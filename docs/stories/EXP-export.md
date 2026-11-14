@@ -1,0 +1,2810 @@
+# EXP Export and LaTeX, DOCX import and export
+
+**Status:** first draft, 2026-11-06, written from specification draft 0.2. Not yet reviewed. Every number is a target to validate, not a measurement.
+
+This epic holds the stories for [09 Export and LaTeX](../spec/09-export-latex.md) in full: the converter and the bundle, the tagging-first house class `docedit.cls`, the mapping from the CDM to LaTeX, tables, the typed emitters, fonts on the LaTeX side, math storage and the math gate, pagination parity and `layout.json`, engine and performance, the compile service (job flow, options, diagnostics, sandbox rules, reproducibility, scaling), suggestions and comments in output, the other targets (`tex`, `cdm`, HTML, Markdown, DOCX), DOCX import, accessible PDF and the export test corpus.
+
+**Sources:** 09 (all); [ADR 0007](../adr/0007-latex-export-pipeline.md); the pitfall review sections 3.5 (document model and LaTeX), 3.2 (S-03, S-06, S-10, S-12) and 6; phase placement from [11 Roadmap](../spec/11-roadmap.md), [12 §13](../spec/12-fields-rules-workflow.md) and [13 §12](../spec/13-experience-extensibility.md); mapping rules that 09 points to in 03 §7 and §10, 07 §15 and 12 §12.
+
+**Left to other epics (README §2.3):** spikes S4 and S8 (SPK), of which the stories here are the production follow-ups; math display and editing in the editor (FE); sealing the final PDF and the evidence content of the certificate (FRW); how the page view consumes `layout.json` (FE); the resource, message and event definitions for exports and imports (PRO); the job table, quotas, asset worker and font manifest (BE); invariants I1 to I11 and the numbering algorithm themselves (CDM); the commit-time call into the authority (SYN); who may export, region states and permissions (PRM); the export dialog, PDF pane, accessibility checker, output restriction and policy hook administration (UX); security testing coverage and supply chain (SEC); the performance harness (FND).
+
+**Phase placement.** Phases follow 11. Where 11, 12 §13 or 13 §12 place a feature, that is used. Where they do not, the phase is inferred from the roadmap's principles and the Notes say "phase inferred".
+
+## Export jobs and the pipeline
+
+### EXP-001 Export a document of regions and three paragraph styles to PDF
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | L | must | Author |
+
+**Spec:** 09 §1, §2, §8, §9.3 items 1 to 3; 11 §3 · **Requirements:** R5 · **Depends on:** EXP-042, SPK-017, PRO-063, PRO-064, BE-049
+
+As an author trying the minimum demo, I want to turn a document of paragraphs and regions into a typeset PDF, so that the demo shows the LaTeX pipeline working end to end.
+
+**Acceptance criteria**
+
+- [ ] Given a document with paragraphs in three styles and two regions, when I request a PDF export, then a job is created, the converter writes a bundle with `main.tex`, `styles.tex` and `docedit.cls` from the CDM at the current `seq`, a worker compiles it with LuaLaTeX, and the PDF opens in the demo's PDF panel.
+- [ ] Given the exported PDF, when its text is extracted, then it equals the document's text in order, and the regions leave no visible trace (09 §3.1, Regions).
+- [ ] Given a worker is compiling, when the bundle tries to open a network connection, then the connection fails, because the container has no network.
+- [x] Given a paragraph containing `\ { } $ & # _ % ^ ~`, when exported, then the characters appear in the PDF as typed, because every string passes through the `text` emitter.
+- [x] Given the job finishes, when its result is read, then it holds a signed URL with an expiry and the page count.
+- [ ] Given the compose file of the demo, when it is started, then the export worker runs from it with no manual TeX installation.
+
+**Evidence:** criterion 5 (lane V-EXP-001-016, round 1): `services/document-service/test/control-plane/routes.exports.test.ts` (`pnpm vitest run --project node <file>`, 8 tests passed, none skipped, for memory and PostgreSQL storage). A finished job read over HTTP holds the signed URL with its expiry, the page count, the layout URL and the converged flag. The job is run by a stand-in compile handler, as in EXP-004 criterion 3; this run does not feed the real worker's result to the route.
+
+**Notes:** The 1a slice is deliberately small (11 §3): the full emitter set, limits, single-use sandboxes and diagnostics are the 1b stories. The findings of spike S4 replace the first guesses of this story. Lane EXP-001-013, round 1: not changed. Criteria 1, 2, 3 and 6 need a LuaLaTeX compile in the Podman image and a container without network; neither was run in this lane (no Podman, no TeX image). Criterion 4 is checked at bundle level by the escaping tests of EXP-025; the PDF text check needs a compile. Criterion 5 needs a finished job from the worker, which was not run here.
+
+Lane U-EXP-001-016 (round 1): criterion 4 ticked. **Evidence:** `services/export-worker/src/exp-001-u-exp-001-016.e2e.test.ts` (test "prints the TeX special characters as typed"), run with `pnpm vitest run` in Podman with the worker image (LuaLaTeX compile, Ghostscript txtwrite text). The same file's first test compiles the three styles and two regions and reads the PDF text: the words are in order and the region titles and policy name are not printed. That test ticks nothing, because Ghostscript drops the spaces inside the italic Quote paragraph, so the check ignores spaces. The network test (same file) runs a Python probe with the compile's sandbox flags (`--network=none`) and gets `BLOCKED`. It shows the container has no network, not that a LuaTeX process fails to connect, so criterion 3 stays unticked. Criterion 1 (the job, the bundle at `seq`, the PDF panel in the demo), criterion 5 (the signed URL in the job result, built by the document service) and criterion 6 (the compose file run through the worker) are not shown by any test here.
+
+### EXP-002 Keep the converter stateless and in step with the model
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §1; 03 §2, §7; ADR 0007 · **Requirements:** R5 · **Depends on:** CDM-005, CDM-013
+
+As a maintainer, I want one converter package that reads the CDM and shares the model's rules, so that the PDF, the editor and the other writers agree.
+
+**Acceptance criteria**
+
+- [x] Given the `export-latex` package, when its imports are listed, then the CDM types, the numbering algorithm and the layout semantics come from `packages/model`, and the package holds no second copy of any of them.
+- [x] Given the same CDM document, `seq`, font manifest, assets and options, when the converter runs twice, then the two bundles are byte-identical, because it reads no clock, random source or environment.
+- [x] Given a document whose `requires` lists a feature the converter does not support, when it is read, then the job fails with a diagnostic naming the feature, and nothing is opened and silently dropped (03 §2).
+- [x] Given the package, when its unit tests run in Node.js without a browser, then they pass.
+- [x] Given the PDF path, when its dependencies are reviewed, then Pandoc is not among them.
+- [x] Given the writer interface, when it is reviewed, then no LaTeX-specific type appears in it, so that another writer (for example a Typst previewer, ADR 0007) can be added without changing how the CDM is read.
+
+**Evidence:** `packages/export-latex/src/converter.test.ts` (describe `EXP-002`): two runs over the same input give the same files, map, manifest and bundle hash (criterion 2); the envelope is not changed by a run; a `requires` feature the converter does not read gives an `unsupported_feature` error that names it, with `ok` false, and a supported one does not (3); `package.json` names no Pandoc dependency (5); `cdmWriter` and `latexWriter` both run through the `DocumentWriter` interface (6, test part). Criterion 1: `src/convert.ts` takes `computeLabels`, `styleTable`, `sha256Hex` and the other shared rules from `@docedit/model`; a search of `src/` finds no local copy of them (checked by search, not by a lint rule). Criterion 4: the tests run in Node.js (`pnpm vitest run packages/export-latex`). Criterion 6 is by review of `src/writer.ts`: `WriterInput` and `DocumentWriter` name no LaTeX type.
+
+**Notes:** Round 1 (packet X2, export-latex developer). Criterion 1 holds today by search only; nothing stops a later second copy except review. The byte-identity test covers one document; it does not cover every construct.
+
+### EXP-003 Warn before export about content that will not typeset well
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Author |
+
+**Spec:** 09 §1, §3.2, §13 · **Requirements:** R5, R11 · **Depends on:** EXP-039, EXP-040, EXP-113, UX-101
+
+As an author, I want to be told before I export about things that will not typeset well, so that I can fix them first.
+
+**Acceptance criteria**
+
+- [ ] Given a table row taller than a page, a table inside a multi-column section, a character that no loaded font covers, or an image without alternative text, when the preflight runs, then it returns one warning for each occurrence, with the block identifier and a code.
+- [ ] Given the same document, when the editor and the converter each run the preflight, then they return identical results, because they use one shared implementation.
+- [ ] Given I start an export from the editor and the preflight has warnings, when the export dialog opens, then the warnings are listed before the job is created and I can continue or cancel.
+- [x] Given a document with none of these constructs, when the preflight runs, then it returns no warnings.
+- [ ] Given a warning that the converter will also act on (a row split into continuation rows), when the job runs, then the same warning appears in the job's warnings.
+
+**Evidence:** criterion 4: `packages/export-latex/src/preflight.test.ts` (describe `EXP-003 preflight on a clean document`: a clean document gives no warnings, and a property over printable ASCII paragraphs gives none). The same file tests criterion 1 for a table in a multi-column section, a table in a story, a missing glyph (with coverage in the manifest) and a picture without alternative text, criterion 2 (the same warnings on every run) and criterion 5 for the table warning in the job (`describe EXP-003 the converter reports ...`).
+
+**Notes:** How the preflight and the converter know that a row is taller than a page, before anything has been typeset, is not specified (Open questions). The presentation of the warnings belongs to UX. Batch 2026-11-13 (packet X1, round 4): criterion 1 stays unticked, because the row taller than a page is not detected (`src/preflight.ts` header). Criterion 2 stays unticked: the converter calls the shared `preflight()`, but the editor does not call it yet (`packages/element` and `packages/ui` are not owned by this packet). Criterion 3 is the dialog, which is UX. Criterion 5 stays unticked: its example, a row split into continuation rows, needs EXP-039. Round 4 fix: the table warning was written twice into the job (preflight and table writer); `src/convert.ts` now keeps only the writer's copy (see ADR 0115, item 18). Open question for the owner, glyph warnings per block and character or per occurrence: ADR 0115, item 17. Lane U-EXP-001-016, round 4 review: no criterion ticked; criterion 1 needs a row-height rule the spec does not give, criterion 2 needs a call in `packages/element` or `packages/ui` (not this lane's). See ADR 0317, round 4 review, item 1 and 2. Lane V-EXP-001-016, round 5: criterion 2 stays unticked. `packages/element/package.json` has no dependency on `@docedit/export-latex`, and nothing in `packages/element` or `packages/ui` calls `preflight()`; the wiring needs a workspace dependency (pnpm-locked script) and an editor change owned by UX. Criterion 5 stays unticked: its row split is EXP-039, whose converter does not call `splitRow` (no row-height measure).
+
+### EXP-004 Create an export job and follow its progress
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 09 §1, §9.1; 05 §6.1, §6.2, §7; 08 §4 · **Requirements:** R5 · **Depends on:** EXP-011, PRO-063, PRO-064, BE-049, PRM-056, PRO-035
+
+As an author, I want to start an export and watch its progress, so that I know when my file is ready or why it failed.
+
+**Acceptance criteria**
+
+- [x] Given I have `view` and no `no-export` restriction, when `POST /documents/{id}/exports` is called with a `target`, an optional `seq` and `options`, then the response is `202` with a job in state `queued`, and the job is resolved to its document and checked against my token.
+- [x] Given a running job, when it progresses, then it moves through `queued`, `converting` and `compiling` and ends in exactly one of `completed`, `failed` or `cancelled`, and each change is pushed as an `export.progress` event.
+- [x] Given a completed job, when `/exports/{jid}` is read, then the result holds a signed URL with an expiry, the page count, the URL of `layout.json`, whether page references converged, the warnings and the diagnostics.
+- [x] Given a job that is queued or running, when I call `DELETE /exports/{jid}`, then it ends `cancelled`, its worker is stopped and its sandbox is discarded, and `export.cancelled` is raised.
+- [x] Given a job ends, when it is `completed` or `failed`, then `export.completed` or `export.failed` is raised, and the webhooks `dep.export.completed` or `dep.export.failed` carry the job and the `seq`.
+- [ ] Given a job completes, when its result is stored, then a version of kind `export` points at the exported `seq`, so that the exported state can be found again.
+- [x] Given `seq` is older than the head, when the job runs, then the bundle is built from the content at that `seq`, and the manifest records it.
+
+**Evidence:** Lane V-EXP-001-016 (round 1), criterion 7: `services/export-worker/src/exp-004-v-exp-001-016.seq.job.test.ts` (describe `EXP-004 criterion 7`, Node.js with a fake compile, `pnpm vitest run --project node`): the head is seq 3 and the export is at seq 2, so `main.tex` holds the content of seq 2 and not of seq 3 or 0; the bundle's `manifest.json` and the stored result `manifest.json` both record `seq` 2. 2 tests passed.
+
+**Evidence:** `services/document-service/src/control-plane/export-routes.ts` (creation, the job states, `exportJobOf`), `exports.ts` (`exportState`, `exportHooks`: `export.progress`, `export.completed`, `export.failed`, `dep.export.completed.v1`, `dep.export.failed.v1`). `services/document-service/test/control-plane/routes.exports.test.ts` (criteria 1, 3: 202 with `queued`, the stage names, the signed URL with expiry, page count, layout, `converged`, diagnostics; memory and PostgreSQL). `services/document-service/src/control-plane/export-jobs.test.ts` (criteria 2, 5, memory: `queued`, `converting`, `compiling` sent as `export.progress` in that order; `export.completed` and `dep.export.completed.v1` with the job and `seq`; a failure for good sends `export.failed` and `dep.export.failed.v1` with the code). Criterion 4 is partly covered: `export.cancelled` is sent and the job ends `cancelled` (`export-jobs.test.ts`, `routes.exports.test.ts`), but stopping the worker and discarding its sandbox are not checked.
+
+**Notes:** The embedding methods and events (`requestExport`, `de-export-*`) belong to PRO. Idempotency keys follow 05 §6.1. Returning the first result for an identical bundle and profile is EXP-006. Cross-check: recording an export as a version (HIS-007) and the job webhooks (PRO-073) arrive in phase 2 and build on this story. Packet C (2026-11-13): criterion 4 stays open until the worker stop and the sandbox discard are tested in packet D (the compile worker). Criterion 6 stays open: the version is HIS-007's. Criterion 7 was open in packet C; lane V-EXP-001-016 ticks it (see the criterion 7 Evidence line). Lane EXP-001-013 (round 3): criterion 4 gains a runner test, `services/document-service/src/control-plane/jobs/exp-004-cancel-worker.test.ts`, which shows that cancelling a running job aborts the handler's signal, that the handler's result is not stored, and that the runner reports the job as lost. The sandbox discard has no code yet (no sandbox exists in `services/document-service`), so criterion 4 stays unticked.
+
+Lane U-EXP-001-016 (round 1): criterion 4 ticked. The sandbox is the export worker's (`services/export-worker/src/sandbox.ts`). `services/export-worker/src/exp-004-u-exp-001-016.cancel.e2e.test.ts` (Podman and the worker image, `docedit-export-worker:s4`, Podman machine route) aborts the signal of a running sandbox and checks that its container exists before the abort and is gone after it. The job passes its cancel signal to that sandbox (`services/export-worker/src/job.ts`, `signal: ctx.signal`). The link from `DELETE` to the job's signal is by reading across the runner test above and this test; no single test runs the whole path.
+
+### EXP-005 Choose export options
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §9.1, §13; 05 §6.2 · **Requirements:** R5, R11 · **Depends on:** EXP-004
+
+As an author, I want to choose how an export is produced, so that I get a quick preview, a final file, or an accessible one when I need it.
+
+**Acceptance criteria**
+
+- [x] Given the option `profile`, when I pass `preview` or `final`, then the job runs that profile; any other value is rejected with `validation_failed`.
+- [x] Given the option `tagging`, when I pass `on`, `draft` or `off`, then the PDF is fully tagged, tagged in draft form, or untagged; any other value is rejected with `validation_failed`.
+- [x] Given the option `pdfStandard`, when I pass a value from the published schema (for example `ua-2` or `a-4`), then the PDF declares that standard; a value outside the schema is rejected with `validation_failed`.
+- [ ] Given the options `locale` and `timeZone`, when they are set, then dates and language-dependent text use them; when they are missing, the job uses the defaults of the published schema and records the values it used in the manifest.
+- [x] Given the option `fields`, when it is missing, then it is `flatten`; `blank` is also accepted (EXP-033).
+- [x] Given any options, when the bundle is built, then they are recorded in `manifest.json` and are part of the bundle hash, so jobs with different options never share a cached result.
+
+**Evidence:** Lane U-EXP-001-016 (round 4). `packages/export-latex/src/bundle-hash.ts` (`canonicalJson`, `bundleHashInput`: the hash input gains a `#options` line, the SHA-256 of the canonical options); `packages/export-latex/src/convert.ts` (the bundle hash uses it); `services/export-worker/src/verify.ts` (the worker recomputes the same hash). Tests, Node.js (`pnpm vitest run --project node`): `packages/export-latex/src/converter.test.ts` ("changes the bundle hash when an option reaches no file (EXP-005 criterion 6)", and the hash-over-lines test), `services/export-worker/src/verify.test.ts` (the converter's bundle verifies; a forged manifest with a rehashed bundle is refused by the hash it lists). 44 tests in five files passed (the four converter and worker files named above, and `services/export-worker/src/job.test.ts`).
+
+**Evidence:** `services/document-service/src/control-plane/export-routes.ts` (`createExport`: `pdfStandard` and `locale` are checked against the published schema, `fields` defaults to `flatten` in the job's options), `exports.ts` (`PDF_STANDARDS`, `LOCALE_PATTERN`). `services/document-service/src/control-plane/export-jobs.test.ts` ("refuses option values outside the published schema and records the default of fields"): `profile`, `tagging`, `pdfStandard`, `fields`, `locale` and `certificate` values outside the schema get `validation_failed` (400); the accepted values run; a request without `fields` runs with `flatten`.
+
+**Notes:** The options `suggestions`, `comments` and `certificate` are specified in EXP-081 to EXP-084 and FRW-050. Packet C (2026-11-13): the list of `pdfStandard` values is the published definition's `known` list (`ua-2`, `a-4`); the schema's examples name the same two. Whether the list grows is open (see docs/adr/0104-control-plane-backlog-batch.md, Q1; Q2 and Q3 there repeat the two questions below). Criterion 4 stays open: the defaults of `locale` and `timeZone` are not set, and the values used are not recorded in `manifest.json` (packet D). Criterion 6 stays open for the same reason (the manifest); the request key already includes the options (EXP-006). Defaults for `locale` and `timeZone`, and whether `final` may be combined with `tagging` set to `draft` or `off`, are not specified (Open questions). Lane EXP-001-013, round 1: criterion 6 stays unticked. The manifest records the options, but `bundleHash` is the hash of the file hashes only (`convert.ts`): an option whose value reaches no file leaves it unchanged, so the jobs cannot be told apart by the hash. Putting the options into the hash changes `services/export-worker/src/verify.ts`, which recomputes the hash the same way and refuses a mismatch; that is another lane's package and a joint decision (ADR 0221, item 1). Lane U-EXP-001-016 (round 4): criterion 6 is ticked; the hash change is the spec's own rule, taken without the joint decision (ADR 0317, item 1, proposed). Criterion 4 stays unticked: `spec/dep/dep-1.openapi.json` gives `locale` a pattern and `timeZone` no default, so "the defaults of the published schema" name no value. The default is a spec question (ADR 0317, item 2); the manifest already records the value used (`timeZone` as `''` when unset).
+
+### EXP-006 Return the first result for the same bundle and profile
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | should | Operator |
+
+**Spec:** 09 §8, §9.1, §2 · **Requirements:** R5, R9 · **Depends on:** EXP-011
+
+As an operator, I want identical requests answered from the first result, so that compile minutes are not spent twice on the same bundle.
+
+**Acceptance criteria**
+
+- [x] Given two requests that produce the same bundle hash and the same profile, when the second arrives, then it returns the first job's result without compiling again.
+- [x] Given a preview and a final export of the same bundle, when both are requested, then they are cached separately and neither satisfies the other.
+- [x] Given a new version of `docedit.cls`, when the same document is exported, then the cache key differs and the PDF is compiled again, because the class version is part of every cache key.
+- [x] Given a cached result whose signed URL has expired, when it is requested again, then a fresh signed URL for the same PDF is issued.
+- [x] Given two tenants whose documents give the same bundle hash, when each exports, then a result is never returned to the other tenant.
+
+**Evidence:** `services/document-service/src/control-plane/export-jobs.test.ts`: "answers an identical request from the first result and compiles each different request" (criteria 1, 2; the repeat of a final export is `completed` at once and compiles nothing, a preview of the same bundle compiles again, a different option compiles again); "issues a fresh signed URL when a cached result is requested after its URL expired" (criterion 4; a day later the cached copy carries a later `expiresAt` and a new URL, and the same result read again is signed afresh); "never returns a cached result to another tenant" (criterion 5; `MemoryJobQueue.findCompleted` by tenant, and `exportRequestKey` starts from the tenant). Memory storage; the PostgreSQL run skips without a database. Criterion 3 (packet C, 2026-11-13): "compiles again under another house class version and answers the same version from the first result" in the same file starts a second service over the same stores with `exportClassVersion` set to another value; the same request is accepted and compiles again there (the handler runs once more), the cache key of its job differs, and the first service still answers the first request from its result (memory storage only).
+Lane U-EXP-001-016 (round 5): `services/document-service/test/control-plane/exp-006-u-exp-001-016.pg.test.ts` (criterion 5 on PostgreSQL: a completed cache key is found by its own tenant and not by another tenant or an unknown one; a same-key queued job of another tenant is not a cache hit), run against PostgreSQL 16 or newer in Podman (`docedit-test-postgres`, a version check in the test helper), `pnpm vitest run --project node`, 2 tests passed. The PostgreSQL run of the file above passes criteria 1, 2, 4 and 5; criterion 3 has no PostgreSQL variant (its test is memory only).
+
+**Notes:** The last criterion is inferred from tenancy (06 §12, R10), not stated in 09. Packet C (2026-11-13): criterion 3 is ticked on the route-level test described above, which builds the second service directly (`startService`) rather than through the harness.
+
+### EXP-007 Serve previews and requested exports from separate queues
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Operator |
+
+**Spec:** 09 §8, §9.1, §9.5; 06 §4.1, §12 · **Requirements:** R5, R9 · **Depends on:** BE-049
+
+As an operator, I want interactive previews and requested exports in separate queues with per-tenant limits, so that a bulk export cannot starve previews.
+
+**Acceptance criteria**
+
+- [x] Given previews and user-requested exports are both waiting, when workers become free, then each kind is served from its own queue.
+- [x] Given one tenant has queued many final exports, when another user asks for a preview, then the preview starts while the export queue is still non-empty.
+- [x] Given each tenant has a concurrency limit, when a tenant already has that many jobs running, then further jobs stay `queued` and none runs beyond the limit.
+- [x] Given stateless workers, when a worker is free, then it claims the next job from its queue and holds no state from earlier jobs.
+- [ ] Given the capacity sheet, when it is read, then it plans workers from one core and up to 1.5 GiB of memory for each running job.
+
+**Evidence:** `services/document-service/src/control-plane/jobs/priority.test.ts` (in-memory queue, the priorities of `EXPORT_PRIORITIES` in `exports.ts`): criterion 1, a worker for both kinds takes the waiting preview first and a worker for one kind never takes the other; criterion 2, a preview of one tenant starts while twenty exports of another wait; criterion 3, a tenant at its limit keeps its further job `queued` while another tenant's job runs, and `defaultLimit` applies without a limit of its own; criterion 4, a worker that holds nothing takes over a job whose worker was lost. The PostgreSQL queue is not run here (no database).
+
+**Notes:** Whether a tenant over its concurrency limit waits or is refused with `quota_exceeded` (06 §12) is not settled (Open questions). The criterion 3 wording ("stay `queued`") is met by waiting. Cross-check: phase 1b caps tenants by configuration; quota enforcement through BE-092 follows in phase 2. Packet C (2026-11-13): criterion 5 stays open. No capacity sheet exists in the repository; `09-export-latex.md` line 174 states the planning start (one core, up to 1.5 GiB per running job) but names no sheet, and no document or test reads it. A sheet must be written before this criterion can be ticked. Lane EXP-001-013, round 2: `docs/research/2026-11-06-unit-cost-sheet.md` (row A17) states "4 (one vCPU and 1.5 GiB each)" for jobs per worker node, which is the planning figure. It is a research note for SPK-025, not a capacity sheet, and nothing reads it in a test. Whether it serves as the sheet is a decision for the owner (ADR 0221, item 4); criterion 5 stays unticked.
+
+### EXP-008 Compile previews only while someone is looking
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Operator |
+
+**Spec:** 09 §9.1; 06 §10 · **Requirements:** R5, R9 · **Depends on:** EXP-062, FE-071
+
+As an operator, I want preview compiles to run only when someone needs them, so that compile cost stays proportional to use.
+
+**Acceptance criteria**
+
+- [x] Given nobody has the preview or another view that needs a compile open on a document, when the document changes, then no preview compile starts.
+- [ ] Given a visible preview and a document that keeps changing, when previews are requested, then at most one preview compile per document starts in any ten-second window.
+- [ ] Given the bundle hash is unchanged since the last preview, when a preview is requested, then no compile runs and the cached result is returned.
+- [x] Given the viewer closes the preview, when a preview job is still `queued`, then it is cancelled.
+- [ ] Given page-break reconciliation is not enabled for the tenant, when documents change, then no compile is started for it.
+
+**Evidence:** `services/document-service/src/control-plane/export-routes.ts` (the preview window from `exports.ts` `ExportPolicy.previewWindowMs`) (`createExport`: a second preview of a document inside the window is queued with a delay; a repeat of a completed request is answered from its result; `ownJob` and `cancelExport` cancel a queued or running job). `services/document-service/src/control-plane/export-jobs.test.ts`: "cancels a queued preview when its viewer closes it, and holds later previews inside the window" (criteria 2, 4: the second requester's preview stays `queued` until the window has passed, then completes; a queued preview is cancelled with 204); "answers an identical request from the first result" (criterion 3: the preview's repeat compiles nothing). Criterion 1 (packet C, 2026-11-13): `src/control-plane/export-jobs.test.ts`, "starts no preview compile when the document changes and nobody asks for one" appends a commit to the log store as the data plane's commit path does (`routes.commits.test.ts` uses the same call), then finds no preview job in the queue; a preview asked for afterwards is queued, which shows the check can see one (memory storage; the PostgreSQL run skips without a database).
+
+**Evidence:** Stabilisation group 4, round 1 (2026-11-13): criteria 2 and 4 on both stores. The preview window is now measured in the queue's own clock: `createExport` passes `notBefore` (the latest preview's `createdAt` plus the window) and the queue sets `run_after` from it (`jobs/queue.ts` `NewJob.notBefore`; `jobs/pg.ts` `greatest(now() + delay, notBefore)`), so this node's clock is not compared with the database's (06 §2.1). On PostgreSQL the test harness's `advance` moves the jobs' times back by the same amount (`test/control-plane/support.ts`). `pnpm vitest run --project node services/document-service/src/control-plane`: the `export jobs (postgres)` block passes, with EXP-008 criteria 2, 4 and BE-051 criterion 1, against the Podman test PostgreSQL.
+
+**Notes:** Stabiliser round 1 (control-plane, 2026-11-13): criteria 2 and 4 are unticked. Their Evidence test, `export-jobs.test.ts`, fails in its PostgreSQL run: the harness moves the service clock with `advance`, which the database clock does not share, so the preview window and the delayed claim do not agree there; the migration `0061_fork_provenance.sql` also fails on a fresh database. The memory run passes. Reopen when the PostgreSQL run passes. Stabilisation group 4, round 1: reopened and ticked; the clocks now agree (see Evidence), and `0061_fork_provenance.sql` no longer exists.
+
+**Notes:** Reconciliation is opt-in per tenant (06 §10) and belongs to phase 3 (EXP-057). Packet C (2026-11-13): criterion 1 is ticked on a commit appended to the log store (the data plane's commit path, not the HTTP route, which only pages the log); criterion 5 is phase 3's page-break reconciliation. Lane EXP-001-013, round 2: criterion 5 stays unticked. No reconciliation code exists in `services/document-service/src` (searched), so a tenant with it off is not a distinct case to test; the existing test checks preview jobs only, not export jobs, and a test for both kinds would need the same commit set-up. Evidence audit (2026-11-13): criteria 2 and 3 are unticked. Criterion 2: `createExport` holds a later preview until the latest preview's `createdAt` plus the window, which is its request time and not its start time, and a newer preview replaces only the same requester's queued one, so previews of two viewers requested one second apart start one second apart; the test only requests at one instant. Criterion 3: the cache key is `exportRequestKey` (seq, view, target, options, class version), not the bundle hash, so a new `seq` whose bundle is unchanged compiles again; the test repeats an identical request at the same `seq`.
+
+### EXP-009 Limit a tenant's compile minutes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Tenant administrator |
+
+**Spec:** 09 §9.1; 06 §12 · **Requirements:** R9, R10 · **Depends on:** EXP-007, BE-092, UX-078
+
+As a tenant administrator, I want a monthly budget of compile minutes, so that exports cannot run up unbounded cost.
+
+**Acceptance criteria**
+
+- [x] Given a tenant has a monthly budget, when a job's worker time is used, then the minutes are counted against that tenant.
+- [x] Given the budget is used up, when another export is requested, then it is refused with `quota_exceeded` and a `Retry-After` header.
+- [ ] Given the budget is raised through the administration API, when an export is requested, then it is accepted.
+- [ ] Given usage so far, when the usage figures are read, then the compile minutes used this month are included.
+
+**Evidence:** Lane U-EXP-001-016 (round 2). `services/document-service/src/control-plane/exp-009-compile-budget.ts` (`CompileBudget`: the monthly ledger in UTC months, the refusal and the seconds to the next month) and its unit test `src/control-plane/exp-009-compile-budget.test.ts`; `test/control-plane/exp-009-compile-budget.test.ts` over HTTP on the harness, memory storage. Criterion 1: a compile of 150 ms against a budget of 60 ms, settled through the runner's hook (`server.ts`, `metered`), then the next request is refused. Criterion 2: a budget of zero refuses an export and a preview with 429 `quota_exceeded`, a `Retry-After` and no job (`export-routes.ts`, `createExport`). Run with `pnpm vitest run --project node` on the two files (12 tests passed). Not run on PostgreSQL: the ledger is in memory.
+
+**Notes:** Phase inferred: the administration API arrives in phase 2 (13 §12). Whether previews count against the budget is not stated. Lane EXP-001-013 (round 3), no criterion ticked: the only quota code is `services/document-service/src/control-plane/quotas.ts` (UX-078), which stores an `exportMinutes` value per tenant and counts no minutes. Nothing in the worker path meters compile time (`jobs/runner.ts` has no meter hook for it) and the export route does not refuse with `quota_exceeded` or `Retry-After` (`export-routes.ts`). Criteria 1 to 4 need that wiring, so they stay unticked. Lane U-EXP-001-016 (round 2): criteria 1 and 2 are ticked. Decisions taken where the spec is open, to be confirmed (ADR 0317): previews count against the budget; the refusal covers previews and is checked before a cached answer; a budget that is not set is no limit. Criterion 3 stays unticked: the administration write path of the budget (UX-076) is not built, so the test raises the value in the quota store directly. Criterion 4 stays unticked: no usage read surface exists (UX-076). The ledger is in memory and is lost on restart; a durable ledger on PostgreSQL is not built. Lane V-EXP-001-016, round 5: criteria 3 and 4 stay unticked. No administration route for quotas exists in `services/document-service/src`, and, contrary to what this note first said, `spec/dep/dep-1.openapi.json` does define the write path: `getTenantQuotas` and `setTenantQuotas` on `/quotas` (UX-078), with `exportMinutes` in `QuotaSettings`. No handler for that route exists in `services/` (reviewer grep, round 3), so criterion 3 is open because the route is unbuilt, not because it is undefined. Criterion 4 has no usage read surface either.
+
+### EXP-010 Refuse export for restricted callers and run the host's policy hook
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Tenant administrator |
+
+**Spec:** 05 §6.2; 07 §12; 13 §5, §10, §12 · **Requirements:** R5, R10 · **Depends on:** EXP-004, UX-040, PRM-056
+
+As a tenant administrator, I want export to respect output restrictions and the host's data-loss hook, so that casual leaks are deterred and the host can veto an export.
+
+**Acceptance criteria**
+
+- [x] Given a caller restricted with `no-export`, when they request an export, then the request is refused and no job is created.
+- [x] Given a caller without `view`, when they request an export, then the request is refused with `forbidden`.
+- [ ] Given the host registered a pre-export policy hook, when an export is requested, then the hook runs synchronously before the job is created, and a refusal by it stops the request with a reason the caller can read.
+- [ ] Given a caller allowed to export but without `edit`, when they ask for a raw compile log, then they are refused (EXP-066).
+
+**Notes:** `no-export` deters casual copying and is not a security boundary (13 §5). The restriction model and the hook contract belong to UX and PRM. Phase 2 follows 13 §12 (output restrictions). Cross-check: the host's policy hook (UX-086) is phase 4; until then this story refuses restricted callers only.
+
+**Evidence:** `services/document-service/test/control-plane/exp-010-refusals.test.ts` (describe `EXP-010 export refusals`, memory storage; PostgreSQL skips without a database): criterion 1, a `no-export` caller gets `forbidden` for an export and a preview and `latestFor` finds no job of either kind; criterion 2, a token that does not cover the document gets 403 `forbidden` and no job; a control caller with `view` gets 202, so the refusals are not caused by the set-up. The route guard is `guard(ctx.caller, 'export', doc)` in `src/control-plane/export-routes.ts`.
+
+**Lane EXP-001-013, round 2:** criterion 3 stays unticked. The hook request builder and reader exist (`src/control-plane/policy-hook.ts`, UX-086), but the sender, its timeout and the calls in the export path are not built, and that file names the timeout as an open question. Criterion 4 stays unticked: `ownJob` in `export-routes.ts` leaves the raw log out for a caller without `edit` rather than refusing the request; the refusal is EXP-066 and is not built as a refusal.
+
+## Bundle
+
+### EXP-011 Assemble the bundle and its manifest
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §2; 08 §7; 01 §8 · **Requirements:** R5 · **Depends on:** EXP-002, EXP-013, EXP-015
+
+As a maintainer, I want every export to produce one bundle with a manifest, so that a result can be reproduced, cached and traced to a point in the history.
+
+**Acceptance criteria**
+
+- [x] Given a document, when the converter finishes, then the bundle holds `main.tex`, `styles.tex`, `docedit.cls`, `assets/`, `map.json` and `manifest.json`, and no font files.
+- [x] Given `main.tex`, when it is read, then it is machine-generated, written as one block per group of lines, and contains no user-authored TeX outside math.
+- [x] Given `manifest.json`, when it is read, then it records `seq`, the hash-chain head, the CDM version, the class version, the fonts with their hashes, the options and the hash of the whole bundle.
+- [x] Given any file of the bundle changes, when the bundle hash is computed (SHA-256), then it changes.
+- [ ] Given a completed export, when the host reads the result, then the chain head of the manifest is available to it, so that the host can anchor it.
+
+**Evidence:** `packages/export-latex/src/converter.test.ts` (describe `EXP-011`): the bundle holds `main.tex`, `styles.tex`, `docedit.cls`, `docedit.lua`, `map.json` and `manifest.json`, the picture under `assets/`, and no `.ttf`, `.otf`, `.ttc` or `.otc` file (criterion 1); the manifest records `seq`, `chainHead`, `cdm`, `classVersion`, the four faces of each family with their SHA-256, the math face, the options and `bundleHash` (criterion 3); every file except the manifest is listed with its SHA-256, and `bundleHash` is the SHA-256 over those lines (criterion 4, first part); a fast-check property (25 runs) and a text change move `bundleHash` when `docedit.cls` or `main.tex` changes (criterion 4, second part). Criterion 2: `packages/export-latex/src/exp-011-main-tex.test.ts` (describe `EXP-011 criterion 2`): `main.tex` starts with the generated `\setrandomseed` macro; each block owns one contiguous range of `map.json`; every body line that no block owns is a generated macro, a document end or a blank line; a probe paragraph with TeX specials (`\input`, `%`, `#`, `&`, `^^`, `$`) reaches `main.tex` only in its escaped form.
+
+**Notes:** Round 1 (packet X2). Criterion 2 is unticked: no test checks that `main.tex` has one block per group of lines or that it has no user TeX outside math (EXP-025 covers the escaping of text). Lane EXP-001-013, round 1: criterion 5 stays unticked. `services/export-worker/src/job.ts` passes `chainHead: null` to the converter, and the job result holds no chain head, so the host cannot anchor the export from it. The fix belongs to the worker (another lane's package): pass the head of the log at `seq` and expose it in the result (ADR 0221, item 2). Criterion 5 is unticked: the converter writes `chainHead` into the manifest, but the result the host reads is built by the job (document service and export worker), outside this package. Criterion 4 is tested through `docedit.cls` and `main.tex`; `assets/` and `map.json` are covered by the hash list, not by a separate change test. Batch 2026-11-13 (packet X1/X2, round 5): criterion 2 is ticked on the structural reading (see Evidence). The "no user TeX outside math" check is a probe of text specials, not a proof over all inputs; the generated-line check accepts any line that starts with a command, so it is looser than the generated macro list.
+
+### EXP-012 Map bundle lines back to blocks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §2, §9.2 · **Requirements:** R5 · **Depends on:** EXP-011
+
+As a maintainer, I want a source map from `main.tex` to block identifiers, so that compile errors can be shown at the block they came from.
+
+**Acceptance criteria**
+
+- [x] Given `main.tex`, when `map.json` is read, then every line range that came from a block maps to that block's identifier.
+- [ ] Given text that the converter emits away from its block (footnote text, header and footer paragraphs, continuation rows of a split table), when `map.json` is read, then those lines map to the identifier of the footnote, story or original table block.
+- [x] Given a line that belongs to no block (preamble, macros), when `map.json` is read, then it is marked as belonging to no block and is not attributed to a neighbour.
+- [x] Given identical input, when the converter runs twice, then `map.json` is identical.
+
+**Evidence:** `packages/export-latex/src/map-assets.test.ts` (describe `EXP-012`): every line range of `main.tex` that has a block names a block identifier, and the lines of a paragraph map to that paragraph and to no other (criterion 1); the preamble and the line of `\begin{document}` map to no block, and the first line of a paragraph maps to it (criterion 3); two runs over the same input give the same `map.json` (criterion 4).
+
+**Notes:** Round 1 (packet X2). Criterion 2 is unticked. A footnote paragraph is registered as its own block, owned by the footnote (test "registers a footnote paragraph as its own block"), but the footnote's text lines are emitted inside the lines of the host paragraph (`src/inline.ts`, `footnoteText`), so `map.json` attributes them to the paragraph. Header and footer story text and the continuation rows of split tables (EXP-039) are not tested. Giving footnote text its own line scope is a converter change for a later batch. Round 10 (export-latex, 2026-11-13): still unticked and not changed. Moving the footnote text after the host paragraph, as the heading path does with `st.deferred`, would change where `\footnotetext` lands when the paragraph runs over a page; the class sets it in the body of the paragraph (`class/docedit.cls`, `\DEfntext`). That needs a compile to check, and no compile was run in this round. Lane U-EXP-001-016, round 4 review: still unticked; the fix changes `map.json` and needs a compile first (ADR 0317, round 4 review, item 3). Lane V-EXP-001-016, round 1: the mechanism is clearer and still unchanged. `footnote()` in `src/inline.ts` writes `\DEfnmark` and the `\DEfntext` body into one string, which the paragraph passes to `line()` (`src/context.ts`); `line()` owns every line by the current block, so the footnote body lines take the host paragraph. The fix needs the paragraph's text to be split into owned pieces, and a compile to show the same typeset output.
+
+### EXP-013 Generate style and numbering macros
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §2, §3.1; 03 §4.1, §6; review S-06 · **Requirements:** R5 · **Depends on:** EXP-042, EXP-044, CDM-041
+
+As a maintainer, I want `styles.tex` generated from the style and numbering definitions, so that named styles reach the PDF without any user-chosen name reaching TeX.
+
+**Acceptance criteria**
+
+- [x] Given `style_def` and `numbering_def` nodes, when `styles.tex` is generated, then it holds one macro per style with the `basedOn` chain (up to ten deep, invariant I5) already flattened.
+- [x] Given a style whose identifier or name contains control sequences, spaces or non-ASCII characters, when macros are generated, then macro names come from `generatedId` and are never derived from the identifier or the name.
+- [x] Given two styles whose names differ only in case or punctuation, when macros are generated, then their macro names do not collide.
+- [x] Given the built-in styles (`Normal`, `Heading1` to `Heading9`, `Caption`, `FootnoteText`), when a document uses them, then macros exist for them.
+- [ ] Given a flattened style, when its values are compared with the cascade of 03 §6, then they are equal.
+
+**Evidence:** criteria 2 to 4: `packages/export-latex/src/styles.test.ts` (describe `EXP-013 macro names come from a counter`: a style whose id and name hold a control sequence and a non-ASCII letter gives a macro named `\DES` followed by letters only, and neither the id nor the name reaches `styles.tex`; describe `EXP-013 macro names do not collide`: `BodyText`, `Bodytext` and `body_text` with names that differ in case and punctuation give three distinct macros; describe `EXP-013 built-in styles`: `Normal`, `Heading1` and `Caption` used by the body give distinct macros). Criterion 5 is partly checked in the same file (describe `EXP-013 a flattened style equals the cascade`): the font size of a leaf two levels below its root equals the model's `resolveRun` value, and the macro holds it.
+Round 6 (export-latex, 2026-11-13), criterion 1: `src/convert.ts` now calls `styleMacro` for every `style_def` after the body and the TOC, so an unused style gets its macro too (the spec default, "one macro per style"). `src/styles.test.ts` (describe `EXP-013 style macros flatten the basedOn chain`): a document whose leaf is the only style in use gives eleven macros (ten chain styles and the Normal style the test helper adds), and ten of them carry the flattened size. The tests that counted macros were changed to the same rule.
+
+**Notes:** Batch 2026-11-13 (packet X2, round 4). Round 6: criterion 1 is ticked. `numbering_def` makes no macro in `styles.tex`: numbering labels are literal text from the numbering algorithm (EXP-024), so the criterion's "style_def and numbering_def" is read as its "then" part, one macro per style. The owner decision of ADR 0115, item 19 (lazy or eager) is answered by the spec default, eager; the owner may still change it. The test of the basedOn chain covers ten levels for one property (the font size). Criterion 5 stays unticked. Lane EXP-001-013, round 1: `packages/export-latex/src/exp-013-cascade.test.ts` now compares every setter the style macro carries (font size, bold, italic, small caps, alignment, the three indents, widow control, keep lines and the line rule) with `resolveParagraph` and `resolveRun`, over random styles with a `basedOn` parent; the macro body is parsed, so the test reads what reaches TeX. Spacing before and after, keep with next, page break before and contextual spacing are not in the macro: `blocks.ts` and `flow.ts` apply them from the same resolved paragraph. Whether a flattened style must carry them is not decided; ADR 0221 lists it. Lane U-EXP-001-016, round 4 review: criterion 5 stays unticked for that reason (ADR 0317, round 4 review, item 4). Lane V-EXP-001-016, round 1: still unticked, and the conflict is now clearer. Spec 09 §3.1 (the table row "Paragraph styles") says the macro sets "font, size, leading, alignment, indents, spacing, keep-with-next and widow and orphan penalties", while 03 §7 and `flow.ts` give spacing and keep-with-next as converter-computed `\DEgap` and `\DEkeep` lines. Making the macro carry spacing would change the design of the class, and adding setters the class does not read would be inert. Owner or spec decision (ADR 0317, item 4, round 1).
+
+### EXP-014 Put images into the bundle by content hash
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | S | must | Maintainer |
+
+**Spec:** 09 §2; 06 §4.4; review S-10 · **Requirements:** R5, R10 · **Depends on:** EXP-011, BE-043, BE-045
+
+As a maintainer, I want images in the bundle named by content hash, with SVG already converted, so that compiles are reproducible and never decode hostile images.
+
+**Acceptance criteria**
+
+- [x] Given an image asset attached to the document, when the bundle is built, then the file is in `assets/` and named by its content hash.
+- [ ] Given an SVG asset, when it is processed on upload, then the asset worker converts it to PDF, and the compile does no SVG conversion.
+- [x] Given a figure whose asset is not attached to the document or is not `ready`, when the converter runs, then the job reports a diagnostic with the block identifier, and no other document's asset is read.
+- [x] Given the same image used in several places, when the bundle is built, then it appears once in `assets/`.
+
+**Evidence:** `packages/export-latex/src/map-assets.test.ts` (describe `EXP-014`): a ready PNG is written to `assets/<sha256>.png` with its bytes, and the picture refers to it by that name (criterion 1); a figure whose asset is not listed gets `asset_not_attached`, and one whose asset is `pending` gets `asset_not_ready`, both with the figure's identifier, and an asset the job lists but the document does not use does not reach the bundle (criterion 3); two figures that use one image give one file (criterion 4).
+
+**Notes:** Round 1 (packet X2). Criterion 2 is unticked. The converter does not convert SVG: an SVG asset is refused with `asset_type_unsupported` (`src/emit.ts`, `assetFile`). The conversion on upload belongs to the asset worker (BE-043, BE-045), outside this package, and no test in this batch covers it. Round 7 (lane EXP-014-026): `services/asset-worker/src` has an SVG sandbox (`svg-draw.ts`, `svg-write.ts`), but nothing in it writes PDF (a search for `pdf` finds no match), so criterion 2 stays unticked and the asset worker is the owner's to build. Lane U-EXP-001-016, round 4 review: still unticked; the asset worker's dependencies name raster codecs only, and the converter is an owner choice (ADR 0317, round 4 review, item 5). Lane V-EXP-001-016, round 1: still unticked. Writing a PDF from an SVG is a new converter in `services/asset-worker`, which the asset worker's owner has not chosen; not built in this lane (needsFromOthers).
+
+
+## House class and mapping
+
+### EXP-015 Build the house class for tagging from the start
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §3.1, §2, §9.3 item 5, §13; ADR 0007 (after the first review); review M-2 · **Requirements:** R5, R11 · **Depends on:** SPK-017
+
+As a maintainer, I want `docedit.cls` built on packages that work with the LaTeX project's tagging support, so that accessible PDF is a property of the class and never a late switch that moves every page break.
+
+**Acceptance criteria**
+
+- [x] Given `docedit.cls`, when its package list is read, then none of `titlesec`, `multirow`, `enumitem`, `tabto`, `caption` and `float` is loaded, and every package it does load works with tagging in the pinned TeX Live 2026.
+- [x] Given the class, when headings, lists, list labels, tab stops and row spans are produced, then heading formatting is built on the kernel's sectioning commands, lists and labels are the class's own macros, tab stops are implemented in Lua, and row spans do not use `multirow`.
+- [x] Given the class loads a fixed list of packages, when a bundle asks for another package or class, then it is not loaded (09 §9.3 item 5).
+- [ ] Given any change to the class, when it is released, then its version is raised, written to `manifest.json` and included in every cache key.
+- [x] Given `tagging` is `draft`, when a preview is compiled, then the class uses draft tagging to save time.
+- [x] Given the class is distributed with a bundle, when its licence is read, then the licence is recorded in the licence manifest (EXP-073).
+
+**Evidence:** criterion 2: `packages/export-latex/src/class.structure.test.ts` (describes `EXP-015 criterion 2`, Node.js only, source audit of `class/docedit.cls` and `class/docedit.lua`): headings are `\@startsection` redefinitions, `DElist` is on `\list`, labels use `\DE@labellayout`, tab stops are Lua functions, and `\DErowspan` has no `multirow`. No compile was run. Criterion 5 (describe `EXP-015 criterion 5`, round 5, lane export-latex-2, `packages/export-latex/src/exp-015-draft-tagging.test.ts`, 3 tests): a draft job writes `tagging=draft` in its `\DocumentMetadata` line and no `tagging=on` or `tagging=off`, and `docedit.cls` sets no `tagging` key of its own. This is the converter's side of a draft preview; the preview job's choice of `draft` is the caller's, and no compile was run. Criterion 3 (round 3, lane EXP-014-026): `services/export-worker/src/verify.test.ts` (describes `bundle checks before the engine starts (EXP-067)`, Node.js, 7 tests, passing on 2026-11-13) shows that `verifyBundle` refuses a bundle whose `main.tex` loads a package or a class other than `docedit`, runs Lua or inputs a file, before the engine starts, and refuses any file the converter never writes; the fixed package list of the class is in `packages/export-latex/src/class.test.ts`. No compile was run. Reviewer (U1 group 1, round 3): criteria 1 and 4 were ticked by the lane and are unticked. Criterion 1: the kitchen-sink fixture has no `columns` on any `page_setup`, so `multicol` (loaded by the class) is never exercised in the compile, and the worker image's TeX Live was not checked against the pinned TeX Live 2026 (ADR 0317 item 4). Criterion 4: the pin in `exp-015-class-release.test.ts` is one version and two hashes that can be changed together, so a class edit passes once the hash is updated without raising `CLASS_VERSION`; it is a tripwire, not a check that the version was raised. The compile and the pin remain useful partial evidence. Lane U-EXP-001-016 (round 4), criteria 1 and 4 (partial): `services/export-worker/src/exp-015-u-exp-001-016.packages.e2e.test.ts` compiles the kitchen-sink fixture (`packages/model/fixtures/kitchen-sink.json`: tables, highlight, colour, links, footnotes, equations, languages, fields, form fields, images, a section break) with tagging on and validates it with veraPDF as PDF/UA-2 and PDF/A-4f (one test passed, Podman machine route, `DOCEDIT_PODMAN_MACHINE=podman-machine-default`; the automatic route in `sandbox-ready.ts` did not select it on this host). `packages/export-latex/src/exp-015-class-release.test.ts` pins `CLASS_VERSION` with the SHA-256 of `docedit.cls` and `docedit.lua`, so a class change without a new version fails; the manifest and cache-key parts are in `class.test.ts` and in EXP-006's tests. Round 3 fix (lane U-EXP-001-016, 2026-11-13), criteria 1 and 4 ticked again. Criterion 1: `services/export-worker/src/exp-015-u-exp-001-016.packages.e2e.test.ts` (Node.js, `DOCEDIT_PODMAN_MACHINE=podman-machine-default pnpm vitest run --project node <file>`, 4 of 4 tests, about 505 s on the shared development machine under load) compiles the kitchen-sink fixture with its landscape setup set to two columns, six paragraphs added in that section and its three pictures supplied as PNG assets (`exp-015-u-exp-001-016.fixture.ts`). It checks that the packages `\RequirePackage` loads in `docedit.cls` are exactly the fourteen the fixture names a use for, that the converter output reaches each one (`\DEdefsetupb` with two columns for `multicol`, `\DEtbl` for `longtable` and `array`, `\cellcolor` for `colortbl`, `\DEhl` and `\DEuld` for `lua-ul` and `luacolor`, `\DEbabel` and `\DEdeflang` for `babel`, `\DEgeometry`, `\DEimg`, `\DEhref`, `\DEmath`, `\DEmathfont`, `\DEc`, `\DEdeffamily`), that the compile log shows each package loaded with LaTeX2e <2026-11-01> and tagpdf v1.0i, that the layout sets the two-column paragraphs in two columns (a later paragraph starts higher on the same page), and that veraPDF finds the PDF compliant as PDF/UA-2 and PDF/A-4f. The image's TeX Live is checked against the pin in `services/export-worker/Containerfile` (release-texlive.txt reads version 2026; `luahbtex --version` reads 1.24.0). Criterion 4: `class/releases.json` is an append-only ledger of released versions with the SHA-256 of each class file; `packages/export-latex/src/exp-015-class-release.test.ts` (Node.js, 7 passed, 1 skipped) fails when a class file differs from the bytes recorded under the current `CLASS_VERSION`, when that version is not the last release, when versions do not rise, or when `ProvidesClass` announces another version; against a base revision (`DOCEDIT_CLASS_BASE_REF`, `origin/main`, `main`) it also fails when a released entry was rewritten in place. That leg is skipped in this tree, which has no commits.
+
+**Evidence:** criterion 6 (lane V-EXP-001-016, round 1): `services/export-worker/src/exp-015-v-exp-001-016.licence.podman.test.ts` (Podman, machine route `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `pnpm vitest run --project node <file>`, 1 test passed, about 330 s on the loaded machine). It runs `services/export-worker/scripts/licence-manifest.ts` against `localhost/docedit-export-worker:s4` and reads back `houseClass` (name `docedit`, the `CLASS_VERSION` and the `CLASS_LICENCE` Apache-2.0 of `@docedit/export-latex`). The script's package-database read had a 120 s limit, which the loaded machine exceeded (66 s for the read alone); it is raised to 300 s in `services/export-worker/scripts/licence-manifest.ts`. The generated manifest is complete for the house class only: EXP-073 criterion 3 (every package licence from the TeX Catalogue) stays open.
+
+**Notes:** Assumption A3 (one house class) is the premise; customer templates are out of scope (Open questions). The compatible-package list is a snapshot of 2026-09 and is re-checked against TeX Live 2026 during implementation. Round 2 (export-latex, 2026-11-13): `packages/export-latex/src/class.test.ts` audits the class source. It checks that none of the six forbidden packages is loaded (criterion 1, forbidden part), that the loaded packages are exactly the fixed list (criterion 3, class side), and that the `ProvidesClass` version is the converter's `CLASS_VERSION` (criterion 4, manifest part). Nothing is ticked: criterion 1 needs a LuaLaTeX compile to show that each package works with tagging; criterion 3 needs a bundle compile to show that a `\usepackage` in a bundle is refused; criterion 4's cache-key part belongs to the export worker, which is not built; criterion 5 is ticked in round 5 on the converter side only (the converter writes `tagging=draft` for a draft job; the class is not compiled, and the preview job's choice of `draft` is the caller's); criterion 6 needs the licence manifest of EXP-073, which is not built.
+Round 6 (export-latex, 2026-11-13), criterion 2: `packages/export-latex/src/class.structure.test.ts` audits the class source and `class/docedit.lua` as text (comments removed). It checks that each heading level is a redefinition of the kernel sectioning command with `\@startsection`, that `DElist` is built on the kernel `\list`, that the labels go through the class's `\DE@labellayout`, that the tab stops are functions in `docedit.lua` called by `\directlua`, that `tabto` is not used and that `\DErowspan` is a `\vbox` with no `multirow`. This is a reading of how the class is built; the look of the PDF is not checked (no compile was run). Criteria 1 and 5 stay unticked as before, and criterion 4's cache-key part stays with the export worker.
+Round 3 (lane EXP-014-026, 2026-11-13): criterion 3 is ticked. The earlier note that it needs a bundle compile is out of date: the worker's `verifyBundle` refuses a bundle that loads a package or a class before the engine starts, and that refusal is what "not loaded" means for this criterion. Criterion 4 stays unticked: the cache key includes the class version (`services/document-service/src/control-plane/export-jobs.test.ts`) and the result manifest records it (`services/export-worker/src/job.test.ts`), but the rule that the version is raised on every change is a release step and is not testable here. Criterion 6 needs the licence manifest of EXP-073 to be generated and read, which was not run in this lane. Round 3 fix (lane U-EXP-001-016): the TeX Live check of ADR 0317 (round 4, item 4) is now made inside the image, against the versions the Containerfile records; the image's base digest itself is not read back. The ledger alone cannot see a released entry rewritten in place; the base-revision leg of the test does, and it runs only where git history holds the base branch (a CI checkout must fetch it; root configuration, not changed here).
+Evidence audit (2026-11-13): criterion 4 unticked because `packages/export-latex/src/exp-015-class-release.test.ts` ("the working tree: the last release is the current version") now fails: `class/docedit.cls` and `class/docedit.lua` were edited after release 0.2.0 was recorded in `class/releases.json`, with `CLASS_VERSION` still 0.2.0, so a changed class would share cache keys with the old one; raise `CLASS_VERSION` and the `ProvidesClass` version and append a release, then tick again.
+
+### EXP-016 Validate every reference PDF with veraPDF in CI
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §3.1, §14; 11 §2 (S4) · **Requirements:** R5, R11 · **Depends on:** EXP-015, EXP-114, FND-002
+
+As a maintainer, I want PDF validation to run on every change, so that tagging regressions are caught before they move page breaks.
+
+**Acceptance criteria**
+
+- [ ] Given the reference corpus, when CI runs, then each PDF is validated with veraPDF against the standards it declares, and CI fails on any violation.
+- [ ] Given a change to the class, the converter or the image, when a pull request is opened, then the validation runs before merge.
+- [ ] Given a validation failure, when the CI log is read, then it names the rule and the corpus document.
+- [ ] Given a PDF produced with draft tagging for a preview, when CI runs, then it is not required to validate.
+
+**Notes:** The validation starts with spike S4 and continues here as a permanent gate. Availability of veraPDF profiles for PDF/UA-2 and PDF/A-4 is checked when this story starts. Round 7 (lane EXP-014-026): not started, all four criteria stay unticked. The CI step belongs in `.github/workflows` (root configuration, for the main session), veraPDF is not installed in this environment, and the profile availability has not been checked (no network use in this lane). The veraPDF step in `services/export-worker/scripts` and the test under `services/export-worker/src/compile.e2e.test.ts` (both outside this lane) show it is referenced but were not run here.
+
+Lane U-EXP-001-016 (round 1): the veraPDF image (`docker.io/verapdf/cli`) is present in Podman, and `services/export-worker/src/compile.e2e.test.ts` passed in this lane (3 tests: the 03 §12 example and a nine-level heading document compile with tagging and validate as PDF/UA-2 and PDF/A-4f; the draft and off tagging compile). Criterion 1 needs the reference corpus validated in CI on every change, and the CI step is root configuration (`.github/`, for the main session). Criteria 1 to 3 stay unticked. Criterion 4 (draft PDFs not required to validate) has no test yet.
+Lane V-EXP-001-016 (round 1): nothing ticked. New: `services/export-worker/src/exp-016-corpus-report.ts` (`flavoursFor`, `requiresValidation`, `validationReport`: one line per failed rule naming the corpus document, flavour, clause and test) with `exp-016-corpus-report.test.ts` (Node.js, 5 tests passed); `services/export-worker/src/exp-016-v-exp-001-016.corpus.e2e.test.ts` validates the corpus documents kept in git (`pages-1`, `form-fields`, `pages-20`) as `ua2` and `4f`, a violation with tagging off, and a draft preview. The Podman run did not finish in this lane: the shared Podman host was saturated by other lanes and the run was stopped after about 35 minutes with no result, so the corpus test is not proven. Criterion 2 (validation before merge) is the CI workflow, root configuration. Decisions taken for the corpus set and the flavours: `docs/adr/0317-lane-V-EXP-001-016.md`, items 1 to 3.
+Stabilisation group 5, round 3 (2026-11-14): criterion 1 stays unmet. In `services/export-worker/src/exp-016-v-exp-001-016.corpus.e2e.test.ts`, `pages-1`, `form-fields`, the violation case and the draft preview pass, and "validates pages-20 against every declared flavour" fails: the worker image has no face for the Chinese, Japanese and Korean text of block 29 (`docedit: missing U+4E0E in block 29` and others; the image's `fonts.json` has no fallback chain beyond STIX Two Math). The test and the corpus are unchanged. Found in the image's TeX Live tree: `LXGWWenKaiGBLite-Regular.ttf` (lxgw-fonts, OFL-1.1) covers every Han and kana character of `pages-20` but no Hangul; the Hangul faces found there are Baekmuk (Catalogue licence "other-free", not in `licences/policy.json`) and the Un fonts (`unfonts-core`, `unfonts-extra`; licence to be confirmed, GPL upstream, which the policy denies). Covering Korean needs either an OFL Hangul face added to the image from outside TeX Live (for example Noto Serif KR, a download not made here) or an owner decision on the Baekmuk licence. Until one of them lands and the image is rebuilt, the `pages-20` case fails and this criterion is not met.
+
+### EXP-017 Typeset page setups and sections
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.1, §4.2, §10 · **Requirements:** R1, R5 · **Depends on:** EXP-015, EXP-044
+
+As an author, I want page size, orientation, margins and columns to carry into the PDF, so that the typeset document has the page layout I set.
+
+**Acceptance criteria**
+
+- [x] Given a document with one page setup, when exported, then size, orientation, margins, gutter, header and footer distances and `columns` with `columnGap` apply, with `geometry` used for the first page setup.
+- [x] Given a `section_break` to a page setup of a different size or orientation, when exported, then the page dimensions and the header width are set directly for that setup, `\newgeometry` is not used, and the section starts on a new page.
+- [x] Given `start` is `nextPage`, `evenPage` or `oddPage`, when exported, then the section starts on the next page, the next even page or the next odd page.
+- [x] Given a `continuous` break that changes margins, when exported, then the margins are not changed and a diagnostic with the block identifier reports it.
+- [x] Given every length comes from the CDM's integers, when written, then it passes through the `dimen` emitter.
+
+**Evidence:** `packages/export-latex/src/exp-017-page-setup.test.ts` (describes `EXP-017 criterion 1` to `criterion 5`, 10 tests, Node.js, `pnpm vitest run packages/export-latex/src/exp-017-page-setup.test.ts`). Criteria 1, 3, 4 and 5 are read from main.tex: `\DEdefsetup`, `\DEdefsetupb`, `\DEgeometry`, `\DEsection` and the `continuous_break_geometry` diagnostic with its block identifier; criterion 5 is a fast-check property over widths and margins (40 runs), checking the bp value against the twips. Criterion 2 is the converter's `\DEsection` and setup for the different-size section, plus a class source audit: no `\newgeometry` outside comments, `\paperwidth` and `\paperheight` set from the setup, and the `\clearpage` before the start. Nothing compiles, so the page size and margins in the PDF are not measured.
+
+**Notes:** The package that sets columns is not named in 09 and must be checked for tagging support (EXP-015). Page number format, start and watermark are EXP-036. Round 7 (lane EXP-014-026, 2026-11-13): the converter and class checks above are the tick basis; the PDF geometry needs a LuaLaTeX compile, which was not run here.
+
+### EXP-018 Typeset headers and footers
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.1, §7 · **Requirements:** R1, R5 · **Depends on:** EXP-017
+
+As an author, I want headers and footers, with different first and even pages, in the PDF, so that the document looks as I set it.
+
+**Acceptance criteria**
+
+- [ ] Given a page setup with default, first-page and even-page header and footer stories, when exported, then `fancyhdr` page styles are generated per page setup, with first-page and even-page variants as `differentFirstPage` and `differentOddEven` say.
+- [x] Given a header taller than the space its page setup gives it, when a page is set, then the class measures the header box and enlarges the top margin, so the body moves down (03 §7, header growth).
+- [x] Given two page setups with different headers, when the second section starts, then its header replaces the first and does not leak back.
+- [x] Given a header that contains a `page` or `pageCount` field, when the PDF is read, then each page shows its own number (EXP-019).
+
+**Evidence:** `packages/export-latex/src/exp-018-headers.test.ts` (describes `EXP-018 criterion 1` to `criterion 4`, 4 tests, Node.js). Criterion 2 is a class source audit: `\DE@measure` on the default, first and even header stories, the `\global\DE@hh` and `\headheight` settings, and the `docedit.frame` call. Criterion 3: two setups name two header stories with different numbers, the story text of each is read from `\DEdefstory`, and the class audit shows `\DE@pagestyle` redefines `\@oddhead` on each section start, with `\@evenhead` set to it. The criterion 1 test (`EXP-018 criterion 1 (not ticked)`) checks that the setup writes the three header stories and both flags; criterion 1 stays unticked (see Notes). Compiled checks (fixer of group 3, round 1, lane EXP-014-026): `packages/export-latex/src/exp-018-headers.compile.test.ts` (2 tests, Node.js, compiles in the export worker's Podman sandbox through `test/harness.ts`, skips when `sandboxReady()` is false; passed locally on 2026-11-13 with the `docedit-export-worker` image). Criterion 4: a header `Page {page} of {pageCount}` over three pages (two `pageBreakBefore` paragraphs); `pdftotext -raw`, split at its form feeds, gives three pages, page n contains `Page n of 3` and no other page's number. Criterion 2: the same body paragraph under a one-line header and under a twelve-line header; in layout.json the body block's `y` under the tall header is more than 1440 twips below its `y` under the short one, and the last header line comes before the body text on the page.
+
+**Notes:** Criterion 1 is not ticked. It names `fancyhdr` page styles, but the house class builds its page styles itself (`\DE@pagestyle` in `class/docedit.cls`, ADR 0032 §6) and does not load `fancyhdr`, which 09 does not name either. The first-page and even-page variants exist in the class (`\DE@pick`, `differentFirstPage`, `differentOddEven`). Whether `fancyhdr` is still required is a decision for the owner, not taken here. Criterion 3 is tested on the converter output and the class source (string checks), not on a compiled PDF. Criteria 2 and 4 are now also tested on a compiled PDF (see Evidence); `docedit.body_frame` itself has no Lua unit test, the compile exercises it. The 1440-twip threshold of the criterion 2 test is the test's own bound (twelve header lines below a 720-twip header distance), not a measurement.
+
+### EXP-019 Print page, reference, sequence and date fields correctly
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.4, §7; review S-06 · **Requirements:** R1, R5 · **Depends on:** EXP-005, EXP-061, CDM-042
+
+As an author, I want page numbers, cross-references, caption numbers and dates to be right in the PDF, so that I never have to correct them by hand.
+
+**Acceptance criteria**
+
+- [x] Given a `page` field, when exported, then it prints the current page number, and a `pageCount` field prints the number of the last page through a last-page reference.
+- [x] Given a `ref` field that targets a bookmark, heading, numbered paragraph, caption sequence or equation label, when exported, then it prints a page reference or the literal label text, as its `format` says.
+- [x] Given `seq` fields, numbered items and cross-references to numbered items, when exported, then the labels are the literal text computed by the shared numbering algorithm and no TeX counter is used.
+- [x] Given a `date` field, when a job is created, then it prints the server's date at job creation in the job's time zone.
+- [x] Given a request or a stored `cached` value that carries a different date, when exported, then the output still shows the server's date; a value supplied by a client is never printed.
+- [x] Given a field whose value the converter can compute, when it has a `cached` text, then the converter ignores `cached`.
+
+**Evidence:** `packages/export-latex/src/exp-019-fields.test.ts` (describes `EXP-019 criterion 1` to `criterion 6`, 14 tests, Node.js). Criterion 1: `\DEpage` and `\DEpages` in main.tex; the class audit of `\DEpages` as `\PreviousTotalPages` and the `enddocument/afterlastpage` hook. Criterion 2 (describe `EXP-019 criterion 2`, round 5, lane export-latex-2): a ref to a numbered paragraph prints its literal label, a ref with a page format prints `\DEpref`, a ref to a bookmark prints the label of the block that holds it (and `\DEpref` for a page format), a ref to a numbered heading prints `Chapter 2`, a ref to the second caption prints label `2`, and a ref to the second labelled equation (`eq:second`) prints `2`. Criterion 3: the two seq fields of a caption paragraph print `\DEa` labels 1 and 2 in order, and main.tex has no counter command. Criteria 4 and 5: a date field prints the model's date for the job instant in Tokyo and in New York (two different days), and a cached date is not printed; with no job instant the converter refuses (`date_without_job_time`). Criterion 6: page and ref fields with a `cached` text print the computed value and never the cached text.
+
+**Notes:** Round 5 (lane export-latex-2): criterion 2 is ticked. The earlier note is out of date: the caption-sequence test now checks the label, and the heading and equation-label refs are tested in this file (the `eq:` target is also covered in `exp-052-equations.test.ts`). Fixer of group 3, round 1 (lane EXP-014-026): the bookmark and numbered-paragraph tests now assert the printed `\DEa{…}{1.}` label after `See `, not only the text `1.`. All criterion 2 checks read main.tex; none compiles. The field kinds `title` and `styleRef` are in the model (03 §4.4) but 09 gives no mapping for them (Open questions). The mirror kind `formValue` is EXP-033. Round 7 (lane EXP-014-026): criterion 5's "a value supplied by a client" is covered by the cached-date case only; the converter's `date` option, which carries a server-formatted text, is not tested.
+
+### EXP-020 Typeset paragraph styles from the formatting cascade
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.5, §6 · **Requirements:** R1, R5 · **Depends on:** EXP-013, EXP-015
+
+As an author, I want my paragraph styles and direct formatting to appear in the PDF as I set them, so that the typeset document matches my formatting.
+
+**Acceptance criteria**
+
+- [x] Given a paragraph with a style and direct attributes, when exported, then font, size, leading, alignment, indents, spacing, `keepNext`, `keepLines`, `pageBreakBefore` and `widowControl` follow the cascade of 03 §6: defaults, table style, numbering level, style chain, direct attributes.
+- [ ] Given a style with `borders` and `shading`, when exported, then they are drawn around and behind the paragraph.
+- [x] Given a run mark with `value: false` where the style switches the property on, when exported, then the property is off for that run.
+- [x] Given a `fontFamily` that is not in the manifest, when exported, then the fallback chain is used and a diagnostic names the family.
+- [x] Given a paragraph inside a table, when exported, then the table style's properties come before the paragraph style's.
+
+**Evidence:** `packages/export-latex/src/exp-020-cascade.test.ts` (describes `EXP-020 criterion 1` to `criterion 5`, 8 tests, Node.js, `pnpm vitest run packages/export-latex/src/exp-020-cascade.test.ts`). Criterion 3: a run with `bold` `value: false` prints the medium weight (`\DEfont{..}{m}{n}`) where the style sets bold. Criterion 4: an unknown `fontFamily` gives a `font_family_missing` diagnostic on the paragraph that names the family, and the run uses the default family. Criterion 5: a cell paragraph with a paragraph style takes the style's size over the table style's, and a cell paragraph with no style takes the table style's size. No PDF is compiled. Criterion 1, numbering-level leg (round 7, lane EXP-014-026): `packages/export-latex/src/exp-020-numbering-cascade.test.ts` (describe `EXP-020 criterion 1 (numbering-level leg)`, 3 tests): a numbered paragraph takes the level's `indentLeft` and negative `hanging` as `\DEil` and `\DEif`; the style's `indentLeft` overrides the level's; a direct `indentLeft` overrides both.
+
+**Notes:** Lane export-latex-2 (round 4). Round 7 (lane EXP-014-026): criterion 1 is ticked on the converter's output, as criteria 3 and 5 are; the numbering-level leg is now tested, and the other properties were already covered through the converter's macros. Criterion 2 is unticked: the cascade's `borders` and `shading` are in the model, but `props.ts` does not draw them (it warns and writes `\DEshade` for shading). Criterion 2 is unticked: `props.ts` does not draw paragraph borders (it warns that they are not drawn) and it warns that shading is not drawn while still writing `\DEshade`, so neither is drawn as the story asks. The run property `hidden` and the paragraph property `dir` are in 03 §4.5, but 09 does not say how output treats hidden text (Open questions); right-to-left is EXP-037. Lane V-EXP-017-032 (2026-11-13): criterion 2 is not changed. `\DEshade` in `class/docedit.cls` is an empty macro and the class has no border macro, so shading and borders need a drawing method (a background behind each paragraph's lines, a frame around them) and a compile test. That is a class change, recorded as an open question in `docs/adr/0318-lane-V-EXP-017-032.md`.
+
+### EXP-021 Apply the model's paragraph spacing and line spacing
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1; 03 §7 · **Requirements:** R1, R5 · **Depends on:** EXP-020, EXP-115
+
+As an author, I want spacing in the PDF to follow the same rules as the editor, so that gaps and line heights are what I set.
+
+**Acceptance criteria**
+
+- [x] Given two consecutive paragraphs, when exported, then the gap between them is the larger of the first one's `spaceAfter` and the second one's `spaceBefore`.
+- [x] Given `contextualSpacing` and two paragraphs of the same style, when exported, then the gap between them is zero.
+- [x] Given `lineRule` is `multiple` (for example 1150 for 1.15 lines), when exported, then the spacing is applied per line to the height of the tallest run on that line, in a `post_linebreak_filter` callback, and not as a paragraph-wide `\baselineskip`.
+- [x] Given `lineRule` is `exact` or `atLeast`, when exported, then the value is a length.
+- [ ] Given the shared spacing fixtures (EXP-115), when the LaTeX writer runs them, then they pass.
+
+**Evidence:** `packages/export-latex/src/exp-021-spacing.test.ts` (describes `EXP-021 criterion 1` to `criterion 4`, 6 tests, Node.js, `pnpm vitest run packages/export-latex/src/exp-021-spacing.test.ts`). Criterion 1: `\DEgap` carries the larger of `spaceAfter` and `spaceBefore` for 40 random pairs. Criterion 2: no gap between two paragraphs of a `contextualSpacing` style, and a gap when the styles differ (control). Criterion 3: `\DElsm{1150}` per paragraph and no `\baselineskip` assignment in `main.tex`; the class audit checks the `post_linebreak_filter` registration in `class/docedit.lua`. Criterion 4: `\DElse` and `\DElsa` take the value for 30 random lengths. No PDF is compiled, so the gap and line heights in the PDF are not measured.
+
+**Notes:** Lane export-latex-2 (round 4). Criterion 5 is unticked: the shared spacing fixtures of EXP-115 are not built yet. Criterion 3 is checked as a source audit of the class and the converter output; the per-line height is not measured.
+
+### EXP-022 Typeset headings with working bookmarks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.3 · **Requirements:** R1, R5 · **Depends on:** EXP-015, EXP-043
+
+As an author, I want headings to become PDF bookmarks, so that readers can navigate the document.
+
+**Acceptance criteria**
+
+- [x] Given paragraphs whose style has an `outlineLevel`, when exported, then they are set with the kernel's sectioning commands and class-defined formatting, and the PDF has a bookmark for each.
+- [ ] Given a heading with formatting, a footnote, math or special characters, when it is used in a bookmark, caption list or table of contents entry, then the text is also emitted in plain form, through `pdfString` for bookmarks.
+- [x] Given a numbered heading, when exported, then its number is the literal label of the shared algorithm.
+- [ ] Given headings from level 1 to level 9, when exported, then each is set at its level.
+
+**Evidence:** Lane V-EXP-017-032 (2026-11-13): criterion 1 is ticked by `packages/export-latex/src/exp-022-bookmarks.compile.test.ts` (describe `EXP-022 criterion 1`, 1 test, passed in the Podman sandbox through the machine route, 211 s on a loaded host). The outline read from the compiled PDF has four entries, in order and nested at levels 1 to 3, each with a destination on a page of the document.
+
+criterion 3: `packages/export-latex/src/exp-022-headings.test.ts` (describe `EXP-022 criterion 3`: a numbered heading gives the `\DEh` label `1.` and the bookmark string `1. Introduction`, from the shared label). Criterion 2 (bookmark text) and criterion 4 (levels 1 to 9 in the converter output) are tested in the same file (`EXP-022 criterion 2`, `EXP-022 criterion 4 (converter side)`) but are not ticked, see Notes. Criterion 1 is partly covered by a source check of the class sectioning commands (`EXP-022 criterion 1 (source side)`).
+Reviewer, round 6 (2026-11-13): criterion 1 is unticked. The only test for it is now `it.fails` (the round 6 note in Notes records that the compiled PDF has no `/Outlines` object), so no passing test shows a bookmark for each heading; the reviewer could not compile here (Podman cgroup error) and so could not confirm either reading. Earlier claim, superseded: Lane U-EXP-017-032 (2026-11-13): criterion 1 was ticked by `packages/export-latex/src/exp-022-bookmarks.compile.test.ts` (describe `EXP-022 criterion 1`, Node.js, sandbox compile in Podman through `test/harness.ts`; the outline is read from the compiled PDF, with object streams inflated: two level-1 headings and one level-2 heading, in order and nested). The criterion 2 part of that earlier claim is withdrawn (round 7): `exp-022-bookmarks.compile.test.ts` has no criterion 2 test, and criterion 2 stays unticked.
+Fixer, group 3 round 6 (2026-11-13): criterion 1 is ticked again. `packages/export-latex/src/exp-022-bookmarks.compile.test.ts` (describe `EXP-022 criterion 1`) is now a plain `it`: the compile must succeed (`expect(c.compile.ok)`), `main.tex` has one `\DEh` per heading, and the outline, read with `test/exp-023-pdf-links.ts` (`pdfLinks`, which walks `/Outlines` from the catalogue and now reports each item's `depth`), is exactly Alpha (depth 0), Beta (1), Gamma (2), Delta (0), each with a destination on a page. It passed when compiled in the Podman sandbox through the machine route (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`), with the `sandboxReady()` gate forced open in a temporary copy, because the gate reports `ok: false` on this host (see Notes); in a plain `pnpm vitest run packages/export-latex` it skips.
+
+**Notes:** The kernel offers fewer sectioning levels than the model's nine; how levels beyond the kernel's are produced is a class design question for S4 (Open questions). Criterion 1 is not ticked: the bookmark for each heading is in the PDF, and that needs a compile, which was not run. The class maps levels 6 to 9 to the subparagraph role (`class/docedit.cls`, tagging code), so the rendered level of those headings is the open S4 question; the converter's `\DEh` level is tested, the rendered level is not. Criterion 2 is not ticked: it also names table of contents entries, and the table of contents (EXP-023) is not built; the caption plain form (`blocks.ts`, `\DEcaption`) is not tested here. The bookmark plain form is tested for bold text, special characters and hidden runs. Round 6 (export-latex, 2026-11-13): criterion 1 stays unticked. `packages/export-latex/src/exp-022-bookmarks.compile.test.ts` compiles three headings in the sandbox and looks for their outline titles, and the PDF has no `/Outlines` object at all (no bookmark for any heading), although hyperref is loaded and `\DEh` passes the pdfString to the kernel `\section`. The cause is not found. The test is `it.fails` until the outline is written; it also passes when the compile itself fails, so a compile error would read as a pass. ADR 0115 (round 6) records it. Lane U-EXP-017-032: in the compiled PDF a backslash in a heading becomes the bookmark text `\textbackslash` (hyperref's purify path for `\DEstr`, `class/docedit.cls` line 137 to 141; the hex in main.tex is correct). Criterion 2 stays unticked until that is fixed; the defect is an `it.fails` test, so the suite stays green and will flag the fix. Criterion 4 is still unticked: the rendered level of levels 6 to 9 is the open S4 question, and no level beyond two was compiled. Lane V-EXP-017-032 (2026-11-13): criterion 1 is ticked on the passing compile (see Evidence) for levels 1 to 3; the reviewer's round 6 note above predates that run. The sandbox probe is `sandboxReady()` in `services/export-worker/src/sandbox-ready.ts`, whose wall limit was raised from 60 s to 180 s on this loaded host. Lane V-EXP-017-032 (2026-11-13), criterion 2 stays unticked: `packages/export-latex/src/exp-022-v-bookmark-plain.compile.test.ts` passed in the Podman sandbox for a bold run and special characters, and its backslash case fails as a known defect (`it.fails`, confirmed on the compile: the bookmark text is not the typed text). The caption and table of contents plain forms are not tested.
+Fixer, group 3 round 6 (2026-11-13): the round 6 finding of "no `/Outlines`" was wrong; the defect was in the test. The PDF has an outline: the catalogue has `/Outlines`, and each item is in an object stream with `/Title 70 0 R`, an indirect reference to a literal string (UTF-16BE with octal escapes). The old `outlineTitles()` searched for `/Title (` and `/Title <` only, so it found nothing. A minimal `article` with `\DocumentMetadata{tagging=on}` and the docedit bundle both show the same shape. The test now uses the object reader of `test/exp-023-pdf-links.ts`. The sandbox gate: on this host `sandboxReady()` reports `ok: false` on the machine route because its probe treats any `/run/secrets` as a host mount, while `sandboxArgs` itself mounts an empty tmpfs there (SEC-048); the direct route fails on the `pids` cgroup controller. That code is in `services/export-worker` and is not changed here. Lane U-EXP-017-032, round 8 (2026-11-13): the backslash defect is cause-found but not fixed. The bookmark title is set by hyperref from the typeset content (the `\DEstr` plain form in `\DEh` argument 4 is not used by hyperref for the outline). Wrapping the content in `\texorpdfstring{#7}{#4}` in `class/docedit.cls` (`\DEh`) was tried and reverted: the outline literal then holds a raw backslash (`\000k\sla...` in the object stream, read as an escape), which is worse than `\textbackslash`. A fix needs the backslash written as an escaped code unit in the UTF-16 literal, which is hyperref's pdfstring encoder; not done here. `it.fails` stays, so criterion 2 stays unticked.
+
+### EXP-023 Generate tables of contents and lists of figures and tables
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Author |
+
+**Spec:** 09 §3.1, §8; 03 §4.3, §10 · **Requirements:** R1, R5 · **Depends on:** EXP-022, EXP-028, EXP-061
+
+As an author, I want a table of contents and lists of figures and tables in the PDF, so that readers can find things.
+
+**Acceptance criteria**
+
+- [x] Given a `toc` with `minLevel`, `maxLevel` and `of` set to `headings`, when exported, then entries are generated for the headings in that range, with page numbers.
+- [x] Given `of` names a caption sequence, when exported, then a list of the captions of that sequence is generated.
+- [x] Given a final export, when the page references have converged, then the page numbers in the entries are correct.
+- [x] Given a one-pass preview, when the entries may show stale page numbers, then the job result says so (EXP-062).
+- [x] Given an entry, when the PDF is read, then it links to its heading or caption.
+
+**Evidence:** criterion 5 (fixer, 2026-11-13): `packages/export-latex/src/exp-023-toc.compile.test.ts`, describe `EXP-023 criterion 5` (3 tests, Node.js, sandbox compile in Podman through `test/harness.ts`; the PDF is read with `packages/export-latex/test/exp-023-pdf-links.ts`). "links each heading entry to its heading, on the heading page" (preview and final): three headings on pages 2 to 4; the table's page has exactly three `/Link` annotations, top to bottom in entry order, each resolving through the named destinations to its heading's page and to the same destination as that heading's bookmark; no other page has a link; the final PDF passes veraPDF PDF/UA-2. "links each caption entry to its caption, on the caption page": two captions on pages 2 and 3, two links on the list's page, to those pages, with distinct destinations. The class fix is `\DE@tocline` in `packages/export-latex/class/docedit.cls`.
+
+**Evidence:** Lane V-EXP-017-032 (2026-11-13), criterion 4: `services/export-worker/src/job.test.ts`, test 'compiles a preview once with tagging off and flags stale page references (EXP-062)' (pure Node, `pnpm exec vitest run --project node services/export-worker/src/job.test.ts`, 11 of 11 passed). A preview's job result has `converged: false` and the diagnostic `preview_one_pass`, whose message says that page numbers in the table of contents and in references may be stale. The flag is set for every preview, so it covers a preview with a table of contents. The compile in that test is a fake; the flag under the real compile is in `services/export-worker/test/export.e2e.test.ts` (EXP-062 criterion 1), which was not run in this lane.
+
+**Notes:** Lane export-latex-2 (round 4). No criterion is ticked. All five describe the PDF (entries, page numbers, links), and no compile runs here (Podman not run). `packages/export-latex/src/exp-023-toc.test.ts` checks only the converter's side: `\DEtoc` takes the minimum and maximum level (clamped to at least the minimum and at most nine), and `\DElistof` is written per caption sequence name. Criterion 3 and the preview case of criterion 4 also need EXP-061 and EXP-062.
+Lane U-EXP-017-032 (2026-11-13): criteria 1, 2 and 3 (final and preview profiles) are ticked by `packages/export-latex/src/exp-023-toc.compile.test.ts` (describes `EXP-023 criteria 1 and 3`, `criterion 2`; 3 tests, Node.js, sandbox compile in Podman through `test/harness.ts`; entries and page numbers read with `pdftotext` per page). Criterion 4 stays unticked: EXP-062 is not built. Criterion 5 was unticked by the reviewer (2026-11-13): the test `criterion 5` counts `/S /GoTo` actions, and the compiled PDF of that test has four, which are the three outline (bookmark) actions and the catalogue's `OpenAction`. The PDF has no `/Annots` and no `/Link` at all, so no table of contents entry is a link annotation. The test passes without any link in the entries and shows nothing about them; it needs to find the link annotations (or the tagged `Link` structure elements) of the entries and their destinations. Fixer (2026-11-13): the cause was in the class. With `\DocumentMetadata` (every bundle has it), the kernel's `\contentsline` (latex-lab-toc) no longer wraps the entry in a link; hyperref adds the link in the `contentsline/text` hooks, which only the kernel's `\@dottedtocline` calls, and the class's own `\DE@tocline` did not. `\DE@tocline` now calls the `contentsline/text` and `contentsline/page` hooks with `\@contentsline@destination` and marks the leaders as an artifact through the `toc/leaders` sockets, as the kernel does; without `\DocumentMetadata` the hooks are skipped and hyperref's own `\contentsline` links the entry. Criterion 5 is re-ticked on the new tests (see Evidence). The old PDF of the hollow test, read with the same reader, has no annotation at all. Only the entry text is a link (hyperref's default `linktoc=section`), not the page number.
+
+### EXP-024 Typeset numbered lists with literal labels
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.3, §7; review M-4 · **Requirements:** R1, R5 · **Depends on:** EXP-015, EXP-044, CDM-042
+
+As an author, I want list numbers in the PDF to be the ones I see in the editor, so that skipped levels, tables between items and deep nesting never break them.
+
+**Acceptance criteria**
+
+- [x] Given paragraphs with `numbering` (`numberingId`, `level`, `listId`), when exported, then each label is the literal text computed by the shared algorithm, set by the class's own list macros, and no LaTeX counter is used for list numbers.
+- [x] Given skipped levels, a table between two items, nine nested levels, `numberingRestart`, `restartAfter` and `legal`, when exported, then the labels equal the editor's.
+- [x] Given two lists that use the same definition with different `listId`, when exported, then they number independently.
+- [x] Given a `bullet` level, when exported, then the bullet comes from the published character list through `enumLookup`, and the stored value is never written.
+- [x] Given `indentLeft`, `hanging` and `align` of a level, when exported, then the label and text are placed accordingly.
+
+**Evidence:** `packages/export-latex/src/exp-024-lists.test.ts` (describes `EXP-024 criterion 1` to `criterion 5`, 10 tests, Node.js, `pnpm vitest run packages/export-latex/src/exp-024-lists.test.ts`). Labels are read from the `\DEli` line of main.tex through map.json's block lines. Criterion 1: the labels are the text of the shared `computeLabels`, and no counter command (`\arabic`, `\value`, `\the`, `\stepcounter` and similar) appears in main.tex; the test also checks that `class/docedit.cls` defines `DElist` and `\DEli`. Criterion 2: the labels equal `computeLabels` for skipped levels, a table between items, nine levels, `numberingRestart`, `restartAfter` and `legal`. The "editor's" labels are taken from the same shared function the editor uses (CDM-042), not from a running editor. Criterion 3: two lists with `listA` and `listB` restart at 1. Criterion 4: a published bullet (`◦`) is printed; `✗`, which is not in the table, prints `•` with an `enum_unknown` warning and is never written. Criterion 5: `indentLeft` 720 and `hanging` 360 give `\DEil{36bp}\DEif{-18bp}` and `\begin{DElist}{36bp}`; align `start`, `center` and `end` give the codes 0, 1 and 2. Nothing compiles, so the printed positions and the label glyphs in the PDF are not inspected.
+
+### EXP-025 Typeset text runs as typed
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1, §3.2; 03 §4.5, §5 · **Requirements:** R1, R5 · **Depends on:** EXP-015, EXP-042, EXP-044, EXP-047
+
+As an author, I want text to appear in the PDF exactly as I typed it, with my character formatting, so that nothing is changed by TeX's conventions.
+
+**Acceptance criteria**
+
+- [x] Given the sequences `--`, `---` and quotes typed as backticks, when exported, then they appear as typed, because the class switches TeX ligatures off (`Ligatures=TeXOff`) on every font it loads, including fallback fonts.
+- [x] Given runs of spaces, and leading and trailing spaces, when exported, then explicit spaces are emitted for every space after the first and for leading and trailing spaces, so the counts equal the input.
+- [ ] Given the extracted text of the exported PDF, when it is compared with the input, then they are equal for the corpus.
+- [x] Given bold, italic, `underline` (single, double, dotted, none), `strike` and `highlight`, when exported, then underline, strike and highlight are drawn with `lua-ul` and colours with `xcolor` through the `color` emitter.
+- [x] Given `smallCaps`, `allCaps` and `vertAlign`, when exported, then they are applied.
+
+**Evidence:** `packages/export-latex/src/exp-025-runs.test.ts` (describes `EXP-025 criterion 1` to `criterion 5`, 10 tests, Node.js, `pnpm vitest run packages/export-latex/src/exp-025-runs.test.ts`). The tests read the run payloads of main.tex and the house class source. Criterion 1: `--`, `---` and backtick quotes reach main.tex unchanged, and every `\newfontfamily` and `\setmainfont` loader in `class/docedit.cls` carries `Ligatures=TeXOff` and the fallback option. Criterion 2: `a   b` gives `a \ \ b`, `  lead` gives `\ \ lead`, `end  ` gives `end\ \ `; a fast-check property (60 runs) keeps the count of spaces equal to the input. Criterion 4: single, double and dotted underline give `\DEul`, `\DEuld` and `\DEulo`, none gives no underline macro; `\DEst` for strike; `\DEhl{DEhlyellow}` for highlight; `\DEc{1F5FAD}` for a colour mark; the class loads `xcolor` and `lua-ul` and defines the macros. Criterion 5: bold and italic set the font macro's `b` and `it` shapes, small caps sets `sc`, and `\DEuc`, `\DEsup` and `\DEsub` wrap the run. Criterion 1 and criterion 4 are checked on the TeX source and the class source; the glyphs and the drawn lines in the PDF are not inspected, since nothing compiled. Criterion 3 (lane U-EXP-017-032, 2026-11-13): `packages/export-latex/src/exp-025-runs.corpus.compile.test.ts` (describe `EXP-025 criterion 3`, Node.js, sandbox compile through `test/harness.ts`) compiles ten one-line paragraphs (dashes, backtick and straight quotes, `fi`/`fl` pairs, Latin-1 accents, Cyrillic, punctuation, bold, italic and underline runs) and checks that the `pdftotext -raw` lines equal the input, in order, apart from page numbers. The corpus is written in the test, not taken from `packages/corpus`. It passed on 2026-11-13 only with the readiness probe replaced by a scratch vitest config (the probe reported `podman info` over its 30 s limit on the loaded host) and `DOCEDIT_PODMAN_MACHINE` set to the WSL machine. The unmodified command skips on this host until the probe passes, so that run is the one to repeat. Lane V-EXP-017-032 (2026-11-13): repeated unmodified with `DOCEDIT_PODMAN_MACHINE=podman-machine-default` after the probe's wall limit went from 60 s to 180 s (`services/export-worker/src/sandbox-ready.ts`): 1 test passed in the Podman sandbox.
+
+**Notes:** Evidence audit (2026-11-13): criterion 3 is unticked because its compile test uses ten paragraphs written inside the test and not `packages/corpus` (the shared corpus of FND-006, `pages-1` and `pages-20` with their repeated spaces and ligature cases), so the test does not show that the PDF text equals the input for the corpus; it passes (Podman sandbox, 1 test).
+
+### EXP-026 Fail final exports on missing glyphs
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.2 (Missing glyphs); review M-7 · **Requirements:** R5 · **Depends on:** EXP-047
+
+As an author, I want an export to fail rather than silently lose a character, so that a signed PDF never differs from what I wrote.
+
+**Acceptance criteria**
+
+- [x] Given a character that neither the run's font nor the fallback chain covers, when the converter checks every character against the fonts' character maps, then it reports an error diagnostic with the block identifier and the code point.
+- [x] Given the class sets `\tracinglostchars=3`, when a character is lost at compile time despite the check, then the compile reports an error and not only a log line.
+- [x] Given a `final` export, when any glyph is missing, then the job fails and no PDF is released.
+- [x] Given a `preview`, when a glyph is missing, then the miss is reported as a diagnostic.
+- [ ] Given every character is covered by a font or the fallback chain, when exported, then the job passes and fallback fonts render with ligatures off.
+
+**Evidence:** `packages/export-latex/src/glyphs.missing.test.ts` (converter diagnostics only; no PDF is compiled). Criterion 1 (describe `EXP-026 ... (criterion 1)`): an error `glyph_missing` names the paragraph and `U+0416`; a property over Cyrillic letters checks block and code point; each code point is reported once per block. Criterion 4 (describe `... criterion 3 and 4, converter side`): a preview gives a warning diagnostic and still writes the bundle. Criterion 3 is ticked in round 3 on the worker side: `services/export-worker/src/exp-026-glyphs.job.test.ts` (describes `EXP-026 criterion 3` and `criterion 4 (worker side)`, 3 tests, Node.js, passing on 2026-11-13) runs one final export and one preview of a document with a Cyrillic character that the test manifest does not cover. The final job ends `failed` with `unsupported_feature`, the `glyph_missing` error names the paragraph, the compile is never called and no output is stored; the preview completes with a warning and stores its PDF. The compile is a fake, so no PDF is compiled here. Criterion 2 needs a LaTeX run for `\tracinglostchars`. Criterion 5 is not ticked: that the job passes and that fallback faces render with ligatures off need a compile.
+
+**Notes:** Whether a preview still produces a PDF when a glyph is missing is not specified (Open questions). Lane export-latex-2 (round 2): the glyph check (`fonts/check.ts`) is the converter side only; the worker's job-level failure is not in this lane. Round 10 (export-latex, 2026-11-13), criterion 2: a sandbox test was written to show that a character no image font covers fails a final compile (`\tracinglostchars=3`) and lets a preview go on. It was removed without being run: Podman could not start any container on this host (`crun: controller pids is not available`), so no compile could run. The character and the check are not yet confirmed. An earlier compile in this round, with a private-use character and no converter coverage, reported success for the final profile, which is not explained. Criterion 2 stays unticked until a compile on a working Podman shows the failure and its log line. Round 3 (lane EXP-014-026): criterion 3 is ticked on the worker side (see Evidence). The worker test replaces the compile, so the sandbox's own handling of a lost character is not covered; criteria 2 and 5 still need a real compile. The test manifest needed coverage on the math face too, because the converter's fallback chain is the math face when the manifest names no fallback.
+Lane U-EXP-017-032 (2026-11-13): criterion 2 is ticked by `packages/export-latex/src/exp-026-glyphs.compile.test.ts` (describe `EXP-026 criterion 2`, 2 tests, Node.js, sandbox compile in Podman): the final compile of U+4E00, which the test manifest claims for every face while no real face has it, ends with `compile.ok` false and the log line `Missing character`. The converter drops U+E000 from the text before the compile (`\DEr{0}{before  after}` in main.tex), so that character cannot test criterion 2; this explains the earlier private-use observation. Criterion 5 is not ticked: the same file compiles Cyrillic text covered by the real faces as a final export, and pdftotext returns it unchanged, but the ligature setting of fallback faces is not checked (pdftotext does not show whether a ligature glyph was used; a glyph-level check is needed). Lane V-EXP-017-032 (2026-11-13): `packages/export-latex/src/exp-026-fallback.compile.test.ts` (describe `EXP-026 criterion 5`, one test, sandbox compile in Podman with `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, passed, not skipped): a final export whose text holds U+2200, which the image's Noto families lack and the fallback chain (the math face, as the manifest has no fallback list) draws, passes, and `pdftotext` returns the text as typed, with `--` and two backticks unchanged. This does not isolate the fallback face's ligature setting, because `--` and the backticks are drawn by the family, so criterion 5 stays unticked.
+
+### EXP-027 Typeset languages without rewriting text
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Author |
+
+**Spec:** 09 §3.1, §4; 03 §4.1, §5 · **Requirements:** R1, R5 · **Depends on:** EXP-044
+
+As an author, I want text in several languages to hyphenate and format correctly without TeX changing my characters, so that the PDF says what I wrote.
+
+**Acceptance criteria**
+
+- [x] Given `settings.lang` and `lang` marks, when exported, then `babel` is loaded only through its ini-based interface, and the language is chosen through `enumLookup`.
+- [x] Given any language, when exported, then `babel` shorthands and automatic punctuation spacing are switched off, so characters such as `"`, `:`, `;`, `!` and `?` are unchanged and no spacing is inserted.
+- [x] Given a language tag that has no entry in the table, when exported, then the document language is used and a warning names the tag.
+- [x] Given `settings.hyphenation` is false, when exported, then hyphenation is off.
+
+**Evidence:** `packages/export-latex/src/languages.typeset.test.ts` (converter output and the class source read as text; no PDF is compiled). Criterion 1 (describe `EXP-027 ... (criterion 1)`): a marked language gives `\DEdeflang` with its babel name and ini tag, once per tag; main.tex loads no babel package with options; the class loads babel through `import=` with `shorthands=off`. Criterion 3 (describe `... (criterion 3)`): `language_unknown` names the tag, the text is printed, and no `\DElang` is written for it. Criterion 4 (describe `... (criterion 4)`): no `\DEhyphenation` unless `settings.hyphenation` is true; the class default is `\hyphenpenalty=10000`. Criterion 2 (2026-11-13, packet X1): `packages/export-latex/src/typeset.compile.test.ts` (describe `EXP-027 criterion 2`) compiles German text with `"`, `:`, `;`, `!` and `?`, and French text with ` : ; ! ?`, in the Podman sandbox, and checks that `pdftotext` returns each text unchanged, so no spacing is inserted.
+
+**Notes:** Lane export-latex-2 (round 2). Criterion 1 is met by the converter's macros and the class's text, which a compile would confirm; the table in `languages.ts` is the enumerated choice.
+
+### EXP-028 Typeset images, figures and captions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.3, §4.4 · **Requirements:** R1, R5 · **Depends on:** EXP-014, EXP-043, EXP-044
+
+As an author, I want pictures and captioned figures in the PDF at the sizes I set, so that the document reads as intended.
+
+**Acceptance criteria**
+
+- [x] Given an inline `image` or a block `figure` with `width` and `height`, when exported, then `graphicx` is used with an explicit width and height written through `dimen`.
+- [x] Given `placement` is `here`, when exported, then the figure appears where it occurs; given `float`, then it may float.
+- [ ] Given a figure with a `caption` that contains a `seq` field, when exported, then the caption shows the literal label of the shared algorithm, and `align` is honoured.
+- [x] Given an `alt` text, when exported, then it is written through the `pdfString` emitter as the graphic's alternative text.
+- [x] Given a figure kept with its caption, when a page break would fall between them, then they stay together.
+
+**Evidence:** `packages/export-latex/src/pictures.typeset.test.ts` (converter output and the class macros read as text; no PDF is compiled). Criterion 1 (describe `EXP-028 ... (criterion 1)`): an inline image and a block figure write `\DEimg` with the file and a width and height in points, for any size (property); the class's `\DEimg` is `\includegraphics[width=#2,height=#3,...]`. Criterion 2 (lane EXP-027-039, round 3): `packages/export-latex/src/figures.placement.compile.test.ts` (describe `EXP-028 criterion 2 (here)`) compiles a paragraph, a figure with placement `here` and a paragraph in the sandbox; the figure's y in the class's layout report lies between the two paragraphs, and its caption text lies between them in the PDF text. The picture is the converter's placeholder box (no asset), which goes through the same `\DEfig` macro. Criterion 4 (lane EXP-027-039, `packages/export-latex/src/pictures.alt.exp028.test.ts`, describe `EXP-028 criterion 4`): the alternative text of a block figure, of an inline image and of any printable text (property) is the `\DEstr` hex in the `\DEimg` option, and decodes to the `alt` text. Criteria 3 is not ticked (see Notes). Criterion 5 (round 5 fix, E group 2; the earlier 30-figure sweep was replaced): `packages/export-latex/src/exp-028-keep-with-caption.compile.test.ts` (describe `EXP-028 criterion 5`) compiles trials in the sandbox. Each trial starts a page with a one-line spacer whose space after is S twips, then a figure (a picture 1440 twips high and a one-line caption). A coarse sweep (S from 0 to 16000 in steps of 400, class as shipped) finds the last S at which the figure starts on the spacer's page. A fine sweep from there (61 trials, steps of 20 twips) is compiled twice: with the class as shipped, and with the class's `\penalty\@M` removed from `\DE@figbody` (the class text is changed in memory for that compile only). The test asserts that without the penalty at least one picture is on its spacer's page and its caption on the next page, that with the penalty every picture is on the page of its caption, and that in those same trials the whole figure starts the next page. Picture pages come from the layout report, caption pages from `pdftotext`. In a run on 2026-11-13 (local Podman machine, export-worker image) the coarse sweep stopped at S = 12800, and 15 fine trials (S = 13060 to 13340) split without the penalty and moved whole with it. These values depend on the page setup and fonts; the test finds them by search and asserts none of them.
+
+**Evidence (criterion 3, seq part, lane V-EXP-017-032):** `packages/export-latex/src/exp-028-caption-label.compile.test.ts` (describe `EXP-028 criterion 3 (seq)`, 1 test, Node.js, compiled in the Podman sandbox): two captions with a `seq` field print `FIRSTCAP Figure 1` and `SECONDCAP Figure 2` in `pdftotext -raw` order, and main.tex uses no counter command.
+
+**Notes:** Floating figures with text wrap are not in the model in version 1 (03 §10). Images without `alt` are reported by EXP-113. Lane export-latex-2 (round 2): criterion 4 is not ticked. The converter writes the picture's `alt` as a `kvValue` option of `\DEimg` (`inline.ts`, `imageBox`), not through `pdfString` as the criterion names; an emitter decision, recorded as an open question in `docs/adr/0140-export-latex-2-backlog-batch.md`. Lane EXP-027-039: `kvValue` is braces around `pdfString` (`emit.ts`), so the option value is the `pdfString` form; criterion 4 is ticked on that reading (proposed in `docs/adr/0223-lane-EXP-027-039.md`, open for the owner). Criterion 3 (caption `seq` label and `align`) and criterion 5 (keeping a figure with its caption) need a LaTeX run. Lane EXP-027-039 (round 3): criterion 2 is ticked (see Evidence). For criterion 3, `align` reaches the picture line only (`blocks.ts`, `DE@figbody` in `docedit.cls`); the caption is set by its own style, so the caption is not moved by `align`. Whether `align` should move the caption is open for the owner (ADR 0223, decision 12). Criterion 3 stays unticked until that is settled and the seq label is checked in a compile. Lane V-EXP-017-032 (2026-11-14): the seq label is now checked in a compile (`packages/export-latex/src/exp-028-caption-label.compile.test.ts`, Podman sandbox, passed with `DOCEDIT_CONTAINER_CGROUPS=disabled` on the WSL machine, see Evidence); the `align` half is still the owner's question (ADR 0223, decision 12), so the criterion is not ticked. Round 10 (export-latex, 2026-11-13): `packages/export-latex/src/exp-028-figure-caption.test.ts` checks the converter side of criterion 3 (passes, Node.js): a `seq` field in a caption prints its literal label (`\DEa{offset}{1}`, then 2 for the second figure), no counter command is used, and `align` gives the class code of `\DEfig` (start 0, centre 1, end 2). Criterion 3 stays unticked for the open align question above. Criterion 5: `DE@figbody` in `class/docedit.cls` puts `\penalty\@M` between the picture and the caption, but the story asks for the figure to stay with its caption across a page break, and no test shows that with a compile; not ticked. Round 11 (lane EXP-027-039): a compile sweep was added, and the round 11 review unticked criterion 5 again (see Evidence): the sweep does not reach a page break between a picture and its caption, so it does not exercise the criterion. A test would need a figure placed so that the picture fits at the foot of a page and the caption does not (for example by sizing the filler from the layout report, or a fixed-height filler found by search), and it should fail when the penalty is removed. Round 5 fix (E group 2): the test now finds such a placement by search and runs the same document without the penalty as a control; criterion 5 is ticked on that test (see Evidence).
+
+### EXP-029 Typeset footnotes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.4, §13; review M-11 · **Requirements:** R1, R5 · **Depends on:** EXP-015
+
+As an author, I want footnotes at the foot of the page in the PDF, including from tables and headings, so that notes are never lost.
+
+**Acceptance criteria**
+
+- [ ] Given a `footnote`, when exported, then `\footnote` is used where LaTeX allows it, and `\footnotemark` with `\footnotetext` where a footnote cannot be set directly (for example inside table cells or moving arguments).
+- [x] Given `settings.footnoteFormat` and `settings.footnoteRestart` (`continuous`, `perPageSection`), when exported, then the marks follow them.
+- [x] Given a footnote whose text continues on the next page, when `layout.json` is written, then that page `opensWith` `footnoteContinuation` (EXP-055).
+- [x] Given a footnote of one paragraph (version 1), when exported, then it is set in the `FootnoteText` style.
+
+**Evidence:** criterion 4: `packages/export-latex/src/exp-029-footnotes.test.ts` (describe `EXP-029 criterion 4`, Node.js): the `\DEfntext` of a one-paragraph footnote names a style macro whose body carries the size of the `FootnoteText` style (1000 twips). Criterion 2: `EXP-029 criterion 2 (part)` checks that `footnoteFormat: lowerRoman` prints `i` in `\DEfnmark`, and that `footnoteRestart: perPageSection` restarts the marks at a section break while `continuous` counts through the body (4 tests in the file). Run with `pnpm vitest run packages/export-latex/src/exp-029-footnotes.test.ts`. No PDF is compiled.
+
+**Notes:** Lane export-latex-2 (round 4). Criterion 1 is unticked: the converter always writes `\DEfnmark` and `\DEfntext`, and the `\footnote` branch that LaTeX allows is not built (the class's footnote macros are the reason: text in area 2 belongs to the footnote's block). Criterion 2 is ticked on the model's meaning of `perPageSection`: the model restarts the marks at every section break (`numbering/labels.ts`), and the converter prints those labels. Open for the owner: the name says page, but the model restarts at section breaks and not at page breaks; a page restart would need the layout (EXP-055). The tests check the converter's output, not the PDF. Criterion 3 needs `layout.json` (EXP-055). The footnote content model is open until spike S1 settles it (03 §13); multi-paragraph footnotes would change this story. Round 14 (lane EXP-027-039): criterion 3 has a compile test, `packages/export-latex/src/exp-029-footnote-continuation.compile.test.ts` (describe `EXP-029 criterion 3`), but it has not run: `podmanInfo()` (`services/export-worker/src/container.ts`, 30 s timeout) took 37 to 43 s on this host, so the sandbox reports Podman unavailable and the test skips. Not ticked until a run passes (ADR 0223, decision 27). Lane U-EXP-017-032 (2026-11-13): criterion 3 is ticked. `exp-029-footnote-continuation.compile.test.ts` ran in the Podman sandbox (not skipped, 1 test passed, with `exp-032-tabs.compile.test.ts`) and checks `opensWith` in `layout.json` for the page that holds only the footnote's rest. Criterion 1 stays unticked (the `\footnote` branch is not built).
+
+### EXP-030 Typeset links and bookmarks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1, §4; 03 §4.4, §5, I9; review S-06 · **Requirements:** R1, R5, R10 · **Depends on:** EXP-043
+
+As an author, I want links in the PDF to work, and never to do anything dangerous, so that readers can follow them safely.
+
+**Acceptance criteria**
+
+- [ ] Given a `link` mark with an `href` using `http`, `https`, `mailto` or an in-document target, when exported, then `hyperref` writes it through the `url` emitter, with characters that are special in TeX arguments percent-encoded.
+- [x] Given an `href` with another scheme that reaches the converter (for example `run:`, `file:` or `javascript:`), when exported, then no link action is written, the text is printed as plain text, and a diagnostic names the block.
+- [x] Given the exported PDF, when its link annotations are inspected, then none carries a launch, script or file action.
+- [x] Given an `anchor` node, when exported, then a named destination is written with a `generatedId`.
+- [ ] Given a link `title`, when exported, then it is written through `pdfString`.
+
+**Evidence:** `packages/export-latex/src/links.anchors.test.ts` (converter output and diagnostics; no PDF is compiled or inspected). Criterion 2 (describe `criterion 2`, one case per scheme `run:`, `file:`, `javascript:`): the text is printed, no `\DEhref` or `\DElink` is written, and a `link_refused` warning names the paragraph's id. Criterion 4 (describe `criterion 4`): an `anchor` writes `\DEanchor{1}` and an in-document link `\DElink{1}`, with no `link_target_missing`. Criterion 1 is not ticked: the scheme and encoding part is tested (https with a space encoded as `%20`, mailto), but `url` leaves `&`, `#` and `%` unencoded, and the story asks for percent-encoding of TeX-special characters. Criterion 3 (lane EXP-027-039, round 3): `packages/export-latex/src/links.annotations.compile.test.ts` (describe `EXP-030 criterion 3`) compiles https, mailto, in-document and refused links in the sandbox, inflates every Flate stream (so object streams are read), finds URI and GoTo actions, and finds no Launch, JavaScript, GoToR, GoToE, SubmitForm, ImportData, Rendition or RichMediaExecute action and no `/JS` key. Criterion 5 is not ticked: the converter writes the link title with `pdfHexString`, not `pdfString` (open question, see Notes).
+
+**Notes:** Lane export-latex-2 (round 1). Open: the story asks for TeX-special characters in a link target to be percent-encoded, but `url` (`emit.ts`) passes `&`, `#` and `%` through unencoded, and the link title is written with `pdfHexString` where the criterion names `pdfString` (`inline.ts`, `linkWrap`; `attributes.ts` maps `mark:link.title` to `pdfString`). Neither is changed in this round: both are emitter decisions. Spec default to follow: percent-encode, and one string emitter for link titles. Annotation inspection (criterion 3) needs a compiled PDF. Round 14 (lane EXP-027-039): criteria 1 and 5 stay unticked and nothing is changed, see ADR 0223, decision 28. The `url` emitter already percent-encodes every character outside RFC 3986, and its output is hex-encoded before TeX reads it; percent-encoding `&`, `#` and `%` would change valid URLs. The title's `/Contents` is a PDF hex string written by the class, so `pdfString` would need a class change.
+
+### EXP-031 Map line, page and column breaks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Author |
+
+**Spec:** 09 §3.1; 03 §4.4, §4.5 · **Requirements:** R1, R5 · **Depends on:** EXP-015
+
+As an author, I want the breaks I insert to be where I put them in the PDF, so that the layout I chose holds.
+
+**Acceptance criteria**
+
+- [x] Given a `break` of kind `line`, when exported, then the text continues on a new line in the same paragraph.
+- [x] Given a `break` of kind `page` or a paragraph with `pageBreakBefore`, when exported, then the following material starts on a new page.
+- [x] Given a `break` of kind `column` in a multi-column section, when exported, then the following material starts at the top of the next column.
+
+**Evidence:** `packages/export-latex/src/typeset.compile.test.ts` (describe `EXP-031 criteria 1 and 2`), compiled in the Podman sandbox (2026-11-13, packet X1): a line break puts `Beta` on the line after `Alpha` in one paragraph (criterion 1); a page break and a paragraph with `pageBreakBefore` start the following text on page 2, read per page with `pdftotext` (criterion 2). Criterion 3 (lane EXP-027-039, round 14): `packages/export-latex/src/exp-031-column-break.compile.test.ts` (describe `EXP-031 criterion 3`), compiled in the Podman sandbox on a two-column page setup; `pdftotext -bbox` must be poppler's (set `DOCEDIT_PDFTOTEXT` to it, because the xpdf build on Git's path has no `-bbox`; the tests skip without one). The word after a column break in the same paragraph is in column 2 and level with the first line of column 1.
+
+**Notes:** Lane export-latex-2 (round 1): the converter writes `\DEbr`, `\DEbrpage` and `\DEbrcol` inside the paragraph that holds the break, and `pageBreakBefore` gives `\DEpb` (`packages/export-latex/src/breaks.test.ts`). Criteria 1 and 2 are ticked from the compiled PDF (see Evidence). Criterion 3 stays unticked: the column break in a multi-column section is not tested, and the column position needs a compile check with a two-column section. Lane EXP-027-039 (round 1), a probe compiled in the Podman sandbox (the probe file was removed, not kept as a test): with `columns: 2`, the converter writes `\DEstartsetup` and `\DEbrcol`, and two columns are set (60 paragraphs fill both). A `\DEbrcol` in the middle of a paragraph ("Line one", line break, "Line two", column break, "Top right") does not start column 2: all three lines stay in column 1. A paragraph that starts with the column break puts "Top right" in column 2, but one line lower than the top of the column (the break's own empty line sits above it). So the criterion is not met as built: `\DEbrcol` (`class/docedit.cls`, `\vadjust{\columnbreak}` after `\penalty-10000`) needs a fix in the class, an owner or class decision, before a test can pass. Recorded in `docs/adr/0223-lane-EXP-027-039.md`. Lane EXP-027-039 (round 13): a candidate class fix, `\protected\def\DEbrcol{\par\columnbreak\noindent}` in place of the `\vadjust{\columnbreak}` line, was drafted and not kept. The paragraph macro `\DE@par` already opens a group and ends with `\par`, so a `\par` inside the content is safe. The Podman sandbox did not start here (`sandboxReady()` reports that a container with the sandbox limits does not start), so no compile was run and the class is unchanged. A paragraph that starts with a column break would still leave an empty line (the `\indent` of `\DE@par`). Round 14 (lane EXP-027-039): criterion 3 is ticked. The compile test failed on the macro as it stood (the word "Top" stayed at the left margin), and passed after `class/docedit.cls` `\DEbrcol` became `\par\columnbreak\noindent` (the draft of round 13). Left for the owner (ADR 0223): the class version is not bumped (ADR 0115, the same question as EXP-032), and a paragraph that begins with a column break is not measured here, so the empty line above it is not tested.
+
+### EXP-032 Typeset tab stops
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1, §3.2; 03 §4.4, §4.5, §7 · **Requirements:** R1, R5 · **Depends on:** EXP-015, EXP-044
+
+As an author, I want tab stops with leaders to work in the PDF, so that tables of prices, contents lines and signature lines look right.
+
+**Acceptance criteria**
+
+- [x] Given `tabs` with left, centre, right and decimal alignment and leaders, when exported, then text is aligned to stops measured from the left margin, by the class's own Lua implementation, and `tabto` is not used.
+- [x] Given a `tab` node after the last stop, when exported, then it advances to the next multiple of `defaultTabStop`.
+- [ ] Given a right-aligned or decimal tab inside justified text, when exported, then the result is approximate and the job's warnings say so.
+- [ ] Given the shared tab fixtures (EXP-115), when the LaTeX writer runs them, then they pass.
+
+**Evidence:** Lane V-EXP-017-032 (2026-11-13): the file ran unchanged, 4 of 4 passed in the Podman sandbox with `$env:DOCEDIT_PODMAN_MACHINE = "podman-machine-default"` (no copy with the gate forced open; 413 s on a loaded host). Fixer, group 3 round 6 (2026-11-13): criterion 1 is ticked again. The rule-leader check in `packages/export-latex/src/exp-032-tabs.compile.test.ts` (describe `EXP-032 criterion 1 (rule leaders)`) no longer counts bars: `horizontalMarks()` reads the page content stream with the graphics state (`q`, `Q`, `cm`, `w`), records stroked lines and filled rectangles, and merges touching marks of one thickness on one line. The test wants exactly one 0.4 pt line and one 0.9 pt line, each from the end of START to the start of its end word within 1.5 pt, at the height of its text line, so it holds whether LuaTeX writes one long rule or a row of short ones. In this compile LuaTeX wrote rows of 0.996 pt strokes (296 at `0.398 w`, 367 at `0.897 w`, each `0 0 m 0.996 0 l S` under its own `cm`), which merge into the two lines. All four describes of the file (stops, default stop, decimal and character leaders, rule leaders) passed when compiled in the Podman sandbox through the machine route (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`) with the `sandboxReady()` gate forced open in a temporary copy, because the gate reports `ok: false` on this host (see EXP-022 Notes); in a plain run they skip. Reviewer, round 6 (2026-11-13): criterion 1 is unticked. The rule-leader test counts 1 pt bars, but the round 12 note in Notes records a dump in which LuaTeX draws an underscore leader as one stroked line the length of the gap, and `rectangles()` then reports a line of that length, which the 0.9 to 1.1 pt filter excludes. The reviewer could not compile here (Podman cgroup error), so the test was not re-run. The decimal, dot, hyphen and middle-dot checks read as sound but were not re-run. Round 6 (export-latex, 2026-11-13), criterion 1 (claimed, not accepted): `packages/export-latex/src/exp-032-tabs.compile.test.ts` (describes `EXP-032 criterion 1 (decimal and leaders)` and `EXP-032 criterion 1 (rule leaders)`), compiled in the Podman sandbox and read with `pdftotext -bbox` and `pdftotext -raw`. A decimal stop puts the end of the integer part on the stop (the integer widths are measured from the same PDF). Dot, hyphen and middle-dot leaders are repeated characters between the start word and the end word. Underscore and heavy leaders are rules: their filled bars are counted in the page content stream (inflated with Node.js zlib), about one bar per point of each gap. The class change that made the rules draw is in `packages/export-latex/class/docedit.lua` (`make_leader`). Lane EXP-027-039 (round 5). Criterion 2: `packages/export-latex/src/exp-032-tabs.compile.test.ts` (describe `EXP-032 criterion 2`), compiled in the Podman sandbox and read with `pdftotext -bbox`: a tab with no stops moves to 36 pt, and a tab after one stop at 72 pt moves to the next 36 pt multiple after the text that precedes it. Criterion 1 (describe `EXP-032 criterion 1 (part)`, same file): left, centre and right stops place text at 144, 216 and 288 pt from the margin, and `main.tex` has no `\tabto`. Criterion 3 (warning part only): `packages/export-latex/src/exp-032-tabs.warning.test.ts` checks that a right or decimal tab in a justified or distributed paragraph gives a `tab_approximate` warning naming the block (`props.ts`, `setters`), and that left, centre and start-aligned cases give none. The approximate placement itself is not measured. Lane U-EXP-017-032 (2026-11-13), criterion 1 ticked: `exp-032-tabs.compile.test.ts` ran in the Podman sandbox and all its tests passed (none skipped). The rule-leader test finds one stroked line per underscore and heavy leader, with its endpoints and thickness, and the decimal, dot, hyphen and middle-dot tests pass; `tabto` is absent from main.tex.
+
+**Notes:** Lane EXP-027-039 (round 5). Criterion 2 is ticked (see Evidence). Criterion 1 stays unticked: the decimal stop and the leaders (`leader` dots, underscores) are not checked in a compile, and `\DEtab` is a glue of width 0 that the class's Lua places; the criterion's full wording is not met until those are tested. Criterion 3 stays unticked: the warning is built, but the approximate result is not measured. Criterion 4 stays unticked: no EXP-115 fixtures exist in the repository. Earlier notes said `inline.ts` had no case for a `tab` node; that is no longer so (`inline.ts`, `case 'tab'`, writes `\DEtab`). Built: the converter writes `\DEdefaulttab` (`convert.ts`) and the tab lists `\DEdeftabs` through `tabList` (`props.ts`), and the class has the Lua `docedit.deftabs` and the `\DEtab` macro (`class.structure.test.ts` checks that they exist). Not built or not checked: `inline.ts` has no case for a `tab` node, so a tab in the text is not converted; no test positions text on a stop; and the leader and decimal behaviour, the default-stop rule and the fixtures of EXP-115 need a LuaLaTeX run or the fixtures themselves. Criterion 1 also needs the class's Lua to be the one that aligns, which only a compile shows. Round 6 (export-latex, 2026-11-13): criterion 1 is ticked (see Evidence), which supersedes the sentence above on decimal stops and leaders. Found on the way: the underscore and heavy leaders drew nothing, because a bare rule node with width 0 in an hlist is not drawn; `make_leader` in `class/docedit.lua` now puts the rule in a 1 pt box. This changes the class's output for those two leaders, and `CLASS_VERSION` (`src/convert.ts`, `0.2.0`) is not bumped: whether a class change needs a new version is an owner question (ADR 0115). Criterion 3 stays unticked (the approximate placement is not measured) and criterion 4 stays unticked (no EXP-115 fixtures exist). Round 12 (lane EXP-027-039): the decimal and leader test in `exp-032-tabs.compile.test.ts` (describe `EXP-032 criterion 1 (decimal and leaders)`) ran in the sandbox and failed on the rule leaders only; the decimal, dot and character leader checks passed. A dump of a single underscore leader shows that LuaTeX draws it as one stroked line (`0.398 w`, `0 0 m 297.267 0 l S`) the length of the gap, not as a row of 1 pt bars, so the `bars` count in that test does not match the output. `rectangles()` in that file now also reads stroked lines. Another agent was editing the same test at the same time, so that test is left as it stands and criterion 1 stays unticked. Lane V-EXP-017-032 (2026-11-13): criterion 1 is ticked on the passing run (see Evidence). Criterion 3 (the approximate placement is not measured) and criterion 4 (no EXP-115 fixtures) stay unticked. Fixer, group 3 round 6 (2026-11-13): with the current `make_leader` (the rule in a 1 pt box), a compile of an underscore and a heavy leader drew rows of 0.996 pt strokes, not one long line; the round 12 dump probably predates the box. The rule check now merges marks into lines, so it does not depend on either form (see Evidence), and criterion 1 is ticked.
+
+### EXP-033 Flatten form-field values into the PDF
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Owner |
+
+**Spec:** 09 §3.1, §9.1, §13; 12 §3.2, §3.4, §12, §13 · **Requirements:** R5, R13, R11 · **Depends on:** EXP-002, EXP-005, EXP-042, FRW-002, FRW-003, FRW-006
+
+As an owner, I want the values filled into a form to appear in the PDF, so that I get a finished document.
+
+**Acceptance criteria**
+
+- [x] Given `fields` is `flatten` (the default), when exported, then the value of each `form_field` of kind `text`, `number`, `date`, `checkbox` and `choice` is written into the text at the field's fixed `width` and tagged with its `label` in the tagged PDF; an empty field appears as blank space of that width.
+- [ ] Given a `number` field with `format` (decimals, prefix, suffix) and a `date` field with a pattern, when exported, then the value is shown in that format, dates using the export job's time zone; a `choice` shows the option's `label`, not its identifier; a `checkbox` shows a glyph chosen through `enumLookup`.
+- [x] Given a `field` of kind `formValue`, when exported, then it prints the flattened value of its target field.
+- [x] Given `fields` is `blank`, when exported, then the fields are printed without their values.
+- [x] Given a value that contains TeX special characters, control sequences or markup, when exported, then it is written through the `text` emitter and prints literally (one escaping layer).
+- [ ] Given a value wider than its field, or a value whose glyph the fonts lack, when exported, then the job reports a warning with the field's identifier.
+- [x] Given an export at a `seq`, when it runs, then the values are those at that `seq`.
+- [x] Given the export, when the PDF is inspected, then it contains no live PDF form fields.
+
+**Evidence:** Criterion 1 (lane U-EXP-033-048, round 6): `packages/export-latex/src/exp-033-kinds.compile.test.ts` compiles a text, number, date and choice field, each empty and with a value, and a checkbox (preview profile, because its glyphs are not in the image's fonts), in the Podman sandbox (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_REQUIRE_SANDBOX=1`; 2 of 2 passed, 187 s, 2026-11-13). `pdftotext -bbox` shows that the word after an empty field moves by the field's 144 pt width, a value does not move it, the value is printed in its format, and the label is the alternative text of each field's tag. `packages/export-latex/src/form-fields.flatten.test.ts` (converter output only; no PDF is compiled or inspected). Criterion 3 (describe `EXP-033 criterion 3`): a `formValue` field prints the value of its target, and nothing when fields are blank. Criterion 4 (describe `criterion 4`): `fields: 'blank'` writes the label and width with an empty body. Criterion 5 (describe `criterion 5`): a value with TeX specials is written exactly as `text()` writes it. (Superseded by the round 6 run above: the class rendering of the blank space and the label in the PDF objects are now checked; reviewer note: the checkbox glyph is not checked as printed in `exp-033-kinds.compile.test.ts`, and its compile uses the preview profile although `exp-033-no-live-fields.compile.test.ts` compiles a checked checkbox at the final profile without error.) Criterion 2 is not ticked: the checkbox glyph comes from the model's `valueText` (a fixed mapping), not from `enumLookup` as the criterion names. Criterion 6 (lane EXP-027-039, round 2) is not ticked (unticked by the round 2 review): `packages/export-latex/src/exp-033-glyph-field.test.ts` (describe `EXP-033 criterion 6 (glyph case)`, Node.js, 4 tests) checks that a missing glyph in a flattened value gives a `glyph_missing` diagnostic whose block is the field id, an error in a final export and a warning in a preview, and a property over the Cyrillic letters. That covers one of the two inputs, and in a final export it is an error where the criterion says a warning. The width branch is not tested and the converter reports nothing for it. Criterion 7 (lane U-EXP-033-048, round 2): `services/export-worker/src/exp-033-seq.job.test.ts` (describe `EXP-033 criterion 7`, Node.js, 2 tests, fake compile, no sandbox): the content store holds `Ada` at seq 0 and `Grace` at seq 3, and the export at each seq compiles the value of that seq and not the other. Criterion 8 (lane EXP-027-039, round 11): `packages/export-latex/src/exp-033-no-live-fields.compile.test.ts` (describe `EXP-033 criterion 8`) compiles text, checkbox and number fields with a link in the sandbox, inflates every Flate stream, checks the link annotation as a positive control, checks that the values print, and finds no `/AcroForm`, `/Subtype /Widget` or `/FT` field type.
+
+**Notes:** Lane V-EXP-033-048 (2026-11-13), criterion 2 part: `packages/export-latex/src/exp-033-format.compile.test.ts` compiles a number (two decimals, prefix, suffix), a date with a `datePattern` and a choice label in the Podman sandbox and reads them with `pdftotext -raw` (passes, with `DOCEDIT_CONTAINER_CGROUPS=disabled`); the checkbox glyph goes through `enumLookup` (`form-fields.flatten.test.ts`). Criterion 2 stays unticked: a date is printed from its stored day in UTC, not in the export job's time zone, so the time-zone part is not met (open question, `docs/adr/0319-lane-V-EXP-033-048.md`). Criterion 1 is not met by `packages/export-latex/src/exp-033-field-value.compile.test.ts` in this sandbox: it counts three `BEFOREFIELD` words, but the value of its third field is glued to that word, so the count is two. That test belongs to lane U-EXP-033-048 and is left unchanged. `hyperref` form support does not work with tagging, so no live fields are produced in version 1 (09 §13; 12 §12). What `blank` prints and what happens to a value wider than its field are not specified (Open questions). Kinds `signature`, `initials`, `dateSigned` and `formula` are EXP-034. The field rectangles are EXP-058 (FRW-057, phase 3). Phase 1b follows 12 §13 (flattened PDF). This story absorbed FRW-081 during the cross-check. Lane export-latex-2 (round 1): the converter writes the field's `\DEff` macro with its width, label and value, and no value width is measured by the converter (the class reports overflow in the log, so criterion 6 stays open for the converter side). The checkbox glyph is the model's `valueText` mapping; criterion 2 would need that glyph chosen through `enumLookup`, or the criterion reworded. Batch 2026-11-13 (packet X2, round 5): the checkbox glyph is now chosen by `enumLookup` in the converter (`CHECKBOX_GLYPHS` in `src/inline.ts`, for both a `form_field` and a `formValue` that targets it); tests in `packages/export-latex/src/exp-033-checkbox.test.ts`. Criterion 2 stays unticked: the date pattern is applied to the stored calendar date, anchored at UTC noon (`formFieldValue`), and the export job's time zone is not used. A calendar date has no instant, so the zone does not change its day; the criterion's wording and this reading differ, and the owner should decide (ADR 0115). The number format and choice label are tested in `form-fields.flatten.test.ts`; no test covers a date pattern. Lane EXP-027-039 (round 2): criterion 6 is not ticked. Only its glyph branch is tested, and there the test follows EXP-026: a missing glyph is an error in a final export, where the criterion says "a warning"; the owner should confirm the severity (ADR 0223, decision 8). The width branch needs a field-width measure the converter does not have (no font metrics exist in the repository; `inline.ts` leaves overflow to the class log), and what happens to a value wider than its field is an open question. The criterion stays unticked until the owner settles the severity and the width case is either built or the criterion is reworded. Criterion 7 (values at a `seq`) is ticked (lane U-EXP-033-048, round 2): the job reads the content at its `seq` (`contentAt` in `services/export-worker/src/content.ts`), so the converter writes the value of that `seq`; the test is in `services/export-worker/src/exp-033-seq.job.test.ts`. The compile is a fake, so the PDF itself is not checked for this criterion. Criterion 2 (date pattern in the job's time zone) and criterion 6 (width and severity) are unchanged and stay unticked. Lane U-EXP-033-048 (round 3), criterion 1: `packages/export-latex/src/exp-033-field-value.compile.test.ts` is written (Podman sandbox compile; a text field of 144 pt, empty and with a value, measured with `pdftotext -bbox`; the label as the field's alternative text in the object text) and is not yet a pass. The first run failed its own precondition (two of the three paragraphs were found by the word search, not three; the cause is not read yet), and a later run skipped because `sandboxReady()` could not read `podman info` within 30 s on the loaded machine. Criterion 1 stays unticked until that test passes. Lane U-EXP-033-048 (round 4): `packages/export-latex/src/exp-033-field-value.compile.test.ts` now passes (Podman sandbox through `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, one compile, 2026-11-13): the empty field and the field with a value both move the next word by the 144 pt width, and the label is the alternative text of the tagged span. Two fixes made it pass: the test matched whole words, but a value with no space before its field glues to the word before it (`BEFOREFIELDADAVALUE`), so the match is now on the word's start; and `class/docedit.cls` passed the label to tagpdf as the unexpanded `\DEstr` macro, so the alternative text was the TeX code. `\DE@tagalt` (`docedit.cls`) and `docedit.altdef` (`class/docedit.lua`) now set the decoded label first. Criterion 1 is ticked (lane U-EXP-033-048, round 6) by `packages/export-latex/src/exp-033-kinds.compile.test.ts`, which compiles all five kinds; the text-only test stays as it is. The checkbox is compiled at the preview profile, so its glyph is not checked there (a final export would fail the glyph check if the image's fonts lack the glyph, which the test does not verify); the width does not depend on the glyph. The tagged label is checked in the object text, not in a structure-tree reader.
+
+### EXP-034 Flatten signature, initials, date-signed and formula values
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Relying party |
+
+**Spec:** 09 §3.1; 12 §3.3, §8.1, §8.2, §12 · **Requirements:** R5, R13 · **Depends on:** EXP-033, EXP-014, FRW-009, FRW-045, FRW-046
+
+As a relying party, I want signatures, initials, signing dates and computed values in the final PDF, so that the document shows who signed and what was computed.
+
+**Acceptance criteria**
+
+- [x] Given a `signature` or `initials` field with a value `{ asset, mode }`, when exported with `fields` set to `flatten`, then the signature image from the asset is shown at the field's width, with alternative text from the field's `label`.
+- [ ] Given a `dateSigned` field, when exported, then the stored date, set in the workflow's time zone by the server, is printed and no client value is used.
+- [x] Given a `formula` field, when exported, then its stored value is printed.
+- [x] Given a `signature` field that has no value, when exported, then a labelled empty box of the field's width is printed.
+
+**Evidence:** Lane V-EXP-033-048 (round 12, 2026-11-14), criterion 1: `packages/export-latex/src/exp-034-signature.compile.test.ts` compiles a signature field whose value names a 200 by 100 PNG asset in the Podman sandbox (`DOCEDIT_REQUIRE_SANDBOX=1`, `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_CONTAINER_CGROUPS=disabled`) and finds the image dictionary at 200 by 100 and the label as the `/Alt` of the tagged span and the picture. `packages/export-latex/src/exp-034-signature.test.ts` (Node.js) checks the `\DEimg` line at the field width with height 1440 twips for that PNG, the JPEG and PNG size readers (`src/signature-picture.ts`), and the blank field with its `form_value_not_printed` warning when the job gives no bytes or the bytes are not a readable image. Also Round 6 (export-latex-5, 2026-11-13). `packages/export-latex/src/form-fields.signed.test.ts`: criterion 3 (describe `EXP-034 criterion 3`): a formula field with the stored value `1,234.50` gives a `\DEff` line with that text, the field width and the label; an empty formula field gives blank text and no `form_value_not_printed` warning. Criterion 4 (describe `EXP-034 criterion 4`): an empty `signature` field gives `\DEff` with the field's width (2880 twips), its label and empty text; an empty `initials` field does the same. Nothing compiles here, so the printed box is not inspected.
+
+**Notes:** Phase 2 follows 12 §13. Round 6 (export-latex-5): criterion 1 stays unticked: a signature or initials value is not drawn as the picture from its asset; the converter warns `form_value_not_printed` and prints blank (`formFieldValue` in `src/inline.ts`). Drawing it needs an image box for the field, which is not built. Criterion 2 stays unticked: a `dateSigned` value is printed as its stored string, with no formatting, and the converter does not set the time zone (the server does that, as the criterion says); whether the stored string is the printed form is not decided by the spec and needs the owner's view. Visible signature appearances placed by the signing service use EXP-058. Lane EXP-027-039 (round 12): criterion 1 is still unticked, and the blocker is data, not code. The picture needs its height as well as its width, and the height comes from the image's own proportions, which the converter does not have: `AssetInput` (`bundle.ts`) carries no pixel size, and `bytes` may be absent when the worker supplies the file by hash. Reading PNG or JPEG headers would need the bytes, so the criterion waits for the job to carry the asset's pixel size (or the bytes). Not built in this round; recorded in `docs/adr/0223-lane-EXP-027-039.md`. Lane V-EXP-033-048 (round 12): criterion 1 is ticked. The converter reads the pixel size from the bytes the job supplies (PNG from its IHDR chunk, JPEG from its start-of-frame segment; `src/signature-picture.ts`). The height is the width times the image's proportions, rounded to a twip. Without bytes the field stays blank with its warning, as before, so a job that supplies only a hash still prints blank: the bytes are the job's to give. The `mode` value does not change the picture (its meaning is not in the spec; the owner should say whether `typed` or other modes print differently). Only the PNG path is compiled in the sandbox; the JPEG path is checked on its header bytes in Node. Recorded in `docs/adr/0319-lane-V-EXP-033-048.md` (V34).
+
+### EXP-035 Typeset extension content through its fallback
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Author |
+
+**Spec:** 03 §4.3, §4.4, §10; 13 §7.3 · **Requirements:** R5, R14 · **Depends on:** EXP-028, CDM-032
+
+As an author who uses a host's custom block, I want the PDF to show its fallback, so that the document is complete even though the PDF cannot run the extension.
+
+**Acceptance criteria**
+
+- [x] Given an `extension_block` with a `fallbackAsset`, when exported, then the image is typeset as a block like a figure.
+- [ ] Given an `extension_block` or an `extension_inline` with `fallbackText`, when exported, then the text is written through the `text` emitter.
+- [x] Given the `payload` of an extension node, when the bundle is built, then the payload is not read and never reaches TeX.
+- [x] Given an extension node whose fallback asset is missing, when exported, then a diagnostic with the block identifier reports it.
+
+**Evidence:** Round 6 (export-latex-5, 2026-11-13). `packages/export-latex/src/extension.fallback.test.ts`: criterion 1 (describe `EXP-035 criterion 1`): an `extension_block` with a ready PNG `fallbackAsset` gives a `\DEfig` line mapped to the block, with the picture under `assets/<sha256>.png`, and the same `\DEimg` picture (file, size and alternative text) as a figure of the same asset and size. Criterion 3 (describe `EXP-035 criterion 3`): a sentinel string in the `payload`, nested too, appears in no bundle file and in no part of `map.json`, with and without a fallback; a search of the typesetter sources finds no reader of `payload` outside `attributes.ts`, where it is `null` (a search, not a build check). Criterion 4 (describe `EXP-035 criterion 4`): a fallback asset the job does not list gives a `fallback_asset_missing` warning with the block's identifier, a placeholder is printed, and a listed asset gives no such warning. The diagnostic is added in `packages/export-latex/src/blocks.ts` (block branch of `block`).
+
+**Notes:** Phase inferred: custom blocks arrive in phase 2 (13 §12). 09 does not list extension nodes in its mapping table; the rule comes from 03 §10. Round 6 (export-latex-5): criterion 2 stays unticked. A block's `fallbackText` is written through the `pdfString` emitter (`src/attributes.ts`, `extension_block.fallbackText`), in the placeholder and in the picture's alternative text; only an inline's `fallbackText` goes through `text`. Changing the block rule is a converter decision for the owner (it changes the class's placeholder argument, which is a PDF string). Criterion 1 is tested on the converter output, not on a compile. The payload check is a converter test and a source search; "not read" is not observed at run time.
+
+### EXP-036 Print page number format, page number start and watermark
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | could | Author |
+
+**Spec:** 03 §4.1; 13 §2 · **Requirements:** R1, R5 · **Depends on:** EXP-017, EXP-019
+
+As an author, I want page numbers to start and be formatted as I set, and a watermark on the pages I choose, so that the PDF matches my page setup.
+
+**Acceptance criteria**
+
+- [x] Given `pageNumberStart` and `pageNumberFormat` in a page setup, when exported, then the pages of that section are numbered from that number in that format.
+- [x] Given a `watermark` text, when exported, then it appears on the pages of that page setup, and it is written through the `text` emitter.
+- [x] Given tagging is on, when the PDF is inspected, then the watermark is not part of the reading order.
+
+**Evidence:** `packages/export-latex/src/exp-036-page-numbers.compile.test.ts` (describe `EXP-036 criterion 1`; compiled in the Podman sandbox, headers read with `pdftotext`): a section numbered from 5 in decimal gives 5, 6, 7; from 4 in lowerRoman gives iv, v, vi; two sections with their own start and format give 1, 2, IV, V. Criterion 2 (lane U-EXP-033-048, 2026-11-13): `packages/export-latex/src/exp-036-watermark.compile.test.ts` (describe `EXP-036 criterion 2`) compiles a watermark `Draft & 50% copy` in the Podman sandbox and reads each page with `pdftotext`: each of three pages holds the text, and a second setup with no watermark prints none. Criterion 3 (lane EXP-027-039, round 12): `packages/export-latex/src/exp-036-watermark.tagging.compile.test.ts` (describe `EXP-036 criterion 3`) compiles with `tagging: 'on'` in the Podman sandbox and reads the page content stream: the watermark's text block is in `/Artifact` marked content with no MCID, and the body text block is in an MCID sequence.
+
+**Notes:** Phase inferred. Watermark is built in (13 §2) and `page_setup` carries the attributes (03 §4.1), but 09 gives no mapping for them (Open questions). Lane EXP-027-039 (round 3): criterion 1 is ticked (see Evidence). Lane U-EXP-033-048 (2026-11-13): criterion 2 is ticked. `page_setup.watermark` now goes through the `text` emitter (`attributes.ts`), `setupTex` writes `\DEdefwatermark` (`page.ts`), and the class sets the text in the header box of each page of the setup, centred vertically on the text block, in grey and `\Huge` (`class/docedit.cls`, `DE@wm`). The placement, colour and size are a presentation choice of this lane, not from the spec; see `docs/adr/0319-lane-U-EXP-033-048.md`. Criterion 3 stays unticked: the watermark is wrapped in `\SuspendTagging`, but no tagged PDF is inspected to show it is out of the reading order. Lane EXP-027-039 (round 12): criterion 3 is ticked; see Evidence. The check reads the content stream of a tagged compile: the watermark block (font size of 20 pt or more) sits in `/Artifact` marked content, not in an MCID sequence, and the body text sits in an MCID sequence (positive control). The structure tree itself is not read.
+
+### EXP-037 Typeset right-to-left and complex-script text
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | M | should | Author |
+
+**Spec:** 09 §8; 11 §7; 03 §4.1, §4.5 · **Requirements:** R1, R5 · **Depends on:** EXP-026, EXP-047
+
+As an author who writes in a right-to-left or complex script, I want the PDF to set my text correctly, so that it reads as I wrote it.
+
+**Acceptance criteria**
+
+- [ ] Given `settings.dir` or a paragraph `dir` of `rtl`, when exported, then the text is set right to left and alignment and indents are mirrored.
+- [ ] Given text in a complex script, when exported, then it is shaped by HarfBuzz through LuaLaTeX, and the glyph check of EXP-026 uses the fallback chain.
+- [ ] Given a paragraph that mixes left-to-right and right-to-left text, when exported, then the visual order follows the Unicode bidirectional algorithm and the extracted text equals the input.
+- [ ] Given the `text` emitter removes bidirectional override characters, when exported, then display relies only on the implicit algorithm.
+
+**Evidence:** Round 6 (export-latex-5, 2026-11-13), criterion 4: `packages/export-latex/src/bidi.controls.test.ts` (describe `EXP-037 criterion 4`): for any string over the override, isolate, implicit-mark and right-to-left alphabet, `text` emits no U+202A to U+202E and no U+2066 to U+2069 (fast-check, 1000 runs); `clean` keeps the marks U+200E and U+200F and the Arabic and Hebrew letters; a document with overrides and isolates in Arabic and Hebrew text gives a `main.tex` with no override character and with the letters intact (also as a property over inserted controls). Nothing compiles here, so the display itself is not checked.
+
+**Notes:** Phase 4 follows 11 §7 (right-to-left and complex-script content). 09 does not describe the mapping; the criteria are derived from the engine choice (09 §8). Round 6 (export-latex-5): criterion 1 stays unticked: a right-to-left paragraph is still set left to right and warns `rtl_unsupported` (`src/props.ts`). Criterion 2 needs a LuaLaTeX run with HarfBuzz and the fallback chain, not run here. Criterion 3 needs the compiled visual order and the extracted text, not run here. Note for the owner: the converter starts a new run where a removed control was, so `main.tex` has more `\DEr` runs than the text has words; the display is not changed, but the run count differs from a document without the controls. Evidence audit (2026-11-13): criterion 4 was unticked because its test only checks that no override character reaches `main.tex`; the "then" (display follows the implicit algorithm) is not exercised, and the class loads no bidirectional support (`\babelprovide` has no `bidi` option) while a right-to-left paragraph warns `rtl_unsupported`, so nothing makes the display follow the algorithm yet. Lane V-EXP-033-048 (round 12, 2026-11-14), not ticked: a LuaLaTeX probe in the sandbox image (`localhost/docedit-export-worker:s4`, `\pardir TRT\textdir TRT` around Latin words, Noto Serif from the image's font directory) puts the letters of each word in reverse order (`pdftotext -bbox` reads `Delta` as `a t l e D`), so `\textdir` alone is not the mechanism. A `\TeXXeTstate=1` and `\beginR`/`\endR` probe was run and its output was not read back; the image has the `bidi` package. The class change is still to be designed (owner or class work); the probe files are not part of the repository.
+
+## Tables
+
+### EXP-038 Typeset tables in the body flow
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 09 §3.2; 03 §4.3 · **Requirements:** R1, R5 · **Depends on:** EXP-015, EXP-044
+
+As an author, I want tables in the PDF with the widths, borders and shading I set, and header rows that repeat, so that long tables stay readable.
+
+**Acceptance criteria**
+
+- [x] Given a table in a single-column body flow, when exported, then it is written with `longtable` and `colortbl`, with column widths taken from `grid`.
+- [x] Given a table of width type `auto`, when exported, then the widths still come from the stored `grid`, because LaTeX has no automatic table widths.
+- [x] Given `headerRows`, when the table continues on another page, then those rows repeat at the top of the page.
+- [ ] Given table borders, cell borders, `shading`, `cellMargins`, `vAlign`, `align`, banded rows and header row shading, when exported, then they are drawn.
+- [x] Given a row with `heightRule` `atLeast` or `exact`, when exported, then the height is honoured.
+
+**Evidence:** Round 5 (2026-11-13, packet X1 and X2), criteria 1 and 2: `packages/export-latex/src/tables.test.ts` (describe `EXP-038 tables in the body flow`): a single-column table is a `longtable` (not `\DEboxtbl`) with `\cellcolor[HTML]` for a cell shade, the real `class/docedit.cls` loads `colortbl`, and the `p` column widths are the grid widths less the default cell margins (`(grid - 216) / 20` bp, checked for two widths and as a property over random grids); a table with `width` type `auto` gets the same widths as one with another width type. Criterion 3 (2026-11-13, packet X1): `packages/export-latex/src/typeset.compile.test.ts` (describe `EXP-038 criterion 3`) compiles a 150-row table with `headerRows: 1` in the Podman sandbox and reads each page after the first with `pdftotext`: its first line is the header text. Criterion 5 (round 9, export-latex-5, 2026-11-13): `packages/export-latex/src/tables.rowheight.compile.test.ts` (describe `EXP-038 criterion 5`), a sandbox compile read with `pdftotext -bbox`. Criterion 4, partial (round 8 fix, export-latex-5, 2026-11-13; not ticked, see Notes): `packages/export-latex/src/tables.borders.test.ts` (describes `EXP-038 criterion 4: cell borders are drawn` and `EXP-038 criterion 4: the other table properties in the converter output`) and `packages/export-latex/src/tables.borders.compile.test.ts`, which compiles bordered cells in the Podman sandbox and reads the rules from the pixels of the page rendered by `pdftoppm` at 100 dpi (two rules a side for a single border, four for a double), and compiles cell borders in a repeated head and in a boxed table. Criterion 4, shading, cell margins, top vertical alignment and table alignment (round 11, lane V-EXP-033-048, 2026-11-13): `packages/export-latex/src/tables.shading.compile.test.ts` (describe `EXP-038 criterion 4: shading, cell margins, vertical alignment and table alignment in the PDF`) compiles three shaded tables with `align` left, centre and end, two tables with a cell margin of 108 and 720 twips, and a row with top, centre and bottom aligned cells (the centre and bottom cells are not shown to move: see Notes, round 5 of this lane), in the Podman sandbox (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_REQUIRE_SANDBOX=1`, passed, 2026-11-13). The fills are read from the first page rendered by `pdftoppm` at 100 dpi, and the word positions from `pdftotext -bbox`.
+
+**Notes:** Round 5 (2026-11-13). The widths are the grid less the left and right cell margins, which is how the converter has always set `p` columns; the criterion's "taken from `grid`" is read as the grid width of the column. Round 9 (export-latex-5, 2026-11-13), criterion 5 is ticked: `tables.ts` now writes `\rule{0pt}{h}` for an `atLeast` row and a `\vbox to h{...}\vss` for an `exact` row (single-row cells only; a row span is not sized). `packages/export-latex/src/tables.rowheight.compile.test.ts` (describe `EXP-038 criterion 5`) measures the word positions of `pdftotext -bbox`: the rows of 720 and 1440 twips differ by 36 pt and 72 pt, and an `atLeast` row of 1440 twips is at least 72 pt. Two limits are not covered by the tick: content taller than an `exact` row is not clipped (it runs into the next row), and the separator between rows adds a measured overhead of about 3.6 pt (font dependent) to every row, which the test does not pin. The `row_height_approximate` warning is removed. The repeat of `headerRows` is written (`\endfirsthead`, `\DErephead`, `\endhead`), and whether the rows repeat on the next page is now checked on the compiled PDF (see Evidence). Criterion 4 stays unticked, because banded rows are not shaded: 03 §4.3 gives `bandedRows` no colour (warning `banded_rows`; ADR 0143, question 19). The other properties, round 8 fix (export-latex-5, 2026-11-13): cell borders are now drawn (`tables.ts` with `\DEvrule`, `\DEcline`, `\DEclinegap` and `\DEclineend` in `class/docedit.cls`; the `cell_borders` warning is removed), with a cell's own side replacing the table's and a shared edge resolved by the rule in ADR 0143, question 18; they are checked in the output and on the compiled PDF. Table borders, `shading`, `cellMargins`, `vAlign`, `align` and header row shading are written and checked in the converter output only, not in a compile. Dotted, dashed and thick borders are drawn solid. Criterion 5 was unticked in round 5 (no `atLeast` or `exact` rule was applied); it is ticked in round 9, see above. Round 11 (lane V-EXP-033-048, 2026-11-13), criterion 4 stays unticked for two reasons. Shading, cell margins, top and centre vertical alignment and table alignment are drawn (see Evidence). Bottom vertical alignment is not: in the compiled PDF a `vAlign: bottom` cell sits at the top of its row, about 47 pt above the last line of a four-line neighbour, because the `b` column does not bottom-align it; the test makes no bottom check, and the fix is in `tables.ts` or the class, not done in this round. Banded rows stay unshaded (03 §4.3 gives no colour; ADR 0143, question 19; owner). Header row shading comes from a table style and is not covered by a test. Lane V-EXP-033-048 (round 5, 2026-11-14): bottom alignment is still not drawn, and the vertical centring claimed above is weaker than it reads. Measured with `pdftotext -bbox` on a compile of the test's table (Podman sandbox, `DOCEDIT_PODMAN_MACHINE=podman-machine-default`): the bottom cell's first line sits at yMin 91.3 pt, the top of the tall row's first line, against 136.3 pt for its last line; the centred cell sits at 94.5 pt. A centred cell in a four-line row should sit about 68 pt lower than the top cell, so neither `b{}` nor `m{}` works inside `\multicolumn` in the `longtable`, and the test's check `top < mid < T4` passes on a 3 pt offset. The existing test therefore does not show centring, and the round 11 claim that centre is drawn should be read as unproven. Criterion 4 stays unticked. The fix is a converter or class change (no TeX-only option was found that uses the unknown row height); not done in this round. Recorded in `docs/adr/0319-lane-V-EXP-033-048.md`, item V38.
+
+### EXP-039 Split table rows that are taller than a page
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.2; 03 §10 · **Requirements:** R5 · **Depends on:** EXP-038
+
+As an author, I want a very tall table row to continue on the next page instead of failing, so that the export succeeds and I am told what was approximated.
+
+**Acceptance criteria**
+
+- [ ] Given a row taller than a page, when exported, then the converter splits it at paragraph boundaries into continuation rows and returns a warning that names the table and the row.
+- [ ] Given continuation rows, when the PDF is read, then the text equals the original row's text and the header rows repeat as for any other row.
+- [ ] Given a single paragraph that is taller than a page, when exported, then a diagnostic names the block.
+- [ ] Given the same document, when the preflight runs (EXP-003), then it reports the row before export.
+
+**Notes:** How the converter measures a row before typesetting is not specified (Open questions). What it does with an unsplittable paragraph is not specified either. Round 8 (export-latex-5, 2026-11-13): the split rule is built as a pure function, `packages/export-latex/src/tables.split.ts` (`splitRow`), with the height test supplied by the caller; its tests are `packages/export-latex/src/tables.split.test.ts` (7 passing: a tall row splits at block boundaries with cells kept in step, a block over the page limit is reported with its cell and index, text is kept). Nothing is ticked: the converter does not call `splitRow` (no measure exists, ADR 0143 question 2), so criteria 1, 3 and 4 are not met, and criterion 2 (PDF text and repeated header) needs a compile.
+
+### EXP-040 Typeset tables in multi-column sections
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Author |
+
+**Spec:** 09 §3.2; 03 §8 (I10), §10 · **Requirements:** R5 · **Depends on:** EXP-017, EXP-038
+
+As an author, I want a table inside a multi-column section to appear in the PDF, and to be told when it cannot break across pages, so that columns do not silently lose content.
+
+**Acceptance criteria**
+
+- [x] Given a table in a multi-column section, when exported, then it is written as a boxed `tabular`, because `longtable` does not work there.
+- [x] Given such a table is taller than the space available, when exported, then the job reports that it cannot span pages, and the preflight reports it before export.
+- [x] Given the table's cells contain paragraphs, figures and equations, when exported, then all appear in the boxed table.
+
+**Evidence:** Round 5 (2026-11-13, packet X1 and X2): `packages/export-latex/src/tables.test.ts` (describe `EXP-040 tables in multi-column sections`): a table after a two-column section break is written with `\DEboxtbl` and no `longtable`, while a table before the break stays a `longtable`; a 60-row table in a two-column section gives one `table_cannot_span_pages` warning with its block id and the preflight gives the same block id; a cell with a paragraph, a picture and an equation has its blocks in `map.json` with line ranges inside the `\DEboxtbl` to `\DEboxtblend` lines. The existing `packages/export-latex/src/preflight.test.ts` covers the preflight and the job diagnostic for the same table. Criterion 3 (export-latex-5, round 9, 2026-11-13): `packages/export-latex/src/tables.boxed.compile.test.ts` (describe `EXP-040 criterion 3`) compiles a two-column section with a boxed table whose cell holds a paragraph, a figure without a picture and an equation the math gate refuses, and `pdftotext` finds `CELLPARA`, `[figure: FIGALT]` and `[equation]` in the PDF.
+
+**Notes:** 09 also lists headers, footers and footnotes for the boxed writer, but invariant I10 forbids tables in stories and footnotes in version 1, so only multi-column sections reach it (Open questions).
+Round 5 (2026-11-13). Criterion 2: the converter reports `table_cannot_span_pages` for every boxed table, not only for one taller than the space, because it does not measure height. The report is therefore raised in the taller case too, and the criterion is ticked on that reading; a table that fits is reported as well (a superset). Criterion 3 stays unticked: the test shows that the blocks of the cell are inside the boxed table in the bundle, and that the equation is either typeset or a placeholder (the math gate decides). That all of them print in the PDF needs a compile, which was not run here. Round 9 (export-latex-5, 2026-11-13): criterion 3 is ticked on a compile, with the figure and the equation as their placeholders (no picture file and a refused formula are used). A typeset formula and a real picture inside a boxed cell are not checked by a compile here, so this reading of "appear" is the placeholder one.
+
+### EXP-041 Typeset row spans and column spans
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1, §3.2; 03 §4.3, §8 (I6) · **Requirements:** R1, R5 · **Depends on:** EXP-038, EXP-015
+
+As an author, I want merged cells to appear in the PDF, so that complex tables keep their structure.
+
+**Acceptance criteria**
+
+- [x] Given cells with `colspan` and `rowspan`, when exported, then they are produced by the class's own cell macros and `multirow` is not used.
+- [x] Given spanned content that is taller than the rows it spans, when exported, then the job reports it with the block identifier.
+- [ ] Given borders and shading on a spanned cell, when exported, then they cover the whole span once.
+- [x] Given tagging is on, when the PDF is inspected, then the spans are recorded in the table structure (EXP-112).
+
+**Evidence:** Lane V-EXP-033-048 (round 11, 2026-11-14), criterion 4: `packages/export-latex/src/tables.spans.tagged.compile.test.ts` (describe `EXP-041 criterion 4`) compiles a column and a row span with tagging on in the Podman sandbox (machine route, `DOCEDIT_REQUIRE_SANDBOX=1`) and reads the structure tree: `/ColSpan 2` and `/RowSpan 2` are both present. The row span needs the preamble's `testphase={table}` (ADR `docs/adr/0319-lane-V-EXP-033-048.md`, V41, status proposed). Round 7 (lane export-latex-5, 2026-11-13), criterion 1: `packages/export-latex/src/tables.spans.test.ts` (describe `EXP-041 criterion 1`): the class defines `\DEcolspan` as the class cell macro around `\multicolumn`, a column span is written with `\DEcolspan{2}{` and no `\multicolumn` for the span, a row span with `\DErowspan{%`, a row and column span writes its covered positions with `\DEcolspan` too, and no output or class file uses `multirow`. Nothing compiles here. Lane EXP-040-052 (2026-11-13), criterion 2: `packages/export-latex/src/tables.rowspan.overflow.test.ts` (describe `EXP-041 criterion 2`): a row-spanned cell with content gives one `span_taller_than_rows` warning with that cell's block identifier, two such cells give two in document order, a spanned cell with no content and a table without spans give none, and a column-spanned cell gives none.
+
+**Notes:** Round 5 (2026-11-13, packet X1). Round 10 (export-latex, 2026-11-13), criterion 3: the shading of a spanned cell is written once, on the line that opens its span, and the table's own vertical and horizontal borders skip the positions a span covers. `packages/export-latex/src/tables.spans.test.ts` (describe `EXP-041 criterion 3`) checks these in the converter output. The cell's own `borders` attribute is not drawn at all (warning `cell_borders`, EXP-038), so criterion 3 as written, "borders ... on a spanned cell", is not met and stays unticked. Round 8 fix (export-latex-5, 2026-11-13): the cell's own borders are now drawn, and for a span they cover it once: the top and bottom of a column span are one `\DEcline` over its columns, its sides are its spec's two edges, and a row span's sides are drawn in every row it covers, with no rule between those rows (`packages/export-latex/src/tables.borders.test.ts`, describe `EXP-041 criterion 3`, and `packages/export-latex/src/tables.borders.compile.test.ts`, which reads the rules from the rendered page). Criterion 3 still stays unticked for shading: the shading of a row span colours its first row only. Colouring the rows it covers would paint over its content, which hangs from the first row (`\DErowspan`) and is drawn before the later rows; doing it needs the row heights, which the converter does not measure (ADR 0143, question 2). Round 7 (lane export-latex-5, 2026-11-13): criterion 1 is ticked on the structural reading. `class/docedit.cls` gained `\DEcolspan[3]`, which wraps `\multicolumn` (the LaTeX command underneath is still used, inside the class macro), and `tables.ts` writes every span (also the covered positions of a row span) through it. Single columns that need an alignment spec still use `\multicolumn` directly, as they are not spans. Round 5 had read criterion 1 as not met, because `\multicolumn` is not a class cell macro; the class macro now answers that. Criterion 2 (lane EXP-040-052, 2026-11-13): the converter does not measure heights, so `span_taller_than_rows` is raised for every row-spanned cell that holds content (a superset of the taller ones), with the cell as its block. Column spans are not reported: their cell lies in one row. The same reading as EXP-040 criterion 2. Criteria 3 and 4 need a compile and the tagged PDF. Round 10 (lane V-EXP-033-048, 2026-11-13), criterion 4 stays unticked: `packages/export-latex/src/tables.spans.tagged.compile.test.ts` compiles a column and row span with tagging on in the Podman sandbox and reads the structure tree from the PDF's flate streams. tagpdf records the column span (`/ColSpan 2`, passes), but no row span (`/RowSpan`, `it.fails`), because `\DErowspan` is a `\vbox` and the class does not tag the cell. Fixing that needs a tagpdf cell attribute in `class/docedit.cls` (owner or class work). Round 11 (lane V-EXP-033-048): done through tagpdf's `table/multirow` key from the latex-lab table test phase (`\DErowspan{rows}{content}`, preamble `testphase={table}`); criterion 4 is ticked. The owner should accept the test-phase module (ADR 0319, V41).
+
+
+## Typed emitters
+
+### EXP-042 Emit text and generated identifiers safely
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 09 §4, §3.2 (Spaces); review S-06, M-7 · **Requirements:** R5, R10 · **Depends on:** none
+
+As a maintainer, I want the `text` and `generatedId` emitters from the first demo on, so that body text never carries TeX into the engine.
+
+**Acceptance criteria**
+
+- [x] Given a string, when `text` writes it, then `\ { } $ & # _ % ^ ~` are escaped.
+- [x] Given a no-break space or a soft hyphen, when `text` writes it, then it is mapped to the matching TeX form; given control characters and bidirectional override characters, then they are removed; and the output is NFC-normalised.
+- [x] Given a `[` that follows a line break or an item, when `text` writes it, then it is guarded so it cannot be read as an optional argument.
+- [x] Given a label, macro name or file name, when `generatedId` produces it, then it derives from a counter or a hash and never from user input, and two different inputs never give the same name in one bundle.
+- [x] Given a string made of every special character, when it is exported and the PDF's text is extracted, then the extracted text equals the input.
+
+**Evidence:** `packages/export-latex/src/emit.test.ts` (describe `text emitter`: escapes every special character, guards brackets and maps no-break space and soft hyphen, removes control and bidirectional characters with NFC, and a fast-check property that the TeX decodes back to the cleaned input). The guard `[` and `]` are always braced, which satisfies the criterion without a line-break check. Round 2 (2026-11-13), criterion 4: `packages/export-latex/src/emit.bundle.test.ts` (150 distinct anchors give 150 distinct `\DEanchor` numbers, and 150 distinct paragraph styles give 150 distinct `\DES` macro names, in one converted bundle) and `emit.strings.test.ts` (`generatedId` is injective over counters). Criterion 5 (2026-11-13, packet X1): `packages/export-latex/src/typeset.compile.test.ts` (describe `EXP-042 criterion 5`) compiles three strings that hold every special character in the Podman sandbox and checks that `pdftotext` returns each one unchanged.
+
+**Notes:** Batch 2026-11-13 (packet X1). Criterion 4 was unticked in round 1 (the bundle part was not tested) and is ticked in round 2, see Evidence. The emitter part is tested in `packages/export-latex/src/emit.strings.test.ts` (`generatedId` is injective over counters, rejects negative and non-integer input, and was made to reject negatives in this batch), but "two different inputs never give the same name in one bundle" is a bundle-level property of the converter, not yet tested. Criterion 5 is ticked in packet X1 (2026-11-13) after a compile in the sandbox, see Evidence; the compile skips where the sandbox cannot run. The other emitters are EXP-043 and EXP-044. The `text` rule on leading, trailing and repeated spaces is EXP-025.
+
+### EXP-043 Emit PDF strings, key-value options and URLs safely
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §4; 03 §8 (I9); review S-06 · **Requirements:** R5, R10 · **Depends on:** EXP-042
+
+As a maintainer, I want the `pdfString`, `kvValue` and `url` emitters, so that alternative text, metadata, options and link targets cannot inject TeX.
+
+**Acceptance criteria**
+
+- [ ] Given a bookmark, a metadata field or an alternative text, when `pdfString` writes it, then it uses PDF string encoding and no TeX command in the input survives as a command.
+- [x] Given a value for any key-value option, when `kvValue` writes it, then it is braced and `,`, `=`, `]` and braces in the value are neutralised, so the value cannot add, end or change an option.
+- [ ] Given a link target, when `url` writes it, then only the schemes of invariant I9 pass (so `run:` and `file:` do not), and characters that are special in TeX arguments are percent-encoded.
+- [ ] Given each of the three emitters, when the converter's output is searched, then every place that writes such a value goes through the emitter.
+
+**Evidence:** `packages/export-latex/src/emit.strings.test.ts` (describe `kvValue (EXP-043 criterion 2)`: for any string the output is braced and, once the wrapper, the `\DEstr` command and hex digits are removed, nothing remains, so `,`, `=`, `]` and braces cannot reach the option list; the payload decodes back to the cleaned value) and `packages/export-latex/src/emit.test.ts` (describe `pdfString and kvValue emitters`, hex-only property).
+
+**Notes:** Batch 2026-11-13 (packet X1). Criterion 1 is unticked: `pdfString` writes UTF-8 hexadecimal digits that `docedit.lua` decodes into catcode-12 characters, not a PDF text string. The UTF-16BE form with a byte order mark (`pdfHexString`) is tested in `emit.strings.test.ts`, but which form bookmarks and metadata use is for the class and needs the compile check. Criterion 3 is unticked: the `url` emitter refuses every scheme outside I9 (tested), and hex-encodes the whole target so `#`, `%`, `&`, `$`, `~` and `_` never reach TeX. The literal rule to percent-encode TeX-special characters is not implemented, because percent-encoding `%` would change the meaning of existing escapes; this is recorded as an open question in `docs/adr/0115-export-latex-backlog-batch.md`. Criterion 4 is unticked: "every place" needs the EXP-045 guard check, which is not yet written. Round 3 (export-latex-5, 2026-11-13): criterion 4 stays unticked. `packages/export-latex/src/emit.output.search.test.ts` puts a probe with `\write18`, braces, `%` and `^^` into the alternative text, the figure placeholder, a heading, a link target and title, and the document title. No raw probe reaches a `.tex` file, and each place carries the probe in its emitted form. Two gaps stay open: the link title is written by `pdfHexString` (`inline.ts`, UTF-16BE), not `pdfString`, although the attribute table (`attributes.ts`, `mark:link.title`) names `pdfString`; and the probe reaches only the places one document can reach (`hidden_region.title`, `source_def` fields and bibliography text are not probed). Which emitter the link title uses is an open question for the owner (EXP-030 owns the link dictionary). Round 9 (export-latex-5, 2026-11-13), criterion 1 stays unticked: `packages/export-latex/src/pdfstring.compile.test.ts` compiles a figure without a picture whose alternative text holds `\textbf`, `\input`, `%` and `^^5c`, and `pdftotext` returns the placeholder `[figure: ...]` unchanged (passes). The same file checks the document title: the compiled PDF has no `Title` field at all, not even for a plain ASCII title, so `\hypersetup{pdftitle=...}` (`convert.ts`) does not reach the metadata. That test is marked `it.fails` until the title is written; the cause is not found (the value is `{\DEstr{...}}`, decoded by `docedit.str`, and hyperref writes nothing). Bookmarks are not checked, because no outline reader is available to the test, and the "PDF string encoding" wording is not met by the hex-to-catcode path. Owner or class work needed for the title. Round 10 (lane V-EXP-033-048, 2026-11-13): the title is not lost. The compiled PDF carries it in XMP `dc:title` (probe in the sandbox: `/Title` is absent from the Info dictionary under `\DocumentMetadata` with PDF 2.0 and PDF/UA, and the XMP holds the plain title). `packages/export-latex/src/pdfstring.compile.test.ts` now reads XMP and passes as an ordinary test (no `it.fails`), with the special-character title from round 9. Lane U-EXP-033-048 (2026-11-14): bookmarks are now checked by `packages/export-latex/src/exp-043-bookmarks.compile.test.ts` (Podman sandbox, preview profile, outline read with `test/exp-023-pdf-links.ts`): a heading whose text has `%`, parentheses, `&`, `#`, `~`, `$`, `]`, `^^5c`, braces and `_` comes out in the outline as typed. A heading with a backslash command (`\textbf{BOLD}`) loses the backslash and the letter after it, a product defect in the heading bookmark path; the test records it with `it.fails` until it is fixed. Round 8 (lane U-EXP-033-048, 2026-11-14): the cause of the backslash defect is likely the bookmark string. hyperref writes the outline title as a PDF literal string without escaping its backslashes, so `\t` in `\textbf` reads as a tab. Doubling each backslash in `\DE@strexp` (`class/docedit.lua`, `docedit.strpdf`) fixed the outline, but the same string reaches the XMP `dc:title` as raw text and showed `\\`, which broke `pdfstring.compile.test.ts`; the change was reverted, the defect stays open (`it.fails` in `exp-043-bookmarks.compile.test.ts`). The fix needs a separate string path for the bookmark, which is not chosen here (open question for the class owner). Criterion 1 stays unticked: that defect, the "PDF string encoding" wording (`pdfString` writes hex digits for `\DEstr`, not a PDF text string, as noted above).
+
+### EXP-044 Emit lengths, colours and enumerations safely
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §4; 01 §8 (Lengths); review S-06 · **Requirements:** R5, R10 · **Depends on:** EXP-042
+
+As a maintainer, I want the `dimen`, `color` and `enumLookup` emitters, so that lengths, colours and names that select behaviour cannot carry TeX.
+
+**Acceptance criteria**
+
+- [x] Given a length in twentieths of a point, when `dimen` writes it, then it divides by 20 and writes `bp`, and a value outside the safe range is clamped to that range.
+- [x] Given a colour, when `color` writes it, then exactly six hexadecimal digits are written; anything else is not written and a diagnostic names the block.
+- [x] Given a language, alignment, format or bullet character, when `enumLookup` writes it, then the value selects an entry in a fixed table and the value itself is never written.
+- [x] Given a value that is not in the table, when `enumLookup` runs, then the table's documented default is used and a diagnostic names the block.
+
+**Evidence:** `packages/export-latex/src/emit.test.ts` (describe `dimen, color, enumLookup, identifiers`: `dimen(230)` is `11.5bp`, a value beyond the range is clamped; `enumLookup` writes only the table's own entries, and `known` is false for a value outside the table, with the fallback returned). The tables used by `blocks.ts`, `page.ts` and `props.ts` go through the same function. Round 2 (2026-11-13), criteria 2 and 4: the callers now go through `colourOf` and `enumOf` in `packages/export-latex/src/context.ts`, which raise `colour_invalid` and `enum_unknown` with the block id. Tests: `packages/export-latex/src/diagnostics.test.ts` (a run colour and a table cell colour that are not six hex digits give `colour_invalid` for their block, and no value but six hex digits is written; an unknown paragraph alignment or highlight gives `enum_unknown` for its paragraph, and the fallback is written; a property over unknown alignments). The other call sites (label alignment, bullet, figure, page number format, section start, tab lists, export options) use the same helper and are not tested one by one.
+
+**Notes:** Batch 2026-11-13 (packet X1). Criteria 2 and 4 were unticked in round 1: the diagnostic that names the block was raised by the converter's callers, not by `color` or `enumLookup`, and no test of the converter's diagnostics existed yet. Round 2 (2026-11-13) decision, to be confirmed by the owner (ADR 0115, items 8 and 9): a colour or lookup that belongs to no block (a style definition, a tab list, a page setup's page number format, an export option) raises its diagnostic with a null block id, because the spec names no other owner for it. Criterion 4 covers every user-value lookup except the converter's constant `'a-4f'`. `color` returning null for any other value is tested in `emit.test.ts`.
+
+### EXP-045 Allow TeX output only through the emitters
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §4; 03 §8 (I11); ADR 0007; review S-06 · **Requirements:** R5, R10 · **Depends on:** EXP-042, EXP-043, EXP-044
+
+As a maintainer, I want it to be impossible to concatenate a user-controlled value into TeX without an emitter, so that a new feature cannot reopen the injection holes closed by the review.
+
+**Acceptance criteria**
+
+- [ ] Given the converter's source, when the CI check runs, then any code path that writes a user-controlled value to the bundle without going through one of the eight emitters (`text`, `pdfString`, `kvValue`, `url`, `dimen`, `color`, `enumLookup`, `generatedId`) fails the build.
+- [x] Given the CDM schema, when a test lists every attribute whose value can reach output, then each has an entry that names its emitter, and an attribute without an entry fails the test.
+- [ ] Given the raw writer, when its callers are listed, then only the emitters call it.
+- [ ] Given a new context that user strings can reach, when it is added, then it is rejected in review until an emitter covers it.
+
+**Evidence:** `packages/export-latex/src/attributes.test.ts` (describe `EXP-045 attribute table`): every node, projection node and mark attribute of `CDM1` has an entry in `ATTRIBUTE_EMITTERS`, the table names no other attribute, and every entry is one of the eight emitters or null (criterion 2). `packages/export-latex/src/emit.guard.test.ts` searches the package for a cast to `Tex` or a use of the constructor outside `emit.ts`; it is a search, not a build check (criteria 1 and 3, part).
+
+**Notes:** Invariant I11 (grammars on every attribute) is the other half and belongs to CDM. Round 2 (export-latex, 2026-11-13): criterion 1 stays unticked, because `gatedMath` writes math that passed the gate (09 §6.3) without one of the eight emitters, and the criterion lists the eight only (ADR 0115, item 10, for the owner). Criterion 3 stays unticked: `line` takes only `Tex`, but no list of its callers is written as a test. Round 3 (export-latex-5, 2026-11-13): `packages/export-latex/src/emit.raw-writer.test.ts` pins the modules that call `line` (`blocks.ts`, `convert.ts`, `flow.ts`, `page.ts`, `tables.ts`), so a new caller fails the test until a reviewer lists it. Those callers are the converter's structural modules, not the emitters, so "only the emitters call it" is still not met and criterion 3 stays unticked. Criterion 4 is a review, not a test. The attribute table's `null` entries mean that the value never reaches the bundle.
+
+### EXP-046 Fuzz the emitters per context and per language
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §4, §14; 10 §3.4, §5 · **Requirements:** R5, R10 · **Depends on:** EXP-045, EXP-114, SEC-001
+
+As a maintainer, I want adversarial tests of every emitter in every context, so that an escaping mistake is found by a machine before it is found by an attacker.
+
+**Acceptance criteria**
+
+- [x] Given random and mutated strings for the `text` emitter, when each is exported and compiled, then the extracted text of the PDF equals the input.
+- [ ] Given random and mutated strings for each other emitter, when each is exported and compiled, then the job compiles and a trace of the token stream contains no control sequence that the emitter did not write.
+- [x] Given each context in which an emitter is used and strings in several languages and scripts (including right-to-left, CJK and combining marks), when the fuzzer runs, then every combination is covered.
+- [x] Given seeds from known attacks (`\input`, `\write18`, `^^` notation, unbalanced braces, `]` and `,` in options), when the fuzzer runs, then they are included in every run.
+- [ ] Given a failure, when it is found, then the input is stored as a fixture of the corpus.
+
+**Evidence:** criterion 1 (re-ticked by the round 6 fixer, group B3): `packages/export-latex/src/emit.compile.fuzz.test.ts` compiles one document in the sandbox, one paragraph per string, and checks that each input is one line of `pdftotext -raw` output (ligature glyphs expanded by NFKC). The batch is all 23 known-attack seeds, unfiltered, 4 words that hold `fi`, `ff`, `fl`, `ffi` and `ffl`, and 120 fast-check samples (seed 46) of random strings over printable ASCII and the space (upper- and lower-case letters, digits, every TeX special, hyphen, quotes) and of seeds with a special character inserted; 146 distinct strings after removing duplicates, up to 39 characters, all found (local run, 2026-11-13, Podman sandbox). A second test in the same file fails if any seed does not fit the batch or is missing from it, or if the alphabet loses lower-case letters. Criteria 3 and 4: `packages/export-latex/src/emit.fuzz.test.ts` (fast-check, 120 runs per property; for each of eleven groups of languages and scripts (Latin, Greek, Cyrillic, Arabic and Hebrew with directional marks, CJK, Devanagari, combining marks, emoji, TeX specials, controls): `text` in three contexts (block start, after a space, explicit spaces), `pdfString` and `kvValue`, `url` with six prefixes, `color` and `enumLookup`; `dimen` and `generatedId` over integers). Each property starts with the known-attack seeds (`examples`), so the seeds are in every run.
+
+**Notes:** Batch 2026-11-13 (packet X1, round 4). The fuzzer checks the grammar of each output, not a compile. `text` output is read back through its escapes and must equal the cleaned input, with no bare TeX special character or backslash; the hex forms decode to the cleaned input. Criteria 1 and 2 need the sandbox and a trace of the compiled token stream (`services/export-worker`, Podman), not run here. Criterion 5 needs a stored corpus of failing inputs, not built; no failure has been found, so nothing is stored (ADR 0115, item 20). Lane export-latex-5, round 7 (2026-11-13): the store and replay mechanism is built in `packages/export-latex/src/emit.corpus.test.ts` (describes `EXP-046 criterion 5`): a fixture is `{emitter, input}` in `packages/export-latex/test/emitter-corpus/`, named by a SHA-256 prefix, and every stored fixture is replayed through the grammar checks of `text`, `pdfString`, `kvValue` and `url` on each run. The folder is empty, because no failure has been found; the replay test checks the format only. Criterion 5 stays unticked until a failure is stored. The corpus package is not in this lane, so the folder location is a proposal (ADR 0143, item 3). Criteria 1 and 2 are unchanged (sandbox compile and token trace). `url` hex-encodes the whole target, so its output holds no TeX special; see EXP-043 Notes for the percent-encoding question. Round 6 (lane U-EXP-033-048, 2026-11-14), criterion 2 stays unticked: `packages/export-latex/src/exp-046-trace.compile.test.ts` (Podman sandbox, 2 of 2 passed) compiles a baseline and a random batch of `pdfString` (figure alternative text) and `url` (link target) strings with `\tracingcommands1` switched on after `\begin{document}`, and finds no unexpandable control sequence in the random compile that the baseline lacks; a `\special` injected into the body is reported (negative control). Two limits: the trace is at level 1 only, because `\tracingmacros2` with level 2 writes about 200 MB of log for this batch (hyperref purifies every link target), so expandable macros are not traced; and the `kvValue`, `dimen`, `color`, `enumLookup` and `generatedId` emitters have no batch yet. Round 9 (export-latex-5, 2026-11-13): criterion 1 is ticked on one sandbox compile of a batch (one paragraph per string), not one compile per string. The batch leaves out hyphens, quotes, lower-case `fi` and `ff` (ligatures, not what the emitter does) and the glyphs a default font lacks, so those are not tested by it. Criterion 2 still needs the token trace of the compiled job, and criterion 5 needs a failure to store. Round 6 review (group B3): criterion 1 is unticked again, because the batch holds no lower-case letter and omits the named attacks (see Evidence); it can be ticked when the alphabet includes lower-case letters (leaving out only `fi` and `ff`) and every seed is compiled. Round 6 fix (group B3): the alphabet is now printable ASCII with no exclusions. The class loads fonts with `Ligatures=TeXOff`, so `--` and quotes stay as typed; the font's `fi`/`ff` ligatures are compared through NFKC instead of being left out. Every seed is compiled, and criterion 1 is ticked again. Characters outside ASCII are not in this compiled batch (the scripts of criterion 3 are checked by grammar in `emit.fuzz.test.ts`, not compiled), because they depend on the fallback fonts. Round 8 (lane U-EXP-033-048, 2026-11-14), criterion 2, other emitters: `packages/export-latex/src/exp-046-others.trace.compile.test.ts` (Podman sandbox, machine route, `DOCEDIT_REQUIRE_SANDBOX=1`, 2 of 2 passed) compiles a baseline and a random batch with the same alphabet and seeds for the document title (`kvValue`, in the preamble, so the trace starts after the `\documentclass` line), the paragraph alignment (`enumLookup`), the cell shading (`color`) and the paragraph indent (`dimen`, integers), and finds no extra control sequence at level 1. `generatedId` takes a counter, not a string, so no batch reaches it. Criterion 2 stays unticked, because the trace is level 1 only (the same limit as above) and the owner has not said whether level 1 meets "a trace of the token stream".
+
+## Fonts
+
+### EXP-047 Load fonts from the manifest by hash
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §5, §2, §8; 02 §6 · **Requirements:** R5 · **Depends on:** BE-047, FE-061, FE-062
+
+As a maintainer, I want workers to load the same font files as the editor, addressed by hash, so that line widths agree and no font is ever found by accident.
+
+**Acceptance criteria**
+
+- [x] Given the font manifest of a job, when the worker starts, then the font files are on a read-only path identified by hash, and `fontspec` loads them by file path and hash and never by system lookup.
+- [x] Given a hash in the manifest with no matching file, when the job runs, then it fails with a diagnostic and no other font is substituted silently.
+- [x] Given a font served to the editor and the same font mounted in a worker, when their SHA-256 hashes are compared, then they are equal.
+- [x] Given the manifest, when it is read, then it records each font's licence and the fallback chain that the converter's glyph check uses.
+
+**Evidence:** Round 5 (2026-11-13, packet X1): `packages/export-latex/src/fonts/manifest-chain.test.ts` (describe `EXP-047 the manifest records each font's licence and the fallback chain`): every entry of the bundle's `manifest.json` `fonts` has a licence and a file, the families and the math face carry their licences, the `fallback` entries come in the order of the manifest's chain with the same file and hash, the math face is the only chain entry when no fallback list is given, and a character only a later fallback face covers is not reported by the glyph check. Lane U-EXP-033-048 (round 3), criterion 1: `services/export-worker/src/exp-047-fonts.image.podman.test.ts` starts the worker image read-only, with no network and no capabilities (Podman, machine route; passed, 179 s, 2026-11-13). Each font file's bytes hash to its name, every face of the image's `fonts.json` has its file under its hash, the directory is not writable, and `OSFONTDIR` is `/nonexistent`. The fontspec path (`Path=\DE@fontpath`, every face a hash file name) is `packages/export-latex/src/exp-047-fontspec.test.ts`. Lane V-EXP-033-048 (round 7), criterion 2 (UNTICKED by the reviewer: the test is a sandbox compile, not the job; the job's `font_file_missing` diagnostic is not wired in `main.ts`, so "the job fails with a diagnostic" is not shown; rerun by the reviewer, passed): `packages/export-latex/src/exp-047-missing-face.compile.test.ts` (describe `EXP-047 criterion 2`) runs the sandboxed compile with a default face that names a file the image lacks (`DOCEDIT_REQUIRE_SANDBOX=1`, Podman machine route, passed, 176 s, 2026-11-13): the compile fails, the log names the missing file, and no PDF is produced, so no other font is substituted. The job-level check (`services/export-worker/src/exp-047-fonts.job.test.ts`, `font-files.ts`) is the host-side part; its wiring in `main.ts` is still open (ADR 0116, decision 16), so the sandbox compile is the evidence for this criterion. Lane V-EXP-033-048 (round 7), criterion 5: `services/export-worker/src/exp-073-image.podman.test.ts` passed through the Podman machine route (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_REQUIRE_SANDBOX=1`, 71.6 s, 2026-11-13): the image holds non-empty files under `/opt/docedit/luaotfload-names`, including the names database. Fonts are addressed by path and hash as tested by `exp-047-fonts.image.podman.test.ts` (round 3). Lane V-SYN-019-036 (fixer of V-EXP-033-048), criterion 2, re-ticked at job level: `services/export-worker/src/main.ts` now passes `checkFontFiles: imageFontCheck(IMAGE)` to the handler; `services/export-worker/src/image-font-files.ts` runs `sha256sum` inside the worker image (read-only, no network, no capabilities) over every face of the job's manifest at `/opt/docedit/fonts`. `services/export-worker/src/exp-047-fonts.job.podman.test.ts` builds the worker with `createExportWorker` and that check against the real image `localhost/docedit-export-worker:s4` (`DOCEDIT_REQUIRE_SANDBOX=1`, `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, 4 of 4 passed, 168.8 s as reported by vitest on this development host, 2026-11-13): with the image's own manifest the check passes and the job reaches the compile; with one face's hash naming no file the job fails with `unavailable` and exactly one `font_file_missing` diagnostic naming the family and the file, no compile runs and nothing is stored, so no other font is used; with the math face given another hash it fails with `font_file_mismatch`; a last case reads `main.ts` for the wiring. The sandbox compile test above remains the evidence that the compile itself does not substitute a face. Lane V-EXP-033-048 (round 8), criterion 3: `services/export-worker/src/exp-047-served-hash.podman.test.ts` (Podman, machine route, `DOCEDIT_REQUIRE_SANDBOX=1`, passed, 62.7 s, 2026-11-14): the font files are copied out of the worker image, loaded as the document service loads its font directory (`loadFontCatalogue`) and served by its font route (`fontFileHandler`, the route the editor fetches from, called directly and not over HTTP). For every file the served bytes, the file's name and `sha256sum` run inside the image on the mounted file give the same SHA-256.
+- [x] Given the image, when it is built, then it contains a pre-built font name cache, and fonts are still addressed by path and hash.
+
+**Notes:** The editor's registry is FE's and the manifest and assets are BE's (README §2.3). 02 §6 says fonts under the Open Font License with reserved names are not subsetted under their own name; 09 does not say how the PDF embeds fonts (Open questions).
+
+Round 5 (2026-11-13, packet X1): criterion 4 is ticked on the converter's side only. The manifest lists the chain as the glyph check reads it, but it does not record the coverage ranges the check uses, and when a face has no coverage the check is switched off without a line in the manifest. Criteria 1, 2, 3 and 5 stay unticked: they need the worker's read-only font path, the hash check of the job's files (none is read by the converter), the editor's registry (FE) and the image's name cache, none of which is in `packages/export-latex`. Round 8 (lane V-EXP-033-048): criterion 3 is ticked on the served route of the document service, not on the editor's own font registry (FE), which is not exercised; see Evidence.
+Lane EXP-040-052 (2026-11-13), criterion 1, converter part: `packages/export-latex/src/exp-047-fontspec.test.ts` reads the shipped `class/docedit.cls` and the `styles.tex` of a bundle: every face is a content-hash file name, every loader is given by `Path=\DE@fontpath`, and no family or system name reaches a loader. The read-only path is not checked, so criterion 1 stays unticked. Criterion 2, worker part: `services/export-worker/src/font-files.ts` (`checkFontFiles`) returns `font_file_missing` or `font_file_mismatch` for each manifest face with no file or with bytes that do not hash to its name (tests: `services/export-worker/src/font-files.test.ts`, 5 passing). The job does not call it yet: the image's font directory is not on the host, and the local compile path is not changed in this lane, so the job does not fail on a missing hash, and criterion 2 stays unticked. Round 5 (export-worker): the handler now takes an optional `checkFontFiles` (`src/job.ts`); when it reports a problem the job fails with `unavailable` before conversion, its diagnostics `font_file_missing` or `font_file_mismatch`, and no compile (`src/exp-047-fonts.job.test.ts`, 5 tests). `src/main.ts` does not wire it, because the worker reads the manifest from the image and no host font directory is named yet; criterion 2 stays unticked until the owner names where the worker's font files are (ADR 0116, decision 16). Lane U-EXP-033-048 (round 3): criterion 1 is ticked (see Evidence). Criterion 2 stays unticked: `services/export-worker/src/exp-047-missing-face.compile.test.ts` (a sandboxed compile whose default face names a file the image lacks, expecting a failed compile, a log naming the file and no PDF) is written and not yet run; the Podman calls on this machine were too slow to finish in this round. Criterion 3 stays unticked: the editor's registry is FE's and no test reads the editor's font bytes. Criterion 5 stays unticked: the image's name cache is checked by `services/export-worker/src/exp-073-image.podman.test.ts`, which did not complete in this round, so the cache is not re-proven here. Lane U-EXP-033-048 (round 4): criterion 5 is ticked. `services/export-worker/src/exp-073-image.podman.test.ts` passed on the image (Podman, machine route, 2026-11-13: the names cache has non-empty files and the names database), and "addressed by path and hash" is shown by the fontspec path test (`packages/export-latex/src/exp-047-fontspec.test.ts`) and by criterion 1's image test. Criterion 2 is still unticked, see the next note.
+
+Lane U-EXP-033-048 (round 4), criterion 2: `packages/export-latex/src/exp-047-missing-face.compile.test.ts` passed (Podman sandbox, machine route, 2026-11-13): a bundle whose default regular face names a file the image lacks fails to compile, its log names the file, and no PDF comes out, so no other font is substituted. The job-level part is not met: the diagnostic `font_file_missing` is produced by `checkFontFiles` but the job does not call it (`src/main.ts` is not wired; the owner must name the worker's font directory, ADR 0116, decision 16), so the job does not fail with that diagnostic before the compile. Lane V-EXP-033-048 (round 7): `exp-073-image.podman.test.ts` run with `DOCEDIT_REQUIRE_SANDBOX=1` from `services/export-worker` reported one test skipped (a direct container start failed on the cgroup `memory.max` path); with `DOCEDIT_PODMAN_MACHINE` set it passes (see Evidence).
+
+Lane V-SYN-019-036 (fixer of V-EXP-033-048), criterion 2: the open point of ADR 0116 (decision 24 of round 5, cited above as decision 16) was where the worker's font files are read from for the check. No new location is chosen here: the check reads the files where the sandbox reads them, in the image at `/opt/docedit/fonts` (09 §5; S4 §2), so no host font directory is needed. For the owner to review: if workers later get fonts outside the image (for example tenant fonts, EXP-048), that location needs its own check, and `font-files.ts` (`checkFontFiles` over a host directory) is ready for it. The result is kept per process for each image and set of faces, since the image does not change while the worker runs; each check costs one `podman run` the first time.
+
+### EXP-048 Use tenant fonts only in that tenant's jobs
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Tenant administrator |
+
+**Spec:** 09 §5; 02 §6; 11 §9 (risk 11) · **Requirements:** R5, R10 · **Depends on:** EXP-047, BE-048
+
+As a tenant administrator, I want fonts my organisation is licensed to use to appear in my exports and nowhere else, so that our documents match our brand without leaking a licensed font.
+
+**Acceptance criteria**
+
+- [ ] Given a font that a tenant uploaded, when that tenant's job runs, then the font is mounted and used.
+- [ ] Given a job of another tenant whose manifest lists the same hash, when it runs, then the font is not mounted.
+- [ ] Given a font whose recorded licence does not permit server-side use, when a job needs it, then it is not loaded, the fallback chain is used and a diagnostic names the family.
+- [x] Given a tenant font that was removed, when a document that uses it is exported, then the fallback chain is used and a warning names the family.
+
+**Evidence:** Lane EXP-040-052 (2026-11-13), criterion 4: `packages/export-latex/src/tenant-fonts.removed.test.ts` (describe `EXP-048 criterion 4`): a family the job's manifest lacks gives one `font_family_missing` warning per paragraph, naming the family, the export stays `ok`, the paragraph prints in the default family (`\DEfont{1}`), `styles.tex` writes the manifest's fallback chain in order, and the same family present in the manifest gives no warning and prints in its own family.
+
+**Notes:** Phase inferred: tenant fonts depend on the administration API of phase 2 (13 §12). Lane EXP-040-052 (2026-11-13): criterion 4 is ticked on the converter's side. A removed tenant font reaches the converter only as a family the job's manifest lacks, so removal is the same input as a family that was never there; the job's removal step is BE-048 and is not tested here. Criterion 1 (the font is mounted and used for that tenant's job) is the job's and the worker's. Criterion 2 (another tenant's job with the same hash does not mount it) is the job's manifest, not the converter. Criterion 3 stays unticked: the manifest records a licence as free text, and 09 §5 says the licence "must permit server-side use" without saying how that is recorded or who decides. This is an open question for the owner; the converter does not guess a policy from the licence string. Proposed in `docs/adr/0224-lane-EXP-040-052.md`. Lane V-EXP-033-048 (round 7): criteria 1 and 2 stay unticked. `services/document-service/src/control-plane/fonts.ts` serves one global font catalogue; no tenant-scoped font set, mount or manifest exists, so there is nothing to test against PostgreSQL yet. This needs BE-048 (tenant font administration) built first, and it is not a test gap.
+
+## Math
+
+### EXP-049 Gate math: syntax, allow-list and forbidden primitives
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §6.1, §6.3; 03 §8 (I7, I8); review M-9, S-03 · **Requirements:** R5, R10 · **Depends on:** none
+
+As a maintainer, I want one shared validator that accepts only a narrow, safe subset of math, so that the only user-authored TeX that reaches the engine cannot define macros, read files or run code.
+
+**Acceptance criteria**
+
+- [x] Given a `latex` value, when the gate runs, then it parses it with KaTeX in strict mode with `trust` off and a macro expansion limit, and whatever KaTeX rejects is rejected.
+- [x] Given a control sequence that is not on the allow-list, when the gate runs, then the value is rejected. The allow-list is the intersection of what KaTeX supports and what `amsmath` and the chosen math font provide, minus the commands the gate forbids.
+- [x] Given `\def`, `\let`, `\csname`, `\catcode`, `\input`, `\include`, `\openin`, `\write`, `\directlua`, `\special`, `\immediate`, `\newcommand` or the `^^` character notation, in any spelling, when the gate runs, then the value is rejected.
+- [x] Given a value that builds a forbidden command indirectly (for example with `\expandafter` or `^^5c`), when the gate runs, then it is rejected.
+- [x] Given the allow-list, when its test runs, then every entry compiles under the class's math setup, and the list is a versioned file generated from its sources.
+- [ ] Given the gate, when it is packaged, then one implementation is used by the authority, the converter and the editor.
+
+**Evidence:** `packages/export-latex/src/math/gate.test.ts` (describe `math gate: syntax and KaTeX`, `allow-list`, `forbidden primitives` and `indirect construction`: a value the lexical scan passes is refused by KaTeX; `\cancel`, which KaTeX parses and the list omits, is refused; each forbidden primitive is refused at the start, inside a group and after text, in several spellings; `^^` and the indirect builders `\expandafter`, `\edef`, `\noexpand` and `\string` are refused) and `packages/export-latex/src/math/gate.fuzz.test.ts` (describe `math gate fuzzing (EXP-053 criterion 2, part)`: every control word of an accepted value is on the list). Criterion 5 (lane U-EXP-049-064, round 5, Podman, image `localhost/docedit-export-worker:s4`): `packages/export-latex/test/math-allow-list.compile.test.ts` (describe `EXP-049 criterion 5`) puts one inline equation per allow-list command and one display equation per allowed environment into one document, compiles it under the class in the worker's sandbox, and checks that the converter reports no `math_refused`. It passed on 2026-11-13 after the allow-list was narrowed (see Notes). Currency: `packages/export-latex/src/math/allow-list.currency.test.ts` passes after the regeneration.
+
+**Notes:** The math font is "the chosen math font" in 09 §6.3 and is not named anywhere in the spec (Open questions). Batch 2026-11-13 (packet X2, round 3): criteria 5 and 6 stay unticked. Criterion 5 needs the TeX engine to compile every allow-list sample under the class, and the currency test of the generated file is not written yet. Criterion 6: the converter imports `mathGate`, and the authority receives it by injection (`RoomInit.mathGate`); the editor has no caller yet.
+Lane EXP-040-052 (2026-11-13), criterion 5: the currency test is written in `packages/export-latex/src/math/allow-list.currency.test.ts`. It recomputes the list from `candidates.ts` and checks the commands, environments, fingerprint, refusals and KaTeX version of `allow-list.ts` against the installed KaTeX. Criterion 5 stays unticked: the compile of every entry under the class is not run.
+Lane U-EXP-049-064, round 5 (2026-11-13): criterion 5 is ticked (see Evidence). The first compile failed on `\blacklozenge`, which only `amssymb` defines, and the class does not load `amssymb`. A `\ifdefined` and `\meaning` dump of all 503 entries under the class found 19 names undefined and 5 that are base-LaTeX placeholders (`\not@base`): `blacklozenge blacksquare bm centerdot circlearrowleft circlearrowright degree doteqdot lozenge npreceq nshortmid nshortparallel nsucceq ntriangleleft ntriangleright shortmid shortparallel square varpropto`, and `leadsto lhd rhd unlhd unrhd`. They were removed from `candidates.ts`, and `allow-list.ts` was regenerated with `scripts/math-allow-list.ts` (fingerprint `a0edb1b3...`, ADR 0320). Spec default used: 09 §6.3 limits the list to what `amsmath` and the math font provide. Criterion 6 stays unticked: the editor has no caller of `mathGateReason`, which is a UI change (FE).
+
+### EXP-050 Gate math: painting, dimensions, characters and limits
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §6.3; 03 §8 (I7); review S-03, M-9 · **Requirements:** R3, R5, R10 · **Depends on:** EXP-049
+
+As a maintainer, I want the gate to refuse math that paints outside its box or breaks a compile, so that an editor of one region cannot cover text in another region of a signed PDF.
+
+**Acceptance criteria**
+
+- [x] Given `\rlap`, `\llap`, `\smash`, `\raisebox`, `\colorbox`, `\fcolorbox` or `\rule`, when the gate runs, then the value is rejected.
+- [x] Given `\kern`, `\hskip` or `\hspace` with a negative or large argument, when the gate runs, then the value is rejected, and every dimension argument is bounded.
+- [x] Given an unescaped `%`, `#` or `~`, or a stray `&` outside an alignment environment, when the gate runs, then the value is rejected; `\text{50% of}` is rejected.
+- [ ] Given a display environment, when the gate runs, then only `equation` (numbered or not) is allowed, containing `aligned`, `gathered`, `cases` or the matrix environments; `align`, `gather`, `multline` and `eqnarray` are rejected.
+- [x] Given a value of 4,000 characters, when the gate runs, then it is accepted; given 4,001, rejected. Given nesting depth 50 it is accepted; given 51, rejected.
+- [x] Given an equation that places a white box over a price in another region, when the gate runs, then it is rejected.
+
+**Evidence:** `packages/export-latex/src/math/gate.test.ts` (describe `math gate: painting, dimensions, characters and limits (EXP-050)`: each painting command is refused in both modes; `\kern`, `\hskip`, `\hspace`, `\mkern` and `\mskip` refuse negative and out-of-bound lengths; unescaped `%`, `#`, `~`, a stray `&` and `\text{50% of}` are refused; `aligned`, `gathered`, `cases` and a matrix environment are accepted; `align`, `gather`, `multline`, `eqnarray` and `equation` are refused; 4,000 characters and depth 50 are accepted, 4,001 characters and depth 51 are refused; `\colorbox{white}` over a figure is refused).
+
+**Notes:** The bounds for dimension arguments are not given in 09 and are set when this story is built (Open questions); they are set in `DIMENSION_BOUNDS` (ADR 0046). Batch 2026-11-13 (packet X2, round 3): criterion 4 stays unticked. The criterion says that `equation` is the only display environment allowed, but the gate refuses `\begin{equation}` inside a value, because the class supplies the display wrapper (09 §6.3). The two readings differ; this is recorded in ADR 0115 for the owner.
+
+### EXP-051 Reject bad equations at edit time and replace them at export
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §6.3; 03 §8 (I8); 07 §16 · **Requirements:** R3, R5, R10 · **Depends on:** EXP-049, EXP-050, SYN-011, FE-070
+
+As an author, I want an equation that cannot be typeset safely to be refused while I type it, so that I find out at once and an export never fails because of it.
+
+**Acceptance criteria**
+
+- [x] Given a commit that sets a `latex` attribute failing the gate, when the document service processes it, then the commit is rejected with `invalid_op`, and the authority runs the gate for every commit that sets a `latex` attribute (invariant I8).
+- [ ] Given I enter an equation that fails the gate, when I leave the equation, then the editor does not accept it and tells me why.
+- [x] Given an equation that fails the gate reaches the converter anyway (for example after the allow-list was narrowed), when the document is exported, then it is replaced in the PDF by a visible placeholder, a diagnostic with the block identifier is returned, and the rest of the document exports.
+- [x] Given the converter runs the gate again, when an accepted equation is exported, then the result is the same as at commit time for the same gate version.
+- [ ] Given an equation of 4,000 characters at nesting depth 50, when a commit sets it, then the gate completes within the commit's CPU budget of 04 §12.
+
+**Evidence:** Lane EXP-040-052 (2026-11-13), criterion 3: `packages/export-latex/src/exp-051-equation-placeholder.test.ts` (describe `EXP-051 criterion 3`): a refused display equation (`\def`) is written as `\DEplaceholder` with no `\DEeq`, gives one `math_refused` warning with its block identifier, and the paragraphs before and after it are written in full; a refused inline equation (`\rlap`) gives a `\DEph` placeholder inside its paragraph with the same diagnostic for the paragraph; the other equations of the document are still written.
+Criterion 1 (lane U-EXP-049-064, round 5, in-memory data plane, no PostgreSQL): `services/document-service/src/data-plane/sec-034-math-gate.test.ts` (test "refuses each definition or primitive of the corpus with invalid_op (I8) and stores nothing", and "refuses a content replacement that brings \def, through the same gate") submits real commits over the wire with `\def`, `\let`, `\csname`, `\directlua` and the rest, and checks `invalid_op` and that nothing is stored. Passed on 2026-11-13 with `pnpm vitest run` on that file.
+
+Lane V-EXP-049-064, round 2 (2026-11-13, criterion 4, Node.js only): `packages/export-latex/src/exp-051-gate-version.test.ts` checks that the converter's gate verdict equals `mathGateReason` (the commit path's gate, `room-host.ts`) for accepted and refused values, that the manifest records the allow-list version, KaTeX version and fingerprint (`manifest.mathGate`, written by `convert.ts`), and that two conversions give the same manifest and `main.tex`. Run with `pnpm vitest run --project node` on that file.
+
+**Notes:** The gate sits on the hot write path (04 §12, admission control). The browser can run the same validator to answer before the commit. Round 7 (export-latex, 2026-11-13): criterion 4 stays unticked. The converter calls the same `mathGate` (`blocks.ts`, `inline.ts`) and writes the accepted value as it is, but the commit-time run is the authority's injected copy, and the manifest records neither the allow-list version (`ALLOW_LIST_VERSION`, `math/allow-list-source.ts`) nor the KaTeX version, so "the same gate version" is not checked across the two runs. Criterion 5 stays unticked: 04 §12 gives no CPU figure for the gate (a measurement would need a stated number and harness), and this round did not invent one.
+Lane EXP-040-052 (2026-11-13). Lane U-EXP-049-064, round 5: criterion 1 is ticked (see Evidence). Criterion 2 is the editor's (no editor caller yet). Criterion 5 is a CPU measurement on the commit path; none is in `packages/export-latex`, so they stay unticked. Criterion 4 stays unticked: the converter calls the same `mathGate` as the commit path, but the code has no gate version to compare against, so "the same result for the same gate version" is not testable here. Lane V-EXP-049-064 (2026-11-13): `packages/export-latex/src/exp-051-same-result.test.ts` shows, in one process, that accepted equations are written as equations and that two conversions give the same bytes; the comparison across gate versions is still open, so criterion 4 stays unticked. Lane V-EXP-049-064, round 2: the manifest now records the gate version (`mathGate` in `manifest.json`), so a later run can compare its verdicts with the version it was written under; criterion 4 is ticked on the Node test above. A cross-process run of an old gate is not made.
+
+### EXP-052 Typeset equations
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 09 §6.1, §6.3; 03 §4.3, §4.4; 02 §6 · **Requirements:** R1, R5 · **Depends on:** EXP-050, EXP-019, EXP-047
+
+As an author, I want inline and display equations in the PDF, numbered the way the editor numbers them, so that reviewers see the same equation numbers on screen and on paper.
+
+**Acceptance criteria**
+
+- [x] Given an inline `equation`, when exported, then it is set in the line in the OpenType math font.
+- [x] Given an `equation_block` with `numbered` set, when exported, then it is set as a display equation with its number; with `numbered` unset, without a number.
+- [x] Given `aligned`, `gathered`, `cases` and matrix environments inside `equation`, when exported, then each is typeset.
+- [x] Given a `ref` field that targets an equation `label`, when exported, then it prints the number the editor shows for that equation.
+- [ ] Given any equation, when the PDF is rendered, then nothing of it is painted outside its box, because the class clips every equation to its box.
+
+**Evidence:** Lane EXP-040-052 (2026-11-13), criteria 1 to 4, structure only (nothing compiled): `packages/export-latex/src/exp-052-equations.test.ts`. Criterion 1: an inline `equation` is written as `\DEmath{...}` in its paragraph, and `styles.tex` sets the math font with `\DEmathfont` from the manifest's file. Criterion 2: a numbered display equation has its number as the tag of its `\DEeq` line, an unnumbered one an empty tag. Criterion 3: `aligned`, `gathered`, `cases` and `pmatrix` pass `mathGate` and are written inside `\DEeq`. Criterion 4: a `ref` field with target `eq:pyth` prints the number 1 of that labelled equation.
+
+Criterion 5, display equations only (lane V-EXP-049-064, 2026-11-14, Podman through `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, image `localhost/docedit-export-worker:s4`): `packages/export-latex/test/exp-052-clip.compile.test.ts` (describe `EXP-052 criterion 5`) puts a 200 pt bar that starts left of a display equation's box into the bundle, compiles it, and rasterises page 1 with pdftoppm at 72 dpi. Its dark pixels stay within 20 of the document with an empty equation, and a 20 pt square inside the box is still painted (more than 300 dark pixels). It passed on 2026-11-14. `docedit.cls` (class 0.2.3, `\DE@clipout`) clips each `\DEeq` to its box with a PDF clip path.
+
+**Notes:** On-screen math uses KaTeX's fonts and the PDF an OpenType math font, so sizes differ slightly (02 §6). Whether equation numbers are printed as literal labels or counted by TeX is not stated; the criterion fixes only the result (Open questions). Display and editing in the editor belong to FE.
+Lane EXP-040-052 (2026-11-13). Criterion 5 stays unticked: `docedit.cls` sets `\DEeq` and `\DEmath` without a clipping box, so nothing clips an equation to its box. The gate refuses the painting commands (EXP-050), but a clip in the class needs a compile to check. Criteria 1 to 4 are ticked on the structure of the bundle; the PDF glyphs and the sizes need a compile, which was not run.
+
+Lane V-EXP-049-064 (2026-11-14), criterion 5 stays unticked. The class now clips display equations (`\DEeq`) to their box, but inline equations (`\DEmath`) are not clipped. The first try boxed inline equations as well. The box stopped the line breaker from breaking inside an equation, and the line-start offsets that `packages/export-latex/src/exp-055-line-offsets.v-lane.compile.test.ts` checks then failed in Podman, so the inline box was removed. A clip for inline math needs a mechanism that keeps the line breaks; none is chosen here (see `docs/adr/0320-lane-V-EXP-049-064.md`). The class is at 0.2.3 (`class/releases.json`, `CLASS_VERSION` in `src/convert.ts`).
+
+### EXP-053 Fuzz the math gate
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §6.3, §14; 10 §5 · **Requirements:** R5, R10 · **Depends on:** EXP-049, EXP-050, SEC-001
+
+As a maintainer, I want the gate fuzzed continuously, so that a bypass is found by a machine first.
+
+**Acceptance criteria**
+
+- [x] Given random, grammar-based and mutated inputs, when the gate runs, then it never crashes or hangs, and each input is decided within a bounded time.
+- [ ] Given every input the gate accepts, when it is compiled, then the token stream trace holds no control sequence outside the allow-list and no material is painted outside the equation's box.
+- [x] Given the gate and KaTeX, when both run on the same input, then everything the gate accepts is accepted by KaTeX.
+- [x] Given seeds of known attacks (`\text{50% of}`, a white `\colorbox`, `\input`, `^^` notation, a very large `\hspace`), when the fuzzer runs, then they are included in every run.
+- [ ] Given a failure, when it is found, then the input is stored as a regression fixture.
+
+**Evidence:** `packages/export-latex/src/math/gate.fuzz.test.ts` (describe `math gate fuzzing (EXP-053 criterion 1)`: fast-check, 400 runs per property over grammar-based, random, grapheme and mutated inputs; no call throws and each call takes under 2 s; describe `criterion 3`: every value the gate accepts is accepted by KaTeX in strict mode; describe `criterion 4, seeds`: the seeds are the fast-check `examples` of every property, so they run first in every run, and each seed is refused).
+
+**Notes:** Batch 2026-11-13 (packet X2, round 3). Criterion 2 needs the TeX engine to trace the token stream and to check the boxes; its lexical half (every control word of an accepted value is on the allow-list) is in the same file. Criterion 5 stays unticked: no failure has been found, so no regression fixture exists yet. The 2 s bound is a guard against a hang, not a measured target. Lane V-EXP-049-064, round 9 (2026-11-14), criterion 2, token-stream half: `packages/export-latex/test/exp-053-trace.compile.test.ts` compiles 15 accepted values (11 hand-written, 4 from a fixed-seed sample) in Podman (`localhost/docedit-export-worker:s4`, `pnpm exec vitest run --project node` on that file, 3 of 3 passed, about 80 s). Each value is traced with `\tracingcommands` against an empty equation. No I/O, shell or engine primitive (`DANGEROUS` in the test) appears in any value's trace. The strict reading is NOT met: a value with `\frac` or `\sqrt` also runs kernel and expl3 internals (tagging socket, `\msg`, `\tl`, `\ifx`, `\Ustack`), which are not on the allow-list and cannot be listed one by one (up to 289 extra words per value). Criterion 2 stays unticked; the reading and the choice of denylist are recorded in `docs/adr/0320-lane-V-EXP-049-064.md` for the owner. The painting half stays open for inline equations, which the class does not clip. Criteria 1, 3 and 4 are unchanged; criterion 5 stays unticked (no failure, so no fixture).
+
+### EXP-054 Choose the converter between LaTeX and Office math
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | 2 | M | must | Maintainer |
+
+**Spec:** 09 §6.1; review M-15; 11 §1 (principle 3) · **Requirements:** R5 · **Depends on:** EXP-049
+
+As a maintainer, I want a time-boxed comparison of converters between LaTeX and Office math through MathML, so that DOCX import and export can be built on a converter whose licence we can ship.
+
+**Acceptance criteria**
+
+- [ ] Given the candidates (Microsoft's stylesheet, which is not redistributable, the strongest open-source converter, which is under the GPL, and any permissively licensed one), when they are compared, then the report states each licence and what it allows: the GPL converter only as a separate process.
+- [ ] Given a corpus of equations taken from real Word files and from the gate's allow-list, when each converter runs in both directions, then the report gives the share converted correctly, the share converted wrongly, and the share not converted.
+- [ ] Given the recommendation, when it is read, then it names the converter, the process boundary, where it runs, and how an equation that cannot be converted is turned into an image whose alternative text is the LaTeX source.
+- [ ] Given the time box ends, when the report is delivered, then it recommends one converter or states that none fits.
+
+**Notes:** The roadmap lists no numbered spike for this (review M-15 asks for "a converter spike"). Phase 2 is inferred, because DOCX import (EXP-105) needs the answer. How an equation image is rendered is not specified anywhere (Open questions).
+
+## Pagination parity and `layout.json`
+
+### EXP-055 Report block-level layout in `layout.json`
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §7, §7.1, §3.1, §9.3 item 7; 02 §9.7 · **Requirements:** R5 · **Depends on:** EXP-015, SPK-017
+
+As a maintainer, I want every compile to report where pages begin, so that the editor can later pin its page breaks to the typeset result.
+
+**Acceptance criteria**
+
+- [x] Given a compile, when the class sets a block's material, then it marks it with a LuaTeX attribute that identifies the block, and marks text runs with their starting offset.
+- [ ] Given each page, when the kernel's shipout hook runs, then Lua code writes `n`, `setup`, `starts` (`blockId` and `offset`) and `opensWith` (`text`, `float`, `tableHead` or `footnoteContinuation`), because the first material on a page is not always body text.
+- [x] Given the file, when it is read, then it holds `seq`, `classVersion` and `granularity`, and block-level page starts are the guaranteed minimum.
+- [x] Given `offset`, when it is written, then it counts UTF-16 code units of the block's text, each inline atom counts as one and bookmarks count as zero.
+- [x] Given `layout.json`, when anything would use it, then it is first validated against its published schema; an invalid file is not served, and the job reports a diagnostic.
+- [x] Given text in the document that imitates layout data, when `layout.json` is written, then it still validates, because only the class's Lua code writes it.
+
+**Evidence:** `services/export-worker/src/job.test.ts` (test "never uses a hostile layout report: it is dropped with a diagnostic (SEC-036 criterion 3)") gives four hostile layout reports to the job: none is stored as `layout.json`, each leaves `layout` null and adds a `layout_invalid` diagnostic. The job stores a layout only when `validateLayout` (`services/export-worker/src/layout.ts`, against `LAYOUT_SCHEMA`) returns no errors (`job.ts`, the `validateLayout(built).length === 0` check). Run on 2026-11-13 with `pnpm vitest run services/export-worker/src/job.test.ts` (no Podman).
+Criteria 1, 2, 3 and 6 (lane U-EXP-049-064, round 5, Podman, image `localhost/docedit-export-worker:s4`): `packages/export-latex/src/exp-055-layout.compile.test.ts` compiles the class in the sandbox and reads `main.layout`. Criterion 2: pages are numbered 1 to n, each has `opensWith` in the four values, and the first page starts at the first block with offset 0; a page opened inside a paragraph starts at that block with an offset above zero. Criterion 3: `seq` and `classVersion` equal the job's, granularity is `line`, and every page has a start. Criterion 1: the block identifiers of the page starts and of `lineStarts` are the identifiers of the converted blocks. Criterion 6: a paragraph and a `\DEpage` look-alike in the text leave `layout.json` valid, with only the real pages. Passed 4 of 4 on 2026-11-13 with `pnpm vitest run packages/export-latex/src/exp-055-layout.compile.test.ts`. Criterion 4 stays unticked: the test checks UTF-16 offsets of lines, not inline atoms (counted as one) or bookmarks (counted as zero).
+
+Criterion 4 (lane V-EXP-049-064, round 2, Podman through the machine route `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, 2026-11-13): `packages/export-latex/src/exp-055-line-offsets.v-lane.compile.test.ts` compiles a 260-word paragraph with astral characters, inline equations and bookmark anchors, and matches each line start, in order, against the first word of the PDF lines. It passed on 2026-11-13 with `pnpm vitest run --project node` on that file. The PDF has more lines than the paragraph, because pdftotext splits an inline equation with a superscript over two lines; the match therefore does not assume line k of the PDF is line k of the paragraph.
+
+Criterion 4 (fixer U-SYN-037-053, round 7, 2026-11-14): the lane U test `packages/export-latex/src/exp-055-057-line-offsets.compile.test.ts` (describe `EXP-055 criterion 4`) no longer matches PDF line k with paragraph line k; it matches in order as the V-lane test does, and passed on two runs under Podman (machine route, `DOCEDIT_REQUIRE_SANDBOX=1`; see EXP-057 Evidence). The Notes sentence of round 7 that says it stays unticked until that test passes is superseded.
+
+**Notes:** Phase inferred: the roadmap puts the first block-level `layout.json` in spike S4 and its use in phase 3, but the job result of 09 §9.1 already carries its URL in 1b. The precision of offsets inside a block is established by S4 (Open questions). How the page view uses the file is FE's. Lane EXP-053-065 (2026-11-13): criterion 5 ticked (see Evidence). Lane U-EXP-049-064, round 5: criteria 1, 2, 3 and 6 are ticked (see Evidence); criterion 4 stays unticked (inline atoms and bookmarks are not tested). Lane V-EXP-049-064, round 2: criterion 4 is ticked (see Evidence). Before that round, criteria 1 to 4 and 6 stayed unticked: the class's Lua code that writes the file, the starting offsets and the `granularity` field need a compile (Podman, not run here), and no test of criterion 6 can run without one.
+Lane U-EXP-049-064, round 7 (2026-11-13), criterion 4: the converter's half is ticked-ready and passes in Node (`packages/export-latex/src/exp-055-offsets.convert.test.ts`: an equation atom advances the next run by one, an anchor by none). The compile half is written (`packages/export-latex/src/exp-055-057-line-offsets.compile.test.ts`, describe `EXP-055 criterion 4`: each line start of a paragraph with astral characters, inline equations and anchors is checked against the first word the PDF prints). Its first Podman run timed out at the 60 s default; the timeout is now 300 s, and that rerun did not finish with a result under the host's load (the sandbox probe also reported "not ready" in two of three vitest runs). Criterion 4 stays unticked until that test passes. Audit (2026-11-13): criterion 2 is unticked again, because the class never reports `float` (`docedit.cls` sets the area attribute to 1 for figures and never to 4, so a page that opens with a float is written as `text`) and the compile test only checks that `opensWith` is one of the four values and that page 2 is `text`, so `float` and `tableHead` are never exercised (only `footnoteContinuation`, in EXP-029's test). Criteria 1, 3, 4, 5 and 6 were rerun and hold; the schema check of criterion 5 is a hand-written validator that no test compares with `LAYOUT_SCHEMA`.
+Lane U-EXP-049-064, round 9 (2026-11-14): criterion 2 stays unticked and is blocked on a class change. `packages/export-latex/class/docedit.cls` (`\DEfig`, line 554) sets area 1 for figures, so `float` is never written. A fix means a new class version: a raised `CLASS_VERSION` (`src/convert.ts`), a `ProvidesClass` bump, and a ledger entry in `class/releases.json` (`exp-015-class-release.test.ts`). That would change the class version every concurrent lane sees, so this round did not make it. Needs the main session's decision on the version bump.
+
+### EXP-056 Check `layout.json` against the PDF
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §14, §7.1 · **Requirements:** R5 · **Depends on:** EXP-055, EXP-114
+
+As a maintainer, I want a test that compares `layout.json` with the pages of the PDF, so that reported page starts are known to be true.
+
+**Acceptance criteria**
+
+- [ ] Given a corpus document, when the test runs, then for every page the first block and offset in `starts` matches the text that begins that page in the PDF.
+- [ ] Given pages that open with a float, a table header row or a footnote continuation, when the test runs, then `opensWith` equals what the PDF shows.
+- [ ] Given `setup`, when the test runs, then it equals the page setup in force on that page.
+- [ ] Given a mismatch, when CI runs, then it fails and names the document and page.
+
+**Evidence (lane U-EXP-049-064, round 9, 2026-11-14, criterion 1 on a Latin stand-in, not the corpus):** `packages/export-latex/src/exp-056-layout-latin.compile.test.ts` compiles a generated 30-paragraph Latin document (no CJK) under Podman (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_CONTAINER_CGROUPS=disabled`, `DOCEDIT_REQUIRE_SANDBOX=1`, `pnpm vitest run --project node` on that file). Each page's `starts` block and offset are checked against the first words `pdftotext -f n -l n` prints at the top of that page, and each `opensWith` is one of the four values. It passed (1 test, about 73 s). Criterion 1 stays unticked: it names the corpus document.
+
+**Notes:** Lane U-EXP-049-064, round 6 (2026-11-13). Criterion 1 is not ticked. `packages/export-latex/src/exp-056-layout-pdf.compile.test.ts` compiles `pages-20` (the shared corpus document) in the sandbox (Podman, image `localhost/docedit-export-worker:s4`) and checks each page's `starts` against `pdftotext -f n -l n`. The compile fails before any page is checked: LuaTeX reports "Missing character: There is no 文 (U+6587)" in the fallback font, and the run ends with "Fatal error occurred, no output PDF file produced!" (`main.tex:283`). The image has no CJK face, and the converter's glyph check (EXP-026) did not refuse the paragraph in the corpus's Chinese, Japanese or Korean text, so the gap is in the glyph fallback, not in this story. The test stays failing until that is fixed (owner of EXP-026 or the font manifest). Fixer of round 2 (2026-11-13): the test is now `it.skip`, with the reason in its title, so the repository gate does not carry a known red test; it has the 300 s timeout of the other compile tests (the default 60 s ended the reviewer's run before any page was checked). Every multi-page corpus document (`pages-20`, `pages-100`, `pages-300`, `pages-1000`) holds CJK text, so no other corpus document can stand in. Turn the test on again when CJK is covered. Lane V-EXP-049-064, round 2: the TeX tree of the image has OpenType CJK faces (Fandol, Harano Aji, LXGW); none is in the image's font manifest, none covers Hangul (the corpus also uses Korean), and their licences were not checked in this round, so the face is an owner decision (licence and coverage) and none is chosen here. The `imageFonts` read of the image's manifest (60 s timeout in `test/harness.ts`) also failed under load in this round, so the compile was not run. Criteria 2 to 4 are not run: `opensWith` against the PDF, `setup` and the mismatch report of CI (root configuration, not owned by this lane).
+Lane U-EXP-049-064, round 9 (2026-11-14): the Latin stand-in in Evidence is the only run that is possible while the CJK face is missing. Criterion 2 cannot be proven as written: the class never emits `float` (see EXP-055 criterion 2), and `tableHead` and `footnoteContinuation` are not in this document. Criterion 3 (`setup`) needs a document with two page setups, which the stand-in does not have. Criterion 4 needs CI wiring (root configuration) and a deliberate mismatch.
+
+### EXP-057 Report line-level layout
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | L | must | Maintainer |
+
+**Spec:** 09 §7, §7.1; 02 §9.7; 06 §10 · **Requirements:** R5 · **Depends on:** EXP-055, EXP-056, SPK-017
+
+As a maintainer, I want the compile to report line starts, table rows per page and column breaks, so that the page view can adopt the typesetter's breaks for paragraphs that have not changed (parity level L1).
+
+**Acceptance criteria**
+
+- [x] Given `granularity` is `line`, when a compile finishes, then `blocks` holds `lineStarts` for each block, as UTF-16 offsets with inline atoms counted as one and bookmarks as zero.
+- [ ] Given a table that splits across pages, when `layout.json` is written, then the table rows on each page are reported; given columns, the column breaks are reported.
+- [ ] Given the precision that S4 established, when a block cannot be reported at line level, then the file says which granularity it achieved and falls back to block-level starts.
+- [ ] Given the layout test (EXP-056), when it runs on the corpus, then the reported line starts equal the PDF's.
+- [ ] Given line-level reporting is on, when compile time is measured, then the cost over block-level reporting is recorded.
+
+**Evidence:** Lane U-EXP-049-064, round 8 (2026-11-14), criterion 1: `packages/export-latex/src/exp-055-057-line-offsets.compile.test.ts`, reviewer's correction: the developer's claim that `exp-055-057-line-offsets.compile.test.ts` passed 2 of 2 does not hold. Under Podman (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_CONTAINER_CGROUPS=disabled`, image `localhost/docedit-export-worker:s4`, `DOCEDIT_REQUIRE_SANDBOX=1`) the test `EXP-055 criterion 4` in that file failed on two runs of the reviewer ("line 3: q37 at 250"): it matches PDF line k with paragraph line k, and `pdftotext` splits each inline equation over two lines (see Notes, lane V-EXP-049-064). The count rule (UTF-16, atoms one, anchors zero) is checked against the PDF by `packages/export-latex/src/exp-055-line-offsets.v-lane.compile.test.ts` (1 test, passed under the same set-up on the reviewer's run), which matches the line starts in order. The test `EXP-057 criterion 1` in the first file (passed) checks that every block reports `lineStarts` that start at 0, increase and stay inside the block text.
+
+**Evidence (fixer U-SYN-037-053, round 7, 2026-11-14):** the `EXP-055 criterion 4` test of `packages/export-latex/src/exp-055-057-line-offsets.compile.test.ts` now matches each line start in order against the first words of the PDF lines after the previous match (the method of the V-lane test), and fails with the list of misses if any line start is not found. Run with `DOCEDIT_REQUIRE_SANDBOX=1`, `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_CONTAINER_CGROUPS=disabled` and `pnpm vitest run --project node` on that file: passed 2 of 2 on two runs seen by the fixer (the first run together with `exp-055-line-offsets.v-lane.compile.test.ts`, 3 of 3).
+
+**Notes:** Phase 3 and L1 opt-in follow 09 §7 and 11 §6. Lane V-EXP-049-064, round 2: `packages/export-latex/src/exp-055-057-line-offsets.compile.test.ts` (lane U) fails its paragraph check on the machine route (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, 2026-11-13). It matches PDF line k with paragraph line k, but `pdftotext` splits each inline equation with a superscript over two lines, so the indices drift after the first equation. A probe showed that the layout's line starts are right (paragraph line 3 starts at `q55`, which the PDF prints). That file is not edited by this lane; `packages/export-latex/src/exp-055-line-offsets.v-lane.compile.test.ts` matches in order and passes, and it ticks EXP-055 criterion 4. Criteria 2 and 3 (table rows, column breaks) and 4 (corpus, against the PDF) are not built or not run. Lane U-EXP-049-064, round 7 (2026-11-13): criterion 1 has a Podman test that passed once (`packages/export-latex/src/exp-055-057-line-offsets.compile.test.ts`, describe `EXP-057 criterion 1`: every paragraph block of a document with an inline equation, an anchor and astral characters, and of a plain one, has `lineStarts` that start at 0, increase and stay inside the block text). The counting rule (atoms one, anchors zero) is checked against the PDF by the `EXP-055 criterion 4` test in the same file, which passed in round 8, so criterion 1 is ticked (see Evidence). Criteria 2 (table rows and column breaks), 3 (fallback) and 4 (the corpus check, blocked by the CJK glyph gap of EXP-056) and 5 (cost) are not run. Reconciliation is opt-in per tenant (06 §10). The editor's use of the file is FE's.
+
+### EXP-058 Report the rectangle of every form field
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 09 §3.1, §7.1; 12 §12, §13 · **Requirements:** R5, R13 · **Depends on:** EXP-055, EXP-033
+
+As a maintainer, I want `layout.json` to carry the page and rectangle of every flattened field, so that the signing service can place visible signature appearances.
+
+**Acceptance criteria**
+
+- [x] Given a flattened document, when `layout.json` is written, then `fields` holds an entry for every `form_field` keyed by its identifier, with `page` and `rect`.
+- [x] Given a field, when its rectangle is drawn on the PDF page, then it covers the flattened value or empty box.
+- [x] Given the rectangle values, when they are read, then their unit and origin are the ones the schema documents.
+- [x] Given a field in a table cell, when `layout.json` is written, then its page is the page of that row.
+
+**Evidence:** Lane V-EXP-049-064, round 3 (2026-11-13), Podman through the machine route (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_CONTAINER_CGROUPS=disabled`, image `localhost/docedit-export-worker:s4`). `packages/export-latex/src/exp-058-fields.compile.test.ts`, run with `pnpm vitest run --project node` on that file, 2 tests passed. Criteria 1 and 3: two fields, one 2880 twentieths wide and one blank, each keyed by identifier with page 1; the first's width is 2880 within 2 twentieths, and the printed value `Ada` has its left edge within 1.5 points of the rectangle's left edge in `pdftotext -bbox`. Criterion 2: `Ada` lies inside the rectangle (horizontal edges within 1 point, vertical centre inside); the blank box is reported but its coverage is not measured separately. Criterion 4: a field in a table cell after a 900-word paragraph has the page on which `pdftotext` prints its label. `services/export-worker/src/exp-058-fields.test.ts` (6 tests, Node.js) covers the parse of the `fields` member, the join with the map, the drop of unknown numbers and pages, and the schema checks. The class (`docedit.cls`, `docedit.lua`) is at 0.2.2 (ledger entry appended). Regression: `exp-055-layout.compile.test.ts` (4 tests) and `exp-033-field-value.compile.test.ts` and `exp-033-format.compile.test.ts` passed in the same Podman route.
+
+**Notes:** Phase 3 follows 12 §13. The sample in 09 §7.1 suggests twentieths of a point but the spec does not state the unit or origin (Open questions). Lane U-EXP-049-064, round 7 (2026-11-13): not started in code. `services/export-worker/src/layout.ts` (`buildLayout`) always writes `fields: {}`, and the class (`packages/export-latex/class/docedit.lua`) reports no field rectangles, so every criterion needs a class change and a compile of a flattened form (Podman) before a test can prove it. Nothing is ticked.
+Lane V-EXP-049-064, round 3 (2026-11-13): all four criteria are ticked (see Evidence). The class reports each field box's rectangle by number (`\DEfieldno`, the `DE@attr@field` attribute, the `fields` member of `main.layout`), and the worker joins the number with the map's `fields` (`SourceMap.fields`, optional, written when the document has a form field). The unit and origin are those the schema already documented: twentieths of a point from the top-left corner of the page (`unit: "twip"`); the spec's sample is consistent with this, but 09 §7.1 does not state it, so this is recorded as a proposed decision in `docs/adr/0320-lane-V-EXP-049-064.md` (round 3). Fields in a header are reported at their first page. The class is at 0.2.2 (`class/releases.json`, `CLASS_VERSION` in `src/convert.ts`).
+
+### EXP-059 Decide whether forced line breaks (parity level L2) are built
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 3 | S | could | Owner |
+
+**Spec:** 09 §7, §15 · **Requirements:** R5 · **Depends on:** EXP-057, SPK-017
+
+As the owner, I want a recorded decision on whether the class should force the editor's first-fit breaks, so that nobody builds an experimental mode by accident or forgets it.
+
+**Acceptance criteria**
+
+- [ ] Given the evidence from S4 and from L1 in use, when the owner decides, then the decision is recorded as build, do not build, or defer, with the reasons.
+- [ ] Given a decision to build, when it is scoped, then it keeps the constraints of 09 §7: the same fonts, no hyphenation, fixed leading, breaks forced with penalties before TeX's own line breaker runs, and the line breaker is not replaced.
+- [ ] Given a decision to build, when it is announced, then the mode is labelled experimental, with the loss of TeX's paragraph quality stated.
+
+**Notes:** 09 §15 lists this as open. No implementation story is written until the decision says build. Lane U-EXP-049-064, round 8 (2026-11-13): the owner's decision is still missing, and the lane may not make it. The options, the spec default (L2 not built) and the evidence gap (S4 has no reference-machine measurement, see EXP-060) are set out in `docs/adr/0320-lane-U-EXP-049-064.md`, section "Round 8". Nothing is ticked.
+
+
+## Engine and performance
+
+### EXP-060 Meet the export latency target
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §8; 00 §9; 11 §2 (S4) · **Requirements:** R5, R9 · **Depends on:** EXP-114, EXP-015, FND-007, FND-009, SPK-017
+
+As a maintainer, I want the export time measured on the real class with tagging on, so that the target is checked against evidence and not against published lower bounds.
+
+**Acceptance criteria**
+
+- [ ] Given a 20-page corpus document and an empty queue, when a PDF export is measured on the reference worker (one core, 1.5 GiB), then the time to a finished PDF is within 10 seconds at the 95th percentile (target).
+- [x] Given corpus documents of several sizes, when the harness runs, then it records time for each stage: queue wait, conversion, engine start, each pass, and result storage.
+- [ ] Given a change to the class, the converter or the image, when CI runs, then compile time is compared with the stored baseline and a regression beyond the agreed threshold fails the gate.
+- [ ] Given the published timings of 09 §8 (about 1.4 seconds for one page and about 23 seconds for 10,000 plain paragraphs), when the measurements exist, then the spec's figures are replaced by them.
+- [ ] Given the target is missed, when the report is written, then it says by how much and refers to EXP-063.
+
+**Evidence:** Lane U-EXP-049-064, round 6 (2026-11-13), criterion 2: `services/export-worker/scripts/latency.ts` run with `--corpus` on two sizes, one run each, final profile, Podman 6.0.2 on the image `localhost/docedit-export-worker:s4` (host: Intel i9-10900KF, 20 logical CPUs, 128 GiB, Windows 11; not the reference machine, so no target is claimed). The sizes were `s4-01p` (1 page) and a 3-page document derived from `s4-20p` (its first 23 body blocks). Both completed and every stage was recorded (queue wait, content, conversion, checks, sandbox outside the passes, each pass, parse, store): 13.61 s and 26.77 s for the job. Results in the scratchpad (`results.json`, `summary.md` under the run's output directory), not in version control.
+
+**Notes:** Round 8 (lane U-EXP-049-064, 2026-11-14): `services/export-worker/scripts/latency.ts --runs 1 --profiles final` ran end to end under Podman on the development host (not the reference worker, so no target is measured here): `s4-01p` took 12.68 s from job creation to end, and `s4-20p` (23 pages, three passes) took 47.5 s. In the first run of this round the `s4-20p` and `s4-100p` jobs failed their bundle checks. `packages/export-latex/class/docedit.cls` was modified at 00:29:42 local time, inside that run (it started at 00:29:30), which points to a concurrent edit to the class in the shared working tree. The rerun of `s4-20p` passed. The script now records the diagnostic codes of a failed run (`diagnostics` in `results.json`). The cause is inferred from timestamps, not reproduced. The published figures exclude this class's fonts, `hyperref`, `babel`, tables, tagging (reported as about three times slower) and later passes, so they are lower bounds. Whether the 10-second target holds for a final export that runs several passes is not stated (Open questions). Round 6 (export-worker, 2026-11-13; ADR 0116 decision 27): criterion 2 stays unticked. One run of `scripts/latency.ts` on this host's Podman route (shared with other agents' containers) completed the 1-page document (final 57,077 ms, preview 27,109 ms) with the worker's stage times recorded. The 20-page final job did not finish within about 75 minutes and the run was stopped, so no results file exists. Criteria 1 and 3 to 5 need the reference worker, a baseline and the threshold, which are not set. Lane U-EXP-049-064, round 6: criterion 2 is ticked on the two-size run in Evidence. The 20-page corpus document is not run here (it did not finish in the earlier run); the derived 3-page document stands in for a second size, and its name in the output says "5p" but it has 3 pages.
+
+### EXP-061 Run final exports to convergence from a clean state
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 09 §8, §9.1; review M-10, S-12 · **Requirements:** R5, R10 · **Depends on:** EXP-070, EXP-071, EXP-076
+
+As an author, I want a final export to have correct page references, and to be independent of every earlier export, so that the PDF depends on the document alone.
+
+**Acceptance criteria**
+
+- [x] Given a `final` export, when it starts, then it runs from a clean state and repeats passes until page references stop changing.
+- [x] Given a job, when it finishes, then its result records whether page references converged.
+- [x] Given two jobs, when the second runs, then no `.aux` or other auxiliary file written by the first job is read by it, whether on the same worker or on another.
+- [ ] Given page references have not converged when the job reaches a limit of EXP-071, when the job ends, then the result records that they did not converge.
+- [x] Given a table of contents and page references, when a final export has converged, then the page numbers printed are those of the PDF.
+
+**Evidence:** `services/export-worker/src/exp-061-062-passes.test.ts` (describe `what a final export records and what each compile receives (EXP-061 criteria 2 and 3)`: the result and manifest record `converged` and the passes run, for converged and for not converged; four jobs of one handler, a preview among them, send each compile only the bundle files and no auxiliary file, and two final jobs send the same bundle bytes) and `services/export-worker/src/job.test.ts` (test "records a final export that did not converge, and delivers it flagged (EXP-061 criterion 4)"; test "converts, seals, compiles and stores the outputs" checks `converged: true` in the result and the manifest). Container isolation (`--rm`, read-only root, the work tmpfs) is checked in `services/export-worker/src/sandbox.args.test.ts`. Run on 2026-11-13 with `pnpm vitest run` on those files (no Podman).
+
+**Evidence:** Round 4 (2026-11-13, packet export-worker; Podman run on the worker image, full run of `pnpm vitest run services/export-worker`). Criterion 1 and criterion 5: `services/export-worker/test/export.e2e.test.ts`, "runs a final export with a table of contents until references converge, and prints the PDF's page numbers", passed: the result is converged, at least three passes ran, and each "Section n" line of the PDF's first pages (`pdftotext -raw`) carries the page that `layout.json` gives its heading block. Criterion 2: the same test checks `result.converged`, and `src/job.test.ts` ('records a final export that did not converge') checks the flag in the result. Criterion 3: `src/exp-061-062-passes.test.ts`, 'gives each job only its own bundle: no auxiliary file of an earlier job reaches a later compile', checks that the compile of a job receives no `.aux` file, whichever worker runs it, because each compile starts from the job's own bundle; `sandbox.escape.test.ts`, 'keeps nothing between jobs', shows the same for a marker file on one host. Criterion 4 stays unticked: the test in `src/job.test.ts` covers a final export that ends unconverged at the pass cap, and the story does not say whether a job that reaches a limit of EXP-071 (which ends `failed`, with no result) must instead deliver a result flagged as unconverged (Open questions).
+
+**Evidence (lane U-EXP-049-064, round 8, 2026-11-14, criteria 1, 2, 3 and 5 re-run):** `services/export-worker/test/export.e2e.test.ts` under Podman (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_CONTAINER_CGROUPS=disabled`, image `localhost/docedit-export-worker:s4`, `pnpm vitest run --project node` on that file). The third full run had 7 of 7 tests passing, including "runs a final export with a table of contents until references converge, and prints the PDF's page numbers". The two full runs before it failed: the first in four tests (three where the job failed its bundle checks, and the EXP-070 cancelled-job test), the second only in the EXP-070 cancelled-job test (its compile was not called within its 120 s window). The first failure coincides with an edit to `packages/export-latex/class/docedit.cls` made during the run, which the bundle's pinned class check would refuse; this is an inference from timestamps, not reproduced. The cancelled-job test passed alone and in a later full run. Criterion 4 is unchanged.
+
+**Notes:** An `.aux` file is executed as TeX, so reuse would let one sandbox escape persist into other users' exports and would make output depend on history. Reviewers disagreed and security won (review §4). Whether a final export that does not converge fails or is delivered flagged is not stated, and no cap on passes is given (Open questions). Lane U-EXP-049-064, round 7: criterion 4 stays unticked; the owner decision is set out in docs/adr/0320-lane-U-EXP-049-064.md (proposed). Lane EXP-053-065 (2026-11-13): criteria 1 and 5 stay unticked. Criterion 1: the clean-state loop is in `services/export-worker/image/compile.sh`, which only `compile.e2e.test.ts` runs (Podman, not run here). Criterion 4 is not met for a job that a time or memory limit fails: a failed job's result keeps its diagnostics only, with no `converged` field; the pass cap alone is covered (`job.test.ts`). Criterion 5 needs a compile of a document with page references.
+
+### EXP-062 Compile previews in one pass with draft tagging
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.1, §8, §9.1 · **Requirements:** R5 · **Depends on:** EXP-005, EXP-015
+
+As an author, I want a quick preview of my document, so that I can check the layout while I work without waiting for a full export.
+
+**Acceptance criteria**
+
+- [x] Given `profile` is `preview`, when a job runs, then the compile makes one pass and may use draft tagging.
+- [ ] Given a preview and a final export of the same document, when both are timed, then the preview finishes sooner.
+- [ ] Given a preview may show stale page numbers in the table of contents and in references, when its result is read, then it carries a flag that says so, and the PDF pane tells the viewer.
+- [x] Given a preview result, when the cache is read, then it is stored apart from final results (EXP-006).
+
+**Evidence:** `services/export-worker/src/exp-061-062-passes.test.ts` (describe `pass plan of an export job (EXP-062 criterion 1)`: fast-check over every profile and tagging choice, a preview is planned as one pass and a final export as two to four, a draft-tagged preview compiles in one pass with `tagging=draft` in `main.tex`); `services/export-worker/src/job.test.ts` (test "compiles a preview once with tagging off and flags stale page references (EXP-062)"); `services/export-worker/src/profile.test.ts`. Run on 2026-11-13 with `pnpm vitest run` on those files (no Podman).
+
+**Evidence:** Criterion 1 (round 4, 2026-11-13): `src/exp-061-062-passes.test.ts`, 'plans one pass for every preview and two to four passes for every final export' and 'compiles a draft-tagged preview in one pass and reports it as not converged'; `src/job.test.ts`, 'compiles a preview once with tagging off and flags stale page references' (the compile receives `minPasses` and `maxPasses` of 1 and the `tagging=off` line); and under Podman, `test/export.e2e.test.ts`, 'compiles a preview in one pass and flags stale references', which checks one pass in `passMs` and the `preview_one_pass` diagnostic. Criterion 3 is partly met (the result carries the flag and the diagnostic); the pane that tells the viewer is UX's.
+
+**Evidence:** Lane V-EXP-049-064 (2026-11-13, pure Node, `pnpm vitest run --project node`): criterion 4 is `services/document-service/src/control-plane/exp-062-preview-cache-key.test.ts`, which shows that the first-result cache key (`exportRequestKey` in `exports.ts`, read by `export-routes.ts`) differs between a preview and a final export of the same content, and that equal preview requests share one key. The same key separation is also checked in `export-jobs.test.ts` ('keys each request by its tenant, document, content, options and house class version').
+
+**Notes:** The pane that shows the flag is UX's. A browser-side engine for previews is an open question of 09 §15 and is not part of this story. Round 4 (2026-11-13, packet export-worker, Podman run): the time check of criterion 2 is no longer asserted in `test/export.e2e.test.ts`. Its wall-clock comparison failed on the baseline run of this round (preview sandbox 25,277 ms, final 21,787 ms), and a per-pass comparison failed on the next run (the preview's one pass 8,959 ms, the final export's first pass 6,424 ms, the preview's sandbox overhead 5,972 ms against 2,175 ms). On this shared host the preview was not faster, so the assertion measured the host; the cause is not known. The test still checks one pass for the preview and at least two for the final export. Criterion 2 stays unticked until EXP-060 measures it on the reference worker. The test is renamed to say so. Lane EXP-053-065 (2026-11-13): criterion 2 stays unticked (a timing comparison needs the real class, Podman). Criterion 3 stays unticked: the flag is in the result (`converged` false and the `preview_one_pass` diagnostic, `job.test.ts`), but the pane that tells the viewer is UX's. Criterion 4 stays unticked: the kind split that keeps previews apart is tested in `services/document-service/src/control-plane/export-jobs.test.ts`, which this lane did not run.
+
+### EXP-063 Start engines ahead of time in fresh sandboxes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | cond | M | could | Operator |
+
+**Spec:** 09 §8; 06 §10 · **Requirements:** R5, R9 · **Depends on:** EXP-060, EXP-070
+
+As an operator, I want engines already started and waiting inside fresh sandboxes, so that the engine start-up and the class loading do not count against the latency of each job.
+
+**Acceptance criteria**
+
+- [ ] Given a pre-started sandbox, when it waits, then it has loaded the engine and the class past the preamble and holds no document data.
+- [ ] Given a job is assigned, when it uses a pre-started sandbox, then the sandbox is used once and destroyed after that job, like any other (EXP-070).
+- [ ] Given a pre-started sandbox was started with a class version or image other than the job needs, when the job is assigned, then that sandbox is not used.
+- [ ] Given the benchmark of EXP-060, when pre-starting is on, then the measured gain over the target is recorded.
+
+**Notes:** Condition: build this only if the measurements of EXP-060 show that the latency target cannot be met by the pre-built font cache, the preview profile and the cache by bundle hash alone.
+
+## Compile service
+
+### EXP-064 Parse compile logs with a bounded parser
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §9.2; review S-12 · **Requirements:** R5, R10 · **Depends on:** EXP-012, EXP-068
+
+As a maintainer, I want the compile log read by a parser with hard bounds that treats the log as hostile, so that a document cannot fake or flood its own diagnostics.
+
+**Acceptance criteria**
+
+- [x] Given the worker, when it compiles, then it runs with file and line error messages enabled.
+- [x] Given a log, when the parser reads it, then it has hard limits on input size, line length, number of entries and time, and stops at a limit with a diagnostic that says output was truncated.
+- [x] Given a document whose text imitates a log line (for example an error line naming another file and line), when the log is parsed, then no entry points at a block other than the one the line really came from.
+- [x] Given a parsed log, when entries are returned, then each is `{ severity, code, blockId, message }`, and `message` is plain text that cannot carry markup.
+- [x] Given random and mutated logs, when the parser is fuzzed, then it never crashes or exceeds its bounds.
+- [x] Given a job, when it ends, then the log size is recorded as a metric.
+
+**Evidence:** `services/export-worker/image/compile.sh` runs `lualatex --file-line-error`; `services/export-worker/src/compile-config.test.ts` reads that engine call (criterion 1; the image itself was not run, Podman is not available here). `services/export-worker/src/diagnostics.ts` (`LOG_LIMITS`, `parseLog`) bounds bytes, lines, line length, entries and time; `services/export-worker/src/diagnostics.test.ts` tests each bound, the time budget included, and the truncation entry, whose message now says the output was truncated (criterion 2). The box-dump and imitation tests in the same file (criterion 3). The entry shape and plain-message checks in the fast-check property (criterion 4), and the two fast-check fuzz properties at 500 runs each (criterion 5). `services/export-worker/src/job.test.ts` reads `logBytes` from the metrics that `onMetrics` receives (criterion 6). Run on 2026-11-13 with `pnpm vitest run` on the unit files of `services/export-worker/src` (the Podman suites were not run). Lane U-EXP-049-064, round 6 (2026-11-13, criterion 6, Node only): `services/export-worker/src/exp-064-log-metric.test.ts` (describe `EXP-064 criterion 6`) shows that a job whose compile fails records the log size of that compile, and that a job failing before any compile records 0 with `pdfBytes` null; `services/export-worker/src/job.ts` now wraps the attempt so that every failure calls `onMetrics`. Run with `pnpm vitest run --project node` on that file and `job.test.ts` (13 tests passed).
+
+**Evidence (fixer U-SYN-037-053, round 6, criterion 6, 2026-11-14):** `services/export-worker/src/job.ts`: `ExportMetrics` has `state` (`completed`, `failed`, or `aborted` for a cancelled job or a lost lease) and `target`; the handler fills one metrics record as the stages run and calls `onMetrics` exactly once per attempt, in a `finally`, for every target: `cdm` and `tex` jobs record a log size of 0, a failed attempt keeps the stage times it reached and its compile's log size, and a throw from `onMetrics` is ignored rather than failing the job or recording a second entry. `services/export-worker/src/metrics-log.ts`: `metricsLogFields` logs `export.completed`, `export.attempt_failed` or `export.attempt_aborted` by state, and `completedMetrics` keeps completed attempts only; `src/main.ts` logs with the first and `scripts/latency.ts` takes its medians from the second. Tests: `services/export-worker/src/exp-064-log-metric.test.ts` (8 tests: a failed compile, a failure before the compile, a completed pdf job with its stages, a failed attempt with its sandbox time, completed `cdm` and `tex` jobs with log size 0, a cancelled job as `aborted`, a throwing sink), `services/export-worker/src/exp-064-metrics-log.test.ts` (6 tests: the event per state, no failed attempt logged as completed, an unknown target logged as `other`, the latency filter), and `job.test.ts`; `pnpm vitest run --project node` on the three files, 2026-11-14, all passed (Node only; the Podman suites were not run).
+
+**Evidence (lane U-EXP-049-064, round 8, criterion 1, 2026-11-14):** `services/export-worker/test/exp-064-file-line.podman.test.ts` runs the real sandbox (`compileInSandbox`, which runs `image/compile.sh`) on a plain `article` with an undefined control sequence on line 4, and checks that the log holds `./main.tex:4: Undefined control sequence.`, the file-and-line form that `diagnostics.ts` parses. Run with `pnpm vitest run --project node` on that file under Podman (`DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `DOCEDIT_CONTAINER_CGROUPS=disabled`, image `localhost/docedit-export-worker:s4`), 1 test passed.
+
+**Notes:** Log volume is unmeasured (review §6, item 5). Fixer U-SYN-037-053, round 6: the reviewer found that failed, cancelled and retried attempts were logged as `export.completed` with 0 ms stages and entered the latency medians, that `cdm` and `tex` successes recorded nothing, and that a throwing `onMetrics` could record twice; all three are fixed (see Evidence). The worker's metrics now count attempts, not jobs: a retried job reports one entry per attempt, each with its state. Evidence audit (2026-11-13): criterion 6 was unticked because `createExportHandler` called `onMetrics` only when a job completed. Lane U-EXP-049-064, round 6: fixed in `job.ts` (see Evidence); a job that fails before the compile records a log size of 0, since it has no log.
+
+### EXP-065 Show diagnostics at the blocks they come from
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3.2, §9.1, §9.2; 00 §4 (R5) · **Requirements:** R5 · **Depends on:** EXP-012, EXP-064
+
+As an author, I want errors and warnings of an export to point at the place in my document, so that I can fix them without reading a TeX log.
+
+**Acceptance criteria**
+
+- [x] Given a job with errors or warnings, when its result is read, then each diagnostic has a `severity`, a stable `code`, a `blockId` and a `message`, with the block identified through `map.json`.
+- [ ] Given every construct the converter approximated (margin changes of a continuous break, approximate tabs, split rows, boxed tables that cannot span pages, spanned content taller than its rows), when the job completes, then a warning for each is in the result.
+- [ ] Given I choose a diagnostic in the editor, when the block still exists, then the editor moves to it; when the block has changed since the exported `seq`, then I am told so.
+- [x] Given the codes, when the documentation is read, then the list of codes is published in the machine-readable artifacts and versioned with the class.
+
+**Evidence:** `services/export-worker/src/job.test.ts` (test "gives every diagnostic of a result a severity, a catalogue code, a block of map.json or null, and a message") runs a failing job whose log names one line of main.tex with an undefined command, a LaTeX error, a fatal error and an overfull line, and checks each entry of the result: severity in the three levels, code a key of the `CODES` catalogue in `services/export-worker/src/diagnostics.ts`, `blockId` null or a block of the job's `map.json`, and a non-empty message. The entries that name the line carry the block the map gives for that line (criterion 1). Run on 2026-11-13 with `pnpm vitest run services/export-worker`; no Podman needed, the compile is a stand-in.
+
+**Notes:** 09 names no codes (Open questions); this story produces the catalogue. The display of diagnostics is UX's. Round 4 (2026-11-13): criterion 2 stays open. `services/export-worker/src/exp-065-approximations.job.test.ts` runs a document with one construct per approximation and checks, in the job's result, a warning with the right block for `tab_approximate`, `continuous_break_geometry`, `span_taller_than_rows` and `table_cannot_span_pages`. Split rows have no warning: `packages/export-latex/src/tables.split.ts` returns the cells it cannot split (`unsplittable`), and no code in the converter reports them. That warning needs the converter owner's change (ADR 0116, decision 24). Lane V-EXP-065-080 (2026-11-13, criterion 4): `services/export-worker/spec` artifact `spec/export/diagnostic-codes-1.json` is written by `services/export-worker/scripts/write-diagnostic-codes.ts` from the catalogue `CODES` and carries `classVersion` (`CLASS_VERSION`); `services/export-worker/src/exp-065-codes-artifact.test.ts` (3 tests, Node) fails when the file drifts from the catalogue or the class version is wrong. Run with `pnpm exec vitest run src/exp-065-codes-artifact.test.ts` from `services/export-worker`. The file is not yet wired into `pnpm generate` (a `generate` script needs a change to `services/export-worker/package.json`, listed for the main session).
+Lane V-EXP-049-064 (2026-11-13): checked by search, `splitRow` in `packages/export-latex/src/tables.split.ts` is called only by its own test, so the converter does not split rows at all and the approximation does not occur yet; the warning waits for the row measure of EXP-039, and no change was made here.
+Round 2 (2026-11-13, packet export-worker; ADR 0116, decision 11): criterion 2 stays open. The converter (`packages/export-latex`) emits only `table_cannot_span_pages`, `image_without_alt`, `unsupported_feature` and `glyph_missing`; it does not emit the margin change of a continuous break, approximate tabs, split rows or spanned content taller than its rows, so no warning for them can reach the result from this packet. Criterion 3 is UX's. Criterion 4 stays open: the catalogue is in `diagnostics.ts`, but its publication in the machine-readable artifacts of `spec/` belongs to another packet.
+
+### EXP-066 Give raw compile logs to editors only
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Editor |
+
+**Spec:** 09 §9.2; 07 §12 · **Requirements:** R5, R10 · **Depends on:** EXP-064, PRM-056
+
+As an editor, I want to read the raw compile log of an export, so that I can diagnose problems the structured diagnostics do not explain.
+
+**Acceptance criteria**
+
+- [ ] Given a caller with `edit` in the document, when they request the raw log of a job, then they receive it.
+- [ ] Given a caller with `view`, `comment`, `suggest` or only `fill`, when they request it, then the request is refused with `forbidden`.
+- [ ] Given a raw log, when it is served, then it is plain text with `nosniff` and is never rendered as HTML.
+- [ ] Given a job's log, when the job's artefacts expire, then the log expires with them.
+
+**Notes:** Round 3 (lane EXP-066-078, 2026-11-13; ADR 0226 decision 3): nothing ticked, and nothing built in the export packages. The raw log is served as a signed URL inside the job record, by `services/document-service/src/control-plane/export-routes.ts` (`ownJob`, `exportJobOf`), which is the control plane's and not in this lane's packages. Criterion 1 holds there for `edit` callers. Criterion 2 is not met: a caller with `view`, `comment`, `suggest` or `fill` gets the job without a log URL, not a `forbidden` refusal. Criterion 3 (`text/plain` with `nosniff`) is the storage's, and the worker writes `text/plain; charset=utf-8`. Criterion 4 (expiry with the artefacts) is the storage's lifecycle, not checked here.
+
+### EXP-067 Compile only bundles that came from the converter
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Operator |
+
+**Spec:** 09 §9.3 item 1; ADR 0007 · **Requirements:** R5, R10 · **Depends on:** EXP-011
+
+As an operator, I want workers to refuse anything but converter output, so that there is no route for raw LaTeX, custom preambles or uploaded packages.
+
+**Acceptance criteria**
+
+- [x] Given the exports resource, when its schema is read, then it has no input for raw LaTeX, a preamble, a package or a class.
+- [x] Given a bundle with an extra file, a modified `docedit.cls`, an unlisted package or a raw `.tex` file, when a worker receives it, then the job is refused before the engine starts, with a diagnostic.
+- [x] Given a bundle, when a worker receives it, then every file matches the hashes in `manifest.json` and the class equals the pinned version.
+- [ ] Given a worker, when it is asked to run a job whose bundle was not queued by the service, then it refuses.
+
+**Evidence:** `services/export-worker/src/verify.ts` (`verifyBundle`, `sealBundle`, `checkSeal`) and `services/export-worker/src/verify.test.ts` refuse an extra file, a raw `.tex` file, a loaded package, a modified `docedit.cls` or `docedit.lua`, an input or Lua in `main.tex`, a file whose hash the manifest does not list, and an asset whose name is not its hash (criteria 2 and 3). `services/export-worker/src/job.ts` runs `verifyBundle` before `compileInSandbox` and throws a `JobFailure` carrying the problems as diagnostics; the job-level path with a refused bundle is not tested, because the converter never writes one. Criterion 1 is ticked (lane U-EXP-065-080, 2026-11-13) on `services/export-worker/src/exp-067-exports-schema.test.ts`, which reads the published `spec/dep/dep-1.openapi.json` and checks that the create-export request (`CreateExportRequest`: target, seq, options) and `ExportOptions` have no property for LaTeX, a preamble, a package, a class, an engine or a shell, and that the option names are exactly the published ones. Run with `pnpm exec vitest run src/exp-067-exports-schema.test.ts` from `services/export-worker`. Criterion 4 stays open.
+
+**Notes:** How a worker knows that a bundle came from the converter (for example by a hash the service signs) is not specified (Open questions). Criterion 4 therefore stays open: the seal in `verify.ts` is drawn per process and proves only that a bundle is the one this process verified for this job. Batch of 2026-11-13: see docs/adr/0116-export-worker-backlog-batch.md.
+
+### EXP-068 Harden the TeX engine configuration
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Operator |
+
+**Spec:** 09 §9.3 item 2; review S-12 · **Requirements:** R5, R10 · **Depends on:** EXP-073
+
+As an operator, I want the engine configured so that known TeX attacks fail even before the sandbox is reached, so that the sandbox is the second line and not the only one.
+
+**Acceptance criteria**
+
+- [x] Given the engine, when a job runs, then shell escape is disabled and `openin_any` and `openout_any` are set to `paranoid`.
+- [ ] Given the image, when it is built, then the LuaTeX version is 1.17 or later, and a build with an earlier version fails (CVE-2023-32700, CVE-2023-32668).
+- [x] Given the engine, when it starts, then the `--safer` flag is not used, and OpenType fonts load from file.
+- [x] Given test bundles that try shell execution and sockets, when they are compiled with this configuration, then both fail.
+- [x] Given Lua's `debug` and file libraries remain reachable, when the security notes are read, then they state that any TeX injection is to be treated as arbitrary Lua and that the sandbox is the boundary.
+
+**Evidence:** `services/export-worker/src/security-notes.test.ts` (five tests: the `## Security notes` section of `services/export-worker/README.md` states that a TeX injection is arbitrary Lua, that the container is the boundary, the cited settings `shell_escape=f`, `openin_any=p` and `openout_any=p` (checked against `services/export-worker/Containerfile`), the LuaTeX 1.17 floor with both CVEs, and that `--safer` is not used; criterion 5, run on 2026-11-13 with `pnpm vitest run services/export-worker/src/security-notes.test.ts`). `services/export-worker/src/engine-config.test.ts` reads the `ENV` block of `services/export-worker/Containerfile` and the engine call of `services/export-worker/image/compile.sh`: `shell_escape=f`, `openin_any=p`, `openout_any=p` and `--no-shell-escape` (criterion 1, as written; the image was not built or run, Podman is not available here). The same file checks that `--safer` is in neither the image's code, the engine call nor the worker's arguments, and that the build's LuaTeX gate accepts 1.17 and later and rejects 1.16 (the `--safer` half of criterion 3 and the gate of criterion 2 only). Criteria 2 to 4 stay unticked: the build, the OpenType load and the adversarial suite need Podman and the image. Criterion 5 is ticked on the notes as written (round 3, lane EXP-066-078). Round 4 (2026-11-13, packet export-worker, Podman run on the worker image): criterion 4 is ticked on `services/export-worker/src/sandbox.escape.test.ts`, tests 'cannot run commands: \write18, os.execute, io.popen (CVE-2023-32700)' and 'has no network: no socket library (CVE-2023-32668)', both passed in the full run of `pnpm vitest run services/export-worker`. Criterion 3 stays open: the test 'builds only on LuaTeX 1.17 or later' checks the build's version pattern against version strings, not a build, and the OpenType load from file is not tested. Criterion 2 stays open for the same reason (no build is run). Lane V-EXP-065-080 (2026-11-13): criterion 3 is ticked on `services/export-worker/src/exp-068-otf-load.podman.test.ts`, which runs in a real sandbox of `localhost/docedit-export-worker:s4` under Podman (WSL machine route, `DOCEDIT_PODMAN_MACHINE=podman-machine-default`, `pnpm exec vitest run src/exp-068-otf-load.podman.test.ts` from `services/export-worker`): a probe loads an `.otf` file of `/opt/docedit/fonts` by path with fontspec, the PDF (inflated) embeds a FontFile2 or FontFile3 stream, and the log has no `safer` refusal. The static half of `--safer` is in `engine-config.test.ts`. Criterion 2 stays open: the Containerfile's build gate (`luatex --version` matched against 1.17 or later) is the only check of the version, and no image with an earlier LuaTeX was built to see it refuse.
+
+### EXP-069 Choose the sandbox technology for compile workers
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 1b | S | must | Maintainer |
+
+**Spec:** 09 §9.3 item 3; 10 §3.4 · **Requirements:** R5, R10 · **Depends on:** SPK-017
+
+As a maintainer, I want a recorded choice between gVisor and a Firecracker microVM, so that the single-use sandbox is built on one technology with known costs.
+
+**Acceptance criteria**
+
+- [ ] Given both options, when they are compared, then the record covers isolation strength, start-up time, memory overhead, fit with the supported orchestrators and operating cost, using the S4 measurements.
+- [ ] Given the decision, when it is recorded, then it states how every property of EXP-070 is met by the chosen option.
+- [ ] Given the decision, when it is published, then it is written as a decision record and linked from ADR 0007.
+
+**Notes:** Phase inferred: the roadmap names no decision for this; the stories of EXP-070 and EXP-075 wait for it. Round 3 (lane EXP-066-078, 2026-11-13; ADR 0226 decision 2): nothing ticked. Criterion 1 needs measurements of gVisor and of a Firecracker microVM, which have not been taken (only the Podman measurements exist). Criterion 2 is answered for gVisor in ADR 0045 but not checked on a running sandbox. Criterion 3 needs the link from ADR 0007, which the owner adds once the choice is made. The choice is the owner's; ADR 0045 recommends gVisor as a proposal.
+
+### EXP-070 Run every job in a single-use sandbox
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Operator |
+
+**Spec:** 09 §9.3 item 3; review S-12 · **Requirements:** R5, R10 · **Depends on:** EXP-069, EXP-073
+
+As an operator, I want each job to run in its own sandbox that is destroyed afterwards, so that a successful attack on one job reaches no other job or user.
+
+**Acceptance criteria**
+
+- [x] Given a job, when it starts, then it runs in its own single-use sandbox with no network, a read-only root file system, a temporary working directory, all capabilities dropped and a non-root user.
+- [ ] Given a job that writes a marker file, when another job runs, then the marker is not visible to it, whether on the same host or another.
+- [x] Given a job finishes, fails, times out or is cancelled, when it ends, then its sandbox is destroyed.
+- [ ] Given the worker image, when it is started under a plain container runtime and under an orchestrator, then both work; functions-as-a-service platforms are not supported.
+
+**Evidence:** Criterion 1 (round 2, 2026-11-13): `services/export-worker/src/sandbox.args.test.ts`, the describe "the isolation of every job", checks the command every job starts with: `run --rm` with a job name, `--network=none`, `--read-only` with `--read-only-tmpfs=false`, one `/work` tmpfs with `noexec,nosuid,nodev`, `--cap-drop=ALL` with no `--cap-add`, `--security-opt=no-new-privileges`, `--user=10001:10001`, and no volume or mount flag. These tests need no Podman. That the running container has these properties is the sandbox suite's (`src/sandbox.escape.test.ts`), which was not run here, because Podman is not available. Lane U-EXP-065-080 (2026-11-13): criterion 1 is ticked on `services/export-worker/src/exp-070-sandbox-properties.escape.test.ts` (non-root 10001, CapEff and CapBnd zero, NoNewPrivs 1, read-only `/usr` and `/etc`, a tmpfs `/work` that is writable and is the working directory), run under Podman on the worker image `localhost/docedit-export-worker:s4` with `pnpm vitest run services/export-worker/src/exp-070-sandbox-properties.escape.test.ts`. A first run of that day skipped on the readiness probe, which failed under load on the 2 GiB Podman machine; a later run passed all three tests.
+
+**Notes:** Round 2 (2026-11-13; ADR 0116, decision 12). Criterion 1 is ticked on the command only, as EXP-071 criterion 1 is; see the ADR. Criterion 2 (a marker file of one job is invisible to the next) stays open as a whole: the same-host half passed under Podman on 2026-11-13 (`src/sandbox.escape.test.ts`, 'keeps nothing between jobs'), but the criterion also names another host, which no test runs. Criterion 3 is ticked (round 4, 2026-11-13, Podman run): `src/sandbox.escape.test.ts`, 'removes the sandbox of every job, whether it finished, failed or timed out', checks that the containers of a finished, a failed and a timed-out run do not exist afterwards (`containerExists`); `test/export.e2e.test.ts`, 'stops the sandbox of a cancelled job and leaves nothing behind', checks the cancelled job. Criterion 4 needs the image under a runtime and an orchestrator.
+### EXP-071 Enforce per-job limits
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Operator |
+
+**Spec:** 09 §9.3 item 4, §8 · **Requirements:** R5, R9, R10 · **Depends on:** EXP-070
+
+As an operator, I want hard limits on every job, so that one document cannot take a worker or its neighbours down.
+
+**Acceptance criteria**
+
+- [x] Given a job, when it runs, then its limits are 120 seconds of wall clock, one core, 1.5 GiB of memory, 2,000 pages, 200 MiB of output and 256 MiB of working directory.
+- [x] Given a job exceeds a limit, when it is stopped, then it ends `failed` with a diagnostic that names the limit, and its sandbox is destroyed.
+- [x] Given a test document of 2,001 pages, an endless loop, a memory bomb and a disk filler, when each is compiled, then each stops at its limit and no other job on the host is affected.
+- [x] Given the limits, when the service's documentation is read, then each is listed with its value.
+
+**Evidence:** `services/export-worker/src/sandbox.ts` (`LIMITS`, `sandboxArgs`) gives every job the arguments of the limits: `--timeout=120`, `--cpus=1`, `--memory=1536m`, the output `fsize` ulimit of 200 MiB, the 256 MiB `/work` tmpfs and `DOCEDIT_MAX_PAGES=2000`. `services/export-worker/src/sandbox.args.test.ts` checks those arguments and the values of `LIMITS` (criterion 1). The kernel's enforcement of them is in `services/export-worker/src/sandbox.escape.test.ts` (criteria 2 and 3), which needs Podman and the image and was not run on 2026-11-13. Round 4 (2026-11-13, Podman run on the worker image, full run of `pnpm vitest run services/export-worker`): criterion 2 is ticked on `src/job.test.ts`, 'fails a job that reached a limit, with a diagnostic that names it' (state `failed`, the error names `limit_memory`), and on `sandbox.escape.test.ts`, 'stops a disk filler at the working directory limit', which checks that the limit is read as `workdir` and that the container does not exist afterwards. Criterion 3 is ticked on the escape tests 'stops a runaway TeX loop at the pass time limit', 'stops a runaway Lua loop at the pass time limit', 'kills a memory bomb without disturbing a job that runs at the same time' (the neighbour compile succeeds), 'stops a disk filler at the working directory limit' and 'stops a document of 2,001 pages at the page limit'. Criterion 4: `services/export-worker/README.md` lists each limit with its value, and `services/export-worker/src/limits-doc.test.ts` compares those values with `LIMITS` (run on 2026-11-13 with `pnpm vitest run services/export-worker`).
+
+**Notes:** 09 gives the limits per job and does not say whether the 120 seconds cover all passes of a final export (EXP-061) or how the second compile for sealing (EXP-079) is counted (Open questions).
+
+### EXP-072 Keep credentials off the workers
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | S | must | Operator |
+
+**Spec:** 09 §9.3 item 6; 12 §8.2; 10 §3.6 · **Requirements:** R5, R10 · **Depends on:** EXP-070
+
+As an operator, I want workers that hold nothing worth stealing, so that a compromised worker cannot read data or sign anything.
+
+**Acceptance criteria**
+
+- [ ] Given a worker, when its environment, files and mounts are listed, then the only credential is a write-only, per-job upload location.
+- [x] Given a compromised worker running arbitrary Lua, when it tries to read from object storage, list other jobs' results or reach the database, then it cannot.
+- [x] Given a worker, when its image and configuration are searched, then no signing key is present.
+- [ ] Given a job ends, when the upload location is used afterwards, then it no longer accepts writes.
+
+**Evidence:** `services/export-worker/src/image-secrets.test.ts` searches the Containerfile and every file of `services/export-worker/image/` for the key material it recognises (private key blocks and AWS, Stripe and GitHub token shapes), names no credential-like variable in the image's environment or in a job's container arguments, and finds no volume, mount, secret or env file in those arguments (criterion 3). This is a static search of what the worker is built and started from, not a proof that no key is present. Criterion 1 stays unticked: the job holds no credential, but its outputs return on standard output, so there is no write-only upload location for it to be the only credential of. Criterion 4 needs that upload location, which the worker does not have (its outputs return on standard output). Criterion 2 is ticked (lane U-EXP-065-080, 2026-11-13) on `services/export-worker/src/exp-072-services.podman.test.ts`: the test services of infra/containers (PostgreSQL 55432, S3 57070) accept connections from the host (positive control), and a job sandbox under Podman with the worker image is refused on both ports and on three other addresses, with no host name resolving (run with `pnpm exec vitest run src/exp-072-services.podman.test.ts` from `services/export-worker`, 2 passed). The Lua half is `sandbox.escape.test.ts`, 'has no network: no socket library'.
+
+### EXP-073 Build the curated TeX Live image
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §9.3 item 5, §2, §8; 10 §3.4, §3.8 · **Requirements:** R5, R10 · **Depends on:** EXP-015, SEC-050, SEC-051, SEC-052
+
+As a maintainer, I want one pinned, minimal TeX Live image with its licences recorded, so that compiles are reproducible and the licence obligations of distributing it are met.
+
+**Acceptance criteria**
+
+- [ ] Given the image, when it is built, then it is a curated TeX Live 2026 installation pinned by digest, the class loads a fixed list of packages, and the image holds only what that list needs.
+- [ ] Given the image's digest, when a bundle is built, then the digest is recorded in `manifest.json`.
+- [ ] Given a release, when it is published, then it includes a licence manifest generated from the TeX Catalogue that records the licence of everything the image ships and of the house class.
+- [ ] Given the image contains LuaTeX under the GPL and most packages under the LPPL, when a release is published, then it includes a source offer.
+- [x] Given the image, when it is built, then it contains the pre-built font name cache (EXP-047).
+
+**Evidence:** `packages/export-latex/src/image-digest.test.ts` (describe `EXP-073 criterion 2`: a given digest is written to `manifest.json` and to the manifest object, any well-formed digest is recorded as given (fast-check), the content hashes and `bundleHash` do not change, and a malformed digest is refused with a `RangeError`). The option `imageDigest` is in `packages/export-latex/src/bundle.ts`; the converter in `packages/export-latex/src/convert.ts` checks it against `IMAGE_DIGEST_PATTERN` and writes the field (criterion 2, converter side). Run on 2026-11-13 with `pnpm vitest run` on that file, `converter.test.ts` and `class.test.ts`, and `tsc --noEmit -p packages/export-latex`. Criterion 5 (round 4, 2026-11-13): `services/export-worker/src/exp-073-image.podman.test.ts` runs the built image `localhost/docedit-export-worker:s4` through Podman with the sandbox's flags and `--entrypoint=find`, and finds non-empty files directly under `/opt/docedit/luaotfload-names` (the cache the Containerfile copies there).
+
+**Notes:** Signing of images and the software bill of materials are SEC's. Round 3 (export-latex-3, 2026-11-13): criterion 2 is ticked for the converter only. The digest is an input the caller gives; the export worker that supplies it and refuses a bundle without one is not built here. The digest is not a content file, so it is outside `files` and `bundleHash`. Criterion 1 needs the image built and a compile of it, criterion 3 needs the licence manifest from the TeX Catalogue (`services/export-worker/scripts/licence-manifest.ts` is outside this package), criterion 4 needs the source offer in a release, and criterion 5 needs the pre-built font name cache (EXP-047) in the image. None of these is checked here. Audit (2026-11-13): criterion 2 is unticked because no product code supplies `imageDigest` (the export worker's `job.ts` and `bundle-io.ts` never pass it, so every real bundle records `null`) and only `image-digest.test.ts` gives it a value; which digest is meant is also open (ADR 0116 decision 4). Round 4 (2026-11-13): criterion 5 is ticked on the built image (see Evidence). Criteria 1, 3 and 4 stay open: the image is the full TeX Live scheme, not the curated list (the Containerfile says so); `out/licence/licence-manifest.json` lists 415 of its 5,265 packages as licence `unknown`; and no release is built, so no release has a licence manifest or a source offer.
+
+> EXP-074 (Show the PDF in a sandboxed viewer) was merged into FE-071 during the cross-check of 2026-11-06.
+
+### EXP-075 Test the sandbox adversarially
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §14, §9.3; 10 §5 · **Requirements:** R5, R10 · **Depends on:** EXP-068, EXP-070, EXP-071, EXP-072
+
+As a maintainer, I want a suite that attacks the sandbox from inside a compile, so that its rules are checked by trying to break them.
+
+**Acceptance criteria**
+
+- [ ] Given test bundles that bypass the converter, when each tries to read files outside its working directory, read other jobs' files, open a socket, run a command, exhaust memory, loop forever or fill the disk, then every attempt fails and the job ends within its limits.
+- [x] Given the known CVE cases (CVE-2023-32700 and CVE-2023-32668), when they are tried, then they fail.
+- [ ] Given the suite, when CI runs on every change to the image, the class or the sandbox configuration, then it runs against the real image and runtime and blocks the change on a failure.
+- [ ] Given a new attack, when it is found, then it is added to the suite.
+
+**Evidence:** Round 4 (2026-11-13, Podman run on the worker image, full run of `pnpm vitest run services/export-worker`). Criterion 2: `services/export-worker/src/sandbox.escape.test.ts`, 'cannot run commands: \write18, os.execute, io.popen (CVE-2023-32700)', 'cannot replace the engine with os.exec' and 'has no network: no socket library (CVE-2023-32668) and no interface but loopback' passed. The same file's other attack tests passed too: writes outside the work directory, a `\input` of an absolute path, the runaway loops, the fork bomb, the memory bomb, the output bound, the disk filler, the cross-job marker and the host mounts. Criterion 1 is not ticked: the test 'reads only the image: no host path, no credentials' records that TeX reads are not restricted, so a read of a file outside the work directory (an image file) succeeds, which the criterion says must fail. Lane V-EXP-065-080 (2026-11-13, Podman, WSL machine route, `pnpm exec vitest run src/exp-075-read-probe.podman.test.ts` from `services/export-worker`): `\openin` of `/etc/passwd`, of `../../../../etc/passwd` and of `/proc/self/environ` all succeed in a real sandbox of the worker image, so `openin_any=p` does not stop them; `\openin` of `article.cls` (the TeX tree) succeeds by design. The test is `it.fails`, so the suite passes while the gap stays open and fails once the reads are refused. Criterion 3 (a CI run on every change) and criterion 4 (a process for new attacks) are not checked here.
+
+**Notes:** Coverage of the overall threat model is SEC's; this suite is the export part. Round 6 (export-worker, 2026-11-13; ADR 0116 decision 28): criterion 1 stays unticked. The TeX read restriction (`openin_any`) was probed through `runInSandbox`, but the probe script failed (exit 127) and no setting was verified. No change was made to the image or the sandbox arguments.
+
+### EXP-076 Reproduce the same PDF from the same bundle
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §9.4, §8 · **Requirements:** R5 · **Depends on:** EXP-047, EXP-073
+
+As a maintainer, I want the same bundle and the same image to give the same PDF, so that results can be cached and compared, and two compiles can be compared before sealing.
+
+**Acceptance criteria**
+
+- [x] Given a job, when it runs, then `SOURCE_DATE_EPOCH` and `FORCE_SOURCE_DATE` are set from the job, the job path is fixed, fonts are addressed by hash and the image is pinned.
+- [ ] Given the same bundle compiled several times on different hosts, when the PDFs are compared, then they are byte-identical.
+- [x] Given a PDF, when it is searched, then it contains no host name, path or random identifier that differs between runs.
+- [ ] Given a result, when the manifest is read, then it records the image digest and class version.
+
+**Evidence:** `services/export-worker/src/reproducibility.test.ts` checks that the job's epoch becomes `SOURCE_DATE_EPOCH` with `FORCE_SOURCE_DATE=1` in the sandbox's arguments (`sandboxArgs`); that the job path is `/work/job` in `services/export-worker/image/compile.sh`, with no temporary or random names; that the base image is pinned by digest in the Containerfile; and that every font file of `services/export-worker/out/fonts-local/fonts.json` is named by the SHA-256 of its bytes (this last check runs only where the fonts have been built). The epoch taken from the job's `createdAt` is asserted in `services/export-worker/src/job.test.ts`. Criteria 2 and 3 need several runs on different hosts under Podman and are not checked here; criterion 4 stays open (docs/adr/0116-export-worker-backlog-batch.md, decision 4). Lane U-EXP-065-080 (2026-11-13): criterion 3 is ticked on `services/export-worker/src/exp-076-pdf-content.test.ts`, which compiles a probe article twice in real sandboxes of the worker image under Podman and checks that its PDF holds none of the job path, host path, container name or the strings `sandbox` and `docedit`; the same test shows the two PDFs byte-identical on this host, which is a part of criterion 2 only. Criterion 4 was ticked by the lane and unticked by the reviewer: ADR 0116 decision 4 leaves it open until the owner says whether the Podman image ID (`image.id`, recorded in the manifest and checked in `services/export-worker/src/job.test.ts` with a stubbed image ID, together with `bundle.classVersion`) or the registry digest is meant by "image digest"; that is the owner's decision (open point in docs/adr/0321-lane-U-EXP-065-080.md). Criterion 2 stays open: it needs two hosts. Run with `pnpm exec vitest run src/exp-076-pdf-content.test.ts` from `services/export-worker`; from the repository root the probe reported Podman as unavailable. Fix round 1 (2026-11-13): `services/export-worker/src/exp-076-manifest-image.podman.test.ts` runs a real export job (real sandbox, the image's font manifest, no stubbed image lookup) on `localhost/docedit-export-worker:s4` and checks that `manifest.json` records `image.id` equal to what `podman image inspect --format {{.Id}}` reports, and `bundle.classVersion` equal to `CLASS_VERSION`; it passed once from `services/export-worker` on the machine route, after one run that skipped on the readiness probe. It records no registry digest. Criterion 4 stays unticked until the owner decides what "image digest" means (ADR 0116 decision 4).
+
+### EXP-077 Scale workers on queue depth
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 4 | M | should | Operator |
+
+**Spec:** 09 §9.5; 06 §6; 11 §7 · **Requirements:** R5, R9 · **Depends on:** EXP-007, EXP-070, BE-065
+
+As an operator, I want export workers to scale with the queue and stay warm at a minimum, so that a cold start does not delay the first job after quiet hours.
+
+**Acceptance criteria**
+
+- [ ] Given stateless workers that pull from the queue, when the queue depth grows, then the number of workers grows with it up to the configured maximum.
+- [ ] Given a warm minimum, when the queue is empty, then at least that many workers stay running.
+- [ ] Given a scale-down, when a worker is running a job, then it finishes the job first.
+- [ ] Given the worker image, when it is deployed, then it runs as a container on at least two orchestrators.
+- [ ] Given the load tests to the stage 2 targets, when they run, then the export queue wait stays within the target set by the unit-cost sheet.
+
+**Notes:** The warm minimum exists because a cold worker has to load a large image. Stage 1 runs "a few" workers (06 §6), which is covered by EXP-007.
+
+### EXP-078 Gate TeX Live and class upgrades on reference PDFs
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | should | Maintainer |
+
+**Spec:** 09 §9.4, §8; ADR 0007 · **Requirements:** R5 · **Depends on:** EXP-114, EXP-073
+
+As a maintainer, I want every TeX Live or class upgrade tested against stored reference PDFs before rollout, so that an upgrade cannot move line and page breaks unnoticed.
+
+**Acceptance criteria**
+
+- [ ] Given a TeX Live upgrade, when it is prepared, then it is handled as a class version change.
+- [ ] Given the new image, when the corpus is compiled, then a report lists every document whose text positions or pixels differ from its reference PDF, with moved line and page breaks.
+- [ ] Given differences, when the report is reviewed, then the new references replace the old only through a reviewed change.
+- [ ] Given the rollout, when it happens, then it follows the review, and the previous image stays available until it is complete.
+
+**Notes:** Phase inferred: the first upgrade cannot come before there is a deployed image to upgrade. The reference comparison (`services/export-worker/src/exp-078-reference.podman.test.ts`) covers only `pages-1` so far. `pages-20` has no reference: in the current worker image its compile stops at block 29 (Chinese text, no font covers U+4E0E and others). The corpus is not covered in full until the image carries a CJK font and that reference is written and reviewed.
+
+## Output for signing
+
+### EXP-079 Compare two independent compiles before sealing
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Relying party |
+
+**Spec:** 09 §9.3 item 8, §9.4; 12 §8.2 step 2; 10 §3.6 · **Requirements:** R5, R10, R13 · **Depends on:** EXP-070, EXP-076, FRW-049, SPK-021
+
+As a relying party, I want the final PDF compiled twice on independent workers before it is sealed, so that a compromised worker or a non-deterministic compile cannot put a tampered PDF under a valid seal.
+
+**Acceptance criteria**
+
+- [ ] Given a final PDF that is to be sealed, when it is requested, then the same bundle is compiled on two independent workers, each in its own sandbox, and the two results are compared.
+- [ ] Given the bundle, when sealing is about to start, then it is pinned to `completedSeq` and the chain head, and a bundle that does not match them is refused.
+- [ ] Given the two results are equal, when they are compared, then the hashes of both PDFs are recorded in the job result and sealing proceeds with that PDF.
+- [ ] Given the two results differ, when they are compared, then the job fails with a diagnostic, nothing is sealed, the workflow stays `completed` and an operator-visible failure is raised.
+- [ ] Given the sealing step, when it receives a PDF, then it accepts only one that came from an equal pair.
+- [ ] Given the two workers, when they run, then neither holds signing keys or any credential other than a write-only per-job upload location.
+- [ ] Given a sealing export, when compile minutes are counted, then both compiles count against the tenant's budget.
+
+**Evidence:** Lane V-EXP-065-080 (round 4, 2026-11-13). `services/export-worker/src/exp-079-pair.ts` holds the pair rule: `comparePair` returns a sealable PDF only when both compiles succeeded, ran in different containers and are byte-identical (SHA-256 of each recorded), and `acceptForSealing` refuses anything that did not come from such a pair. `compileSealingPair` compiles the bundle in two sandboxes at once. `services/export-worker/src/exp-079-pair.test.ts` (6 tests, Node, `pnpm exec vitest run src/exp-079-pair.test.ts` from `services/export-worker`) covers equal, unequal, failed, missing-PDF and same-container pairs and the refusal of unmarked PDFs. `services/export-worker/src/exp-079-pair.podman.test.ts` (2 tests, Podman, worker image `localhost/docedit-export-worker:s4`, WSL machine route) compiles the probe bundle in two real sandboxes: the pair is equal and sealable, and a second compile with another `SOURCE_DATE_EPOCH` is refused with a diagnostic. Criteria 1 to 5 and 7 stay unticked: the two compiles run on one host (criterion 1 names independent workers), the job does not yet call the pair rule, pin the bundle to `completedSeq` and the chain head, record the hashes in the job result, or raise the operator failure (criteria 2 to 4; FRW-053 is the sealing step), and the compile minutes are not yet charged to the tenant (criterion 7; EXP-009). Criterion 6 is the sandbox's, not checked for the pair. Decisions are in docs/adr/0321-lane-V-EXP-065-080.md.
+
+**Notes:** The comparison is possible because of the reproducibility rules (EXP-076). Sealing itself belongs to FRW and the signing service (FRW-053), which waits for this story. What happens when the compiles differ is not specified beyond the criteria above (Open questions). Two compiles per final PDF double the compile cost. This story absorbed FRW-051 during the cross-check.
+
+> EXP-080 (Append the certificate of completion) was merged into FRW-050 during the cross-check of 2026-11-06.
+
+## Suggestions and comments in output
+
+### EXP-081 Export with all suggestions accepted or all rejected
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Owner |
+
+**Spec:** 09 §10; 03 §5; 07 §5.2 · **Requirements:** R5, R8 · **Depends on:** EXP-005, CDM-039, CDM-040, FE-041, FE-047
+
+As an owner, I want to export the document as if every suggestion were accepted, or as if none were, so that I can circulate a clean text.
+
+**Acceptance criteria**
+
+- [ ] Given `suggestions` is `accept`, when the document is exported, then the output is as if every `ins`, `del` and `fmt` suggestion were accepted, including suggestions on paragraphs, whole table rows and whole tables.
+- [ ] Given `suggestions` is `reject`, when the document is exported, then the output is as if none were accepted, and `fmt` suggestions revert to their recorded `before` values.
+- [ ] Given a suggested deletion of a whole block, when `suggestions` is `accept`, then the block is removed only if the suggestion passes the permission rules.
+- [ ] Given a mark that the exporter cannot verify, when exported, then it never drops a region because of it, and a diagnostic names the block.
+- [x] Given an export, when it finishes, then the document is unchanged and no commit is created.
+- [ ] Given the same document, when accepted in the editor and when exported with `accept`, then the text is the same.
+
+**Evidence:** criterion 5, the converter's half (the envelope is not changed; two runs give the same bundle): `packages/export-latex/src/suggestions.test.ts` (`accept` keeps inserted and drops deleted text, `reject` the reverse; block suggestions on paragraphs, rows and tables; `accept` prints the same text as the document with its suggestions accepted by hand). Run with `pnpm vitest run packages/export-latex/src/suggestions.test.ts`. Criterion 2 (`fmt` revert) is not built: `suggestions.ts` shows `fmt` as suggested in both modes (ADR 0032 §1), which contradicts this criterion; the conflict is recorded in docs/adr/0142-export-latex-4-backlog-batch.md. Criterion 1 includes `fmt` too, so it stays unticked. Criterion 4 is not built for a mark the converter cannot verify (only `ins` and `del` are read). Criterion 6 needs the editor. The commit of criterion 5 is the service's, and it is tested (lane U-EXP-081-096, round 3): `services/document-service/test/control-plane/exp-081-settled-export.test.ts` (over HTTP, memory store and PostgreSQL: after a `pdf` export with `accept` or `reject`, the head content and the whole commit log read through `/content` and `/commits` are the same text as before, and the PostgreSQL `jobs` table gains one export job). Run with `pnpm vitest run services/document-service/test/control-plane/exp-081-settled-export.test.ts` (4 tests, PostgreSQL in Podman, 2026-11-13). Reviewer, U4 group 1 round 3: criterion 5 unticked. That test starts the harness without an `export` job handler, so the job stays queued: it shows that accepting the request writes no commit, not that a finished export leaves the document unchanged. It needs a handler that runs the job to `completed` (as `export-jobs.test.ts` does with `jobHandlers`) before the commit log and content are compared. Fixed, U4 group 1 round 3 (fixer): the test now starts the harness with an `export` job handler that reads the stored content at the job's `seq` through the service's `ContentReader`, settles the suggestions with the real `markdownText` writer of `@docedit/export-latex` (target `md`, enabled in the test's `exportTargets`, so no LaTeX sandbox is needed) and stores the output under the job. Each test waits for the job to reach `completed`, checks that the output is settled (`accept`: "Hello there", no " old"; `reject` the reverse), then compares `/content`, the head `seq` and `/commits` before and after, and on PostgreSQL the `doc_heads.head_seq` and the `doc_commits` count; the stored content still holds the `ins` and `del` marks, read over HTTP and by a service read. 4 tests passed, memory and PostgreSQL in Podman, 2026-11-13: `pnpm vitest run services/document-service/test/control-plane/exp-081-settled-export.test.ts`. The PDF worker (`services/export-worker`) is not run by this test.
+
+**Notes:** How the exporter checks "the permission rules" at export time is not specified (Open questions). Round 2 (lane EXP-079-091, ADR 0227 decision 5): which marks count as "cannot verify" is not defined; the converter reads only `ins` and `del`, so criterion 4 stays open. Round 3 (lane U-EXP-081-096, 2026-11-13): criterion 5 had evidence on both halves (converter and service) and was ticked; the reviewer unticked it (see Evidence). Criterion 2 stays open because `fmt` revert is not built and ADR 0032 §1 conflicts with it. Criterion 6 needs the editor (FE). Round 4 (lane V-EXP-081-096, 2026-11-13): criteria 2, 3 and 4 are open for the reasons in ADR 0322 items m to o (criterion 3 needs the suggestion owners in the payload; criterion 4 has no definition of "cannot verify"); nothing ticked.
+
+### EXP-082 Refuse an export that would ship unreviewed suggestions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | must | Owner |
+
+**Spec:** 09 §10; 05 §5.8, §6.2 · **Requirements:** R5, R8 · **Depends on:** EXP-005, EXP-081
+
+As an owner, I want an export to stop when suggestions are unresolved and I have not said what to do with them, so that nobody ships unreviewed text by accident.
+
+**Acceptance criteria**
+
+- [x] Given a document with unresolved suggestions and no `options.suggestions`, when an export is requested, then the request fails with `pending_suggestions` and no job is created.
+- [x] Given the same document, when `options.suggestions` is `accept`, `reject` or `markup`, then the request is accepted.
+- [x] Given a document without unresolved suggestions, when `options.suggestions` is missing, then the request is accepted.
+- [x] Given the failure, when the problem details are read, then they carry the code `pending_suggestions` in RFC 9457 form.
+
+**Evidence:** criteria 1 to 4 (lane U-EXP-081-096): `services/document-service/test/control-plane/exp-082-pending-suggestions.test.ts` (over HTTP, memory store and PostgreSQL: status 409, `application/problem+json`, body with `type`, `title`, `status`, `detail` and `code` `pending_suggestions`; on PostgreSQL the `jobs` table holds no export job for the document after the refusal; a document with no suggestions is accepted with 202; `accept`, `reject` and `markup` are accepted with 202). Run with `pnpm vitest run services/document-service/test/control-plane/exp-082-pending-suggestions.test.ts` (6 tests, PostgreSQL in Podman, 2026-11-13). The same gate is also exercised by `services/document-service/test/control-plane/routes.exports-gate.test.ts`. The converter's half: `packages/export-latex/src/suggestions.test.ts` (EXP-082 describe block) and `packages/export-latex/src/suggestions.markup.test.ts`.
+
+**Notes:** Ticked on 2026-11-13 (lane U-EXP-081-096). The job-count check of criterion 1 runs on PostgreSQL only; the memory store is not counted. Which targets the rule covers (`tex`, `html`, `md`, `docx`, `cdm`) is not stated (Open questions); the service applies it to every target the request names.
+
+### EXP-083 Show suggestions as markup in the PDF
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | should | Owner |
+
+**Spec:** 09 §10; 03 §5; 07 §5.2 · **Requirements:** R5, R8 · **Depends on:** EXP-081, EXP-044
+
+As an owner, I want a PDF that shows insertions and deletions, so that a reviewer without the editor can see what is proposed.
+
+**Acceptance criteria**
+
+- [x] Given `suggestions` is `markup`, when exported, then insertions and deletions are rendered in colour, written through the `color` emitter.
+- [x] Given deleted text, when exported with `markup`, then it stays visible and the PDF's extracted text contains both inserted and deleted text.
+- [ ] Given a suggestion on a paragraph, a whole table row or a whole table, when exported with `markup`, then the block is marked as inserted or deleted.
+- [x] Given a reader who cannot see colour, when they read the markup, then insertions and deletions also differ by a non-colour cue.
+- [x] Given `markup` output, when it is compared with `accept` output, then the job notes that pagination differs.
+
+**Evidence:** criterion 2 (lane U-EXP-081-096): `services/export-worker/test/exp-083-markup.e2e.test.ts` (a paragraph with a deletion and an insertion, exported with `suggestions` `markup` through the job resource, the worker and the Podman sandbox; the PDF's extracted text, read with `pdftotext`, holds `Keep`, `old`, `new` and `text.`). Run with `pnpm vitest run services/export-worker/test/exp-083-markup.e2e.test.ts` (Podman, worker image `localhost/docedit-export-worker:s4`, 2026-11-13). To allow the option, `services/export-worker/src/profile.ts` now accepts `markup` (it refused it as "comes with EXP-083"). criterion 5: `packages/export-latex/src/suggestions.markup.test.ts` (the job's diagnostics carry `markup_pagination`, an info, once, when the document has suggestions in markup mode; none for `accept`, `reject` or a document without suggestions). The mode and the markup are in `packages/export-latex/src/suggestions.ts` (`markupRun`, `suggestionHides`) and `packages/export-latex/src/inline.ts` (`runTex`). Run with `pnpm vitest run packages/export-latex/src/suggestions.markup.test.ts`.
+
+**Evidence (lane V-EXP-081-096, round 5, 2026-11-13):** criterion 1: `services/export-worker/test/exp-083-markup-colour.e2e.test.ts` compiles a document with one `del` and one `ins` run in `markup` mode in the Podman sandbox (worker image `localhost/docedit-export-worker:s4`, `DOCEDIT_REQUIRE_SANDBOX=1`), and reads the PDF's page content with `services/export-worker/test/pdf-colours.ts` (inflates the FlateDecode streams and reads the `rg` operators): the insertion colour `#1F5FAD` and the deletion colour `#B3261E` are both set, and `old` and `new` are in the extracted text. Run with `pnpm vitest run services/export-worker/test/exp-083-markup-colour.e2e.test.ts` (1 test, about 23 s). Criterion 4: the same test checks the TeX source: the insertion is `\DEc{1F5FAD}{\DEul{...}}` (underline) and the deletion `\DEc{B3261E}{\DEst{...}}` (strike-through, `\strikeThrough` in `docedit.cls`). The test reads the source; it does not look at the drawn underline or strike line in the PDF.
+
+**Notes:** The non-colour cue is inferred from the accessibility principles of PRODUCT.md. Round 5 (lane V-EXP-081-096): criteria 1 and 4 are ticked as above; criterion 4 rests on the source-level underline and strike-through, which the PDF test does not draw-check. Criteria 3 (whole rows and tables) is still open. How `fmt` suggestions and authors are shown in markup is not specified (Open questions). Criterion 2 is ticked (lane U-EXP-081-096, 2026-11-13: the worker now accepts `markup`, and the PDF text holds both kinds of text); criteria 1, 3 and 4 are unticked. The markup is in the TeX source only: an insertion is `\DEc` in the insertion colour around `\DEul`, a deletion `\DEc` in the deletion colour around `\DEst`, both through the colour emitter, and the test reads that source. The PDF's colour, underline and strike-through, and the extracted text of criterion 2, need a LuaLaTeX run, which this package does not do. Criterion 3 is partly built (lane EXP-079-091, round 2, ADR 0227 decision 1): a paragraph with an `ins` or `del` mark has its text runs marked in markup mode (`blockMarks` and `runMarks` in `packages/export-latex/src/inline.ts`; test `packages/export-latex/src/suggestions.block-markup.test.ts`). A row, a table and atoms (images, fields, equations) with a suggestion still print unmarked, so the criterion stays open. The older assertion in `suggestions.markup.test.ts` that counts one deletion colour macro now sees two (the struck paragraph is marked); that test is not this lane's and is left as it is. The colours (`#1F5FAD` for insertions, `#B3261E` for deletions) are a proposed default (docs/adr/0142-export-latex-4-backlog-batch.md), not an owner decision.
+
+### EXP-084 Show comments in the margin
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | should | Owner |
+
+**Spec:** 09 §9.1, §10; ADR 0015; 05 §6.2 · **Requirements:** R5, R8 · **Depends on:** EXP-005, EXP-043, SYN-032, PRO-059
+
+As an owner, I want to see the comments of a review in the PDF margin, so that I can print or circulate the review.
+
+**Acceptance criteria**
+
+- [ ] Given `comments` is `margin`, when exported, then the threads at the exported `seq` appear in the margin next to their target range or block; given `none`, no comments appear.
+- [ ] Given comment ranges, when the converter reads them, then they come from the document service's mapped ranges at the exported `seq`, because comments are not in the document.
+- [ ] Given a thread whose range is detached, when exported with `margin`, then the thread is listed with a warning instead of being anchored to the wrong place.
+- [ ] Given comment text and author names, when written, then they go through the typed emitters.
+- [ ] Given tagging is on, when the PDF is inspected, then the margin comments do not break the reading order of the body.
+
+**Notes:** The default of `comments`, the display of resolved threads, and where author names come from (the service holds only surrogates; 08 §13) are not specified (Open questions). The margin package must work with tagging (EXP-015). Round 2 (lane EXP-079-091, ADR 0227 decision 4): no margin writer exists in `packages/export-latex`, and the converter does not read the `comments` option, so no criterion is ticked. Round 4 (lane V-EXP-081-096, 2026-11-13): still no criterion ticked; the gap is the comment ranges in the payload from the service, a margin macro in the house class, and a LuaLaTeX run (ADR 0322 item p).
+
+
+## Other targets
+
+### EXP-085 Download the LaTeX bundle
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Author |
+
+**Spec:** 09 §11, §2, §9.3 item 7; 00 §4 (R5) · **Requirements:** R5 · **Depends on:** EXP-004, EXP-011, EXP-073
+
+As an author, I want to download the LaTeX source of my export, so that I can compile it myself or keep it with the PDF.
+
+**Acceptance criteria**
+
+- [x] Given `target` is `tex`, when the job completes, then the result is an archive with `main.tex`, `styles.tex`, `docedit.cls`, `assets/`, `map.json` and `manifest.json`, and no auxiliary files or logs.
+- [x] Given the archive, when it is read, then it lists the fonts it needs by hash and licence, because fonts are not part of the bundle, and it states how they are obtained.
+- [x] Given the archive, when it is opened, then it carries a notice that it should be compiled with the same restrictions as the service uses: no shell escape, no network, paranoid file access and LuaTeX 1.17 or later.
+- [ ] Given the archive, when it is opened, then it includes the licence of the house class and the licence manifest of the packages it relies on.
+- [x] Given the archive, when it is compiled with the documented command and the listed fonts, then the PDF's text equals that of the service's PDF.
+
+**Evidence:** criteria 1 to 3: `packages/export-latex/src/archive.test.ts` (reads the ustar members back: `main.tex`, `styles.tex`, `docedit.cls`, `map.json`, `manifest.json` and the `assets/` picture are present, and no `.aux`, `.log`, `.out`, `.toc` or `.pdf` member is; the README lists each font file by SHA-256, family, role and licence, says how to place the fonts and check their hashes, and gives the compile restrictions). Run on 2026-11-13 with `pnpm vitest run packages/export-latex/src/archive.test.ts`.
+
+**Evidence (lane V-EXP-081-096, round 5, 2026-11-13):** criterion 1: `services/export-worker/src/exp-085-v-tex.job.test.ts` (a `tex` job through the JobRunner and MemoryJobQueue, real export handler, no compile: `completed`, one stored archive `source.tar` as `application/x-tar`, with `main.tex`, `styles.tex`, `docedit.cls`, `map.json`, `manifest.json` and `README.txt` and no `.aux`, `.log`, `.out`, `.toc` or `.pdf` member). Run with `pnpm vitest run services/export-worker/src/exp-085-v-tex.job.test.ts` (2 tests; corrected from 3 by the reviewer, 2026-11-13). Criterion 5: `services/export-worker/test/exp-085-archive.e2e.test.ts` run with `DOCEDIT_REQUIRE_SANDBOX=1` (Podman, worker image `localhost/docedit-export-worker:s4`, sandbox ready, `pdftotext`): the sandbox compile of the bundle and the archive compiled with the README command both give the same squashed PDF text; 1 test passed in about 60 s. The earlier skip is no longer hit on this machine.
+
+**Notes:** Criterion 1 was unticked by the evidence audit (2026-11-13): `texArchive` is tested as a function only, and `services/export-worker/src/job.ts` refuses every target but `pdf` and `cdm` (`this worker exports pdf and cdm, not tex`), so no job returns the archive. 09 §11 says the archive "compiles outside the service" but 09 §2 keeps fonts out of the bundle (Open questions). Criterion 4 is unticked in part: the README names the class licence (Apache-2.0, tested), but the archive does not include the licence manifest of the packages, which the README places in the export worker image (EXP-073, `services/export-worker`); the archive does not carry it. Criterion 5 is unticked: it needs a LuaLaTeX compile of the archive, which this package does not run and no LuaLaTeX run was made. Round 3 (lane U-EXP-081-096, 2026-11-13): `services/export-worker/test/exp-085-archive.e2e.test.ts` compiles the archive in the worker image with the README's command (run twice), and compares its PDF text with the sandbox compile of the same bundle. It has not passed yet: the sandbox readiness probe failed on the loaded Podman machine (`podman info` and `image exists` took 43 s and 54 s), so the test skips, and criterion 5 stays unticked. The test is a skip, not a pass. Round 4 (lane V-EXP-081-096, 2026-11-13): the test was run twice, once plain and once with `DOCEDIT_REQUIRE_SANDBOX=1`; both runs skipped at `sandboxReady()`, which takes about 160 s on the loaded Podman machine and reports no ready sandbox. The skip reason is not printed, because the `describe.skipIf` block skips before the reason is shown, so the cause is not identified. Criterion 5 stays unticked, and the next step is to read the probe's reason on a quiet machine. Two timeouts in `services/export-worker/src/container.ts` and `sandbox-ready.ts` were raised for this (30 s to 120 s). Criterion 4 (licence manifest in the archive) is not built: `archive.ts` takes no licence manifest, and the manifest is made by `scripts/licence-manifest.ts`. Round 5 (lane V-EXP-081-096): criteria 1 and 5 are ticked (Evidence above). `scripts/licence-manifest.ts` is not in the repository, so the worker has no licence manifest to add to the archive; criterion 4 stays unticked and needs EXP-073 (or the owner) to supply the manifest file.
+
+### EXP-086 Export the canonical JSON
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Integrating developer |
+
+**Spec:** 09 §11; 03 §2; 05 §6.2 · **Requirements:** R5 · **Depends on:** EXP-004, CDM-010
+
+As an integrating developer, I want the document's canonical JSON as an export target, so that I can keep or process the content without the editor.
+
+**Acceptance criteria**
+
+- [x] Given `target` is `cdm`, when the job completes, then the result is the envelope (`cdm`, `requires`, `doc`) at the requested `seq` in the RFC 8785 form with the CDM's canonical-form rules.
+- [x] Given the output, when its SHA-256 hash is compared with the hash the conformance kit computes for the same document, then they are equal.
+- [x] Given the output, when it is read, then it holds no comments, grants or history, which are not part of the document.
+- [x] Given the job, when it runs, then it follows the same states, events, permission and `no-export` rules as other targets.
+
+**Evidence:** criterion 4 (lane U-EXP-081-096, round 2, 2026-11-13): `services/export-worker/src/exp-086-cdm.job.test.ts` (run through the control plane's JobRunner and MemoryJobQueue with the real export handler; a `cdm` job ends `completed`, its stage reports are `converting 5` then `converting 50` with no `compiling` stage, no compile runs, and only `output.json` is stored, as `application/json`, equal to `cdmWriter`'s text and SHA-256; a restricted view is projected as for pdf (EXP-123) and writes no hidden text; an unknown target is refused with `validation_failed`). The permission and `no-export` gates are tested at the HTTP level in `services/document-service/test/control-plane/exp-086-cdm-target.test.ts` (memory store and PostgreSQL: a viewer may request `cdm`; a caller with no role is refused; a caller restricted with `no-export` gets the same status and code for `cdm` as for `pdf`). Run with `pnpm vitest run services/export-worker/src/exp-086-cdm.job.test.ts` (4 tests) and `pnpm vitest run services/document-service/test/control-plane/exp-086-cdm-target.test.ts` (PostgreSQL in Podman). The service's test, of an earlier round: `services/document-service/test/control-plane/exp-086-cdm-target.test.ts` (memory store and PostgreSQL, 6 tests, PostgreSQL in Podman, 2026-11-13); it uses a stand-in handler, so it covers the service's rules and not the writer. Criteria 1 to 3: `packages/export-latex/src/cdm-writer.test.ts`. For each envelope case of the canonical-form fixtures (`packages/model/fixtures/canonical/index.json`, read only), `cdmWriter` gives the fixture's expected text and its SHA-256, which the independent Python kit (`packages/model/conformance/canonical.py`) computes; an envelope with `comments`, `grants` and `history` members gives output with only `cdm`, `requires` and `doc`, and the same hash. Run on 2026-11-13 with `pnpm vitest run packages/export-latex/src/cdm-writer.test.ts`.
+
+**Notes:** Phase inferred: the roadmap does not place `cdm` or `tex`; both come from the same job at little cost and R5 lists the bundle. Whether `pending_suggestions` applies to this target is open (EXP-082). Criterion 4 ticked in round 2 (lane U-EXP-081-096, 2026-11-13). The worker now has a `cdm` branch (`services/export-worker/src/job.ts`, `CDM_OUTPUT_FILE`), which runs the same content, class-version and restricted-view gates as `pdf`. "Events" is read as the job's states and its progress reports: the job runner has no separate event stream, so none is asserted (judgement for the owner to confirm). The permission check is at the HTTP level, in the document-service test.
+
+### EXP-087 Export HTML
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Author |
+
+**Spec:** 09 §11; 13 §12; 03 §10 · **Requirements:** R5 · **Depends on:** EXP-004, CDM-005
+
+As an author, I want HTML export, so that I can use the content in other tools.
+
+**Acceptance criteria**
+
+- [ ] Given `target` is `html`, when the job completes, then headings, paragraphs, lists with their literal labels, tables with spans, images with alternative text, links, footnotes and equations are present in a structure that matches the document.
+- [x] Given text and attribute values, when written, then they are escaped for HTML, the output contains no script or event handler, and link targets use only the schemes of invariant I9.
+- [x] Given paragraph and run formatting, when exported, then the resolved formatting follows the cascade of 03 §6.
+- [ ] Given a construct HTML cannot express (page setups, headers and footers, tab stops, form field controls), when exported, then the job's warnings name it.
+- [x] Given the output, when its visible text is compared with the document's text, then they are equal.
+- [ ] Given images, when the job completes, then they are delivered together with the HTML in the target's documented packaging.
+
+**Evidence:** criteria 2 and 4 (writer level; the job's warnings are the service's part of criterion 4): `packages/export-latex/src/html-writer.test.ts`. Criterion 2: `escapeHtml` on text and attribute values, a fast-check property (seed 20261113, 200 runs) that a printable paragraph is written as its escaped text with no `<script`, a test that no script element or event handler attribute is written, and a `javascript:` link written as its text with `link_scheme_dropped`, an `https` link and an in-document target kept. Criterion 4: tab stops, page breaks, form fields and page setups are named in the diagnostics, and headers and footers (stories) as `headers_footers_omitted`. Criterion 5 (round 3, lane EXP-079-091): `packages/export-latex/src/html-writer.visible-text.test.ts` (one test: a heading, nested bullet and numbered lists with their labels, a table with a column span and a closing paragraph; the visible text read back from the output, with the list labels counted as visible text, equals the hand-written text of the document). The paragraph test in `html-writer.test.ts` covers paragraphs. Footnotes, pictures and equations are not in that comparison. Criterion 3 (lane U-EXP-081-096, round 4): `packages/export-latex/src/exp-087-cascade.html.test.ts` (bold from the paragraph style; a direct `value: false` mark overriding it; bold and italic from a paragraph style and a character style; a colour from a style, with small capitals from a style named `caps_plain`). Run with `pnpm vitest run packages/export-latex/src/exp-087-cascade.html.test.ts packages/export-latex/src/html-writer.test.ts` (19 tests, passing on 2026-11-13). Reviewer, U4 group 1 round 4: criterion 3 unticked. The cascade is real for bold, italic, strike, underline, vertical alignment, colour, language and hidden (the five tests pass), but `fontFamily`, `fontSize` and `highlight` of the resolved run are neither written (HTML can: a `style` on the span, as colour is) nor named in a diagnostic, so formatting is lost without a warning. Tick again when they are written, or when each is named by a warning and the spec says that is enough. Fixed, U4 group 1 round 4 (fixer), criterion 3 ticked again at writer level: `html-writer.ts` now writes the whole resolved run, so `fontFamily` and `fontSize` are written as `font-family` and `font-size` (twips / 20, in points) on the run's `span` where they differ from the default paragraph style, whose family and size are written on `body` in the stylesheet, and `highlight` as `background-color` (the RGB values Word gives the 16 named highlights of 03 §4.5); a family outside the model's pattern or a highlight outside the list is named (`font_family_not_written`, `highlight_not_written`). Formatting marks are no longer read one by one: the overwritten mark loop for bold, italic, strike, underline and vertical alignment is gone, and `charStyle`, `fontFamily`, `fontSize`, `highlight`, `smallCaps` and `allCaps` marks no longer raise a spurious `<type>_plain` warning. Paragraph alignment and the `paragraph_layout_omitted` warning now read the resolved paragraph too, so a style's alignment is written and a style's spacing is named. `packages/export-latex/src/exp-087-fonts.html.test.ts` (11 tests: family and size of the default style on `body`; the base 11 pt; size from a paragraph style; family from a character style over a paragraph style size; a direct size mark over the style; a direct size equal to the default writes nothing; highlight from a character style and from a direct mark; family, size, colour and highlight in one `style`; alignment from a paragraph style and a direct one over it; spacing from a style named; an unsafe family and an unknown highlight named and not written). Run with `pnpm vitest run packages/export-latex/src/exp-087-fonts.html.test.ts packages/export-latex/src/exp-087-cascade.html.test.ts packages/export-latex/src/html-writer.test.ts packages/export-latex/src/html-writer.visible-text.test.ts` (4 files, 31 tests, passing on 2026-11-13, Node.js) and `tsc --noEmit -p packages/export-latex` (clean). The export job does not offer `html` yet (Notes), so "when exported" is proved at the writer, not through a job. Not ticked: criterion 1, because equations are written as LaTeX source in a `pre` element and the representation is open (Notes); criterion 6 (below). Run with `pnpm vitest run packages/export-latex/src/html-writer.test.ts` (14 tests, passing on 2026-11-13) and `tsc --noEmit -p packages/export-latex`.
+
+**Notes:** Criterion 4 unticked by the evidence audit (2026-11-13): it says the job's warnings name the construct, but the export worker refuses `html` (`job.ts` accepts only `pdf` and `cdm`), so no job carries the writer's diagnostics, and `page_setup_omitted` is written at `info`, not as a warning; the tests cover the writer's diagnostics only. Direct writer (09 §11), in `packages/export-latex/src/html-writer.ts`, exported from the package index, not added to `writer.ts` (the job's target registry is the service's). Round 1, lane EXP-079-091. Criterion 3 (unticked by the reviewer in round 4, ticked again by the round 4 fixer): each paragraph and run is resolved through the model's `resolveParagraph` and `resolveRun` (03 §6), so style formatting is written and not only direct marks. Font family, size and highlight are written as CSS on the run (see Evidence); small and all capitals are named as `caps_plain`, and paragraph spacing, indents, borders, shading and tab stops as `paragraph_layout_omitted`. Writing the default style's family and size on `body` rather than on every run, and the highlight RGB values, are representation choices the spec leaves open (proposed here, for the owner). A language is written on a run only when it differs from the document default, which is the `lang` of the html element. Criterion 6 is the job's packaging of `assets/`; the writer returns the picture list. Representation choices (open in the spec): equations as LaTeX source, not rendered; lists as `ul` and `ol` with the literal label in a `span`, styled `list-style: none`; alignment as a class with a fixed stylesheet; `markup` suggestions as `ins` and `del`, the missing option as `pending_suggestions` (error) with the text written as rejected. The paste side (HTML in and out of the clipboard) is FE's.
+
+### EXP-088 Export Markdown
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Author |
+
+**Spec:** 09 §11; 13 §12 · **Requirements:** R5 · **Depends on:** EXP-004
+
+As an author, I want Markdown export, so that I can move text into tools that use it.
+
+**Acceptance criteria**
+
+- [ ] Given `target` is `md`, when the job completes, then headings, emphasis, strike, lists, tables, links, images and footnotes are written in Markdown.
+- [ ] Given text that contains Markdown-special characters, when written, then they are escaped so the rendered text equals the typed text.
+- [ ] Given a construct Markdown cannot express (colours, underline, merged cells, page setups), when exported, then it is approximated and the job's warnings name it.
+- [x] Given link targets, when written, then only the schemes of invariant I9 are used.
+
+**Evidence:** criteria 1, 3 and 4 (writer level; the job's part of criteria 1 and 3, carrying the writer's diagnostics into the job's warnings, is the service's): `packages/export-latex/src/markdown-writer.test.ts`. Criterion 1: headings by outline level, emphasis, strike, bullet and literal numbered labels with nesting, a pipe table, links, a picture with its alternative text and asset, and a footnote and its definition. Criterion 3 (unticked by the reviewer in group 3 round 1, fixed and re-ticked in the fix round): underline, page breaks, merged cells, equations, paragraph alignment and colour are named in the diagnostics; a column span (`colspan: 2`) is written as the cell and an empty cell with one `merged_cells_flattened` warning, as a row span is; a `page_setup` in the definitions raises the warning `page_setup_omitted` and is not raised without one; colour, underline, merged cells and page setups are all warnings, not errors. Criterion 4: a `javascript:` link is written as its text with `link_scheme_dropped`, an in-document target and an `https` or `mailto` link are written, and a destination's blanks and parentheses are percent-encoded. Criterion 2 (escapes, `unescapeMd` round trip under fast-check, seed 20261113, 200 runs) is open: it checks that the escapes read back, not the rendered text, because the workspace carries no Markdown renderer. Run with `pnpm vitest run packages/export-latex/src/markdown-writer.test.ts` (23 tests) and `tsc --noEmit -p packages/export-latex`, both passing on 2026-11-13.
+
+**Notes:** Criteria 1 and 3 unticked by the evidence audit (2026-11-13): both are stated for the job ("when the job completes", "the job's warnings name it"), but the export worker refuses `md` (`job.ts` accepts only `pdf` and `cdm`); the tests call `markdownText` directly, and the story's own Evidence calls the job part the service's. Tick again when a `md` job runs through the worker, as the `cdm` job does (EXP-086). Direct writer (09 §11), in `packages/export-latex/src/markdown-writer.ts`, exported from the package index, not added to `writer.ts` (the job's target registry is the service's). Round 1, lane EXP-079-091. Choices the spec leaves open, all approximations: bullets are written as `-`; numbered labels are written literally and not indented for nesting (an indented ordered list would become code after a blank line); a `markup` suggestion is written with `<ins>` and `<del>`, and a block suggestion has no mark (info diagnostic); a missing `suggestions` option with suggestions present is the error `pending_suggestions` and the text is written as rejected, as the LaTeX writer does (EXP-082); display equations are written as LaTeX source in a code block, not rendered; pictures are written under `assets/`, and the job packages them (criterion 6 of 09, not covered). Criterion 2 stays open for the reason above. Round 4 (lane U-EXP-081-096): still open; the workspace has no Markdown renderer, and adding one is a root `package.json` change for the main session (needsFromOthers). EPUB, through a Pandoc JSON writer, is "later" in 09 and unscheduled in the roadmap; no story is written for it.
+
+### EXP-089 Mark exports with the classification label
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | S | could | Tenant administrator |
+
+**Spec:** 13 §10, §12 · **Requirements:** R5, R15 · **Depends on:** EXP-004, EXP-005, UX-085
+
+As a tenant administrator, I want the document's classification label printed on exports, so that a copy that leaves the editor still shows how it must be handled.
+
+**Acceptance criteria**
+
+- [ ] Given a document with a classification label, when a PDF is exported, then the label appears as a marking in the documented place on every page, written through the `text` emitter or an `enumLookup` of the tenant's list.
+- [ ] Given a document without a label, when a PDF is exported, then no marking appears.
+- [ ] Given a label change, when the document is exported again, then the bundle hash differs and a new result is produced.
+- [ ] Given the other targets, when exported, then they carry the label in the way their documentation states.
+
+**Notes:** Phase 4 follows 13 §12. Where the marking is placed is not specified (Open questions). Round 3 (lane EXP-079-091, ADR 0227 decision 9): the converter has no input for the classification label, so no criterion is ticked. Round 4 (lane U-EXP-081-096): still unticked. The placement of the marking is open in the spec and no spec default is written, so the lane did not choose one.
+
+## DOCX export
+
+### EXP-090 Write DOCX text, styles and numbering
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 09 §11; 03 §10; ADR 0004; 11 §7 · **Requirements:** R5 · **Depends on:** EXP-115, CDM-005
+
+As an author, I want a Word file of my document, so that I can send it to someone who works in Word.
+
+**Acceptance criteria**
+
+- [ ] Given `target` is `docx`, when the job completes, then `export-docx` has written the package directly from the CDM, and it opens in Word and LibreOffice without a repair prompt (target).
+- [ ] Given named styles, `basedOn` chains, direct formatting, fonts and colours, when exported, then they appear in the file as styles and direct properties, and the formatting Word resolves for the corpus equals the cascade of 03 §6.
+- [x] Given multi-level numbering, when exported, then the labels shown in the file equal those of the shared algorithm.
+- [x] Given any string, when written, then it is escaped for XML, and the package contains no document type declaration and no external relationship.
+- [ ] Given a construct the writer approximates, when exported, then the job's warnings name it; for a document imported from Word, the preservation layer applies instead (EXP-118), because the owner reversed assumption A2 on 2026-11-06.
+- [ ] Given the shared numbering and layout fixtures, when the DOCX writer runs them, then they pass.
+- [ ] Given a produced package, when CI validates it against the OOXML schemas, then it is valid.
+
+**In progress:** lane V-EXP-081-096
+
+**Evidence:** criterion 3: `packages/export-docx/test/writer.test.ts`, 'writes numbering whose labels, under ECMA-376, equal the shared algorithm (EXP-090)'. The numbering fixture is written, and the labels Word computes from `word/numbering.xml` and `word/document.xml` under ECMA-376 (the test's `wordLabels`) equal the model's `computeLabels`, which the test also checks against the expected labels (`I`, `1.`, `1.a)`, a dash, `II`, and a restarted list). Two lists of one definition get separate abstract numberings.
+
+Criterion 4 (lane export-docx-2, round 6): `packages/export-docx/test/exp-090-escape.test.ts` (fast-check, seed 20261113, 40 runs; well-formed strings with control characters and markup, written as paragraph text and as a paragraph style name: every part parses, none has a document type declaration, no relationship is external, and the text read back equals `xmlSafe` of the text written). The property found a gap, now closed: `el()` in `src/writer-xml.ts` wrote attribute values, such as a style name, without the XML 1.0 rule, and `textElement` did not apply it either. `writer.test.ts` still passes (97 tests with the new file).
+
+**Notes:** Open (2026-11-13, round 4): criterion 1 needs Word and LibreOffice, and criterion 7 needs OOXML schema validation in CI; neither is run here. Criterion 2 needs the cascade of 03 §6 computed for the corpus. Criterion 4 (round 6, lane export-docx-2) is ticked for documents without hyperlinks: a hyperlink carries the one external relationship a document has by design, read as proposed in docs/adr/0144-export-docx-2-backlog-batch.md. The criterion as written forbids every external relationship; the owner or the spec should confirm that reading. Criterion 4 before round 6 forbade every external relationship, but the package check in `writer.test.ts` allows hyperlinks (SR-M18), so the wording needs the owner's or the story's decision. Criterion 5 is tested for one construct only (a floating figure). Criterion 6 needs the EXP-115 fixtures, which are not built. Criterion 7 (round 2, lane EXP-079-091): no OOXML schema validation exists in the repository (a search of `packages/export-docx`, `packages/export-latex` and `tests` finds none), so it stays open (ADR 0227 decision 3). Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported. Phase 4 follows 11 §7. The writer is the direct OOXML writer; the document's `requires` check of 03 §2 applies as for the LaTeX converter (EXP-002). Second review (2026-11-06, SPK-027), SR-M18: "no external relationship" in the fourth criterion would forbid hyperlinks, which are external relationships, and an imported package keeps its own; the review proposes "no external relationship except hyperlinks, beyond those the original package had" ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-091 Write DOCX tables, images and captions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 09 §11; 03 §4.3, §10 · **Requirements:** R5 · **Depends on:** EXP-090
+
+As an author, I want tables, pictures and captions in the Word file, so that structured documents survive the export.
+
+**Acceptance criteria**
+
+- [x] Given a table with spans, borders, shading, `headerRows`, banded rows and a `grid`, when exported, then the Word table has the same structure, widths and repeated header rows.
+- [ ] Given inline images and figures with `width`, `height`, `align` and `alt`, when exported, then the pictures appear at those sizes with alternative text.
+- [x] Given a figure caption with a `seq` field, when exported, then the label shown equals the shared algorithm's.
+- [x] Given a row taller than a page, when exported, then it is written as a Word row, which Word can split, and no continuation rows are made.
+- [x] Given an asset, when it is included, then it is taken from the document's attached assets only (invariant I4).
+
+**Evidence:** criterion 1: `packages/export-docx/test/writer.test.ts`, 'writes tables with their grid, spans, header rows, borders, shading and margins, and pictures as parts (EXP-091)': the grid widths, a header row, a row that cannot split, a column span, a row span with its continuing cell, shading, a double border, the table style, and banded rows (`noHBand` is 0). Criterion 2, in part: the same test checks that the picture extent of 457,200 EMU is written, and 'escapes every string' in the same file reads the alternative text back. Its `align` is not checked. Round 5, `packages/export-docx/test/exp-091-095.test.ts`: 'writes a row taller than a page as one splittable Word row, with no continuation rows (EXP-091)' (a 200-paragraph row carries no `cantSplit`; a row the model keeps together does, as the control); 'takes a picture only from the document assets, and writes an asset that is missing as its alternative text (EXP-091, I4)' (one media part, the attached bytes, a missing asset is not guessed and warns); 'writes a figure with its alignment and alternative text, and its caption number equals the shared algorithm (EXP-091)' (figure `align` gives `w:jc`, the alternative text reads back, each `SEQ Figure` result equals `computeLabels`). Round 6 (lane export-docx-2): `packages/export-docx/test/exp-091-figures.test.ts` (fast-check, seed 20261113, 30 runs over sizes of 1 to 9000 twips, every alignment value and any alternative text): a figure's extent is its size times 635 EMU, its `descr` is the alternative text (none when it is empty), and its paragraph's `w:jc` is `center`, `right` for `end`, `left` for `start`, and absent otherwise. Criterion 2 stays open: the inline-image part (`align` on an inline picture, which the model may not carry) is not checked here.
+
+**Notes:** Open (2026-11-13, round 4): criterion 2 lacks the `align` check. Criterion 3 is not met: the test counts two `SEQ Figure` fields but does not compare their results with the shared algorithm's labels. Criterion 4 (a row taller than a page, written as a row Word can split, with no continuation rows) and criterion 5 (assets only from the attached set, I4) have no test. Round 5 (2026-11-13, ADR 0117): criteria 3, 4 and 5 are ticked on the tests named in the Evidence. For criterion 5, "attached" is taken as the asset store the caller passes for the document; the writer writes only the assets its nodes refer to, and which assets the job attaches is for EXP-098. Criterion 2 stays open: the figure's `align` and alternative text are now checked, and one picture's size is checked, but the `align` of an inline image is not. Round 2 (lane EXP-079-091, ADR 0227 decision 2): the CDM `image` node has no `align` attribute (`packages/model/src/definition/cdm1.ts`), so the writer cannot meet this for inline images without a model change; the reading (figures only, or a model change) is for the owner or the spec. Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported.
+
+### EXP-092 Write DOCX page structure, notes and references
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 09 §11; 03 §4.1, §4.2, §4.4, §10, §7 · **Requirements:** R5 · **Depends on:** EXP-090
+
+As an author, I want page setups, headers, footers, footnotes, contents and references in the Word file, so that the document keeps its structure.
+
+**Acceptance criteria**
+
+- [x] Given page setups and section breaks, when exported, then sections have their size, orientation, margins and columns, and headers and footers have first-page and even-page variants as the setup says.
+- [x] Given a footnote, when exported, then it is a Word footnote of one paragraph.
+- [x] Given a `toc` and lists of figures or tables, bookmarks and cross-references, when exported, then they are fields that Word can update, and the labels equal the shared algorithm's.
+- [x] Given `page` and `pageCount` fields, when exported, then Word fields are written; given a `date` field, then the server's date at job creation in the job's time zone is written, and never a client value.
+- [x] Given tab stops, `watermark`, `pageNumberStart` and `pageNumberFormat`, when exported, then they are written as native properties.
+
+**Evidence:** criteria 1, 4 and 5: `packages/export-docx/test/writer.test.ts` (EXP-092 test: two sections, the landscape one in two columns and starting on an odd page, first-page and even-page footers, `PAGE` and `NUMPAGES` in the header, a `DATE` field of 07/11/2026 for Pacific/Auckland at the instant the caller passes, the Roman start of page 3); `packages/export-docx/test/exp-092-094.test.ts` (each section's size and margins, the landscape size from its page setup; the `w:tabs` right stop at 2880 with a dot leader; the `DRAFT` watermark and `pgNumType` on the section). Criterion 2: `packages/export-docx/test/exp-092-094.test.ts` (the footnote's part holds one paragraph and so does the footnote node). Criterion 3 (round 4, lane export-docx-2, 2026-11-13): `packages/export-docx/test/exp-092-lists.test.ts` (the list-of-figures entries show `Figure <label>: <caption>` with the label `computeLabels` gives each caption, and the `TOC` field instruction names `"Figure"`; a cross-reference's cached text equals `referenceText` for its target). The fix is in `packages/export-docx/src/writer.ts` (`shownText`, which replaces the caption's `seq` fields by their labels in the list entries; before it they were empty).
+
+**Notes:** Criterion 3 ticked (round 4, 2026-11-13): the list-of-figures entries had lost their caption labels (the writer's text reader ignored `seq` fields), and the test in Evidence showed it; the writer now reads each list entry with its labels. The date criterion is met by construction: the writer reads the instant from its options and never from the client; the test passes the instant. Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported.
+
+### EXP-093 Write suggestions and comments to DOCX
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Owner |
+
+**Spec:** 09 §10, §11; 03 §5, §10; ADR 0015 · **Requirements:** R5, R8 · **Depends on:** EXP-090, EXP-081, SYN-032
+
+As an owner, I want my review to travel into Word as tracked changes and comments, so that a reviewer in Word sees what I see.
+
+**Acceptance criteria**
+
+- [x] Given suggestions and `suggestions` is `markup`, when exported, then insertions and deletions become `w:ins` and `w:del` with an author and a date.
+- [ ] Given the date of a suggestion, when written, then it is the server time of the commit that introduced the suggestion's `id`.
+- [x] Given suggestions and `suggestions` is `accept` or `reject`, when exported, then the file holds no tracked changes and is as if all were accepted or rejected.
+- [ ] Given comment threads at the exported `seq`, when exported, then they become Word comments anchored to their range or block, with replies.
+- [x] Given a suggestion on a paragraph, a whole table row or a whole table, when exported with `markup`, then it becomes the matching tracked block change.
+
+**Evidence:** criteria 1 and 3: `packages/export-docx/test/writer.test.ts`, 'writes suggestions as tracked changes with author and date, or settles them (EXP-093)'. Criterion 1: a `w:ins` with the author 'Ada Lovelace' and the given date, a `w:del` with its author, and a row's `w:del` with its date. Criterion 3: with `suggestions` set to `accept` and to `reject`, no `w:ins`, `w:del` or `w:rPrChange` remains, the accepted text stays, the rejected text goes, and rejected formatting returns to its old state. Criterion 5, in part: a paragraph mark is written as inserted and a row as deleted, and, for a whole table, every row carries the change (round 5: `packages/export-docx/test/exp-091-095.test.ts`, 'writes a whole-table suggestion as a tracked change on every row', with the commit dates).
+
+**Notes:** Open (2026-11-13, round 4): criterion 2 needs the commit time of each suggestion, which the host supplies (EXP-098 is not built); the writer test passes the times in. Criterion 4 (comments as Word comments with replies) has no test. Round 5: criterion 5 is met for a whole table (see Evidence). Criterion 4 stays open: the writer has no comment part, so no Word comment or reply is written. Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported. Where Word's author names come from is open: the service stores per-tenant surrogates, not names (08 §13; 13 §5). How `fmt` suggestions are written is not specified. 08 §6 also mentions "compare, then export as DOCX with tracked changes"; 09 does not describe it and no story is written here (Open questions). Lane EXP-092-104 (2026-11-13, round 6): criterion 4 is built for block anchors only. `packages/export-docx/src/writer-comments.ts` writes each thread of `WriteOptions.comments` as Word comments on its paragraph (range start, range end and reference per message), with replies in `comments.xml` and linked to their root in `commentsExtended.xml`; `src/writer.ts` wires it in `paragraphXml` and `pack`. Tests: `packages/export-docx/test/exp-093-comments.test.ts` (8 tests, including a fast-check escaping property). Criterion 4 stays unticked because the thread target in 07 §6 is a text range as well as a block, and the export input has no offsets within a paragraph; the input shape is proposed in docs/adr/0228-lane-EXP-092-104.md (status: proposed). Whether the writer must map a range to runs is an owner or spec question.
+
+### EXP-094 Write regions to DOCX
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Owner |
+
+**Spec:** 09 §11; 07 §15; 07 §11; 11 §7 · **Requirements:** R3, R5 · **Depends on:** EXP-090, PRM-018, PRM-046, gap: no story yet for the export-identities callback of 07 §15, which 05 §8.1 lacks
+
+As an owner, I want regions to carry into the Word file as protected areas as far as the format allows, so that a Word user is guided to the parts they may edit and the file keeps the shape of my document's rights.
+
+**Acceptance criteria**
+
+- [x] Given a region, when exported, then it becomes a block-level content control tagged with the region identifier and title.
+- [x] Given at least one region that is not editable by everyone, when exported, then the file gets document protection in read-only mode and editable ranges (`w:permStart` and `w:permEnd`); given every region is editable by everyone, then no protection is added.
+- [x] Given the host supplies export identities through the opt-in callback, when exported, then per-user editable ranges are written for those identities only; without it, only the `everyone` group is used.
+- [x] Given an `approved` region, when exported, then it becomes a content control with locked content.
+- [x] Given the grants, when exported, then the original grants are kept in a custom XML part.
+- [x] Given the export result, when it is read, then the warnings state that Word's protection is advisory and that enforcement exists only inside the document service.
+
+**Evidence:** criteria 1 to 6: `packages/export-docx/test/writer.test.ts` (EXP-094 test: the region tag `lockedRegion0001` and its title as alias, read-only protection with `permStart` ranges for `everyone` and for the named editor, `sdtContentLocked` for the approved region, the `urn:docedit:grants:1` part with the grant, the warning that protection is advisory; no protection without the callback). `packages/export-docx/test/exp-092-094.test.ts` (one body-level control per region, tagged and titled; no read-only protection and no range when every region is editable by everyone, and no advisory warning; with no export identities only the `everyone` group is written; the named identity's range is written for the restricted region alone and wraps its control; the warning says the protection is advisory and enforced only inside the document service).
+
+**Notes:** Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported. Phase 4: 11 §7 ("the direct writer, including fields and regions"). The protection in the file is advisory, as the file format's specification says; the enforcement of 07 exists only while the document lives in the document service. Whether the export should say so to the user is open (Open questions); the last criterion takes it that it should. The opt-in callback is not in the list of callbacks in 05 §8.1. This story absorbed PRM-055 during the cross-check.
+
+### EXP-095 Write form fields to DOCX
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Owner |
+
+**Spec:** 12 §12, §13; 09 §11; 03 §10 · **Requirements:** R5, R13 · **Depends on:** EXP-090, FRW-002, FRW-003
+
+As an owner, I want fields to become Word content controls, so that a form can be completed in Word and its data read back, and the file keeps its blanks, labels and values.
+
+**Acceptance criteria**
+
+- [x] Given a `form_field`, when exported, then it becomes an inline content control with the field's `key` as tag, its `label` as alias, a lock, and data binding to a custom XML part that holds the values.
+- [x] Given assignees and rules, when exported, then they are stored in a second custom XML part, separate from the values.
+- [x] Given values with XML special characters, when exported, then they are escaped in the custom part.
+- [x] Given the file, when it is opened, then Word's "filling in forms" protection is set.
+- [x] Given the export result, when it is read, then the warnings state that this protection is advisory and that enforcement exists only while the document lives in the document service.
+- [ ] Given the custom parts, when the export is made for a requester, then they hold only the values that requester may read (ADR 0019), and the export result says which were redacted.
+
+**Evidence:** criterion 1 (lane U-EXP-081-096, `packages/export-docx/test/exp-095-bindings.test.ts`, run with `writer.test.ts`, `exp-091-095.test.ts` and `exp-092-094.test.ts`, 112 tests pass): each of the six controls carries a `w:dataBinding` whose XPath names the field of its own key, checkbox and date fields included; checkbox values are stored as `true` or `false`, and dates as a dateTime (docs/adr/0322-lane-U-EXP-081-096.md). Criteria 3, 4 and 5 (round 4) and criterion 2 (round 5, `packages/export-docx/test/exp-091-095.test.ts`, 'keeps assignees and rules in a definitions part of their own': a `role_def` and a `rule_def` share the definitions part, and the values part holds neither): `packages/export-docx/test/writer.test.ts`, 'writes form fields as content controls bound to a custom XML part of their values (EXP-095)'. Six inline controls (each in a paragraph) carry their `key` as tag, their label as alias, a lock and a data binding to the values part. The values part holds `Ann &amp; Bob &lt;x&gt;`, which reads back as `Ann & Bob <x>`. The role definition (assignee) is in a second part, which holds no values. The settings part sets `w:edit="forms"`, and the export warns that the form protection is advisory and that enforcement is the document service's. Criterion 6 is tested only in part: `writer.test.ts`, 'writes a projection from the model alone', checks that the export reports `secret.value` as redacted, and does not read the custom parts. Round 5, `packages/export-docx/test/exp-091-095.test.ts`, 'leaves a redacted form value out of every part of a requester's package': a sentinel value held under `redacted` appears in no part of the package, the values part holds an empty field for its key, and the export names the key.
+
+**Notes:** Criterion 1 ticked (lane U-EXP-081-096, round 9): `formFieldXml` in `packages/export-docx/src/writer.ts` had left `w:dataBinding` out for `checkbox` and `date` fields; the exclusion is removed. The binding format for those two kinds is a choice made here, not in the spec, and is proposed in docs/adr/0322-lane-U-EXP-081-096.md. Earlier audit (2026-11-13): the test read only the first binding, so it did not see two of six controls unbound. Round 5 (2026-11-13): criterion 2 is ticked (see Evidence). Criterion 6 stays open: the form-values part is checked, but the grants part (`grants`, written as the host gives it) is not checked against a requester's visibility, and the criterion covers every custom part. Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported. Phase 4 follows 12 §13 ("DOCX round trip of fields"), but 12 §12 specifies only the export side. Reading these controls back on import is not described in 09 or 12 §12 (Open questions). How a `signature` field is exported is not stated. This story absorbed FRW-082 during the cross-check. Second review (2026-11-06, SPK-027), SR-M15: Word re-reads a bound content control from its custom XML part, so for an imported form the writer must treat the control and the part as one unit, and the mapping of Word's own content controls to `form_field` kinds is still undecided; 12 §12 does not yet say that custom parts are redacted per requester (SR-N47) ([review](../review/2026-11-06-second-review.md)). Round 8 (2026-11-13, lane export-docx-2): criterion 6 stays open. The writer has no visibility input of its own; it sees only the redacted form keys and the hidden-region placeholders. The grants part and the role and rule definitions part are written as the host gives them, and whether a restricted requester may read them is undecided (ADR 0144, open questions).
+
+### EXP-096 Write math to DOCX
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 09 §6.1; 03 §10 · **Requirements:** R5 · **Depends on:** EXP-054, EXP-049, EXP-090
+
+As an author, I want equations to stay equations in the Word file, so that they can be edited there.
+
+**Acceptance criteria**
+
+- [ ] Given an equation that passes the gate, when exported, then the server converts it from LaTeX to Office math through MathML with the converter chosen in EXP-054.
+- [ ] Given a converter licensed under the GPL, when it is used, then it runs as a separate process.
+- [ ] Given an equation that cannot be converted, when exported, then it becomes an image whose alternative text is the LaTeX source.
+- [ ] Given an equation that fails the gate, when exported, then it is replaced as in EXP-051.
+
+**Notes:** Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported. Second review (2026-11-06, SPK-027), SR-M10: for an imported equation the criteria apply only after an edit; while it is unedited, its original Office math is written back, which needs inline atoms to keep their original XML ([review](../review/2026-11-06-second-review.md)). Checked 2026-11-13 (ADR 0117, round 8): no criterion ticked. The writer writes the LaTeX source as text; criteria 1 and 2 need the converter of EXP-054 (not done); criterion 3 needs an equation renderer outside this package; criterion 4 needs the gate of EXP-049 and the replacement of EXP-051.
+
+## DOCX import
+
+### EXP-097 Choose the parser to build the DOCX importer on
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | 2 | M | must | Maintainer |
+
+**Spec:** 09 §12; 11 §1 (principle 3); research summary §4 · **Requirements:** R5, R10 · **Depends on:** none
+
+As a maintainer, I want a time-boxed evaluation of existing DOCX parsers, so that the importer builds on a permissively licensed, maintained and safe base where one fits.
+
+**Acceptance criteria**
+
+- [ ] Given the candidates (for example mammoth, which produces lossy HTML without sanitising and had CVE-2025-11849, the Open XML SDK under MIT, and others), when they are compared, then the report gives licence, maintenance state, security history and fit with the CDM.
+- [ ] Given a corpus of real Word files and the hostile corpus of EXP-110, when each candidate reads them, then the report gives how much structure each recovers and how each behaves on hostile files.
+- [ ] Given a candidate in another runtime than Node.js, when it is recommended, then the report states how it would run in a sandboxed worker and what that means for the reference service.
+- [ ] Given the time box ends, when the report is delivered, then it recommends adopt, fork or build, with evidence.
+
+### EXP-098 Import a Word file as a job
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 09 §12; 05 §6.2, §7; 04 §3.2, §10; 07 §11, §12, §15; 08 §4 · **Requirements:** R5 · **Depends on:** EXP-099, EXP-100, EXP-108, EXP-109, PRO-066, SYN-005, SYN-030
+
+As an author, I want to start from my existing Word file, so that I can bring my work into the editor.
+
+**Acceptance criteria**
+
+- [ ] Given an uploaded `.docx` asset, when the host calls `POST /documents/{id}/imports` with `asset` and `format` `docx` using its service credential, then a job is returned and `/imports/{jid}` reports its state and, when complete, its warnings.
+- [ ] Given the import completes, when the content is stored, then it is written as a snapshot commit with origin `import`, connected clients receive `sync.reset` with reason `import`, and a version of kind `import` is created.
+- [ ] Given the job ends, when it completes or fails, then `import.completed` or `import.failed` is raised and the webhooks `dep.import.completed` or `dep.import.failed` are sent.
+- [ ] Given a document with an `approved` region that the import would change, when the import is requested, then it is refused until the state is changed.
+- [ ] Given an import, when it finishes, then it creates no grants and no workflow state.
+- [ ] Given `POST /documents` is called with an import, when it completes, then the new document opens with the imported content.
+- [ ] Given a Word file, when it is imported, completed in fill mode and signed, then the workflow ends in a sealed PDF.
+
+**Notes:** 07 §12 makes import a service-credential operation, so the host calls it on behalf of the author (naming them with `DEP-Actor`); the embedding API has no import method (Open questions). The last criterion is the phase 2 exit criterion of 11 §5. Lane U-EXP-097-112 (2026-11-13): the import route and job are still not built (`services/document-service/src/control-plane/handlers.ts` refuses `import` as a source). The PostgreSQL test `services/document-service/test/data-plane/u-exp-097-112.import-commit.pg.test.ts` shows that an imported envelope is refused unless the document lists its features: an import that keeps Word content as `preserve` atoms needs a document whose `requires` includes `preserve` (the room refuses it with `feature_missing`, `I1`). The job must decide how that feature is added (an owner or spec decision, not made here). No criterion is ticked by this lane.
+
+### EXP-099 Read the DOCX package safely
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Operator |
+
+**Spec:** 09 §12; 10 §3.5; 11 §1 · **Requirements:** R5, R10 · **Depends on:** EXP-097, BE-043
+
+As an operator, I want the package read in a sandbox with hard limits, so that a hostile Word file cannot harm the service.
+
+**Acceptance criteria**
+
+- [ ] Given a file, when the importer runs, then it runs in a sandboxed worker with no network and no credentials.
+- [x] Given limits on entry count, total uncompressed size and compression ratio, when a file exceeds any of them, then it is rejected before it is fully expanded.
+- [x] Given any XML part with a document type declaration, when the importer reads it, then the file is rejected.
+- [x] Given a relationship with an external target (remote template, linked image or hyperlink to a file), when the importer reads it, then it is never followed and no network request is made.
+- [x] Given a macro-enabled file, when it is uploaded, then it is refused with a clear message.
+- [x] Given an embedded object, when the importer meets it, then it treats it as opaque: it never parses or runs it, and keeps it only as a preserved fragment (EXP-117).
+
+**Evidence:** criterion 2: `packages/export-docx/test/exp-099-limits.test.ts` (round 4, lane V-EXP-097-112: `importDocx` on `poi/sample.docx` is refused with the entry limit, the total size limit and the ratio limit, and accepted under the default limits; the entry check runs on the central directory, before any entry is inflated, and the size and ratio checks are the `readZip` ones), with `packages/export-docx/test/zip-bounded.test.ts` (a header that declares a small size over an entry that inflates to more is refused during inflate, not after it is fully expanded; `src/zip.ts` `inflateBounded`) and `test/layers.test.ts` (entry count, total size and ratio). Criterion 6: `packages/export-docx/test/embedded-opaque.test.ts` (the embedding part of `poi/EmbeddedDocument.docx` is kept byte for byte under `parts/` in the atom's fragment). Criteria 3 to 5: `packages/export-docx/test/package-safety.test.ts` (a document type declaration is refused in the document, styles and settings parts; an external relationship is kept as data, and a stubbed `fetch` is never called while the fixture imports; a macro-enabled main part is refused with "macro-enabled files are refused"); `packages/export-docx/test/layers.test.ts` (the same refusals at the parser and the package level). Criterion 2 has the limit checks in `test/layers.test.ts`, but see the Notes.
+
+**Notes:** The values of the three limits are not given in 09 (Open questions). Open (2026-11-13): criterion 1 needs the sandboxed worker of BE-043, not built here. Criterion 2 (2026-11-13, second round): the entry count, total size and ratio still use the sizes the central directory declares, but `entryData` now inflates through fflate's streaming `Inflate` in 64 KiB slices and refuses the entry as soon as its output passes the declared size, so a header that lies is stopped during inflate. The ratio check is still judged on declared sizes only. Criterion 6 is ticked on the fragment's byte-for-byte copy of the embedding; the fragment's other parts remain EXP-117's. Lane U-EXP-097-112 (round 4, 2026-11-13): criterion 1 stays open. `importDocx` runs in the calling Node process; the asset worker's Podman sandbox (`services/asset-worker/src/sandbox-podman.ts`) takes images and SVG only, so a DOCX job kind, an image with the package and a change in `services/asset-worker` are needed first (see docs/adr/0323-lane-U-EXP-097-112.md). Evidence audit (2026-11-13): criterion 2 is unticked because no test exceeds the entry-count limit (`test/layers.test.ts` passes `maxEntries: 10` over an archive of one entry, so only the size and ratio limits are exercised, and the Evidence line wrongly says entry count is covered), and no test drives the limits through `importDocx`; add a test that reads an archive with more entries than `maxEntries`, then re-tick. Done (lane V-EXP-097-112, round 4): `test/exp-099-limits.test.ts` drives the entry, size and ratio limits through `importDocx`; criterion 2 is ticked. Criterion 1 (the sandboxed worker) stays open, as in the note above.
+
+### EXP-100 Import text, styles and numbering
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 09 §12; 03 §4.1, §4.3, §4.5, §9 · **Requirements:** R5 · **Depends on:** EXP-099, EXP-097
+
+As an author, I want the text, styles and lists of my Word file to arrive as styles and lists, so that I can keep editing with the same structure.
+
+**Acceptance criteria**
+
+- [x] Given Word paragraphs and runs, when imported, then they become paragraphs, text and marks of the CDM, and formatting that has no CDM property is reported as a warning.
+- [x] Given Word styles with inheritance, when imported, then they become `style_def` nodes with the `basedOn` chain kept, and built-in headings map to the reserved identifiers `Heading1` to `Heading9`.
+- [ ] Given Word numbering, when imported, then it becomes `numbering_def` nodes and paragraph `numbering` with `listId`, and the labels the editor computes equal those Word displays for the corpus.
+- [x] Given imported definitions, when they are stored, then they get fresh random identifiers, never identifiers taken from the file.
+- [ ] Given the document defaults of the file, when imported, then they become `settings` and the default paragraph style.
+
+**Evidence:** criteria 1 and 2 were unticked by the reviewer (round 3) because no test compared the import with the file, and are re-ticked in fix round 3 on these tests in `packages/export-docx/test/import-styles.test.ts` (run of 2026-11-13: the file passes 317 tests). Criterion 1: "gives each imported text the marks of its run’s w:rPr, on every corpus file" reads `document.xml` of each corpus file and checks every imported body text, in document order, against its run: the toggles (`w:b`, `w:i`, `w:strike`, `w:caps`, `w:smallCaps`, with their on/off value), the valued marks (`w:sz`, `w:color`, `w:vertAlign`, `w:u`) and the character style (`w:rStyle`, through the source map's style mapping) are the marks of the text node, no more and no less (917 texts, 144 of them marked, in 17 files); "imports bold and italic text of a file as bold and italic marks" checks one file's bold run and italic run; the last block (below) checks the warning. Criterion 2: "gives every imported style the basedOn of its Word style, through the identifier mapping" reads `styles.xml` of each corpus file and checks, for every paragraph, character and table style, that its `style_def` has the `basedOn` of the file's `w:basedOn` mapped to the CDM identifier (and none when the file has none), and that the first paragraph style named "heading n" is the built-in `Heading<n>`; it asserts that at least 60 files have a kept `basedOn`. Criteria 4 and 5: `packages/export-docx/test/import-styles.test.ts` (on every corpus file: text nodes carry text, every `basedOn` names a style of the document, `Heading1` to `Heading3` are built-in paragraph styles, one `settings` node names a paragraph style, and definition identifiers are unique and random unless built in; `poi/heading123.docx` maps to `Heading1` to `Heading3`); `packages/export-docx/test/fresh-ids.test.ts` (a second import of the same file shares no identifier except the model's built-in style identifiers); the last block of `packages/export-docx/test/import-styles.test.ts` (criterion 1: formatting the editor does not show is reported with a count).
+
+**Notes:** Criterion 1 is met with A2: formatting without a CDM property is reported as `preserved` ("kept with the paragraph and written back to Word"), not as a dropped item, because of the owner's A2 decision (see EXP-107). Criterion 2 keeps the reserved built-in identifiers of the model, as the spec asks, and those are the only identifiers that repeat between imports. Criterion 3 stays open: the labels Word displays need Word, which is not run here (the labels come from `labelFor` in `src/import.ts` and are not compared with Word for the corpus). Evidence audit (2026-11-13): criterion 5 is unticked because the importer never reads `w:docDefaults` of `styles.xml` (run size, fonts, language, paragraph spacing; `poi/sample.docx` has 11 pt, 10 pt after, line 1.15, `de-DE`, and none reaches `settings` or a style), `settings` takes only `defaultTabStop` and the `w:default` style, and the test (`import-styles.test.ts`, "criterion 5") only checks at most one `settings` node and a conditional style kind, never a value against the file. Round 4 (lane V-EXP-097-112): the language of `w:docDefaults` is now `settings.lang` (`packages/export-docx/src/import.ts`, `styles()` and `settings()`), tested by `packages/export-docx/test/exp-100-doc-lang.test.ts` (every corpus file that has a docDefaults language, read from its styles.xml, and `poi/sample.docx`, whose language is `en-US`, not `de-DE` as written above). The rest of criterion 5 is not done: the size, font and spacing defaults are not mapped to the default paragraph style. Mapping them into the Normal style changes that style's bytes on the patch write and needs a decision on the cascade (03 §6); criterion 5 stays unticked.
+
+### EXP-101 Import tables, images and figures
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 09 §12; 03 §4.3; 06 §4.4 · **Requirements:** R5 · **Depends on:** EXP-100, BE-043, BE-045
+
+As an author, I want tables and pictures of my Word file to arrive intact where the editor supports them, so that I lose as little as possible.
+
+**Acceptance criteria**
+
+- [ ] Given a Word table, when imported, then it becomes a table with a stored `grid`, spans, borders, shading and header rows.
+- [ ] Given a nested table, when imported, then it is dropped or flattened and a warning names it, because tables cannot contain tables in version 1.
+- [ ] Given a picture, when imported, then it goes through the asset worker, which decodes and re-encodes it, and is attached to the document with its alternative text.
+- [ ] Given a floating or anchored object, when imported, then it is placed inline and a warning names it.
+- [ ] Given a caption, when imported, then it becomes a `Caption` paragraph with a `seq` field.
+
+**Evidence:** criterion 1: `packages/export-docx/test/exp-101.test.ts` (on every corpus file, each imported table has a `grid` of 1 to 63 integers and each row's cell spans fill it exactly, and `headerRows` is at most the row count; on `docx4j/tables.docx`, a table with header rows, a cell with a column span, a cell with shading, and cells whose `borders` attribute holds the dotted borders, with `w:tcBorders` still in their residue; on `docx4j/cr043-tracked.docx` and `poi/bug65738.docx`, the `borders` attribute of tables and cells from `w:tblBorders` and `w:tcBorders`; the border lenses write an unedited element back exactly, rewrite only an edited side, keep unmodelled sides and attributes, and write new borders in schema order). Direct table and cell borders are read by the `tblBorders` and `tcBorders` lenses of `packages/export-docx/src/props.ts`, which the direct writer (`src/writer.ts`) now also uses. Fixed after the reviewer unticked the criterion (round 1, B group 3), when borders stayed only in the residue.
+
+**Notes:** Lane export-docx-2 (2026-11-13): criterion 2 says a nested table is "dropped or flattened" with a warning. Under A2 the importer keeps it as a preserved block with the label `nested table` (`src/import.ts`, the report of `test/import-report.test.ts`), so the criterion's wording and A2 disagree, and the owner decides which reading holds; stays open. Criterion 3 (pictures decoded and re-encoded by the asset worker, BE-043 and BE-045) is not built: the package writes pictures as image nodes with their bytes. Criterion 4 (floating objects placed inline) is not built: under A2 an anchored object is a preserved atom in place (EXP-117), and the report does not separate floating from inline (EXP-107 Notes). Criterion 5 (a `seq` field for a caption) is not tested; a caption is a `Caption` paragraph, and its field is kept as a field marker, not as a `seq` field node. Tests of the criteria above are not written, because the behaviour is not built. Fixer, B group 3 (2026-11-13): for criterion 1, a Word border style the model does not name (`triple`, `wave`, art borders) reads as `single`, and `w:start` and `w:end` read as left and right (as in a left-to-right table); the original side stays in the residue and is written back while its value is unchanged. Borders defined in a table style (`w:tblPr` inside `w:style`) are now read into the style's `borders` by the `tblPr` nested lens of `styleSpec('table')` (`src/props.ts`; lane export-docx-2, round 2; `test/exp-101-style-borders.test.ts`). Open: the style writer (`src/writer-styles.ts`) writes a table style's borders, cell margins and row banding from its attributes only, so the other children of that `tblPr` (for example `w:tblInd`) are not written back from the residue. Evidence audit (2026-11-13): criterion 1 is unticked because vertical merges are not imported as spans: `w:vMerge` never becomes the model's `rowspan` (03 §4.3; no `rowspan` in `src/import.ts` or `src/props.ts`), and the corpus files `docx4j/tables.docx` (14 `w:vMerge`), `docx4j/sample-docx.docx` and `python-docx/tbl-cell-access.docx` import with no cell that has `rowspan`; `tables-import.test.ts` and `exp-101.test.ts` check `colspan` only (the first is the better test, and the story's Evidence does not name it). Import `w:vMerge` as `rowspan` (or state in the criterion that only column spans are imported), test it against the source, then re-tick. Round 4 (lane V-EXP-097-112): not done, and left open on purpose. `w:vMerge` has no lens in `src/props.ts`, so it stays in the cell's residue. To import it as `rowspan`, each continuation cell must leave its CDM row (a row cannot hold a cell under a row span), so the continuation cell's content and properties would have to be kept elsewhere (a preserved atom or the source-map gap). Whether that content is kept, merged into the restart cell or dropped is not stated in 03 §4.3 or 09 §12, and under A2 it is a decision for the owner or the spec before the code is written. Criterion 1 stays unticked.
+
+### EXP-102 Import sections, headers, footers, notes, fields and links
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 09 §12; 03 §4.1, §4.2, §4.4, I9, I10 · **Requirements:** R5 · **Depends on:** EXP-100
+
+As an author, I want page setups, headers, footers, footnotes, fields and links of my Word file to arrive, so that the document keeps its structure.
+
+**Acceptance criteria**
+
+- [x] Given Word sections, when imported, then they become `page_setup` and `section_break` nodes, and headers and footers become `story` nodes with first-page and even-page variants.
+- [ ] Given footnotes, when imported, then they become `footnote` nodes; a multi-paragraph footnote is approximated and a warning names it; endnotes are reported as unsupported.
+- [ ] Given fields for page numbers, page count, date, cross-references and sequences, and a table of contents, when imported, then they become `field` and `toc` nodes; any other field is reported as unsupported and replaced by its cached text.
+- [ ] Given bookmarks and hyperlinks, when imported, then bookmarks become `anchor` nodes and hyperlinks become `link` marks only when the target uses an allowed scheme (invariant I9); other targets are dropped with a warning.
+- [ ] Given content controls and form fields, when imported, then they are reported as unsupported.
+
+**Evidence:** criterion 1 (lane export-docx-2, round 3): `packages/export-docx/test/exp-102-sections.test.ts` (`docx4j/sections_multiple.docx`: two `page_setup` nodes and one `section_break` whose `pageSetup` names the second; the first section's six header and footer variants name story nodes of the right kind, and `differentFirstPage` is set; `poi/headerFooter.docx`: one section whose six variants all resolve to stories, three headers and three footers). Round 4 (lane V-EXP-097-112): `packages/export-docx/test/exp-102-even-odd.test.ts` (on `python-docx/doc-odd-even-hdrs.docx` and `poi/PageSpecificHeadFoot.docx`, which hold `w:evenAndOddHeaders`, every page setup has `differentOddEven` and one names an even-page header story; a file without the setting keeps the flag off), run in Node.js with vitest together with the export-docx import and round-trip tests (`roundtrip`, `patch`, `source-map`, `lenses`, `import-report`, `tables-import`, `import-styles`, `identity`, `floating-report`, `exp-102-sections`): 985 passed.
+
+**Notes:** Whether Word comments are imported is not stated in 09 or 07 §15 (Open questions). Lane export-docx-2 (round 3): criteria 2 to 5 stay unticked. Under ADR 0017 (A2) the importer keeps footnotes, endnotes, fields, bookmarks, hyperlinks and content controls as preserved atoms (`footnote`, `endnote`, `field`, `bookmark`, `hyperlink`, `content control` in the import report, action `preserved`), not as `footnote`, `anchor` or `link` nodes and marks, and it reports none of them as dropped or unsupported. Criterion 2 also needs the multi-paragraph footnote approximation, which the importer does not read (`test/floating-report.test.ts` says so). The wording of criteria 2 to 5 and A2 disagree, so the owner decides which reading holds (proposed in docs/adr/0144-export-docx-2-backlog-batch.md). Evidence audit (2026-11-13): criterion 1 is unticked because the importer never reads `w:evenAndOddHeaders` of `settings.xml` into the page setup's `differentOddEven` (03 §4.2; only `src/writer.ts` mentions it), so the even-page header and footer stories are imported but can never be switched on in the editor; neither test file has a corpus file with `w:evenAndOddHeaders`, and `exp-102-sections.test.ts` checks the CDM only, not the sections of the file. Read the setting, test it on a file that has it, then re-tick. Done (lane V-EXP-097-112, round 4): `settings()` reads `w:evenAndOddHeaders` (`packages/export-docx/src/import.ts`) and `pageSetup()` sets `differentOddEven` on every page setup, as the writer expects. The setting is document-wide, so every section gets the flag: this is the reading taken here, not an owner decision. Criterion 1 is ticked on the test named in its Evidence. Criteria 2 to 5 are unchanged and stay open.
+
+### EXP-103 Import tracked changes as suggestions with author labels
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Owner |
+
+**Spec:** 09 §12; 07 §15; 03 §5; 10 §3.5; review S-10 · **Requirements:** R5, R8, R10 · **Depends on:** EXP-100, CDM-039, CDM-040
+
+As an owner, I want the tracked changes of a Word file to arrive as suggestions I can accept or reject, without anyone being impersonated, so that a review can continue in the editor.
+
+**Acceptance criteria**
+
+- [x] Given tracked insertions and deletions, when imported, then they become `ins` and `del` suggestion marks with fresh suggestion identifiers.
+- [ ] Given the authors of tracked changes, when imported, then each becomes a label and never a user identity, and no suggestion is attributed to a real user of the tenant.
+- [ ] Given imported suggestions, when an editor reviews them, then accept and reject work like any other suggestion.
+- [x] Given the import, when it finishes, then no user gains the `suggest` capability from it.
+
+**Evidence:** criterion 1: `packages/export-docx/test/exp-103.test.ts` (on `docx4j/cr043-tracked.docx`, `docx4j/review-for-word-word2010.docx`, `docx4j/sample-docx.docx` and `poi/delins.docx`: the `ins` and `del` marks of each file, with identifiers of 8 characters or more that are not digits, one kind and one label per identifier, and no identifier shared by a second import of the same file). Criterion 4, on the package side: the same file checks that the envelope holds only `cdm`, `doc` and `requires`, with no `grants` attribute and no `region` node, so the import creates no grant from which the `suggest` capability could follow (03 §5, 07 §12). The authority's reading of grants is not tested here.
+
+**Notes:** Lane export-docx-2 (2026-11-13): criterion 2 has a test for the label form only (`word:` plus the author's name). Whether a label can never match a real user is open: the CDM's `user` attribute is a string of up to 255 characters with no grammar (`cdm1.ts`), so the rule rests on the authority, and the criterion stays open. Criterion 3 (accept and reject work like any other suggestion) needs the editor's suggestion commands, which this package does not exercise, so it stays open. The time of an imported suggestion (criterion of EXP-098) is not in the package. Marks carry a `user` that the authority checks against the submitting user (03 §5); how a label is stored there is not specified (Open questions). The time of an imported suggestion is the server time of the import commit. Second review (2026-11-06, SPK-027), SR-M14: under A2 the original dates and author strings must survive an edit of the paragraph (the review proposes keeping them in the source map, keyed by suggestion `id`), 03 §5 needs an import exception for labels, and revision kinds the CDM cannot express (moves, property changes, cell changes) need an owner decision ([review](../review/2026-11-06-second-review.md)). Lane U-EXP-097-112 (round 4, 2026-11-13): criterion 3 stays open. A grep of `packages`, `services` and `apps` finds no accept or reject command for `ins` and `del` marks, so the editor's suggestion commands it needs are not built (docs/adr/0323-lane-U-EXP-097-112.md).
+
+### EXP-104 Import editable ranges as regions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Owner |
+
+**Spec:** 07 §15 (import); 09 §12; 03 §8 (I3, I7); ADR 0009 (consequences); review 3.2 S-10 · **Requirements:** R3, R5 · **Depends on:** EXP-098, EXP-100, PRM-001, PRM-018, PRM-046
+
+As an owner, I want the editable ranges of a protected Word file to become regions where they can, and to be told where they cannot, so that I only need to grant roles on them and protected parts stay protected.
+
+**Acceptance criteria**
+
+- [ ] Given editable ranges that cover whole blocks, when imported, then each becomes a region with a new identifier that was never used in the document, a direct child of the body, not nested, and followed by a body paragraph.
+- [ ] Given a range inside a paragraph, or a column range in a table, when imported, then it is imported as locked and reported to the importing user with its location.
+- [ ] Given imported regions, when the import finishes, then they have no grants and policy `inherit`; the file creates no grants by itself.
+- [ ] Given overlapping or nested ranges, when imported, then they are flattened so no region nests, and a warning names them.
+- [ ] Given more than 500 regions would result, when the import runs, then it fails as in EXP-109.
+- [ ] Given tracked changes by named authors, when the file is imported, then the authors become labels and never match a user identity.
+- [ ] Given the import is requested, when it runs, then it is a service-credential operation.
+
+**Notes:** "Imported as locked" is not defined in 07 §15 for content that cannot become a region, and the policy given to imported regions and the treatment of the file's document protection are not stated (Open questions). Phase 2: DOCX import is scheduled there (11 §5, 09 §12). This story absorbed PRM-054 during the cross-check. Lane U-EXP-097-112 (round 4, 2026-11-13): the importer keeps `w:permStart` and `w:permEnd` as preserved `permission range` atoms (`packages/export-docx/src/import.ts`), so no region is produced; building regions changes the A2 design and needs the owner's reading of "imported as locked". No criterion ticked (docs/adr/0323-lane-U-EXP-097-112.md).
+
+### EXP-105 Import Office math
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 09 §6.1, §12 · **Requirements:** R5, R10 · **Depends on:** EXP-054, EXP-049, EXP-100
+
+As an author, I want equations in my Word file to arrive as equations that the editor accepts, so that I can keep editing them.
+
+**Acceptance criteria**
+
+- [ ] Given Office math, when imported, then it is converted to LaTeX through MathML with the converter chosen in EXP-054.
+- [ ] Given the converted LaTeX, when it is stored, then it passes the math gate first; no unvalidated TeX is ever stored in a `latex` attribute.
+- [ ] Given an equation that fails the gate or cannot be converted, when imported, then it becomes an image attached to the document and a warning names it.
+- [ ] Given inline and display math, when imported, then they become an `equation` and an `equation_block`.
+
+**Notes:** How the image of such an equation is produced is not specified (Open questions). Lane U-EXP-097-112 (round 4, 2026-11-13): all four criteria stay open; the conversion needs the converter chosen in EXP-054, a spike whose criteria are unticked, and the importer keeps `m:oMath` as a preserved `equation` label (docs/adr/0323-lane-U-EXP-097-112.md). Second review (2026-11-06, SPK-027), SR-M10: under A2 the third criterion changes: an equation that fails the gate or cannot be converted is kept as preserved content with an image fallback, and every imported equation is written back as its original Office math while unedited (09 §6.1 as edited, E20); inline atoms need somewhere to keep their original XML ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-106 Substitute fonts and warn about reflow
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 09 §12; 02 §6; 11 §9 (risk 11) · **Requirements:** R5 · **Depends on:** EXP-100, BE-047
+
+As an author, I want the fonts of my Word file replaced by the closest ones I can use, and to be told when the document will reflow, so that I know what changed.
+
+**Acceptance criteria**
+
+- [ ] Given a font family of the file, when imported, then it is mapped through the font manifest, which maps Calibri to Carlito, Cambria to Caladea, and Arial, Times New Roman and Courier New to the Liberation families.
+- [ ] Given a family with no metric-compatible substitute (for example Aptos), when imported, then the default is used and a warning says that the document will reflow.
+- [ ] Given substitutions, when the job completes, then each substituted family is listed once, with the family that replaced it.
+- [x] Given a tenant font with the same family name, when imported, then the manifest's order of preference decides, and the result is listed.
+
+**Evidence:** criteria 1 and 2: `packages/export-docx/test/exp-106.test.ts` (the five families of 02 §6 map to their substitutes; `Aptos` gets the default, `source` `default`, `reflow` true and the reflow message; every corpus file gets exactly one line per family it names, apart from the open families, and its document has the same families with an empty manifest). Criterion 3 is evidenced at the importer's result only (`ImportResult.fonts`, each family once); see Notes. Criterion 4 (round 10, 2026-11-13): `packages/export-docx/test/exp-106-tenant.test.ts` (on every corpus file that names Calibri, a tenant entry placed first replaces it and is the one line listed for the family; with the built-in entry first, Carlito decides; a tenant entry that keeps the name Calibri is listed with source `tenant`). The tenant's fonts come from BE-047; the test passes the manifest the importer is given. Source: `packages/export-docx/src/font-substitution.ts`, wired in `src/import.ts` (`ImportOptions.fonts`, `ImportResult.fonts`).
+
+**Notes:** Evidence audit (2026-11-13): criteria 1 and 2 were unticked because `ImportResult.fonts` is built only from `fontFamily` marks found in `envelope.doc` (`familiesOf`), so families named in `w:docDefaults` and through theme fonts (`w:asciiTheme`, with the family in `theme1.xml`, which is how Word files name Aptos) are never mapped or warned about: `poi/sample.docx`, `docx4j/comment-cards.docx` and `poi/bookmarks.docx` name Calibri or Times in `docDefaults` and give an empty `fonts` list, and the corpus test derives its expected families from the same document, so it cannot see the gap. Lane export-docx-2 (2026-11-13): criterion 3 says "when the job completes"; the job is EXP-098, not built, so the tick waits for it: the importer's result already holds the list. Criterion 4 is ticked in round 10 (2026-11-13) on the reading that it concerns the importer's decision for the manifest it is given; the supply of tenant fonts (BE-047) is not built and is not checked here. Proposed in docs/adr/0117-export-docx-backlog-batch.md (round 10). The default family (`Liberation Sans`) is a proposed default, not in 02 §6 or 09; see docs/adr/0144-export-docx-2-backlog-batch.md (proposed). Second review (2026-11-06, SPK-027), SR-M12: under A2 the substitution must be for display and typesetting only; the CDM keeps the family the file names (for example Calibri), or the DOCX export writes Carlito back ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-107 Report what the import dropped or approximated
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 09 §12 · **Requirements:** R5 · **Depends on:** EXP-100, EXP-101, EXP-102
+
+As an author, I want a list of everything the import left out or changed, so that I can fix those places before I trust the result.
+
+**Acceptance criteria**
+
+- [x] Given a file with text boxes, shapes, floating objects, nested tables, unsupported fields or multi-paragraph footnotes, when imported, then the job returns a warning for each kind, with a count.
+- [x] Given a warning, when it is read, then it names the kind, says whether the construct was dropped or approximated, and lists the identifiers of the blocks it affects where it can.
+- [x] Given a file with none of these, when imported, then the warning list is empty.
+- [ ] Given the job result, when the host reads it, then the warnings are available to show to the importing user.
+
+**Evidence:** criteria 2 and 3: `packages/export-docx/test/import-report.test.ts` (every report line of every corpus file names its kind and action, has a message, a count of at least one and at most 100 block identifiers, each of which is a node of the imported document, with one line per kind and action; `poi/Styles.docx` and `python-docx/tbl-cell-props.docx` give an empty report; `docx4j/textbox.docx` names its text box block). Criterion 1, the per-kind counts for text boxes, shapes, nested tables, fields and footnotes, is evidenced in the same file, but the criterion stays open (see Notes). Criterion 1, footnotes of several paragraphs (round 11, 2026-11-13): `packages/export-docx/test/exp-107-footnotes.test.ts` (a synthetic edit of `poi/footnotes.docx` with a second paragraph in one note gets one `footnote of several paragraphs` line, preserved, count 1, with blocks; no S11 corpus file holds such a note, checked by a plain reading of the XML parts). Criterion 1, floating objects (round 7): `packages/export-docx/test/floating-report.test.ts` (the `floating object` line of five corpus files, with 1, 1, 1, 4 and 7 floating objects, equal to the `wp:anchor` count of their package XML; every corpus file agrees with that count; an inline text box gets no such line).
+
+**Notes:** Since the owner reversed A2 on 2026-11-06, constructs the model cannot represent are preserved (EXP-117) rather than dropped. The warnings then say "preserved, not editable" for them, and "dropped" only for what Word regenerates by itself (ADR 0017, Open questions). Criterion 2 says "dropped or approximated"; under A2 the action also has the value `preserved`, which the report uses, so the criterion is read as "says whether the construct was dropped, approximated or preserved" (proposed in docs/adr/0117-export-docx-backlog-batch.md). Criterion 1 (round 7, 2026-11-13): an anchored drawing now also gets a line of its own, `floating object`, preserved, counted beside its content kind (a floating text box is counted under both kinds); the name and the double count are a spec-default proposal (docs/adr/0117-export-docx-backlog-batch.md, decision 17), and the kind list stays an owner or spec decision. Criterion 1 (round 11, 2026-11-13): multi-paragraph footnotes now get their own line, `footnote of several paragraphs`, with action `preserved` (A2; the note is kept whole, so nothing is approximated). The word "approximated" in the criterion is read as A2 reads it, as in ADR 0117 decision 18; the owner may reword it. Criterion 4 stays open (the job result is EXP-098). Criterion 4 stays open: the job result and its `warnings` for the host are the job of EXP-098, which is not built here; the package returns `report` and `warnings` on `ImportResult`.
+
+### EXP-108 Keep the original Word file as an immutable asset
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | S | must | Owner |
+
+**Spec:** 09 §12; 06 §4.4; 00 §5 (A2) · **Requirements:** R5 · **Depends on:** BE-043, BE-045
+
+As an owner, I want the file I imported kept unchanged, so that the lossless writer can patch it (ADR 0017) and I can always go back to my original.
+
+**Acceptance criteria**
+
+- [x] Given an import, when it completes, then the original file is stored as a content-addressed, immutable asset attached to the document.
+- [ ] Given the asset, when a caller with `view` downloads it, then it is served with a fixed content type and as a download, never as inline HTML.
+- [ ] Given the asset is attached, when the asset retention job runs, then it is not deleted; given the document is purged, then it is purged with it.
+- [ ] Given the import version, when it is read, then it names the original asset.
+
+**Evidence:** criterion 1: `packages/export-docx/test/original-asset.test.ts` (on every corpus file the import's `originalAsset` is in the store with role `original`, server-only, the DOCX content type, the SHA-256 of the file's bytes, and the file's bytes unchanged; equal bytes get the same asset; the document validates with the import's asset set attached). Immutable: 'keeps the original immutable: changing the input or a read copy leaves the asset as it was' (on every corpus file, a byte of the input buffer is changed after `importDocx`, and the asset's bytes and `sha256` still equal the original digest; a read copy is zeroed and the next read is unchanged; the asset is frozen, so assigning `sha256` or `bytes` throws) and 'copies the bytes on add, so the caller cannot change a stored asset' (`AssetStore` in `src/assets.ts` copies on `add`, hashes the copy, hands out frozen assets whose `bytes` is a new copy on each read, and has no public map). Run of 2026-11-13: `pnpm vitest run packages/export-docx`, 25 files, 2088 tests passed.
+
+**Notes:** Review of round 6 (2026-11-13): criterion 1 was unticked. Stored, server-only and content-addressed hold and are tested, but "immutable" does not: `AssetStore.add` (`src/assets.ts`) keeps the caller's `Uint8Array` by reference (the import passes its own input buffer), the `Asset` objects and `byId` are mutable, and no test changes the input or the asset afterwards. The test line `original.bytes` equal to `bytes` compares one object with itself. Fixed in round 6 (fixer, 2026-11-13): `add` copies the bytes and hashes the copy, the store's maps are private, assets are frozen, and `bytes` is a new copy on each read (the exporter now caches parsed fragments by asset id, since a copy defeats `readFragment`'s cache by buffer); criterion 1 is re-ticked on the tests named in Evidence. Round 6 (2026-11-13): criterion 1 is read as the package's content-addressed store (the same reading as EXP-116 criterion 1, ADR 0117 decision 3); the production object store is BE-003. Criteria 2 to 4 stay open: download and content type (BE), retention and purge (BE), and the import version that names the asset (EXP-098). Second review (2026-11-06, SPK-027), SR-C1: under ADR 0019 the original file holds the content of hidden regions and values, so the second criterion leaks it; the review proposes serving the original file only to principals who see the whole document ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-109 Validate imported content against the model
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** 09 §12; 03 §8, §9; 07 §15 · **Requirements:** R5, R10 · **Depends on:** EXP-100, CDM-013
+
+As a maintainer, I want imported content to satisfy every invariant of the model before it is stored, so that an import can never create a document the authority would have refused.
+
+**Acceptance criteria**
+
+- [ ] Given the imported tree, when it is validated, then it passes `model.validate()` for I1 to I11 before the snapshot commit is made.
+- [ ] Given nodes without identifiers, when imported, then fresh identifiers are assigned, unique in the document, and no identifier of a removed region is reused.
+- [ ] Given a `latex` value, a link `href` or another attribute that fails its grammar, when imported, then it is dropped or replaced as the relevant story says and a warning names it.
+- [ ] Given a combination that invariant I10 forbids (a footnote in a footnote, a floating figure in a cell, page breaks in cells, captions or footnotes, tables in stories or footnotes), when imported, then it is converted to an allowed form with a warning.
+- [ ] Given content that would exceed a limit of I7 (16 MiB canonical size, 500 regions, 63 table columns, nesting depth 12), when imported, then the import fails as a whole with a diagnostic naming the limit, and no partial document is stored.
+
+**Evidence:** criterion 1 unticked by the reviewer (round 3): the clause "before the snapshot commit is made" depends on the commit of EXP-098, which is not built, and the Notes already say it is not tested; the validation part is evidenced as follows. `packages/export-docx/src/import.ts` runs `validate()` on every result by default and fails the import with `ImportError` before it returns the envelope (option `validate`); `packages/export-docx/test/fresh-ids.test.ts` "is valid for the model, checked here apart from the import’s own check" (every corpus file, imported with `validate: false`, passes `validate()` run by the test; fix round 3 turned the import's check off there so that the test no longer repeats it); `packages/export-docx/test/roundtrip.test.ts` (the same on the corpus). No test makes the import's own check refuse a result: two attempts (a 64-column table, and a run property nested 20 deep with the `grammar` option raised) gave documents that pass `validate()` (the reason was not traced for the run property; the 64-column table is kept as preserved content, because the importer returns no table for more than 63 columns, so the check has nothing to refuse). Round 4 (2026-11-13): `packages/export-docx/test/import-refusal.test.ts` gives the refusal path a test: a body of about 17 MB is refused as a whole, with `canonical_too_large` named and no document returned, and the same content imported with the check off gives a document that `validate()` refuses with that code. Criterion 2, first clause: `packages/export-docx/test/fresh-ids.test.ts` (identifiers are unique within each document and a second import shares none except the model's built-in style identifiers).
+
+**Evidence (lane U-EXP-097-112, 2026-11-13, PostgreSQL in Podman, not ticked):** `services/document-service/test/data-plane/u-exp-097-112.import-commit.pg.test.ts` (run with `pnpm exec vitest run services/document-service/test/data-plane/u-exp-097-112.import-commit.pg.test.ts`, shared container `docedit-test-postgres`, own tenant and schema, dropped afterwards; 1 of 1 passed, not skipped). It imports `docx4j/sample-docx.docx` with `importDocx` (so the import validates the tree first) and stores it with the snapshot path `replaceContent` (reason `import`) at the next seq; the commit reads back as kind `snapshot` with origin `import`, the chain verifies with payloads, and a body that fails the math gate (I8) is refused with the head unchanged. The HTTP route and the job are not built, and the test does not show the `cdm` version check (see Notes).
+
+**Notes:** Lane U-EXP-097-112 (2026-11-13): the test above found that `replaceContent` accepts an envelope whose `cdm` is 99; a snapshot path does not check the `cdm` version of the content, so I1 to I11 are not all checked on that path. Owner or room-host decision, not changed here. Criterion 1 stays unticked for the reason below. Open (2026-11-13): criterion 1 says "before the snapshot commit", and the commit is the host's job (EXP-098), so the package guarantees the validation and the commit is not tested here. Criterion 1 stays unticked until EXP-098 builds the commit and a test shows the order, or the owner rewords it as a package-level guarantee (fix round 3). Criterion 2's second clause (no identifier of a removed region is reused) applies to an import into an existing document, which EXP-098 does; it is not tested here. Criteria 3 and 4 stay open: an unsupported `latex` value, `href` or attribute is kept as preserved content rather than dropped (A2), and the I10 combinations are kept as preserved content, not converted (A2), so both criteria contradict the owner decision; criterion 5 (I7 limits) needs a fixture over 500 regions or 16 MiB that the corpus does not hold. Round 4 (2026-11-13): the 16 MiB case is tested in `test/import-refusal.test.ts`. The 500-region case stays open, because the importer does not yet produce regions (EXP-104), and no import in the tests reaches nesting depth 12. Criterion 5 also says that a table over 63 columns fails the import, but the importer keeps such a table as preserved content (A2), so no limit is exceeded and nothing fails; the criterion stays unticked until the owner says which reading holds. Second review (2026-11-06, SPK-027): under A2 the third and fourth criteria lose content: a value that fails its grammar, or a combination I10 forbids, should become preserved content rather than be dropped or converted. SR-M22: numbering templates with words ("Article %1") fail today's grammar; SR-K5: tables in headers are an owner decision ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-110 Fuzz and test the importer
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Maintainer |
+
+**Spec:** 09 §12; 10 §3.5, §5 · **Requirements:** R5, R10 · **Depends on:** EXP-099, EXP-100, SEC-001
+
+As a maintainer, I want the importer tested on real and hostile files, so that it works on documents people have and survives documents attackers build.
+
+**Acceptance criteria**
+
+- [ ] Given a corpus of real Word files from several generators, when the importer runs, then success rate and warnings per file are recorded, and a drop below the agreed rate fails CI.
+- [ ] Given a hostile corpus (zip bombs, document type declarations with entities, external relationships, macro-enabled files, embedded objects, deeply nested XML, very large tables), when each is imported, then each is rejected or neutralised within bounded time and memory.
+- [x] Given random and mutated packages, when the importer is fuzzed, then it never crashes, hangs or makes a network request.
+- [x] Given an imported corpus document, when it is exported to PDF, then the export succeeds.
+- [ ] Given a failure, when it is found, then the input is added to the corpus.
+
+**Evidence:** criterion 3: `packages/export-docx/test/fuzz.test.ts`, in Node.js (fast-check at fixed seeds over three corpus files; details in the fix round below). Round 1 history: the first version (60 runs, byte flips in the first 4,096 bytes of the compressed package, hang check by the test timeout only) was a smoke fuzz. Criterion 3 unticked by the reviewer (group 4 round 2): the mutations fall in the first 4,096 bytes of the compressed package, so every mutation that matters is stopped by the ZIP layer (CRC, inflate or size refusals) and none reaches the XML parser or the importer's own logic; the central directory is never mutated. A reviewer probe of 180 mutated files found only ZIP-layer refusals, or an unchanged import. Needed: mutate the decompressed parts and repackage them with `writeZip` (correct CRC), mutate the central directory, and bound the time of each import. Fix round (2026-11-13): `test/fuzz.test.ts` rewritten. Part mutations (300 runs): an XML part of a seed is decompressed, mutated (byte flips, truncation, deletion, duplication, random bytes, tags, attributes, entities, a DTD, external relationships, nesting up to 20,000 levels) at positions over the whole part, and packaged again with `writeZip`; in the run of 2026-11-13, 155 imported, 54 were refused by the XML parser, 91 by the importer and none by the ZIP layer, and the test requires no ZIP refusal and more than 30 of each of the others. Container mutations (200 runs): flips and 16- or 32-bit field overwrites in the central directory, the end record, a local header or anywhere in the file. Random packages (200 runs). Every import must end with a result or an `ImportError` and within 1 second plus ten times the seed's own import time (a test bound, not a spec figure; the seeds took 9.0, 8.3 and 78.8 ms in that run); `fetch`, `XMLHttpRequest` and `WebSocket` are stubbed and never called. A longer campaign of 7,000 inputs (`DOCEDIT_FUZZ_RUNS=10`, `DOCEDIT_FUZZ_SEED=7`) passed on the same day. An import that never returns blocks the event loop; only the test timeout catches that case.
+
+**Evidence (lane U-EXP-097-112, 2026-11-13):** criterion 4: `services/export-worker/src/exp-110-u-exp-097-112.import-pdf.e2e.test.ts`, run with `pnpm exec vitest run services/export-worker/src/exp-110-u-exp-097-112.import-pdf.e2e.test.ts` and `DOCEDIT_CONTAINER_CGROUPS=disabled`, `DOCEDIT_PODMAN_MACHINE=podman-machine-default` (Podman in the WSL machine, sandbox `localhost/docedit-export-worker:s4`, `--network=none`). Three S11 corpus files (`docx4j/sample-docx.docx`, `docx4j/tables.docx`, `poi/headerFooter.docx`) are imported with `importDocx` and compiled by LuaLaTeX in the sandbox through `runExport`; each compile succeeds, the PDF starts with `%PDF-` and the layout data validates. 3 of 3 tests passed (not skipped).
+
+**Notes:** Open (2026-11-13): criterion 1 needs the success-rate report and the agreed CI threshold, neither set here. Criterion 2 is not met in full (round 4, lane export-docx-2, 2026-11-13): `packages/export-docx/test/hostile-corpus.test.ts` imports seven hostile packages (a zip bomb, a document type declaration with entities, a macro-enabled package, an external relationship, an embedded package, 20,000 nested `w:ins` elements, and a 200 by 50 table), each within a 30-second test bound, with fetch, XMLHttpRequest and WebSocket stubbed; each is refused with an `ImportError` or imported, and the test does not measure memory, so the memory half stays open; the zip bomb case (a lying header) is covered by `test/zip-bounded.test.ts` under EXP-099, the embedded object by `test/embedded-opaque.test.ts`, but very large tables and deep nesting under a measured bound are not. Criterion 4 is ticked (lane U-EXP-097-112, see Evidence). Criterion 5 needs the corpus workflow.
+
+### EXP-116 Record a source map and keep unknown properties on import
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** ADR 0017 (parts 1 and 2); 03 §4.6; 09 §12 · **Requirements:** R5 · **Depends on:** EXP-100, EXP-108, CDM-051, SPK-028
+
+As an author, I want everything in my Word file that the editor does not model kept with my document, so that the file I get back is the file I gave, plus my edits.
+
+**Acceptance criteria**
+
+- [x] Given an import, when it completes, then a source map is stored as an immutable asset next to the original file, recording for every node the import created its identifier, the location of its original element and its canonical hash as imported.
+- [x] Given a modelled element with attributes or child elements the model does not represent, when imported, then they are kept in the node's `preserved` attribute, or in a `preserved` mark on its text, as JSON element trees that pass I11.
+- [ ] Given identity-bound values (paragraph and text identifiers, revision-session identifiers), when imported, then they are recorded only in the source map, never in the document.
+- [x] Given the imported document, when it is validated, then it passes `model.validate()` and lists `preserve` in `requires` if it carries any preserved data.
+- [ ] Given the corpus of SPK-028, when the importer runs, then the job reports the share of nodes carrying preserved data and the size overhead against an import without preservation.
+
+**Evidence:** criterion 2: `packages/export-docx/test/source-map.test.ts` (every `preserved` node attribute over the corpus passes `checkPreserved`, the I11 grammar; the test does not visit `preserved` marks, which a review probe found also pass over the corpus: 199 marks, no problem). Criterion 1 (unticked by the reviewer, re-ticked by the fixer, group 4 round 1): `packages/export-docx/test/source-map.test.ts` shows the original and the source map as server-only assets of the prototype's in-memory, content-addressed store (the production object store is BE-003; ADR 0117 decision 3), the stored map equal to the one returned, and for every identified node of every corpus file an entry whose range lies inside its part and whose hash equals the node's hash: blocks and stories in `nodes`, definitions in `defs`, section breaks in the new `breaks`, synthetic nodes and shared trees in the new `derived` with a hash (a shared tree names its located holders); see ADR 0117 round 3, decisions 6 to 8, and `src/source-map.ts` (`v: 3`). Criterion 4: `packages/export-docx/test/roundtrip.test.ts` (every corpus file imports and its document passes `validate()` with `preserve` in `requires`). Criterion 3, partly (round 10, 2026-11-13): `packages/export-docx/test/identity.test.ts` checks every corpus file, including the identity values of each source map's `identityTree`, and its known-leak list is now empty; `packages/export-docx/test/exp-116-identity.test.ts` (fast-check at a fixed seed: identity attributes are split out and restored exactly on random trees; `docx4j/cr043-tracked.docx` keeps its two values out of the document, and a regenerated paragraph writes them back as `w:rsidR` and `w:rsidSect`). The criterion stays unticked, see Notes.
+
+**Notes:** Open (2026-11-13): criterion 3 fails for `docx4j/cr043-tracked.docx`, where two revision-session values reach the document (listed as known leaks in `test/identity.test.ts`). The cause is a `preserved` element tree of `w:sectPrChange`, whose `w:sectPr` keeps `w:rsidR` and `w:rsidSect` (residue built by `readContainer` in `src/props.ts` with `toTree`, which does not strip identity attributes). Round 10 (2026-11-13): fixed for the residues of paragraph properties, section properties and style definitions: `splitIdentity` and `restoreIdentity` (`src/tree.ts`) move identity-bound attributes into the source map (`identityTree`) at import, and `preservedOf` in `src/export.ts` puts them back on write. Still open: table, row, cell and run residues (`readContainer` calls in `src/import.ts`) are not split, and no corpus file shows a leak there. The criterion is about every import, so it stays unticked until those residues are split too, or the owner reads it as a corpus property. Criterion 5 needs the job's own report (EXP-098), not the measurement test. Round 7 (lane export-docx-2, 2026-11-13): `packages/export-docx/src/preservation-report.ts` (`preservationReport`) builds the share of nodes with preserved data and the overhead against `preserve: false`, and `packages/export-docx/test/exp-116-report.test.ts` checks it on every corpus file; the job that returns it is EXP-098, not built, so criterion 5 stays open. Criteria 1 and 2 are ticked on 2026-11-13 (see Evidence). Lane U-EXP-113-123 (round 2, 2026-11-13): the residues of tables, rows and cells are now split too. `splitIdentity` (`src/tree.ts`) takes the body's own attributes as well as its children's, `restoreIdentity` puts them back, the importer calls it for `table`, `table_row` and `table_cell` (`src/import.ts`), and `preservedOf` (`src/export.ts`) restores identity values from the source map also for a node with no `preserved` tree. Test: `packages/export-docx/test/exp-116-table-identity.test.ts` (3 tests, Node.js). A `w:cnfStyle` in a cell's `tcPr` with an rsid value now keeps it out of the document, and the regenerated cell writes it back. Criterion 3 stays open: run properties (`runMarks`, `src/import.ts`) keep their identity values in a `preserved` mark, which the source map has no place for. See ADR 0324 (round 2, decision 3). Lane V-EXP-113-123 (round 2, 2026-11-13), read from the code and not tested: `runMarks` builds the `preserved` mark's props from the raw `w:rPr`, and `splitIdentity` (`src/tree.ts`) is applied to the paragraph's copy only, so identity attributes inside a run's residue would be written back into the document by a regenerated paragraph. A fix needs a per-run entry in the source map (a path inside the paragraph's `identityTree`), which is a source-map format change; not made in this round. new with the A2 decision. Phase 2, with the importer (11 §5). Second review (2026-11-06, SPK-027): SR-C1, the source map and the original file must be server-only, never resolvable by readers; SR-M11, verbatim elements carry identifiers and generated field results that go stale; SR-M12, keep original lexical values of modelled attributes and drop preserved attributes that override an edited one (theme colours, theme fonts); SR-M13, R1 needs a block-level granularity; SR-M19, import hashes must survive migrations and forks ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-117 Import content the model cannot represent as preserved atoms
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** ADR 0017 (part 3); 03 §4.6; 09 §12; 10 §3.5 · **Requirements:** R5, R10 · **Depends on:** EXP-099, EXP-116, CDM-051
+
+As an author, I want text boxes, charts, shapes and other content the editor cannot edit kept in place, so that importing my file never silently loses part of it.
+
+**Acceptance criteria**
+
+- [x] Given text boxes, shapes, charts, SmartArt, embedded or linked objects, ink, nested tables, floating pictures with wrap, unmapped content controls or alternate content without a usable fallback, when imported, then each becomes a `preserved_block` or `preserved_inline` atom in its original position.
+- [x] Given such content, when it is imported, then its original XML and every part it relates to are stored as one immutable fragment asset attached to the document, and the atom's `fragment` names it.
+- [ ] Given the file holds a rendering of the content (an alternate-content fallback, a cached drawing or a picture), when imported, then it becomes the atom's `fallbackAsset`; otherwise `fallbackText` names the kind, for example "Chart".
+- [ ] Given a fragment, when it is stored, then nothing in it is parsed beyond the package structure or executed, and its relationships to external targets are kept as data, never followed.
+- [x] Given the import warnings (EXP-107), when they are read, then each preserved kind is reported as "preserved, not editable", with a count.
+
+**Evidence:** criterion 3 (lane export-docx-2, round 2): `packages/export-docx/test/exp-117-fallback.test.ts` (on every corpus file, each preserved drawing atom without a `fallbackAsset` (text box, shape, chart, group, canvas, SmartArt) has its kind as `fallbackText`; `docx4j/textbox.docx` names its text boxes `text box`). The fix is in `fragmentAtom` in `src/import.ts`: the text of a drawing is its content, so it no longer becomes the fallback text. Criterion 1 (lane export-docx-2, round 9, 2026-11-13): `packages/export-docx/test/exp-117-kinds.test.ts` (a synthetic package holds one block of each kind in source order: ink, alternate content without a fallback, a linked object, a floating picture, a text box, a shape, a nested table and an unmapped content control; each becomes a preserved atom or block at its position with its label; a second test checks that the corpus holds a chart, SmartArt, a text box, a shape, an embedded object, a nested table and a content control). The labels `ink` and `linked object` are new in `labelFor` (`src/import.ts`). Criterion 5, the wording (round 9): the same file checks that the message of every `preserved` report line of every corpus file starts with "preserved, not editable"; the counts are checked in `test/exp-117-fragments.test.ts`. Criterion 5 (lane EXP-105-117, 2026-11-13): `packages/export-docx/test/exp-117-report.test.ts` (every preserved item of every corpus file is worded "preserved, not editable" and has a count, and each atom kind has its own line with the count of its atoms). The formatting warning (`formatting the editor does not show`, `src/import.ts`) had other wording; its message now starts with the same words (fix of 2026-11-13). Criterion 1, in part, in the same file: in document order, each body atom's fragment XML occurs in `word/document.xml` after the previous atom's. Which kinds are covered, and the kinds of ink, linked objects and unmapped content controls, are not checked, so criterion 1 stays open.
+
+Criterion 2 (lane export-docx-2, round 6): `packages/export-docx/test/exp-117-fragments.test.ts` (on every corpus file, each preserved atom's `fragment` is listed in the source map and is in the store with the fragment content type and role `fragment`; its XML appears verbatim in its source part; every internal part its relationships name, which exists in the package, is copied into the fragment). Criterion 4, in part: the same file shows that an external relationship of a fragment keeps its id, type, target and mode as in the source part and takes no part (the corpus has such fragments).
+
+**Notes:** Audit (2026-11-13): criterion 3 was unticked because no test asserts its first half (a rendering in the file becomes `fallbackAsset`; `exp-117-fallback.test.ts` checks only the `fallbackText` branch), and a SmartArt's cached drawing does not become a `fallbackAsset` (only image relationships do, `fragmentAtom` in `src/import.ts`). Open (2026-11-13, second round): the prototype's atoms exist for text boxes, shapes, groups, charts, embedded objects and form fields, each with a fragment carrying its related parts (probe on `docx4j/chart.docx`, `poi/shapes-with-text.docx`, `poi/EmbeddedDocument.docx`, `docx4j/LegacyForms.docx`). Criterion 3 is ticked on 2026-11-13 (lane export-docx-2, round 2): `fallbackText` of a drawing without a fallback picture now names its kind, where it held the drawing's text before. Not ticked: SmartArt, ink, floating pictures with wrap and nested tables were not probed; criterion 5 is not checked against the warning counts. Those need the work before the ticks. Round 6 (lane export-docx-2): criterion 2 is ticked (see Evidence). Criterion 4 stays open in part: nothing checks that a fragment is never parsed beyond the package structure or executed. Lane U-EXP-113-123 (round 2, 2026-11-13): `packages/export-docx/test/exp-117-external.test.ts` imports every corpus file with `fetch`, `XMLHttpRequest` and `WebSocket` stubbed (no call is made), and checks that each external relationship of a fragment keeps its target and takes no part (passing, Node.js). This covers "never followed" only. The importer does parse an atom's XML to read its kind and fallback text (`labelFor` and `fragmentAtom`, `src/import.ts`), so the "never parsed" half stays open; see ADR 0324 (round 2, decision 4). Criterion 5 stays open on wording: the report says "preserved, not editable" for most kinds, but the importer uses other messages for some, for example "kept with the paragraph and written back to Word; not shown or editable in the editor" for `docx4j/2016_image_with_text_effects.docx`; the counts equal the atoms of each kind (`test/exp-117-fragments.test.ts`). Round 9 (lane export-docx-2, 2026-11-13): criterion 1 is ticked on the synthetic and corpus tests in Evidence. Criterion 5 is read with the spec default that the report says "preserved, not editable" at the start of its message, and that a reason may follow after a colon, which the importer's messages now do; this reading is proposed in docs/adr/0117-export-docx-backlog-batch.md (round 9). Criterion 4 stays open. Round 10 (lane V-EXP-113-123, 2026-11-13): criterion 3, first half, is checked by `packages/export-docx/test/exp-117-rendering.test.ts` (on every corpus file, each preserved atom whose fragment refers to an internal image relationship has a `fallbackAsset`; passing in Node.js). The second half stays open: a SmartArt's cached drawing is DrawingML XML, not an image, so no `fallbackAsset` can be made from it without a renderer, and the atom keeps `fallbackText` "SmartArt". The reading that a cached drawing is not a picture is a proposed decision in docs/adr/0324-lane-V-EXP-113-123.md (owner or spec to confirm). Criterion 3 stays unticked. new with the A2 decision. Replaces "dropped with a warning" for these constructs (09 §12). Second review (2026-11-06, SPK-027): SR-C2, fragment assets must be written only by the import worker and never accepted as uploads; SR-M17, many kinds have no rendering in the file (charts, shapes, text boxes), so the PDF shows a label unless fallbacks are rendered at import (owner decision); SR-M18, embedded objects, external relationships and field codes are kept and reach everyone who exports, so the import report lists them and a tenant may strip them ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-118 Write DOCX by patching the original package
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** ADR 0017 (contract R0 and R1, part 1); 09 §11 · **Requirements:** R5 · **Depends on:** EXP-090, EXP-116
+
+As an author, I want the Word file I export from an imported document to keep everything I did not change, so that colleagues who stay in Word lose nothing.
+
+**Acceptance criteria**
+
+- [x] Given a document imported from Word and not edited, when it is exported as DOCX, then the package has the same parts and relationships and every part is byte-identical to the original (R0).
+- [x] Given edits, when exported, then parts no edit affected are byte-identical, and in changed parts every element outside the edited content is unchanged as canonical XML (R1 a and b).
+- [x] Given an edited node, when it is written, then the writer regenerates it from the CDM and merges back its preserved properties, so that properties the model does not represent are kept (R1 c).
+- [ ] Given a node whose canonical hash still equals its import hash, when written, then its original element is copied verbatim, including identity-bound values from the source map; a copy of it with a fresh identifier gets fresh identity-bound values.
+- [ ] Given every exported file of the SPK-028 corpus, when opened in Word and LibreOffice, then no repair prompt appears (target).
+
+**Evidence:** criteria 1 to 4: `packages/export-docx/test/roundtrip.test.ts` (R0 on all 78 corpus files: no part changed, missing or added, no node regenerated, every part copied raw); `packages/export-docx/test/edits.test.ts` (R1 for the scripted edits, and R1 c and d with every paragraph regenerated); `packages/export-docx/test/lenses.test.ts` (unmodelled attributes of an edited element kept); `packages/export-docx/test/patch.test.ts` with `test/patch-cases.ts` (`copy-paragraph`: the copy has no `w14:paraId` of its own and the original keeps it).
+
+**Notes:** Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported. Audit (2026-11-13): criterion 4 was unticked because a copy with a fresh identifier gets no identity-bound values at all (the writer takes them from the source map by node identifier, `src/export.ts`, and nothing mints a new `w14:paraId`), where ADR 0017 says copies get fresh values; `patch.test.ts` `copy-paragraph` only checks that the paraId appears once. new with the A2 decision. Phase 4 follows 11 §7, where the DOCX writer is scheduled; the owner may move this story to phase 2 with import (ADR 0017, Open questions). Open (2026-11-13): criterion 5 needs Word and LibreOffice, and LibreOffice is not installed here; the Word check is `scripts/word-open-check.ps1`, not a test. Lane U-EXP-113-123 (2026-11-13): still open. No `soffice` is on the host and no LibreOffice image is in the local Podman images, and Word is not available to any test here; a headless LibreOffice conversion would not show a repair prompt, so it could not tick this criterion alone. Needs a Word and LibreOffice run on a reviewer's machine (needsFromOthers). Second review (2026-11-06, SPK-027): the last two sentences are stale; the owner moved it to phase 2. SR-C1: under ADR 0019 a patched package copies hidden content, so a lossless export is only for a requester who sees the whole document; others get a package written fresh from their projection. SR-M11: identifiers and generated field results in verbatim elements; SR-M13: R1's granularity and canonicalisation; SR-M15: a data-bound content control and its custom XML part are one unit ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-119 Put preserved fragments back and renumber their relationships
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** ADR 0017 (part 3); 03 §4.6 · **Requirements:** R5 · **Depends on:** EXP-117, EXP-118
+
+As a maintainer, I want preserved atoms written back from their fragments, so that charts, text boxes and other preserved content survive export, wherever the atom now is.
+
+**Acceptance criteria**
+
+- [x] Given a preserved atom, when the document is exported as DOCX, then its fragment's XML is written at the atom's current position and the fragment's parts are added to the package.
+- [x] Given relationship identifiers in a fragment that clash with those in the package, when it is written, then they are renumbered consistently in the fragment's XML and its parts.
+- [x] Given an atom that was copied within the document, when exported, then each copy is written with its own relationships and the package stays valid.
+- [x] Given an atom that was deleted, when exported, then its fragment's parts are not written, unless another atom still refers to them.
+
+**Evidence:** criteria 1, 2, 3 and 4: `packages/export-docx/test/patch.test.ts` with `test/patch-cases.ts`: `copy-chart` (a copied chart is written as its own chart part with its own relationships), `atom-to-header` (an atom moved into a header brings its relationships), `copy-chart-delete-original`, and `delete-chart` (no chart part is left once its only atom is deleted). Criterion 2: `clash-relationship-ids` (four embedded objects fill the header's identifiers up to `rId8`, and a copy of the first object's image, whose fragment says `rId8`, is written as `rId1`; the test counts each image target's references in the header part).
+
+**Notes:** Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported. Second review (2026-11-06, SPK-027): SR-C2, write back only fragments the import created for this document, and serialise preserved trees against a per-position allow-list. Criterion 2 is ticked on 2026-11-13 after the clash case was added; it was open before because no case had a clashing identifier. SR-M11, renumbering must not collide with identifiers inside verbatim elements ([review](../review/2026-11-06-second-review.md)).
+
+### EXP-120 Prove lossless round trip in CI
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** ADR 0017; 09 §14 · **Requirements:** R5 · **Depends on:** EXP-118, EXP-119, SPK-028
+
+As a maintainer, I want the lossless contract checked on every change, so that a regression in the importer or the writer cannot reach a release.
+
+**Acceptance criteria**
+
+- [x] Given the corpus of SPK-028, when CI runs, then every file passes R0 after an import and export without edits.
+- [x] Given the scripted edits of SPK-028, when CI runs, then every file passes R1, and the report lists any element that changed outside the edits.
+- [ ] Given a failure, when it is reported, then it names the file, the part and the first differing element.
+- [ ] Given a release, when its notes are written, then they state the corpus version and the pass rate of R0 and R1.
+
+**Evidence:** criteria 1 to 3: `packages/export-docx/test/roundtrip.test.ts` (R0 on every corpus file); `packages/export-docx/test/edits.test.ts` (R1 for each applicable scripted edit and for every paragraph regenerated; violations name the part or the block); `packages/export-docx/test/ci-report.test.ts` (an R0 failure names the part and the first differing element; an R1 violation names the part).
+
+**Notes:** Moved from phase 4 to phase 2 and raised to must on 2026-11-06: the owner decided that the lossless DOCX writer ships with import (ADR 0017), so Word files round-trip as soon as they can be imported. Audit (2026-11-13): criterion 3 was unticked because `roundtrip.test.ts` asserts only `r0.diff.changed` and never `r0.differences`, so a real R0 failure in CI names the file and the part but not the first differing element (`ci-report.test.ts` proves `checkR0` can, on a tampered package only). new with the A2 decision. Until EXP-118 lands, the R0 half can run against the SPK-028 prototype. Open criterion 4 (2026-11-13): release notes need a release process, which this package does not have.
+
+### EXP-121 Typeset citations and bibliographies with biblatex
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 09 §3, §4, §9.3; 03 §13 · **Requirements:** R5 · **Depends on:** CDM-052
+
+As an author, I want my citations and bibliography typeset in the PDF, so that a paper or report reads as it should.
+
+**Acceptance criteria**
+
+- [ ] Given sources and citations, when the document is exported to PDF, then the bundle contains a `.bib` file generated from the sources through typed emitters, so that no user string reaches LaTeX unescaped, and every citation becomes a biblatex command.
+- [x] Given a bibliography node, when the document is typeset, then the bibliography appears at its position in the house style.
+- [ ] Given the compile, when it runs in the sandboxed worker, then biber runs under the same sandbox rules (09 §9.3), and the extra passes it needs are measured.
+- [ ] Given the `tex` target, when the bundle is downloaded, then it includes the `.bib` file and compiles outside the service.
+- [x] Given a citation of a source that is missing or malformed, when the document is exported, then a diagnostic names the block.
+
+**Evidence:** criteria 2 and 5: `packages/export-latex/src/exp-121-citations.test.ts` (the bibliography entries sit between the paragraphs around the bibliography node, through `\DEbibentry`, and attribute to its block; `include` cited and all; a citation of an undefined source and a citation item with no source each give `citation_source_missing` with the block id and print `(?)`; a defined source gives no diagnostic). Criterion 1 (escaping) has a test in the same file, but criterion 1 stays open because no `.bib` file is written.
+
+**Notes:** new on 2026-11-06: the owner decided that the first release serves all three candidate markets (SPK-006), so citations and a bibliography are a version 1 requirement (CDM-004). Second review (2026-11-06, SPK-027), SR-M20: 09 does not yet name a `.bib` emitter context, biber's place in the sandbox or the extra passes; the review proposes a `bibField` emitter with fuzzing, or a converter that writes the bibliography itself so that no second program runs, and an owner decision on the citation styles the house class offers; the fourth criterion depends on SR-N37 (fonts are not in the bundle) ([review](../review/2026-11-06-second-review.md)). 2026-11-13 (lane EXP-118-123): criteria 2 and 5 ticked, with tests in `packages/export-latex/src/exp-121-citations.test.ts`. Criterion 1 stays open: the converter writes the citation texts and the bibliography itself (`citations.ts`, the default of owner decision 10), so no `.bib` file exists, and criteria 3 (biber in the sandbox) and 4 (a `.bib` file in the `tex` bundle) follow from that choice. The `.bib` route is an open owner decision; see [ADR 0230 (lane EXP-118-123)](../adr/0230-lane-EXP-118-123.md).
+
+### EXP-122 Write and read citations and bibliographies in DOCX
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 09 §11, §12; ADR 0017 · **Requirements:** R5 · **Depends on:** CDM-052, EXP-090, EXP-116
+
+As an author, I want citations to survive a trip through Word, so that colleagues who work in Word can keep the references alive.
+
+**Acceptance criteria**
+
+- [ ] Given citations and sources, when the document is exported as DOCX, then citations become Word citation fields and the sources become the file's bibliography sources part, so that Word can update them.
+- [ ] Given a Word file with citations and a bibliography, when it is imported, then sources become source definitions and citations become citation nodes, and the file round-trips under R0 and R1 of ADR 0017 on the corpus of SPK-028.
+- [ ] Given properties of Word's citations that the model does not represent, such as the citation style Word uses, when the file is imported and exported, then they are kept as preserved properties.
+
+**Notes:** new on 2026-11-06: the owner decided that the first release serves all three candidate markets (SPK-006), so citations and a bibliography are a version 1 requirement (CDM-004). Phase 2 with the DOCX writer (the owner moved it there on 2026-11-06). Lane EXP-118-123 (round 2, 2026-11-13): criterion 1 is built in the direct writer, not ticked. A citation is a `CITATION` field (`\l 1033`, `\m` for a further source, `\n` for a suppressed author) with the cached text as its result; the sources are a `b:Sources` custom XML item referenced from the document, with its datastore naming the bibliography schema (`packages/export-docx/src/writer-citations.ts`, `writer.ts` `atomXml` and `customXml`). Test: `packages/export-docx/test/exp-122-citations.test.ts` (9 tests, passing). Not ticked because Word is not run: the field switches and the order of the `b:Source` children are written from the shape of Word's output, not checked in Word, so "Word can update them" is unverified; the source-type mapping and the locale switch are spec defaults (ADR 0230, section 4). Narrative mode writes no switch; a locator, prefix or suffix goes only into the cached text. The patching writer (export.ts) is not changed: a citation in an imported document is not yet a model citation node here, so its handling there is not checked. Criterion 2 is not built: the importer (`src/import.ts`) does not read citation fields or `b:Sources`. Criterion 3 is not built for the same reason. Lane U-EXP-113-123 (2026-11-13): the SPK-028 corpus (`packages/export-docx/corpus`, 78 files) has no `CITATION` field; 12 files carry an empty `b:Sources` item and no source, so R0 and R1 on citation documents cannot be shown until the corpus has them (a corpus change, not this package's; needsFromOthers). The importer change is not made in this round, because criterion 2 would then be built without a test on the file it names. Second review (2026-11-06, SPK-027), SR-M20: the corpus should include citations made by reference managers (for example Zotero or Mendeley fields), which carry their data in field codes and would otherwise arrive as preserved fields that cannot be edited ([review](../review/2026-11-06-second-review.md)).
+
+## Accessible PDF
+
+### EXP-111 Produce tagged, accessible PDF
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Viewer |
+
+**Spec:** 09 §13, §3.1; 13 §8 · **Requirements:** R5, R11 · **Depends on:** EXP-015, EXP-016, EXP-005
+
+As a viewer who uses assistive technology, I want the exported PDF to be tagged, so that I can read it with a screen reader.
+
+**Acceptance criteria**
+
+- [x] Given `tagging` is `on`, when a PDF is exported, then it is tagged and declares the standard chosen with `pdfStandard` (PDF/UA-2 and PDF/A-4 among them).
+- [ ] Given the corpus, when each tagged PDF is validated with veraPDF, then it passes.
+- [ ] Given the document language, when exported, then it is set as the PDF's language, and `lang` marks set the language of passages.
+- [ ] Given `tagging` is `off`, when exported, then the PDF is untagged; given `draft`, it is tagged in draft form.
+- [ ] Given repeated headers, footers and page numbers, when the PDF is read, then they are not part of the reading order.
+- [ ] Given flattened field values, when the PDF is read, then each is tagged with its label.
+
+**Evidence:** criterion 1 (lane U-EXP-097-112, 2026-11-13): `packages/export-latex/src/exp-111-tagged.compile.test.ts`, run with `pnpm exec vitest run packages/export-latex/src/exp-111-tagged.compile.test.ts` in the export worker's sandbox (Podman, no network) with the sample document (a heading and two paragraphs). The compiled PDF declares `pdfuaid:part` 2 and `pdfaid:part` 4 in its metadata, has a structure tree, and passes veraPDF in the veraPDF image (`ua2` and `4f` flavours, `compliant` true, no failed rule).
+
+**Notes:** Round 11 (export-latex, 2026-11-13), criterion 3, converter side: `packages/export-latex/src/exp-111-language.test.ts` checks that `lang` in the `\DocumentMetadata` line comes from the settings (en-GB when none), and that a run marked with a language is wrapped in `\DElang` while the other text keeps the document language. Criterion 3 stays unticked: the PDF's passage-level language is not read from a compile, and the document-level `/Lang` test (`exp-111-tagged.compile.test.ts`) was not run in this round. Round 3 (lane export-latex-4, 2026-11-13): `packages/export-latex/src/exp-111-tagging.test.ts` checks the `\DocumentMetadata` line the converter writes for each `tagging` value (`on`, `draft`, `off`, `none`) and `pdfStandard` value. It shows the source part of criterion 1 (tagging on declares the standard) and criterion 4 (the mapping of `off` and `draft`; `none` writes no line), and the warning when PDF/UA-2 is asked without full tagging. Nothing is ticked: each criterion is a property of the PDF (tagged, veraPDF passes, the reading order, the field labels), and it needs a LuaLaTeX compile with tagpdf and veraPDF, which this package does not run. Criterion 3 (the document language) is not tested here. Lane U-EXP-097-112 (2026-11-13): criteria 2, 3, 4, 5 and 6 stay unticked. Criterion 2 (the corpus) is checked on two documents only, the sample and `services/export-worker/fixtures/s4-corpus/s4-01p.cdm.json`; the reference corpus of FND-006 is not used. Criterion 3 has a test for `/Lang (en-GB)` (the test passed on 2026-11-13), but the `lang` marks of passages are not tested. Criterion 4: `off` writes no structure tree (tested, passed). For `draft` the reading taken is that tagpdf's draft mode numbers the marked content (`/MCID`) and writes no structure tree; this reading is the lane's, not the spec's, and that test was corrected after its first run and not rerun, because the sandbox readiness check (`sandboxReady`) stopped reporting ready on this machine (EXP-072: "Podman's default mounts put /run/secrets into the sandbox"). Criteria 5 and 6 are not built or tested. Lane V-EXP-097-112 (2026-11-13): `pnpm exec vitest run packages/export-latex/src/exp-111-tagged.compile.test.ts` did not finish within 30 minutes on this machine (no result, run stopped); the worker image `localhost/docedit-export-worker:s4` exists, but the veraPDF image `docker.io/verapdf/cli:v1.30.3` is not in the local store, and Podman answered slowly under load. Nothing is re-ticked on that run.
+
+### EXP-112 Tag tables, lists, headings, links and graphics
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Viewer |
+
+**Spec:** 09 §13, §3.1; 03 §4.3 · **Requirements:** R5, R11 · **Depends on:** EXP-111, EXP-024, EXP-038, EXP-041
+
+As a viewer who uses assistive technology, I want the structure of the document to be present in the PDF, so that I can navigate by heading, list and table.
+
+**Acceptance criteria**
+
+- [ ] Given `headerRows`, when exported with tagging, then those rows are tagged as header cells, and spans are recorded.
+- [ ] Given numbered and bulleted lists made by the class's own macros, when exported with tagging, then they are tagged as lists with labels and bodies.
+- [ ] Given headings, when exported with tagging, then they are tagged with their levels in order.
+- [ ] Given graphics with `alt`, when exported with tagging, then the alternative text is attached; given links, they are tagged as links.
+- [ ] Given an equation, when exported with tagging, then it is tagged and has a text alternative.
+
+**Notes:** What the text alternative of an equation is, and whether PDF/UA-2's mathematics support is used, is not specified (Open questions). Round 3 (lane export-latex-4, 2026-11-13): no criterion is ticked and no test was added. Each criterion is a property of the tagged PDF (the table header cells, the list labels and bodies, the heading levels, the alternative text of a graphic, the link tags, the equation tag), which needs a LuaLaTeX compile with tagpdf and a read of the structure tree. This package does not run either. The source side (how the converter writes `\DEimg` alternative text and the list and heading macros) is covered only in part by `src/alt-report.test.ts` (EXP-113) and the class audit in `src/class.test.ts`.
+
+Lane U-EXP-097-112 (2026-11-13): no criterion ticked. The sandbox and veraPDF route of EXP-111 works (`packages/export-latex/src/exp-111-tagged.compile.test.ts`), so a compile test for these criteria can be written on it. Still open: reading the structure tree of the compiled PDF (the table header cells, list labels and bodies, heading levels, the alternative text and link tags, the equation tag). The PDF's object streams have to be inflated first, as the test does for `/Lang`. This lane did not start that parser in this round.
+
+### EXP-113 Report images without alternative text
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Author |
+
+**Spec:** 09 §13, §1; 13 §8 · **Requirements:** R5, R11 · **Depends on:** EXP-028, EXP-065
+
+As an author, I want an export to tell me which images have no alternative text, so that my PDF can be accessible.
+
+**Acceptance criteria**
+
+- [x] Given `image` and `figure` nodes without `alt`, when an export runs, then the job reports each with its block identifier.
+- [ ] Given the job result, when it is read, then it includes the count of images without alternative text.
+- [x] Given the preflight (EXP-003) and the job, when both check the same document, then they report the same images.
+- [ ] Given the list, when the accessibility checker of the editor asks for it, then it is available to it.
+
+**Evidence:** criteria 1 and 3: `packages/export-latex/src/alt-report.test.ts` (the job's diagnostics give each `image` and `figure` without alternative text, inline ones with their paragraph, table-cell, footnote and whitespace-only cases included; the list and count equal those of `preflight` for the same document). The helpers are `altTextReport` and `bundleAltTextReport` in `packages/export-latex/src/alt-report.ts`, exported from `src/index.ts`. Run on 2026-11-13 with `pnpm vitest run packages/export-latex/src/alt-report.test.ts`.
+
+**Notes:** Whether a `final` export with `pdfStandard` `ua-2` must fail when alternative text is missing is not specified; 09 §13 says only that the job reports it (Open questions). The checker is UX's. Criterion 2 (the count in the job result) is unticked: `bundleAltTextReport(bundle).count` gives it from the converter's result, but the job result object built by the export service does not carry the count yet (services are not in this package). Lane U-EXP-113-123 (2026-11-13): the wire `result` is built in `exportJobOf` (`services/document-service/src/control-plane/export-routes.ts`) and its schema is generated in `spec/dep/dep-1.schema.json`, where `result` has a fixed property list. A count there is a DEP protocol change, not an internal one, so it is left to the protocol owner (needsFromOthers). The job's `diagnostics` already list each picture with its block identifier, so a client can count them today. Criterion 4 is unticked: the list is exported for the editor's accessibility checker, but that checker is UX's and is not built.
+
+## Testing
+
+### EXP-114 Add reference PDFs to the shared corpus
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 09 §14, §9.4 · **Requirements:** R5 · **Depends on:** EXP-015, FND-006
+
+As a maintainer, I want a stored reference PDF for each corpus document that exercises the export, so that every change to the converter, the class or the image is compared with known output.
+
+**Acceptance criteria**
+
+- [ ] Given the shared corpus (FND-006), when its documents are checked against 09 §3, then every mapping has a document with a stored reference PDF: page setups, headers, styles, numbering, the three table writers, spans, images, footnotes, fields, math, form fields, regions, languages, fallback fonts, and suggestions and comments once phase 2 arrives.
+- [ ] Given a corpus document, when it is exported, then the result is compared with its reference by extracted text positions and by rendered pixels with stated tolerances, and the tool shows the differences.
+- [ ] Given each reference PDF, when CI runs, then it is validated with veraPDF (EXP-016).
+- [ ] Given a reference changes, when the change is proposed, then it is reviewed with the differences shown.
+
+**Evidence:** criterion 3 is unticked by review (2026-11-13): the test passes only when the sandbox readiness probe says ok, which is slow (2 to 2.5 minutes) and, in the reviewer's run without `DOCEDIT_PODMAN_MACHINE` set, left the two veraPDF tests skipped (1 passed, 2 skipped); with the variable set, 3 of 3 passed. No CI job runs it, and the criterion says "when CI runs". It becomes tickable when CI runs the test with the veraPDF cases not skipped. Lane claim, kept as the record: `packages/export-latex/src/exp-114-references.compile.test.ts` checks each stored reference in `packages/export-latex/test/references/` (listed in `manifest.json`, SHA-256 checked) and runs veraPDF in Podman for its flavours (ua2 and 4f). Run on 2026-11-13 with `pnpm vitest run packages/export-latex/src/exp-114-references.compile.test.ts`: 3 of 3 passed, none skipped (sandbox and veraPDF image in Podman, lane U-EXP-113-123). The references are written by `packages/export-latex/scripts/exp-114-make-references.ts`. CI wiring of this test is root configuration, not done here. Fix after review (2026-11-13): the test no longer waits for the compile sandbox's readiness probe, because veraPDF runs in its own container (`services/export-worker/src/verapdf.ts`); it needs only Podman and the pinned veraPDF image. Without them it skips with the reason in the suite title, and with `DOCEDIT_REQUIRE_SANDBOX=1` it fails instead (checked with an absent image name: 1 failed). Run on this host with no `DOCEDIT_PODMAN_MACHINE` set, `pnpm vitest run packages/export-latex/src/exp-114-references.compile.test.ts`: 3 passed, 1 skipped (the "required" case), 323 s on the shared Podman machine. Criterion 3 stays unticked until a CI job runs it with `DOCEDIT_REQUIRE_SANDBOX=1`.
+
+**Notes:** The documents, their versioning and the corpus tooling belong to FND-006; this story adds the reference PDFs. Round 3 (lane export-latex-4, 2026-11-13): no criterion is ticked. A reference PDF is the output of a LuaLaTeX compile, and the comparison (criterion 2) and veraPDF (criterion 3) need that output and the tools; this package makes neither, and no reference PDF exists in the corpus for this story. Criterion 1 needs the corpus mapping check of 09 §3 against FND-006's corpus, which is not in this package. The latency benchmark (EXP-060), the layout test (EXP-056) and the fuzz seeds (EXP-046, EXP-053) draw on the corpus under FND-006. Lane U-EXP-113-123 (2026-11-13): criterion 3 was ticked, then unticked by review (see Evidence). Two references were made from the converter's bundle in the sandbox: the inline sample and `s4-01p`, both as PDF/UA-2 and PDF/A-4f with tagging on. The sandbox readiness probe was fixed (`services/export-worker/src/sandbox-ready.ts`, see ADR 0324), which the earlier rounds lacked. Criterion 1 stays open: the mapping check of 09 §3 needs a reference for each mapping, and only two exist. Criterion 2 stays open: the text-position and pixel comparison is not built, and `pdftotext` is not checked here. Criterion 4 is a review process, not a test. The choice of these two documents as the first references is a spec default, not an owner decision ([ADR 0324](../adr/0324-lane-U-EXP-113-123.md)).
+
+### EXP-115 Run the shared numbering and layout fixtures against every writer
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 09 §14; 03 §7 · **Requirements:** R1, R5 · **Depends on:** CDM-005
+
+As a maintainer, I want the model's fixtures for numbering and layout rules to run against the editor and every writer, so that they cannot drift apart.
+
+**Acceptance criteria**
+
+- [ ] Given the fixtures of `packages/model` (numbering labels, paragraph spacing, line spacing, header growth, tabs, field dates), when the LaTeX writer runs them, then each passes, comparing labels in the extracted PDF text and measured spacing in the layout.
+- [ ] Given the DOCX writer exists, when it runs the same fixtures, then they pass (EXP-090).
+- [ ] Given a writer fails a fixture, when CI runs, then it names the fixture and the writer.
+- [ ] Given a rule of 03 §7 changes, when the change is made, then fixtures are added or updated in the same change.
+
+**Notes:** Cross-check: the page view's layout engine (FE-076, phase 3) joins these fixtures when it exists. Round 3 (lane export-latex-4, 2026-11-13): no criterion is ticked. Criterion 1 compares labels in the extracted text of the PDF and measured spacing in the layout, which needs a LuaLaTeX run this package does not make. The fixtures of `packages/model` are in `src/numbering/labels.universal.test.ts` and `src/spacing/spacing.universal.test.ts`; the LaTeX run against them is open. Criterion 2 is the DOCX writer's (EXP-090). Criteria 3 and 4 are CI and process rules, not in this package.
+
+## Read restrictions (ADR 0019)
+
+Added on 2026-11-06 from spike S12 (SPK-029; `docs/spikes/2026-11-06-s12-read-restrictions.md`), after the owner decided that version 1 can hide regions and field values from some readers (SPK-005). Every other story that serves content, steps, positions, history, search, exports, comments, presence or field values applies the requester's projection: README §2.2 rule 8.
+
+### EXP-123 Export as the requester
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** ADR 0019 (decision item 5); ADR 0017; 09 §2, §9, §11 · **Requirements:** R3, R5 · **Depends on:** SYN-050, EXP-001
+
+As an author, I want exports to contain only what I may read, unless I manage the document and ask for everything, so that an export never leaks hidden content.
+
+**Acceptance criteria**
+
+- [x] Given an export job, when it is created, then its bundle is built from the requester's projection, and a full export needs `manage` and an explicit option.
+- [x] Given a projected export, then its manifest lists the redactions, and each placeholder prints as a neutral notice.
+- [ ] Given a DOCX export of an imported file, when the requester cannot read everything, then the original package is neither patched nor offered; only full exports patch it.
+- [x] Given previews and raw compile logs, then they are kept per visibility class and given only to their requester.
+
+**Evidence:** criterion 4 (lane U-EXP-113-123, 2026-11-13): `services/document-service/test/control-plane/exp-123-preview-class.test.ts` (a final export by an owner does not reuse a viewer's cached result, since the view token differs; a preview from another viewer of the same class is a cached copy with no compile and no raw log; another user gets 403 on the job); run with `pnpm vitest run services/document-service/test/control-plane/exp-123-preview-class.test.ts`, 4 of 4 tests, memory and PostgreSQL 16 in `docedit-test-postgres`, not skipped. Criterion 1: `services/document-service/test/control-plane/exp-123-requester.test.ts` (the full-export gate and the requester's class in the job payload, in memory and PostgreSQL), and `services/export-worker/src/exp-123-projection.job.test.ts` (the worker projects the envelope from the payload's `hiddenRegions` before the converter: no hidden text or title in `main.tex` or in the cdm output, the manifest lists the region; Node.js, the compile replaced; run with `pnpm vitest run services/export-worker/src/exp-123-projection.job.test.ts`). Criterion 2: `packages/export-latex/src/exp-123-projection.test.ts` (the manifest and the notice of a hidden region) and `packages/export-latex/src/exp-123-redacted-field.test.ts` (a redacted form field prints the notice, not an empty field, and is listed in the manifest); Node.js, no compile.
+
+**Notes:** 2026-11-13 (lane V-EXP-113-123): criteria 1 and 2 ticked (see Evidence). The worker no longer refuses a restricted view: `services/export-worker/src/job.ts` projects the stored envelope with the authority's `project` (`projectedEnvelope`) for both the `pdf` and the `cdm` target, before the converter sees it. The converter's redacted form field now prints its notice (`packages/export-latex/src/inline.ts`, `formFieldTex`). Two older tests pin the former refusal and now fail, as designed by this change; their owners should update them: `services/export-worker/src/job.test.ts` ("refuses a restricted view and options it cannot honour") and `services/export-worker/src/exp-086-cdm.job.test.ts` ("refuses a cdm job for a restricted view"). The titles of hidden regions stay hidden in the worker (`titles: false`, the spec default for ADR 0019's open question on titles; not an owner decision). Criterion 3 stays open: the worker writes only pdf and cdm, and the control plane has no DOCX export job yet, so no restricted DOCX export exists to test. Criterion 4 stays open: previews and raw compile logs per visibility class are not tested. Not run in the Podman sandbox here; the sandboxed projected compile (EXP-001 e2e style) is not yet run. Lane U-EXP-113-123 (2026-11-13): `services/document-service/test/control-plane/exp-123-requester.test.ts` passes in full, 4 of 4 tests, on both memory and PostgreSQL storage (PostgreSQL 16 in the shared container `docedit-test-postgres`, run with `pnpm vitest run services/document-service/test/control-plane/exp-123-requester.test.ts`, not skipped). This confirms the control-plane half of criteria 1 and 4 against a real database; it does not tick them, because the worker side below is not built. 2026-11-13 (lane EXP-118-123). Tests added, no criterion ticked yet. `services/document-service/test/control-plane/exp-123-requester.test.ts` (memory storage run; the PostgreSQL run skips here): a full export is refused with 403 for an editor or a viewer, a manager without the option gets a projected job, a manager with it gets `full: true`, and a viewer's job records the hidden legal region (`hiddenRegions`); a viewer's job has no raw log, an editor's has one, and another user gets 403 on the job. `packages/export-latex/src/exp-123-projection.test.ts` covers the manifest's redactions (a hidden region, a redacted form field) and an empty list for a full export. Open: criterion 1 needs the worker to build the bundle from the projection; `services/export-worker/src/job.ts` refuses any job that hides something (`unsupported_feature`, EXP-123), so the projected build is not done. Criterion 2: a redacted form field prints an empty field, not the neutral notice; see [ADR 0230](../adr/0230-lane-EXP-118-123.md). Criterion 3: a restricted view is refused for every target, so no DOCX is written; the DOCX case is not tested by name. Criterion 4: previews are not tested, and the storage per visibility class is not shown. SR-C1 (ADR 0019) is the reason a patched package goes only to a requester who sees the whole document., 4 of 4 tests, on both memory and PostgreSQL storage (PostgreSQL 16 in the shared container `docedit-test-postgres`, run with `pnpm vitest run services/document-service/test/control-plane/exp-123-requester.test.ts`, not skipped). This confirms the control-plane half of criteria 1 and 4 against a real database; it does not tick them, because the worker side below is not built. 2026-11-13 (lane EXP-118-123). Tests added, no criterion ticked yet. `services/document-service/test/control-plane/exp-123-requester.test.ts` (memory storage run; the PostgreSQL run skips here): a full export is refused with 403 for an editor or a viewer, a manager without the option gets a projected job, a manager with it gets `full: true`, and a viewer's job records the hidden legal region (`hiddenRegions`); a viewer's job has no raw log, an editor's has one, and another user gets 403 on the job. `packages/export-latex/src/exp-123-projection.test.ts` covers the manifest's redactions (a hidden region, a redacted form field) and an empty list for a full export. Open: criterion 1 needs the worker to build the bundle from the projection; `services/export-worker/src/job.ts` refuses any job that hides something (`unsupported_feature`, EXP-123), so the projected build is not done. Criterion 2: a redacted form field prints an empty field, not the neutral notice; see [ADR 0230](../adr/0230-lane-EXP-118-123.md). Criterion 3: a restricted view is refused for every target, so no DOCX is written; the DOCX case is not tested by name. Criterion 4: previews are not tested, and the storage per visibility class is not shown. SR-C1 (ADR 0019) is the reason a patched package goes only to a requester who sees the whole document.
+
+## Coverage
+
+| Section of 09 | Stories |
+|---|---|
+| Status and introduction | none: informative |
+| 1 Pipeline | EXP-001, EXP-002, EXP-003 |
+| 2 Bundle | EXP-011, EXP-012, EXP-013, EXP-014, EXP-073, EXP-076 |
+| 3.1 The class is built for tagged PDF from the start | EXP-015, EXP-016 |
+| 3.1 Mapping (page setup, headers and footers, fields, styles, headings, spacing, numbering, images, footnotes, links, highlight, languages, breaks, regions, form fields) | EXP-017 to EXP-037, EXP-047 |
+| 3.2 Tables, tab stops, ligatures, spaces, missing glyphs, warnings | EXP-038 to EXP-041, EXP-025, EXP-026, EXP-032, EXP-065 |
+| 4 Typed emitters | EXP-042 to EXP-046 |
+| 5 Fonts | EXP-047, EXP-048 |
+| 6.1 Storage and editing | EXP-054, EXP-096, EXP-105; display and editing: none: owned by FE |
+| 6.2 Why math is the dangerous part | none: informative |
+| 6.3 Math gate | EXP-049, EXP-050, EXP-051, EXP-053 (typesetting: EXP-052) |
+| 7 Pagination parity | EXP-055, EXP-057, EXP-059; L0 (web view, PDF preview and read view): none: owned by FE and UX; L1 adoption in the page view: none: owned by FE |
+| 7.1 `layout.json` | EXP-055, EXP-056, EXP-057, EXP-058 |
+| 8 Engine and performance | EXP-060, EXP-061, EXP-062, EXP-063, EXP-006, EXP-047, EXP-073 |
+| 9.1 Job flow and options | EXP-004, EXP-005, EXP-006, EXP-007, EXP-008, EXP-009, EXP-010, FRW-050 |
+| 9.2 Diagnostics | EXP-064, EXP-065, EXP-066 |
+| 9.3 Sandbox rules (items 1 to 8) | EXP-067 (1), EXP-068 (2), EXP-069 and EXP-070 (3), EXP-071 (4), EXP-073 (5), EXP-072 (6), FE-071, EXP-055 and EXP-064 and EXP-085 (7), EXP-079 (8); tests: EXP-075 |
+| 9.4 Reproducibility | EXP-076, EXP-078, EXP-079 |
+| 9.5 Scaling | EXP-007, EXP-077 |
+| 10 Suggestions and comments in output | EXP-081, EXP-082, EXP-083, EXP-084 |
+| 11 Other targets | EXP-085 (`tex`), EXP-086 (`cdm`), EXP-087 (`html`), EXP-088 (`md`), EXP-090 to EXP-096 (`docx`), EXP-089 (classification label); EPUB: none: unscheduled ("later" in 09, absent from 11) |
+| 12 DOCX import | EXP-097 to EXP-110 |
+| 13 Accessible PDF | EXP-111, EXP-112, EXP-113 |
+| 14 Testing | EXP-114, EXP-115, EXP-046, EXP-053, EXP-056, EXP-075, EXP-110 |
+| 15 Open issues | Open questions below; EXP-059 (L2), EXP-057 (offset precision), EXP-054 |
+| ADR 0007 | EXP-001, EXP-002, EXP-015, EXP-045, EXP-067, EXP-070, EXP-073 |
+
+## Open questions
+
+| Question | Stories affected |
+|---|---|
+| How precise can offsets in `layout.json` be inside a block? Spike S4 decides; the file states the granularity it achieved | EXP-055, EXP-057 |
+| Is L2 (forced first-fit breaks) ever worth building? | EXP-059 |
+| Customer templates (assumption A3, owner decision 3 of 11 §10); a middle path is a small set of reviewed house classes with parameters | EXP-015, EXP-073 |
+| Citations and bibliography are not modelled (03 §13). If the first market is academic they are a version 1 requirement and map to `biblatex`, which would add mapping stories and a tagging check | none yet; would extend EXP-015 and the mapping stories |
+| Cost per preview compile at scale, and whether a browser-side engine could take previews later (09 §15); the unit-cost sheet is a phase 0 note | EXP-008, EXP-009, EXP-060, EXP-062 |
+| The footnote content model is open until spike S1 (03 §13); multi-paragraph footnotes would change typesetting and import | EXP-029, EXP-102 |
+| How does the converter or the preflight know a row is taller than a page before typesetting? It needs text measurement with the manifest's fonts, or a first compile | EXP-003, EXP-039 |
+| What does the converter do with a single paragraph taller than a page inside a row? | EXP-039 |
+| 09 §3.2 gives a boxed `tabular` for headers, footers and footnotes, while invariant I10 forbids tables in stories and footnotes | EXP-040 |
+| Are equation numbers printed as literal labels from the shared algorithm (`\tag`) or counted by TeX? The gate allows the numbered `equation` environment so both editor and typesetter count alike | EXP-019, EXP-052 |
+| Which OpenType math font is "the chosen math font"? | EXP-049, EXP-052 |
+| What bound applies to "large" dimension arguments in the math gate? | EXP-050 |
+| How is an equation turned into an image (DOCX export fallback, Office math that fails the gate on import)? A compile of the equation alone, KaTeX in a headless browser, or another way | EXP-054, EXP-096, EXP-105 |
+| Does the math gate fit the commit path? It runs a KaTeX parse inside step 6 of the authority algorithm, and 04 §12 says a typical commit costs well under a millisecond of CPU; no budget is given for the gate | EXP-051 |
+| What are the defaults of `locale`, `timeZone` and `comments`? May `final` be combined with `tagging` `draft` or `off`? | EXP-005, EXP-019, EXP-084 |
+| What does `fields: blank` print, and what happens to a value wider than its fixed field? | EXP-005, EXP-033 |
+| What happens when page references do not converge within the limits: does a final export fail or is it delivered flagged? Is there a cap on passes? | EXP-061, EXP-071 |
+| Does the 10-second target (00 §9) hold for a final export of several passes, and how do two compiles before sealing count against the 120-second limit? | EXP-060, EXP-071, EXP-079 |
+| In preview, does a missing glyph still produce a PDF? | EXP-026 |
+| Which targets does `pending_suggestions` apply to, and what do `tex`, `cdm`, `html` and `md` do with `markup`? | EXP-082, EXP-081, EXP-086, EXP-087, EXP-088 |
+| How does the exporter check that a suggested block deletion "passes the permission rules" at export time? | EXP-081 |
+| How are `fmt` suggestions shown in markup and written to DOCX? | EXP-083, EXP-093 |
+| Where do author names come from for markup, margin comments and Word's tracked changes? The service holds per-tenant surrogates; the host resolves names | EXP-083, EXP-084, EXP-093 |
+| How are resolved and detached comment threads shown in the margin? | EXP-084 |
+| "Compare, then export as DOCX with tracked changes" (08 §6) is not described in 09; where is it specified and which epic owns it? | EXP-093 |
+| How can a `tex` archive "compile outside the service" when fonts are not in the bundle? | EXP-085 |
+| How does the editor's PDF viewer ("PDF.js inside the component", 01 §7) become a sandboxed cross-origin frame, and where is the frame's content served from under a strict content security policy? | FE-071 |
+| How does the PDF embed fonts under the Open Font License with reserved names? 02 §6 says they are not subsetted under their own name, which 09 does not address | EXP-047 |
+| How does a worker know that a bundle came from the converter (for example a hash signed by the service)? | EXP-067 |
+| Which sandbox: gVisor or a Firecracker microVM? | EXP-069, EXP-070 |
+| Does a tenant over its concurrency limit wait or get `quota_exceeded`? Do previews count against the monthly compile budget? | EXP-007, EXP-009 |
+| What is the diagnostic code catalogue, and what happens when a limit is exceeded (the codes of the failed job)? | EXP-065, EXP-071 |
+| Which unit and origin does `rect` in `layout.json` use? | EXP-058 |
+| How does a classification marking appear in the output, and in which targets? What is the policy hook's contract and timeout? | EXP-089, EXP-010 |
+| The mapping in 09 §3.1 does not cover several model features: field kinds `title` and `styleRef`, run property `hidden`, `watermark`, `pageNumberStart`, `pageNumberFormat`, and `gutter` | EXP-019, EXP-020, EXP-036 |
+| The kernel's sectioning commands offer fewer levels than the model's nine heading levels | EXP-022 |
+| What is the text alternative of an equation in tagged PDF, and is PDF/UA-2's mathematics support used? | EXP-112 |
+| Must a `final` export with `ua-2` fail when images lack alternative text? | EXP-113 |
+| HTML and Markdown packaging, and how equations and images are represented | EXP-087, EXP-088 |
+| Limits of the importer (entry count, total size, compression ratio) have no values; are Word comments imported; how are imported endnotes handled; what does "imported as locked" mean; how are imported authors stored in a mark whose `user` the authority checks? | EXP-099, EXP-102, EXP-103, EXP-104 |
+| Which caller starts an import in practice? 07 §12 gives import to the service credential and the embedding API has no import method | EXP-098 |
+| Are DOCX content controls read back on import (the round trip of fields, 12 §13 phase 4)? | EXP-095, EXP-102 |

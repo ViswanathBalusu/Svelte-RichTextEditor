@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Tests run in Node.js, and the *.universal.test.ts files also in Chromium, Firefox and WebKit; the browser measurer test reaches canvas through a structural type, so no DOM library is needed here either.",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts", "test/**/*.ts"]
+}

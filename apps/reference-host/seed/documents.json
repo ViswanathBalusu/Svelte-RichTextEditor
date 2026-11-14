@@ -1,0 +1,23 @@
+{
+  "x-note": "Demo only. Templates the host offers for a new document, and the documents seeded when the stack starts (UX-091, UX-094). Roles are the host's sharing decisions (they go into the token's `docs` claim); grants are region grants stored by the document service (07 §3). The creator of a document becomes its owner.",
+  "templates": [
+    {
+      "key": "two-regions",
+      "title": "Two-region agreement",
+      "content": "two-regions.cdm.json",
+      "roles": { "u-ada": "editor", "u-bob": "editor", "u-vic": "viewer" },
+      "grants": [
+        { "region": "rAdaSection00001", "principal": "user:u-ada", "role": "editor" },
+        { "region": "rBobSection00001", "principal": "user:u-bob", "role": "editor" }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "externalId": "demo-supply-agreement",
+      "template": "two-regions",
+      "title": "Supply agreement (demo)",
+      "creator": "u-olivia"
+    }
+  ]
+}

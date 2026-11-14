@@ -1,0 +1,40 @@
+{
+  "name": "@docedit/perf",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Client performance harness on the reference machine (FND-007), and spikes S5 (SPK-018, text measurement) and S10 (SPK-023, text kernel).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.browser.json && tsc -p tsconfig.test.json",
+    "build:pages": "node scripts/build-pages.ts",
+    "serve": "node scripts/serve.ts",
+    "fonts": "node scripts/fonts.ts",
+    "wasm": "node scripts/build-wasm.ts",
+    "licences:cargo": "node scripts/cargo-licences.ts",
+    "sizes": "node scripts/kernel-sizes.ts",
+    "s5:quantisation": "node scripts/s5-quantisation.ts",
+    "compare": "node scripts/compare-baseline.ts"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@docedit/corpus": "workspace:*",
+    "@docedit/layout": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "harfbuzzjs": "1.6.1",
+    "linebreak": "1.1.0"
+  },
+  "devDependencies": {
+    "@docedit/backend-mock": "workspace:*",
+    "@docedit/element": "workspace:*",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "svelte": "5.57.3",
+    "vite": "8.3.6"
+  }
+}

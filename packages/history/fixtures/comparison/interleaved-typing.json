@@ -1,0 +1,67 @@
+{
+  "name": "interleaved-typing",
+  "description": "Two people type into the same paragraph in turns, and one deletes a word of the other.",
+  "expected": ["modified:pEnd00000000001Z"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 4,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "modified",
+        "blockId": "pEnd00000000001Z",
+        "type": "paragraph",
+        "spans": [
+          {
+            "op": "insert",
+            "at": 0,
+            "text": "So ",
+            "user": "bob",
+            "seq": 4
+          },
+          {
+            "op": "insert",
+            "at": 11,
+            "text": " indeed",
+            "user": "carol",
+            "seq": 2
+          }
+        ]
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 4,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "modified",
+        "blockId": "pEnd00000000001Z",
+        "type": "paragraph",
+        "spans": [
+          {
+            "op": "insert",
+            "at": 0,
+            "text": "So ",
+            "user": "bob",
+            "seq": 4
+          },
+          {
+            "op": "insert",
+            "at": 11,
+            "text": " indeed",
+            "user": "carol",
+            "seq": 2
+          }
+        ]
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

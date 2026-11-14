@@ -1,0 +1,33 @@
+[package]
+name = "docedit-text-kernel"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+publish = false
+description = "Spike S5 and S10 text kernel: HarfRust shaping, UAX #14 break opportunities, first-fit line breaking and TeX-pattern hyphenation, compiled to WebAssembly with a plain C ABI."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+# `kernel` adds segmentation, line breaking and hyphenation (S10). Without it the module is the
+# shaper alone, which S5 compares with harfbuzzjs.
+[features]
+default = ["kernel"]
+kernel = ["dep:unicode-linebreak", "dep:hypher"]
+
+# Exact versions, so that the licence check (scripts/cargo-licences.ts) and Cargo.lock agree.
+[dependencies]
+harfrust = { version = "=0.15.0", default-features = false, features = ["std"] }
+unicode-linebreak = { version = "=0.1.5", optional = true }
+# English patterns only (hyph-en-us.tex, all-permissive with its notice kept; borrow list section 11).
+hypher = { version = "=0.1.8", default-features = false, features = ["alloc", "english"], optional = true }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false

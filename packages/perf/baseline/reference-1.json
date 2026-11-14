@@ -1,0 +1,104 @@
+{
+  "schema": "docedit-perf-baseline/1",
+  "fromRun": "median of 2026-11-06T17-17-42Z, 2026-11-06T17-21-20Z, 2026-11-06T17-26-16Z",
+  "profile": "reference-1",
+  "corpusVersion": 2,
+  "tolerance": {
+    "default": 0.9,
+    "source": "per-metric relative spread (max − min) / median over the runs 2026-11-06T17-17-42Z, 2026-11-06T17-21-20Z, 2026-11-06T17-26-16Z on the reference machine, rounded up to the next 5 % (at least 5 %, and at least one 8 ms Event Timing step for the typing quantiles); ADR 0037 §6. Measured on a shared machine: provisional until the scheduled job has a dedicated runner",
+    "perMetric": {
+      "tti@pages-20": 0.55,
+      "ready@pages-20": 0.6,
+      "typing.p50@pages-100": 0.2,
+      "typing.p95@pages-100": 0.2,
+      "typing.reported@pages-100": 0.05,
+      "typing.frame.p50@pages-100": 0.25,
+      "typing.frame.p95@pages-100": 0.5,
+      "memory@pages-100": 0.1,
+      "memory.ua@pages-100": 0.05,
+      "memory.jsHeap@pages-100": 0.05,
+      "usable300.typing.p50@pages-300": 0.65,
+      "usable300.typing.p95@pages-300": 0.4,
+      "usable300.typing.reported@pages-300": 0.05,
+      "usable300.typing.frame.p50@pages-300": 0.9,
+      "usable300.typing.frame.p95@pages-300": 0.45,
+      "usable300.ready@pages-300": 0.25,
+      "usable300.tti@pages-300": 0.3,
+      "usable300.memory@pages-300": 0.1
+    }
+  },
+  "metrics": {
+    "tti@pages-20": {
+      "value": 278,
+      "better": "lower"
+    },
+    "ready@pages-20": {
+      "value": 250.8,
+      "better": "lower"
+    },
+    "typing.p50@pages-100": {
+      "value": 40,
+      "better": "lower"
+    },
+    "typing.p95@pages-100": {
+      "value": 40,
+      "better": "lower"
+    },
+    "typing.reported@pages-100": {
+      "value": 150,
+      "better": "lower"
+    },
+    "typing.frame.p50@pages-100": {
+      "value": 25.9,
+      "better": "lower"
+    },
+    "typing.frame.p95@pages-100": {
+      "value": 46.8,
+      "better": "lower"
+    },
+    "memory@pages-100": {
+      "value": 98.7,
+      "better": "lower"
+    },
+    "memory.ua@pages-100": {
+      "value": 15.4,
+      "better": "lower"
+    },
+    "memory.jsHeap@pages-100": {
+      "value": 14.7,
+      "better": "lower"
+    },
+    "usable300.typing.p50@pages-300": {
+      "value": 64,
+      "better": "lower"
+    },
+    "usable300.typing.p95@pages-300": {
+      "value": 104,
+      "better": "lower"
+    },
+    "usable300.typing.reported@pages-300": {
+      "value": 150,
+      "better": "lower"
+    },
+    "usable300.typing.frame.p50@pages-300": {
+      "value": 94.7,
+      "better": "lower"
+    },
+    "usable300.typing.frame.p95@pages-300": {
+      "value": 176.6,
+      "better": "lower"
+    },
+    "usable300.ready@pages-300": {
+      "value": 525.1,
+      "better": "lower"
+    },
+    "usable300.tti@pages-300": {
+      "value": 575.2,
+      "better": "lower"
+    },
+    "usable300.memory@pages-300": {
+      "value": 159.1,
+      "better": "lower"
+    }
+  }
+}

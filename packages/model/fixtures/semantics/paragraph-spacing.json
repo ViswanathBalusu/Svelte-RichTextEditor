@@ -1,0 +1,547 @@
+{
+  "rule": "paragraph-spacing",
+  "spec": "03 §7 (Paragraph spacing)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "paragraphGap and flowGaps in packages/model/src/spacing/gaps.ts",
+  "description": "Gaps between vertically adjacent blocks: the larger-of rule, contextual spacing per side, container edges, and blocks that are not paragraphs.",
+  "format": "`pairs`: `above` and `below` are what the rule reads of two resolved paragraphs (null for no paragraph: a container edge or a block that is not a paragraph); `expected` is the gap in twips. `flows`: documents built as in numbering-lists.json; `expected` lists, per container (`body`, or the id of a table cell or story), every gap in flow order, the leading and trailing ones included, as `above`, `below` (block ids, null at the edges) and `gap`.",
+  "settings": { "lang": "en-GB", "defaultParagraphStyle": "Normal" },
+  "styles": [
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Normal",
+        "kind": "paragraph",
+        "name": "Normal",
+        "builtIn": true,
+        "spaceBefore": 0,
+        "spaceAfter": 160
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Body",
+        "kind": "paragraph",
+        "name": "Body",
+        "basedOn": "Normal",
+        "spaceBefore": 120,
+        "spaceAfter": 160
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "ListParagraph",
+        "kind": "paragraph",
+        "name": "ListParagraph",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "spaceBefore": 120,
+        "spaceAfter": 160,
+        "contextualSpacing": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "FootnoteText",
+        "kind": "paragraph",
+        "name": "FootnoteText",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "spaceBefore": 40,
+        "spaceAfter": 60
+      }
+    }
+  ],
+  "numberings": [],
+  "pairs": [
+    {
+      "id": "larger-of-the-two",
+      "description": "The gap is the larger of spaceAfter above and spaceBefore below (CDM-043: 160 and 240 give 240).",
+      "above": {
+        "styleId": "Body",
+        "spaceBefore": 0,
+        "spaceAfter": 160,
+        "contextualSpacing": false
+      },
+      "below": {
+        "styleId": "Body",
+        "spaceBefore": 240,
+        "spaceAfter": 0,
+        "contextualSpacing": false
+      },
+      "expected": 240
+    },
+    {
+      "id": "larger-of-the-two-after-wins",
+      "description": "The larger one wins whichever side it is on.",
+      "above": {
+        "styleId": "Body",
+        "spaceBefore": 0,
+        "spaceAfter": 300,
+        "contextualSpacing": false
+      },
+      "below": {
+        "styleId": "Body",
+        "spaceBefore": 100,
+        "spaceAfter": 0,
+        "contextualSpacing": false
+      },
+      "expected": 300
+    },
+    {
+      "id": "contextual-same-style",
+      "description": "Two paragraphs of one style that both have contextualSpacing have no gap.",
+      "above": {
+        "styleId": "ListParagraph",
+        "spaceBefore": 120,
+        "spaceAfter": 160,
+        "contextualSpacing": true
+      },
+      "below": {
+        "styleId": "ListParagraph",
+        "spaceBefore": 120,
+        "spaceAfter": 160,
+        "contextualSpacing": true
+      },
+      "expected": 0
+    },
+    {
+      "id": "contextual-different-styles",
+      "description": "Contextual spacing only acts between paragraphs of the same style; otherwise the larger-of rule applies.",
+      "above": {
+        "styleId": "ListParagraph",
+        "spaceBefore": 120,
+        "spaceAfter": 160,
+        "contextualSpacing": true
+      },
+      "below": {
+        "styleId": "Body",
+        "spaceBefore": 240,
+        "spaceAfter": 160,
+        "contextualSpacing": false
+      },
+      "expected": 240
+    },
+    {
+      "id": "contextual-only-above",
+      "description": "Contextual spacing is per side: the paragraph above drops its spaceAfter, the one below keeps its spaceBefore.",
+      "above": {
+        "styleId": "Body",
+        "spaceBefore": 0,
+        "spaceAfter": 160,
+        "contextualSpacing": true
+      },
+      "below": {
+        "styleId": "Body",
+        "spaceBefore": 120,
+        "spaceAfter": 0,
+        "contextualSpacing": false
+      },
+      "expected": 120
+    },
+    {
+      "id": "contextual-only-below",
+      "description": "Per side: the paragraph below drops its spaceBefore, the one above keeps its spaceAfter.",
+      "above": {
+        "styleId": "Body",
+        "spaceBefore": 0,
+        "spaceAfter": 160,
+        "contextualSpacing": false
+      },
+      "below": {
+        "styleId": "Body",
+        "spaceBefore": 240,
+        "spaceAfter": 0,
+        "contextualSpacing": true
+      },
+      "expected": 160
+    },
+    {
+      "id": "start-of-a-container",
+      "description": "At the start of a container (body, cell, story) the first paragraph keeps its spaceBefore.",
+      "above": null,
+      "below": {
+        "styleId": "Body",
+        "spaceBefore": 120,
+        "spaceAfter": 160,
+        "contextualSpacing": false
+      },
+      "expected": 120
+    },
+    {
+      "id": "end-of-a-container",
+      "description": "At the end of a container the last paragraph keeps its spaceAfter.",
+      "above": {
+        "styleId": "Body",
+        "spaceBefore": 120,
+        "spaceAfter": 160,
+        "contextualSpacing": false
+      },
+      "below": null,
+      "expected": 160
+    },
+    {
+      "id": "paragraph-before-a-table",
+      "description": "A block that is not a paragraph has no spacing: a paragraph keeps its spaceAfter above a table.",
+      "above": {
+        "styleId": "Body",
+        "spaceBefore": 120,
+        "spaceAfter": 160,
+        "contextualSpacing": false
+      },
+      "below": null,
+      "expected": 160
+    },
+    {
+      "id": "consecutive-footnotes",
+      "description": "The paragraphs of consecutive footnotes on a page follow the same rule (here both in FootnoteText).",
+      "above": {
+        "styleId": "FootnoteText",
+        "spaceBefore": 40,
+        "spaceAfter": 60,
+        "contextualSpacing": false
+      },
+      "below": {
+        "styleId": "FootnoteText",
+        "spaceBefore": 40,
+        "spaceAfter": 60,
+        "contextualSpacing": false
+      },
+      "expected": 60
+    }
+  ],
+  "flows": [
+    {
+      "id": "region-is-transparent",
+      "description": "Spacing runs across region boundaries as if the region were not there, contextual spacing included.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "ListParagraph" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        {
+          "type": "region",
+          "attrs": { "id": "regionAxxxxxxxxx", "title": "Region", "policy": "restricted" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "ListParagraph" },
+              "content": [{ "type": "text", "text": "Text." }]
+            },
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p03xxxxxxxxxxxxx", "style": "Body" },
+              "content": [{ "type": "text", "text": "Text." }]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p04xxxxxxxxxxxxx", "style": "Body" },
+          "content": [{ "type": "text", "text": "Text." }]
+        }
+      ],
+      "expected": [
+        {
+          "container": "body",
+          "gaps": [
+            { "above": null, "below": "p01xxxxxxxxxxxxx", "gap": 120 },
+            { "above": "p01xxxxxxxxxxxxx", "below": "p02xxxxxxxxxxxxx", "gap": 0 },
+            { "above": "p02xxxxxxxxxxxxx", "below": "p03xxxxxxxxxxxxx", "gap": 160 },
+            { "above": "p03xxxxxxxxxxxxx", "below": "p04xxxxxxxxxxxxx", "gap": 160 },
+            { "above": "p04xxxxxxxxxxxxx", "below": null, "gap": 160 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "table-and-its-cells",
+      "description": "A table has no spacing of its own; each cell is a container that keeps its first spaceBefore and last spaceAfter.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Body" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        {
+          "type": "table",
+          "attrs": { "id": "tableAxxxxxxxxxx", "grid": [4500, 4500] },
+          "content": [
+            {
+              "type": "table_row",
+              "attrs": { "id": "rowA0xxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA00xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Body" },
+                      "content": [{ "type": "text", "text": "Text." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p03xxxxxxxxxxxxx", "style": "Body", "spaceBefore": 240 },
+                      "content": [{ "type": "text", "text": "Text." }]
+                    }
+                  ]
+                },
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA01xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p04xxxxxxxxxxxxx", "style": "Normal" },
+                      "content": [{ "type": "text", "text": "Text." }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p05xxxxxxxxxxxxx", "style": "Body" },
+          "content": [{ "type": "text", "text": "Text." }]
+        }
+      ],
+      "expected": [
+        {
+          "container": "body",
+          "gaps": [
+            { "above": null, "below": "p01xxxxxxxxxxxxx", "gap": 120 },
+            { "above": "p01xxxxxxxxxxxxx", "below": "tableAxxxxxxxxxx", "gap": 160 },
+            { "above": "tableAxxxxxxxxxx", "below": "p05xxxxxxxxxxxxx", "gap": 120 },
+            { "above": "p05xxxxxxxxxxxxx", "below": null, "gap": 160 }
+          ]
+        },
+        {
+          "container": "cellA00xxxxxxxxx",
+          "gaps": [
+            { "above": null, "below": "p02xxxxxxxxxxxxx", "gap": 120 },
+            { "above": "p02xxxxxxxxxxxxx", "below": "p03xxxxxxxxxxxxx", "gap": 240 },
+            { "above": "p03xxxxxxxxxxxxx", "below": null, "gap": 160 }
+          ]
+        },
+        {
+          "container": "cellA01xxxxxxxxx",
+          "gaps": [
+            { "above": null, "below": "p04xxxxxxxxxxxxx", "gap": 0 },
+            { "above": "p04xxxxxxxxxxxxx", "below": null, "gap": 160 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "table-style-in-cells",
+      "description": "Cell paragraphs resolve with the table style (layer 2), which here removes Normal's spaceAfter.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": { "id": "Grid", "kind": "table", "name": "Grid", "spaceAfter": 0 }
+        }
+      ],
+      "body": [
+        {
+          "type": "table",
+          "attrs": { "id": "tableAxxxxxxxxxx", "style": "Grid", "grid": [4500] },
+          "content": [
+            {
+              "type": "table_row",
+              "attrs": { "id": "rowA0xxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA00xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Normal" },
+                      "content": [{ "type": "text", "text": "Text." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Normal" },
+                      "content": [{ "type": "text", "text": "Text." }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx", "style": "Normal" },
+          "content": [{ "type": "text", "text": "Text." }]
+        }
+      ],
+      "expected": [
+        {
+          "container": "body",
+          "gaps": [
+            { "above": null, "below": "tableAxxxxxxxxxx", "gap": 0 },
+            { "above": "tableAxxxxxxxxxx", "below": "p03xxxxxxxxxxxxx", "gap": 0 },
+            { "above": "p03xxxxxxxxxxxxx", "below": null, "gap": 160 }
+          ]
+        },
+        {
+          "container": "cellA00xxxxxxxxx",
+          "gaps": [
+            { "above": null, "below": "p01xxxxxxxxxxxxx", "gap": 0 },
+            { "above": "p01xxxxxxxxxxxxx", "below": "p02xxxxxxxxxxxxx", "gap": 0 },
+            { "above": "p02xxxxxxxxxxxxx", "below": null, "gap": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "section-break-is-transparent",
+      "description": "A section break does not interrupt spacing; whether a new page drops the space is pagination's.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Body" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        { "type": "section_break", "attrs": { "id": "sectAxxxxxxxxxxx", "pageSetup": "ps1" } },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Body", "spaceBefore": 400 },
+          "content": [{ "type": "text", "text": "Text." }]
+        }
+      ],
+      "expected": [
+        {
+          "container": "body",
+          "gaps": [
+            { "above": null, "below": "p01xxxxxxxxxxxxx", "gap": 120 },
+            { "above": "p01xxxxxxxxxxxxx", "below": "p02xxxxxxxxxxxxx", "gap": 400 },
+            { "above": "p02xxxxxxxxxxxxx", "below": null, "gap": 160 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "figure-and-equation",
+      "description": "Figures and display equations have no spacing of their own.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Body" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        {
+          "type": "figure",
+          "attrs": {
+            "id": "fig01xxxxxxxxxxx",
+            "asset": "01a1ae27-b400-7315-9767-e3e13f9a5c14",
+            "width": 2880,
+            "height": 1440
+          },
+          "content": [{ "type": "caption", "content": [{ "type": "text", "text": "Figure" }] }]
+        },
+        {
+          "type": "equation_block",
+          "attrs": { "id": "eq01xxxxxxxxxxxx", "latex": "E = mc^2", "numbered": true }
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Body" },
+          "content": [{ "type": "text", "text": "Text." }]
+        }
+      ],
+      "expected": [
+        {
+          "container": "body",
+          "gaps": [
+            { "above": null, "below": "p01xxxxxxxxxxxxx", "gap": 120 },
+            { "above": "p01xxxxxxxxxxxxx", "below": "fig01xxxxxxxxxxx", "gap": 160 },
+            { "above": "fig01xxxxxxxxxxx", "below": "eq01xxxxxxxxxxxx", "gap": 0 },
+            { "above": "eq01xxxxxxxxxxxx", "below": "p02xxxxxxxxxxxxx", "gap": 120 },
+            { "above": "p02xxxxxxxxxxxxx", "below": null, "gap": 160 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "footnote-edges",
+      "description": "A footnote is a container: its paragraph keeps its spaceBefore and spaceAfter.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Body" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "container": "fn01xxxxxxxxxxxx",
+          "gaps": [
+            { "above": null, "below": "fp01xxxxxxxxxxxx", "gap": 40 },
+            { "above": "fp01xxxxxxxxxxxx", "below": null, "gap": 60 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "story-edges",
+      "description": "A header story keeps its first paragraph's spaceBefore and last paragraph's spaceAfter; both count in its height.",
+      "stories": [
+        {
+          "type": "story",
+          "attrs": { "id": "storyAxxxxxxxxxx", "kind": "header" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p08xxxxxxxxxxxxx", "style": "Body" },
+              "content": [{ "type": "text", "text": "Text." }]
+            },
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p09xxxxxxxxxxxxx", "style": "Body" },
+              "content": [{ "type": "text", "text": "Text." }]
+            }
+          ]
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Body" },
+          "content": [{ "type": "text", "text": "Text." }]
+        }
+      ],
+      "expected": [
+        {
+          "container": "storyAxxxxxxxxxx",
+          "gaps": [
+            { "above": null, "below": "p08xxxxxxxxxxxxx", "gap": 120 },
+            { "above": "p08xxxxxxxxxxxxx", "below": "p09xxxxxxxxxxxxx", "gap": 160 },
+            { "above": "p09xxxxxxxxxxxxx", "below": null, "gap": 160 }
+          ]
+        }
+      ]
+    }
+  ]
+}

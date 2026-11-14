@@ -1,0 +1,26 @@
+{
+  "name": "@docedit/layout",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Page layout engine: CDM flow blocks to pages and lines, with text measurement injected (02 §9). Phase 0: spike S7 (SPK-020), which drives candidate layout cores from CDM flow blocks.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@docedit/model": "workspace:*",
+    "@docen/layout": "0.7.0",
+    "@docen/pretext": "0.7.0"
+  },
+  "devDependencies": {
+    "@docedit/corpus": "workspace:*",
+    "@docx-editor.dev/core": "2.35.0"
+  }
+}

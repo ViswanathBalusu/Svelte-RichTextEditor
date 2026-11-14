@@ -1,0 +1,18 @@
+{
+  "name": "i3-region-id-to-retired",
+  "doc": "attr: the identifier of a region changes to a retired one (also an I2 change).",
+  "base": "example",
+  "steps": [{ "stepType": "attr", "pos": 14, "attr": "id", "value": "rRetiredRegion01" }],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": [{ "from": "rG7mK2pQ9xYt4HcD", "to": "rRetiredRegion01" }]
+  },
+  "expected": ["I2", "I3"]
+}

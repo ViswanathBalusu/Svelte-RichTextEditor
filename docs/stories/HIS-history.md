@@ -1,0 +1,1142 @@
+# HIS History
+
+**Status:** first draft, 2026-11-06, written from specification draft 0.2. Not yet reviewed. Every number is a target to validate, not a measurement.
+
+**Scope.** This epic turns [08 History](../spec/08-history.md) (all sections; informative, except section 2, which defines what MUST be recorded) and [ADR 0010](../adr/0010-history-from-commit-log.md) into stories, with the history items of the [review](../review/2026-09-18-pitfall-review.md) (S-02, S-08, TENT-1 and PD-6, the log's cost) and the history rows of 07 (§8 visibility, §12 matrix, §13 restore). The epic owns the history service and its user interface: what is recorded for every commit, checkpoints and rebuilding versions, named and automatic versions, the history list and panel, viewing old versions, comparison, attribution (including the difference between what a person wrote and what an assistant wrote for them, 13 §6.2), restore and fork, history visibility enforced at every endpoint, changes since the last visit, retention, tamper evidence and privacy.
+
+**Left to other epics (README section 2.3).**
+
+- SYN owns the sync side: the commit types, stamping, ordering and acknowledgement, the range mapping used for comment ranges and the log's incarnation. HIS records what SYN produces.
+- PRM owns who may do what (roles, region grants, the outcome check, region states, the matrix of 07 §12). HIS owns the visibility gate of 07 §8 and enforces it; PRM tests the rest of the matrix.
+- BE owns the room lifecycle, the persist pipeline, object storage layout, the scheduler and the recovery procedure. HIS owns the policies they execute (checkpoints, thinning, cold segments).
+- EXP owns exports and imports, the manifest and DOCX output. FRW owns workflows, evidence and the evidence bundle. UX owns the shell, panes, command registry and the mention and task interface. FE owns the editing core and renderers. SEC owns the threat-model coverage and privacy verification.
+- Comments and suggestions are not owned here; HIS covers only their relation to history (08 §14).
+
+Phases follow 11 §5: recording starts in phase 1a, the history interface, comparison, attribution, restore, retention and tamper-evidence services arrive in phase 2 ("history visibility is enforced at every endpoint" is a phase 2 exit criterion), and the visibility gate itself is needed from 1b because pinned reads and channel resume already supply sequence numbers.
+
+## What is recorded
+
+### HIS-001 Record every accepted commit in full
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | L | must | Maintainer |
+
+**Spec:** 08 §2; ADR 0010; 06 §4.1 · **Requirements:** R4 · **Depends on:** BE-017
+
+As an owner, I want every accepted change recorded in full from the first release, whether or not any history screen exists yet, so that history can be built later without gaps.
+
+**Acceptance criteria**
+
+- [x] Given any accepted commit of kind steps, control or snapshot, when it is stored, then the document service MUST store: document, `seq` and kind; the commit identifier (the client's, or derived for a server-authored commit); the user as the tenant's surrogate identifier, the session, and the agent if an assistant acted; the server time; the origin; the scopes touched, including `field:<id>` scopes; `base`, whether the commit was rebased, the access revision and the token's `jti`; the CDM version and the engine; the payload; and the size.
+- [x] Given a build with no history interface (phase 1a), when commits are made, then they are recorded in full, and an integration test reads back every field for a commit of each kind.
+- [x] Given a commit that was rebased, when its payload is stored, then the payload is the rebased steps as applied (for a control commit, the control data; for a snapshot commit, the checkpoint reference), not the steps the client sent.
+- [x] Given the scopes of a commit, when it is stored, then they are written to the per-scope table in the same transaction as the commit, so that "history of one region" and "who filled this field" are index lookups.
+- [x] Given a crash during the write of a commit, when the service restarts, then either the whole record (metadata, payload, scopes, head) exists or none of it does.
+- [x] Given a restarted room that must rebuild an acknowledgement for a stored commit, when it reads the record, then `base`, the rebased flag and the stored steps are enough to build it (SYN-008).
+- [x] Given a server-authored commit, when it is recorded, then the user is the requesting user or `system`, the session is empty and the origin is one of the reserved server origins.
+
+**Evidence:** Through the data plane over PostgreSQL (`services/document-service/test/data-plane/postgres.pg.test.ts` "records every field of a commit, the rebased steps as applied and the token jti"): user (the surrogate), session, agent, server time, origin, scopes, `base`, `rebased`, access revision, token `jti`, CDM version, engine and size; the payload of a rebased commit is the steps as applied; a restarted room rebuilds the acknowledgement of a stored commit from the record; a control commit records the user `system`, no session (NULL) and the origin `control`. Scopes and the whole record are written in one transaction (`src/storage/log-store.ts`; `test/postgres/write-path.pg.test.ts`, `outcomes.pg.test.ts`). Lane U-HIS-001-016 (2026-11-13), criteria 1 and 2: `services/document-service/test/postgres/his-001-016-record.pg.test.ts` "reads back every recorded field of a steps, a control and a snapshot commit" (PostgreSQL in Podman, `infra/test-env.ps1`): a rebased steps commit with `base`, `jti` and an agent, a control commit and a snapshot commit are read back through `logs.read`, the snapshot content through `snapshotContent`, and the `doc_commits` and `doc_commit_payloads` rows (size, payload hashes, CDM version, engine, access revision, server time).
+
+**Notes:** the origin is the client's hint, recorded as a claim and never used to authorise anything (04 §3.1). The same record lets an audit show why a change was allowed (access revision, `jti`). Criteria 1 and 2 were open for the snapshot kind until the log store accepted snapshot commits with their content (BE-037); the lane U-HIS-001-016 test above now covers all three kinds.
+
+### HIS-002 Chain every commit by hash
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 08 §2, §12; ADR 0010; 06 §4.1; review S-02 · **Requirements:** R4, R10 · **Depends on:** HIS-001, FND-005
+
+As an owner, I want each commit's hash to cover the previous hash, so that any silent edit of stored history can be detected.
+
+**Acceptance criteria**
+
+- [x] Given a commit, when it is stored, then `hash` equals SHA-256 of the previous hash, the canonical JSON of the metadata above, and the SHA-256 of the payload, in that order, where the previous hash is that of the preceding `seq`; the chain head is advanced in the same transaction as the commit.
+- [ ] Given the hash definition, when it is published, then the exact byte layout (which fields are metadata, the canonical JSON rules, how the three parts are joined, and the previous hash of the first commit) is written in the spec with test vectors, and two independent implementations produce the same hash for the same commit.
+- [x] Given each commit, when its metadata row is stored, then the row keeps the payload's hash, so the chain can be verified after the payload is thinned, moved or erased.
+- [x] Given control and snapshot commits, when they are stored, then they are chained in the same way as step commits.
+- [x] Given a payload that is replaced by a tombstone or moved to a cold segment, when the chain is verified, then it still verifies.
+- [x] Given one metadata field altered directly in storage, when the log is verified (HIS-033), then the tool reports the first `seq` whose hash no longer matches.
+- [x] Given several commits in one batch, when they are stored, then their hashes follow `seq` order and the chain never forks.
+
+**Evidence:** `services/document-service/test/data-plane/postgres.pg.test.ts` "chains every commit by hash, control commits too, and an independent check agrees": an implementation with WebCrypto and the stored columns recomputes every hash and the previous hashes; a payload replaced by a tombstone still verifies (`PgLogStore.verify`); one metadata field altered in storage is reported at its seq. Batches chain in seq order (`test/postgres/write-path.pg.test.ts`). Lane U-HIS-001-016 (2026-11-13), criterion 4: `services/document-service/test/postgres/his-001-016-record.pg.test.ts` "chains control and snapshot commits in the same way, and verifies" (PostgreSQL in Podman): steps, a control commit, a snapshot commit and steps verify to head 5, and the previous hash of each row is the hash of the row before it.
+
+**Notes:** 08 §2 gives the formula but not the byte layout, the canonical JSON profile for metadata or the first commit's previous hash, and 06 §4.1 has no column for the payload hash that the thinning rule needs (Open questions). The cost of hashing is in the persist path. Second review (2026-11-06, SPK-027), SR-N26: 06 §4.1 now has `payload_hash` (E16), and ADR 0020 (proposed) gives a provisional byte layout; SR-N65: the room's `StoredCommit` still lacks `base`, `rebased`, `jti` and `agent`, which 08 §2 requires recording from the first release ([review](../review/2026-11-06-second-review.md)). Open after the data plane (2026-11-06): criterion 2 stays open: the vectors and three agreeing implementations are tested in `services/document-service/test/data-plane/his-002-chain-vectors.test.ts` (service codec, `packages/history` verifier, and a third on `node:crypto`), but the layout is not yet written into 08 with those vectors (docs/spec is outside the lane that wrote the test; ADR 0020 has the provisional layout); criterion 4 is ticked (lane U-HIS-001-016, Evidence); snapshot commits are stored (BE-037). Round 5 (lane V-HIS-001-016, 2026-11-14): `services/document-service/test/data-plane/his-002-chain-vectors.test.ts` passes (3 tests, Node.js); criterion 2 stays open until 08 carries the byte layout with those vectors, which is in `docs/spec` (outside this lane; needsFromOthers).
+
+### HIS-003 Keep personal data out of commit records
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 08 §2 (last paragraph), §13; 06 §4.1 (`tenant_users`); 10 §4 · **Requirements:** R4, R10 · **Depends on:** HIS-001, BE-013
+
+As a tenant administrator, I want commit and session records to hold nothing about a person beyond the surrogate identifier, so that erasing a person later leaves the log and its hash chain as they were.
+
+**Acceptance criteria**
+
+- [x] Given a commit or a session is recorded, when the log, the per-scope table and the read markers are read, then the person appears only as the tenant's surrogate identifier (with the session and, if an assistant acted, the agent), never as the host's `sub`.
+- [ ] Given a scan of every table, event payload and hash input that belongs to history, when it runs in CI, then the host's `sub` appears only in the mapping row.
+- [ ] Given a session, when it is recorded, then the service stores the user agent family and the client version, and no other personal data about the user beyond the surrogate and, if supplied, a display name.
+- [x] Given a display name, when it is supplied, then it is never written to the log, the per-scope table, the read markers, an event payload or a hash input, so that purging it changes none of them.
+
+**Evidence:** `services/document-service/test/data-plane/postgres.pg.test.ts` "keeps the host sub and the display name out of every table it writes": after commits, presence and a grant change through the data plane, no table and no decompressed payload holds a host `sub` or a display name; commits name the surrogate or `system`. On the wire the host `sub` is shown, mapped when sending (D42).
+
+**Notes:** The mapping from `sub` to the surrogate, its table and the separation of surrogates between tenants are BE-013. Evidence for signing workflows is the one deliberate exception and is kept elsewhere (12 §7); that is FRW's. The instruction to hosts not to use e-mail addresses as `sub` is HIS-038. Criterion 2 needs a CI workflow and the mapping table filled by the control plane; criterion 3, the data plane keeps no session records. Round 5 (lane V-HIS-001-016, 2026-11-14): no product code stores a per-session user agent family or client version (grep of `services/document-service/src` finds none), and `docs/spec/08-history.md` (line 39) does not say which service writes the session record, its table, or how the family is derived from the user agent string. Criterion 3 stays open; the open decisions are recorded in `docs/adr/0357-lane-V-HIS-001-016.md` (proposed). Round 4 (lane U-HIS-001-016): the scan of every readable non-bytea column of every table is `services/document-service/test/control-plane/be-013-surrogate-scan.pg.test.ts`, and the commit payloads are decompressed and scanned in `services/document-service/test/data-plane/postgres.pg.test.ts`. Both passed in PostgreSQL in Podman (7 tests, 2 files, 2026-11-13). The CI workflow that runs them on every change is in `.github/` (root configuration, so needsFromOthers): criterion 2 stays unticked until it exists.
+
+## Checkpoints and rebuilding versions
+
+> HIS-004 (Write verified checkpoints on a schedule) was merged into BE-020 during the cross-check of 2026-11-06.
+
+### HIS-005 Rebuild the content at any sequence number
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 08 §3; 06 §3; 05 §5.2, §6.2 (`/content`) · **Requirements:** R4, R9 · **Depends on:** BE-020, SYN-002
+
+As an author, I want any earlier version of my document to open quickly, so that looking back costs little.
+
+**Acceptance criteria**
+
+- [x] Given a `seq`, when the content at it is requested, then the service starts from the nearest checkpoint at or before it and replays the commits up to it (target at most 2,000), in a worker thread.
+- [x] Given a `seq`, when it is rebuilt, then the result's hash equals the result of replaying the whole log, and equals the result from any other checkpoint at or before it.
+- [x] Given a rebuilt version, when the same `seq` is requested again, then it is served from a cache keyed by incarnation and `seq`, and the pinned read is immutable and cacheable (the `ETag` combines incarnation and `seq`).
+- [x] Given a replay that crosses a snapshot commit, when it runs, then it starts from the checkpoint written for the snapshot.
+- [x] Given commits made under an older schema or engine, when they are replayed, then the matching package is used (policy: HIS-045).
+- [x] Given a `seq` below the caller's visibility gate, when it is requested, then the request is refused by the gate of HIS-024 before any rebuild work.
+
+**Evidence:** `packages/authority/src/room/content.ts` (`contentAt`, `ContentCache`, `contentEtag`, replayers by engine and CDM version). `test/room-content.test.ts`: the rebuild starts from the nearest checkpoint at or before the seq and reports the commits replayed (the 2,000 target is the checkpoint cadence's, BE-020); over 200 sampled seqs and checkpoint sets the SHA-256 of the canonical form equals a full replay's; a replay that would cross a snapshot commit starts from its checkpoint; a commit of an older engine and CDM version replays with the replayer registered for it and is refused when none is; a seq below the gate is `forbidden` before any work, the head and named versions excepted; pinned reads are cached by incarnation and seq with an entity tag of both; the rebuild runs in a worker thread on plain JSON (`test/harness/content-worker.ts`). Lane V-HIS-001-016 (2026-11-14), criterion 5: `services/document-service/src/control-plane/his-005-engine-refusal.test.ts` "refuses a rebuild that would replay a commit of an unknown engine, and serves a matching one" (Node.js, in-memory stores and a real worker pool): the route's rebuild (`ContentReader.rebuild` in `services/document-service/src/control-plane/content.ts`) refuses a steps commit whose engine or CDM version has no replayer, with `internal` and the reason, and never replays it with the CDM 1 schema; `src/control-plane/be-036-rebuild.test.ts` still passes.
+
+**Notes:** audit (2026-11-13): the ticks stay, but the service's `/content` route rebuilds with `ContentReader` (`services/document-service/src/control-plane/content.ts`), not with `ContentCache` or `contentEtag` (used by no product code) and until round 5 it ignored each commit's engine and CDM version; round 5 (lane V-HIS-001-016) makes it refuse a steps commit with no matching replayer, so it never replays one with the wrong schema (see Evidence). The worker holds one replayer only (`pm-steps/1`, CDM 1), so a commit under an older engine is still refused, not rebuilt, until the policy of HIS-045 adds replayers. `contentAt` (used by the history reader and the export worker) already selects by engine and CDM version; the route's caching and ETag are tested in `services/document-service/test/control-plane/routes.content.test.ts` and `src/control-plane/be-036-rebuild.test.ts`. The pinned read is already needed in phase 1b for `catchUp: "reload"`. 08 §3 promises a replay of at most 2,000 commits, but checkpoints are at most every two minutes and are thinned with age (§11); both can make the replay longer (Open questions).
+
+## Versions
+
+### HIS-006 Name a version
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | must | Editor |
+
+**Spec:** 08 §1, §4; 05 §5.6, §6.2 (`/versions`), §7; 07 §12 · **Requirements:** R4 · **Depends on:** HIS-001, HIS-024, UX-003, UX-019
+
+As an editor, I want to give the current state of the document a name and a note, so that I can find it again, for example "Sent to legal".
+
+**Acceptance criteria**
+
+- [x] Given a user with `edit` somewhere in the document, when they name a version with a name and a note, then a version of kind `named` is stored pointing at the head (or at the `seq` given), with the creator and time.
+- [x] Given a user with only `view`, `comment`, `suggest` or `fill`, when they try to name a version, then the request is refused with `forbidden`.
+- [x] Given a `seq` above the head or below the caller's visibility gate, when a version is named, then the request is refused.
+- [x] Given a named version, when it is created, then the event `version.created` is sent to subscribers and the webhook `dep.version.created` is raised with the `seq` and the chain head.
+- [x] Given a name or note that contains markup, when it is shown, then it is shown as text.
+- [ ] Given the history list, when it is read, then named versions appear with name, note, creator and time, and the command to name a version is in the command registry.
+
+**Evidence (lane V-HIS-001-016, 2026-11-13, criterion 1):** `services/document-service/test/postgres/his-006-versions.pg.test.ts` (PostgreSQL in Podman, `docedit-test-postgres`, a database of its own, 5 tests passed; `PgVersionStore` in `services/document-service/src/storage/versions-store.ts`): "names the head by default, with the name, note, creator and time" and "names the seq given, not the head" read the `versions` row back (kind `named`, seq, name, note, `created_by`, `created_at`); the store stores the row, not the route. The edit check is `createVersion` in `packages/history` (the route calls it first; it is not called by this store). The HTTP route `POST /documents/{id}/versions` is not built, so criterion 1 is met at the store, not through HTTP.
+
+**Evidence (lane V-HIS-001-016, 2026-11-14, criterion 5):** `packages/ui/e2e/his-009-history-pane.spec.ts` "shows an erased person as unknown and markup in a name or note as text" (Chromium, Firefox and WebKit): a named version whose name and note hold markup is shown as literal text in the history pane, and no script runs. Criterion 6 stays open: the command to name a version is not in the command registry (`packages/ui/src/commands/builtin.ts` has none), and the list shows the named versions of the port, not the route.
+
+**Evidence:** `packages/history/test/versions.test.ts` "refuses a seq above the head and a seq below the gate (HIS-006 criterion 3)" (`createVersion` in `src/versions.ts`, the rules a service applies before it stores a version). Criterion 2 (round 7, 2026-11-13): `packages/history/test/gate-negative.test.ts` "refuses view, comment, suggest and fill with forbidden, and allows edit" derives `canEdit` for each role from the connection with the authority's `editsSomewhere`, the function the service uses (08 §9), and `createVersion` refuses the four roles with `forbidden`. The route itself is the service's. Criteria 1, 4, 5 and 6 are the service's (storage, events, webhook and the history list's command).
+
+**Evidence (lane V-HIS-001-016, fix of group 3, round 3, 2026-11-14; criteria 1 to 4 over HTTP):** the route is `createVersion` in `services/document-service/src/control-plane/versions-routes.ts` (lane U-PRO-052-068). `services/document-service/test/control-plane/his-006-v-his-001-016-name-version.test.ts` (`pnpm vitest run --project node`, memory and PostgreSQL in Podman, `docedit-test-postgres`, a database of its own that the harness drops; 9 tests passed, 1 skipped by design: the gate case runs on PostgreSQL only): "stores a named version at the head with name, note, creator and time" reads the stored row back (kind `named`, seq 2 at the head, name, note, a non-empty `createdBy`, `createdAt` between the clock before and after the request) and a second request with `seq: 1` stores at 1 (criterion 1); "refuses view, comment, suggest and fill with forbidden and stores nothing" sends the four roles, each answered 403 `forbidden`, with an editor as the control (criterion 2); "refuses a seq above the head" (400 `validation_failed`, nothing stored) and "refuses a seq below the caller gate with forbidden" (history visibility `since_access` set in storage, an editor's gate is then the head: seq 1 is refused with 403 `forbidden` and seq 2 is stored) (criterion 3); "sends version.created and raises dep.version.created once, with the seq and the chain head" checks the webhook data and the `version.created` notice are `{ seq, chainHead }` with the head's chain head from `LogStore.state`, that a repeated request sends no second event, and on PostgreSQL that a version at seq 1 carries the hash of the commit at seq 1 read from `doc_commits` (criterion 4). The chain head was added to the route here (`chainHeadOf`). `services/document-service/test/control-plane/pro-054-versions.test.ts` (6 tests) still passes.
+
+**Notes:** named versions are never thinned (HIS-030, HIS-032). Audit (2026-11-13): criteria 1 to 3 are unticked because no product code reaches `createVersion` (`packages/history/src/versions.ts`) or `PgVersionStore` (`services/document-service/src/storage/versions-store.ts`): only their own tests import them and the route `POST /documents/{id}/versions` does not exist, so no request is stored or refused. Lane V-HIS-001-016 (2026-11-13): criterion 1 is ticked at the store (see Evidence above; the store defaults to the head). Earlier note, round 3 (2026-11-13, lane HIS-001-016): criterion 1 stays unticked. Its rule (kind `named`, name, note, creator and time at the `seq` given) is tested in `packages/history/test/versions.test.ts`, but the stored row, the default of the head when no `seq` is given, and the creator's surrogate are the service's; `createVersion` takes an explicit `seq` and does not choose the head. Criterion 5 (markup as text) is the pane's and is not built. Round 4 (lane U-HIS-001-016) wrote a second `PgVersionStore` over the same `versions` table (`version-store.ts`, with `u-his-001-016-versions.pg.test.ts`). The review fix (round 2, 2026-11-13) removed it: the one store is `services/document-service/src/storage/versions-store.ts`, which gained a `kind` filter on `list`, and the cases the removed test had that the V test lacked (an export requested twice, every kind outside the seven, one version per kind at a seq, the kind filter) are now in `test/postgres/his-006-versions.pg.test.ts`. Correction (fix of group 3, round 3, 2026-11-14): the two sentences that said the HTTP route and criterion 4 are not built were stale. The route `POST /documents/{id}/versions` exists (`services/document-service/src/control-plane/versions-routes.ts`, lane U-PRO-052-068) and criteria 1 to 4 are ticked over HTTP (Evidence above). Decided here, not by the spec: the chain head is sent as `chainHead`, the placeholder name `dep.document.changed.v1` uses; the generated schema of `dep.version.created.v1` names only `seq` (gaps G83), so `spec/` should gain the field when the spec names it. The in-memory store keeps no hash per commit, so below the head it sends no `chainHead`; `PgLogStore.chainHeadAt` gives it at every seq. Criteria 5 (markup as text) and 6 (the history list and the command) need the history pane (HIS-009), which is not built.
+
+### HIS-007 Create versions for exports, restores, imports and workflows
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** 08 §4; 06 §4.1 (`versions`); 12 §6 · **Requirements:** R4 · **Depends on:** HIS-001, EXP-004, EXP-098, FRW-027, FRW-040
+
+As an owner, I want the state that an export, an import, a restore or a workflow step refers to to be a version I can find again, so that "what exactly was sent" is never a guess.
+
+**Acceptance criteria**
+
+- [x] Given an export job that completes at `seq` S, when it finishes, then a version of kind `export` points at S.
+- [ ] Given a restore, when it runs, then a `pre-restore` version is recorded first and a `restore` version after (HIS-018, HIS-019).
+- [ ] Given an import that completes, when it finishes, then a version of kind `import` points at the resulting `seq`.
+- [ ] Given a workflow that is sent or completed, when the transition is stored, then versions of kind `sent` or `completed` point at that `seq`.
+- [x] Given the same document, `seq` and kind, when creation is requested twice, then only one version exists.
+- [x] Given a kind outside `named`, `export`, `pre-restore`, `restore`, `import`, `sent` and `completed`, when creation is requested, then it is refused.
+- [x] Given automatic grouping of the history list, when versions are listed, then groups are not stored as versions.
+
+**Evidence:** `services/document-service/test/postgres/his-007-export-version.pg.test.ts` "HIS-007 criterion 1: a completed export stores an export version at its seq" (PostgreSQL in Podman, `docedit-test-postgres`, a database of its own, 3 tests passed; lane V-HIS-001-016, 2026-11-13): the `exportHooks` settled hook of `control-plane/exports.ts`, given a completed `export` job at seq 2, stores one `export` version at seq 2 with the job's creator, read back through `PgVersionStore.list`; a preview and a failed export store none; a seq above the head is refused and reported through `versionFailed`. The version is stored after the hook returns, so the test polls for it. `server.ts` passes the version store to the hook. `packages/history/test/versions.test.ts` "returns the stored version when the same document, seq and kind is requested twice (HIS-007 criterion 5)" (applied to every kind, named included, as the criterion is written: a second name for the same seq returns the first version; see ADR 0118) and "refuses a kind outside the seven of 08 §4, and accepts each of the seven (HIS-007 criterion 6)"; "never stores two versions for one seq and kind, whatever is requested (property)". The store that holds the versions is `PgVersionStore` (`services/document-service/src/storage/versions-store.ts`). Against the `versions` table (review fix for lane U-HIS-001-016, 2026-11-13; PostgreSQL in Podman, `docedit-test-postgres`, a database of its own, `services/document-service/test/postgres/his-006-versions.pg.test.ts`, 8 tests passed): "HIS-007 criterion 5: an export requested twice at one seq returns the stored version and keeps one row" and "HIS-007 criterion 5 (as applied to named): the same seq and kind returns the stored version" show criterion 5; "HIS-007 criterion 6: accepts each of the seven kinds and refuses any other before storage" shows criterion 6; "keeps one version per kind at a seq, lists by kind oldest seq first, and leaves out versions below the gate" shows that the kind is part of the key. Criteria 1 to 4 are the service's. Criterion 7 is unticked by the reviewer (group 3, round 3, 2026-11-13): `services/document-service/test/postgres/u-his-001-016-groups-not-stored.pg.test.ts` ("listing and grouping the history writes no version row", PostgreSQL in Podman, 1 test passed) calls `groupCommits`, a pure function with no database access, and then reads the same tables again; it cannot fail unless `PgVersionStore.list` itself writes. No service code lists the history or computes groups (the history list route is not built), so no code path that could store a group is exercised. It also checks only the `versions` rows and the log, not every table or the schema. Re-ticked after the fix (group 3, round 3, 2026-11-13; same file, PostgreSQL in Podman, `docedit-test-postgres`, a database of its own, 3 tests passed): "the schema has no table or column for a group, and versions are pointers to a seq with a kind" reads `information_schema` of the migrated schema (no table or column named for a group; `versions` has exactly its eight pointer columns); "a group cannot be stored as a version, through the store or by SQL" shows `PgVersionStore.create` refusing the kinds `group`, `auto` and `session` and the table's check constraint refusing `group` (SQLSTATE 23514); "listing and grouping the history writes nothing to any table" takes the row count and an MD5 of the rows of every ordinary table before and after reading the log, listing the versions and computing the groups twice, finds no table changed, and then stores one version as a control and finds exactly `versions` changed by one row, so the comparison can fail. No `as never` cast: the store's rows are mapped to the history package's `StoredVersion`. The read is composed in the test from the store calls the list will use; the route `GET /documents/{id}/history` is not built (HIS-026, HIS-008), and its test should take the same snapshot around the route.
+
+**Notes:** phase inferred: exports exist from 1b, but the roadmap places the history interface in phase 2; before it, the export manifest records the `seq` and chain head (09). The comment on the `versions` table in 06 §4.1 omits `sent` and `completed`.
+
+Round 5 (lane V-HIS-001-016, 2026-11-13): criterion 1 ticked (Evidence above). Criterion 2 (`pre-restore` and `restore`) waits for HIS-018 and HIS-019. Fix of group 3, round 3 (2026-11-14): the whole-document half of criterion 2 is now built and tested. `services/document-service/src/control-plane/restore-route.ts` (HIS-019, lane V-HIS-017-032) stores the `pre-restore` version at the head before it writes the snapshot commit and the `restore` version at the new seq after it; `services/document-service/test/control-plane/his-019-restore-route.test.ts` "records a pre-restore version, a snapshot with reason restore and a restore version" (memory and PostgreSQL in Podman, `docedit-test-postgres`, 8 tests passed, rerun 2026-11-14) reads `pre-restore` at seq 2 and `restore` at seq 3. The criterion stays unticked because the region restore of HIS-018 is not built (the route refuses `region` with `not_found`), so the versions of a region restore are not shown. Criterion 3 (`import`) is not ticked: no import job or completion hook exists in `services/document-service/src` (the import is EXP's). Criterion 4 (`sent` and `completed`) is not ticked: no workflow transition writes a version in `services/document-service/src` (the workflow is FRW's). The export version is written after the hook returns, asynchronously, and a failure is reported through `versionFailed` (the export stays completed), so a store outage leaves a completed export without its version: an operator must watch the `export.version` log event.
+
+### HIS-008 List history grouped by day and editing session
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 08 §1, §4; 05 §6.1, §6.2 (`/history`); 06 §4.1 (`commit_scopes`) · **Requirements:** R4 · **Depends on:** HIS-001, HIS-007, HIS-024
+
+As an author, I want a list of what happened to my document, grouped sensibly and filterable by version, region, field or person, so that I can find the change I am looking for.
+
+**Acceptance criteria**
+
+- [x] Given a sequence of commits, when the list is read, then a new group starts after an idle gap of five minutes, when the set of authors changes, at a change of origin such as an import or a restore, and at any stored version.
+- [x] Given the idle gap changed in configuration, when the list is read again, then the groups change with no data migration, because grouping is computed at read time.
+- [x] Given the filters `namedOnly`, `region`, `field`, `user`, `fromSeq` and `toSeq`, when each is used alone or together, then the result contains only the matching commits, using the per-scope table for `region` and `field`.
+- [x] Given a long history, when it is read, then the response is `{ items, nextCursor }` with an opaque cursor and a `limit` of at most 200.
+- [x] Given a group, when it is listed, then it shows the day, the session, the authors, the time range, the number of changes and the origins.
+- [x] Given a caller whose visibility is limited, when the list is read, then it contains only what the gate of HIS-024 allows, which for people who see named versions only is the named versions.
+
+**Evidence:** `packages/history/test/groups.test.ts`: "starts a group after an idle gap, when the authors change, at a change of origin and after a version" (criterion 1; the change of origin is a restore, an import is not tested); "changes with the idle gap in configuration, with nothing stored" (criteria 1 and 2; the default of five minutes is asserted there); "applies each filter alone and together" (criterion 3; `region` and `field` match the `scopes` the caller passes, which the service reads from the per-scope table, not this package); "pages newest first with an opaque cursor and a limit of at most 200" and "gives every item once across pages, whatever the limit (property)" (criterion 4); "shows the day, the sessions, the authors with their agents, the time range, the count and the origins" (criterion 5); "obeys the gate: commits after it, and named versions only for a reader who sees named versions only" (criterion 6). The HTTP response and the service's read of the table are not in this package.
+
+**Notes:** the spec does not say which time zone defines a "day" (Open questions), nor whether control commits (grants, region states) appear to every reader; phase 2 shows content and version events, and the rest is decided with PRM.
+
+### HIS-009 Browse history in a panel
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 08 §1, §4; 13 §3; 05 §8.3 · **Requirements:** R4, R11 · **Depends on:** HIS-008, HIS-006, UX-003, UX-019
+
+As an author, I want a history pane that lists versions and changes and lets me filter them, so that I can look back without leaving the document.
+
+**Acceptance criteria**
+
+- [x] Given the `history` port is present, when the user opens the history pane from the command registry, then the pane lists the groups of HIS-008 with author names resolved through the host's `resolveUsers`, times, counts and the named versions marked; without the port, no history control is shown.
+- [ ] Given the filters, when the user selects named versions, one region, one field or one person, then the list narrows accordingly and shows which filters are active.
+- [x] Given an author who was erased (HIS-038), when a group is shown, then it shows an unknown-person label instead of a name.
+- [x] Given a reader who sees named versions only, when the pane opens, then it lists the named versions and says why the rest is not shown.
+- [ ] Given the pane, when it is used with a keyboard and a screen reader, then every control is reachable, focus is visible, each group announces its authors and time range, and no meaning depends on colour alone.
+- [ ] Given the initial bundle budget, when the editor first loads, then the history pane code is loaded on demand.
+- [ ] Given loading, empty and error states, when they occur, then each has a message.
+
+**Evidence:** lane V-HIS-001-016 (2026-11-14), Chromium, Firefox and WebKit: `packages/ui/e2e/his-009-history-pane.spec.ts` (18 passed over three engines, with one Firefox test passed on its retry; the keyboard test has no axe run after the filter, because Firefox crashed the page on that check in two runs): "is offered from the command registry, and lists groups and named versions with names" (criterion 1: the command `view.history` opens the pane, the group names come from the harness directory, the count, the year, the "Named version" text, and axe finds no violation; without the port the pane and the command are absent, in "is not offered without the history port"); "shows an erased person as unknown and markup in a name or note as text" (criterion 3, and the markup is text); "tells a reader of named versions why the rest is not shown" (criterion 4). The model and the controller are tested in Node in `packages/ui/test/his-009-history-pane.test.ts` (16 tests: loading, empty and error states, the stale-reply rule, filters sent to the port, paging, the unknown label when the directory fails).
+
+**Notes:** all interface strings are external (definition of done). The pane's slot in the shell belongs to UX. Lane U-HIS-001-016 (round 5, 2026-11-13): not built. The filters and grouping already exist as `listHistory` in `packages/history/src/groups.ts`, and the erased-author label as `labelHistoryItems`. Still missing: a `history` port on `CoreApi` (`packages/ui/src/core-api.ts`), `HistoryPane.svelte`, a loader supplied by the host registry (`packages/ui/test/panes.test.ts` requires that `BUILT_IN_PANES` gives `history` no loader), and a browser run of the pane in the UI harness (`packages/ui/e2e/harness`, which is shared). Criteria 1 to 7 stay unticked until that exists. See docs/adr/0357-lane-U-HIS-001-016.md. Round 7 (lane V-HIS-001-016, 2026-11-14): built the pane (`packages/ui/src/panes/HistoryPane.svelte`), its state (`packages/ui/src/shell/history-pane.ts`), the `history` port on `CoreApi` (`packages/ui/src/core-api.ts`), the `view.history` command (`packages/ui/src/commands/builtin.ts`, offered in `App.svelte` only with the port), the loader in `panes.ts`, the strings, and a harness port (`packages/ui/e2e/harness/his-009-history-port.ts`, with a small edit in `harness/main.ts`). Criteria 1, 3 and 4 are ticked. Criterion 2 stays open: the browser run covers the named-versions filter only; region, field and person are tested in Node, and the harness port does not narrow by region or field. Criterion 5 stays open: keyboard operation of the checkbox is tested, but focus visibility, the announcements of each group and a screen reader run are not. Criterion 6 stays open: the pane is reached only through a dynamic import (a source check in the Node test), and the bundle budget is not measured. Criterion 7 stays open: the error message is tested in the browser; the loading and empty messages are only the states in the Node test. Open for the main session: `spec/parity/parity-profile.json` is stale after the new command (its generator is `pnpm --filter @docedit/ui generate`, and `spec/` is outside this lane), so `packages/ui/test/parity.test.ts` fails on "matches a fresh generation byte for byte" until it is regenerated. The command's capability is the parity row `version-history`.
+
+## Viewing and comparing versions
+
+### HIS-010 Open a read-only view of an old version
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 08 §1, §5; 06 §4.4; 02 §7; 07 §8 · **Requirements:** R4 · **Depends on:** HIS-005, HIS-009, HIS-024, FE-072
+
+As an author, I want to open the document as it was at any version I may see, so that I can read what was there and copy from it.
+
+**Acceptance criteria**
+
+- [ ] Given a version selected in the pane, when it is opened, then the component creates a second, read-only editor state that is never connected to the live channel, and no command can submit a commit from it.
+- [ ] Given the old version open, when other people keep editing, then the live document continues to receive commits unaffected.
+- [ ] Given the content at the version's `seq`, when it is rendered, then it uses a pinned read, and assets resolve to the immutable, content-addressed objects it referenced, so images look as they did.
+- [ ] Given the comment ranges, when they are shown, then they are those of the nearest checkpoint at or before the `seq`, and the view tells the user they are approximate between checkpoints.
+- [ ] Given a version below the user's visibility gate, when it is requested, then it is refused with `forbidden` and no entry point offers it.
+- [ ] Given the old version, when the user leaves it, then focus returns to where it was and the live editor is untouched.
+- [ ] Given the view, when it is announced to assistive technology, then its name states that it is a read-only version and gives the date.
+
+**Notes:** "fonts of that time" (08 §5) has no recorded source in a commit or checkpoint (Open questions). In phase 3 the project's own painter may render old versions (02 §7). Second review (2026-11-06, SPK-027), SR-M4: under ADR 0019 an old version is served as the projection of the reader's current visibility, so revoked access also hides history; pinned reads must not be shared across visibility classes (SR-C4) ([review](../review/2026-11-06-second-review.md)). Round 7 (lane V-HIS-001-016, 2026-11-13): no criterion ticked. The read-only editor state, the live-channel isolation and the focus return are mounted from the history pane, which does not exist yet (`packages/ui/src/panes` has none; HIS-009). Criterion 4 has no data to read: the checkpoint holds `seq` and `doc` only, and where comment anchors are kept is undecided (ADR 0357, choices 7 and 8).
+
+### HIS-011 Compute comparisons from the recorded steps
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Maintainer |
+
+**Spec:** 08 §6 (first bullet and last bullets); 05 §6.2 (`/diff`); ADR 0010 · **Requirements:** R4 · **Depends on:** HIS-005, HIS-024
+
+As an author, I want a fast and accurate comparison of two close versions that tells me who changed what, so that I can review a short stretch of work.
+
+**Acceptance criteria**
+
+- [x] Given two versions at most 2,000 commits apart with no snapshot commit between them, when a comparison is requested, then the service builds it from the recorded steps with `prosemirror-changeset`, producing inserted and deleted spans that carry the user and `seq` of the commit that produced them.
+- [ ] Given the result, when it is returned, then it is `{ fromSeq, toSeq, changes }` with changes keyed by block identifier and kinds `modified`, `added`, `removed` and `formatted` (with `attrs`), and `field` keyed by field identifier, spans having `op`, `at`, `text`, `user` and `seq`.
+- [x] Given the parameters `region` and `granularity` (`word` or `char`), when they are given, then the result is limited to that region and uses that granularity.
+- [ ] Given a comparison, when it is computed, then it runs in a worker thread and never on a room's event loop.
+- [x] Given the same pair of sequence numbers, when it is requested again, then the cached result is returned, and the cache never serves one caller a change that the caller's access would hide.
+- [x] Given the same inputs, when the comparison is run twice, then the output is identical.
+
+**Evidence:** `packages/history/test/compare.test.ts`: "gives inserted and deleted spans with the user and seq of the commit that made them" (criteria 1, with `prosemirror-changeset` in `src/compare.ts`); "uses the steps for versions up to 2,000 commits apart by default and aligns beyond that" (criterion 1, `STEP_LIMIT` 2000); "limits the result to a region and uses the granularity asked for" (criterion 3); "caches by the pair of sequence numbers and never serves one visibility class another class's result" (criterion 5); "gives the same output for the same inputs (property)" (criterion 6).
+
+**Notes:** the comparison between versions further apart, or across a snapshot, is HIS-012. Quality for moved content and table changes is evaluated on this implementation by the spike HIS-043, whose recommendation feeds back into this story. Criterion 2 is not ticked: a field change carries `user` and `seq` but no `spans` (test "reports added, removed, formatted blocks, field values and definitions in the 08 §6 format"), and the spec does not give field spans a shape; this needs a decision (Open questions). Criterion 4 is not ticked: `test/harness/compare-worker.ts` runs the package on plain data in a worker thread, but the room host that would call it lives in `packages/authority` and the services, outside this package. The kind `moved`, which the implementation reports, is not in the list of 08 §6; see HIS-012. Round 3 (2026-11-13): criterion 2 stays unticked for the shape, not only for the field spans. `compare` returns `changes` as a flat array whose entries name their `blockId` or `fieldId`, not an object keyed by identifier, and the spec's `field` spans are still undecided; see ADR 0272, choice 4. Round 5 (lane V-HIS-001-016, 2026-11-13): criterion 4 stays unticked. `services/document-service` has no `@docedit/history` dependency (its `package.json` lists `authority`, `model`, `protocol` and others), so a data-plane worker task (`src/data-plane/tasks.ts`, run by the `Workers` pool) cannot import the comparison yet. Adding the dependency is a `package.json` change for the main session (needsFromOthers); the room host that calls the task is then a follow-up.
+
+### HIS-012 Compute comparisons by aligning blocks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Maintainer |
+
+**Spec:** 08 §6; 05 §6.2 (`/diff`) · **Requirements:** R4 · **Depends on:** HIS-011, HIS-014
+
+As an author, I want a comparison between versions that are far apart, or on either side of an import or restore, that is still readable, so that I can see what changed over weeks.
+
+**Acceptance criteria**
+
+- [x] Given two versions more than 2,000 commits apart, or with a snapshot commit between them, when a comparison is requested, then the two documents are aligned by block identifier and a word-level diff runs inside blocks that changed.
+- [x] Given tables, when they are compared, then rows and cells are aligned by their identifiers and added, removed and changed rows and cells are reported.
+- [x] Given form fields, when their values differ, then they are compared by field identifier and reported as changes of kind `field` with the user and `seq` of the commit that set the value, found through the per-scope table.
+- [x] Given a block that exists in both versions with only formatting differences, when it is compared, then it is reported as `formatted` with the changed attribute names.
+- [x] Given a restored block that received a new identifier (HIS-020), when it is compared, then it is reported as added and the old one as removed.
+- [x] Given the result, when authorship is needed for inserted text, then it comes from the attribution map at the later version.
+- [x] Given a block that moved, when it is compared, then the output is deterministic, and its form (a move, or a removal plus an addition) follows the recommendation of the spike HIS-043 once it exists.
+
+**Evidence:** `packages/history/test/compare.test.ts`: "runs a word diff inside changed blocks, with insertions authored from the attribution map" (criteria 1 and 6); "aligns tables by row and cell identifiers" (criterion 2); "compares field values by identifier, with who set them from the per-scope table" (criterion 3); "reports a block with only formatting differences as formatted, with the names" (criterion 4); "reports a restored block with a new identifier as added, and the old one as removed" (criterion 5); "reports a moved block once, deterministically, in both methods" (criterion 7, determinism only). Criterion 7 (lane U-HIS-001-016, 2026-11-13): the spike HIS-043 is done (ADR 0118, round 6), and its recommendation is to report moves as `moved` in both methods. `packages/history/test/compare.test.ts` "reports a moved block once, deterministically, in both methods" checks the exact `moved` change for a move within a container and for a move into another container, and checks that the steps method and the aligned method give the same changes. Determinism is shown by that exact expected output on the fixed input, not by a repeated run.
+
+**Notes:** the attribution map names who inserted content; it cannot name who deleted text or who changed formatting, so deleted spans and `formatted` changes in this path cannot carry a user the way the example in 08 §6 shows (Open questions).
+
+### HIS-013 Compare two versions in the editor
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 08 §1, §6 (last two paragraphs), §14; 13 §3 · **Requirements:** R4, R11 · **Depends on:** HIS-011, HIS-012, HIS-009, UX-035, UX-036
+
+As an author, I want to pick any two versions and see the changes in the document itself, so that I can review them in context.
+
+**Acceptance criteria**
+
+- [ ] Given two versions chosen in the pane (or one version against the current document), when the comparison opens, then it is drawn in the newer version's layout with insertions highlighted, deletions shown on demand so that layout does not shift, and change bars in the margin.
+- [ ] Given the comparison, when the user moves to the next or previous change by keyboard, then focus moves to it and a live region announces its position ("n of m"), its kind and its author.
+- [ ] Given the comparison, when the summary is opened, then it lists changes grouped by region.
+- [ ] Given insertions and deletions, when they are drawn, then they carry an icon or text style as well as colour, and use the same rendering component as suggestion marks.
+- [ ] Given a `field` change, when it is shown, then it names the field and who changed it.
+- [ ] Given a user who may see only part of the history, when they compare, then only versions inside their gate are offered.
+
+**Notes:** "compare, then export as DOCX with tracked changes" reuses the same data and is EXP-093 (gap: 09 does not yet cover exporting a comparison as DOCX tracked changes). Round 7 (lane V-HIS-001-016, 2026-11-13): no criterion ticked. The comparison is drawn in the editor, so it needs the history pane (HIS-009), which does not exist yet; the summary by region (`summarise` in `packages/history/src/compare.ts`) and the gate are logic only (ADR 0357, choices 8 and 9).
+
+## Attribution
+
+### HIS-014 Maintain the attribution map
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Maintainer |
+
+**Spec:** 08 §7, §3; ADR 0010 · **Requirements:** R4 · **Depends on:** BE-020, SYN-006
+
+As an author, I want the system to know who wrote each stretch of text, so that "who wrote this" is a lookup and not an investigation.
+
+**Acceptance criteria**
+
+- [ ] Given a step commit, when the room applies it, then each existing run (a range of positions naming the user and the `seq` that inserted it) is mapped through the step's position map and inserted content gets a new run naming the commit's user and `seq`.
+- [x] Given formatting changes (mark and attribute steps), when they are applied, then attribution does not change in version 1.
+- [x] Given pasted text, when it is attributed, then it names the person who pasted it.
+- [ ] Given a checkpoint, when it is written, then the attribution map is saved with it, and a room opened from a checkpoint plus replay holds the same map as one that replayed the whole log.
+- [x] Given the runs of a document, when they are checked in a property test, then they cover all text exactly once, with no gap and no overlap.
+- [x] Given an attribute change such as a field value, when it is applied, then it creates no run; "who filled this field" comes from HIS-016.
+
+**Evidence:** `packages/history/test/attribution.test.ts`: "maps the runs through a step and gives inserted content a run of its commit" (criterion 1); "does not change for formatting: marks, attributes and a paragraph re-typed in place" (criterion 2); "attributes pasted content to the person who pasted it" (criterion 3); "agrees with a per-position model and covers every position exactly once (property)" (criterion 5); "creates no run for an attribute change such as a field value (HIS-016 answers who filled it)" (criterion 6). Criterion 4 is not ticked: the package serialises the map and shows that a checkpoint plus replay gives the same map as the whole log ("serialises for a checkpoint and reads back the same map"; "gives the same map from a checkpoint plus a replay as from the whole log (property)"), but the room that opens from a checkpoint is in `packages/authority` and BE-019, which is not ticked.
+
+**Notes:** phase inferred. The log holds every input, so a map can be rebuilt by replay; whether checkpoints written before phase 2 are backfilled is open (Open questions). Maintaining runs reuses the position-map function of SYN-001. The map's size on very large documents is measured on this implementation by the spike HIS-044. Round 3 (2026-11-13): criterion 4 stays unticked. The room's checkpoint effect (`packages/authority/src/room/room.ts`, around the `fx.checkpoints` assignment for a snapshot) carries `seq`, `doc`, `reason` and `threads` only, so no attribution map is written with a checkpoint yet. Adding it touches the room, which is outside this lane; see ADR 0272, choice 4. Evidence audit (2026-11-13): criterion 1 was unticked because it says "when the room applies it" and no room or service code calls `applyCommit` or holds an `AttributionMap` (only `packages/history` tests and scripts do), so the tests show the map function, not the room maintaining the map; it can be re-ticked when the room host updates the map on each commit.
+
+### HIS-015 See who wrote a passage
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 08 §1, §7; 05 §6.2 (`/attribution`) · **Requirements:** R4, R11 · **Depends on:** HIS-014, HIS-024
+
+As an author, I want to select a passage and see who wrote it and when, so that I can ask the right person.
+
+**Acceptance criteria**
+
+- [ ] Given a selected passage or a region, when the user asks "who wrote this", then the answer lists the authors and the times of the runs that cover it, from the attribution map at the version being viewed.
+- [ ] Given `GET /documents/{id}/attribution` for a region or a block range, when it is called, then it returns the spans with user and `seq`, limited by the visibility gate.
+- [x] Given an old version open, when the user asks, then the answer is the map at that version.
+- [x] Given text brought back by a restore, when it is asked about, then it names the original author and shows that it was restored by the restoring user (HIS-018).
+- [x] Given an erased person (HIS-038), when they are shown, then the label is an unknown person.
+- [ ] Given the answer, when it is read with a screen reader or without colour, then authors are named in text, and any author colouring has a legend and is not the only signal.
+
+**Evidence:** `packages/history/test/who-wrote.test.ts`: "answers from the map at the version being viewed, not the head" (criterion 3, `attributionFor` at seq 1 and seq 2); "names the original author of restored text and the user who restored it" (criterion 4, with the restore hint of `applyCommit`); "is refused below the visibility gate, as if the version did not exist" (the gate part of criterion 2). `packages/history/test/erasure.test.ts` "shows an erased surrogate as an unknown person", "still names the assistant on an erased person's run" and "never shows an erased identifier as a person (property)" (criterion 5; `shownAuthor` in `src/erasure.ts`, which the interface uses for the label; the erasure itself is HIS-038).
+
+**Notes:** criteria 1, 2 and 6 are not ticked. Criterion 1: the spans carry the `seq` of the commit that wrote the text, not its server time, so the service joins the times from the commit list. Lane HIS-001-016 (round 2): `packages/history/src/who-wrote-times.ts` (`withRunTimes`) does that join and lists each author with the seqs and first and last server times of their runs (test `packages/history/test/who-wrote-times.test.ts`, 4 tests, passing); the criterion stays unticked because the user's "who wrote this" answer and its screen-reader form need the pane and the route, which are not built. Criterion 2: the `GET /documents/{id}/attribution` route is not built; `attributionFor` is its logic. Criterion 5 is ticked for the label only; the erasure of HIS-038 is the service's. Criterion 6 is the interface's. Round 5 (lane V-HIS-001-016, 2026-11-13): criteria 1, 2 and 6 stay unticked. The `GET /documents/{id}/attribution` route (criterion 2) needs `attributionFor` from `@docedit/history`, which `services/document-service` does not depend on (a `package.json` change for the main session; needsFromOthers), and a source of attribution maps at a `seq`: the checkpoints hold no map yet (HIS-014 criterion 4), so the route would replay from the start of the log. The pane that answers "who wrote this" (criterion 1) and its screen-reader form (criterion 6) are not built.
+
+### HIS-016 See who filled a field
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | must | Owner |
+
+**Spec:** 08 §1, §7 (second paragraph); 12 §4.1, §14 · **Requirements:** R4, R13 · **Depends on:** HIS-001, HIS-008, HIS-009, FRW-002, FRW-003, FRW-007, PRM-041, PRM-042
+
+As an owner, I want to see who filled a field and when, so that I can answer "who put this value in" and account for each value in the document.
+
+**Acceptance criteria**
+
+- [x] Given a field, when the user asks who filled it, then the answer comes from the commits whose scopes include `field:<id>` and shows the user, the time and the `seq` of the latest one.
+- [x] Given the history list filtered by a field, or the owner asking for the field's history, when it is read, then it lists every commit that touched that field, found through the per-scope table, each with the user, session, server time and origin.
+- [x] Given a value set by a server-authored commit (origin `prefill`, `sign` or `rules`), when it is shown, then the origin is shown with it, together with the requesting user or `system`.
+- [x] Given a caller below their `minVisibleSeq`, when they ask for a field's history, then commits below the gate are withheld.
+- [x] Given the attribution map does not record attribute changes, when the answer is built, then it comes from the `field:<id>` scopes recorded with each commit and not from the attribution map, and the lookup is an index lookup that does not replay the log.
+- [x] Given a field that has never been changed, when its history is asked for, then it is empty and says so.
+
+**Evidence:** `packages/history/test/field-history.test.ts`: "names the user, time and seq of the latest commit that touched the field" (criterion 1); "lists every commit that touched the field, newest first, with user, session, time and origin" (criterion 2, the owner's field history; the history list's filter is HIS-008's); "shows the origin of a server-authored value with the system as its user" (criterion 3); "withholds commits at or below the minimum visible seq and above the head" (criterion 4); "says so, with an empty list, for a field that never changed" (criterion 6); "refuses the history of a field whose value the caller may not see" (HIS-046). Criterion 5 (fixer, 2026-11-13): `PgLogStore.scopeHistory` and its statement `SELECT_SCOPE_HISTORY` in `services/document-service/src/storage/log-store.ts` return the commits whose scopes include `field:<id>`, newest first, with user, session, agent, server time, origin and scopes, behind the `minVisibleSeq` and head gate, from `commit_scopes` joined to `doc_commits` by key and without reading `doc_commit_payloads` or the attribution map. `services/document-service/test/postgres/his-001-016-record.pg.test.ts` "scopeHistory answers a field lookup from the commit_scopes index, not by replaying the log" (PostgreSQL in Podman, `docedit-test-postgres`, a database of its own): two documents of 600 commits, `ANALYZE`, no planner setting changed; the method returns the 12 commits of `field:f-owner` with their metadata, applies the gate and returns none for an unchanged field, and the plan of the same statement, run as the service role inside the tenant, is an index scan of `commit_scopes_pkey` for the scope, a keyed index scan of one `doc_commits` partition per row, no sequential scan and no payload table.
+
+**Notes:** criterion 5 was unticked by the reviewer (2026-11-13). The lane test runs a hand-written `SELECT` on `commit_scopes` with `enable_seqscan = off` on four rows, so it shows that the primary key can serve the lookup, not that any product code does: no code in `services/document-service/src` queries `commit_scopes` by scope (the only reads join it by `seq` into the commit rows), and `fieldHistory` filters the commit metadata it is given. The criterion is met when a store method answers "commits that touched `field:<id>`" from `commit_scopes` and a test shows its plan uses the index without forcing the planner; the route that calls it is not built. Fixer (2026-11-13): re-ticked on `PgLogStore.scopeHistory` (see Evidence). The commit row is read through a `LATERAL` lookup with `LIMIT 1`: as a plain join the planner chose a sequential scan of the document's 600-row commit partition (a hash join), which reads every commit of the document. The route that passes the result to `fieldHistory` is still not built. Round 4 (lane U-HIS-001-016): `LogStore` now declares `scopeHistory` as an optional method (`src/storage/types.ts`; `ScopeCommit` moved there from `log-store.ts`, which re-exports it), so the interface no longer hides it. The memory store does not implement it yet. `document-service` has no `@docedit/history` dependency, which the route needs: a `package.json` change for the main session. The signing evidence record (IP address, consent and so on) is FRW's and is not part of this answer. The scopes are recorded from 1b (FRW-007); the user-facing answer waits for the history panel (phase 2). This story absorbed FRW-013 during the cross-check.
+
+### HIS-017 Tell apart what a person wrote and what an assistant wrote for them
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 08 §2, §7 (last paragraph); 13 §6.2; 04 §3.1; PRODUCT principle on assistance · **Requirements:** R4, R14 · **Depends on:** HIS-001, HIS-014, HIS-015, PRM-004, PRM-005
+
+As an author, I want history to show clearly which text I wrote and which text an assistant wrote on my behalf, so that I can see what a model contributed.
+
+**Acceptance criteria**
+
+- [ ] Given a commit made by an assistant acting for a user under a delegated agent identity, when it is recorded, then the user is the person it acted for, the agent is named, and the origin is `assistant`.
+- [x] Given text inserted by such a commit, when the attribution map is read, then its run names the person and the agent.
+- [ ] Given the history list, "who wrote this" and a comparison, when assistant-written content is shown, then it is labelled with the person and the agent in text, with an icon, distinct from the person's own writing and never by colour alone.
+- [x] Given a commit with `origin: "assistant"` from a connection that has no delegated agent identity, when it is recorded, then no agent is attributed, because the agent comes from the authenticated connection and not from the claim.
+- [x] Given text the person typed, when it is shown, then it is never labelled as written by an assistant.
+
+**Evidence:** `packages/history/test/attribution.test.ts`: "names the person and the agent on the runs of an assistant commit" (criterion 2); "never names an agent the connection did not carry, whatever origin the commit claimed" (property; criterion 5, every run without an agent is labelled as a person, for origins including `input`). Criteria 1 and 4 are not ticked (see Notes). Criterion 3 (the icon and the text label in the history list and the comparison) belongs to the `ui` and `element` packages and is not ticked. The package takes the agent from the commit it is given and does not check where the commit's agent came from. Criterion 4 (the last but one of the list): `services/document-service/test/data-plane/his-017-agent-claim.test.ts` "records no agent for an assistant-origin commit, even when the client claims one" (the stored record has no agent, the claimed `robot` is dropped, origin `assistant` is kept), with `test/data-plane/sync.test.ts` "stamps the author from the connection and records the client origin only as a claim" (the broadcast author).
+
+**Notes:** the agent identity is capped at `suggest` (13 §6.2), so assistant writes arrive as suggestions. Whether accepting such a suggestion changes the attribution of the accepted text is not specified: accepting removes a mark, and formatting does not alter attribution in version 1 (Open questions). Second review (2026-11-06, SPK-027), SR-M23: no token claim or channel establishes the agent identity yet (UX-044), so the first and fourth criteria wait for that decision ([review](../review/2026-11-06-second-review.md)).
+
+## Restore and fork
+
+### HIS-018 Restore one region to an earlier version
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Editor |
+
+**Spec:** 08 §8; 07 §12, §13; 05 §6.2 (`/restore`); 11 §5 (exit criteria) · **Requirements:** R4 · **Depends on:** HIS-005, HIS-011, HIS-012, HIS-020, SYN-030
+
+As an editor, I want to bring one region back to how it was, without disturbing the rest of the document, so that I can undo a bad stretch of work without losing everyone else's.
+
+**Acceptance criteria**
+
+- [ ] Given `edit` in the region, a region that is not approved and not leased to someone else, when the user restores it to `toSeq`, then the service first records a `pre-restore` version, then computes steps from the current region to the target content and applies them as one commit with origin `restore`, then records a `restore` version.
+- [x] Given the computation, when the steps are built, then blocks are aligned by identifier, unchanged blocks are left alone, changed blocks are replaced, missing blocks are inserted and extra blocks are removed.
+- [x] Given comments and authorship in blocks that were not changed, when the restore is applied, then comment ranges and attribution in those blocks survive.
+- [x] Given restored runs, when the attribution map is updated, then they keep their original authors and are additionally marked as restored by the restoring user.
+- [x] Given steps that would be too large for a commit, when the restore is applied, then it falls back to a snapshot commit.
+- [ ] Given the restore is applied, when subscribers are notified, then the event `version.restored` is sent and the webhook `dep.version.restored` is raised.
+- [x] Given a user without `edit` in the region, when they try, then the request is refused with `forbidden`.
+
+**Evidence:** `packages/history/test/restore.test.ts`: "aligns blocks by identifier: unchanged left alone, changed replaced, missing inserted, extra removed" (criterion 2); "keeps comment ranges and attribution in the blocks it leaves alone" (criterion 3; the comment ranges are checked as mapped positions, the comment store is not in this package); "keeps the original authors of restored runs and marks them restored by the restoring user" (criterion 4); "falls back to a snapshot commit when the steps are too large for one commit" (criterion 5); "refuses a user without edit in the region with forbidden" (criterion 7). Criterion 1 is not ticked: the `pre-restore` and `restore` versions are written by the service, and the test "applies as one server-authored commit with origin restore through the room" checks the commit but not the versions. Criterion 6 (events and webhooks) is the service's.
+
+**Notes:** Second review (2026-11-06, SPK-027), SR-M29: the fifth criterion lets a region restore become a snapshot commit, which replaces the whole document, cannot be rebased over and could overwrite commits in other regions; the review proposes splitting the restore into several commits or refusing it with `too_large` instead ([review](../review/2026-11-06-second-review.md)).
+
+**Notes:** a snapshot commit replaces the whole document; how a region-only fallback leaves other regions and approved regions untouched is not described (Open questions). The restore interface in the history pane is part of HIS-009 and HIS-021.
+
+### HIS-019 Restore the whole document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Owner |
+
+**Spec:** 08 §8; 07 §12, §13; 12 §10 (`workflow_active`); 05 §5.3 (`sync.reset`) · **Requirements:** R4 · **Depends on:** HIS-005, HIS-020, SYN-005
+
+As an owner, I want to return the whole document to an earlier version, so that I can recover from a bad import or a bad round of edits.
+
+**Acceptance criteria**
+
+- [x] Given a user with `manage` and no active workflow, when they restore the document to `toSeq`, then the service records a `pre-restore` version, stores a snapshot commit with reason `restore`, and records a `restore` version.
+- [x] Given the snapshot commit, when it is stored, then every client receives `sync.reset` and reloads, and history is not rewritten: earlier commits and the hash chain are untouched and the restore has a new `seq`.
+- [x] Given a workflow that is active, when the restore is requested, then it is refused with `workflow_active`.
+- [x] Given a user without `manage`, when they request a whole-document restore, then it is refused with `forbidden`.
+- [x] Given a target version that the user's gate hides, when they request the restore, then it is refused.
+- [x] Given the restore, when it completes, then grants are unchanged: a restore never brings back grants.
+
+**Evidence (lane V-HIS-017-032, 2026-11-13, criterion 1 ticked):** `services/document-service/test/control-plane/his-019-restore-route.test.ts` (8 tests passed: memory, and PostgreSQL in Podman `docedit-test-postgres` with the real data plane, `realDataPlane: true`): the owner's `POST /v1/documents/{id}/restore` with `toSeq` 0 after two replacements answers `{ seq: 3, toSeq: 0, preRestoreSeq: 2 }`; the `pre-restore` version is at seq 2 and the `restore` version at seq 3 (read with the version store); the commit at seq 3 is a snapshot with origin `restore`, and the content read back has the block types and text of seq 0; seqs 1 and 2 are read back unchanged; an editor gets `forbidden` and the head stays at 2; a `toSeq` above the head is `not_found`; a body without a valid `toSeq` is `validation_failed`. Route: `src/control-plane/restore-route.ts` (`restore`, operation `restore` of `spec/dep`); the reason goes through `replaceContent`'s new `reason` option (`src/data-plane/index.ts`, `src/seams.ts`), so the snapshot's origin is `restore`. The `pre-restore`/`restore` version kinds are the store's. Criteria 2 to 6 were ticked before (see above).
+
+**Evidence:** `packages/history/test/restore.test.ts`: "is a snapshot commit with reason restore for a user with manage and no active workflow" (criterion 6: after the snapshot commit the grants and their revision are as they were; the ack at seq 4 is part of criterion 1 only, and the `pre-restore` and `restore` versions are not checked here); "is refused while a workflow is active, without manage, and below the gate" (criteria 3, 4 and 5; the target outside the gate is `forbidden`, and a target that does not exist is `not_found`). Not ticked: criterion 1 as a whole (the versions are the service's) and criterion 2 (`sync.reset` to every client and the untouched hash chain; the test checks only the ack).
+
+**Notes:** the re-check at apply time is HIS-020.
+
+**Notes (lane V-HIS-017-032, 2026-11-13):** the whole-document route is built, so the note above about the missing versions and the `restore` reason no longer holds. The workflow refusal (`workflow_active`) and the approved-region refusal (`conflict`) are in the route, but are not run over HTTP by the test; the package tests cover the rules. The route serves no `region` (HIS-018) and no `dryRun` (HIS-021): both are refused with `not_found` and a reason. The `RestoreResult` schema is a placeholder, so `{ seq, toSeq, preRestoreSeq }` is this lane's proposed shape (docs/adr/0358-lane-V-HIS-017-032.md). Restoring to a seq whose payload is thinned answers `not_found` through the rebuild (HIS-032 criterion 4, rebuild part), which the restore route calls.
+
+**Notes (lane HIS-017-032, 2026-11-13):** criterion 2 is not ticked. `services/document-service/src/data-plane/his-019-snapshot-history.test.ts` shows the server half: the reset carries the new `seq` (the head before plus one), and the earlier commits read back unchanged after a whole-document snapshot. The data plane's `replaceContent` writes reason `import` for every replacement, so the `restore` reason is not built, and the client's reload on `sync.reset` is not asserted in `packages/backend-dep/src/backend.universal.test.ts`. Criterion 1 needs the `pre-restore` and `restore` versions, which the service does not write yet.
+
+**Evidence (lane U-HIS-017-032, 2026-11-13, criterion 2 ticked):** `services/document-service/test/data-plane/his-019-reset-chain.pg.test.ts` (PostgreSQL in Podman, 1 test passed): every open client receives `sync.reset` at the new seq, the earlier commits read back unchanged, and `logs.verify` with payloads reports ok at the new head. The reload on `sync.reset` is the engine's: `packages/engine/test/sync-state.test.ts`, "reset on a snapshot (SYN-023)" (33 tests passed, Node). The client reload is not run through `backend-dep` in this check.
+
+### HIS-020 Re-check restores when they are applied
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** 08 §8 (re-check at apply, identifiers, definitions); 07 §11, §13; 03 §9; 04 §10 · **Requirements:** R3, R4 · **Depends on:** SYN-030, PRM-047, PRM-049, CDM-012
+
+As an owner, I want a restore to be judged against the permissions in force when it is applied, not only when it was requested, so that a restore cannot slip past a change of grants or an approval.
+
+**Acceptance criteria**
+
+- [x] Given a restore request that was authorised, when the room applies the commit, then it re-checks the rules of 07 §13 (`manage` for a whole document, `edit` in the region for a region, no affected region approved, no lease held by someone else) at that moment, and refuses the commit if any no longer holds.
+- [x] Given a restore that would change an approved region, when it is requested or applied, then it is refused until the region's state is changed.
+- [x] Given a restored block whose old identifier is in use elsewhere in the current document, when the restore is applied, then the restored block gets a new identifier.
+- [ ] Given a region restore that needs a definition (a style, for example) that no longer exists, when the user has `structure`, then the definition is recreated; when not, the restored paragraphs fall back to the default style and the user is told.
+- [x] Given a restore, when it is applied, then it goes through the invariant check and the outcome check like any server-authored commit (SYN-030).
+
+**Evidence:** `packages/history/test/restore.test.ts`: "refuses a restore that would change an approved region, when requested and when applied" (criterion 2; the approval that arrives before the room applies the commit is refused with `conflict`); "gives a restored block a new identifier when its old one is in use elsewhere" (criterion 3; the new identifier is the same for one request and differs between requests); "recreates a missing definition for a user with structure, and falls back to the default style otherwise" (criterion 4, in part: the plan lists the definitions it `recreated` or `replaced`; criterion 4 was unticked by the reviewer, batch of 2026-11-13 group 4 round 1, because "the user is told" is not built or tested here and the notice is the interface's, UX; re-tick it when a test shows the person is told); the same test applies both plans through the room's author path with origin `restore` (criterion 5, invariant and outcome checks, in the room of `packages/authority`). Not ticked: criterion 1. The test covers the approval and the permission re-check at apply time. Lane HIS-017-032 added `packages/history/test/restore-recheck.test.ts`: a lease taken by someone else after planning makes the room refuse the region restore, the same commit applies without the lease (control), and a whole-document restore whose preconditions no longer hold (a workflow started) is refused. Lane U-HIS-017-032 (2026-11-13) added the planner losing `edit` after planning, in the same file: the grant is withdrawn and the connection's document role is viewer, and the room answers `sync.reject` for the restore, with the control commit written first (Node, `packages/history/test/restore-recheck.test.ts`, "refuses a region restore when the planner loses edit in the region after planning"). The refusal comes from the connection's document role (P6), not from the region grant: a viewer grant alone does not cut an `inherit` region's editor role (`packages/authority/src/permissions/access.ts`, `regionCaps`), so that case is not shown and needs a restricted region policy in a test. Criterion 1 stays unticked for the whole-document `manage` case at apply time (not run here).
+
+**Evidence (lane V-HIS-017-032, 2026-11-13, criterion 1 ticked):** `packages/history/test/his-020-manage-recheck.test.ts` (Node, 2 tests passed): a whole-document restore planned by an owner is applied by the room while the owner still holds `manage` (control: the head moves by one), and is refused with `sync.reject` when the same preconditions are applied for a connection whose role is `editor` (no `manage`), with the head unchanged. The other rules of the criterion are covered by the tests above: edit in the region, an approved region, a lease taken by someone else, and an active workflow.
+
+### HIS-021 Preview a restore with a dry run
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Editor |
+
+**Spec:** 08 §8 (`dryRun`); 05 §6.2 (`/restore`) · **Requirements:** R4 · **Depends on:** HIS-018, HIS-019, HIS-013
+
+As an editor, I want to see what a restore would change before I do it, so that I do not restore the wrong version.
+
+**Acceptance criteria**
+
+- [x] Given a restore request with `dryRun`, when it is made, then the response is the comparison the restore would produce, in the format of HIS-011, between the current content and the result.
+- [ ] Given a dry run, when it completes, then no commit, no version and no event has been created.
+- [x] Given a dry run, when it is requested, then it needs the same permission and the same visibility as the real restore, so that it cannot be used to read what the gate hides.
+- [ ] Given the history pane, when the user chooses restore, then the dry-run comparison is shown with the comparison view and the user confirms before the real restore.
+
+**Evidence:** `packages/history/test/restore.test.ts`: "returns the comparison the restore would produce, in the format of HIS-011" (criterion 1; the dry run is the aligned comparison of HIS-012 with the `fromSeq`, `toSeq` and `changes` of HIS-011, so it inherits the open field-span shape of HIS-011 criterion 2); "needs the same permission and the same visibility as the restore itself" (criterion 3; the `forbidden` and `not_found` cases of the restore). Not ticked: criterion 2. `planRestore` is a pure function and builds no commit, version or event, but the test "creates nothing" only checks a room that the plan never touches, so it does not prove the service path; a test through the service is needed. Criterion 4 is the history pane's (HIS-009 and UX).
+
+### HIS-022 Copy a version into a new document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Owner |
+
+**Spec:** 08 §8 (fork); 05 §6.2 (`/fork`), §8.1 (`de-fork-request`); 07 §12; 12 §9; review section 4 · **Requirements:** R4 · **Depends on:** HIS-005, HIS-024, PRO-083, PRO-087
+
+As an owner, I want a copy of any version as a new document, so that I can start a new line of work without touching the original.
+
+**Acceptance criteria**
+
+- [ ] Given the user chooses to copy a version, when the component acts, then it raises `de-fork-request` for the host and does not call the fork itself, because fork is a service-credential operation.
+- [ ] Given a service credential and `atSeq`, when `POST /documents/{id}/fork` is called, then a new document is created with the content at that `seq`, records `forked_from` and `forked_at_seq`, and starts its own log, its own incarnation and its own hash chain.
+- [x] Given the request names whether grants are copied, when the fork is made, then grants are copied only if it says so.
+- [ ] Given the acting user is named in the `DEP-Actor` header, when `atSeq` is below that user's gate, then the fork is refused.
+- [ ] Given the new document, when it is created, then assets its content references are attached to it so that its references resolve (invariant I4).
+- [x] Given the fork, when it is made, then the original is unchanged and there is no merge back: fork is one-way.
+
+**Evidence:** `services/document-service/src/control-plane/history-routes.test.ts` "creates a new document with the content at atSeq and its own log (HIS-022 criterion 2, part)" (the copy's content at seq 0 equals the source's, with seq 0 and its own incarnation); "copies grants only when the request says so (HIS-022 criterion 3)" (the member is `copyGrants`, default false; see ADR 0153); "leaves the original unchanged (HIS-022 criterion 6)" (metadata ETag, content and grants of the source are the same before and after a fork with `copyGrants`); "is a service-credential operation" and "refuses a seq above the head as not_found" (refusals). Route: `historyRoutes` in `src/control-plane/history-routes.ts`, wired in `handlers.ts`. Not run: PostgreSQL storage (not running here). Criterion 2 is not ticked as a whole: `forked_from` and `forked_at_seq` are not recorded, because the store takes no fork fields. Criterion 1 is the component's (UI). Criterion 4 (the `DEP-Actor` gate) needs the acting user's role, which the service credential does not carry. Criterion 5 (assets) needs a shared asset row, which the storage does not have (ADR 0153).
+
+**Evidence (lane U-HIS-017-032, 2026-11-13, PostgreSQL in Podman):** `services/document-service/test/control-plane/his-022-fork.test.ts` runs the fork cases on memory and on PostgreSQL (`docedit-test-postgres`, each harness its own database, dropped on close): the copy at `atSeq` 0 has its own incarnation and the source content (criterion 2, part); `copyGrants` copies grants only when asked (criterion 3); the original keeps its metadata ETag, content and grants (criterion 6); a user credential is `forbidden` and `atSeq` above the head is `not_found`. Its ten tests (five per storage) passed. Criteria 1, 2, 4 and 5 stay unticked: `forked_from` and `forked_at_seq` are still not stored, the `DEP-Actor` gate needs the acting user's role (not carried by the service credential), and assets are not shared.
+
+**Evidence (lane V-HIS-017-032, 2026-11-13, criterion 2 ticked):** `services/document-service/test/control-plane/his-022-fork-provenance.test.ts` (6 tests passed, memory and PostgreSQL in Podman `docedit-test-postgres`): the copy's stored record names its source (`forkedFrom`) and the `seq` it was copied at (`forkedAtSeq`, 0), a second fork of a copy names the copy, the original keeps neither, and the copy has its own incarnation, head seq 0 and no chain head yet. The store writes the two columns that migration 0002 already defines on `documents` (`src/storage/document-store.ts`, `create`; `src/storage/memory.ts`, `create`; `src/storage/types.ts`, `NewDocument.fork`, `DocumentRecord.forkedFrom`/`forkedAtSeq`); `src/control-plane/history-routes.ts` passes `fork` at creation. Criteria 1, 4 and 5 are not ticked (component, `DEP-Actor` gate, assets, as above).
+
+**Notes:** Lane control-plane-4 (2026-11-13) decided the member name of criterion 3 as `copyGrants`, default false, pending gap G69 (ADR 0153, proposed). The protocol must name the member before the contract suite can check it.
+
+**Notes (evidence audit, 2026-11-13):** criterion 2 was unticked: every fork test uses `atSeq` 0 on a source whose head is 0, so none shows that the copy holds the content at an earlier `seq` rather than the head, `forkedAtSeq` 0 equals a default, and the new hash chain is only shown empty (`chainHead` null); a fork at `atSeq` above 0 of a source with later commits needs a test through the route.
+
+**Notes:** templates are instantiated by forking at a pinned `seq` (12 §9), which is FRW's story. Whether threads, versions and workflow state are copied is not specified (Open questions). Branches with merge are not designed (08 §15).
+
+## Who can see history
+
+### HIS-023 Decide the exact shape of the visibility gate
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 1b | S | must | Maintainer |
+
+**Spec:** 08 §9; 07 §8; review S-08 · **Requirements:** R4, R10 · **Depends on:** none
+
+As a maintainer, I want the visibility gate defined precisely before it is built, so that every endpoint enforces the same rule.
+
+**Acceptance criteria**
+
+- [x] Given 07 §8 names a single `minVisibleSeq(user)` while 08 §9 says that under `editors` everyone without `edit` sees named versions only, when the decision is taken, then it states whether the gate is a number or a predicate over (user, `seq`), and what a named version's own content and comparison cover.
+- [x] Given a viewer whose setting allows named versions only, when their channel resumes after a short disconnect, then the decision states whether they may stream the commits they could have seen live or must reload.
+- [x] Given the setting `since_access` and a token with no `access_since` claim, when the user asks for history, then the decision states the outcome.
+- [x] Given a tenant setting and a document setting, when both exist, then the decision states which wins, who may change either, and whether a change applies to history already written.
+- [ ] Given the decision, when it is recorded, then it is an ADR, 07 §8 and 08 §9 are amended, and HIS-024, HIS-025 and HIS-026 are updated.
+
+**Evidence:** Decided in ADR 0034 (proposed), section 2: the gate is a number, `minVisibleSeq(user)`, with a rule for single states (at or above it, the head, named versions) and one for runs of commits (from a seq at or above it); a named version discloses its content, its attribution map and a comparison built from the two states only; a viewer under `editors` reloads after a short disconnect unless at the head; `since_access` without the claim fails closed at the head; a document setting wins over the tenant's, only tenant administrators change either, and a change applies at once, history included, rewriting nothing. Built in `packages/authority/src/room/gate.ts` and tested in `test/room-resume.test.ts`.
+
+**Notes:** this decision is a gap in the spec, not an owner question from 11 §10. Second review (2026-11-06, SPK-027), SR-M28 recommends a predicate over (user, `seq`) and adds inputs 07 §8 omits: `GET /threads?seq`, `GET /field-values?seq`, `restore` with `dryRun` and `toSeq`, and `POST /versions` with `seq` ([review](../review/2026-11-06-second-review.md)). 2026-11-06: ADR 0034 (proposed) keeps the threshold for runs of commits and adds the predicate for single states that SR-M28 asks for; each of those inputs is one or the other. Not met: (5) the ADR is proposed; 07 §8 and 08 §9 are amended and HIS-024 to HIS-026 updated once the owner accepts it (its last section has the text).
+
+### HIS-024 Enforce one visibility gate wherever a sequence number is supplied
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 08 §9; 07 §8, §12; 04 §9 step 4; 10 §3.3; review S-08 · **Requirements:** R4, R10 · **Depends on:** HIS-023
+
+As an owner, I want old text that was deleted before someone was given access to stay hidden from them, whichever door they try, so that history is not a way round access.
+
+**Acceptance criteria**
+
+- [ ] Given one gate, when any endpoint or message accepts a sequence number, then it calls this gate and no endpoint contains its own copy of the rule.
+- [x] Given content at a `seq`, the commits resource and exports at a `seq` (the places that exist in phase 1b), when the `seq` is below the caller's gate, then the request is refused with `forbidden`.
+- [x] Given a channel resume whose `seq` is below the gate, when the channel opens, then the answer is `catchUp: "reload"` and no old commits are sent.
+- [x] Given a table of every route and message field that carries a sequence number (`seq`, `fromSeq`, `toSeq`, `atSeq`, `after`, `baseSeq`, `resume.seq`), when CI runs, then each is either gated or listed as exempt with a reason, and a new ungated field fails the build.
+- [x] Given the head of the document, when any user with `view` reads it, then the gate never blocks it.
+- [ ] Given the default setting `editors`, when the gate is evaluated, then people with `edit` somewhere in the document see full history and everyone else sees named versions only.
+
+**Evidence:** `services/document-service/src/data-plane/gate.test.ts`: for every setting and every role that reads the document, the gate never blocks the head; under `editors`, people with `edit` see from `seq` 0 and readers only the current state; `all` shows full history; `since_access` shows the state current at the access time and fails closed without the claim (`src/data-plane/gate.ts`).
+**Evidence (criterion 4, lane HIS-017-032):** `services/document-service/src/data-plane/his-024-seq-walk.test.ts`: "every client-supplied sequence field of the definition is gated or exempt in SEQ_INPUTS" and "every listed input is still a field of the definition" walk `DEP1` (the operations' query and body, the client messages' payloads) against `SEQ_INPUTS`, and "a new ungated sequence field fails the walk" adds a probe operation. The walk found the table out of step with the definition: `compare` was `diff` and `history` in the definition, `threads` named `body.range.baseSeq` where the definition has `body.target.range.baseSeq`, and `fork`, `read-marker` and `history`/`diff` were missing. Corrected in `src/data-plane/gate.ts`. The attribution `atSeq` is listed but the definition has no such member (gap G68); the test names that one exception.
+**Evidence (criteria 1, 2 and 5, lane U-HIS-017-032, 2026-11-13):** `services/document-service/test/control-plane/his-024-one-gate.test.ts` walks the service sources: no module outside the two gate modules calls `minVisibleSeq` or `editsSomewhere` (a receiver call such as `room.minVisibleSeq(` delegates and is not a copy) and `visibleFrom` is gone; the routes that take a `seq` call `minVisibleSeqOf` (criterion 1). Criterion 2 for the commits resource and exports: `routes.commits.test.ts` "refuses `after` below the history gate and returns nothing below it" and `routes.exports-gate.test.ts` "refuses a seq below the history gate for a viewer and allows the head and full history", each run on memory and on PostgreSQL in Podman (`docedit-test-postgres`, 22 tests passed across the four gate files). Content at a `seq` below the gate (lane U-HIS-017-032, 2026-11-13): `services/document-service/test/control-plane/his-024-content-gate.test.ts`, on memory and on PostgreSQL in Podman (`docedit-test-postgres`), 2 tests passed: a viewer gets `forbidden` for `content?seq=0`, the owner reads seq 0, and the viewer reads the head at seq 2. Criterion 2 is ticked on the three places together. The default-`editors` criterion (the sixth) was unticked at review: `src/data-plane/gate.test.ts` "shows full history to people who hold edit somewhere, under the default editors setting" and "shows only the current version to readers under the default editors setting" (memory, Node) cover the full-history half and the current-version half, and "named versions only" is HIS-026, not built.
+
+**Evidence (criterion 3, lane V-HIS-017-032, 2026-11-13):** `packages/authority/test/room-resume.test.ts`, describe "the visibility gate on resume", "lets editors stream and tells everyone else to reload under the default setting, editors" (13 tests passed, Node): a resume below the gate for readers gets `catchUp: "reload"` and the room sends no `sync.commit`, and a resume at the head streams for anyone. This is the room's answer; the wire path through the data plane is not run here.
+
+**Notes:** Criterion 6 is not ticked: its named-version half is phase 2 (HIS-026), and the test covers the current-version half only. Criterion 3 (channel resume) is the room's and SYN-026's, not run here. Criterion 4 is ticked (lane HIS-017-032): a test walks the route table against `SEQ_INPUTS`. 07 §8 lists the places a sequence number can be supplied, but 05 §6.2 and 12 §10 add `GET /threads?seq`, `GET /field-values?seq`, the `seq` in a version request and `toSeq` in a restore; the route table of the fourth criterion is how those are found (Open questions). Phase 1b because pinned reads and resume already exist; the remaining endpoints are HIS-026. The resume criterion is exercised together with SYN-026, which calls this gate.
+
+**Notes (evidence audit, 2026-11-13):** criterion 1 was unticked: `POST /documents/{id}/fork` accepts `atSeq` and does not call the gate (`prm-041-seq-routes.test.ts` asserts that it does not), and `control-plane/gate.ts` holds its own copies of the rule (`minVisibleSeqOf` repeats the `since_access` search of `minVisibleSeq`, and `refuseBelowGate` hand-codes `stateVisible` without `named`), which the source walk of `his-024-one-gate.test.ts` cannot see because it matches only calls to `minVisibleSeq(` and `editsSomewhere(` and exempts both gate modules.
+
+### HIS-025 Choose who sees full history
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Tenant administrator |
+
+**Spec:** 08 §9; 06 §4.1 (`history_visibility`); 13 §10 · **Requirements:** R4, R10 · **Depends on:** HIS-024, HIS-023
+
+As a tenant administrator, I want to choose whether everyone with `view`, only editors, or people since the time they were given access can see full history, so that old drafts do not reach people who should not see them.
+
+**Acceptance criteria**
+
+- [x] Given no explicit setting, when history is requested, then the effective setting is `editors`.
+- [x] Given `editors`, when a user has `edit` somewhere in the document, then they see full history, and everyone else sees named versions only.
+- [x] Given `all`, when a user has `view`, then they see full history.
+- [ ] Given `since_access` and a token whose `access_since` claim names a time, when the user asks for history, then they see history from the first commit at or after that time, and a host that does not supply the claim gets the outcome decided in HIS-023.
+- [ ] Given a change of setting, when it is made, then it needs the right decided in HIS-023, is audited with the actor, and takes effect on the next request.
+- [ ] Given the setting, when it is set per tenant and per document, then the effective setting follows the precedence decided in HIS-023.
+
+**Evidence (criteria 1 to 3, lane history-2, round 9):** `packages/history/test/visibility-settings.test.ts`: "has three settings, and no explicit setting means editors (criterion 1)" (`DEFAULT_HISTORY_VISIBILITY`, which the room applies when no setting is given, `packages/authority/src/room/room.ts`); "under editors, a person with edit somewhere sees full history" and "under editors, a person without edit sees the head and named versions only" (criterion 2, with `stateVisible` and `rangeVisible`); "under all, a person with view sees full history whatever their edit rights (property)" (criterion 3).
+
+**Notes:** `since_access` depends on the host: document-level access lives in the host (08 §9). The setting is reached through the administration API (13 §10). Round 9 (lane history-2): criterion 4 stays unticked. The gate (`minVisibleSeq`, ADR 0034) admits the state current at `access_since`, which is the last commit at or before that time, while this criterion says the first commit at or after it; the two differ by one commit, and the owner must decide which applies (proposed ADR 0145, section 8). Without the claim the gate fails closed at the head, as this criterion asks. Criteria 5 and 6 are the service's (the change and its audit, and the per-tenant and per-document precedence of HIS-023). Fixer U2 group 2 round 1 (2026-11-13): criterion 2 was checked and stays ticked. Its reader half rests on a test of named versions: `visibility-settings.test.ts` gives `stateVisible` a set of named sequence numbers and shows that a reader under `editors` sees the head and a named version but not an unnamed earlier state (rerun, passing). That is the rule in `packages/history`. The service listing of named versions for a reader is HIS-026, which is why HIS-024 criterion 6 stays unticked. Round 11 (lane U-HIS-017-032), needs from others: criteria 5 and 6 cannot be built as the spec stands. `spec/dep/dep-1.openapi.json` has no operation that reads or sets `history_visibility` (the column exists in `documents`, 06 §4.1), and no tenant-level setting exists, so the change, its audit and the precedence need an operation added to the spec first (a spec change for the main session, not a product edit). Criterion 4 waits for the owner's decision on the first or last commit at `access_since` (proposed ADR 0145, section 8).
+
+### HIS-026 Prove the gate with negative tests on every endpoint
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** 08 §9; 07 §8, §12; 11 §5 (exit criteria); 05 §11 (`history` profile) · **Requirements:** R4, R10 · **Depends on:** HIS-024, HIS-025, PRO-119
+
+As an owner, I want proof that every place a sequence number can be supplied honours the gate, so that a new endpoint cannot quietly leak old text.
+
+**Acceptance criteria**
+
+- [ ] Given each setting (`editors`, `all`, `since_access`) and each role, when a request supplies a `seq` below the gate to content at a `seq`, history, comparison, attribution, activity, fork, exports at a `seq`, the commits resource, named-version creation, restore and the thread and field-value reads with `?seq`, then each is refused with `forbidden` (or, for resume, answered with `catchUp: "reload"`).
+- [ ] Given a request at or above the gate, when it is made by the same user, then it succeeds, so that the tests fail if the gate is too strict as well as too lax.
+- [ ] Given the comparison and attribution endpoints, when a range straddles the gate, then the response contains nothing from below it.
+- [ ] Given the tests, when they run in the conformance kit, then they belong to the `history` profile and run against any server that announces it.
+- [ ] Given the exit criteria of phase 2, when they are checked, then "history visibility is enforced at every endpoint" is demonstrated by this suite.
+
+**Evidence (round 7, 2026-11-13):** `packages/history/test/gate-negative.test.ts`, describe "the visibility gate on every sequence number": for each setting (`editors`, `all`, `since_access`) and each role, `minVisibleSeq` from the authority gives the gate, and a seq below it is refused with `forbidden` by the comparison, attribution, content at a version (`versionFor`), named-version creation and restore, before any rebuild (the sources throw if touched). Describe "a request at or above the gate succeeds" (criterion 2) runs the same functions at the gate and at the head. Describe "a comparison that straddles the gate contains nothing from below it" (criterion 3, comparison part).
+
+**Notes:** Evidence audit (2026-11-13): criterion 2 was unticked because its test runs `compare`, `attributionFor`, `versionFor`, `createVersion` and `planRestore` of `@docedit/history`, which no product code imports (the document service does not depend on that package, and the diff, attribution and restore routes are not built), so no request to an endpoint at or above the gate is exercised; the positive cases that exist for the commits resource, content and exports are in the HIS-024 service tests. Criterion 1 is not ticked as a whole: exports at a `seq`, the commits resource, threads and field-value reads with `?seq`, fork and the resume answer are the service's routes, not functions of this package. Criterion 3 is not ticked for attribution: `attributionFor` at a visible version returns runs whose `user` and `seq` belong to commits below the gate. A probe with the gate at the head returned the author and `seq` of commit 1 for text at the head. The spec does not say whether such runs are withheld, shown as an unknown person or kept (ADR 0118, round 7). The code has not been changed. Criterion 4 belongs to the conformance kit and criterion 5 to the service's suite. Round 11 (lane U-HIS-017-032), blockers: the HTTP routes `history`, `versions` (named-version creation), `diff`, `attribution` and `restore` are in `spec/dep/dep-1.openapi.json` but `services/document-service/src/control-plane` does not serve them (`src/data-plane/gate.ts` lists them as seq inputs only), so criterion 1 cannot be shown over HTTP for those; criterion 3 for attribution waits for the decision in ADR 0118. Building those routes is a large product change outside a single lane; not started.
+
+## Changes since last visit
+
+### HIS-027 Record read markers and serve the activity since the marker
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** 08 §10, §9; 05 §6.2 (`/read-marker`, `/activity`); 13 §5 · **Requirements:** R4 · **Depends on:** HIS-005, HIS-011, HIS-024
+
+As an author, I want the service to remember what I have already seen and to tell me what others did since, so that I can catch up in one step.
+
+**Acceptance criteria**
+
+- [x] Given a user who has viewed the head, when the component calls `PUT /documents/{id}/read-marker`, then the service records their last seen `seq`, one marker per user and document.
+- [x] Given a marker already at a `seq`, when a lower or equal `seq` is sent, then the marker does not move: read markers only move forward.
+- [ ] Given `GET /documents/{id}/activity`, when it is called, then it returns the changes and the comment activity by other people since the caller's marker, excluding the caller's own commits, as a comparison with a summary per region.
+- [ ] Given the caller has mentions or tasks addressed to them since the marker, when the activity is returned, then they come with it as "for you" items.
+- [x] Given the caller's gate, when the activity covers `seq` values below it, then those are not returned.
+- [ ] Given a very long gap between marker and head, when the activity is computed, then it uses the block-aligned comparison (HIS-012) and runs in a worker thread.
+
+**Evidence:** `packages/history/test/markers.test.ts` "does not move the marker for a lower or equal seq" and "never moves backwards over any sequence of requests (property)" (criterion 2; `advanceMarker` in `src/markers.ts`); `packages/history/test/reader.property.test.ts`, describe "the activity since the marker leaves out what is at or below the gate" (criterion 5; `activitySince` in `src/reader.ts`): "returns nothing from a commit at or below the gate for a marker of 0 and a gate at 2" checks that `fromSeq` and the comparison start at 2, that every `seq` in the changes, their spans and the history items is above 2, and that no change, span, item or summary names the authors of commits 1 and 2 (who do appear without the gate); "names no seq and no author at or below max(marker, gate) …" asserts the same for random logs, markers and gates (fast-check, 200 runs). The earlier step of "compares from the marker, summarises per region and lists other people’s commits only" checks only that `fromSeq` starts at the gate. **Evidence (criterion 1, lane U-HIS-017-032, 2026-11-13):** `services/document-service/test/control-plane/his-027-read-marker.test.ts` (14 tests passed: memory, and PostgreSQL in Podman `docedit-test-postgres`, where the `read_markers` rows are read back through the admin pool): a PUT by a user records the seq (200, `{ seq }`), one row per user and document, a lower or equal seq leaves the marker in place (criterion 2, forward only), a seq above the head is `not_found`, a non-integer seq is `validation_failed`, a service credential is `forbidden`. Route: `setReadMarker` in `src/control-plane/history-routes.ts`; store: `src/storage/read-markers.ts` (`PgReadMarkerStore` on the `read_markers` table of migration 0050, `MemoryReadMarkerStore`). Decisions taken by the lane, to be confirmed: the body is `{ seq }` as the protocol defines; the response carries `ETag: "r<seq>"`; no `If-Match` is required, because the protocol leaves that open (gap, forward-only writes). Criteria 3, 4 and 6 are not ticked: the activity route is not built; criterion 3 also asks for comment activity, which this package does not read; criterion 4 needs mentions and tasks from UX; criterion 6 needs the block-aligned comparison of HIS-012 for long gaps and the worker thread, which the room host runs.
+
+**Notes:** what the caller sees on a first visit, with no marker, is not specified (Open questions). `advanceMarker` accepts any marker up to the head when none is stored, which is one answer to that question, not the spec's. Mentions and tasks themselves are UX's (13 §5).
+
+### HIS-028 Catch up on what changed since my last visit
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 08 §1, §10; 13 §3, §5; PRODUCT (collaboration) · **Requirements:** R4, R11 · **Depends on:** HIS-027, HIS-013, UX-031, UX-032
+
+As an author returning to a document, I want a summary of what others changed and what is waiting for me, so that I can pick up where I left off.
+
+**Acceptance criteria**
+
+- [ ] Given activity since the user's marker, when the document opens, then the catch-up control in the header shows that there is something to see, and opening it shows the comparison with a summary per region.
+- [ ] Given mentions and tasks addressed to the user, when catch-up opens, then they appear first as "for you" items.
+- [x] Given the user's own commits, when catch-up is built, then they are not listed.
+- [ ] Given the user has viewed the head, when they leave catch-up or dismiss it, then the marker moves to the head, and a later visit shows only newer activity.
+- [ ] Given activity, when catch-up appears, then a polite live region announces the number of changes, and the pane is operable by keyboard with visible focus.
+- [ ] Given no activity, when the document opens, then the control shows no badge and catch-up offers nothing.
+
+**Evidence:** `packages/history/test/reader.property.test.ts`: "compares from the marker, summarises per region and lists other people's commits only" (criterion 3: the caller's own commit is not listed; a marker below the gate starts at the gate).
+
+**Notes:** criteria 1, 2, 4, 5 and 6 are not ticked. They are the catch-up control, the "for you" list of mentions and tasks, the live region and the keyboard focus, and the marker moving to the head on leaving, which the read-marker service of HIS-027 and the interface provide. Round 11 (lane U-HIS-017-032): the backend half of criterion 4 is run, not the control. `services/document-service/test/control-plane/pro-058-read-marker-activity.test.ts` (memory and PostgreSQL in Podman, 14 tests passed) shows that a marker at the head lists nothing and that a later change of another person appears once. Criterion 4 stays unticked because leaving or dismissing catch-up is the client's (UI, not built).
+
+## Retention
+
+### HIS-029 Move old payloads to cold segments
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | should | Operator |
+
+**Spec:** 08 §11; 06 §4.1 (notes), §4.2, §10; ADR 0006; ADR 0010 · **Requirements:** R4, R9 · **Depends on:** HIS-002, HIS-005, BE-003, BE-009, BE-052, BE-081
+
+As an operator, I want commit payloads older than 30 days to leave PostgreSQL for compressed files in object storage, so that the database stays small while the history stays complete.
+
+**Acceptance criteria**
+
+- [ ] Given payloads older than 30 days (default), when the scheduler runs, then they are written to compressed `segments/{fromSeq}-{toSeq}.payloads.zst` objects in object storage and removed from `doc_commit_payloads`, and the `doc_commits` metadata rows stay for listing, filtering and the hash chain.
+- [ ] Given a history range, a content replay or a commits page that straddles the boundary, when it is read, then it reads both stores and the result is identical to before the move.
+- [ ] Given a move, when it runs, then payloads are deleted from PostgreSQL only after the segment object is written and read back with a matching hash; given a crash during a move, when the scheduler resumes, then no payload is lost.
+- [ ] Given a moved range, when the chain is verified afterwards (HIS-033, BE-081), then it still verifies, using the payload hashes read from the segments.
+- [ ] Given a segment cannot be read, when a cold range is requested, then the answer is `unavailable` and live editing is unaffected.
+- [ ] Given a document under legal hold, when the scheduler runs, then the move still proceeds, because moving is not thinning.
+
+**Evidence:** `packages/history/test/cold-segments.test.ts`: "removes a payload from the hot store only after its segment reads back, and reads the same afterwards (criteria 2 and 3)"; "never returns a different payload for a range that straddles the boundary (criterion 2, property)"; "keeps every payload when a step fails, whichever step it is (criterion 3, property)"; "refuses to move a payload whose stored hash differs from the metadata, and moves nothing (criterion 3)"; "answers unavailable for the cold part when a segment cannot be read, and reads the hot part alone (criterion 5)"; "is the same plan under a legal hold, which is not a reason to keep payloads (criterion 6, plan)"; "verifies a bundle rebuilt from both stores, with the payloads and payload hashes read from the segments (criterion 4)" (`verifyBundle` on the rebuilt bundle: no problems, `payloadsChecked` equal to the commit count, and a forged segment hash breaks the chain). The move and the read are `src/cold-segments.ts` (`coldMovePlan`, `moveSegment`, `readPayloads`). Run with `pnpm vitest run packages/history/test/cold-segments.test.ts` (16 tests pass).
+
+**Notes:** Evidence audit (2026-11-13): criteria 2 to 6 were unticked because `cold-segments.ts` is imported only by its own test (no product code calls `coldMovePlan`, `moveSegment` or `readPayloads`; the document service does not depend on `@docedit/history`), on in-memory fakes, so no scheduler, PostgreSQL delete, history read, `unavailable` answer or chain verification over moved payloads exists to show the criteria; the rules are tested and can be re-ticked when the service calls them. ADR 0010 says cold segments after 180 days; 08 §11 and 06 §10 say 30 days, which this story follows. Hash partitioning makes this a job, not a partition drop (ADR 0006). Whether a tenant keeps payloads at all after a period is HIS-032; thinning of checkpoints is HIS-030. Phase inferred: the 30-day boundary is first reached in production after the first release. This story absorbed BE-040 during the cross-check. Round 8 review: criterion 4 is unticked. The test "verifies after the move" runs `verifyBundle` on a bundle thinned by `thinBundle`, which uses the hashes of the commit metadata; the payloads read back from the segments are only checked for `ok` and never reach the verifier, so "using the payload hashes read from the segments" is not shown. It needs a test that rebuilds the bundle from `readPayloads` output and verifies it (`payloadsChecked` equal to the commit count). Round 5 fix (group 3): criterion 4 is ticked again on "verifies a bundle rebuilt from both stores, with the payloads and payload hashes read from the segments (criterion 4)". That test takes every payload from `readPayloads` and the payload hash of each moved commit from the decoded segment entries, and verifies the rebuilt bundle. The older test "verifies after the move" stays; it shows only the thinned-bundle case. Round 8 (lane history-2): criteria 2, 3, 5 and 6 are ticked for the functions of `src/cold-segments.ts`, on in-memory stores, as the thinning stories are ticked at the plan. The scheduler, the `doc_commit_payloads` delete and the index row that must be written in the same transaction as the delete are the service's, and the service's history reads do not yet call `readPayloads`. Criterion 1 stays unticked: the zstd codec is an input here (the service supplies it), and the 30-day move is the scheduler's. The text of the segment object and the segment bounds are a decision of this package, recorded in `docs/adr/0145-history-2-backlog-batch.md`.
+
+**Notes (lane V-HIS-017-032, 2026-11-13):** criterion 1 is not built, and the blocker is a package dependency, not the database or the object store. The move rules are `coldMovePlan` and `moveSegment` in `@docedit/history` (`packages/history/src/cold-segments.ts`), but `services/document-service/package.json` does not depend on `@docedit/history`, and the workspace package is not resolvable from the service (checked: `services/document-service/node_modules/@docedit` has no `history`). Product code cannot import it without that dependency, and the service's `package.json` is a root-level change this lane may not make. Needed from the main session: add `"@docedit/history": "workspace:*"` to `services/document-service/package.json` (through `scripts/pnpm-locked.ps1`). The service then needs a migration for the segment index and a retention role that holds `delete` on `doc_commit_payloads`, because `docedit_app` has only `select` and `insert` there (migrations 0002 and 0003). The scheduler wiring is the same work. Nothing in this lane changed for HIS-029.
+
+### HIS-030 Thin checkpoints with age
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | should | Operator |
+
+**Spec:** 08 §11; 06 §2.2, §10; review PD-6 · **Requirements:** R4, R9 · **Depends on:** BE-020, HIS-005
+
+As an operator, I want old checkpoints thinned, so that storage does not grow with every checkpoint ever written.
+
+**Acceptance criteria**
+
+- [ ] Given checkpoints younger than 30 days, when the scheduler runs, then it keeps all of them; older ones are thinned to one per day and then to one per week.
+- [ ] Given a checkpoint that a stored version points at, or that borders a snapshot commit, when the scheduler runs, then it is never removed.
+- [ ] Given a checkpoint that would replace older ones, when thinning starts, then its hash has been verified against a replay (BE-020).
+- [ ] Given thinning, when it has run, then every version can still be rebuilt, if only with a longer replay, and the chain still verifies.
+
+**Evidence:** `packages/history/test/thinning.test.ts` "never removes a checkpoint a version points at, or one that borders a snapshot" (criterion 2), and "holds back a period whose kept checkpoint is not verified against a replay" (the rule behind criterion 3, which the scheduler's replay of BE-020 must satisfy; criterion 3 is not ticked because the replay is not in this package). "keeps every checkpoint younger than 30 days" and "thins the older ones to one per day, then to one per week" are the rule of criterion 1 with the weekly boundary passed in by the caller; criterion 1 is not ticked as a whole until that boundary is decided. The scheduler, the stores and criterion 4 (every version still rebuilt and the chain verified after thinning) are the service's and HIS-033's.
+
+**Notes:** Evidence audit (2026-11-13): criterion 2 was unticked because `thinningPlan` is imported only by its own test (no scheduler or other product code calls it), and "a stored version points at" is a `pinned` flag the caller passes in, not read from stored versions. The age at which "daily" becomes "weekly" is not given (Open questions). `thinningPlan` takes it as `weeklyAfterMs` and has no default; ADR 0118 lists it as a decision for the owner. Thinning makes the replay for old versions longer than the 2,000 commits of 08 §3.
+
+### HIS-031 Place a legal hold on a document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Tenant administrator |
+
+**Spec:** 08 §11; 13 §10; 12 §14 · **Requirements:** R10 · **Depends on:** HIS-030
+
+As a tenant administrator, I want to freeze the deletion of a document's history while a dispute lasts, so that evidence is not lost.
+
+**Acceptance criteria**
+
+- [ ] Given the hold API, when a service credential sets a hold on a document, then thinning of its checkpoints (HIS-030) and payloads (HIS-032) and its purge (HIS-039) are suspended; the first is tested here, the others when those stories land.
+- [ ] Given a document under hold, when it is deleted, then the soft delete is recorded but the purge does not run until the hold is released.
+- [x] Given a hold, when it is released, then the normal schedule resumes and nothing is thinned retroactively beyond what the policy allows.
+- [ ] Given a hold set or released, when it happens, then it is audited with the actor and the time, and the document resource shows that a hold is in force.
+- [ ] Given a request to erase a person (HIS-038) for someone who appears in a document under hold, when it is made, then the outcome is the one decided for that case (Open questions).
+
+**Evidence:** `packages/history/test/hold.test.ts`: "suspends thinning while a hold is in force, and resumes the policy after release (criteria 1, 3)" (criterion 3; the checkpoint half of criterion 1); "plans no removal under a hold, for any checkpoints, and the policy plan after it (property)" (criterion 3, property); "audits each set and release with the actor, the reason and the time (criterion 4, audit part)"; "refuses a change that does not change the state, or that names no actor or reason". `packages/history/src/hold.ts` (`applyHold`), `packages/history/src/thinning.ts` (`ThinningPolicy.hold`).
+
+**Evidence (criteria 1 and 2, lane history-2):** `packages/history/test/legal-hold-plans.test.ts`: "removes no checkpoint, payload or purge while the hold is in force" and "suspends the three plans for any history, and the policy is back on release (property)", which run `thinningPlan`, `payloadThinningPlan` and `purgePlan` with the same hold (the purge gives `legal-hold`, and runs once the hold is released). The purge half is also in `packages/history/test/purge.test.ts`, "does not run under a legal hold, even when the retention has passed" and "runs once the hold is released". Criterion 2's soft delete is an input to the plan (`deletedAt`); recording it is the service's.
+
+**Notes:** policy per tenant and per document and the hold API come from 13 §10 (phase 2). Legal questions are for the operator. Round 9 (lane history-2): criteria 1 and 2 are ticked on the plans of this package, now that HIS-030, HIS-032 and HIS-039 are built; the hold API and the service's own suspension of its scheduler are the service's. Criterion 4 is not ticked: the audit record is built here, but the document resource that shows the hold, and the check that only a service credential or the administration API may call it, are in the service. HIS-040 uses the same hold state to refuse a tombstone. Criterion 5 waits for the open question on erasure under hold. Lane HIS-017-032 (2026-11-13): the plans of HIS-030 (checkpoints, `hold.test.ts`), HIS-032 (`payload-thinning.test.ts`) and HIS-039 (`purge.test.ts`) each refuse to remove anything under a hold. Criterion 1 stays unticked: the hold API, the suspension of the scheduler and the purge are the service's.
+
+**Evidence (lane V-HIS-017-032, 2026-11-13, criterion 4, the placing half):** `services/document-service/test/control-plane/his-031-hold-resource.test.ts` (memory and PostgreSQL in Podman `docedit-test-postgres`, 6 tests passed, run with `ux-080-holds-composed.test.ts`, 29 passed in all): GET `/v1/documents/{id}` answers `legalHold` false, then true once a hold is placed, and false for another document; `GET /v1/audit?kind=hold.placed&document=` gives the placement with the actor (`system`, the service credential) and a time inside the request window. The boolean is read through `HoldStore.held` (`holds.ts`, `holds-pg.ts`), wired in `getDocument` (`handlers.ts`). The reasons are not returned.
+
+**Notes (evidence audit, 2026-11-13):** criteria 1 and 2 are unticked: their tests run only the plan functions of `@docedit/history` with a hand-set `hold` flag, no service imports that package, no service credential's hold reaches a thinning or purge plan, and nothing records or runs a soft delete under a hold. **Notes (lane V-HIS-017-032, 2026-11-13):** criterion 4 stays unticked. Its text covers "set or released", and no release operation exists (`holds.ts` says so), so the release half is not built. Whether one half is enough is a reading the owner should confirm; this lane did not decide it. The document resource gained a `legalHold` member, which the spec does not name (the document schema in `spec/dep/dep-1.openapi.json` is unchanged); the name is a proposal recorded in `docs/adr/0358-lane-V-HIS-017-032.md`. The ETag of the document does not change when a hold is placed.
+
+### HIS-032 Let a tenant thin old payloads
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | M | could | Tenant administrator |
+
+**Spec:** 08 §11; ADR 0010 ("Revisit when") · **Requirements:** R4, R9 · **Depends on:** HIS-029, HIS-031
+
+As a tenant administrator, I want to keep only checkpoints after a chosen period, so that storage cost stays bounded for documents with long, busy histories.
+
+**Acceptance criteria**
+
+- [ ] Given a tenant policy with a period, when the scheduler runs, then payloads older than the period are removed and only checkpoints remain for that range.
+- [x] Given named, export and workflow versions (`sent`, `completed`), when thinning runs, then they are never thinned: the data needed to rebuild them is kept.
+- [x] Given thinning, when the chain is verified, then it still verifies, because it holds the payload hashes.
+- [ ] Given a range whose payloads are gone, when a comparison, restore or rebuild is requested inside it, then the service answers that the detail is no longer available, and the history list still shows the metadata.
+- [ ] Given a document under legal hold, when the scheduler runs, then nothing is thinned.
+
+**Evidence (criterion 4, rebuild part, lane U-HIS-017-032, 2026-11-13):** `services/document-service/test/control-plane/his-032-thinned-rebuild.test.ts` (PostgreSQL in Podman, `docedit-test-postgres`, 2 tests passed): with the payload of seq 2 deleted, seq 0 and seq 1 are served, and seq 2 and the head are refused with `not_found` and the reason "no longer available" (not an internal error).
+
+**Evidence:** `packages/history/test/payload-thinning.test.ts`: "removes the old payloads that no version needs and keeps the recent ones (criterion 1)" (the plan and `thinBundle`, with the metadata and hashes of every row kept); "keeps a named, sent or other pinned version rebuildable from its checkpoint (criterion 2)" (a named and a sent version are rebuilt from the checkpoint after thinning; a `pre-restore` version is not kept on its own); "keeps the chain verifiable after the thinning, because the payload hashes stay (criterion 3)" (`verifyBundle` reports no problem and status `intact`); "removes nothing while a legal hold is in force, and resumes after release (criterion 5)"; "never removes a recent, snapshot or pinned-rebuild payload, and keeps every seq once (property)". Criterion 4, read path: "answers a thinned range with a fixed reason, while its metadata stays in the log" (`payloadOf`, `tombstone.ts`). `packages/history/src/payload-thinning.ts` (`payloadThinningPlan`, `thinBundle`, `PINNED_VERSION_KINDS`).
+
+**Notes:** evidence audit, 2026-11-13: criteria 1 and 5 are unticked because they name the scheduler, and no scheduled task thins payloads in `services/document-service` (only `payloadThinningPlan` and `thinBundle`, imported by their own tests, exist). Phase inferred: ADR 0010 makes thinning a response to cost becoming material, so it is demand-driven. The response code for a thinned range is not named in the spec (Open questions). Round 3 (lane history-2): criteria 1, 2, 3 and 5 are ticked on the plan, which is what the scheduler applies (the scheduler and its rows are the service's, as for HIS-030). The period is the tenant's and is passed in; nothing here chooses it. The pinned kinds are the four the criterion names; the snapshot payload is kept because a replay stops there (a decision of this package, recorded in `docs/adr/0145-history-2-backlog-batch.md`). Criterion 4 is not ticked: `payloadOf` gives the fixed refusal (`not_found`, a reason with no content), but the comparison, the restore and the rebuild are called from the services and do not yet call it, so their answer is not tested here. Round 10 (lane history-own, 2026-11-13): for the comparison part, `compareSteps` now refuses with `not_found` for a thinned `steps` commit (no steps left), so a comparison over a thinned range does not silently drop its changes (`packages/history/test/removed-detail.test.ts`); the restore and the rebuild part is still open, so criterion 4 stays unticked. Round 11 (lane U-HIS-017-032): the rebuild part is built. A commit whose payload is not in the log table raises `PayloadAbsentError` (`services/document-service/src/storage/payload-absent.ts`, from `toStoredCommit` in `src/storage/log-store.ts`), and `ContentService.rebuild` answers `not_found` with a reason (`#readCommits` in `src/control-plane/content.ts`) rather than an internal error. The comparison and restore are not served by document-service, and the history list (commits resource) still reads payloads, so it answers a thinned range as an internal error: criterion 4 stays unticked. Open gap: the commits resource needs a metadata-only read before the list can show a thinned range.
+
+## Tamper evidence
+
+### HIS-033 Verify a log and its chain with a command-line tool
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Operator |
+
+**Spec:** 08 §12; 06 §9, §11; 11 §4 (exit criteria) · **Requirements:** R4, R10 · **Depends on:** HIS-002, BE-020, HIS-005
+
+As an operator, I want a tool that checks a document's log, so that I can prove after a recovery that nothing was altered or lost.
+
+**Acceptance criteria**
+
+- [x] Given a document, when the tool is run against the stores or an exported bundle, then it recomputes the hash chain and reports the first `seq` whose hash does not match, or that the chain is intact.
+- [x] Given a checkpoint and the log after it, when the tool rebuilds the document, then it compares the result with the next checkpoint's content hash and reports any difference.
+- [x] Given payloads that were moved to cold segments or thinned, when the tool runs, then it uses the stored payload hashes and still verifies the chain.
+- [x] Given chain heads supplied by a host or read from anchored records, when the tool runs, then it compares them with the chain and reports any mismatch.
+- [x] Given the tool, when it runs, then its output is machine-readable, it has exit codes for intact, altered and incomplete, and it writes no document text to logs.
+
+**Evidence:** `packages/history/test/chain.test.ts`: "finds the chain intact, computed the same way as the document service computes it" (criterion 1, intact); "reports the first seq whose hash no longer matches when one metadata field is altered" (criterion 1, first bad seq); "rebuilds from a checkpoint and reports a checkpoint the log does not reach" (criterion 2, a checkpoint mismatch is reported); "still verifies the chain from the stored payload hashes when payloads are thinned or moved" (criterion 3); "compares chain heads a host supplied or an anchor recorded" (criterion 4); "prints one JSON report and exits 0 intact, 1 altered, 2 incomplete, 3 unreadable" and "writes no document text into a report, even when a replay fails" (criterion 5). Criterion 1 is met for an exported bundle, which is what `scripts/verify-log.ts` reads. Reading the live stores is an adapter that the document service provides and is not in this package.
+
+**Notes:** 06 §9 requires this tool for rehearsed restores; the phase 1b exit test depends on it. Verification of a full log reads every payload hash and, for a rebuild, replays the log (final report).
+
+### HIS-034 Publish chain heads to hosts and in export manifests
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** 08 §12; 05 §7; 09 (manifest); review S-02 · **Requirements:** R4, R10 · **Depends on:** HIS-002, PRO-035, PRO-036, PRO-072, EXP-004, EXP-098
+
+As an integrating developer, I want the chain head delivered with each change and each export, so that my application can record it and detect later tampering without trusting the operator.
+
+**Acceptance criteria**
+
+- [ ] Given content that changes, when the webhook `dep.document.changed` is raised, then its `data` carries the `seq` and the hash-chain head, and the webhook is debounced to at most once per 10 seconds per document.
+- [ ] Given changes that stop, when the debounce window ends, then a final webhook carries the latest head, so that the last state is not left unanchored.
+- [x] Given an export, when its manifest is written, then it contains the `seq` and the chain head of the exported state.
+- [ ] Given a published head, when it is sent, then it is the head of a durable commit, never of a tentative one.
+- [x] Given a host that stored a head at a `seq`, when the verification tool (HIS-033) is given it, then it confirms or refutes it.
+
+**Evidence:** `packages/history/test/chain.test.ts`: "compares chain heads a host supplied or an anchor recorded" (criterion 5: `verifyBundle` with `anchors` answers `match`, `mismatch` or `unknown`, and a mismatch is an altered result); "prints one JSON report and exits 0 intact, 1 altered, 2 incomplete, 3 unreadable" (the command-line tool with `--anchor`, the same check from the shell, HIS-033).
+
+**Evidence (round 7, 2026-11-13):** `packages/history/test/publication.test.ts`, describe "the changed webhook carries the seq and the head, debounced" (criterion 1: `HeadPublisher` in `src/publication.ts` gives `seq`, `chainHead` and the time, and holds a second head for 10 seconds, property over arrival times), "the window end publishes the latest durable head" (criterion 2: the pending head is published by `poll` when the window ends; property, nothing left unannounced) and "a tentative head is never published" (criterion 4; property over durability).
+
+**Evidence (lane V-HIS-033-046, 2026-11-13; criterion 3):** `services/document-service/test/postgres/his-034-chain-head.pg.test.ts` (PostgreSQL in Podman, `docedit-test-postgres`; `PgLogStore.chainHeadAt` returns the stored hash of the commit at each `seq`, equal to the head's chain head at the head, and null for another tenant or a seq with no commit; 2 tests pass) and `services/export-worker/src/his-034-chain-head.test.ts` (Node.js; a PDF export at seq 2 of a head at seq 3 writes the seq-2 hash into the bundle manifest and the result manifest, and null when the stores offer no chain head; 2 tests pass, with `pnpm vitest run --project node`). The lookup is wired in `services/export-worker/src/main.ts`, and the CDM target writes the same value (`src/job.ts`), but no test runs that wiring or the CDM target.
+
+**Notes:** evidence audit, 2026-11-13: criteria 1, 2 and 4 are unticked. `HeadPublisher` is imported only by its own test; the only `dep.document.changed` the service raises (`handlers.ts`, snapshot write) carries `{ seq }` without `chainHead`, `DocumentChangeDebounce` is not wired, and `toCloudEvent` refuses a changed event with no `chainHead`, so the dispatcher drops it (`envelope_refused`). The trailing webhook is inferred: 05 §7 gives the 10-second debounce but not whether the last change is always delivered. Round 3 (lane history-2): criterion 5 is ticked on the verifier of HIS-033. Round 7 (2026-11-13): criteria 1, 2 and 4 are ticked for the rule in `HeadPublisher` (the spec's 10 seconds, ADR 0118); the service still raises the webhook with what the publisher returns. Criterion 3 was unticked here because the export manifest wrote `chainHead: null`. Lane V-HIS-033-046 (2026-11-13) ticks it: the chain head of the exported state is the stored hash of the commit at its `seq` (recorded as a proposed reading in `docs/adr/0359-lane-V-HIS-033-046.md`).
+
+### HIS-035 Decide how often heads are anchored and at what granularity
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 2 | S | must | Operator |
+
+**Spec:** 08 §12; 12 §8.2; 06 §10 · **Requirements:** R4, R10 · **Depends on:** none
+
+As an operator, I want the anchoring period and the unit that is signed to be decided, so that the cost is bounded for large tenants and the guarantee is stated honestly.
+
+**Acceptance criteria**
+
+- [ ] Given 08 §12 says the service "periodically writes signed, time-stamped heads", when the decision is taken, then it states the period, whether heads are anchored per document or in batches per tenant, and the maximum time between a change and its anchoring.
+- [ ] Given the unit chosen, when a third party is given a document's head, then the decision states how they prove it was covered by an anchor.
+- [ ] Given the cost at 1,000,000 stored documents (stage 3 target), when the decision is taken, then it records the number of signatures and time-stamps per day it implies.
+- [ ] Given the decision, when it is recorded, then it is an ADR, 08 §12 is amended and HIS-036 is updated.
+
+**Notes:** round 4 (lane history-2, 2026-11-13): no criterion ticked. The period, the unit and the cost are set out in `docs/adr/0145-history-2-backlog-batch.md`, section 6 (proposed). The unit and the period are the owner's choice, and 08 §12 is not amended yet.
+
+### HIS-036 Anchor signed, time-stamped heads in write-once storage
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Maintainer |
+
+**Spec:** 08 §12; 12 §8.2; 10 §3.6 · **Requirements:** R4, R10 · **Depends on:** HIS-034, HIS-035, SPK-021
+
+As a relying party, I want the chain head anchored where the operator cannot rewrite it, so that tampering with history is detectable by someone other than the operator.
+
+**Acceptance criteria**
+
+- [ ] Given the schedule decided in HIS-035, when it runs, then the service writes a signed, time-stamped head to write-once storage, recording the tenant, the document or batch, the `seq`, the incarnation, the head hash and the time.
+- [ ] Given the signature, when it is made, then the key is held in a key service or hardware security module, never in a room, worker or the API process.
+- [ ] Given the time-stamp, when it is added, then it is an RFC 3161 token from the configured authority.
+- [x] Given the storage, when an entry is written, then it cannot be altered or deleted before its retention ends, even by the operator's own credentials.
+- [ ] Given anchoring fails, when the next run succeeds, then the missed heads are covered, an alert is raised, and editing is not blocked.
+- [ ] Given an anchored head, when the verification tool is given the anchor record, then it validates the signature and time-stamp and compares the head with the chain.
+**Evidence (lane U-HIS-033-046, 2026-11-13):** `services/document-service/test/objects/his-036-write-once.test.ts`, describe "write-once anchoring storage under Object Lock (HIS-036 criterion 4)": "refuses a delete of the entry before its retention ends, even with the root credentials", "refuses an overwrite of the entry before its retention ends" and "lets the entry be removed once its retention has ended" (criterion 4), run with `pnpm vitest run --project node services/document-service/test/objects/his-036-write-once.test.ts` (4 tests pass) against the Versity S3 Gateway in Podman (`docedit-test-s3`, FND-010). The bucket is created with Object Lock by the test, named `docedit-u-his-033-046-worm-*`, and removed afterwards. The write uses the new `S3ObjectStore.putRetained` (`services/document-service/src/objects/s3.ts`, COMPLIANCE mode, Content-MD5), with `createBucket` and `deleteBucket` for the test's own bucket.
+
+**Notes:** the signing and time-stamp stack is shared with the sealing work of spike S8. Lane U-HIS-033-046 (2026-11-13): criterion 4 is ticked for the storage only: the test proves that an object written with `putRetained` in a bucket with Object Lock cannot be deleted or overwritten by the gateway's root credentials until its retention ends. The production bucket must be created with Object Lock by the operator; the test does not prove that the production bucket is set up so. Criteria 1 and 6 wait for the schedule decided in HIS-035, which the owner has not taken (ADR 0359, proposed). Criterion 2 waits for a key service or HSM, and criterion 3 for an RFC 3161 time-stamp authority; neither exists in the test environment and neither is built. Criterion 5 (missed heads and the alert) waits for the anchoring job, which is not built.
+
+### HIS-037 Export a log segment for third-party verification
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Relying party |
+
+**Spec:** 08 §12; 12 §8.2 (step 4); 13 §10 · **Requirements:** R4, R10 · **Depends on:** HIS-033, HIS-036, HIS-024
+
+As a relying party, I want an export of a document's log that I can check without access to the service, so that I can verify what happened independently.
+
+**Acceptance criteria**
+
+- [x] Given a document and a range, when an authorised caller asks for the audit export, then the bundle contains the metadata rows, the payload hashes, the anchor records covering the range, and instructions for the verification tool.
+- [x] Given the bundle, when the verification tool is run offline, then it verifies the chain and the anchors with no access to the service.
+- [ ] Given a caller whose gate hides part of the range, when the export is made, then it contains nothing the caller could not see.
+- [x] Given the bundle, when it is read, then it holds surrogate identifiers only, not the host's `sub` values.
+
+**Evidence:** `packages/history/src/audit-segment.ts` (`auditSegment`, `verifySegment`, `SEGMENT_FORMAT` `docedit-audit-segment/1`) and `packages/history/test/audit-segment.test.ts`: "holds the metadata rows, the payload hashes, the anchors of the range and the verification steps" (criterion 1; the segment has no payloads and holds the anchors inside the range; the authorisation and the HTTP route are the service's) and "is reachable from the package entry, which is what the document service imports" (criterion 1, ticked at library level only: `src/index.ts` now exports `src/audit-segment.ts`, and the test builds and verifies a segment through the entry; no service route calls it yet); "verifies offline from the segment alone, after a JSON round trip" and "is checked by the command-line tool from the file alone, with the exit code of its status" (criterion 2; `scripts/verify-log.ts` accepts a segment, and `verifyBundle` starts at the segment's `from` through the new `firstSeq` option of `src/chain.ts`); "cuts the range at the caller gate: no record below it is included, and only the link hash of the record just below travels" and "keeps every record of the range, once and in order, under any range and gate (property)" (criterion 3, gate part only; the test asserts that no metadata or payload hash of a record below the gate is in the segment, and that the chain hash of the record at gate − 1 is, once, as the first held record's `prevHash`, which the chain check needs; ADR 0145 §6 records this for the owner); "is refused for a range that starts after it ends, ends above the head, or lies below the gate". Run on 2026-11-13 with `pnpm vitest run packages/history/test/audit-segment.test.ts packages/history/test/chain.test.ts` (17 tests pass; the whole package passes, 231 tests in 26 files; `pnpm run typecheck` in `packages/history` passes).
+
+**Evidence (lane V-HIS-033-046, 2026-11-13; criterion 4 unticked by the reviewer, round 1):** `packages/history/test/his-037-surrogates.test.ts`: "serialises the surrogates of its records and no host sub, over any range" (a log whose actors are surrogates, with host subs kept in a mapping outside the bundle, gives a segment whose JSON holds no `sub` and holds the surrogates). Run with `pnpm vitest run packages/history/test/his-037-surrogates.test.ts` (1 test passes). Reviewer: the test is hollow for criterion 4. The host subs are never an input of the bundle or the segment, so their absence from the JSON is true by construction; the test only shows that the segment copies the `user` field it is given. That the service writes surrogates (and never a `sub`) into the bundle is the service's and is not tested, so criterion 4 stays unticked until a test builds the bundle through the service path (or a type or scan check forbids a `sub` in `LogBundle`).
+
+**Evidence (criterion 4, re-ticked by fixer V-SYN-037-053, 2026-11-13):** `services/document-service/test/postgres/his-037-surrogates.pg.test.ts`: "stamps, stores, exports and cuts the surrogates of the real user directory, and no host sub". Two people with host subs (unique per run, named for the lane) connect over a real WebSocket to the real data plane, which resolves each sub through the real `PgUserDirectory` and stamps the three commits it accepts. The bundle is read from the stored PostgreSQL rows (the columns `PgLogStore.verify` reads), the segment is cut with `auditSegment`, and both JSON texts are scanned: no host sub appears, and each commit's `user` is the surrogate the directory maps the sub to. The segment then verifies `intact` offline from its JSON alone, so the hashed `user` in the stored chain is the surrogate too. "has no `sub` member in any bundle or segment type" adds a type-level check (`ChainMetadata`, `BundleCommit`, `LogBundle`, `SegmentCommit`, `AuditSegment`), enforced by `tsc` over `services/document-service` (`pnpm exec tsc --noEmit -p tsconfig.json` passes). Run with `pnpm vitest run --project node services/document-service/test/postgres/his-037-surrogates.pg.test.ts` against `docedit-test-postgres` in Podman (2 tests pass, 0 skipped). Limit: no service route for the audit export exists yet, so the test reads the bundle from the stores as such a route would.
+
+**Notes:** Review round 4: criterion 1 was unticked by the reviewer because `auditSegment` was not exported from `src/index.ts` (the package's only entry in `exports`). The fixer exported it and re-ticked the criterion at library level; the document service's audit route and its authorisation check are not built, and the criterion's service half is proven only when that route calls `auditSegment`. Criterion 3 is not ticked as a whole: the scopes of a record that touches a hidden region are in its hashed metadata, so a segment still names the hidden scope; and the chain hash of the record just below the gate travels as the first held record's `prevHash` (needed by the chain check; whether that is acceptable or a link-only form is needed is for the owner, ADR 0145 §6). Hiding them needs a decision on what a hidden commit looks like (recorded as proposed in `docs/adr/0145-history-2-backlog-batch.md`). Criterion 4 was not ticked then: the bundle type carries surrogate identifiers, but no test checked that the segment holds no `sub` (ticked on 2026-11-13 by fixer V-SYN-037-053 through the service path; see Evidence). The segment proves the link into `from` only as far as the anchors cover it: a segment alone cannot prove that the record at `from - 1` is the one its link names. The authorisation check and the route are the service's. The evidence bundle of a signing workflow (log segment, control commits, evidence record) is FRW-027, FRW-040 and builds on this export. The tenant-wide discovery export is phase 4 (13 §10, §12). Round 6 (2026-11-13): no criterion ticked. Round 4 (lane history-2, 2026-11-13) answers the range and instructions part in a separate form, the audit segment (see Evidence); `LogBundle` (`src/chain.ts`) still has no range filter, and a bundle that hides part of a range from a caller cannot keep the chain verifiable for an outsider without a decision on what a hidden commit looks like (ADR 0118, round 6).
+
+## Privacy
+
+### HIS-038 Erase a person from history
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Tenant administrator |
+
+**Spec:** 08 §13; 10 §4; 12 §7 · **Requirements:** R4, R10 · **Depends on:** HIS-003, SEC-029, SEC-032
+
+As a tenant administrator, I want to erase a person without rewriting history, so that I can honour a request while the log stays whole.
+
+**Acceptance criteria**
+
+- [ ] Given a person, when the erase operation runs, then the service deletes their one mapping row and their display name, and their read markers, and nothing in the log changes.
+- [ ] Given the person's earlier contributions, when history, attribution or comparison shows them, then they remain, attributed to an identifier that no longer leads anywhere and shown as an unknown person.
+- [ ] Given the hash chain, when it is verified after the erasure, then it still verifies.
+- [ ] Given a scan of the document service, when it is run after the erasure, then the person's `sub` appears nowhere.
+- [ ] Given the integration guide and the token documentation, when they are read, then they ask hosts not to use e-mail addresses as `sub`.
+- [ ] Given the erase operation, when it is called, then it needs a service credential or the administration API and is audited.
+
+**Evidence:** `packages/history/test/erasure-chain.test.ts`: "still verifies, and the erasure does not change the bundle" (criterion 3: a bundle with the surrogate's commits verifies `intact` before and after the erasure of the mapping, and its JSON is byte-identical) and "verifies the same whichever surrogates are erased (property)". The verifier (`verifyBundle`, `src/chain.ts`) takes no mapping, so the erasure cannot change its result. Run on 2026-11-13 with `pnpm vitest run packages/history/test/erasure-chain.test.ts`.
+
+**Evidence (lane V-HIS-033-046, 2026-11-13):** `services/document-service/test/postgres/his-038-erase.pg.test.ts`: "deletes the mapping row, the display name and the read markers of the person only" (criterion 1: `PgUserDirectory.erase` deletes the `tenant_users` row, which holds the display name, and then the `read_markers` of its surrogate in one transaction; the other person's marker, the document and their name are kept; a second erase finds nothing). Run with `pnpm vitest run --project node services/document-service/test/postgres/his-038-erase.pg.test.ts` against PostgreSQL in Podman (`docedit-test-postgres`, 1 test passes). The change is in `services/document-service/src/control-plane/users.ts` and the migration `services/document-service/migrations/0061_his_038_erase_read_markers.sql` (grants `delete` on `read_markers` to the service role). Other tests of `schema.pg.test.ts` fail on table counts that other migrations add; they are not this change's.
+
+**Notes:** signing evidence is personal data kept elsewhere with its own retention (12 §7) and is not removed by this operation. Whether a regulation is satisfied is a legal question for the operator (08 §13). The label an erased identifier gets in history and attribution is `shownAuthor` in `packages/history/src/erasure.ts` (HIS-015 criterion 5, ticked there); the mapping row, the display name and the read markers are deleted by the service, so criterion 1 and the others stay unticked. Round 2 (lane history-2): criterion 3 is ticked (see Evidence). Criterion 2 is partly met: `shownAuthor` gives the unknown label, but the history list (`groups.ts`) and the comparison still show the surrogate as an author id, because the service applies `shownAuthor` when it renders them; this stays unticked until that wiring is tested. Round 8 (lane HIS-033-046, 2026-11-13): `src/erased-labels.ts` (`labelGroupAuthors`, `labelHistoryItems`) shows each erased author of a history list group through `shownAuthor`, tested in `test/erased-labels.test.ts` (the list is labelled, and no erased identifier appears in the labelled page, property over authors and erasure sets). Criterion 2 stays unticked: attribution (`attributionAt`) and comparison (`compare.ts`) are not labelled yet, and the service must call the helper for the list. Audit (2026-11-13): criterion 1 was unticked because `his-038-erase.pg.test.ts` creates no commits, so "nothing in the log changes" is never asserted, and criterion 3 was unticked because `erasure-chain.test.ts` never runs the erase operation (it only calls the pure `shownAuthor` and then re-verifies the same in-memory bundle, true by construction); both need a service-path test that stores commits, calls `PgUserDirectory.erase`, and then compares the stored rows and `PgLogStore.verify`.
+
+### HIS-039 Erase a document and everything derived from it
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Tenant administrator |
+
+**Spec:** 08 §13; 05 §6.2 (`DELETE /documents/{id}`); 06 §4.2, §13; 13 §10 · **Requirements:** R10 · **Depends on:** HIS-029, HIS-031, BE-003, BE-052
+
+As a tenant administrator, I want deleting a document to remove all of its content and history, so that erasure of content is real.
+
+**Acceptance criteria**
+
+- [ ] Given a deleted document whose retention period has passed and which is not under hold, when the purge runs, then it deletes the commits and their metadata, cold segments, checkpoints, assets not used by another document, exports and search entries.
+- [ ] Given an asset that another document also references, when the purge runs, then the asset is kept.
+- [ ] Given backups, when the purge completes, then the backup schedule and the time by which the content ages out of backups are documented for the operator.
+- [ ] Given a purged document, when anyone asks for it, then the answer is `not_found`.
+- [ ] Given a document under legal hold, when the purge is due, then it does not run (HIS-031).
+- [ ] Given a purge, when it runs, then it is audited and the webhook `dep.document.deleted` has already been raised at delete time.
+
+**Evidence:** `packages/history/test/purge.test.ts`: "keeps an asset that another document references and removes the rest (criterion 2, property)" and "keeps a shared asset while removing an unshared one of the same document" (criterion 2, the plan; `purgePlan` in `src/purge.ts`); "does not run under a legal hold, even when the retention has passed (criterion 5)" and "never runs under a hold, for any retention and time (property)" (criterion 5, the plan's refusal; the hold is `hold.ts`, HIS-031). The same file covers the retention and the deleted state: "does not run while the retention period is still running", "runs exactly when the retention period has passed". Run on 2026-11-13 with `pnpm vitest run packages/history/test/purge.test.ts` (12 tests pass).
+
+**Notes:** the retention period between soft delete and purge is not given. A sealed final PDF is stored write-once (12 §8.2); how erasure applies to it is not addressed (Open questions). `purgePlan` (`packages/history/src/purge.ts`) decides what the purge removes and whether it runs; it deletes nothing. The purge job, the deletion of the stores and the check of the service credential are the document service's (BE-052, BE-003). Criterion 1 is not ticked: the stores are deleted by the job, not by this package. Criterion 2 is ticked at the plan, as HIS-030 is for thinning: the job must delete only what the plan lists. Criterion 3 (backups) is for the operator to document and is not built. Criterion 4 (`not_found` after the purge) is the service's answer. Criterion 6 is partly built: the plan returns the audit record; the write of it and the webhook `dep.document.deleted` are the service's. The caller supplies `retentionMs`; nothing in this package chooses it. Audit (2026-11-13): criteria 2 and 5 were unticked because no purge job exists and nothing outside `purge.ts` and its own test calls `purgePlan`; the shared-asset flag and the hold are inputs the test hands in, so the tests show only that the plan filters its own arguments, not that a purge that runs keeps a shared asset or that a held document is not purged.
+
+### HIS-040 Replace one commit's payload with a tombstone
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | should | Maintainer |
+
+**Spec:** 08 §13 (second bullet), §2 · **Requirements:** R10 · **Depends on:** HIS-002, HIS-029
+
+As a tenant administrator, I want to remove the content of a single commit, for example text that must not be kept, while the rest of the history stays verifiable.
+
+**Acceptance criteria**
+
+- [x] Given a commit, when its payload is replaced by a tombstone, then the metadata row and the payload hash remain and the chain verifies.
+- [ ] Given a read, a comparison or a rebuild that needs the tombstoned payload, when it runs, then it fails cleanly with a message that the detail was removed, and does not return wrong content.
+- [ ] Given the operation, when it is called, then it needs a service credential or the administration API, is refused under legal hold, and is audited with the actor and the reason.
+- [ ] Given a checkpoint or cold segment that still holds the content, when the tombstone is applied, then the operation reports that these copies exist and what removing them involves.
+
+**Evidence:** `packages/history/test/tombstone.test.ts`: "keeps the chain verifiable with the payload removed (criterion 1)" (the chain verifies and the status is `incomplete`, because checkpoint 6 cannot be replayed across the tombstoned commit); "reports the checkpoints at or after the commit and the attribution runs that may hold its text (criterion 4, report part)"; "refuses a read of a removed payload with a fixed reason, and answers a present one (criterion 2, read path)"; "is refused under a legal hold, for an unknown commit, and for one already removed (criterion 3, refusal part)"; "keeps the log verifiable whichever commit is removed (property)". `packages/history/src/tombstone.ts` (`tombstone`, `payloadOf`).
+
+**Notes:** the text of a tombstoned commit can survive in later checkpoints and in the attribution map; the spec does not say whether the tombstone also covers them (Open questions). Criterion 1 is ticked. The status of the verifier is `incomplete` and not `intact` after a tombstone, because a checkpoint past the removed commit cannot be replayed (decision recorded in `docs/adr/0118-history-backlog-batch.md`). Criterion 2 is only partly met: `payloadOf` gives the fixed refusal for the read path, but the comparison and the rebuild are called from the services and are not yet made to use it. Round 8 (lane HIS-033-046, 2026-11-13, no tick): `compareSteps` in `packages/history/src/compare.ts` skips a `steps` commit whose `steps` array is empty (`if (c.kind !== 'steps' || c.steps.length === 0) continue;`), so a commit whose payload was tombstoned and is fed in without steps would be left out of a comparison with no refusal. Whether the caller may pass such a commit, and how a removed payload is shown to `compareSteps`, is open for the owner; no test covers it yet. Round 10 (lane history-own, 2026-11-13): `compareSteps` now refuses with `not_found` ("the detail of commit N was removed, so the comparison cannot be built") for a `steps` commit with no steps, and `compare` returns that refusal, so no comparison is served with the commit's changes left out (decision recorded in `docs/adr/0118-history-backlog-batch.md`; tested in `packages/history/test/removed-detail.test.ts`, which also checks that a `control` commit with no steps still compares). The rebuild path is not checked, so criterion 2 stays unticked. Criterion 3 is partly met: the hold refusal and the audit record are built, but the service-credential or administration-API check and the audit persistence are in the service. Criterion 4 is partly met: the list of checkpoints and the attribution note are built, but the rewrite of the attribution map and of the checkpoints is not done (Open questions).
+
+### HIS-041 Delete a document's history by destroying its key
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | L | could | Tenant administrator |
+
+**Spec:** 08 §13 (third bullet); 06 §12; 10 §3.7 · **Requirements:** R10 · **Depends on:** HIS-039, SEC-029, SEC-032, SEC-056, SEC-057
+
+As a tenant administrator, I want to give a sensitive document its own encryption key, so that destroying the key makes every copy of it unreadable, backups included.
+
+**Acceptance criteria**
+
+- [ ] Given a document with its own key, when its commits, checkpoints and cold segments are written, then they are encrypted with that key.
+- [ ] Given the key is destroyed, when anyone reads the document, then the content is unreadable in the database, in object storage and in backups, and the metadata rows and the hash chain remain.
+- [ ] Given a room that opens a document with its own key, when it loads, then it gets the key from the key service, and a key service outage makes the document unavailable, not unencrypted.
+- [ ] Given the option, when it is off for a tenant, then nothing changes for that tenant's documents.
+
+**Notes:** optional (08 §13), so the priority is `could`; phase inferred. Whether it is built at all depends on customer demand. Per-tenant keys exist already (06 §12). Round 2 (lane U-HIS-033-046, 2026-11-13, no tick): nothing here is built per document. `EncryptedObjectStore` (`services/document-service/src/objects/encrypted-store.ts`) seals objects per tenant only and leaves per-document keys undecided; commits and checkpoints in PostgreSQL are not sealed; `KeyService` (`services/document-service/src/storage/key-service.ts`) has `disable` but no destroy operation. The prerequisites SEC-029, SEC-032, SEC-056 and SEC-057 are unticked. Recorded in docs/adr/0359-lane-U-HIS-033-046.md (round 2).
+
+## Relation to suggestions
+
+### HIS-042 Show suggestion decisions in history
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Author |
+
+**Spec:** 08 §14; 04 §3.1; 03 §5 · **Requirements:** R4, R8 · **Depends on:** HIS-008, HIS-013, UX-035, UX-036
+
+As an author, I want to see in history when someone accepted or rejected a suggestion, and when a suggestion was made, so that review decisions are on the record.
+
+**Acceptance criteria**
+
+- [ ] Given a suggestion that is accepted or rejected, when the commit is stored, then it is an ordinary commit with origin `suggestion.accept` or `suggestion.reject`, and the history list shows it with that label and the accepting or rejecting user.
+- [ ] Given a suggestion shown in the document or in the review pane, when its date is displayed, then it is the server time of the commit that introduced it, found by the suggestion's identifier, and not a time carried by the mark.
+- [ ] Given the comparison view and suggestion marks, when insertions and deletions are drawn, then they use the same rendering and the same identity model (a user and a suggestion identifier).
+- [ ] Given the history service, when it is asked for the commit that introduced a suggestion, then it answers from an index and does not scan the log.
+
+**Evidence (lane V-HIS-033-046, 2026-11-13):** `services/document-service/test/postgres/his-042-suggestion-index.pg.test.ts`: "answers the introducing commit by identifier and keeps the lowest seq of a suggestion" (the index keeps the lowest seq, as `suggestionIndex` does), "is served by the primary key, so the lookup does not scan the table" (the store part of criterion 4: `EXPLAIN` with sequential scans disabled over 2,000 rows shows an index scan on the key) and "keeps one tenant's index out of another tenant's reach" (row-level security). Run with `pnpm vitest run --project node services/document-service/test/postgres/his-042-suggestion-index.pg.test.ts` against PostgreSQL in Podman (3 tests pass). The table is `suggestion_introductions` (migration `services/document-service/migrations/0062_his_042_suggestion_introductions.sql`) and the store is `services/document-service/src/storage/suggestion-index.ts`. The index is persisted. Criterion 4 stays unticked: it is about the history service answering from the index, and the service does not yet call `PgSuggestionIndexStore` (nor record the entries when a suggestion commit is stored, criterion 1), so that call is not tested here.
+
+**Notes:** suggestion marks carry no time (03 §5, review TIME-1), so the date has to come from the log; an index from suggestion identifier to commit is needed and is not in 06 §4.1. The DOCX writer's shared use (`w:ins`, `w:del`) is EXP's. Round 2 (lane history-2, no criterion ticked): `src/suggestions.ts` builds the identifier-to-commit index (`suggestionIndex`, lowest seq wins), answers from it (`introducedBy`) and gives the date from the introducing commit's server time (`suggestionDate`; the mark's time is not an input), tested in `test/suggestions.test.ts`, which also shows that the history list labels a `suggestion.accept` and a `suggestion.reject` group with the deciding user. Criterion 1 stays unticked: the commit is written by the service. Criterion 2 stays unticked: the date must be displayed by the review pane (UI). Criterion 3 is the UI's rendering. Criterion 4 stays unticked: the index is in memory here, and the service must persist it (06 §4.1 has no column for it, so a schema change is needed; open for the owner, see ADR 0145).
+
+## Open issues of the spec
+
+### HIS-043 Evaluate comparison quality for moved content, tables and styles
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | 2 | L | must | Maintainer |
+
+**Spec:** 08 §15 (first bullet), §6; ADR 0010 (consequences) · **Requirements:** R4 · **Depends on:** HIS-011, HIS-012 (as prototypes)
+
+As a maintainer, I want to know how well the comparison of HIS-011 and HIS-012 handles moved content, table structure changes and style changes, so that the product does not promise more than the diff delivers.
+
+**Acceptance criteria**
+
+- [x] Given a corpus of edit scenarios (a paragraph moved, a section moved, rows inserted, deleted and reordered, columns changed, cells merged, a style applied to many paragraphs, a style definition changed), when both comparison paths run, then for each scenario the spike records the output next to a hand-written list of the changes a reader would expect.
+- [x] Given documents of 20 and 100 pages and ranges of 100 and 2,000 commits, when comparisons run, then the spike records the time at the median and the 95th percentile.
+- [x] Given the results, when the spike ends, then a written recommendation says how moves, table changes and style changes are reported, where the output is approximate, and what warnings the interface must give.
+- [x] Given the corpus, when the spike ends, then it is checked in as regression fixtures for HIS-011 and HIS-012.
+**Evidence:** Criteria 1 and 4: `packages/history/test/scenarios.ts` (fifteen scenarios, each with the changes a reader expects, as `kind:identifier`) and `fixtures/comparison/*.json` (the recorded output of both methods), checked by `test/comparison-fixtures.test.ts` (`pnpm vitest run packages/history`, 15 tests pass). Criterion 2: `scripts/comparison-cost.ts`, run on 2026-11-13 (corpus `docedit-corpus 2`, 3,000-commit trace, seed 43, i9-10900KF, Node.js 22.18); the figures are in ADR 0118, round 6 (20 pages: 12.3 / 29.7 ms steps and 9.0 / 14.5 ms aligned at 100 commits, 127.4 / 161.2 and 29.1 / 36.3 at 2,000; 100 pages: 15.7 / 37.4 and 12.8 / 17.9, then 232.6 / 277.1 and 76.5 / 99.9). Criterion 3: the recommendation in ADR 0118, round 6 (HIS-043). The recommendation rests on fifteen scenarios and one machine; it is not a claim about other documents.
+
+### HIS-044 Measure the size of the attribution map on large documents
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | 2 | M | should | Maintainer |
+
+**Spec:** 08 §15 (third bullet), §7 · **Requirements:** R4, R9 · **Depends on:** HIS-014 (as a prototype)
+
+As a maintainer, I want to know how big the attribution map grows and what each step costs, and whether a per-block map would be better, so that checkpoints and the room's memory stay bounded.
+
+**Acceptance criteria**
+
+- [x] Given editing traces for documents of 20, 100, 300 and 1,000 pages (11 and 13 §9 limits) with many authors and many restores, when the map is maintained, then the spike records the number of runs, the memory in the room, the serialised size in a checkpoint and the time to update it per step.
+- [x] Given the same traces, when a per-block map is tried, then the spike records the same figures and the cost of answering "who wrote this" for a region.
+- [ ] Given the figures, when the spike ends, then a written recommendation states whether to keep one map per document or to store it per block, and what limit should apply.
+**Evidence:** Criteria 1 and 2: `packages/history/scripts/attribution-size.ts`, run on 2026-11-13 (`node --expose-gc packages/history/scripts/attribution-size.ts`; corpus `docedit-corpus 2`, 20 commits per page, a region restore every 250 commits, seed 44). It records runs, heap memory of a rebuilt map, serialised and Zstandard sizes, step time (median, p95, max) and the "who wrote this" time for one region, for the per-document `AttributionMap` and the per-block `BlockAttribution` (`src/per-block.ts`), on the corpus documents of 20, 100, 300 and 1,000 pages (22, 100, 300 and 1,001 pages in the run). The table is in ADR 0118, round 6. Criterion 3, in part: the recommendation to keep one map per document is in the same round; it names no limit, so the criterion stays open until the owner or operations sets one (reviewer, round 5). The memory figures are heap differences after a collection and are rough; the figures come from one seed and one machine, so the limit is for the owner to set on the real corpus.
+
+### HIS-045 Decide how long old packages stay runnable for replay
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 2 | S | should | Maintainer |
+
+**Spec:** 08 §15 (second bullet); 03 §11.3; ADR 0010 (consequences) · **Requirements:** R4, R9 · **Depends on:** none
+
+As a maintainer, I want a stated policy for replaying commits written under an older schema or engine, so that old versions stay readable and the cost of keeping old packages is known.
+
+**Acceptance criteria**
+
+- [ ] Given a migration recorded as a snapshot commit with a checkpoint on each side (03 §11.3), when the decision is taken, then it states how far back a replay needs the old packages and whether replays can always start at the nearest checkpoint after the last migration.
+- [ ] Given the options (keep old packages runnable for a fixed window, convert old payloads at migration time, or limit comparison and restore to versions after the last migration), when the owner chooses, then the choice and its cost are recorded.
+- [ ] Given the version support window for components and service nodes (03 §11.3, n-1), when the decision is taken, then it states whether the history window is the same.
+- [ ] Given the decision, when it is recorded, then it is an ADR and HIS-005, HIS-011 and HIS-012 are updated.
+
+**Notes:** branches with merge are not designed (08 §15) and no story is written for them; fork is one-way (HIS-022). Round 1 (lane history-2): the facts and the three options, with their costs, are in `docs/adr/0145-history-2-backlog-batch.md` (proposed). No criterion is ticked, since the choice is the owner's. The commit metadata type has no schema or engine version (03 §11.3 says every commit records both), which is a gap for the service's commit record.
+
+## Read restrictions (ADR 0019)
+
+Added on 2026-11-06 from spike S12 (SPK-029; `docs/spikes/2026-11-06-s12-read-restrictions.md`), after the owner decided that version 1 can hide regions and field values from some readers (SPK-005). Every other story that serves content, steps, positions, history, search, exports, comments, presence or field values applies the requester's projection: README §2.2 rule 8.
+
+### HIS-046 Project history surfaces with the requester's current access
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Maintainer |
+
+**Spec:** ADR 0019 (decision item 5); 08; 07 §8 · **Requirements:** R3, R4 · **Depends on:** SYN-050, HIS-024
+
+As a maintainer, I want versions, comparisons, attribution, activity and field history served as the requester's projection, so that history does not reveal what the present hides.
+
+**Acceptance criteria**
+
+- [x] Given an old version, a comparison, an attribution query, the activity since a marker or a field's history, when it is requested, then hidden regions and values are projected with the requester's current access, behind the `minVisibleSeq` gate.
+- [ ] Given a `region` or `field` filter on a hidden scope, when it is requested, then it is refused as if the scope did not exist.
+- [x] Given commits that changed only hidden content, when history is listed, then they appear without content, as the class's view of the log.
+- [x] Given a fork or copy of a version, when it is made, then it is the acting user's projection unless they hold `manage`.
+- [ ] Given every history endpoint, when the negative tests run per class, then none returns hidden content.
+
+**Evidence:** `packages/history/test/reader.property.test.ts`: "history surfaces never return hidden content (HIS-046, property)", for two classes of reader (neither the region nor the values; the region but not the values), over versions, comparisons, attribution, the history list, field history, forks and activity (criterion 1); "refuses attribution and field history for hidden scopes as if they did not exist" (criterion 2); "hides in old versions what the reader's current access hides in the head or in that version" (criterion 1, hidden set of a read); "copies a version for a requester as their projection unless they hold manage" (criterion 4, `forkContent`). `packages/history/test/groups.test.ts`: "refuses region and field filters on hidden scopes as if they did not exist (HIS-046)" (criterion 2); "lists commits that changed only hidden content without their content, as the class sees the log (HIS-046)" (criterion 3). Criterion 1, gate half: "obeys the gate" (`groups.test.ts`), "returns nothing from a commit at or below the gate" (`reader.property.test.ts`) and the refusal below the gate of `who-wrote.test.ts` (HIS-015). Run on 2026-11-13 with `pnpm vitest run packages/history`.
+
+**Evidence (lane V-HIS-033-046, 2026-11-13; criterion 5 not ticked):** `services/document-service/test/control-plane/v-his-033-046-history-negative.test.ts`, over the HTTP surface with memory storage: a reader with no grant on a confidential region (the region's text and paragraph id appear in no response of `content`, `content?seq=0`, `versions`, `activity` or `commits`), a region filter on a hidden scope answered 404 for the unserved `diff`, `history` and `attribution`, the unserved `restore` answering 404 without content, and a user credential refused a fork with 403. Run with `pnpm vitest run --project node services/document-service/test/control-plane/v-his-033-046-history-negative.test.ts` (4 tests pass). The region id stays in the placeholder of a hidden region by design, so the test does not look for it.
+
+**Notes:** criterion 5 is not ticked. The served routes pass; `diff`, `history`, `attribution` and `restore` are not served yet (HIS-026, phase 2; `services/document-service/src/data-plane/gate.ts`), so their 404 is a fact about today's service, not a gated answer. The test is to be extended when HIS-026 serves them. The test covers one class of reader (no region access); the class that sees the region but not its values is covered only at package level. The package tests cover the functions behind the endpoints for two classes of reader. The per-endpoint negative tests, over the route table of the document service and every class of role (05 §6.2, 07 §8), are the service's and wait for the route table of HIS-026. Criterion 1 lists the surfaces as the package functions; the HTTP responses are the service's. Criterion 2 was unticked on audit (2026-11-13): `fieldHistory` and the `field` filter of `listHistory` refuse only a field named in `hidden.values`, and `hiddenSetOf` (`packages/authority/src/permissions/visibility.ts`) does not put the fields inside a hidden region there, so with the real hidden set the history of `fSecretName00001` (a field in the confidential region) is returned with its authors and times; the tests use a hand-made `HIDDEN` that lists only the sensitive field `fTenantName00001`.
+
+## Coverage
+
+| Spec section | Stories |
+|---|---|
+| 08 §1 What users get | HIS-006, HIS-008, HIS-009, HIS-010, HIS-013, HIS-015, HIS-016, HIS-018, HIS-019, HIS-022, HIS-028 |
+| 08 §2 What is recorded | HIS-001, HIS-002, HIS-003 |
+| 08 §3 Checkpoints | BE-020, HIS-005 |
+| 08 §4 Versions | HIS-006, HIS-007, HIS-008 |
+| 08 §5 Viewing an old version | HIS-010 |
+| 08 §6 Comparing versions | HIS-011, HIS-012, HIS-013 |
+| 08 §7 Attribution | HIS-014, HIS-015, HIS-016, HIS-017 |
+| 08 §8 Restore and fork | HIS-018, HIS-019, HIS-020, HIS-021, HIS-022 |
+| 08 §9 Who can see history | HIS-023, HIS-024, HIS-025, HIS-026 |
+| 08 §10 Changes since last visit | HIS-027, HIS-028 |
+| 08 §11 Retention | HIS-029, HIS-030, HIS-031, HIS-032; PD-6 (log cost): HIS-029, HIS-030 |
+| 08 §12 Tamper evidence | HIS-033, HIS-034, HIS-035, HIS-036, HIS-037 |
+| 08 §13 Privacy | HIS-003, HIS-038, HIS-039, HIS-040, HIS-041 |
+| 08 §14 Relation to suggestions | HIS-042 |
+| 08 §15 Open issues | HIS-043, HIS-044, HIS-045; branches with merge: none, not designed (Notes of HIS-045) |
+| ADR 0010 | HIS-001, HIS-002, BE-020, HIS-005, HIS-011, HIS-018 |
+| 07 §8 History visibility | HIS-023, HIS-024, HIS-025, HIS-026 |
+| 07 §13 Interaction with history | HIS-019, HIS-020 |
+| Review S-02, S-08, TENT-1 | HIS-002 and HIS-034 (S-02), HIS-024 (S-08), BE-020 (TENT-1) |
+| 13 §6.2 Assistant identity | HIS-017 |
+| `history` conformance profile (05 §11) | HIS-026; profile definition: none, owned by PRO |
+
+## Open questions
+
+| Question | Affects |
+|---|---|
+| **Hash definition.** 08 §2 gives the formula but not the canonical JSON profile for metadata, the encoding of the three parts, which fields count as metadata, or the previous hash of the first commit. 06 §4.1 has no column for the payload hash that thinning needs. | HIS-002, HIS-033, HIS-040 |
+| **Checkpoint numbers conflict.** ADR 0010 says every 500 commits or 1 MiB and cold segments after 180 days; 08 §3, §11 and 06 §2.2, §10 say 2,000 commits or ten minutes (at most every two minutes) and 30 days. The stories follow 08. | BE-020, HIS-029 |
+| **Replay bound.** "At most 2,000 commits" (08 §3) cannot hold when checkpoints are at least two minutes apart on a busy document, nor after checkpoints are thinned to daily and weekly (08 §11). | HIS-005, HIS-030 |
+| **Shape of the visibility gate:** a single `minVisibleSeq` (07 §8) against "named versions only" (08 §9); how viewers resume under `editors`; `since_access` with no claim; precedence between tenant and document settings; who may change them. | HIS-023, HIS-024, HIS-025, HIS-026 |
+| **Places that supply a sequence number.** The list in 07 §8 omits `GET /threads?seq`, `GET /field-values?seq`, the `seq` of a named version and `toSeq` of a restore. | HIS-024, HIS-026 |
+| **Authorship in the long-range comparison.** The attribution map names who inserted text, not who deleted it or changed its formatting, yet the example result in 08 §6 shows a user on deleted spans and formatted blocks. | HIS-012 |
+| **Region restore as a snapshot.** A snapshot commit replaces the whole document; the fallback in 08 §8 does not say how other regions and approved regions are protected. | HIS-018, HIS-020 |
+| **Attribution map before phase 2 and after an accepted suggestion.** Whether checkpoints written earlier are backfilled by replay, and whether accepting an assistant's suggestion changes attribution. | HIS-014, HIS-017 |
+| **Fonts of that time** for old versions: no commit or checkpoint records which font manifest applied. | HIS-010 |
+| **Day boundaries and control commits in the list:** the time zone of "day" grouping, and whether grant and region-state control commits are shown to every reader. | HIS-008, HIS-009 |
+| **First visit with no read marker:** what changes-since-last-visit shows. | HIS-027, HIS-028 |
+| **Fork contents:** whether threads, versions and workflow state are copied. | HIS-022 |
+| **Thinning thresholds:** the age at which daily checkpoints become weekly, and the response for a range whose payloads are gone. | HIS-030, HIS-032 |
+| **Legal hold against erasure of a person**, and the retention period between soft delete and purge. | HIS-031, HIS-038, HIS-039 |
+| **Erasure against write-once copies:** sealed final PDFs (12 §8.2) and later checkpoints or the attribution map that still hold a tombstoned commit's text. | HIS-039, HIS-040 |
+| **Anchoring period and granularity** ("periodically" in 08 §12). | HIS-035, HIS-036 |
+| **Policy for keeping old packages runnable** (08 §15). | HIS-005, HIS-045 |
+| **Diff quality for moves, tables and styles; size of the attribution map on very large documents.** | HIS-043, HIS-044 |
+| **Branches with merge** are not designed; fork is one-way. | HIS-022 |

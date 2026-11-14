@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spike S5: computed and painted line widths</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      #lines {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      #lines > div {
+        white-space: pre;
+        width: max-content;
+        line-height: 1.5;
+      }
+    </style>
+    <script type="module" src="../src/browser/s5-page.ts"></script>
+  </head>
+  <body>
+    <div id="lines"></div>
+  </body>
+</html>

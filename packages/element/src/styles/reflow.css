@@ -1,0 +1,44 @@
+/*
+ * Reflow of the web view (FE-106; WCAG 2.2 criterion 1.4.10). The web view has no fixed-width
+ * page: paragraphs take the width of their container and wrap. These rules make that hold for
+ * the content that could otherwise force a sideways scroll: long unbroken words, images and
+ * tables. Only a table or an image may scroll horizontally, and it scrolls in its own box.
+ * Each rule is about the editing surface and its sub-editors; no text is given a fixed height
+ * or a fixed inline size, so text-only zoom and a larger default font do not clip it.
+ * Read by the web view's sheet (src/styles.ts), after element.css and before the shell's sheet.
+ */
+.de-editing-surface,
+.de-sub-editor {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+
+.de-editing-surface img,
+.de-sub-editor img {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+/*
+ * The model's image node renders as a span with role img (schema.ts). A span is inline, and an
+ * inline box ignores max-inline-size, so it becomes an inline-block to be held to the container's
+ * width (FE-106 criterion 2, checked in e2e/fe-106-wide-content.spec.ts).
+ */
+.de-editing-surface .de-image,
+.de-sub-editor .de-image {
+  display: inline-block;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+
+/*
+ * A table is a block with its own horizontal scroll, so a wide table never widens the page.
+ * The table keeps its rows and cells; only the box that holds it scrolls.
+ */
+.de-editing-surface table,
+.de-sub-editor table {
+  display: block;
+  max-inline-size: 100%;
+  overflow-x: auto;
+}

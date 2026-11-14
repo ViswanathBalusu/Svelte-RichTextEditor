@@ -1,0 +1,22 @@
+{
+  "name": "@docedit/corpus",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The shared document corpus for performance, layout and export tests (FND-006).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./out/*": "./out/*"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@docedit/model": "workspace:*"
+  }
+}

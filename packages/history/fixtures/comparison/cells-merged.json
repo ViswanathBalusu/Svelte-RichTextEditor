@@ -1,0 +1,71 @@
+{
+  "name": "cells-merged",
+  "description": "The two cells of the second row are merged: the first spans both columns and holds both paragraphs.",
+  "expected": ["formatted:tcFees000000021A", "moved:pCell00000000022", "removed:tcFees000000022A"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "formatted",
+        "blockId": "tcFees000000021A",
+        "type": "table_cell",
+        "path": ["tFees00000000001", "trFees0000000002"],
+        "attrs": ["colspan"],
+        "user": "dave",
+        "seq": 1
+      },
+      {
+        "kind": "removed",
+        "blockId": "tcFees000000022A",
+        "type": "table_cell",
+        "path": ["tFees00000000001", "trFees0000000002"],
+        "user": "dave",
+        "seq": 1
+      },
+      {
+        "kind": "moved",
+        "blockId": "pCell00000000022",
+        "type": "paragraph",
+        "path": ["tFees00000000001", "trFees0000000002", "tcFees000000021A"],
+        "user": "dave",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "formatted",
+        "blockId": "tcFees000000021A",
+        "type": "table_cell",
+        "path": ["tFees00000000001", "trFees0000000002"],
+        "attrs": ["colspan"]
+      },
+      {
+        "kind": "removed",
+        "blockId": "tcFees000000022A",
+        "type": "table_cell",
+        "path": ["tFees00000000001", "trFees0000000002"]
+      },
+      {
+        "kind": "moved",
+        "blockId": "pCell00000000022",
+        "type": "paragraph",
+        "path": ["tFees00000000001", "trFees0000000002", "tcFees000000021A"],
+        "user": "dave",
+        "seq": 1
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

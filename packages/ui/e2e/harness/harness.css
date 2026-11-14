@@ -1,0 +1,25 @@
+/* The host page of the harness. Its rules stay outside the shadow root, except through parts. */
+body {
+  margin: 0;
+  padding: 1rem;
+  font-family: system-ui, sans-serif;
+}
+
+h1 {
+  font-size: 1.1rem;
+}
+
+#host {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 1100px;
+}
+
+/* UX-006 and UX-014: the element exposes these parts to the host (02 §3). */
+#host::part(toolbar) {
+  outline: 3px solid rgb(1, 2, 3);
+}
+
+#host::part(header) {
+  outline: 3px solid rgb(4, 5, 6);
+}

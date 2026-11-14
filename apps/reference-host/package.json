@@ -1,0 +1,34 @@
+{
+  "name": "@docedit/reference-host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The reference host application (13 §11.2): a SvelteKit app with demo sign-in, a token endpoint, the page glue, the host's document catalogue, and the demo stack (compose file and stack script). Demo only: not a production deployment.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "node src/server/main.ts",
+    "setup": "node scripts/setup.ts",
+    "seed": "node scripts/seed.ts",
+    "stack": "pwsh -NoProfile -File scripts/stack.ps1",
+    "test": "vitest run --config vitest.config.ts",
+    "test:e2e": "playwright test -c playwright.config.ts",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.node.json && tsc -p tsconfig.e2e.json"
+  },
+  "dependencies": {
+    "@docedit/document-service": "workspace:*",
+    "@docedit/element": "workspace:*"
+  },
+  "devDependencies": {
+    "@docedit/export-worker": "workspace:*",
+    "@docedit/protocol": "workspace:*",
+    "@sveltejs/adapter-node": "6.0.1",
+    "@sveltejs/kit": "3.1.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "svelte": "5.57.3",
+    "svelte-check": "4.7.8",
+    "vite": "8.3.6"
+  }
+}

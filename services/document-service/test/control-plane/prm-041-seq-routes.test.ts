@@ -1,0 +1,63 @@
+// PRM-041 criterion 1 (lane U-PRM-035-051): every route or message field that takes a sequence
+// number, as SEQ_INPUTS lists it (HIS-024 criterion 4), is shown to call the visibility gate, or is
+// named here as open with its reason. The route files are read from the source, so the check
+// follows the code. A gated route that is not yet gated fails the test that keeps it open, so the
+// list is updated when the gate lands.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { SEQ_INPUTS } from '../../src/data-plane/gate.ts';
+
+const SRC = fileURLToPath(new URL('../../src', import.meta.url));
+const CONTROL_GATE = /minVisibleSeqOf\(|refuseBelowGate\(/;
+const ROOM_GATE = /stateAllowed\(|rangeAllowed\(|minVisibleSeq\(/;
+
+/** Built routes and the file that serves each, with the call that applies the gate there. */
+const BUILT: Record<string, { file: string; gate: RegExp }> = {
+  'ch.open': { file: 'data-plane/room-host.ts', gate: ROOM_GATE },
+  'GET /documents/{id}/content': { file: 'control-plane/handlers.ts', gate: CONTROL_GATE },
+  'GET /documents/{id}/commits': { file: 'control-plane/commit-routes.ts', gate: CONTROL_GATE },
+  'POST /documents/{id}/exports': { file: 'control-plane/export-routes.ts', gate: CONTROL_GATE },
+  'GET /documents/{id}/field-values': { file: 'control-plane/field-routes.ts', gate: CONTROL_GATE },
+};
+
+/** Gated inputs that are not gated yet, or whose route is not built; each with its reason. */
+const OPEN: Record<string, { file: string; reason: string }> = {
+  'POST /documents/{id}/fork': {
+    file: 'control-plane/history-routes.ts',
+    reason: 'the fork applies no gate to atSeq (PRM-042 criterion 4)',
+  },
+  'GET /documents/{id}/diff': { file: '', reason: 'route not built (HIS-026, phase 2)' },
+  'GET /documents/{id}/history': { file: '', reason: 'route not built (HIS-026, phase 2)' },
+  'POST /documents/{id}/versions': { file: '', reason: 'route not built (HIS-026, phase 2)' },
+  'POST /documents/{id}/restore': {
+    file: '',
+    reason: 'route not built (FRW, PRM-049 criterion 5)',
+  },
+  'GET /documents/{id}/threads': { file: '', reason: 'route not built (PRM-042 criterion 1)' },
+  'GET /documents/{id}/attribution': { file: '', reason: 'route not built (PRM-042 criterion 2)' },
+};
+
+const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
+
+describe('every sequence input is gated or named as open (PRM-041 criterion 1)', () => {
+  const gated = [...new Set(SEQ_INPUTS.filter((i) => i.rule !== 'exempt').map((i) => i.where))];
+
+  it('every gated input is either built and gated, or open with a reason', () => {
+    const unaccounted = gated.filter((w) => !(w in BUILT) && !(w in OPEN));
+    expect(unaccounted).toEqual([]);
+    const stale = [...Object.keys(BUILT), ...Object.keys(OPEN)].filter((w) => !gated.includes(w));
+    expect(stale).toEqual([]);
+  });
+
+  it('each built route calls the gate in the file that serves it', () => {
+    for (const [where, { file, gate }] of Object.entries(BUILT))
+      expect(read(file), `${where} in ${file}`).toMatch(gate);
+  });
+
+  it('the open routes that exist still do not call the gate (fails when the gate lands)', () => {
+    const forkFile = OPEN['POST /documents/{id}/fork']!.file;
+    expect(read(forkFile)).not.toMatch(CONTROL_GATE);
+  });
+});

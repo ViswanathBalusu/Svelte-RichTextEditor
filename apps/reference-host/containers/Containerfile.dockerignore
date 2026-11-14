@@ -1,0 +1,18 @@
+# Not sent to the build of containers/Containerfile: installed dependencies, build output, test
+# output, version control, and the local data of a running stack.
+**/node_modules
+**/dist
+**/build
+**/.svelte-kit
+**/test-results
+**/playwright-report
+**/.vitest
+**/coverage
+**/*.tsbuildinfo
+.git
+.install-lock
+apps/reference-host/.stack
+apps/reference-host/stack/.env
+infra/containers/.env
+services/export-worker/out
+packages/export-latex/out

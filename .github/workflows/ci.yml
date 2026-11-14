@@ -1,0 +1,193 @@
+# Continuous integration (FND-002). Every pull request must pass all jobs before it merges
+# (configure the branch protection rule to require them).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Nightly: everything above, plus the long convergence run against PostgreSQL (SYN-047).
+    - cron: '17 2 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, type-check, unit tests, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint and formatting
+        run: pnpm lint
+      - name: Type-check
+        run: pnpm typecheck
+      - name: Architecture boundaries (FND-004)
+        run: pnpm deps:check
+      - name: Licence gate (FND-011)
+        run: pnpm licence:check
+      - name: Unit and property tests in Node.js, without a browser (02 §12)
+        run: pnpm test -- --reporter=default --reporter=junit --outputFile.junit=test-results/node.xml
+      - name: Generated artifacts are current (CDM-007)
+        run: |
+          pnpm generate
+          git diff --exit-code -- spec packages/model/src/generated
+      - name: Actions and base images are pinned (SEC-052)
+        run: pnpm pins:check
+      - name: Build
+        run: pnpm build
+      - name: The editor bundle loads nothing from other origins (SEC-054)
+        run: pnpm origins:check
+      - name: Stories are well-formed
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File docs/stories/tools/check-stories.ps1 | Tee-Object -Variable out
+          if ($out -match '== Problems \((?!0\))') { exit 1 }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: node-test-results
+          path: test-results/
+          if-no-files-found: ignore
+
+  browsers:
+    name: Browser tests (${{ matrix.browser }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Minimum supported versions (02 §12): Chrome and Edge 137, Firefox 142, Safari 17.
+        # Playwright 1.65 ships newer engines than these minimums; the minimums are pinned for the
+        # build targets in tsconfig.base.json (ES2023) and checked against real releases in the
+        # scheduled compatibility run (to be added with the first browser-facing package).
+        include:
+          - browser: chromium
+            os: ubuntu-24.04
+          - browser: msedge
+            os: ubuntu-24.04
+          - browser: firefox
+            os: ubuntu-24.04
+          - browser: webkit
+            os: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Universal tests in ${{ matrix.browser }} (FND-003, FND-005)
+        env:
+          DOCEDIT_BROWSERS: ${{ matrix.browser }}
+        run: pnpm exec vitest run --project browser
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: browser-${{ matrix.browser }}-traces
+          path: |
+            test-results/
+            playwright-report/
+            .vitest-attachments/
+          if-no-files-found: ignore
+
+  dependency-review:
+    # SEC-050 criterion 2: a pull request that adds or changes a dependency gets a review of known
+    # advisories. Licences are checked by the licence gate in the check job, and install scripts stay
+    # off unless allow-listed (pnpm-workspace.yaml: `onlyBuiltDependencies` is empty).
+    name: Dependency review (SEC-050)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+
+  conformance-kit:
+    # The conformance kit (packages/tck; ADR 0042): the independent canonical-form implementation
+    # in Python against the model's fixtures (CDM-011), the kit's own tests with its targets
+    # (backend-mock and the reference service in process), and its Podman image.
+    name: Conformance kit (PRO-108 to PRO-117, CDM-011)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Canonical form in Python, against the model's fixtures (Python 3 is preinstalled)
+        run: python3 -I packages/model/conformance/canonical.py spec/cdm/cdm-1.prosemirror.json packages/model/fixtures/canonical/index.json
+      - name: The kit's tests and its targets
+        run: pnpm exec vitest run --project node packages/tck
+      - name: The kit's image builds with Podman
+        run: podman build -t docedit-tck:ci -f packages/tck/Containerfile .
+
+  integration:
+    # The integration-test environment (FND-010): PostgreSQL and the S3-compatible store in
+    # containers started with Podman (never Docker), clean on each run and removed afterwards.
+    name: Integration tests against PostgreSQL (FND-010, SYN-047)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: podman --version
+      - name: Start the environment, run the Node.js tests against it, tear it down
+        shell: pwsh
+        run: pwsh -NoProfile -File infra/test-env.ps1 run -NoExport pnpm test
+
+  convergence-nightly:
+    name: Convergence suite against PostgreSQL, 3,000 schedules (SYN-047)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: SYN-047 with 3,000 schedules
+        shell: pwsh
+        env:
+          SYN047_RUNS: '3000'
+        run: pwsh -NoProfile -File infra/test-env.ps1 run -NoExport pnpm test
+
+  summary:
+    name: Pipeline duration
+    needs: [check, browsers, conformance-kit, integration, convergence-nightly]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Report the duration of every job
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs \
+            --jq '.jobs[] | select(.completed_at != null) | "\(.name): \(((.completed_at | fromdate) - (.started_at | fromdate)))s"' \
+            | tee -a "$GITHUB_STEP_SUMMARY"

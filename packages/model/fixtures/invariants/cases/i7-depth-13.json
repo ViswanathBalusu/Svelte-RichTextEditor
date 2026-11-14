@@ -1,0 +1,171 @@
+{
+  "name": "i7-depth-13",
+  "doc": "no steps: a stored document nested 13 deep through regions in regions, which no step can make (hostile input).",
+  "base": {
+    "cdm": 1,
+    "requires": [],
+    "doc": {
+      "type": "doc",
+      "content": [
+        {
+          "type": "defs",
+          "content": [
+            {
+              "type": "settings",
+              "attrs": { "lang": "en-GB", "defaultTabStop": 720, "defaultParagraphStyle": "Normal" }
+            },
+            {
+              "type": "style_def",
+              "attrs": {
+                "id": "Normal",
+                "kind": "paragraph",
+                "name": "Normal",
+                "builtIn": true,
+                "fontFamily": "Noto Serif",
+                "fontSize": 220,
+                "spaceAfter": 160,
+                "lineSpacing": 1150,
+                "lineRule": "multiple"
+              }
+            },
+            {
+              "type": "style_def",
+              "attrs": {
+                "id": "Heading1",
+                "kind": "paragraph",
+                "name": "Heading 1",
+                "builtIn": true,
+                "basedOn": "Normal",
+                "next": "Normal",
+                "outlineLevel": 1,
+                "fontSize": 320,
+                "bold": true,
+                "keepNext": true
+              }
+            },
+            {
+              "type": "page_setup",
+              "attrs": {
+                "id": "ps1",
+                "width": 11906,
+                "height": 16838,
+                "marginTop": 1440,
+                "marginRight": 1440,
+                "marginBottom": 1440,
+                "marginLeft": 1440
+              }
+            }
+          ]
+        },
+        {
+          "type": "body",
+          "attrs": { "pageSetup": "ps1" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p3Jq8sLw0aZx1VbN", "style": "Heading1" },
+              "content": [{ "type": "text", "text": "Scope" }]
+            },
+            {
+              "type": "region",
+              "attrs": {
+                "id": "rG7mK2pQ9xYt4HcD",
+                "title": "Legal review",
+                "policy": "restricted"
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pA1b2C3d4E5f6G7h", "style": "Normal" },
+                  "content": [
+                    { "type": "text", "text": "Liability is limited to " },
+                    {
+                      "type": "text",
+                      "text": "direct",
+                      "marks": [{ "type": "bold", "attrs": { "value": true } }]
+                    },
+                    { "type": "text", "text": " damages." }
+                  ]
+                }
+              ]
+            },
+            { "type": "paragraph", "attrs": { "id": "pZ9y8X7w6V5u4T3s", "style": "Normal" } },
+            {
+              "type": "region",
+              "attrs": { "id": "rDeep00000000008" },
+              "content": [
+                {
+                  "type": "region",
+                  "attrs": { "id": "rDeep00000000007" },
+                  "content": [
+                    {
+                      "type": "region",
+                      "attrs": { "id": "rDeep00000000006" },
+                      "content": [
+                        {
+                          "type": "region",
+                          "attrs": { "id": "rDeep00000000005" },
+                          "content": [
+                            {
+                              "type": "region",
+                              "attrs": { "id": "rDeep00000000004" },
+                              "content": [
+                                {
+                                  "type": "region",
+                                  "attrs": { "id": "rDeep00000000003" },
+                                  "content": [
+                                    {
+                                      "type": "region",
+                                      "attrs": { "id": "rDeep00000000002" },
+                                      "content": [
+                                        {
+                                          "type": "region",
+                                          "attrs": { "id": "rDeep00000000001" },
+                                          "content": [
+                                            {
+                                              "type": "region",
+                                              "attrs": { "id": "rDeep00000000000" },
+                                              "content": [
+                                                {
+                                                  "type": "paragraph",
+                                                  "attrs": { "id": "pDeepest00000001" },
+                                                  "content": [{ "type": "text", "text": "x" }]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "steps": [],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I3", "I7"],
+  "limit": { "name": "depth", "side": "past" }
+}

@@ -1,0 +1,220 @@
+{
+  "protocol": "1.0",
+  "generator": "packages/tck/scripts/generate.ts",
+  "description": "The example conversation of 05 §5.9, completed with the members the example leaves out (G53) and replayed in order against a server by the semantics.conversation scenario. A user with a region grant resumes, streams three commits, commits, loses the grant and is rejected.",
+  "spec": "05 §5.9",
+  "frames": [
+    {
+      "from": "C",
+      "frame": {
+        "t": "hello",
+        "id": "1",
+        "d": {
+          "versions": ["1.0"],
+          "token": "$token",
+          "client": {
+            "name": "@docedit/tck",
+            "version": "0.0.0"
+          },
+          "engines": ["pm-steps/1"],
+          "cdm": {
+            "min": 1,
+            "max": 1
+          },
+          "features": ["$features"]
+        }
+      }
+    },
+    {
+      "from": "S",
+      "frame": {
+        "t": "welcome",
+        "re": "1",
+        "d": {
+          "version": "1.0"
+        }
+      },
+      "match": ["d.version"]
+    },
+    {
+      "from": "C",
+      "frame": {
+        "t": "ch.open",
+        "id": "2",
+        "ch": 1,
+        "d": {
+          "kind": "doc",
+          "doc": "$doc",
+          "engine": "pm-steps/1",
+          "cdm": 1,
+          "features": ["$features"],
+          "resume": {
+            "seq": "$s0",
+            "incarnation": "$incarnation"
+          }
+        }
+      }
+    },
+    {
+      "from": "S",
+      "frame": {
+        "t": "ch.opened",
+        "re": "2",
+        "ch": 1,
+        "d": {
+          "head": "$s3",
+          "catchUp": "stream"
+        }
+      },
+      "match": ["d.head", "d.catchUp"]
+    },
+    {
+      "from": "S",
+      "frame": {
+        "t": "sync.commit",
+        "ch": 1,
+        "d": {
+          "commits": [
+            {
+              "seq": "$s1"
+            },
+            {
+              "seq": "$s2"
+            },
+            {
+              "seq": "$s3"
+            }
+          ]
+        }
+      },
+      "match": ["d.commits.seq"]
+    },
+    {
+      "from": "S",
+      "frame": {
+        "t": "sync.caughtUp",
+        "ch": 1,
+        "d": {
+          "seq": "$s3"
+        }
+      },
+      "match": ["d.seq"]
+    },
+    {
+      "from": "C",
+      "frame": {
+        "t": "sync.submit",
+        "id": "3",
+        "ch": 1,
+        "d": {
+          "id": "$commitA",
+          "base": "$s3",
+          "steps": [
+            {
+              "stepType": "replace",
+              "from": "$posLocked",
+              "to": "$posLocked",
+              "slice": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "G"
+                  }
+                ]
+              }
+            }
+          ],
+          "origin": "input"
+        }
+      }
+    },
+    {
+      "from": "S",
+      "frame": {
+        "t": "sync.ack",
+        "re": "3",
+        "ch": 1,
+        "d": {
+          "id": "$commitA",
+          "seq": "$s4",
+          "rebased": false
+        }
+      },
+      "match": ["d.id", "d.seq", "d.rebased"]
+    },
+    {
+      "from": "host",
+      "action": "remove the grant (PATCH /documents/{id}/grants)"
+    },
+    {
+      "from": "S",
+      "frame": {
+        "t": "sync.commit",
+        "ch": 1,
+        "d": {
+          "commits": [
+            {
+              "seq": "$s5",
+              "kind": "control"
+            }
+          ]
+        }
+      },
+      "match": ["d.commits.seq", "d.commits.kind"]
+    },
+    {
+      "from": "S",
+      "frame": {
+        "t": "perm.changed",
+        "ch": 1,
+        "d": {
+          "asOfSeq": "$s5"
+        }
+      },
+      "match": ["d.asOfSeq"]
+    },
+    {
+      "from": "C",
+      "frame": {
+        "t": "sync.submit",
+        "id": "4",
+        "ch": 1,
+        "d": {
+          "id": "$commitB",
+          "base": "$s4",
+          "steps": [
+            {
+              "stepType": "replace",
+              "from": "$posLocked",
+              "to": "$posLocked",
+              "slice": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "H"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "from": "S",
+      "frame": {
+        "t": "sync.reject",
+        "re": "4",
+        "ch": 1,
+        "d": {
+          "id": "$commitB",
+          "code": "permission_denied",
+          "action": "drop",
+          "head": "$s5",
+          "scopes": ["$lockedScope"]
+        }
+      },
+      "match": ["d.id", "d.code", "d.action", "d.head", "d.scopes"]
+    }
+  ]
+}

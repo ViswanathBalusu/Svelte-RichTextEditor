@@ -1,0 +1,9 @@
+{
+  "$comment": "Reference time of the calibration workload (pages/calibrate.html) on the reference machine of ADR 0037 at CPU throttling rate 1: the median of seven iterations after a warm-up, from test-results/calibration/2026-11-06T17-17-06Z.json. A first run the same day gave 237.4 ms. Another machine's rate is this time divided by its own time at rate 1, confirmed by a second calibration run at that rate (e2e/calibrate.spec.ts).",
+  "profile": "reference-1",
+  "rate": 1,
+  "medianMs": 223.4,
+  "run": "2026-11-06T17-17-06Z",
+  "browser": "chromium 158.0.8127.18",
+  "machineBusy": "24 % to 43 % of all logical processors during the run"
+}

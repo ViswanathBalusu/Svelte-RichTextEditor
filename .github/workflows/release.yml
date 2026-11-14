@@ -1,0 +1,335 @@
+# Release pipeline (FND-012; SEC-051, SEC-052, SEC-054; ADR 0044).
+#
+# A tag v<version> builds every distributable, checks it and writes a DRAFT GitHub release with
+# the npm tarball, the bills of materials, the third-party notices, the changelog, the release
+# notes and SHA256SUMS. Nothing is published by the tag. To publish, a maintainer runs this
+# workflow by hand on the same tag with "publish" ticked; those jobs wait for the approval of the
+# `release` environment (configure required reviewers), rebuild each image and refuse one that
+# differs from the draft, push it by digest, sign and attest it without keys (Sigstore, with this
+# run's GitHub OIDC identity), verify it, publish the npm package with provenance (npm trusted
+# publishing, no token) and make the release public. No key or token is stored anywhere.
+#
+# Every action is pinned to a full commit; the comment names its release. Containers are built
+# with Podman, never Docker.
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the draft release of this tag (choose the tag as the ref; needs the release environment's approval)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # An explicit bash adds -o pipefail, so a failure inside a pipe fails the step.
+    shell: bash
+
+env:
+  REGISTRY: ghcr.io
+  SYFT_VERSION: v1.55.0
+
+jobs:
+  prepare:
+    name: Check, build, bills of materials, notices and notes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      images: ${{ steps.images.outputs.images }}
+    steps:
+      - name: Only on a release tag
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "::error::Run the release workflow on a tag v<version>, not on ${GITHUB_REF}."
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: version
+        name: Version, earlier releases and the previous stories snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+          { git tag --list 'v*' | grep -vxF "${GITHUB_REF_NAME}" || true; } | paste -sd, - > released.txt
+          previous="$(gh release list --repo "${GITHUB_REPOSITORY}" --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName // empty')"
+          if [ -n "${previous}" ]; then
+            gh release download "${previous}" --repo "${GITHUB_REPOSITORY}" --pattern stories-snapshot.json --dir previous
+          fi
+      - name: Build every package
+        run: pnpm build
+      - name: Release pipeline (scripts/release/release.ts)
+        env:
+          DOCEDIT_REPOSITORY_URL: https://github.com/${{ github.repository }}
+          DOCEDIT_SBOM_NAMESPACE: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}/sbom
+        run: |
+          args=(--tag "${GITHUB_REF_NAME}" --out dist/release --skip-build --strict --released "$(cat released.txt)")
+          if [ -f previous/stories-snapshot.json ]; then
+            args+=(--previous-snapshot previous/stories-snapshot.json)
+          fi
+          node scripts/release/release.ts "${args[@]}"
+      - id: images
+        name: Images to build
+        run: echo "images=$(node scripts/release/distributables.ts images)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: dist/release/${{ steps.version.outputs.version }}/artefacts/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: release-reports
+          path: dist/release/*/reports/
+          if-no-files-found: ignore
+
+  images:
+    name: Image ${{ matrix.image.id }} (built twice and compared, bill of materials)
+    needs: prepare
+    if: ${{ needs.prepare.outputs.images != '[]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.prepare.outputs.images) }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      IMAGE_ID: ${{ matrix.image.id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      # A staged build context (the asset worker's) copies its decoders out of node_modules.
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: files
+      - id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
+      - name: Build with Podman twice from the pinned bases, compare, write the bill
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: |
+          podman --version
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          node scripts/release/image.ts --id "${IMAGE_ID}" --version "${VERSION}" \
+            --repository "${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}" --out out/image --declared-dir files
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-${{ matrix.image.id }}
+          path: |
+            out/image/*.image.spdx.json
+            out/image/image.json
+          if-no-files-found: error
+
+  draft:
+    name: Draft GitHub release (not published)
+    needs: [prepare, images]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && (needs.images.result == 'success' || needs.images.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: files
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: image-*
+          path: images
+      - name: Add the image bills, list the images built, checksum every file
+        run: |
+          shopt -s nullglob
+          for f in images/*/*.image.spdx.json; do cp "$f" files/; done
+          records=(images/*/image.json)
+          if [ "${#records[@]}" -gt 0 ]; then jq -s '.' "${records[@]}" > files/images-draft.json; else echo '[]' > files/images-draft.json; fi
+          cd files
+          LC_ALL=C ls | grep -vx SHA256SUMS | LC_ALL=C sort | xargs sha256sum > SHA256SUMS
+      - name: When publishing, this run must have rebuilt exactly the reviewed draft
+        if: ${{ env.PUBLISH == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --pattern SHA256SUMS --dir reviewed
+          if ! diff reviewed/SHA256SUMS files/SHA256SUMS; then
+            echo "::error::This run's files differ from the reviewed draft; nothing is published."
+            exit 1
+          fi
+      - name: Create or update the draft
+        if: ${{ env.PUBLISH != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq '.isDraft' > is-draft.txt 2>/dev/null; then
+            if [ "$(cat is-draft.txt)" != "true" ]; then
+              echo "::error::${GITHUB_REF_NAME} is already published; a release is never rebuilt."
+              exit 1
+            fi
+            gh release upload "${GITHUB_REF_NAME}" files/* --clobber --repo "${GITHUB_REPOSITORY}"
+            gh release edit "${GITHUB_REF_NAME}" --notes-file files/RELEASE-NOTES.md --repo "${GITHUB_REPOSITORY}"
+          else
+            prerelease=()
+            case "${VERSION}" in *-*) prerelease=(--prerelease) ;; esac
+            gh release create "${GITHUB_REF_NAME}" files/* --draft --verify-tag "${prerelease[@]}" \
+              --title "${VERSION}" --notes-file files/RELEASE-NOTES.md --repo "${GITHUB_REPOSITORY}"
+          fi
+
+  publish-images:
+    name: Publish image ${{ matrix.image.id }} (push by digest, sign, attest, verify)
+    needs: [prepare, draft]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && needs.prepare.outputs.images != '[]' }}
+    environment: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image: ${{ fromJSON(needs.prepare.outputs.images) }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      IMAGE_ID: ${{ matrix.image.id }}
+      REGISTRY_AUTH_FILE: /home/runner/.docker/config.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: The draft's record of this image and the service's bill
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --pattern images-draft.json --pattern '*.spdx.json' --dir files
+      - name: Log in to the registry with this run's token
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$(dirname "${REGISTRY_AUTH_FILE}")"
+          printf '%s' "${TOKEN}" | podman login "${REGISTRY}" --username "${GITHUB_ACTOR}" --password-stdin
+      - name: Rebuild, refuse anything but the draft's image, push by digest, write the bill
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          expected="$(jq -r --arg id "${IMAGE_ID}" '.[] | select(.id == $id) | .imageId' files/images-draft.json)"
+          if [ -z "${expected}" ]; then echo "::error::the draft has no record of ${IMAGE_ID}"; exit 1; fi
+          node scripts/release/image.ts --id "${IMAGE_ID}" --version "${VERSION}" \
+            --repository "${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}" --out out/image --declared-dir files \
+            --once --expect-id "${expected}" --push
+      - name: Sign and attest the digest without keys, then verify both
+        run: |
+          ref="$(jq -r '.image + "@" + .digest' out/image/image.json)"
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}"
+          cosign sign --yes "${ref}"
+          cosign attest --yes --type spdxjson --predicate out/image/*.image.spdx.json "${ref}"
+          cosign verify --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "${identity}" "${ref}" > /dev/null
+          cosign verify-attestation --type spdxjson --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "${identity}" "${ref}" > /dev/null
+          echo "Signed and verified ${ref}" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: published-${{ matrix.image.id }}
+          path: |
+            out/image/*.image.spdx.json
+            out/image/image.json
+          if-no-files-found: error
+
+  publish:
+    name: Publish the npm package and the release
+    needs: [prepare, publish-images]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.prepare.result == 'success' && (needs.publish-images.result == 'success' || needs.publish-images.result == 'skipped') }}
+    environment: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: published-*
+          path: published
+      - name: The draft's files, with the published images added
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --dir files
+          (cd files && sha256sum --check --strict SHA256SUMS)
+          rm files/images-draft.json
+          shopt -s nullglob
+          for f in published/*/*.image.spdx.json; do cp "$f" files/; done
+          records=(published/*/image.json)
+          if [ "${#records[@]}" -gt 0 ]; then jq -s '[.[] | {id, image, digest, sbom}]' "${records[@]}" > images.json; else echo '[]' > images.json; fi
+          node scripts/release/finalise.ts files images.json
+      - name: npm package with provenance (trusted publishing; no token)
+        run: |
+          # Trusted publishing needs npm 11.5.1 or later; Node.js 22 ships npm 10.
+          npm install --global npm@11.21.1
+          shopt -s nullglob
+          for t in files/*.tgz; do
+            id="$(tar -xOzf "$t" package/package.json | jq -r '.name + "@" + .version')"
+            if npm view "${id}" version > /dev/null 2>&1; then echo "${id} is already published"; continue; fi
+            npm publish "$t" --provenance --access public
+          done
+      - name: Make the release public
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete-asset "${GITHUB_REF_NAME}" images-draft.json --yes --repo "${GITHUB_REPOSITORY}" || true
+          gh release upload "${GITHUB_REF_NAME}" files/* --clobber --repo "${GITHUB_REPOSITORY}"
+          gh release edit "${GITHUB_REF_NAME}" --notes-file files/RELEASE-NOTES.md --draft=false --repo "${GITHUB_REPOSITORY}"

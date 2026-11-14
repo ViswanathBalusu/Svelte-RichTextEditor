@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Runs in browsers and in Node.js: lib ES2023 and no ambient types, so the only platform APIs it reaches are the ones declared in src/platform.ts (WebSocket, fetch, timers), found on globalThis at run time (FND-004).",
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

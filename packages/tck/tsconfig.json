@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "The kit runs in Node.js (a container or a test runner): it speaks DEP over a real WebSocket and HTTP, and reads its fixtures from disk. It is not a universal package.",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

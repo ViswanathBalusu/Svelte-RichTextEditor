@@ -1,0 +1,14 @@
+{
+  "name": "@docedit/painter",
+  "version": "0.0.0",
+  "private": true,
+  "description": "DOM painter for the print view: lines from the layout tree in absolutely positioned page boxes, justified by computed word spacing (02 §9.1, §9.3; ADR 0005).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/painter.ts",
+      "default": "./src/painter.ts"
+    }
+  }
+}

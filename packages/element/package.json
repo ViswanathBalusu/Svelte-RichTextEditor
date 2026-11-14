@@ -1,0 +1,36 @@
+{
+  "name": "@docedit/element",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The <doc-editor> custom element with its open shadow root, and the distributable bundle (02 §2, §3).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./config.schema.json": "./src/config.schema.json"
+  },
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "demo": "node demo/build.ts && node demo/serve.ts",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@docedit/backend-dep": "workspace:*",
+    "@docedit/engine": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*",
+    "@docedit/ui": "workspace:*",
+    "svelte": "5.57.3"
+  },
+  "devDependencies": {
+    "@docedit/backend-mock": "workspace:*",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "katex": "0.19.1",
+    "mathlive": "0.111.4",
+    "pdfjs-dist": "6.5.438",
+    "svelte-check": "4.7.8",
+    "vite": "8.3.6"
+  }
+}

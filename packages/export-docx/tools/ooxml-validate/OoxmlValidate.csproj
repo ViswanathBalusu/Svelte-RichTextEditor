@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    EXP-090 criterion 7: validates DOCX packages against the Open XML schemas with the
+    Open XML SDK's validator (the same schemas Word checks against). Run by
+    test/exp-090-ooxml.test.ts; not part of the pnpm build.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OoxmlValidate</AssemblyName>
+    <RootNamespace>DocEdit.ExportDocx.OoxmlValidate</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+  </ItemGroup>
+
+</Project>

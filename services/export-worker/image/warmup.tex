@@ -1,0 +1,18 @@
+% warmup.tex: run once when the image is built (spike S4). Loads every font of the worker's font
+% directory in both luaotfload renderers and the class's packages, so that the font caches exist
+% in the read-only image and no job spends time building them (09 §8, pre-built font cache).
+\documentclass{article}
+\usepackage{fontspec}
+\usepackage{amsmath}
+\usepackage{unicode-math}
+\usepackage{xcolor}
+\usepackage{lua-ul}
+\usepackage{longtable}
+\usepackage{colortbl}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\directlua{warmup = dofile("warmup.lua") warmup.mathfont()}
+\begin{document}
+\directlua{warmup.fonts()}
+$x^2 + \frac{1}{2}$
+\end{document}

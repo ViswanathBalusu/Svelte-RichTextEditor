@@ -1,0 +1,27 @@
+node_modules/
+dist/
+coverage/
+.vitest/
+test-results/
+playwright-report/
+blob-report/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+*.log
+# Export spike scratch output
+services/export-worker/out/
+packages/export-latex/out/
+.install-lock/
+# Local settings of the integration-test environment (test values only; see .env.example)
+infra/containers/.env
+# .NET build output of the OOXML validator tool
+**/bin/Debug/
+**/bin/Release/
+**/obj/
+# Local tool output and caches
+.playwright-mcp/
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+# A stray file from a Windows redirect; Git cannot index this name
+NUL

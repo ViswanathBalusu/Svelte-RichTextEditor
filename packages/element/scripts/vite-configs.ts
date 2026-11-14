@@ -1,0 +1,194 @@
+/**
+ * Vite configurations of the element package (02 §2, §3; FE-002, FE-016; ADR 0039).
+ *
+ * - `libraryConfig`: the distributable, Vite library mode, one ES module entry (`doc-editor.js`)
+ *   with lazily loaded chunks in `chunks/`: the editor (core, shell, Svelte, styles), each pane and
+ *   the PDF viewer's controller. Output `dist/lib`.
+ * - `viewerConfig`: the PDF viewer's page for its sandboxed frame (FE-071), with PDF.js, its worker
+ *   and the decoders, fonts and CMaps PDF.js fetches. Output `dist/lib/viewer`.
+ * - `demoConfig`: the component built from source together with the demo pages and the test hooks
+ *   (`src/testing.ts`), for the end-to-end suites; `fragments: "html"` builds the negative control
+ *   of spike S2. Output `dist/demo`.
+ * - `svelteHostConfig`: a host application with its own Svelte 5 and default options (spike S2).
+ *
+ * Every component build compiles Svelte with `fragments: "tree"` (no HTML-string templates, no
+ * Trusted Types policy of Svelte's own; FE-016) and `css: "external"` with `emitCss: false`: the
+ * components have no style block, the styles are the element's one stylesheet.
+ */
+import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { cpSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { InlineConfig, Plugin } from 'vite';
+
+const here = dirname(fileURLToPath(import.meta.url));
+export const elementDir = resolve(here, '..');
+// `DOCEDIT_ELEMENT_DIST` (relative to the element package) gives one run its own output directory,
+// so that parallel Playwright runs do not rebuild the directory another run is serving (U-PRO-086-102).
+export const distDir = process.env['DOCEDIT_ELEMENT_DIST']
+  ? resolve(elementDir, process.env['DOCEDIT_ELEMENT_DIST'])
+  : join(elementDir, 'dist');
+export const libDir = join(distDir, 'lib');
+export const viewerDir = join(libDir, 'viewer');
+export const demoDir = join(distDir, 'demo');
+
+/**
+ * The minimum browser versions the build targets (02 §12; FE-116; review F15). Browsers below them
+ * are unsupported: Chrome and Edge 137 (`Selection.getComposedRanges()`), Firefox 142 (the shadow
+ * selection APIs), Safari 17.
+ */
+export const BROWSER_MINIMUMS = ['chrome137', 'edge137', 'firefox142', 'safari17'] as const;
+
+/** The Svelte compile options of every component build (FE-016). */
+export const COMPONENT_COMPILER_OPTIONS = { fragments: 'tree', css: 'external' } as const;
+
+function componentSvelte(fragments: 'tree' | 'html'): Plugin[] {
+  return svelte({
+    configFile: false,
+    compilerOptions: { ...COMPONENT_COMPILER_OPTIONS, fragments },
+    emitCss: false,
+  }) as Plugin[];
+}
+
+function base(outDir: string): InlineConfig {
+  return {
+    configFile: false,
+    root: elementDir,
+    logLevel: 'warn',
+    build: {
+      outDir,
+      emptyOutDir: true,
+      target: [...BROWSER_MINIMUMS],
+      // No preload helper: it inserts <link> elements, which a strict host does not expect.
+      modulePreload: false,
+      // Fonts and other assets stay files, so `font-src 'self'` covers them (no data: URLs).
+      assetsInlineLimit: 0,
+      sourcemap: true,
+      minify: true,
+    },
+  };
+}
+
+export function libraryConfig(): InlineConfig {
+  const config = base(libDir);
+  return {
+    ...config,
+    plugins: componentSvelte('tree'),
+    build: {
+      ...config.build,
+      lib: {
+        entry: join(elementDir, 'src/index.ts'),
+        formats: ['es'],
+        fileName: () => 'doc-editor.js',
+      },
+      rollupOptions: {
+        output: {
+          chunkFileNames: libraryChunkName,
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Chunk names that say what a chunk holds, so that the size report and the tests can tell the
+ * DEP client and the editing core apart from the rest (FE-002).
+ */
+function libraryChunkName(chunk: { name: string; moduleIds: readonly string[] }): string {
+  const has = (dir: string) => chunk.moduleIds.some((id) => id.replaceAll('\\', '/').includes(dir));
+  if (has('/packages/backend-dep/src/')) return 'chunks/dep-client-[hash].js';
+  if (has('/packages/element/src/editor.ts')) return 'chunks/editor-[hash].js';
+  if (has('/packages/engine/src/')) return 'chunks/engine-[hash].js';
+  return 'chunks/[name]-[hash].js';
+}
+
+/** Copies the data PDF.js fetches by URL (decoders, standard fonts, CMaps) next to the viewer. */
+function pdfjsData(outDir: string): Plugin {
+  const from = join(elementDir, 'node_modules/pdfjs-dist');
+  return {
+    name: 'docedit-pdfjs-data',
+    apply: 'build',
+    writeBundle() {
+      for (const dir of ['wasm', 'standard_fonts', 'cmaps'])
+        cpSync(join(from, dir), join(outDir, 'pdfjs', dir), { recursive: true });
+    },
+  };
+}
+
+export function viewerConfig(outDir = viewerDir): InlineConfig {
+  const config = base(outDir);
+  return {
+    ...config,
+    root: join(elementDir, 'src/pdf/viewer'),
+    // Relative URLs throughout: the viewer works wherever its directory is served.
+    base: './',
+    plugins: [pdfjsData(outDir)],
+    build: {
+      ...config.build,
+      // PDF.js and its worker are large by nature; they load only inside the viewer's frame.
+      chunkSizeWarningLimit: 1500,
+      rollupOptions: {
+        input: { 'pdf-viewer': join(elementDir, 'src/pdf/viewer/pdf-viewer.html') },
+        output: {
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+    },
+  };
+}
+
+const DEMO_SCRIPTS = [
+  'spike-flags',
+  's1-page',
+  's2-page',
+  'wasm-page',
+  'probe-page',
+  'host-loader',
+  'embed-page',
+  'lib-page',
+];
+
+export function demoConfig(fragments: 'tree' | 'html', withDemo: boolean): InlineConfig {
+  const config = base(fragments === 'tree' ? demoDir : join(demoDir, 'control'));
+  const input: Record<string, string> = { 'doc-editor': join(elementDir, 'src/index.ts') };
+  if (withDemo)
+    for (const name of DEMO_SCRIPTS) input[name] = join(elementDir, 'demo', `${name}.ts`);
+  return {
+    ...config,
+    plugins: componentSvelte(fragments),
+    build: {
+      ...config.build,
+      rollupOptions: {
+        input,
+        output: {
+          entryFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+        preserveEntrySignatures: 'strict',
+      },
+    },
+  };
+}
+
+export function svelteHostConfig(): InlineConfig {
+  const config = base(join(demoDir, 'svelte-host'));
+  return {
+    ...config,
+    plugins: svelte({ configFile: false }) as Plugin[],
+    build: {
+      ...config.build,
+      rollupOptions: {
+        input: { host: join(elementDir, 'demo/svelte-host/host.ts') },
+        output: {
+          entryFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+    },
+  };
+}

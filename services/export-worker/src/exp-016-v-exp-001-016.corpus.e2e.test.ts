@@ -1,0 +1,107 @@
+/**
+ * EXP-016 (lane V-EXP-001-016): every reference corpus document that declares a standard is compiled
+ * in the sandbox and validated with veraPDF against each declared flavour; a violation fails the
+ * test and its message names the rule and the document. A draft-tagged preview compiles and is not
+ * validated. Needs Podman and the worker image; skips otherwise. The CI step that runs this on
+ * every pull request is root configuration and is not part of this file.
+ */
+import type { FontManifest } from '@docedit/export-latex';
+import { describe, expect, it, vi } from 'vitest';
+import { loadDocument } from '../../../packages/corpus/src/index.ts';
+import { podman } from './container.ts';
+import { flavoursFor, requiresValidation, validationReport } from './exp-016-corpus-report.ts';
+import { runExport } from './pipeline.ts';
+import { IMAGE } from './sandbox.ts';
+import { sandboxReady } from './sandbox-ready.ts';
+import { validatePdf } from './verapdf.ts';
+
+vi.setConfig({ testTimeout: 900_000 });
+
+const ready = await sandboxReady();
+
+async function imageFonts(): Promise<FontManifest> {
+  const r = await podman(
+    [
+      'run',
+      '--rm',
+      '--network=none',
+      '--read-only',
+      '--cap-drop=ALL',
+      '--entrypoint=cat',
+      IMAGE,
+      '/opt/docedit/fonts/fonts.json',
+    ],
+    // 180 s: on a loaded Podman machine a `podman run` took 80 to 100 s (sandbox-ready.ts).
+    { timeoutMs: 180_000, maxStdoutBytes: 1024 * 1024 },
+  );
+  const why = r.timedOut ? 'timed out' : r.stderr.slice(0, 500);
+  expect(r.code, `reading fonts.json: ${why}`).toBe(0);
+  return JSON.parse(new TextDecoder().decode(r.stdout)) as FontManifest;
+}
+
+/** The corpus documents kept in git that declare a standard (corpus README, "Documents"). */
+const CORPUS_DOCUMENTS = ['pages-1', 'form-fields', 'pages-20'] as const;
+const DECLARED = 'ua-2+a-4f';
+
+describe.skipIf(!ready.ok)(`EXP-016 corpus validation (${ready.reason})`, () => {
+  for (const name of CORPUS_DOCUMENTS) {
+    it(`validates ${name} against every declared flavour`, async () => {
+      const doc = await loadDocument(name);
+      const assets = Object.fromEntries(
+        doc.assets.map((a) => [
+          a.entry.id,
+          {
+            sha256: a.entry.sha256,
+            mediaType: a.entry.mediaType,
+            status: 'ready' as const,
+            bytes: a.bytes,
+          },
+        ]),
+      );
+      const r = await runExport(
+        doc.envelope,
+        await imageFonts(),
+        { tagging: 'on', pdfStandard: DECLARED, layout: 'block', title: name, assets },
+        { kind: 'sandbox' },
+      );
+      expect(r.compile.ok, r.compile.log.slice(-3000)).toBe(true);
+      expect(requiresValidation('on')).toBe(true);
+      for (const flavour of flavoursFor(DECLARED)) {
+        const v = await validatePdf(r.compile.pdf!, flavour);
+        const report = validationReport(name, v);
+        expect(report, report).toBe('');
+        expect(v.compliant).toBe(true);
+      }
+    });
+  }
+
+  it('names the rule and the document when a PDF violates the declared standard', async () => {
+    const doc = await loadDocument('pages-1');
+    // Tagging off and no standard: the PDF is not tagged, so PDF/UA-2 must refuse it.
+    const r = await runExport(
+      doc.envelope,
+      await imageFonts(),
+      { tagging: 'off', pdfStandard: 'none', layout: 'block', title: 'pages-1' },
+      { kind: 'sandbox' },
+    );
+    expect(r.compile.ok, r.compile.log.slice(-3000)).toBe(true);
+    const v = await validatePdf(r.compile.pdf!, 'ua2');
+    expect(v.compliant).toBe(false);
+    const report = validationReport('pages-1', v);
+    expect(report).toContain('pages-1 ua2');
+    expect(report.length).toBeGreaterThan(0);
+  });
+
+  it('compiles a draft-tagged preview of pages-1, which the gate does not validate', async () => {
+    const doc = await loadDocument('pages-1');
+    expect(requiresValidation('draft')).toBe(false);
+    const r = await runExport(
+      doc.envelope,
+      await imageFonts(),
+      { tagging: 'draft', pdfStandard: 'none', layout: 'block', title: 'pages-1 preview' },
+      { kind: 'sandbox' },
+    );
+    expect(r.compile.ok, r.compile.log.slice(-3000)).toBe(true);
+    expect(r.compile.pdf?.length ?? 0).toBeGreaterThan(0);
+  });
+});

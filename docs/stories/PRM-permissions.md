@@ -1,0 +1,1593 @@
+# PRM Permissions
+
+This epic covers who may do what to which part of a document and how the server enforces it: roles and capabilities, where permission data lives, effective capabilities, the outcome check and its rules, definitions that affect protected regions, who may comment, what a person sees before an edit and after a rejection, the permissions pane, history visibility, live changes and revocation, leases, region states, audit, the DOCX mapping rules, and the authorisation matrix and threat cases as executable tests.
+
+**Sources:** [07 Permissions](../spec/07-permissions.md) (normative), [ADR 0009](../adr/0009-regions-as-block-containers.md), [ADR 0015](../adr/0015-comments-as-mapped-ranges.md), [ADR 0011](../adr/0011-fields-in-tree-and-fill-capability.md), sections 3.2 and 6 of the [pitfall review](../review/2026-09-18-pitfall-review.md), and the phase placement in [11 Roadmap](../spec/11-roadmap.md).
+
+**Left to other epics (README section 2.3):** the region guard plugin's mechanics in the editing core (FE); where the authority calls the outcome check, the conditional log write on the grants revision, and comment range mapping (SYN); the `fill` capability and rules P7 to P9 (FRW); the history service and panel, and the history settings themselves (HIS); governance and administration interfaces, thread screens, mentions and tasks (UX); resources, messages, the `access` object and the conformance kit (PRO); DOCX import and export code (EXP). Stories here cite those epics with bracketed placeholders (epic prefix, short title, spec section) until the identifiers are known.
+
+## Model, roles and permission data
+
+### PRM-001 Define capabilities, roles, scopes and principals once
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 07 §1, §2; ADR 0009; ADR 0011 · **Requirements:** R3 · **Depends on:** PRO-009
+
+As a maintainer, I want one machine-readable definition of capabilities, roles, scopes and principals shared by the authority, the control plane, the component and the conformance kit, so that no part of the system keeps its own copy of the role table.
+
+**Acceptance criteria**
+
+- [x] Given the definition, when the role table is generated, then it equals 07 §2 for the roles `viewer`, `commenter`, `suggester`, `filler`, `editor` and `owner` against the capabilities `view`, `comment`, `suggest`, `edit`, `fill`, `structure` and `manage`, with `structure` for `editor` marked as document level only.
+- [x] Given a region grant, when it names any role other than `viewer`, `commenter`, `suggester` or `editor`, then validation refuses it, so a region grant never conveys `structure`, `manage` or `fill` (tested over every role and principal pair).
+- [x] Given the scope names `doc`, `body`, `defs`, `region:<id>`, `story:<id>` and `field:<id>`, when they are parsed and formatted, then they round-trip, and any other string is refused.
+- [x] Given the principal forms `user:<sub>`, `group:<id>`, `everyone` and `role:<id>`, when they are parsed, then they are accepted, and any other string is refused.
+- [x] Given the operations that `structure` covers (creating, deleting, splitting, merging and moving regions; changing a region's title; inserting section breaks; changing anything in `doc`, `defs` or a header or footer story) and those that `manage` covers (region grants, region states, a region's `policy`, breaking leases, workflows, restoring, deleting the document), when the definition is read, then each operation is listed under exactly one of the two, and the stories that enforce them cite that list.
+- [x] Given a change to the definition, when the build runs, then the machine-readable artifacts in `spec/` and the conformance-kit fixtures are regenerated from it, and the build fails if they differ.
+
+**Evidence:** `packages/authority/src/permissions/model.ts` (`ROLE_CAPABILITIES`, `REGION_ROLES`, `validateRegionGrant`, `parseScope` and `formatScope`, `parsePrincipal` and `formatPrincipal`). `packages/authority/test/capabilities.test.ts`, "roles, scopes, principals and grants": the role table equals the table of 07 §2 read from the spec, the editor's `structure` marked "document level only"; `validateRegionGrant` accepts the four region roles and refuses `filler` and `owner` for every principal form; nine scope forms round-trip (`defs`, `defs:settings` and `defs:<type>/<id>` included) and twelve other strings are refused; the four principal forms round-trip and eleven other strings are refused. `computeAccess` ignores a region grant with any other role, and the capability fixtures of PRM-004 show such a grant conveys nothing. Operations (criterion 5): `OPERATIONS`, `STRUCTURE_OPERATIONS`, `MANAGE_OPERATIONS` and `operationNeeds` in `packages/authority/src/permissions/model.ts`; every refusal of `outcome.ts` names its operation. `test/outcome.structure.test.ts`, "the operations of `structure` and `manage`, listed once": each operation once under one capability, every item of 07 §2 mapped to one, every commit operation refused for a user without the capability with the operation named and accepted for the owner; the control-plane operations are those of matrix row 10 (`test/matrix.test.ts`). Artifacts (criterion 6): `spec/permissions/permissions-1.json`, written from `model.ts` and `matrix.ts` by `scripts/permissions-artifact.ts` through `pnpm --filter @docedit/authority generate`; `test/matrix.test.ts`, "is current", fails when it is not a fresh generation, as `capabilities.test.ts` does for the capability fixtures of the kit, and the CI step that runs `pnpm generate` and diffs `spec/` covers it.
+
+**Notes:** `<id>` follows the identifier grammar of the CDM (03 §9). Phase inferred: the 1a demo needs region grants and an enforcement path (11 §3). Assumption, recorded here: `<sub>` and group identifiers are opaque token values (05 §3.1), accepted as 1 to 255 characters without whitespace or control characters; `role:<id>` uses the definition identifier grammar. Criteria 5 and 6 met on 2026-11-06. The list adds what 07 §2 does not name but other rules require: `settings.track_changes_off` (07 §5.2) and `field.sensitive` (ADR 0019); creating a region with a policy other than `inherit` is `region.create` plus `region.policy` (ADR 0033 item 6). PRM-011, PRM-012, PRM-030 and PRM-034 enforce the operations of this list.
+
+### PRM-002 Keep permission data in the document service behind a GrantStore
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 07 §3, §17; ADR 0009; review 3.2 S-02 · **Requirements:** R3, R10 · **Depends on:** PRM-001, BE-010, HIS-001
+
+As a maintainer, I want grants, region states and leases kept in the document service's database behind a `GrantStore` interface, with each change also written to the log as a control commit, so that permissions can change while people are connected and their order relative to content changes is provable.
+
+**Acceptance criteria**
+
+- [ ] Given a grant is created, changed or removed, when the write commits, then the grant row, the new grants revision and a control commit that records the revision are written together, or none of them is.
+- [ ] Given a region-state change or a lease break, when it commits, then a control commit is appended in the same transaction.
+- [x] Given any document, when its content is searched for permission data, then the only permission-related attribute found is a region's `policy`.
+- [ ] Given a user with `edit` in a scope, when they submit commits of any shape, including attribute steps and `ext` attributes, then no grant, state or lease changes: grants change only through the control plane.
+- [x] Given the document-level role (`docs` claim) and the groups (`grp` claim), when a token is refreshed with different values, then nothing is written to the grants tables: the host owns whole-document sharing and these values are never stored here.
+- [x] Given an in-memory `GrantStore` in place of PostgreSQL, when the permission suites run, then they pass unchanged, so that a policy engine can replace the tables without a protocol change.
+
+**Evidence:** criterion 4: `packages/authority/test/permissions.grants.test.ts`, where an editor's commits (text, field values carrying grant-shaped data, bold added and removed, a region title) leave the room's permission state unchanged, stored or refused, and a refused commit on a restricted region does too. The `GrantStore` interface is in `services/document-service/src/storage/types.ts`; `PgGrantStore` (`src/storage/grant-store.ts`) and `MemoryStore` (`src/storage/memory.ts`) implement it. The same contract checks (`test/contract/checks.ts`: revisions, history per revision, refusal against a replaced revision, round trip of grants, states, leases, document state and workflow flag, tenant isolation, retired regions) pass against both (`test/contract/memory.test.ts`, `test/postgres/contract.pg.test.ts`). The S3 permission oracle passes with the harness's in-memory permission storage (`packages/authority/test/convergence.property.test.ts`) and, unchanged, with `PgGrantStore` (SYN-047). Verifying tokens with other `docs` roles and `grp` values writes nothing to the permission tables (`services/document-service/test/control-plane/registrations.test.ts`, PostgreSQL).
+
+**Evidence (criterion 3, lane PRM-001-014, re-ticked in round 3 after the reviewer unticked it):** two checks. (1) The schema: `services/document-service/test/contract/prm-002.schema.test.ts` (6 tests) lists every attribute of every node, mark and projection node type of `CDM1`, with the members nested in object and array attributes. It first shows that the list covers every attribute of the live ProseMirror schema (`projectionSchema()`). It then sorts each attribute by its name (whole words such as `grant`, `lease`, `holder`, `state`, `role`, `policy`, `docs`, `grp`), by its enum values (capabilities, roles, region and document states, policies, `everyone`) and by references to roles. The attributes it finds are exactly `region.policy`, `settings.trackChanges` and `form_field.assignee`. Only `region.policy` is permission data. The test shows from the grammars that the other two cannot hold a principal (see Notes). No free-JSON or element-tree attribute has a permission word in its name. A negative control shows that a `grants`, `leaseHolder`, capability-enum or role-reference attribute added to the schema would be found. The shared vocabulary is in `test/contract/prm-002.permission-vocabulary.ts`. (2) Storage: `test/contract/prm-002.content.test.ts` (memory) and `test/postgres/prm-002.content.pg.test.ts` (PostgreSQL, run against the running test database on 2026-11-13) both use `test/contract/prm-002.content-checks.ts`. It writes a grant, a region state and a lease for the region of the model's kitchen-sink document, then appends a control commit and a step commit that carries the whole document (definitions and body). It reads back every field of every stored commit and the document record. In the commits, the only key with a permission name is `policy`, and only on `region` nodes. In the record, the only such key is the document `state`, a database column under 07 §3 and §9. No grant, state or lease value appears in either. 3 test files, 8 tests pass. `tsc -p services/document-service` is clean.
+
+**Notes:** 07 §3 says every change to leases is a control commit, while 04 §3.2 and 08 §2 list only lease breaks; these criteria follow the latter (see Open questions). Workflow participants are stored by FRW-025, FRW-029. A policy engine (for example OpenFGA or SpiceDB) is not scheduled (07 §17). Phase inferred: the commit log is recorded in full from 1a (11 §3). Criteria 1 and 2 contradict 07 §9 and 06 §3, which the room follows: a change writes its rows and the new revision in one transaction, and the owning room records the control commit when it learns of the revision, through the announcement or through `revision_moved`. A control commit written in the change's own transaction would move the head under the room, which then sees another writer and stops. `PgGrantStore.change` follows 07 §9; which text is right is for the owner (see Open questions). Criterion 4 has one deliberate exception in storage: the write that removes a region deletes that region's grants, state and lease (07 §3; PRM-003) without a new revision. Packet A2 (2026-11-06): criteria 1 and 2 stay open with the spec's default: grant, state and document-state changes are one transaction under a new revision, and the room records the control commit when it learns of it (07 §9; 06 §3), which the control plane triggers (`permissionsChanged`). Criteria 3 and 4 concern the CDM and the write path, not the control plane. Criterion 3 reads "permission data" as 07 §3's table defines it: document role, groups, region grants, region states, leases and workflow participants. Two other attributes are read by the permission rules but hold none of these. `settings.trackChanges` (`off` or `everyone`; 07 §5.2) is a mode that makes P4 apply to every user; it names no principal. `form_field.assignee` refers to a role placeholder in `defs` (12 §2, §3.1, §5.4); who plays the role is kept in the workflow resource. The schema test lists both by name and shows that neither grammar accepts a `user:`, `group:` or `role:` principal. This reading is ours, not the owner's (see Open questions). Free JSON (`ext`, `payload`, field values, rules) and preserved element trees are opaque values; the authority never reads permissions from them (criterion 4). Audit 2026-11-13: criterion 4 unticked because `packages/authority/test/permissions.grants.test.ts` submits no step on an `ext` attribute, which the criterion names (its shapes are text, field values, marks and a region title); add an `ext` attribute step on a region and on `body` to that test and tick again. Also seen: `services/document-service/test/postgres/contract.pg.test.ts` now fails 2 of 16 (the lease checks of `test/contract/checks.ts`: the PostgreSQL store returns lease `id` and `acquiredAt` where the check expects the leases as written), so the Evidence claim that the contract checks pass against both stores is not true today.
+
+### PRM-003 Retire a region's permission data when the region is deleted
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Owner |
+
+**Spec:** 07 §3; ADR 0009; review 3.2 S-15 · **Requirements:** R3 · **Depends on:** PRM-002, CDM-024
+
+As an owner, I want a deleted region's grants, state and leases to disappear with it and its identifier never to return, so that a re-created region cannot inherit stale grants or an old approval.
+
+**Acceptance criteria**
+
+- [x] Given a region with grants, a state and a lease, when a commit removes the region, then in the same transaction as the log write its grants, state and lease are retired and its identifier is recorded as retired with the retiring `seq`.
+- [x] Given the transaction fails part-way, when the room recovers, then the region's grants, state and lease are all still in place and the commit is not stored.
+- [x] Given a retired identifier, when a later commit inserts a region with that identifier, then it is rejected with `invalid_op` (invariant I3) and no grant, state or lease attaches to any region.
+- [x] Given a user undoes the deletion of a region, when the undo commit re-inserts the node with its old identifier, then it is rejected with `invalid_op` and the content goes to recovered edits.
+- [x] Given a region has been retired, when `GET /documents/{id}/grants` is called, then the retired region's grants are not listed.
+
+**Evidence:** `packages/authority/test/permissions.room.test.ts`, "a deleted region never comes back": a commit inserting a region with a retired identifier is refused with `invalid_op` (I3) and not written, and a new channel's access lists no region the old grants could apply to; an undo that re-inserts the deleted region with its identifier is refused with `invalid_op` and `drop`, and the reference client (`test/harness/client.ts`) moves the content to its recovered edits and shows the stored document. Criterion 5: `services/document-service/src/control-plane/prm-003.retired-grants.test.ts`, one test over HTTP with memory storage: a region grant is listed by `GET /v1/documents/{id}/grants`, a commit that retires the region is appended through the log store, and the same request then lists no grant of that region (PostgreSQL run not made). Criteria 1 and 2 (lane PRM-001-014, 2026-11-13): `services/document-service/src/storage/prm-003.retirement.test.ts`, memory storage: a commit that retires a region removes its grant, state and lease in the same `append` and keeps the other region's grant (criterion 1 on memory storage); and in PostgreSQL, `services/document-service/test/postgres/prm-003-retirement.pg.test.ts`, first test (criterion 1: inside the log insert's transaction the region's rows are gone and `retired_seq` is 2; after COMMIT it is stored), run on 2026-11-13 against the PostgreSQL started by `infra/test-env.ps1 up`: 3 of 3 pass; with the `after-insert` fault the grants, states, leases and the retired list are as before and nothing is read back, and the `before-insert` fault does the same; `MemoryStore.retiredSeqs` now returns the retiring `seq`, checked for a single commit and for the second commit of a batch. Criterion 2 (fix round 2, 2026-11-13): `services/document-service/src/data-plane/prm-003.recovery.test.ts`, the data plane over memory storage: the owner's commit removing the region Legal (two grants, state `draft`, a lease) fails after its inserts through the test hook `failNextWrite(ref, 'after-insert')`; the client gets `sync.reject` `unavailable`/`retry`, the log is empty at head 0, and storage still holds the grants, state and lease with no retired region; the room serves on (a new channel's `ch.opened` still names the region's scope and lease); after `killRoom` a second node rebuilds the room from storage alone, opens at head 0 with the region in the access and in the content; the resubmitted commit is then stored at `seq` 1 and retires the region with `seq` 1. The PostgreSQL side, `services/document-service/test/postgres/prm-003-retirement.pg.test.ts`, rolls back inside the `PgLogStore` transaction after the deletes (`beforeCommit`, and the `after-insert` fault) and checks grants, state, lease, the retired list and the log; it also checks criterion 1 inside the transaction (rows gone and `retired_seq` 2 inside, still present outside). That file has since run (2026-11-13, PostgreSQL from `infra/test-env.ps1 up`): 3 of 3 pass, including both fault tests.
+
+**Notes:** the rejected undo follows from invariant I3 and is not discussed in 07 (Open questions). Phase inferred: region deletion belongs to the structure operations of 1b (PRM-011). Criterion 1 was unticked until 2026-11-13, when its PostgreSQL test (`prm-003-retirement.pg.test.ts`) first ran and passed; "in the same transaction" is a property of the PostgreSQL write (the transaction is BE's, PRM-002), and the memory-storage test alone could not show it. Criterion 2 is ticked on the room recovery test over memory storage, as the reviewer allowed; there the rollback itself is still MemoryStore's undo of a fault, and the PostgreSQL rollback is shown only once the `.pg.test.ts` file runs. Criterion 5 met on 2026-11-13 (Evidence). The room stamps the removed regions on the commit (`retired`), which storage uses to retire their grants, state and lease.
+
+## Effective capabilities
+
+### PRM-004 Compute effective capabilities per scope
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 07 §4, §2; 00 §3; ADR 0009 · **Requirements:** R3 · **Depends on:** PRM-001, PRM-002
+
+As a maintainer, I want one pure function that turns a document role, a user, their groups, the grants and the region policies into capabilities per scope, so that the room, the control plane and the tests agree on what each connection may do.
+
+**Acceptance criteria**
+
+- [x] Given a document role R, when capabilities are computed for `body`, then they equal those of R; for `doc`, `defs` and `story:<id>` they are `view`, plus `edit` when R includes `structure`.
+- [x] Given a region with policy `inherit`, when capabilities are computed, then they are the union of R's capabilities and those of the best matching grant, limited to `view`, `comment`, `suggest` and `edit`.
+- [x] Given a region with policy `restricted`, when capabilities are computed, then they are those of the best matching grant; with no matching grant they are R's limited to `view` and `comment`; an `owner` always has all four.
+- [x] Given grants naming `user:<sub>`, `group:<g>` for some `g` in `grp`, `everyone`, or a `role:<id>` held by the user's participant, when several match and none has expired, then the one with the most capabilities is the best match; an expired grant never matches (tested with a fake clock at the instant of expiry).
+- [x] Given any document role and any region that is not confidential, when capabilities are computed, then `view` is present; for confidential regions (ADR 0019) `view` follows the read rules S12 settles.
+- [x] Given any inputs, when capabilities are computed for a `region:<id>` scope, then `fill`, `structure` and `manage` are never present; `field:<id>` scopes are left to FRW-008, FRW-009, FRW-010.
+- [x] Given table-driven fixtures covering every role, policy and grant combination, when the conformance kit is built, then the fixtures are published in it.
+
+**Evidence:** `packages/authority/fixtures/capabilities.json`: 528 language-neutral cases, written by `packages/authority/scripts/capability-fixtures.ts` (`pnpm --filter @docedit/authority generate`) with expected values derived again from the wording of 07 §2 and §4: every role and both policies with no grant, a grant of each region role through each principal form, grants that do not match, invalid grant roles, two matching grants, expiry at the instant, a millisecond before and a millisecond after, and the limits of 07 §4 (locked and archived documents with and without a workflow, approved and in-review regions, leases held by the user or another). `packages/authority/test/capabilities.test.ts`: `computeAccess` gives exactly the expected capabilities in every case, the permission oracle of the property suite agrees on every region scope, `view` is always present and `fill`, `structure` and `manage` never in a region scope, and the file equals a fresh generation. Confidential regions (criterion 5): `computeAccess` (`src/permissions/access.ts`) gives a confidential region capabilities only through a matching grant of any role or the owner role, and none otherwise, as ADR 0019 proposes (ADR 0033 item 8). `fixtures/capabilities.json` has 792 cases with the third policy; `test/capabilities.test.ts`: `computeAccess` and the oracle agree on every case, `view` is present in every region that is not confidential, and in a confidential one exactly for owners and holders of a matching grant, who otherwise get nothing. Criterion 7: the conformance kit does not copy the file; `packages/tck/src/fixtures.ts` (`capabilityFixtures`) reads `packages/authority/fixtures/capabilities.json`, and `packages/tck/test/kit.test.ts`, "ship the capability fixtures of every role, policy and grant" (run 2026-11-13), checks that the file covers every role and every policy. The kit test does not count grant combinations; the file holds them (see above).
+
+**Notes:** under 07 §4 a grant replaces the document-role fallback in a restricted region, so a `commenter` given a `viewer` grant ends with `view` only (Open questions). 05 §10 passes `permissions` into `applyCommit`, so a backend not written in JavaScript must compute this map itself; the format of that argument is not defined (Open questions). Phase inferred from 11 §3. The fixtures encode the literal reading above. Criterion 5 met on 2026-11-06 with ADR 0019's proposed read rule (ADR 0033 item 8; owner to confirm). Criterion 7 met on 2026-11-13 (Evidence). Second review (2026-11-06, SPK-027): SR-N32 recommends that a grant never lowers the document-role fallback in a restricted region (owner to decide); SR-M6: 07 §4 needs a `confidential` row once ADR 0019 is accepted ([review](../review/2026-11-06-second-review.md)).
+
+### PRM-005 Limit capabilities on locked and archived documents
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Owner |
+
+**Spec:** 07 §4 (limit 1); 05 §6.2; 12 §6.2 · **Requirements:** R3, R13 · **Depends on:** PRM-004, PRO-051, PRO-052
+
+As an owner, I want a locked or archived document to stop accepting changes, so that a document that is out for signature or put away cannot be altered.
+
+**Acceptance criteria**
+
+- [x] Given document state `locked`, when capabilities are computed, then every scope is limited to `view` and `comment`, even for an `owner`.
+- [x] Given document state `archived`, when capabilities are computed, then every scope is limited to `view`.
+- [x] Given state `locked` or `archived` and an active workflow that allows the participant to fill, when capabilities are computed, then `fill` remains for that participant's fields.
+- [ ] Given a commit from a connection on a locked or archived document, when it arrives, then it is rejected and nothing is stored; the kit asserts the rejection and its `drop` action, and leaves the code open until the `read_only` and `permission_denied` rules agree (Open questions).
+- [x] Given the document's state changes, when the change commits, then access is recomputed for every connection and `perm.changed` is sent.
+
+**Evidence:** `packages/authority/fixtures/capabilities.json` (locked and archived cases for every role, with and without a workflow) and `test/capabilities.test.ts`. `test/permissions.room.test.ts`, "locked and archived documents": every commit, the owner's included, is refused with `read_only` and `drop` and nothing is written; with an active workflow a participant's fill is stored and other changes are refused; a change of the document's state sends every connection `perm.changed` with the new revision and view-only access.
+
+**Notes:** the workflow criterion runs against a stub until FRW ships in phase 2. Phase inferred: the document state is part of the 1b control API (11 §4). Cross-check: the workflow lock (FRW-029) adds to these limits in phase 2. Second review (2026-11-06, SPK-027): SR-K3 is settled: `read_only`, checked before P6 (04 §5 step 1 and 07 P6 as edited), so the fourth criterion can name the code. SR-M26: limit 1 also blocks the region granted to a role for a long answer once `send` locks the document (FRW-086) ([review](../review/2026-11-06-second-review.md)). Not met: (4) the authority refuses with `read_only` and `drop` and stores nothing (`packages/authority/test/permissions.room.test.ts`); the conformance kit (PRO) that asserts it does not exist yet. A connection whose role includes `fill` passes the `read_only` gate while a workflow is active, so an editor's typing is then refused with `permission_denied`.
+
+### PRM-006 Keep every connection's access current
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Editor |
+
+**Spec:** 07 §4 (last paragraph); 05 §5.5; 01 §4.3 · **Requirements:** R3, R7 · **Depends on:** PRM-004, PRO-032, PRO-033, BE-019
+
+As an editor, I want my access to follow every change that affects it, so that the editor always matches what the server will accept.
+
+**Acceptance criteria**
+
+- [x] Given a channel opens, when `ch.opened` is sent, then it carries `access` with `rev`, `asOfSeq`, `docRole`, `caps` (including `structure` and `manage` where held), `scopes` for every region, `leases` and `restrictions`.
+- [ ] Given a change to any of grants, region states, leases, the region list, the document's state, the workflow or a refreshed token, when the change is applied, then the room recomputes the affected connections' access and sends `perm.changed` with a complete new `access` whose `rev` is higher (one test per trigger).
+- [ ] Given a region created by a commit the client has just received, when the client's `access` has an `asOfSeq` before that commit, then the region is treated as not editable until an `access` with `asOfSeq` at or after it arrives.
+- [x] Given new permissions have been computed, when a commit arrives before the client has received `perm.changed`, then the server already enforces the new permissions.
+- [ ] Given `perm.changed` arrives in the component, when it is applied, then the component raises `de-permission-change` with the `access` object and the shading of PRM-026 follows without a reload.
+
+**Evidence:** `services/document-service/test/data-plane/sync.test.ts` (access in ch.opened) and `permissions.test.ts` (a commit sent before perm.changed arrives is checked under the new permissions); the triggers grants, region states, leases, the region list, the document state and an expiry each send a complete new access with a higher rev (`permissions.test.ts` "each trigger of a new access").
+
+**Notes:** whether `access` should be sent as a delta for documents with hundreds of regions is open in 05 §12. Phase 1a: 11 §3 (a grant change taking effect live). Open after the data plane (2026-11-06): criterion 2, the workflow has no source yet, and a refreshed token that changes roles closes the channel for a reopen instead of sending perm.changed (ADR 0035); criteria 3 and 5 are the editor's. Lane PRM-001-014 (2026-11-13), no tick: criterion 2 has tests for the region state, lease, document state, region list and expiry triggers (`services/document-service/test/data-plane/permissions.test.ts`, "each trigger of a new access"), but not for the workflow (FRW, phase 2, no source) or for a refreshed token (ADR 0035 closes the channel instead). Criterion 3: `packages/engine/test/guard.test.ts`, "a region the access does not list is not editable until an access lists it", covers the listing rule in `packages/engine/src/guard.ts` (`capsOf`). The code does not compare the access's `asOfSeq` with the `seq` of the commit that created the region, which the criterion names; that is an open question for the owner and the FE epic, recorded here and not decided. Criterion 5: `packages/element/test/session.test.ts` (PRO-088) shows one `de-permission-change` per access; the shading of PRM-026 is not built.
+
+### PRM-007 Let grants and leases expire on time
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Owner |
+
+**Spec:** 07 §1, §4 (last paragraph) · **Requirements:** R3 · **Depends on:** PRM-006, PRM-018
+
+As an owner, I want a grant with an expiry to stop working at that moment even if nothing else happens in the document, so that temporary access really is temporary.
+
+**Acceptance criteria**
+
+- [x] Given a grant that expires at time T and no other event, when the clock reaches T, then the room recomputes the grantee's access and sends `perm.changed` (fake clock).
+- [x] Given several grants and leases with different expiries, when the earliest passes, then the next recomputation is scheduled for the next earliest remaining expiry.
+- [x] Given a commit arrives after T but before the scheduled recomputation has run, when the authority checks it, then the expired grant is not counted.
+- [x] Given the room restarts, when it opens the document, then the expiry schedule is rebuilt from the stored grants and leases (06 §2.2).
+
+**Evidence:** `Room.nextExpiry` and `Room.expire()` (`packages/authority/src/room/room.ts`), with `nextExpiry` and `sameAccess` in `src/permissions/access.ts`. `test/permissions.expiry.test.ts`, with a fake clock: at the instant of expiry `expire()` sends `perm.changed` to the grantee and to no one else; the schedule moves to the next earliest grant or lease expiry until none remains; a commit made after the instant is refused before `expire()` has run; a room built again from the same stored state has the same schedule.
+
+**Notes:** lease expiry is exercised again in PRM-044. Phase inferred: grants carry an optional expiry from the first grants API (PRM-018), which ships in 1a; the pane that sets it ships in 1b. The room keeps no timers: it gives `nextExpiry` and the host calls `expire()` then, as it performs the writes. The projection gateway must derive visibility classes again at an expiry too (SYN-053; ADR 0033 item 11).
+
+## Enforcement by the authority
+
+### PRM-008 Partition a document into permission scopes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | L | must | Maintainer |
+
+**Spec:** 07 §5.1 (steps 1 and 2), §1; 03 §3, §4; review 3.2 S-01 · **Requirements:** R3 · **Depends on:** PRM-001, CDM-006, CDM-008
+
+As a maintainer, I want a function that splits a document into scopes and finds which scopes differ between two versions, so that the outcome check never depends on the shape of a step.
+
+**Acceptance criteria**
+
+- [x] Given any valid document, when it is partitioned, then each node belongs to exactly one scope: `doc` (the top level: which stories exist, attributes of `body`), one scope per definition node under `defs`, each `story:<id>`, `body` excluding regions, each `region:<id>` (its attributes and its content), and each form field's `value` as `field:<id>` (property test over generated documents: total and disjoint).
+- [x] Given two versions that share unchanged subtrees, when their scopes are compared, then unchanged subtrees are recognised by object identity and are not examined further (instrumented test: nodes visited follow the changed path, not the document size).
+- [x] Given a commit made only of `attr`, `addMark`, `removeMark`, `addNodeMark`, `removeNodeMark` or crafted `replaceAround` steps, when the documents before and after are compared, then the differing scopes equal those found by a full structural comparison.
+- [x] Given a commit that adds, removes or moves a region or section break, when the scopes are compared, then `body` and the scope of each added or removed region are in the result.
+- [x] Given a commit that changes only the `value` of a field inside a region, when the scopes are compared, then only `field:<id>` differs and the region does not.
+- [x] Given a commit that changes a definition node, when the scopes are compared, then the result names that definition node, so that PRM-012 can ask which regions use it.
+
+**Evidence:** `packages/authority/src/permissions/scopes.ts` (`diffScopes`). `packages/authority/test/scopes.test.ts`, "scope partition and diff": for one step of each kind (replace, attr, addMark, removeMark, addNodeMark, removeNodeMark, replaceAround) the identity-pruned diff equals the serialised comparison of the property suite's oracle; an edit in one region visits the same number of nodes in the base document and in one with 400 more regions; removing, adding and moving a region yield `body` and the region, a moved region is reported as moved, a new section break yields `body`; a style change yields `defs:style_def/LegalBody` alone. `outcome.test.ts`, "puts a field value in its own scope, not in the region". `convergence.property.test.ts`: the scopes stamped on every stored commit equal the oracle's serialised comparison (1,000 schedules). Partition (criterion 1): `partitionScopes` in `src/permissions/scopes.ts`. `test/scopes.partition.test.ts`: over 600 generated documents (definitions, stories, body blocks, regions of both policies, section breaks, fields of several kinds), every node position has exactly one scope and every field value its own, and changing any one node (its `ext`, its text, a mark, a field value) changes exactly the scope the partition gives it, for `diffScopes` and for the oracle alike. It found two gaps, now closed: the attributes of the `defs` node belonged to no scope, and a story's `kind` counted as `doc`.
+
+**Notes:** the last two criteria rest on assumptions 07 does not state (Open questions): that a region's scope excludes the values of fields inside it (needed because 12 §4.3 lets fills proceed in approved regions), and the identifier format for one definition node. Review 3.2 S-01 (critical): the `doc` scope was added to cover the top of the tree. Criterion 1 met on 2026-11-06. The definition scopes are written `defs:<type>/<id>` (PRM-001); `doc` holds the attributes of `defs` and `body`, and a story's own attributes belong to the story (ADR 0033 item 10).
+
+### PRM-009 Accept a commit only if every changed scope is writable
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | L | must | Owner |
+
+**Spec:** 07 §5, §5.1 (step 3); 04 §5 step 7; 05 §10; ADR 0009 · **Requirements:** R3 · **Depends on:** PRM-004, PRM-008, PRO-028, PRO-038
+
+As an owner, I want the server to refuse any commit that changes a part of the document its author may not change, whatever the commit's steps look like, so that region permissions are enforced and not advisory.
+
+**Acceptance criteria**
+
+- [x] Given Alice has `edit` in region A only, when she submits a commit that changes only A, then it is accepted.
+- [x] Given the same Alice, when she submits a commit that changes A and B, then it is rejected with `permission_denied`, action `drop`, `head` and `scopes` listing only `region:B`, and nothing is stored.
+- [x] Given a commit whose `base` is older than the head, when the authority has rebased it, then the check runs on the rebased steps against the document as it is at that moment, using the permissions in force at that moment (tests with a base older than a grant change and older than another user's structural change).
+- [x] Given steps of every type, including attribute, mark, node-mark and crafted `replaceAround` steps, when the check runs, then the verdict equals that of an equivalent plain replacement: step shapes are never inspected.
+- [x] Given the check completes, when it returns to the authority, then it returns the scopes it found different (the scopes touched that are stamped on the commit) and it was given permissions that carry the access revision, so the log write can be made conditional on it.
+- [x] Given a server-authored commit (restore, import, repair, migration, sign, rules), when it is applied, then it passes through the same check: no origin is exempt, and preconditions the control plane relied on are re-checked by the room.
+
+**Evidence:** `packages/authority/test/room-scenarios.test.ts`, "the outcome check and the grants revision": a commenter with an editor grant on the Terms region only has a commit changing only that region accepted, stamped with scope `region:rTerms000000000A` and revision 1; the same user's commit changing Terms and Notes is refused with `permission_denied`, `drop`, head 0 and scopes `["region:rNotes000000000C"]`, and nothing is queued or written; a commit on an old base is refused under a grant revoked meanwhile, and under a restricted region another user wrapped around the paragraph meanwhile; a commit is stamped with the scopes found and the revision used. `scopes.test.ts`, "the outcome check never looks at step shapes": for all seven step kinds and five users, the verdict and scopes equal those of the same result built as a plain replacement with no shared subtrees. 2026-11-13 (criterion 6): `packages/authority/test/room-commits.test.ts`, "are checked against permissions like any other commit, never exempt" (a server-authored restore by a user without the right is refused with `permission_denied` and its scope; a `rules` commit by `system` is accepted), and "re-check the preconditions the control plane relied on" (each precondition that no longer holds gives `conflict`); `test/leases-states.test.ts`, "checking rights when restoring (PRM-049)": a snapshot restore by a user without `manage` is refused, one by an owner is stored. Every origin takes the same `process` and `outcomeCheck` path (`room.ts`); import, migration and repair have no refusal test of their own.
+
+**Notes:** the outcome check is the security boundary (07 §5.1). The call from the authority and the conditional write belong to SYN. Rules P1 to P6 are PRM-010, PRM-011 and PRM-014; P7 to P9 are FRW. Review 3.2 S-01 and S-02. Criterion 6 was not met while the room had no path for server-authored step commits; `Room.author` now runs them through the same steps (SYN-030), so it is ticked on 2026-11-13. `outcomeCheck` takes `serverAuthored` and `origin`; P8 is the only rule that reads the origin.
+
+### PRM-010 Apply the base rules P1, P5 and P6
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Owner |
+
+**Spec:** 07 §5.2 (P1, P5, P6); 03 §8 (I2) · **Requirements:** R3 · **Depends on:** PRM-009
+
+As an owner, I want the plainest rules enforced first, so that a viewer or commenter cannot change anything and no one can rename a node's identity.
+
+**Acceptance criteria**
+
+- [x] Given a user without `edit` in a differing scope and with no route through P4 or P7, when they submit a commit that changes the scope, then it is rejected (P1); with `edit` there it is accepted.
+- [x] Given a connection whose capabilities are only `view` or `comment`, when it submits any commit, then it is rejected with `permission_denied` without partitioning or comparing the document (a spy confirms that no comparison ran).
+- [x] Given a commit that changes a non-null `id` of any node, including a region's, when it is submitted, then it is rejected and not stored (P5, invariant I2).
+- [x] Given a differing `field:<id>` scope and a user with `fill` but not `edit`, when the check runs, then the decision is delegated to the rule module of FRW-008, FRW-009, FRW-010 through a registered seam, tested with a stub.
+- [x] Given a user with `suggest` but not `edit` in a differing scope, when no suggestion rule is registered, then the commit is rejected (fail closed); PRM-014 registers P4.
+
+**Evidence:** `packages/authority/test/outcome.test.ts` (P1 for an editor in the body, an inherit region and the restricted region, and through a group grant). `scopes.test.ts`, "P6: refusing view-only connections without analysis": for a viewer and a commenter `outcomeCheck` refuses with `permission_denied` while proxies on both documents record no property read. `room-scenarios.test.ts`, "the base rules as the room applies them": a viewer's commit is refused before the room reads its steps; an attribute step changing the `id` of a paragraph or of a region is refused with `invalid_op` and not written. Seams (criteria 4 and 5): `src/permissions/registry.ts` (`OutcomeRules`, `NO_RULES`), `standard.ts` (`STANDARD_RULES`), `suggestions.ts` (`SUGGESTION_RULE`, P4) and `fill.ts` (`FILL_RULE`, P7); `outcome.ts` keeps P1 and every rule that forbids. `test/outcome.rules.test.ts`: a valid suggestion is refused when no suggestion rule is registered; a fill is refused without a fill rule, and when the module throws or answers anything but `ok: true`; stubs receive exactly the scopes routed to them and decide them; permissive stubs relax none of P8, P9, `manage`, 07 §5.3 or P1 elsewhere; a property test (1,500 runs) shows the accepted sets nested from no module to both.
+
+**Notes:** I2 is also checked at 04 §5 step 6, which runs first, so an identifier change is normally rejected as `invalid_op`; P5 is the second line of defence. Phase 1a: the demo needs a rejection that is a real violation (11 §3). Criteria 4 and 5 met on 2026-11-06: P4 and P7 are registered modules, and without them the check refuses what they would have justified; P8, P9 and every other rule that forbids stay in the core. The security argument is ADR 0033 item 1. The `id` change is caught for attribute steps; see CDM-012 on replacements. Second review (2026-11-06, SPK-027), SR-K3: when the document's state is what limits a connection to `view` or `comment`, `read_only` comes first (07 P6 as edited) ([review](../review/2026-11-06-second-review.md)).
+
+### PRM-011 Restrict structure and policy changes (P2 and P3)
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Owner |
+
+**Spec:** 07 §2, §5.2 (P2, P3), §16; ADR 0009; review 3.2 S-01, S-15 · **Requirements:** R3 · **Depends on:** PRM-009, PRM-010, CDM-024
+
+As an owner, I want only people with the right to restructure the document to add, remove or move regions and section breaks, and only managers to change who is locked out, so that a colleague cannot delete a protected clause, wrap other people's content, or lock others out.
+
+**Acceptance criteria**
+
+- [x] Given a user with `structure` and `edit` in `body`, when they add a `region` that wraps body blocks, then the commit is accepted and the region's policy is `inherit`; a user without `structure` is rejected.
+- [x] Given a `restricted` region on which a document-level `editor` has no grant, when the editor deletes or moves it, then the commit is rejected with `permission_denied`, because P2 needs `edit` in every region affected; an `owner` is accepted.
+- [x] Given a change to a region's `title`, when it is submitted, then it needs `structure` and `edit` in that region.
+- [ ] Given adding, removing or moving a `section_break`, when it is submitted, then it needs `structure` and `edit` in `body` and in every region affected.
+- [x] Given a user with `structure` but not `manage`, when they flip a region's `policy` between `inherit` and `restricted`, then the commit is rejected; with `manage` it is accepted.
+- [x] Given steps that remove or insert exactly one of a region's two boundaries (its opening or closing token), when the commit is checked, then it is rejected and not stored, while whole-node operations succeed (property test with crafted `replace` and `replaceAround` steps).
+- [x] Given a split or a merge of regions, when it is submitted, then it is treated as removing and inserting whole regions and needs `structure` and `edit` in every region affected.
+
+**Evidence:** `packages/authority/test/outcome.structure.test.ts`, "P2", "P3" and "splits and merges": wrapping body blocks in a new region needs `structure` and gives policy `inherit`; deleting or moving a restricted region is refused to an editor without a grant and accepted for the owner and through a group grant; a new title needs `edit` in the region; section breaks need `structure` and `edit` in the body to add, remove or move; flipping a policy needs `manage`. P3 (`src/permissions/boundaries.ts`, run with the invariants) refuses with `invalid_op` every crafted `replace` and `replaceAround` step that removes exactly one region token (property test, 1,200 runs, over 120 of them applying), accepts deletion, unwrapping, wrapping, moving, splitting and merging as whole nodes, and in the room refuses a join of two adjacent regions without writing it. A split needs `structure` and `edit` and creates a region; a merge deletes one and moves its blocks.
+
+**Notes:** P3 is worded for paired boundary markers, which ADR 0009 replaced by a container node; the criterion reads it as the opening and closing tokens of the `region` node, and 07 names no code for it (Open questions). ADR 0033 item 2 records the reading: a step that removes exactly one token is refused with `invalid_op` at 04 §5 step 6, so a join of adjacent regions is refused and a merge is written as whole-node operations. The operations enforced are those of `OPERATIONS` (PRM-001). Phase inferred: 11 §4 lists "restricted regions" under 1b; 1a regions come from seed data. Section-break criterion unticked on audit (2026-11-13): the tests and `outcome.ts` require `structure` and `edit` in `body` only, and a probe showed that an editor with no `edit` in the restricted region Legal can insert a `section_break` naming another page setup just before Legal and have it accepted, which changes the page setup Legal uses (`definitionUse`) without any check on Legal; "every region affected" is neither enforced nor tested.
+
+### PRM-012 Protect regions from changes to shared definitions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Owner |
+
+**Spec:** 07 §5.3, §16; ADR 0009 (after the review); review 3.2 S-03 · **Requirements:** R3 · **Depends on:** PRM-009, PRM-016, CDM-016, CDM-017
+
+As an owner, I want a change to a style, numbering definition or page setup to need rights in every region that uses it, so that protected text cannot be struck through, shrunk, recoloured or renumbered through a shared definition.
+
+**Acceptance criteria**
+
+- [x] Given a restricted region whose paragraphs use style `Clause`, when a user with `structure` but without `edit` in that region changes any property of `Clause`, then the commit is rejected with `permission_denied` and the scopes name the definition and `region:<id>`.
+- [x] Given a region that uses style B, which is based on style A, when A is changed, then the same rule applies through the `basedOn` chain.
+- [x] Given a user with `structure` who holds either `edit` in each such region or `manage`, when they change the definition, then the commit is accepted.
+- [x] Given a numbering definition or a page setup, when it is changed, then the same rule applies to every region that uses it.
+- [x] Given a document that has restricted regions using `Normal`, when a document-level `editor` changes `Normal`, then the commit is rejected; an `owner` can change it.
+- [x] Given a definition no region uses, when a user with `structure` changes it, then `structure` alone suffices.
+- [x] Given a style is applied inside a region, when the next definition change is checked, then the room's index from definitions to regions already includes that use.
+
+**Evidence:** `packages/authority/test/outcome.structure.test.ts`, "definitions that affect protected regions": a change to `LegalBody` by an editor without `edit` in Legal is refused naming `defs:style_def/LegalBody` and `region:rLegal000000000B`; the same through `basedOn` (`Normal`), a numbering definition and the page setup, each accepted for an editor with `edit` in Legal and for the owner; a style no region uses needs only `structure`; in the room, a style applied inside Legal protects it from the next change, made on the old base.
+
+**Notes:** the rule that a change is refused while any such region is `approved` is tested in PRM-047. 07 §5.3 names styles, numbering definitions and page setup; how a region "uses" a page setup or numbering definition, and whether `settings`, `role_def` and `rule_def` need the same protection, is not specified (Open questions). Review 3.2 S-03 (high). Second review (2026-11-06, SPK-027), SR-M34 proposes that a change to `settings` needs `manage` once any region is restricted or approved, and that role and rule changes need the rights of the regions whose fields they touch ([review](../review/2026-11-06-second-review.md)). Until the owner decides, settings, roles and rules need `structure` only, the specification's default; a refusal names the definition and every region that protects it (ADR 0033 item 10).
+
+### PRM-013 Compute the suggestion baseline
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Maintainer |
+
+**Spec:** 07 §5.2 (P4, definition of baseline), §5.4; 03 §5 · **Requirements:** R3, R8 · **Depends on:** PRM-008, CDM-039
+
+As a maintainer, I want a function that computes a scope's baseline, the content with every suggestion rejected, so that rule P4 can compare it before and after a commit.
+
+**Acceptance criteria**
+
+- [x] Given content with suggestion marks, when the baseline is computed, then `ins` content is removed, `del` marks are ignored (the text stays) and `fmt` changes are taken back to their recorded `before`.
+- [x] Given a change to an attribute or a bookmark, when the baseline is computed before and after, then the baseline differs: attributes and bookmarks are part of it.
+- [x] Given block-level suggestions as node marks on paragraphs, whole table rows and whole tables, when the baseline is computed, then a block marked `ins` is removed, a block marked `del` is kept and a block marked `fmt` is restored to its `before`.
+- [ ] Given suggestions by several users on the same text, when the baseline is computed, then every user's marks are handled the same way and none excludes another's.
+- [x] Given two documents with equal baselines but different suggestions, when the baselines are hashed in canonical form, then the hashes are equal; with different baselines they differ (property test).
+- [x] Given a commit that touches one block, when the baseline comparison runs, then only changed blocks are examined (instrumented).
+
+**Evidence:** `packages/authority/test/suggestions.test.ts`, "the suggestion baseline (PRM-013)": criterion 1 (ins removed, del ignored, fmt taken back to its before), 2 (attributes and bookmarks change the baseline), 3 (block marks on paragraphs, table rows and tables), 4 (several users' marks), 5 (over 300 sampled edits, equal baselines hash equal and different ones differ; a `fc.sample` run with a fixed seed, not `fc.assert`), 6 (the instrumented count of visited blocks is the same over 400 extra paragraphs and under 12 in all).
+
+**Notes:** the suggestion rules for block-level changes beyond paragraphs and whole table rows are not yet specified (PRM-062). Phase 2: 11 §5 (enforcement of the `suggest` role). Criterion 4 unticked by audit 2026-11-13: the test covers `ins` and `del` only, and with `fmt` marks by two users on the same text `headOf` in `suggestions.ts` keeps only the `before` of whichever `fmt` mark comes last, so the baseline depends on mark order (alice's bold then bob's italic with `before` = bold gives a baseline that still holds alice's bold, the reverse order gives plain text); it needs the earliest `before` and a test with overlapping `fmt` marks.
+
+### PRM-014 Let suggesters propose without altering the baseline (P4)
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Suggester |
+
+**Spec:** 07 §5.2 (P4), §16; 03 §5; ADR 0009; review 3.2 S-13 · **Requirements:** R3, R8 · **Depends on:** PRM-013, PRM-010
+
+As a suggester, I want to propose changes in scopes where I may only suggest, so that an editor can accept or reject them while the agreed text stays protected.
+
+**Acceptance criteria**
+
+- [x] Given a user with `suggest` but not `edit` in scope S, when a commit adds `ins`, `del` or `fmt` marks that name the user and use suggestion identifiers that belong to them, then it is accepted and the baseline of S is unchanged.
+- [x] Given the same user, when a commit changes the baseline (text typed without `ins`, text removed without `del`, formatting changed without `fmt`, or an attribute or bookmark changed), then it is rejected with `permission_denied`.
+- [x] Given a commit that changes or removes another user's suggestions or marks, when it is submitted, then it is rejected: other users' suggestions and their marks must be unchanged.
+- [x] Given a mark whose `user` is not the submitting user, when the commit is submitted, then it is rejected.
+- [x] Given a suggestion `id` first used by another user, when the commit uses it, then it is rejected: an `id` belongs to the user who first used it.
+- [x] Given a suggester removes the `ins` mark from their own inserted text (accepting their own suggestion), when the commit is submitted, then it is rejected because the baseline changes.
+- [x] Given a suggester deletes text they themselves suggested, when the commit is submitted, then it is accepted because the baseline is unchanged.
+- [x] Given a suggested deletion of a whole restricted region, when a user without `suggest` in that region submits it, then it is rejected because the region's scope differs and P4 needs `suggest` there; with `suggest` it is accepted.
+
+**Evidence:** `packages/authority/test/suggestions.test.ts`, "P4: suggesters propose without altering the baseline (PRM-014)": all eight criteria, each with its own test: accepted suggestions by the suggester (criterion 1), baseline changes refused with `permission_denied` (2), another user's suggestion or mark refused (3), a foreign `user` refused (4), an identifier first used by another refused (5), accepting one's own suggestion refused with scope `body` (6), deleting one's own suggested text accepted (7), and the whole restricted region refused for an editor without a grant and accepted for the suggester there (8).
+
+**Notes:** the last-but-one criterion follows from the definition of the baseline and is not spelled out in 07. Block-level suggestions are limited to paragraphs, whole table rows and, per 03 §5, whole tables; 07 §17 names only paragraphs and rows (Open questions). The `perm-suggest` conformance profile cannot exist until PRM-062 is done. Review 3.2 S-13 (identifier reuse, marks replacing each other).
+
+### PRM-015 Require suggestions from everyone when the document says so
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Owner |
+
+**Spec:** 07 §5.2 (last paragraph); 03 §4.1 (`settings.trackChanges`) · **Requirements:** R8 · **Depends on:** PRM-014, PRM-011
+
+As an owner, I want to make every change in a document a suggestion until I switch that off, so that nothing changes without review.
+
+**Acceptance criteria**
+
+- [x] Given `settings.trackChanges` is `everyone`, when a user with `edit` submits a direct change to a scope, then it is rejected under P4; the same change as a suggestion is accepted.
+- [x] Given `everyone`, when a user with `manage` sets it to `off`, then the commit is accepted and direct changes are accepted from then on.
+- [x] Given `everyone`, when a user without `manage` tries to set it to `off`, then the commit is rejected.
+- [x] Given `everyone`, when any user edits, then the component keeps them in suggestion mode (PRM-031).
+
+**Evidence:** `packages/authority/test/suggestions.test.ts`, "suggestions from everyone when the document says so (PRM-015)": with `everyone` an editor's direct change is refused with `permission_denied` and the same change as a suggestion is stored (criterion 1); a holder of `manage` (the owner) switches it off and direct changes are then accepted, while an editor's attempt to switch it off is refused with scope `defs:settings` (criteria 2 and 3). 2026-11-13 (criterion 4, lane PRM-015-028): `packages/engine/test/fe-041-043-suggestion-core.test.ts`, "trackChanges everyone makes an editor suggest, and the setting follows a remote change live": an editor's suggestion mode is on and locked with reason `document-setting` before typing, the typed text is stored as `ins:eddie`, and only an owner (`manage`) can switch it off; `packages/engine/test/suggestion-mode.test.ts`, "applies trackChanges everyone to an editor, locked unless the user has manage". Both pass (vitest, Node.js 22.18, 23 tests in the two files). The shell's display of the mode (`trackedModeFor` in `packages/ui/src/shell/tracked-for-everyone.ts`) is not wired into `App.svelte`, so the switcher's `review` label is not claimed here.
+
+**Notes:** Criterion (4) was the component's (PRM-031) and is met by the engine tests in Evidence; re-run 2026-11-13 by lane V-PRM-001-017 (23 tests pass, Node.js 22.18). 07 does not say who may switch the setting on (Open questions). Phase inferred: it extends the P4 work of phase 2. Second review (2026-11-06, SPK-027), SR-M24: under 07 §4 `structure` suffices to change `settings`, and while the setting is `everyone` P4 would refuse the change to `off` for everyone; the review proposes "changing `settings.trackChanges` requires `manage`, and P4 does not apply to that change", as S3 implemented ([review](../review/2026-11-06-second-review.md)).
+
+### PRM-016 Keep permission indexes current and the check cheap
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 07 §5.4; 06 §2.2; 03 §8 (I7); 12 §3.6 (I15) · **Requirements:** R3, R9 · **Depends on:** PRM-008, BE-019, FND-007, FND-009
+
+As a maintainer, I want the room's indexes of region ranges, of definitions in use per region and of fields kept current by mapping through each step, so that the outcome check stays cheap as documents grow.
+
+**Acceptance criteria**
+
+- [x] Given random commit sequences (regions added, removed, split and merged; styles applied; fields inserted and deleted), when the indexes are updated by mapping through each step and rescanning only what changed, then they equal a full rebuild from the document after every commit.
+- [x] Given an edit inside one region of a large document, when the outcome check runs, then only scopes whose subtree identity changed are examined (instrumented count).
+- [x] Given a commit that touches few blocks, when the P4 comparison runs, then it looks only at changed blocks (instrumented count).
+- [x] Given the room opens a document, when the first channel is served, then the three indexes were built from the checkpoint and the log tail.
+- [ ] Given documents at the limits (500 regions, 2,000 fields, 16 MiB canonical size), when a typical commit is checked, then the time spent in index updates and in the outcome check is measured and reported by the harness of FND.
+- [x] Given a field identifier, when a fill rule needs the field, then the lookup goes through the field index and is constant time in the number of fields (instrumented).
+
+**Evidence:** lane V-PRM-001-017 (2026-11-13), criterion 3: `packages/authority/test/prm-016.p4-changed-blocks.test.ts`, "visits the same number of nodes in a body of 400 more paragraphs, and fewer than 12": the count is taken on `rules.suggest` as the outcome check calls it for a body where one paragraph gets a suggestion by a suggester; 400 extra paragraphs give the same count as none, and that count is under 12 (Vitest, Node.js 22.18). `packages/authority/test/scopes.test.ts`, "visits the changed path only, whatever the size of the document": an edit in one region visits as many nodes with 400 more regions as without; `test/outcome.fields.test.ts` shows the same for a fill with 300 more paragraphs. 2026-11-13 (criteria 1, 4, 6): `packages/authority/test/indexes.test.ts`, "equal a full rebuild after every commit of random sequences (property)": 300 runs of random commits that add, remove, split and merge regions, apply styles and insert and delete fields, each compared with `PermissionIndex.build` after every commit, with more than 20 splits or merges checked; "are built when the room opens a document": a room reopened from its initial content and the stored log tail has the same indexes as the room that wrote them; "find a field in constant time for the fill rules": the fill gate finds a field through `index.field` with no scan of the document (`gate.scans` is 0), and a gate without the index scans once.
+
+**Notes:** 07 gives no budget for the outcome check; 04 §12 says validating and applying a typical commit costs well under a millisecond of CPU (a target). The first measurement sets the CI gate (Open questions). The field index is shared with FRW. Phase inferred: indexes are needed once restricted regions and definitions protection ship in 1b. Updated 2026-11-13: the room now keeps the indexes (`room.ts`, built at open from the content and the log, and carried through each commit), so (1), (4) and (6) are ticked. For (4) the initial document stands for the checkpoint: storing checkpoints is BE-020, so the room is given the checkpoint content as its input and the tick does not cover the checkpoint store. The 2026-11-06 note that the room kept no indexes is superseded. Lane V-PRM-001-017 (2026-11-13): (3) is ticked; the P4 rule is called with the body's changed children only, and the trimming by identity was already in `suggestions.ts`. Still open: (5), which needs the limits (500 regions, 2,000 fields, 16 MiB) built and timed in the FND harness on the reference machine. `packages/perf` is the layout and kernel harness (FND-007) and has no permission-index measurement, and the reference machine is not available here, so no figure is reported; this needs FND-007 extended and a run on the reference machine (needsFromOthers). The outcome check also still computes definition use from the document when a definition changes. (3) the P4 comparison serialises the whole changed scope: comparing only changed blocks needs suggestion owners seeded from the initial document, since identifiers used by others are found by scanning the scope. (5) needs the harness of FND at the limits.
+
+### PRM-017 Build the permission oracle for property tests
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | L | must | Maintainer |
+
+**Spec:** 07 §5.1 (last paragraph), §16; 11 §2 (S3), §3; review 3.2 S-01 · **Requirements:** R3, R6 · **Depends on:** PRM-009, SPK-016, SYN-013
+
+As a maintainer, I want a test oracle that states, independently of the code under test, which scopes each user may change, so that property tests and fuzzing can show that no sequence of commits changes a scope outside a user's writable set.
+
+**Acceptance criteria**
+
+- [x] Given random users with random roles, grants, policies, expiries and document states, when random commits are generated from every step type, including `replaceAround`, mark and attribute steps and stale bases, then the oracle fails the run if any accepted commit changed a scope outside its submitter's writable set at that moment.
+- [x] Given the oracle, when it finds the scopes a commit changed, then it does so by serialising and comparing each scope, not by object identity, so a defect in identity pruning is caught.
+- [x] Given a failing run, when it is reported, then the seed and a shrunk sequence are printed and can be saved as a regression fixture.
+- [x] Given the real service with PostgreSQL, when the property tests run in CI, then they run against it and not only against the in-process function (the 1a exit criterion).
+- [x] Given the fuzz target for the check, when it runs, then any crash or stall fails the run.
+- [ ] Given rules P4, P7 and P9 are added, when their stories ship, then the oracle's writable set is extended through a registered hook without changing the generator.
+
+**Evidence:** `packages/authority/test/harness/oracle.ts` (`scopeTexts` and `changedScopes` serialise every scope to RFC 8785 text; capabilities re-derived from 07 §2 and §4; the suggestion baseline as a character stream); the convergence suite compares the stamped scopes of every stored commit with it. `convergence.property.test.ts`: fast-check now shrinks a failing schedule (no `endOnFailure`), prints the seed and the shrunk counterexample, and the failure message ends with the sequence as JSON for the `REGRESSIONS` list, which replays first on every run; "reports a failing schedule with its seed and a shrunk sequence that replays" shows it on a property made to fail (seed 7 in the report, shrunk to at most three operations, the saved JSON replaying to the same failure). `fuzz.test.ts` (69,600 hostile submissions in 10 s on 2026-11-06; any exception or missing answer fails) and `scopes.test.ts`, "fuzzing the outcome check" (500 random edit sequences by every user under six permission states; `outcomeCheck` must return a verdict). Criterion 1 (2026-11-06): `test/harness/client.ts` now also generates `removeMark` (formatting, and one's own suggested deletion), `addNodeMark` and `removeNodeMark` (block suggestions), `replaceAround` through `setNodeMarkup`, and crafted node marks and whole-document mark removals; `convergence.property.test.ts` fails unless every step type is both submitted and stored. `S3_RUNS=1000` on 2026-11-06 stored 2,104 replace, 1,602 attr, 499 addMark, 491 addNodeMark, 204 replaceAround, 94 removeMark and 88 removeNodeMark steps, every stored commit checked by the oracle under the revision it records; the S12 suite (`S12_RUNS=1000`) passes with the same client. Criterion 4 (lane U-PRM-001-017, 2026-11-13): `services/document-service/test/postgres/convergence.pg.test.ts` runs this suite, unchanged, against PostgreSQL through `PgSimStorage` with `SYN047_RUNS=300`: 2 of 2 tests pass (PostgreSQL 17 in the Podman test container started by `infra/test-env.ps1 up`; run by `pnpm vitest run services/document-service/test/postgres/convergence.pg.test.ts`, 85.8 s).
+
+**Notes:** fault injection (dropped connections, killed processes, database outage) is part of S3 and is run by SPK/SYN; this story supplies the oracle. Grants that change while commits race (G7) are checked in the convergence suite, SYN-047, with this oracle; the known bypass classes as named fixtures are SEC-021. Review 3.2 S-01. Criterion 4 met on 2026-11-13 (Evidence): the PostgreSQL run of the suite (SYN-047) uses the same client, so it generates every step type too. Whether CI runs the `.pg.test.ts` files is root configuration, left to the main session. (6) P4 and P7 are modelled inside the oracle, not through a hook.
+
+## Granting roles on regions and live changes
+
+### PRM-018 Set and read region grants through the control API
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Owner |
+
+**Spec:** 07 §1, §2, §3, §12; 05 §6.1, §6.2 (`/documents/{id}/grants`); 06 §4.1 · **Requirements:** R3 · **Depends on:** PRM-002, PRM-004, PRO-040, PRO-042
+
+As an owner, I want to give users and groups a role on a region and take it away again, so that specific people can change specific parts of a document.
+
+**Acceptance criteria**
+
+- [x] Given a caller with `manage`, when they send `PATCH /documents/{id}/grants` with `If-Match` carrying the current ETag, then grants of the form (document, region, principal, role, optional expiry) are created, changed or removed, and the response carries the new grants revision.
+- [x] Given a caller without `manage`, such as a document-level `editor`, when they send the same request, then it is refused and nothing changes.
+- [x] Given a stale `If-Match`, when the request arrives, then it fails with `precondition_failed` and nothing changes.
+- [x] Given a principal outside the four forms, a role outside `viewer`, `commenter`, `suggester` and `editor`, or a region that does not exist or is retired, when the request arrives, then it is refused with a problem detail and nothing is stored.
+- [x] Given a principal that already has a grant on the region, when a new role is set, then the existing grant is replaced (one grant per document, region and principal).
+- [x] Given `GET /documents/{id}/grants`, when a caller with `manage` reads it, then the response lists the current grants with their expiry and the current grants revision.
+- [x] Given a service credential naming the acting user in the `DEP-Actor` header, when it patches grants, then the change is attributed to that user.
+
+**Evidence:** `services/document-service/src/control-plane/handlers.ts` (`getGrants`, `updateGrants`; D63) through the matrix row `manage` (`pipeline.ts` `guard`). `services/document-service/test/control-plane/routes.content.test.ts`, in memory and PostgreSQL: PATCH with the current ETag creates, changes and removes grants and returns the new revision; a document `editor` is refused; a stale If-Match is `precondition_failed`; a principal outside the four forms, a role outside the four region roles, a missing region, a retired region and a duplicate are refused with a problem and nothing stored; a new role replaces the grant; GET lists grants with expiry and the revision; DEP-Actor attributes the change to that user's surrogate (PostgreSQL).
+
+**Notes:** 07 §12 lists `manage` for grants and lists service credentials separately; whether a service credential alone may patch grants (for example from "send for completion") and who may read grants are not stated (Open questions). The code for an invalid grant is not named in 07; 05 §5.8 has `validation_failed`. Whether `everyone` may be granted on a restricted region waits for PRM-061. Packet A2 (2026-11-06): a service credential may read and change grants, with or without DEP-Actor, and reading needs `manage` otherwise (D65); an invalid grant is `validation_failed` (D63).
+
+### PRM-019 Make a grant change reach connected people at once
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | L | must | Owner |
+
+**Spec:** 07 §3, §9 (first bullet), §4; 04 G7, §5 (step 9 and "When a write fails"); 05 §5.5; 06 §2.3; 01 §4.3; review 3.2 S-02 · **Requirements:** R3, R7 · **Depends on:** PRM-018, PRM-006, SYN-013
+
+As an owner, I want a changed grant to take effect for connected users without a reload and never to be bypassed by a lost notification, so that a person whose access I reduced cannot keep editing.
+
+**Acceptance criteria**
+
+- [ ] Given Alice and Bob editing the same document in two browser contexts with different region grants, when the owner reduces Bob's role in region R from `editor` to `viewer`, then Bob's tab receives `perm.changed` and stops accepting typing in R without a reload (Playwright).
+- [x] Given the notification to the room is dropped, when the `PATCH` has returned, then a commit that had been checked under the old grants revision cannot be stored: its log write is refused, it is rejected with `unavailable`, and when the client resubmits it is checked against the new permissions.
+- [x] Given a grant change, when it is applied, then the room recomputes the affected connections, records a control commit in the document's log and sends `perm.changed`; clients advance their `seq` on the control commit like on any commit.
+- [x] Given the document has no open room, when a grant is changed, then the new revision is stored and the next room that opens the document loads it.
+- [x] Given two owners change grants at the same time, when the second request carries a stale `If-Match`, then it fails with `precondition_failed`.
+- [x] Given a grant change that affects nobody connected, when it commits, then the revision still increases and the control commit is still recorded.
+- [x] Given the grantee's token is unchanged, when a grant changes, then the change applies at once without a new token (grants are not in the token).
+
+**Evidence:** `services/document-service/test/data-plane/permissions.test.ts`: a lost notification refuses the write under the old revision, rejects with unavailable and checks the resubmission against the new grants (and over PostgreSQL, `postgres.pg.test.ts`); a change records a control commit and then perm.changed; a change made while no room was open is loaded by the next room, whose first write is that revision's control commit, before any commit checked against it; a change that affects nobody connected still records its control commit; grants change without new tokens. Criterion 5 (2026-11-13): `services/document-service/test/control-plane/grants-two-owners.test.ts`, "refuses the second of two concurrent grant changes made under the same ETag (PRM-019 criterion 5)": two owners read ETag "g1"; the first PATCH stores and returns "g2"; the second PATCH under "g1" is refused with `precondition_failed` and stores nothing; a retry under "g2" is accepted. Run on the in-memory store only; the PostgreSQL run of the file was not made. Lane U-PRM-018-034 (2026-11-13): the PostgreSQL run is made by `services/document-service/test/control-plane/prm-019.grants-two-owners-pg.test.ts` (PostgreSQL in Podman, container `docedit-test-postgres`, its own database created and dropped by the harness; `pnpm vitest run test/control-plane/prm-019.grants-two-owners-pg.test.ts` in services/document-service, 1 passed, none skipped).
+
+**Notes:** the conditional write itself is SYN's; this story tests it end to end. The two-tab demo is the 1a scenario of 11 §3. Review 3.2 S-02 (permission changes outside the hash chain). Criterion 1 is the two-tab Playwright scenario (packets B and E); criterion 5 is the grants PATCH of the control plane (packet A2).
+
+### PRM-020 Reject a commit made under old permissions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Editor |
+
+**Spec:** 07 §9 (second and third bullets), §16; 01 §4.3; 05 §5.9 · **Requirements:** R3, R7 · **Depends on:** PRM-019, PRM-009, SYN-020
+
+As an editor whose rights were just reduced, I want a change I made before I heard about it to be refused cleanly, so that nobody can slip a change in through the delay.
+
+**Acceptance criteria**
+
+- [x] Given Bob submits a commit made before `perm.changed` reached him and the room processes it under the new permissions, when it changes a scope he can no longer edit, then the room sends `sync.reject` with `permission_denied`, action `drop`, `head` and the offending `scopes`, and nothing is stored.
+- [x] Given Bob's later commits touch only scopes he can still edit, when they arrive, then they are accepted: the rejection has no collateral effect.
+- [x] Given Bob resubmits the identical rejected commit, when it arrives, then it is checked again and rejected again.
+- [ ] Given a rejection with `permission_denied`, when the client receives it, then it refreshes its permissions, so its `access` matches the server's.
+
+**Evidence:** `services/document-service/test/data-plane/permissions.test.ts` and `sync.test.ts` "rejections": permission_denied with drop, head and the offending scopes, nothing stored; a later commit in the body is accepted; the identical commit sent again is refused again.
+
+**Notes:** the user-facing side is PRM-024 and FE-010. The sequence is the one in 01 §4.3. Criterion 4 is client behaviour. Round 4 (lane PRM-015-028, 2026-11-13): criterion 4 stays open. The sync session emits `permissions-stale` with the refused scopes (`packages/engine/src/sync/session.ts`, `refresh-permissions`), but no code in the engine or the element consumes it, and the protocol has no client request that reads the `access` object again, so the client's `access` is not refreshed from the server. The test "refreshes permissions" in `packages/engine/test/sync-state.test.ts` checks only the action. Needs a consumer and a read of the access (protocol or FE-010 owner).
+
+### PRM-021 Follow document roles and groups through token refresh
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Editor |
+
+**Spec:** 07 §9 (fourth and fifth bullets), §3, §4; 05 §3.1 · **Requirements:** R3 · **Depends on:** PRM-006, PRO-014
+
+As an editor, I want a change the host makes to my document role or my groups to reach the editor within the token's lifetime, so that rights follow the host's sharing without a reload of the page.
+
+**Acceptance criteria**
+
+- [x] Given a refreshed token whose `docs` role for this document is lower than before, when `auth.refresh` carries it, then the room recomputes the connection's access and sends `perm.changed`.
+- [x] Given a refreshed token whose `grp` no longer contains a group, when it is applied, then grants naming that group stop matching for that connection.
+- [x] Given the host changes a user's role and does not revoke sessions, when an open channel continues, then the old role stays in force until the next refresh, which is at most 15 minutes after issue (target; tokens live at most 15 minutes).
+- [x] Given a refreshed token that no longer lists the document, when it is applied, then the user has no document role and the connection loses access to the document.
+- [x] Given group membership changes, when the host issues the next token, then they follow the same timing as document-level roles.
+
+**Evidence:** `services/document-service/test/data-plane/session-1b.test.ts`, "roles and groups through token refresh (PRM-021)": a refresh with a lower document role sends `perm.changed` with `docRole` `viewer`, keeps the channel open, and the next commit is refused with `permission_denied`; the old role serves commits until that refresh; a refresh without a group stops grants on that group matching (`perm.changed` scopes, next commit refused); a refresh that no longer lists the document closes the channel with `forbidden`. Round 3 (lane PRM-015-028, 2026-11-13): criterion 3 by `services/document-service/test/control-plane/prm-021-token-bound.test.ts`, "keeps the old role in force until the token expires, and never beyond 15 minutes after issue" (a lifetime of an hour is capped at 900 s; the role applies at 899 s and the token is refused after expiry and skew), and by `services/document-service/test/data-plane/prm-021-refresh-timing.test.ts`, "serves the role the token carries until the token expires, then ends the session with `token_expired`" (the session ends at the token's expiry, so no open channel outlives the 15-minute bound); criterion 5 by the same file, "applies a lower document role and a removed group together, with one perm.changed" (one refresh drops both, one `perm.changed` is sent, and the body commit is refused under the new role). All pass (vitest, Node.js 22.18, 3 tests in the new files).
+
+**Notes:** Criteria 3 and 5 were ticked in round 3 (see Evidence); the group timing is shown at the refresh that carries the token, the host's own issuing is not tested here. Immediate effect needs session revocation (PRM-022). The close code for the last criterion is left to PRO. Phase inferred: token roles feed 1b "document roles" (11 §4).
+
+### PRM-022 End a user's sessions on the host's request
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Integrating developer |
+
+**Spec:** 07 §9 (fourth bullet), §14, §16; 05 §3.3, §5.7, §5.8; 06 §4.1 (`tenant_users.revoked_before`); review 3.2 S-04 · **Requirements:** R3, R10 · **Depends on:** PRM-006, PRM-051, PRO-012, PRO-016
+
+As an integrating developer, I want to end a user's access immediately without waiting for their token to expire, so that someone removed from my application loses access to documents at once.
+
+**Acceptance criteria**
+
+- [x] Given the host has removed a user's role in its own application, when it revokes the user's sessions, then the old role stops applying at once and does not wait for the token's refresh (at most 15 minutes).
+- [x] Given a token issued after the watermark, when it is presented, then it is accepted and the roles it carries apply.
+- [x] Given the revoke request names a document, when it is processed, then the user's access to that document ends and their access to other documents is unaffected.
+- [x] Given a revocation, when it is processed, then it appears in the audit trail (PRM-052).
+
+**Evidence:** criterion 1 by `services/document-service/test/data-plane/session.test.ts` ("revokes a session: auth.revoked, then close 4401"): the host's revoke sends `auth.revoked` and closes the user's channel with 4401 at once, with no refresh, and another user's channel stays open. Criterion 2 by `services/document-service/test/control-plane/be-031-revocation.test.ts` ("refuses a token issued before the watermark with revoked, and accepts one issued at or after it") and by `services/document-service/test/control-plane/routes.content.test.ts` ("revokes a user's sessions for every document or for one", where a token issued after the watermark works again). Criterion 3 by the same route test (the old token is refused on the revoked document and still works on the other), by `services/document-service/test/data-plane/permissions.test.ts` ("closes that user channels on the document with forbidden", where another user's channel stays open) and by `be-031-revocation.test.ts` ("refuses only the tokens of a revoked document when the revocation names one document"). Run on 2026-11-13 with vitest in Node.js 22.18: session.test, be-031-revocation.test, permissions.test and the two `-t "revokes a user"` route tests of routes.content.test, all passing and none skipped.
+
+**Evidence (criterion 4, lane PRM-015-028, 2026-11-13):** `services/document-service/test/control-plane/prm-052-revoke-audit.test.ts` (vitest in services/document-service, 2 of 2 pass, memory and PostgreSQL): a revocation through `POST /v1/sessions/revoke` is written to the audit trail with the actor, the user's surrogate, the document when one is given and the server time, and is served on `GET /v1/audit`. The entry is written by `revokeSessions` in `services/document-service/src/control-plane/handlers.ts` (`controlAudit`).
+
+**Notes:** Round 2 (lane PRM-015-028, 2026-11-13): criterion 4 was open then, because the revoke handler wrote no audit entry. Ticked in round 5 once PRM-052 criterion 3 added that entry. The route, the messages and the codes are PRO-016, and the stored watermark with its checks is BE-031; this story fixes what a revocation means for a person's access (07 §9, §14). 06 stores one `revoked_before` per tenant user; how a per-document revocation is remembered is not specified (Open questions). Review 3.2 S-04 (high): revocation did not persist.
+
+### PRM-023 Grant a region role to a workflow role placeholder
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Owner |
+
+**Spec:** 07 §1 (principal), §4; 12 §4.3 · **Requirements:** R3, R13 · **Depends on:** PRM-018, FRW-001, FRW-026
+
+As an owner, I want to grant a region role to a role placeholder such as "Reviewer", so that whoever is bound to that role in a workflow gets the access without a grant per person.
+
+**Acceptance criteria**
+
+- [x] Given a grant naming `role:<id>`, when a workflow is active and a participant is bound to that role, then the participant has the granted capabilities in the region, limited as in PRM-004.
+- [x] Given no active workflow, when access is computed, then `role:<id>` matches nobody.
+- [ ] Given a participant is bound, replaced or removed, or the workflow ends, when that happens, then access is recomputed and `perm.changed` is sent.
+- [x] Given a participant who holds two roles with different grants on the region, when access is computed, then the best match applies.
+
+**Evidence (criterion 2, lane V-PRM-018-034, 2026-11-13):** `packages/authority/test/prm-023.placeholder-no-workflow.test.ts` (vitest, Node.js 22.18, 2 passed): a bound participant gets no grant from `role:reviewer` with no active workflow, and the same grant applies once one is active. The rule is in `grantMatches` and `bestGrant` in `packages/authority/src/permissions/access.ts`, and the oracles of `packages/authority/fixtures/capabilities.json` (regenerated from `packages/authority/scripts/capability-fixtures.ts`), `packages/authority/test/harness/oracle.ts` and `packages/authority/test/visibility.test.ts` now apply the same rule. `capabilities.test.ts`, `role-placeholders.test.ts`, `frw-012.role-region-grant.test.ts`, `visibility.test.ts` and the other oracle users pass in Node.js 22.18.
+
+**Evidence:** `packages/authority/test/role-placeholders.test.ts` (criterion 1: a bound participant holds `suggest` but not `edit` on a restricted region, with `granted` set; criterion 4: the editor grant wins over the viewer grant for a participant with both roles, and the viewer grant alone gives no `edit`); the grant matching is `computeAccess` in `packages/authority/src/permissions/access.ts`. Run on 2026-11-13 with vitest.
+
+**Notes:** criterion 3 is not ticked. Criterion 2 is ticked by lane V-PRM-018-034 on the spec default (07 §1: with no active workflow `role:<id>` matches nobody), which answers ADR 0260 item 1 with that default; the owner may still choose otherwise. The fixtures that expected the match were regenerated. Earlier note on criterion 2 (no active workflow, so `role:<id>` matches nobody): 07 §1 says the placeholder resolves to participants bound "in the active workflow", but `bestGrant` matches a `role:` grant whenever the connection carries the role in `participantRoles` and ignores `workflowActive`; the PRM-004 capability fixtures (`packages/authority/fixtures/capabilities.json`) expect that match in cases with no active workflow. A change to the code would also change those fixtures, so the choice is recorded for the main session in `docs/adr/0260-lane-PRM-015-028.md` and not made here. Criterion 3 (recompute and `perm.changed` when a participant is bound, replaced or removed) needs the room and the workflow of phase 2; not built. Whether the role must exist in a `role_def` when the grant is made is not stated (Open questions). Phase inferred: it needs the workflow of phase 2 (11 §5).
+
+## Permissions in the editor
+
+### PRM-024 Explain a rejected change
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | S | must | Editor |
+
+**Spec:** 07 §7, §9 (third bullet); PRODUCT principle 2 · **Requirements:** R3, R11 · **Depends on:** PRM-020, SYN-020
+
+As an editor, I want a rejected change to be explained and never silently dropped, so that I know what was refused and why.
+
+**Acceptance criteria**
+
+- [x] Given a rejection with `permission_denied` and scopes, when it arrives, then the editor shows a message that names the regions (by title), or the part of the document (body, definitions, header or footer), whose change was refused.
+- [x] Given the client knows who changed the permissions and when, when the message is shown, then it says so, using `resolveUsers`; otherwise it says only that permissions changed.
+- [x] Given a screen reader, when the message appears, then it is announced through a live region without moving focus.
+- [x] Given the rejected steps, when the rejection is handled, then they are discarded and the visible document is rebuilt from the confirmed document plus the later local steps that still apply.
+- [ ] Given the two-tab scenario of 11 §3, when one tab's commit is rejected because the other region's grant was withdrawn, then the rejection is visible in that tab.
+
+**Evidence:** `packages/ui/test/rejection-words.test.ts` (criterion 1: a region by its title, the body, definitions, header or footer and the whole document named by `refusedPart`; a region the reader cannot see, or an unknown one, named by nothing; criterion 2: the person named through the directory by `changedByLine`, and the reason line "Not saved: your permissions changed" when the changer is unknown). `packages/ui/src/shell/rejection-words.ts` is used by `packages/ui/src/panes/RecoveredPane.svelte`, which shows the part and the changer under the reason. Run on 2026-11-13 with vitest, not in a browser. Round 1 fix (2026-11-13): the engine fills the item. `packages/engine/src/sync/state.ts` keeps the scopes of a `permission_denied` `sync.reject` and the author and `serverTime` of the last control commit received (`permissionChange`); `packages/engine/src/core.ts` (`#rejectionWords`) gives them to `RecoveredItem` (`packages/engine/src/api.ts`) as `scope`, `scopes`, `changedBy` (null for `system`) and `changedAt`, with a `field:<id>` scope given as the scope the field lies in and `defs:*` as `defs`. `packages/engine/test/prm-024.rejection-explained.test.ts` (vitest, Node.js 22.18, 5 tests): end to end through backend-mock (the real room), a commit refused after the region's grant is withdrawn reaches `core.recovered` with `scope` `region:<id>`, no changer and the control commit's time; with the control commit attributed to a person on the channel, `changedBy` and `changedAt` reach `core.recovered`; the state machine keeps author and time, knows no person for `system`, and adds nothing to other rejections. `packages/ui/e2e/rejection-explained.spec.ts` (Playwright, the rendered pane in the shell harness; Chromium, Firefox and WebKit on 2026-11-13, 2 tests each): the item names "Region: Terms" and "Part: the definitions", leaves out a region without a title, and says "Permission changed by Grace Hopper on <date>" through the harness's `resolveUsers`, with no axe violations; with no changer it shows only "Not saved: your permissions changed". `rejection-words.test.ts` now also covers bare `defs`, `refusedParts` and the time. Round 2 (lane PRM-015-028, 2026-11-13): `packages/engine/test/prm-024.field-scope.test.ts` (vitest, Node.js 22.18, 3 tests, passing) closes the gap the review named: the test channel refuses the first commit with a `field:<id>` scope, and the recovered item names `region:<id>` for a field in the restricted region, `body` for a field in the body, and no scope for a field the confirmed document does not hold.
+
+**Notes:** Review (2026-11-13, round 1): criteria 1 and 2 unticked. The words are built and tested (`refusedPart`, `changedByLine`) and the pane uses them, but the engine's `RecoveredItem` (`packages/engine/src/api.ts`) has no `scope` and no `changedBy`, so nothing a rejection carries reaches the pane; only the fake core and the e2e fixture supply them. Criterion 2 also asks for "when", which no code shows, and `refusedPart` does not name a bare `defs` scope (05 §5.3) or a `field:<id>` scope. Re-tick when the engine fills `scope` from `sync.reject` and the pane shows it in a rendered test. Fixed and re-ticked in the same round (Evidence). The data that says who changed permissions is not named in the `sync.reject` message or the `access` object (Open questions). Proposed reading, not an owner decision: the client takes it from the last control commit before the rejection (04 §3.2, 07 §9: a permission change records one), whose author is the requesting user or `system` (04 §10); `system` means "not known", so only the reason line is shown. A participant's completion (`control.type` `participant`) is not counted as a permission change. The room's control commits are all `system` today (`packages/authority/src/room/room.ts`, `ensureControlCommit`), so in practice the editor says only that permissions changed until the control plane attributes them; the message is in the recovered-edits pane, the status-bar notice stays without names (ADR 0019). The region guard normally prevents a local edit, so the rejection appears in races and in the 1a demonstration (PRM-028). The content of a rejected commit goes to recovered edits in FE-010. The server half is in the data plane: a refused commit reaches the tab as sync.reject with permission_denied and the scopes (`services/document-service/test/data-plane/permissions.test.ts`); every criterion here is the editor's. Lane U-PRM-018-034 (2026-11-13): criterion 5 (the two-tab scenario of 11 §3, where one tab's commit is rejected because another region's grant was withdrawn and the rejection shows in that tab) stays unticked: it needs the real room with two browser tabs against the document service, which is not wired into the shell e2e harness (see PRM-019 criterion 1; needsFromOthers in the lane report).
+
+> PRM-025 (Keep rejected content in recovered edits) was merged into FE-010 during the cross-check of 2026-11-06.
+
+### PRM-026 Show which regions I can edit
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Editor |
+
+**Spec:** 07 §7 (first bullet), §4; 05 §5.5; PRODUCT (Accessibility) · **Requirements:** R3, R11 · **Depends on:** PRM-006, PRM-032, FE-036, FE-038, UX-061, UX-062
+
+As an editor, I want regions I cannot edit to be shaded and to say who can edit them, so that I know before I try.
+
+**Acceptance criteria**
+
+- [ ] Given a region where I lack `edit`, when the document is shown, then the region is shaded and carries a lock indicator that says who can edit it; a region where I can edit shows neither.
+- [ ] Given the indicator, when it names people and groups, then names come from `resolveUsers` and the derived region list (PRM-032).
+- [ ] Given a user who cannot distinguish colours, when the indicator is shown, then it carries an icon and a text label as well as shading, and in `forced-colors` mode it uses system colours.
+- [ ] Given `perm.changed` arrives, when the access is applied, then shading and indicators update without a reload and without moving the selection.
+- [ ] Given the caret enters a region I cannot edit, when it arrives, then assistive technology is told that the region is read-only and who can edit it.
+
+**Evidence:** packages/ui/test/regions.test.ts: "who can edit" names come from the host's `nameOf` (`resolveUsers`) over the derived region list, with roles, lease, approved and hidden cases; a region the reader may not see is described only as hidden and names nobody (ADR 0019); `scopeAnnouncement` gives the title, the read-only sentence and the editors for a caret entering a region the user cannot edit, and nothing when the scope did not change or the user may edit or suggest there. App.svelte passes these to the live announcer (`say`). Not claimed: criterion 1 (shading is drawn by the core), criterion 3 (icon and forced-colours rendering) and criterion 4 (live update without reload) were not checked in a browser in this round.
+
+**Notes:** Round 11 (lane V-PRM-018-034, 2026-11-13): criteria 1, 3 and 4 stay unticked, and they are blocked on the core, not on the shell. `packages/element`, `packages/painter` and `packages/engine` never call `setRegionLabels` (a search of the packages found it only in `packages/ui`), so the core draws no shading and no lock indicator, and no forced-colours rendering exists to test. The shell's words for the indicators are tested in Chromium (`packages/ui/e2e/regions.spec.ts`, "gives the core the words for each lock indicator", and "tells assistive technology when the caret enters one", 2 passed on 2026-11-13 with `--project=chromium`), and the words follow a `perm.changed` without a reload, but the selection is not checked. Needs: the core's indicator and shading drawing (engine or painter owner) with a browser test of the drawn region. Packet U, round 1 (2026-11-13): criteria 2 and 5 ticked on the unit tests above. The service knows region grants but not the document-level roles held in the host's tokens, so "who can edit" for an `inherit` region can only name grantees and say that document-level editors and owners can also edit (Open questions). A region where I may only suggest is "not editable" in the sense of this criterion; whether it looks different is open. Lease and approval reasons are added in PRM-048. Phase inferred: 11 §4 lists the permissions behaviour of the component under 1b. Audit (2026-11-13): criteria 2 and 5 unticked because they pass only against the shell's `FakeCore`: the real core (`packages/engine`, `packages/element/src/editor.ts`) has no `regions` or derived region list (PRM-032's route is not consumed), so in `<doc-editor>` `regions` is null and the announcement names no one who can edit; re-tick when the engine or element supplies the region list and a test runs against it.
+
+### PRM-027 Jump to the next region I can edit
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Editor |
+
+**Spec:** 07 §7 (first bullet); 13 §4 · **Requirements:** R3, R14 · **Depends on:** PRM-026, UX-003
+
+As an editor in a document with many locked regions, I want a command that moves the caret to the next region I can edit, so that I do not have to find it by scrolling.
+
+**Acceptance criteria**
+
+- [ ] Given the command registry, when the editor loads, then a command that moves to the next editable region is registered and appears in the toolbar and command search (when command search exists), operable from the keyboard.
+- [x] Given the caret is anywhere in the document, when the command runs, then the caret moves to the start of the next region, in document order, where I have `edit`.
+- [x] Given no further region where I have `edit`, when `queryCommand` is asked, then the command reports not enabled.
+- [ ] Given `perm.changed` arrives, when the access is applied, then the command's enabled state is updated.
+
+**Evidence:** packages/ui/test/navigation.test.ts (criterion 3: enabled while a later region may be edited, not enabled after the last one and when no region may be edited, with the answer asked of the core's `hasNextEditableRegion` query). Run of 2026-11-13 with the fake core, not the editing core. Criterion 4 (fixer, round 1): the registry (`packages/ui/src/commands/registry.ts`) now also observes `core.permissions` and `core.regions`; the two criterion 4 tests change only `permissions` (the caret's `access` object stays the same, which the tests assert) and check that the published snapshot turns the command off and on again and that `onStateChange` names it. Both tests fail when `core.permissions` is taken out of the registry's inputs (checked on 2026-11-13). Lane ui-4, round 4 (2026-11-13): criterion 1 ticked on the Chromium test "is a command that moves on, and is not enabled when there is none" in `packages/ui/e2e/regions.spec.ts` (`-g "next part I can edit" --project=chromium`, 1 passed): the command is in the Review tab of the full toolbar with its name, runs from the keyboard (focus and Enter) and is announced as not enabled with its reason when there is none. Command search does not exist yet (phase 2), so that part of the criterion is not claimed. Round 4 (lane PRM-015-028, 2026-11-13), criterion 2: `packages/engine/src/region-navigation.ts` (`nextEditableRegion`, `nextEditableRegionStart`) is the core's command, registered in `packages/engine/src/core.ts`. `packages/engine/test/prm-027.next-editable-region.test.ts` (vitest, Node.js 22.18, 6 tests, passing): from the body the caret goes to the first text position of the first editable region; a region the user may only read is skipped; in view mode and with no later editable region the command is not enabled and the caret stays; the function finds nothing when no region is editable.
+
+**Notes:** the command's name and shortcut are the interface designer's to choose (13 §13). Whether it wraps from the last region to the first is not stated. Phase inferred: as PRM-026. Packet U (2026-11-13): criterion 3 ticked on the fake core's tests; criterion 4 was ticked, unticked by review (the registry did not observe `core.permissions`), fixed and ticked again in round 1. Criterion 1 was ticked in round 4 (lane ui-4) on the toolbar and keyboard run in the Evidence line; command search does not exist yet (phase 2) and is not claimed. Criterion 2 is the core's (where the caret lands) and is ticked in round 4 (lane PRM-015-028) by the engine command named in Evidence. The command does not wrap from the last region to the first: the story does not say that it should, so this is the default reading. Audit (2026-11-13): criteria 1 and 4 unticked because the command is not wired into the real component: `packages/engine/src/core.ts` does not list or answer the `hasNextEditableRegion` query (`QUERY_NAMES`, `query()` returns undefined) and `packages/element/src/editor.ts` lists only `insertField` and `setRegionPolicy` in `commandNames`, so the registry's `backs()` does not register the command in `<doc-editor>`; the shell tests (`navigation.test.ts`, `e2e/regions.spec.ts`) pass only against `FakeCore`, which computes the answer itself. Criteria 2 and 3 hold at the engine (`prm-027.next-editable-region.test.ts`, real `DocumentCore`, 6 passed).
+
+### PRM-028 Let regions behave as isolated blocks while typing
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 07 §7 (second, third and seventh bullets); 03 §4.2, §7; 02 §5.2; 05 §8.1 (`insertContent`) · **Requirements:** R3, R11 · **Depends on:** PRM-026, FE-036, FE-038, CDM-042
+
+As an author, I want a region to behave like a self-contained block when I type, delete and select, so that I cannot damage a region's boundaries or edit where I may not.
+
+**Acceptance criteria**
+
+- [x] Given I lack `edit`, `suggest` and `fill` in a scope, when I type, paste, cut, drop or run a command there, then the region guard refuses the local transaction, nothing is queued and no `sync.submit` is sent.
+- [x] Given the caret at the start of a region's first paragraph, when I press Backspace, then nothing happens; at the end of its last paragraph Delete does nothing.
+- [x] Given the caret at the end of a region's last paragraph, when I press Enter, then the new paragraph is inside the region.
+- [x] Given a selection that starts inside a region, when I extend it with the mouse or the keyboard past the boundary, then it is clamped to the region.
+- [x] Given a region at the end of the body or two adjacent regions, when I look for a place for the caret, then there is always a body paragraph after each region, and I cannot delete it.
+- [ ] Given a numbered list that continues before and after a region, when the document is shown, then the numbering continues across the region boundary, because it is computed.
+- [x] Given a host calls `insertContent` for a scope I cannot edit, when it runs, then the same guards refuse it.
+- [x] Given a local edit passed the guard but the server rejects it, when the rejection arrives, then PRM-024 and FE-010 apply.
+
+**Evidence:** criteria 2 to 5 by `packages/engine/test/regions.test.ts` (FE-038 and FE-039: Backspace and Delete at a region's edges, Enter inside the region, selections clamped at the boundary by the selection hook and by moves, a body paragraph after every region); criteria 1 and 7 by `packages/engine/test/guard.test.ts` (typing, paste, drop, replace all and undo refused with nothing queued), `packages/engine/test/prm-028.region-blocks.test.ts` (round 2: a cut of region text and `insertContent` at a caret in a region the user may not edit are refused, the document is unchanged and nothing is queued) and `packages/engine/test/content.test.ts` (`insertContent` into a region is refused with the region named); criterion 8 by `packages/engine/test/prm-024.rejection-explained.test.ts` and `packages/engine/test/prm-024.field-scope.test.ts` (a refused commit reaches the recovered edits with the scope it named). Lane U-PRM-018-034 (2026-11-13): criterion 3 by `packages/ui/e2e/prm-024.live-region.spec.ts` (Playwright, the shell harness: a `permission_denied` item set aside is read by the status live region, the words of the refused change are not, and the focus before and after is the same element; Chromium and Firefox passed, WebKit passed on its retry after one `page.goto` transport failure; `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/prm-024.live-region.spec.ts --project=chromium`). Criterion 4 by `packages/engine/test/sync-state.test.ts`, "permission_denied: discards, rebuilds from the confirmed document plus later steps, keeps recovered edits, refreshes permissions" (vitest, Node.js 22.18, 33 of 33 passing in that file). Run on 2026-11-13 with vitest in Node.js 22.18: `prm-028.region-blocks`, `guard`, `regions`, `content` and `prm-024.rejection-explained`, 44 tests, passing. The browser behaviour of the keys and the mouse is not run in a browser here; the engine tests check the core's model of them.
+
+**Notes:** the plugin's mechanics are FE's; these are the behaviours a person must see, written as acceptance tests. The 1a demonstration needs a way to provoke a rejection, which the guard normally prevents; a test hook or a permission change that races a local edit provides it. Phase inferred: as PRM-026. Round 2 (lane PRM-015-028, 2026-11-13): criterion 6 (numbering continues across a region) is not met. The computed list label that would carry numbering across a region is not used yet (`packages/engine/src/list-semantics.ts`, its header), so no test can show it.
+
+> PRM-029 (Keep deletion and replace-all within what I may edit) was merged into FE-037 during the cross-check of 2026-11-06.
+
+### PRM-030 Keep region-only editors out of definitions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Editor |
+
+**Spec:** 07 §7 (sixth bullet), §4; ADR 0009 (consequences) · **Requirements:** R3 · **Depends on:** PRM-028, PRM-012, UX-003
+
+As an editor who may change only certain regions, I want to apply existing styles there but not change styles, page setup, headers or footers, so that I work within my part.
+
+**Acceptance criteria**
+
+- [x] Given I can edit only inside regions (document role `viewer` plus region grants), when I open the style list in such a region, then I can apply any existing style to its paragraphs, and the commit is accepted.
+- [ ] Given the same, when I look for commands that modify styles, numbering definitions, page setup, headers or footers, then they are disabled (`queryCommand` reports not enabled) and the reason is available.
+- [x] Given a crafted commit that changes a definition, a header or a footer, when the server checks it, then it is rejected with `permission_denied`.
+
+**Evidence:** `packages/authority/test/outcome.structure.test.ts`, "region-only editors stay out of definitions": a viewer with an editor grant on one region applies an existing style there and is accepted; her changes to a style, a numbering definition, a page setup and a header story are refused with `permission_denied`.
+
+**Notes:** Round 5 (packet U, 2026-11-13): criterion 2 stays open. The shell has no command that changes a style definition, numbering, page setup or a header's content; `page.header` only opens the header panel (`changesContent: false`), so there is nothing to disable yet (ADR 0113, round 5). A region-only editor cannot add a landscape page or a new style; whether part of `structure` should be grantable per region is open (PRM-063). Phase inferred: as PRM-026. Not met: (2) is the editor's command state (FE, UX). The definitions refused are the `defs.change` and `story.change` operations of PRM-001. Round 4 (lane PRM-015-028, 2026-11-13), part of (2): `packages/engine/test/prm-030.region-only-definitions.test.ts` (vitest, 2 tests, passing): for a region-only editor `queryCommand('setPageSetup', …)` is not enabled and gives a reason, and `run` leaves the document unchanged; the owner's command is enabled. Style definitions, numbering definitions and header or footer content have no command in the engine yet, so (2) stays unticked.
+
+### PRM-031 Keep a suggest-only scope in suggestion mode
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Suggester |
+
+**Spec:** 07 §7 (eighth bullet); 02 §5.2; 05 §8.1 (`mode`) · **Requirements:** R8 · **Depends on:** PRM-014, FE-041, FE-042
+
+As a suggester, I want the editor to stay in suggestion mode where I may only suggest, so that I cannot make a change that the server would refuse.
+
+**Acceptance criteria**
+
+- [x] Given I have `suggest` but not `edit` in the scope where the caret is, when I look at the mode switcher, then the editor is in suggestion mode and the way to leave it is disabled, with the reason available.
+- [x] Given such a scope, when I type, delete or format, then the result is `ins`, `del` or `fmt` marks that name me, and no direct change.
+- [x] Given the caret moves into a scope where I have `edit`, when it arrives, then the mode I chose for editing applies; moving back returns to suggestion mode.
+- [x] Given the host sets `mode="edit"` and the server grants only `suggest`, when the document opens, then the server's permissions still apply and suggestion mode is in force.
+
+**Evidence:** packages/ui/test/suggest-mode.test.ts (Node, 2026-11-13, lane ui-4, 21 tests with packages/ui/test/modes.test.ts passed): criterion 1, `modeInScope` gives `review` for `edit` in a suggest-only scope without a document limit (property), and the switcher's `suggestOnly` reason is in `shell/modes.ts` (modes.test.ts). Criterion 3, the chosen `edit` returns after any sequence of scopes (property over the step function `stepMode`). Criterion 4, `stepMode` moves a `mode="edit"` start to `review` and does not ask again once there. The wiring is an effect in packages/ui/src/App.svelte that calls `core.setMode` with the step's target. Not run in a browser: the switcher's look and the document opening in the editing core are not checked here. Criterion 2 is the core's and not claimed by the ui tests. **Evidence (round 10, lane PRM-029-042, 2026-11-13):** criterion 2 ticked on `packages/engine/test/fe-041-043-suggestion-core.test.ts` (Node, mock service with the authority room; 16 passed with `pnpm vitest run packages/engine/test/fe-041-043-suggestion-core.test.ts`). A user with the document role `suggester` (suggest but no edit in the body) types, and the server stores `ins:sam` with the typed text ("typed text carries one ins naming the user"); deletes baseline text, which stays with a `del` ("deleted baseline text stays with a del"); and applies bold, which is stored as `fmt:sam` with the previous marks ("bold records an fmt with id, user and the previous marks"). In each case the authority accepts every commit and the baseline text is unchanged apart from the marks.
+
+Round 3 (lane ui-4, 2026-11-13): the open choice of ADR 0138 item 1 is decided by the spec default (07 §7: the editor stays in suggestion mode), option (a) of that ADR: the shell moves the core to `review` where the user may only suggest, and keeps the user's choice of `edit` for the next editable scope. A locked, archived or workflow document keeps the server's limit (no `review` there either). Owner may still prefer option (b); see ADR 0138.
+
+**Notes:** with `settings.trackChanges` set to `everyone` the same behaviour applies to every user (PRM-015). Lane ui-4, round 2 (2026-11-13): criterion 1 is not met in packages/ui. `shell/modes.ts` offers `edit` disabled with `suggestOnly` in a suggest-only scope (UX-015 tests), but nothing switches the editor into suggestion mode: the active mode is the user's `shell.mode.*` choice (`commands/builtin.ts`), and no code moves it to `review` when the caret enters such a scope. Whether the shell should switch automatically, or only disable the way out, is open for the owner (proposed in docs/adr/0138-ui-4-backlog-batch.md). Criteria 2 to 4 are the core's and the server's.
+
+## Permissions pane
+
+### PRM-032 List the document's regions and who can edit them
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Owner |
+
+**Spec:** 07 §7; 05 §6.2 (`/documents/{id}/regions`) · **Requirements:** R3 · **Depends on:** PRM-004, PRO-051, PRO-052
+
+As an owner, I want a list of every region with its title, policy, state and who can edit it, so that I can see the shape of a document's rights at a glance.
+
+**Acceptance criteria**
+
+- [x] Given a caller with `view`, when they call `GET /documents/{id}/regions`, then each region is listed with identifier, title, policy, order, state and who can edit it.
+- [x] Given a region with no stored state, when it is listed, then its state is `draft`.
+- [x] Given a grant changes or a region is added or removed, when the list is read again, then it reflects the change and its ETag differs.
+- [x] Given a retired region identifier, when the list is read, then it does not appear.
+- [x] Given "who can edit", when the list is built, then it names the principals with a matching grant that conveys `edit` and, for an `inherit` region, states that document-level editors and owners can also edit.
+
+**Evidence (round 9, lane PRM-029-042, 2026-11-13):** criteria 1, 2, 4 and 5 ticked on `services/document-service/test/control-plane/prm-032.regions-list.test.ts` (memory storage, 4 passed with `pnpm vitest run services/document-service/test/control-plane/prm-032.regions-list.test.ts`): a viewer lists both regions with the six fields (1); a region with no stored state is `draft` (2); a viewer grant names nobody as an editor and an editor grant names the principal, with `inherit` giving `editor` and `owner` (5); a commit that retires a region removes it from the list (4). Criterion 3 (lane U-PRM-018-034, 2026-11-13): `services/document-service/test/control-plane/prm-032.regions-etag.test.ts` (vitest in Node.js 22.18, memory and PostgreSQL in Podman, 6 of 6 passing with prm-032.regions-list.test.ts, 10 in all): the list carries an ETag, a repeated read keeps it and gets 304 to `If-None-Match`, a grant change through PATCH changes it and the new grant shows, and a commit that retires a region changes it. The tag is `"<incarnation>.<seq>.<view token>.g<grants revision>"` in `listRegions` (`services/document-service/src/control-plane/handlers.ts`).
+
+**Notes:** Lane PRM-029-042, round 9: criterion 3 stayed open in round 9 and is ticked by lane U-PRM-018-034 (see its Evidence line). `listRegions` in `services/document-service/src/control-plane/handlers.ts` sends no ETag, so the ETag cannot differ; adding one is a route change, not made here. The list is derived, not stored. 07 §12 does not list this route; `view` is assumed because every reader can see the lock indicator (Open questions). Phase inferred: the pane and lock indicators of 1b need the list (11 §4). Second review (2026-11-06, SPK-027), SR-M4: under ADR 0019 the titles of hidden regions (when hidden) and "who can edit" them must not reach readers without access ([review](../review/2026-11-06-second-review.md)).
+
+### PRM-033 Mark blocks as a region
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Owner |
+
+**Spec:** 07 §2, §5.2 (P2), §7; ADR 0009; 03 §8 (I7) · **Requirements:** R3 · **Depends on:** PRM-011, PRM-032, UX-019, UX-003
+
+As an owner, I want to mark whole blocks as a region and give it a title, so that I can then say who may edit that part.
+
+**Acceptance criteria**
+
+- [x] Given I hold `structure` and select one or more whole blocks in the body, when I mark them as a region and enter a title, then a commit wraps them in a `region` with a new identifier, my title and policy `inherit`.
+- [ ] Given a selection that lies inside a region or crosses a region boundary, when I look at the command, then it is disabled and says why (regions do not nest).
+- [ ] Given the document already has 500 regions, when I try to add another, then the editor explains the limit and a forced commit is rejected with `invalid_op`.
+- [x] Given I lack `structure`, when I look at the command, then it is disabled, and a forced commit is rejected.
+- [ ] Given a new region, when other people are connected, then it appears for them, and is not editable for them until an `access` that includes it arrives.
+- [ ] Given I use only the keyboard and a screen reader, when I mark a region, then every step is operable and the result is announced.
+
+**Evidence (criterion 1, lane V-PRM-018-034, 2026-11-13):** `packages/engine/test/prm-033.mark-region.test.ts` (vitest, Node.js 22.18, 4 passed): `markRegion` (`packages/engine/src/prm-033-mark-region.ts`, wired in `packages/engine/src/core.ts`) wraps a selected body paragraph in one region with a new identifier, the title and policy `inherit`, and queues the change; it is refused without `structure` (the document is unchanged and nothing is queued), inside an existing region and for an empty title. The server half, that a user with `structure` and `edit` in the body may wrap blocks in a new inherit region, is `packages/authority/test/outcome.structure.test.ts`, "lets a user with structure and edit in the body wrap blocks in a new inherit region" (vitest, Node.js 22.18, passing). The command is not yet shown as disabled with a reason for a nested selection (criterion 2), so that criterion stays open.
+
+**Evidence (round 7, lane PRM-029-042, 2026-11-13):** criterion 4 ticked on two Node runs that passed this round: `packages/ui/test/mark-region.test.ts`, "without `structure` (PRM-033, criterion 4)" (the command is disabled with `reason.query.structure`, `exec` does not run, and the core is never asked to mark; a property over capability sets enables it exactly when `structure` and `edit` both hold), and `packages/authority/test/outcome.structure.test.ts`, "enforces every commit operation and cites it when refusing" (a viewer with an editor grant on Terms only, and no `structure`, is refused for `region.create` with `permission_denied`). Criteria 1 to 3 stay open: criterion 2 is the core's answer for a selection inside a region (the test fakes that answer and checks only the shell's reason text); criterion 3 needs the 500-region limit, and no server check of the region count exists in `packages/authority/src` (no `invalid_op` for it is tested).
+
+**Evidence (criterion 3, server half, lane U-PRM-018-034, 2026-11-13):** `packages/authority/test/prm-033.region-limit.test.ts` (vitest, Node.js 22.18, 2 passed with `pnpm exec vitest run packages/authority/test/prm-033.region-limit.test.ts`): a commit that brings a document from 499 to 500 regions passes `checkInvariants`, and one that adds the 501st is refused with `invalid_op` and a reason naming the regions. The limit is the model validator's `too_many_regions` (I7, `packages/model/src/validate/validate.ts`), and `checkInvariants` maps it to `invalid_op` (the room's step 6 runs it on every submission, forced or not). The explanation of the limit in the editor is not built, so criterion 3 stays unticked.
+
+**Notes:** the interface for marking regions is not specified beyond the permissions pane (13 §3); layout is the designer's. Phase inferred: 11 §4 places regions and restricted regions in 1b; 1a regions come from seed data. Packet U, round 8 (2026-11-13, ui): the shell now answers `canMarkRegion` itself where it can (`markRegionSource`, `regionMarkBlock` in packages/ui/src/commands/queries.ts): no document-level `structure` gives `reason.query.structure`, no `edit` gives `noEdit`, a sub-editor gives `subeditor`, and the core's `limit` code is shown as `regionLimit`. Criteria 2, 3 and 4 stay unticked: the nested and limit answers and the refused forced commit (`invalid_op`) come from the core and the server, and the selection-based check is not run here; the tests are in packages/ui/test/mark-region.test.ts.
+
+### PRM-034 Rename, remove, move, split and merge regions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Owner |
+
+**Spec:** 07 §2 (`structure`), §5.2 (P2, P3); ADR 0009 (decision) · **Requirements:** R3 · **Depends on:** PRM-033, PRM-003, PRM-065
+
+As an owner, I want to restructure regions as the document changes, so that rights keep following the parts they protect.
+
+**Acceptance criteria**
+
+- [ ] Given I hold `structure` and `edit` in a region, when I rename it, then its `title` changes and the pane and lock indicators show the new title to everyone.
+- [x] Given I hold `structure` and `edit` in a region, when I remove it, then the region node is removed as a whole and its grants, state and lease are retired (PRM-003).
+- [x] Given I hold `structure` and `edit` in `body` and in every region affected, when I move a region, then the commit is accepted.
+- [ ] Given I split or merge regions, when the operation runs, then it is a whole-node operation that needs `structure` and `edit` in every region affected; the identifiers, policy and grants of the results follow PRM-065.
+- [ ] Given I lack the rights for an operation, when I look at it, then it is disabled with the reason available, and a forced commit is rejected with the offending scopes.
+
+**Evidence:** `packages/authority/test/outcome.structure.test.ts`, "moves a region with structure and edit in the body and the region": accepted for an editor on an inherit region, refused without `structure`, and refused for a restricted region without a grant.
+
+**Evidence (round 9, lane PRM-029-042, 2026-11-13):** criterion 2 ticked on `services/document-service/test/control-plane/prm-034.remove-region.test.ts`, "removes the node as a whole and retires its grant, state and lease" (memory storage, 1 passed with `pnpm vitest run services/document-service/test/control-plane/prm-034.remove-region.test.ts`): a commit that removes the node takes the whole node out of the content, and the grant, the lease and the approved state of the region are gone from the permission data, with the region listed as retired. The commit is appended to the log directly, as the room would append it; the authority's rule for who may remove a region is not repeated here.
+
+**Evidence (round 11, lane V-PRM-018-034, criterion 1, partial; criterion stays unticked):** `packages/engine/test/prm-034.rename-region.test.ts` (vitest, Node.js 22.18, 4 passed): `renameRegion` (`packages/engine/src/prm-034-rename-region.ts`, wired in `packages/engine/src/core.ts` and the `CommandName` union in `api.ts`) sets the title of the region in one transaction, keeps its identifier and policy and queues the change; it is refused without `structure` and `edit` in `region:<id>`, for an empty or unchanged title and for an unknown region. `packages/authority/test/prm-034.rename-region.test.ts` (vitest, 2 passed): `region.retitle` is accepted for a user with `structure` and `edit` in the region (the accepted steps set the new title, identifier and policy kept) and refused for a restricted region the user holds no grant on. Not shown: the rename command in the shell and the pane and lock indicators drawing the new title for connected people (the shell harness uses a fake core; the core draws no lock indicator yet, see PRM-026).
+
+**Notes:** Lane PRM-029-042, round 9: criteria 1, 4 and 5 stay open. (1) The pane and the lock indicators showing a new title are UX's; the authority side of a rename is `region.retitle` in `packages/authority/src/permissions/model.ts`. (4) Split and merge wait for the owner's decision on PRM-065 (ADR 0033 item 3, unchanged). (5) The disabled command and its reason are the editor's; the forced commit is refused by the authority with the scope named (`packages/authority/src/permissions/outcome.ts`), but the reason shown to the user is not checked here. 07 and ADR 0009 name the operations; neither says whether removing a region deletes its content or only unwraps it (Open questions). Phase inferred: it goes with the structure rules of 1b (PRM-011). Not met: (1) and (5) include the pane and the lock indicators (UX, BE); the authority's part is tested in PRM-011 and PRM-003. (4) is built and tested as ADR 0033 item 3 proposes for PRM-065, and waits for the owner's decision. Both deletion and unwrapping are accepted as whole-node operations.
+
+### PRM-035 Grant roles on a region from the permissions pane
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Owner |
+
+**Spec:** 07 §7 (last bullet), §1, §2; 05 §8.1 (`searchPrincipals`, `resolveUsers`); 13 §3 · **Requirements:** R3, R11 · **Depends on:** PRM-018, PRM-032, UX-019, PRO-080
+
+As an owner, I want to choose people and groups and give them a role on a region, so that I decide who may change what without leaving the document.
+
+**Acceptance criteria**
+
+- [x] Given I hold `manage`, when I open the permissions pane for a region, then I see its grants (principal, role, expiry) with names resolved through `resolveUsers`; without `manage` the grant controls are absent.
+- [x] Given I type in the people-and-groups field, when I search, then candidates come from the host's `searchPrincipals` callback, shown as users and groups.
+- [x] Given I choose a principal, a role from `viewer`, `commenter`, `suggester` and `editor`, and optionally an expiry, when I save, then the editor patches the grants with `If-Match` and the list updates.
+- [x] Given another owner changed the grants first, when my save fails with `precondition_failed`, then the pane reloads the current grants and tells me; nothing is overwritten silently.
+- [x] Given I change or remove a grant, when it is saved, then the affected people connected to the document see their access change without a reload.
+- [x] Given the roles are listed, when they are shown, then each carries a colour, an icon and a text label.
+- [x] Given I use only the keyboard and a screen reader, when I add, change and remove a grant, then every step is operable and the result is announced.
+
+**Evidence (U2 group 3 round 8 fix, lane U-PRM-035-051, criterion 7, 2026-11-13):** `packages/ui/e2e/prm-035-grants.spec.ts`, "a keyboard-only user adds, changes and removes a grant, and each result is announced (criterion 7)". With focus, typing, the arrow keys and Enter only, the spec adds a grant (Legal team as commenter), changes an existing one (Ada Lovelace from editor to suggester: the saved list holds her once, with the new role, and the pane shows "Suggester") and removes one (Ada's). A `MutationObserver` on the shell's `role="status"` region records each message as it is set; the shell clears the region before each message, so the count of "Permissions saved." goes 0, 1, 2, 3, and each step's check can pass only because of that step (the removal's check no longer relies on text that was already there). Run in Chromium, Firefox and WebKit with `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/prm-035-grants.spec.ts --retries=0 --repeat-each=2` (DOCEDIT_UI_PORT 56270, private `--output` folder): 12 passed. An earlier run with retries had one Chromium attempt time out waiting for the pane's region button, before any step of this change, and pass on retry. Limit: the announcement is shown in the live region that assistive technology reads; no screen reader was run, so speech output is not captured.
+
+**Evidence (round 15, lane U-PRM-035-051, criterion 7; reviewer, U2 group 3 round 8: criterion 7 unticked again, because the spec still never changes an existing grant, and its last status assertion after the removal was already true after the earlier save, so it does not show that the removal was announced; no screen reader was run):** `packages/ui/e2e/prm-035-grants.spec.ts`, "a keyboard-only user adds a grant and removes one, and each result is announced (criterion 7)": with the keyboard alone the spec finds the group in the search field, sets the role, saves, and removes a grant; each result is checked in the shell's `role="status"` region, and the saved grant lists are checked through the harness. Run in Chromium, Firefox and WebKit (`pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/prm-035-grants.spec.ts`, port 56500): passed in all three on a clean run in each browser (Firefox failed once on a trace-file write in a parallel run and passed when run alone). The announcement is the status region's text, not a screen reader's speech output; no screen reader was run, so the spoken result is not proven.
+
+**Evidence (criterion 5, lane U-PRM-018-034, 2026-11-13):** `packages/engine/test/prm-035.grant-change-live.test.ts`, "lowers Bob to viewer in the region: his access changes and his typing there is refused" (vitest, Node.js 22.18, 1 passed with `pnpm exec vitest run packages/engine/test/prm-035.grant-change-live.test.ts`). Through the mock service, which runs the authority room and the protocol bridge: Bob's core holds `edit` in the region, then `MockService.setGrants` lowers his group's role to `viewer`; without a new join or reload his `permissions` lose `edit` in `region:<id>` and keep `view`, and typing there leaves the text unchanged with nothing in recovered edits. This is the core's access, not the pane's drawing (PRM-026), and it is not a browser run.
+
+**Evidence:** packages/ui/e2e/regions.spec.ts, "the permissions pane (PRM-032, PRM-035, PRM-036)": "gives a role to someone found in the host's directory, saved with If-Match" (criteria 2 and 3: the search goes to `searchPrincipals`, the candidates show one user and one group, the save sends `If-Match` with the etag, and the list shows the new grant); "reloads and says so when someone else saved first; nothing is overwritten" (criterion 4); "lists the regions as the reader may see them, with who can edit each" (criterion 1 in part: names through `resolveUsers`, no grant controls without `manage`). Run of 2026-11-13 in Chromium only, `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/regions.spec.ts --project=chromium`: 16 passed. Firefox and WebKit were not run. Lane ui-4, round 4 (2026-11-13): criterion 1 ticked on the test "shows when each grant ends, as a date (PRM-035, criterion 1)" in `packages/ui/e2e/regions.spec.ts` (`pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/regions.spec.ts -g "shows when each grant ends" --project=chromium`, 1 passed): a grant with `expiresAt` shows its date ("31 Dec 2026"), next to its role and the principal's name.
+
+**Evidence (round 10, lane U-PRM-035-051, 2026-11-13; reviewer round 1: criterion 7 unticked, because the test adds and removes a grant but never changes one, and no screen reader was run, only the status region's text was read):** criterion 6 ticked and criterion 7 partly shown on `packages/ui/e2e/prm-035-grants.spec.ts`, run in Chromium, Firefox and WebKit with `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/prm-035-grants.spec.ts` (DOCEDIT_UI_PORT 56500; 6 passed across the three browsers). Criterion 6: "each role has its own colour, its own shape and a text label" reads the computed colour and shape (border radius and transform) of each role's mark and the role's text; four distinct colours and four distinct shapes. Criterion 7: "a keyboard-only user adds a grant and removes one, and each result is announced" uses only focus, typing and Enter and the arrow keys: the group is found and chosen, the role is set, Save and Remove are activated, and the shell's status region announces "Permissions saved.". Run note: one Chromium run failed on a Playwright trace-file error (ENOENT in the shared `test-results` folder, while other agents ran in it); a rerun with `--output` in a private folder passed.
+
+**Notes:** offering `everyone` waits for PRM-061; offering a workflow role placeholder is PRM-023. If the host does not supply `searchPrincipals`, the field cannot find anyone; the pane says so. Round 3 (packet U, 2026-11-13): criteria 2, 3 and 4 ticked on the Chromium run above. Criterion 1 was ticked in round 4 (lane ui-4; see the Evidence line above). Criterion 5 (connected people see a change without a reload) is not checked: the two-context browser run of PRM-019 criterion 1 is not built (a document service and a client that connects to it in one test). Criteria 6 and 7 were ticked in round 10 (see the Evidence line above). Audit (PRM-031 to 036, 2026-11-13): criterion 7 stays unticked, because `prm-035-grants.spec.ts` adds and removes a grant but never changes one, and no screen reader was run. The search test used "le", which matched only the group; it now uses "l", because "Ada Lovelace" has no "le" in it. The pane was right and the test was wrong. Phase inferred: region grants are made in the first usable release (11 §4, Permissions row); the grants API alone is 1a (PRM-018).
+
+### PRM-036 Restrict a region to named people
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Owner |
+
+**Spec:** 07 §1 (region policy), §2 (`manage`), §4, §5.2 (P2) · **Requirements:** R3 · **Depends on:** PRM-035, PRM-011
+
+As an owner, I want to set a region to `restricted`, so that only the people I name can edit it, even if they are not document editors.
+
+**Acceptance criteria**
+
+- [x] Given I hold `manage`, when I set a region's policy to `restricted`, then a commit sets its `policy` and connected people's access is recomputed.
+- [x] Given a restricted region, when a document-level `editor` with no grant opens it, then they can view and comment but not edit, and an `owner` keeps all four capabilities.
+- [x] Given I lack `manage`, when I look at the control, then it is disabled, and a forced commit is rejected.
+- [x] Given I set the policy back to `inherit`, when the commit is accepted, then document-level roles apply again.
+- [x] Given the pane, when I choose a policy, then it explains in plain words what `inherit` and `restricted` mean.
+
+**Evidence:** packages/ui/e2e/regions.spec.ts, "explains the policies in plain words and sets one with a commit" (Chromium, 2026-11-13, 16 passed in the regions spec): the accessible descriptions of both policy radios are the en-GB help texts for `inherit` and `restricted`, and choosing `restricted` sends `setRegionPolicy` with `{ region, policy }` once, then announces the change. The same spec's "lists the regions ..." test checks that the policy radios are disabled without `manage`. Authority (round 6, 2026-11-13): `packages/authority/test/region-policy.test.ts`, "PRM-036" tests: a commit by a `manage` holder sets `restricted` and the connected editor with no grant then holds `view` and `comment` in the region and not `edit`, and her channel receives `perm.changed` with that access (`packages/authority/src/room/room.ts`, `sendAccessChanges`, run when a stored commit changes the region list or a policy); the owner holds all four region capabilities; an editor without `manage` who restricts the region is refused with `drop` and nothing is written; setting `inherit` again gives the editor `edit` back and her next commit in the region is accepted. Round 7 (packet U, 2026-11-13), criteria 1 and 3: `packages/authority/test/region-policy.test.ts` (4 passed, run on 2026-11-13 with `pnpm vitest run packages/authority/test/region-policy.test.ts`) shows the commit that sets `restricted` is accepted, the connected editor's `perm.changed` holds `view` and `comment` only, and a user without `manage` gets `drop` with no write. The disabled control is `packages/ui/e2e/regions.spec.ts`, "explains the policies in plain words and sets one with a commit" and "lists the regions ..." (Chromium run of 2026-11-13, cited above).
+
+**Evidence (round 7, lane PRM-029-042, 2026-11-13):** criterion 1 ticked on `packages/authority/test/region-policy.test.ts`, "a manage holder restricts a region; a connected editor without a grant keeps only view and comment (criteria 1 and 2)", run this round and passing (with `packages/ui/test/mark-region.test.ts`, 10 tests in both files): the commit by a `manage` holder sets `restricted` on Terms and the connected editor's channel receives `perm.changed` with `comment` and `view`. The editor's side, the `setRegionPolicy` call with `{ region, policy }`, is checked by "explains the policies in plain words and sets one with a commit" in `packages/ui/e2e/regions.spec.ts` (Chromium run of 2026-11-13, not repeated in this round). Criterion 3 stays open: the authority refusal without `manage` is tested (test "criterion 3, authority half", passing this round), but the disabled control is only checked by that Chromium spec, which was not run here, and no Node test covers it.
+
+**Evidence (round 14, lane V-PRM-035-051, criterion 1, editor side):** `packages/engine/test/prm-036.region-policy.test.ts` (5 passed, `pnpm vitest run test/prm-036.region-policy.test.ts` in packages/engine, Node.js 22.18): the named command `setRegionPolicy` (`packages/engine/src/prm-036-region-policy.ts`, wired in `packages/engine/src/core.ts` and `api.ts`) sets the region's policy in one transaction and queues it when the user holds `manage`; without `manage`, for an unknown region, or for the policy the region already has, nothing changes and nothing is queued. The element's `runNamed` (`packages/element/src/editor.ts`) passes `{ region, policy }` through to it; that wiring is not run in a browser.
+
+**Notes:** Phase inferred: restricted regions are in 1b (11 §4). Round 3 (packet U, 2026-11-13): criterion 5 ticked on the browser run above. Criterion 1 stays open: the authority side is now tested (the room sends `perm.changed` to connected channels when a stored commit changes a region's policy or the region list, which it did not do before round 6), but the commit the editor sends through the core's `setRegionPolicy` is not exercised by an authority test. Criterion 3 stays open: the disabled control is tested, but the refused forced commit is the authority's, and no ui test covers it. The authority's half is now tested in `test/region-policy.test.ts`. Criterion 2 and criterion 4 are the authority's (the effect of `restricted` and of returning to `inherit`); both are ticked on `test/region-policy.test.ts` (round 6). Round 10 (lane U-PRM-035-051, 2026-11-13): the disabled control of criterion 3 is run in Chromium, Firefox and WebKit by `packages/ui/e2e/regions.spec.ts` ("lists the regions as the reader may see them", 51 of 51 passed across the three browsers with the file's other tests, port 56500); the Note's "no ui test covers it" is out of date. Round 14 (lane V-PRM-035-051): the editor side of criterion 1 is now implemented (see its Evidence line): the engine runs `setRegionPolicy` and the element passes `runNamed('setRegionPolicy')` to it. The earlier statement that no package implements it is out of date.
+
+## Comments
+
+### PRM-037 Comment on text or a block where I may comment
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Commenter |
+
+**Spec:** 07 §6 (first bullet), §12; ADR 0015; 05 §6.2 (`/documents/{id}/threads`) · **Requirements:** R8 · **Depends on:** PRM-004, SYN-032, PRO-051, PRO-052
+
+As a commenter, I want to start a thread on a range of text or on a block where I may comment, so that I can give feedback without being able to change the document.
+
+**Acceptance criteria**
+
+- [x] Given I have `comment` in every scope a range covers, when I post a thread with `target.range` (`from`, `to`, `baseSeq`), then the room maps the range from `baseSeq` to the head and the thread is created with the mapped range.
+- [x] Given the mapped range covers a scope where I lack `comment`, when I post the thread, then it is refused and nothing is stored.
+- [x] Given the document changed after `baseSeq` so that the mapped range now covers a scope where I lack `comment`, when I post the thread, then it is refused: the check is made at the head, at that moment.
+- [x] Given a target `{ block: id }` for a figure, table or equation, when I post the thread, then `comment` in that block's scope is enough.
+- [x] Given a `baseSeq` older than the rebase window, when I post the thread, then it is refused.
+- [x] Given I reply to a thread, when I post the comment, then `comment` in the scopes of the thread's target is required.
+- [x] Given I hold `view` only, when I post a thread or a reply, then it is refused.
+
+**Evidence:** `packages/authority/test/threads.test.ts`, "mapping a requested range from its base to the head (SYN-033; PRM-037)" (seven tests): the range is mapped from `baseSeq` 0 to the head and carries the text "agreement" (criterion 1); a range over a scope the caller lacks `comment` in is `permission_denied` with the scope named and nothing stored (criterion 2); after the owner unwraps Terms, the same range is refused at the head (criterion 3); a block target in a region where the caller has `comment` is accepted, and an unknown block is `not_found` (criterion 4); a `baseSeq` older than `maxRebaseSteps` is `stale_base` (criterion 5); a reply by a commenter with `comment` in the target's scopes is accepted and one by a viewer is `permission_denied` (criteria 6 and 7). The viewer's post of a new thread is refused in the same test.
+
+**Notes:** 07 names no error codes for these refusals (Open questions). Phase 2: 11 §5 lists comments as mapped ranges with threads. R8: comments respect region permissions. Review 3.2 S-11, superseded by ADR 0015.
+
+### PRM-038 Never change the document by commenting
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Commenter |
+
+**Spec:** 07 §6 (second and third bullets); ADR 0015; 12 §6.2; review 3.2 S-11 · **Requirements:** R8, R13 · **Depends on:** PRM-037, PRM-005, PRM-047, SYN-032
+
+As a commenter, I want to comment on a locked document, an approved clause and a document out for signature, so that review can go on when editing has stopped.
+
+**Acceptance criteria**
+
+- [x] Given I create a thread, when it is stored, then the document's head `seq` and canonical hash are unchanged and no commit was appended; a commit from a connection that only has `comment` is rejected (P6).
+- [x] Given document state `locked`, when I create a thread, then it succeeds; given `archived`, it is refused.
+- [x] Given an `approved` region, when I create a thread inside it, then it succeeds.
+- [x] Given an active workflow that has locked the document, when I create a thread, then it succeeds.
+- [x] Given an editor tries to change another user's thread target or range, when the request arrives, then it is refused: no route moves or re-points a thread.
+- [x] Given the commented text is deleted, when the range is mapped, then it collapses and the thread is reported as detached; undoing the deletion does not restore the range.
+
+**Evidence:** `packages/authority/test/threads.test.ts`, "works on a locked document, an approved region and under a workflow lock; not on an archived one" and "commenting never changes the document (PRM-038)" block: a thread on a locked document, an approved region and a locked-by-workflow document is accepted, an archived one is `read_only`; the head `seq`, the pending count and the canonical JSON are unchanged after a thread (first test of "mapping a requested range"); a commit from a commenter is `permission_denied`; `retarget` is refused for an editor, an owner and a commenter. The collapse and undo case is "collapses a range whose text is deleted, reports it detached, and keeps it so after an undo".
+
+**Notes:** ADR 0015 accepts that a collapsed range stays collapsed. Review 3.2 S-11: comment anchors in the document could be moved or deleted by any editor.
+
+### PRM-039 Resolve, reopen, assign and delete threads
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | must | Commenter |
+
+**Spec:** 07 §6, §12; 05 §6.2 (`/threads/{tid}`, `/comments/{cid}`) · **Requirements:** R8 · **Depends on:** PRM-037
+
+As a commenter, I want to resolve, reopen and assign threads in scopes where I may comment, so that review work is tracked.
+
+**Acceptance criteria**
+
+- [x] Given I have `comment` in a thread's scope, when I resolve, reopen or assign it, then the change is accepted; without `comment` it is refused.
+- [x] Given I am neither the thread's author nor a holder of `manage`, when I delete the thread, then it is refused; the author or a holder of `manage` may delete it.
+- [x] Given I am neither a comment's author nor a holder of `manage`, when I edit or delete the comment, then it is refused.
+- [x] Given the document is locked or the region approved, when I resolve a thread, then it succeeds, because commenting never changes the document.
+
+**Evidence:** `packages/authority/test/threads.test.ts`, "needs comment in the thread’s scopes to resolve, reopen or assign; deleting needs the author or manage" (criteria 1 and 2: a viewer is refused, a commenter is accepted for resolve, reopen and assign, a commenter who is not the author is refused the delete, the author and an owner may delete); "lets only a comment’s author or a holder of manage edit or delete it" (criterion 3 for delete); "resolves on a locked document and in an approved region" (criterion 4). `packages/authority/test/comments.prm-039.test.ts`, "editing a comment (PRM-039 criterion 3)": a commenter who is not the author is refused the edit, the author and an owner may edit, and an archived document refuses with `read_only`.
+
+**Notes:** 07 §12 speaks of "its scope" in the singular; which scope governs a thread that spans several is not stated (Open questions). Comment editing appears in 05 §6.2 but not in 07 §12.
+
+### PRM-040 Limit threads per document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Owner |
+
+**Spec:** 07 §6 (last bullet) · **Requirements:** R8, R9 · **Depends on:** PRM-037
+
+As an owner, I want a limit on the number of threads in a document, so that comments cannot be used to exhaust the service.
+
+**Acceptance criteria**
+
+- [ ] Given a document with 4,999 threads, when a thread is created, then it is accepted; given 5,000 (target limit), when another is created, then it is refused and nothing is stored.
+- [x] Given the limit is reached, when I try to start a thread, then the editor explains why.
+- [x] Given the limit is reached, when I reply to, resolve or reopen an existing thread, then it still works.
+
+**Evidence:** `packages/authority/test/threads.test.ts`, "accepts up to 5,000 threads, refuses the next with quota_exceeded, and still lets threads be answered" (the room, `DEFAULT_THREAD_LIMIT`): the first 5,000 creations are accepted, the 5,001st is refused with `quota_exceeded` and not stored, and reply, resolve and reopen of the first thread still succeed. The 4,999 case is covered by the same loop, since the count before the last accepted creation is 4,999. The limit is the room's `threadLimit` (`src/room/room.ts`, `DEFAULT_THREAD_LIMIT`).
+
+**Evidence (round 11, lane U-PRM-035-051, 2026-11-13; criterion 2):** `packages/ui/e2e/prm-040-thread-limit.spec.ts` (three tests, run in Chromium, Firefox and WebKit with `pnpm exec playwright test -c packages/ui/playwright.config.ts`, port 56500): with 5,000 threads the comment box shows the refusal text, keeps the typed text, sends no request and passes axe; with 4,999 the thread is posted; a service refusal with `quota_exceeded` shows the same text. The last test found that `serverRefusal` (`packages/ui/src/shell/comment-create.ts`) did not map `quota_exceeded`, so the box said the comment could not be added; the mapping is fixed there. In WebKit two tests passed only on a retry (a 30 s wait in the harness under parallel workers), so they are reported as flaky there.
+
+**Notes:** Audit (2026-11-13): criterion 1 is unticked because the limit exists only in `Room.createThread` (`packages/authority/src/room/room.ts`), which no service code calls; the shipped route `POST /documents/{id}/threads` (`services/document-service/src/control-plane/thread-routes.ts`) places and stores threads with no count check, so the 5,001st thread is accepted by the service. Tick it when that route (or the store) refuses at the limit with `quota_exceeded`, with a service-level test. 07 names no error code (05 §5.8 has `quota_exceeded`), and does not say whether resolved or deleted threads count (Open questions). Round 3 (lane authority-2, 2026-11-13): the room counts every thread it holds, resolved or not, which is the reading of 07 §6 taken here, not decided by the owner. Criterion 2 was open until round 11 (lane U-PRM-035-051), when the browser test above closed it. Lane PRM-029-042, round 10: the comment box maps the limit to `comment.refused.threadLimit` (`packages/ui/src/components/CommentBox.svelte`; text in `packages/ui/src/i18n/en-GB.ts`) and the controller gives `threadLimit` (`packages/ui/test/ux-028-comment-create.test.ts`).
+## History visibility
+
+### PRM-041 Keep old text out of resume and catch-up
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Viewer |
+
+**Spec:** 07 §8; 08 §9; 05 §3.1 (`access_since`); 04 §9; review 3.2 S-08 · **Requirements:** R4, R10 · **Depends on:** PRM-004, SYN-026, SYN-027, HIS-024
+
+As a viewer who joined a document late, I want text that was deleted before I had access to stay out of what my client receives, so that old versions do not leak.
+
+**Acceptance criteria**
+
+- [ ] Given one function `minVisibleSeq(user)`, when every place that accepts a sequence number (`resume.seq`, `after`, `fromSeq`, `toSeq`, `atSeq`, `?seq`, the `seq` option of an export) is enumerated, then each is shown to call it (route-enumeration test).
+- [x] Given a connection whose `resume.seq` is below its gate, when the channel opens, then `ch.opened` carries `catchUp: "reload"` and no commit below the gate is streamed.
+- [x] Given `GET /documents/{id}/commits` with `after` below the gate, when it is called, then no commit below the gate is returned.
+- [x] Given the default setting `editors`, when a user with `edit` somewhere in the document and a user with `view` only reconnect from the same old `seq`, then the first can stream the missing commits and the second is told to reload.
+- [x] Given the settings `all` and `since_access`, when the gate is computed, then it follows 08 §9, and for `since_access` it uses the token's `access_since` claim.
+- [x] Given a user's role changes, when access is recomputed, then the gate is recomputed with it.
+- [x] Given a client puts a read marker lower than the stored one, when the request arrives, then the stored marker does not move backwards.
+
+**Evidence (round 13, lane U-PRM-035-051, 2026-11-13; criterion 7):** `services/document-service/test/control-plane/his-027-read-marker.test.ts`, run with `pnpm vitest run test/control-plane/his-027-read-marker.test.ts` in services/document-service: 14 passed, memory and PostgreSQL in the shared Podman container, none skipped. The test `keeps a lower or equal seq from moving the marker` puts 2, then 1, then 2 and then 3 over HTTP and reads 2, 2, 2 and 3; on PostgreSQL the `read_markers` row is 3, and the migration 0050 trigger refuses a backward move as a second guard.
+
+**Evidence (round 13, lane U-PRM-035-051; criterion 1 in part):** `services/document-service/test/control-plane/prm-041-seq-routes.test.ts` (3 passed, `pnpm vitest run test/control-plane/prm-041-seq-routes.test.ts`, no container): it reads `SEQ_INPUTS` (`services/document-service/src/data-plane/gate.ts`) and shows that the built routes call the gate in the file that serves them (`ch.open` in `data-plane/room-host.ts`; content in `control-plane/handlers.ts`; commits, exports and field values in their route files). It names the open ones with their reasons, and checks that the fork file still does not call the gate. Criterion 1 stays open: the fork, diff, history, versions, restore, threads and attribution routes are not gated or not built.
+
+**Evidence:** `packages/authority/src/room/gate.ts` (`minVisibleSeq`, `rangeVisible`, `editsSomewhere`; ADR 0034, proposed) and `Room.open`: `test/room-resume.test.ts`, 'the visibility gate on resume': below the gate the answer is `reload` and no commit is streamed; under the default `editors` an editor and a region-grant editor stream from the same old seq while a viewer, a suggester and a filler reload; `all` streams, `since_access` uses the token's `access_since` claim (`RoomConnection.accessSince`) and fails closed at the head without it; a grant of `edit` opens history and its removal closes it again, and a lock does not.
+
+**Evidence (round 7, lane PRM-029-042, 2026-11-13):** criterion 3 ticked on `services/document-service/test/control-plane/routes.commits.test.ts`, "refuses `after` below the history gate and returns nothing below it (PRM-041 criterion 3; HIS-024)", in the memory-storage variant, run this round and passing (the postgres variant of the same test is skipped here: no PostgreSQL). The test checks a 403 `forbidden`, and that the body contains no `"seq"`. The gate itself is `services/document-service/src/control-plane/gate.ts`, used by `commit-routes.ts`, `export-routes.ts`, `field-routes.ts` and `handlers.ts`. Criterion 1 stays open: each route that takes a sequence number needs a test that shows it calls the gate, and no such route-enumeration test exists yet. The Notes below say the REST routes do not exist yet; that is out of date for criterion 3 and for the routes listed here, and the owner of PRM-041 should confirm it.
+
+**Notes:** `minVisibleSeq` is a single threshold, but the `editors` setting lets other users see named versions only, which is a set of sequence numbers (Open questions). Clamp or refuse for the commits resource, and the case of a missing `access_since` claim, are not stated. Phase inferred: resume and the commits resource exist in 1b (11 §4), so the gate must exist with them, which needs the default setting `editors` from 1b; 11 §5 requires it at every endpoint by the end of phase 2 (PRM-042). Cross-check: the per-document visibility setting (HIS-025) arrives in phase 2; phase 1b applies the default. 2026-11-06: ADR 0034 (proposed) settles the shape (a threshold, with named versions admitted for single states only) and the missing claim (the gate fails closed at the head); it does not decide clamp or refuse for the commits resource, which HIS-024 states as refuse. Not met: (1) and (3) need the REST routes and exports of PRO and BE, which do not exist yet; the room and `contentAt` (HIS-005) call the gate. (7) read markers are the service's (08 §10).
+
+### PRM-042 Keep old text out of every other history surface
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Viewer |
+
+**Spec:** 07 §8, §12 (row 2); 08 §4 to §8, §10; 05 §6.2; review 3.2 S-08 · **Requirements:** R4, R10 · **Depends on:** PRM-041, HIS-008, HIS-011, HIS-015, HIS-018, HIS-022, HIS-027
+
+As a viewer, I want content, history, comparison, attribution and activity to respect the same gate, so that there is no side door to deleted text.
+
+**Acceptance criteria**
+
+- [ ] Given `GET /documents/{id}/content?seq=N` and `GET /documents/{id}/threads?seq=N`, when `N` is below the gate, then they are refused; at or above they succeed.
+- [ ] Given `/history`, `/diff` and `/attribution`, when a range below the gate is requested, then no content below the gate is returned.
+- [ ] Given `/activity` since a read marker that is below the gate, when it is called, then changes below the gate are not included.
+- [ ] Given `POST /documents/{id}/fork` with `atSeq` (service credential), when the acting user is named in `DEP-Actor` and `atSeq` is below that user's gate, then the request is refused.
+- [x] Given an export with a `seq` option, when `seq` is below the gate, then the export is refused.
+- [ ] Given a user without `edit` anywhere under the setting `editors`, when they open a named version, then the content at that version's `seq` can be read.
+
+**Evidence (round 7, lane authority-2, 2026-11-13; criterion 6 unticked by the reviewer):** the building block is tested but not wired. `packages/authority/test/room-content.test.ts` (the refusal test) and `test/room-resume.test.ts` ('never blocks the head, and admits named versions') show that `contentAt` and `stateVisible` admit a seq when the caller passes a `named` predicate, but the predicate is written inline in the test. Nothing in the product supplies it: `services/document-service/src/data-plane/gate.ts` (`stateAllowed`) calls `stateVisible(gate, seq, head)` without `named`, no service route calls `contentAt` of this package, and no code links named versions (HIS-006, `packages/history`) to the gate. A user without `edit` who opens a named version below the head is therefore still refused by the service. Tick this when the content route and `stateAllowed` pass a predicate built from the stored named versions, with a test at that level.
+
+**Evidence (round 9, lane PRM-029-042, 2026-11-13):** criterion 5 ticked on `services/document-service/test/control-plane/routes.exports-gate.test.ts`, "refuses a seq below the history gate for a viewer and allows the head and full history (PRO-063 criterion 2; PRM-041)" (memory storage, passed with `pnpm vitest run services/document-service/test/control-plane/routes.exports-gate.test.ts`): a viewer's export with `seq` 0 is `forbidden`, the head is accepted, and an owner's `seq` 0 is accepted. The PostgreSQL variant was skipped (no PostgreSQL running).
+
+**Notes:** Round 13 (lane U-PRM-035-051): criterion 6 is blocked on two things. Two PostgreSQL version stores exist and neither is wired into the service: `services/document-service/src/storage/versions-store.ts` (`PgVersionStore`, used by `test/postgres/his-006-versions.pg.test.ts`) and `services/document-service/src/storage/version-store.ts` (`PgVersionStore`, used by `test/postgres/u-his-001-016-versions.pg.test.ts`). The content route (`gateFor` in `services/document-service/src/control-plane/handlers.ts`) would need a named-version lookup passed as the `named` predicate, and that needs a store in the control-plane dependencies and a memory variant; none was made this round. Which of the two stores is canonical is for the main session to decide. Lane PRM-029-042, round 9: criteria 1 to 4 and 6 stay open. (1) `content` is refused below the gate (`routes.content` and `pro-049-content-gate.test.ts`), but `GET /documents/{id}/threads` is not a route in `services/document-service/src/control-plane`. (2) and (3) are not routes there either: `history-routes.ts` builds only `fork`, and its header lists `history`, `diff`, `attribution` and `activity` as not built. (4) `forkDocument` in `history-routes.ts` applies no gate at all, and a named `DEP-Actor` user's role lives in the host's tokens, so the gate of that user cannot be computed from storage (open question, Notes of PRM-041). (6) No named-version store exists: no `versions` route and no version table in `services/document-service/src/storage/types.ts`, so the predicate `stateAllowed` would pass is never built. Which gate applies to a fork requested by a service credential without an acting user is not stated (Open questions). Review 3.2 S-08 (medium).
+
+## Leases
+
+### PRM-043 Acquire and release a region lease
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Editor |
+
+**Spec:** 07 §10, §4 (limit 3), §12; 05 §2 (`leases` feature), §6.2; 06 §4.1 (`region_leases`) · **Requirements:** R3 · **Depends on:** PRM-004, PRM-006, PRO-051, PRO-052
+
+As an editor on a team that works by check-out, I want to hold a region exclusively for a short time, so that nobody else edits it while I do.
+
+**Acceptance criteria**
+
+- [x] Given the server announces the `leases` feature and I have `edit` in region R, when I `POST` a lease, then I hold it, with an identifier, my identity as holder and an expiry (target default five minutes).
+- [x] Given I lack `edit` in R, or R is `approved`, when I `POST` a lease, then it is refused.
+- [x] Given another user holds a lease on R, when I `POST` one, then it is refused and the existing lease is unchanged.
+- [x] Given Alice holds a lease on R, when access is computed for Bob, then his capabilities in R are at most `view` and `comment`, even if he is an `owner`; `access.leases` shows the holder and expiry; Bob's commit in R is rejected with `permission_denied`.
+- [x] Given Alice releases the lease with `DELETE`, when it ends, then access is recomputed and `perm.changed` is sent to everyone affected.
+- [ ] Given a lease is acquired or released, when the document is read, then its content and canonical hash are unchanged, and every other feature works with `leases` switched off.
+- [ ] Given a server that does not announce `leases`, when the component loads, then it offers no check-out.
+
+**Evidence:** `packages/authority/test/leases-states.test.ts`, "acquiring and releasing a lease (PRM-043)": a user with `edit` gets the lease with its identifier, holder and default expiry (criterion 1); a user without `edit`, an approved region and a region another user holds are refused, the last with `conflict` and the holder named (criterion 2); a release sends `perm.changed` to both open connections and leaves the content hash unchanged (criterion 5). `packages/authority/test/leases-restore.test.ts`, "a refused lease leaves the held lease as it was" (criterion 3). `packages/authority/test/leases.access.test.ts` (criterion 4, round 5): an owner who is not the holder has at most `view` and `comment` in the leased region, `access.leases` names the holder and expiry and drops a lapsed lease, and the owner's commit in the region is refused with `permission_denied`.
+
+**Evidence (lane V-PRM-035-051, criterion 6, first clause only; criterion stays unticked):** `services/document-service/test/control-plane/prm-043-lease-content.test.ts`, run with `pnpm vitest run test/control-plane/prm-043-lease-content.test.ts` in services/document-service, memory and PostgreSQL in Podman (2 passed, none skipped). The content body, `seq` and incarnation read over HTTP are the same before a lease is taken, while it is held, and after the holder releases it, and the content `ETag` is unchanged. The second clause ("every other feature works with `leases` switched off") is not tested.
+
+**Notes:** the interface for acquiring a lease is not described in 07 or 13; the `leases` port exists (05 §8.3). The lock indicator names the holder (PRM-048). 05 gives no error code for a refused lease. Round 2 (lane authority-2, 2026-11-13): criterion 1 is tested as the acquire verdict; the check that the server announces `leases` is not in the authority (`src/room/features.ts` has no such feature), which criterion 7 needs and stays open. Criterion 4 is ticked in round 5 (lane authority-2, 2026-11-13): `Access` now carries `leases` (`src/permissions/access.ts`, the leases in force at the computation time). Criterion 6 stays open: no test runs the other features with `leases` switched off. Round 10 (lane U-PRM-035-051, 2026-11-13): criterion 7 stays open. The shell has no check-out control at all (a search of `packages/ui/src` finds no check-out, lease-acquire or `POST` lease control; the lease text in `shell/regions.ts` is only the lock label of PRM-048). A test that asserts the absence would pass without saying anything about the feature gate, so none was written. The check-out control and the `leases` feature flag in the component are needed first, and the interface for acquiring a lease is still not described in 07 or 13 (the open point above).
+
+### PRM-044 Keep a lease alive and let it end
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Editor |
+
+**Spec:** 07 §10; 05 §11 (test-mode switch); review 3.2 S-15 · **Requirements:** R3 · **Depends on:** PRM-043, PRM-007
+
+As an editor holding a lease, I want it to stay while I work and to end on its own if I leave, so that a forgotten lease cannot lock a region forever.
+
+**Acceptance criteria**
+
+- [x] Given I hold a lease, when I send a heartbeat (`PUT`) before it expires, then its expiry moves later and I keep the lease.
+- [x] Given the total time since I acquired the lease reaches the maximum of eight hours (target), when I send a heartbeat, then it is not extended beyond that maximum and the lease ends at the maximum.
+- [x] Given I send no heartbeat, when the expiry passes, then the lease ends without any other event, access is recomputed and other people regain their capabilities (the kit's test-mode switch shortens the timers).
+- [x] Given a lease that has expired or been broken, when its former holder sends a heartbeat, then it is refused and the holder is told they no longer hold it.
+- [x] Given someone other than the holder sends a heartbeat, when the request arrives, then it is refused.
+
+**Evidence:** `packages/authority/test/leases-states.test.ts`, "keeping a lease alive and letting it end (PRM-044)": a heartbeat moves the expiry on, the total is capped at eight hours from acquisition, and a heartbeat at the cap is refused (criteria 1 and 2); a lease ends at its expiry with `perm.changed` to the open connection, the room's injected clock standing in for the timers (criterion 3); a heartbeat for an expired lease or one never held is refused with `not_found`, and one from someone other than the holder with `permission_denied` (criterion 5).
+
+**Evidence (lane V-PRM-035-051, criterion 4):** `services/document-service/test/control-plane/prm-044-broken-lease.test.ts`, run with `pnpm vitest run test/control-plane/prm-044-broken-lease.test.ts` in services/document-service, memory and PostgreSQL in Podman (2 passed, none skipped). A manager breaks the holder's lease (204); the former holder's heartbeat gets 404 with the detail "you no longer hold this lease", and the grants show no lease in force afterwards.
+
+**Notes:** the heartbeat interval and whether the five-minute expiry and eight-hour maximum are configurable are not stated. Review 3.2 S-15: endless leases. Round 2 (lane authority-2, 2026-11-13): criterion 4 stays open: the authority answers `not_found` for an expired or broken lease, and the reply that tells the former holder is the host's (BE). Lane V-PRM-035-051: the HTTP reply exists (`src/control-plane/lease-routes.ts`, heartbeat: 404 "you no longer hold this lease") and is tested for a broken lease on PostgreSQL; criterion 4 is ticked on that test. The test-mode switch of 05 §11 is not built; criterion 3 is tested with the room's injected clock.
+
+### PRM-045 Break another person's lease
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Owner |
+
+**Spec:** 07 §10, §12, §14; 04 §3.2 · **Requirements:** R3, R10 · **Depends on:** PRM-043, PRM-051
+
+As an owner, I want to end someone else's lease, so that a region does not stay blocked when its holder is away.
+
+**Acceptance criteria**
+
+- [x] Given I hold `manage`, when I break Alice's lease on R, then the lease ends at once, access is recomputed for everyone and Alice's connection receives `perm.changed`.
+- [x] Given I lack `manage`, when I try to break another person's lease, then it is refused; a holder may only release their own.
+- [x] Given a lease is broken, when it commits, then a control commit is appended to the log and the audit trail records the actor, document, scope and server time.
+- [ ] Given Alice has unconfirmed changes in R, when the lease is broken, then her commit is rejected with `permission_denied` and its content goes to recovered edits (FE-010).
+
+**Evidence:** criterion 1: `packages/authority/test/leases-states.test.ts`, "is a control commit, and the holder's commit made under the lease is then refused": the break by a holder of `manage` (`endLease`, `broken: true`) is stored as a control commit, and the lease holder's connection receives `perm.changed` once the room is given the new state. Criterion 2: the same file, "needs manage; the holder only releases their own": a user without `manage` is refused with `permission_denied`, and a manager's break ends the lease with an empty lease list.
+
+**Evidence (round 12, lane U-PRM-035-051, 2026-11-13; criterion 3):** `services/document-service/test/data-plane/prm-045-lease-break.pg.test.ts`, run with `pnpm vitest run test/data-plane/prm-045-lease-break.pg.test.ts` in services/document-service against PostgreSQL in Podman (passed, not skipped). The holder takes a lease (revision 2), the manager `alice` removes it (revision 3): the audit trail holds `grants.changed` rows for revisions 2 and 3, the last with actor `alice`, the document, scope `region:<id>` and a time inside the call; the manager's `sync.commit` carries control commits for revisions 2 and 3. The break is made through the plane's grant change, which is the change the lease route stores (`lease-routes.ts`), not through an HTTP `DELETE`.
+
+**Notes:** 05 §6.2 lists `POST`, `PUT` and `DELETE` for the lease resource and does not say how a manager breaks a lease (Open questions). Round 3 (lane authority-2, 2026-11-13): criterion 3 stays open, because the audit trail of PRM-051 does not exist. Criterion 4 stays open and its wording is in question: the holder keeps the grant of `edit` that she had before, so the break removes only the exclusion and her commit is checked under her grants (accepted if they allow it); the test shows the stored-before-write path answers `unavailable` with retry, not `permission_denied`. Whether a holder's rights should depend on the lease is for the owner to decide (07 §10 does not say; ADR 0146). Round 14 (lane V-PRM-035-051): criterion 4 stays open and no test was written for it. As worded, the holder's unconfirmed commit is refused with `permission_denied` once the lease is broken, but the holder still holds `edit` in the region (PRM-043 criterion 4 and the round-13 note above), so a test would assert a rule the grants do not express. This is an owner decision (for the main session), not a lane edit.
+
+## Region states
+
+### PRM-046 Set a region's state
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Owner |
+
+**Spec:** 07 §11, §12; 05 §6.2 (`/regions/{rid}/state`), §7; 06 §4.1 (`region_states`); ADR 0009 (after the review); review 3.2 S-02 · **Requirements:** R3, R10 · **Depends on:** PRM-004, PRM-002, CDM-010, HIS-001
+
+As an owner, I want to mark a region `draft`, `in_review` or `approved`, and to have an approval bound to exactly what I approved, so that a later change cannot hide behind an old approval.
+
+**Acceptance criteria**
+
+- [x] Given I hold `manage`, when I `PUT` a region's state to `draft`, `in_review` or `approved`, then it is stored with the actor and time; a caller without `manage` is refused.
+- [x] Given a region in `draft` or `in_review`, when access is computed, then capabilities in the region are the same as without a state: these are labels the host can use.
+- [x] Given I approve a region, when the state is stored, then the state record holds the `seq` and the hash of the region's canonical content at that `seq`, and the approval is a control commit in the log.
+- [x] Given a content commit and an approval race, when the room orders them, then a content commit ordered before the approval is included in the hash and one ordered after it is refused.
+- [x] Given a state change, when it commits, then access is recomputed, `perm.changed` is sent and the change is audited (PRM-052).
+- [x] Given a retired or unknown region, when I `PUT` its state, then the request fails with `not_found`.
+- [x] Given a state change, when it is made, then `dep.region.state_changed` is raised (PRM-053).
+
+**Evidence:** criterion 2: `packages/authority/test/region-state-rights.test.ts`, "gives the same access in the region as without a state" (400 generated cases over every role, both policies and each grant form). Criterion 1, in part: the same file, "refuses every role but owner, for every label, and accepts the owner" (200 cases). Criterion 3: `packages/authority/test/leases-states.test.ts`, "binds an approval to the seq and hash the room computes" (the state record holds the seq and the room's hash; the change is a control commit and sends `perm.changed`). Criterion 4: the same file, "includes a commit stored before the approval in its hash and refuses one ordered after it". Criterion 6: `region-state-rights.test.ts`, "answers not_found for a retired or unknown region, whatever the state".
+
+**Evidence (round 12, lane U-PRM-035-051, 2026-11-13; criterion 5, with PRM-052 criterion 1):** `services/document-service/test/data-plane/prm-046-state-audit.pg.test.ts`, run with `pnpm vitest run test/data-plane/prm-046-state-audit.pg.test.ts` in services/document-service against PostgreSQL in Podman (passed, not skipped). Setting a region to `approved` by the owner `alice` (revision 2): the connected editor receives `perm.changed`; the `region_states` row holds the state with `changed_by` `alice` and a `changed_at` inside the call; one `grants.changed` audit row carries actor, document and scope `region:<id>`; the owner's `sync.commit` carries the control commit for revision 2.
+
+**Evidence (round 15, lane U-PRM-035-051, 2026-11-13; criteria 1 and 7):** `services/document-service/test/control-plane/prm-046-region-state-route.test.ts`, run with `pnpm vitest run test/control-plane/prm-046-region-state-route.test.ts` in services/document-service: 4 passed, memory and PostgreSQL in the shared Podman container, none skipped. Over HTTP, `PUT /v1/documents/{id}/regions/{rid}/state` by an owner with `If-Match` gives 200, moves the grants ETag, and raises one `dep.region.state_changed` event for the document with the region and state. On PostgreSQL the `region_states` row holds `approved`, a `changed_by` identifier equal to the actor of the `grants.changed` audit row (the tenant's user identifier, not the host's `sub`), and a `changed_at` inside the call. An editor's `PUT` is refused with `forbidden`, stores nothing and raises no event.
+
+**Evidence (lane V-PRM-035-051, round 16, criterion 3):** `services/document-service/test/control-plane/prm-046-v-V-PRM-035-051-approval-binding.test.ts` (memory and PostgreSQL, 4 passed, none skipped; `pnpm vitest run test/control-plane/prm-046-v-V-PRM-035-051-approval-binding.test.ts` in services/document-service). `PUT .../state` with `approved` ignores a client `seq` and `hash`; the response's `seq` is the head's and its `hash` is 64 hex characters; the `region_states` row holds `approved_seq` equal to that `seq` and `content_hash` equal to that hash (PostgreSQL). A later `draft` clears both columns. The control-commit half is already evidenced by `services/document-service/test/data-plane/prm-046-state-audit.pg.test.ts` (round 12, PostgreSQL). Also run: `tests/security/test/sec-030-*.test.ts`, `approved-regions.test.ts`, `prm-052-control-audit.test.ts` and `prm-053-*.test.ts` (60 passed).
+
+**Notes:** the hash is computed by the room, never taken from the client. Round 16 (lane V-PRM-035-051): the columns `approved_seq` and `content_hash` (bytea) already exist in `migrations/0003_grants.sql`, so no migration was added; `src/storage/grant-store.ts` and `src/storage/memory.ts` now write and read the binding, and `setRegionState` in `src/control-plane/handlers.ts` passes the seq and hash it computes. The sentence below that says the store writes neither column is out of date for this round. Evidence audit (2026-11-13): criterion 3 is unticked because the test hands `setRegionState` an approval it built itself, while in the service the `PUT` route returns the `seq` and hash in its response but never stores them (`grant-store.ts` writes neither `approved_seq` nor `content_hash` of `region_states`, `PermissionState.approvals` is never filled, and the route does not use `Room.regionApproval`), so the stored state record holds no `seq` or hash. How `form_field` values count in the region's canonical content is not stated (Open questions). Round 15: the route raises `dep.region.state_changed` itself (`handlers.ts`, `setRegionState`), so criterion 7 is met on the route, not in the room; the room-level event builder of PRM-053 is not checked here. Review 3.2 S-02 (high): approvals were labels not bound to content. Round 3 (lane authority-2, 2026-11-13): criteria 1 (the actor and time of a stored state are not kept: `RegionState` holds only the label) and 7 (the room does not raise `dep.region.state_changed`; its builder is in `src/permissions/events.ts`, PRM-053) stay open. Round 6 (lane PRM-043-056, 2026-11-13): criterion 1 stays open. The actor and time need a change to the `RegionState` record in `src/permissions/model.ts`, which is a plain label read as `Map<string, RegionState>` in about 40 files across the authority, history, protocol and backend packages; that is a shared-model change, not a lane edit, and needs the owner's or main session's go-ahead.
+
+### PRM-047 Make an approved region unchangeable
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Owner |
+
+**Spec:** 07 §11, §4 (limit 2), §5.3, §13; 12 §4.3; ADR 0009 (after the review); review 3.2 S-02 · **Requirements:** R3, R13 · **Depends on:** PRM-046, PRM-009, PRM-012, SYN-030, FRW-008, FRW-009, FRW-010
+
+As an owner, I want an approved region to stay exactly as approved, for everyone including me, until I change its state, so that approval means something.
+
+**Acceptance criteria**
+
+- [x] Given an `approved` region, when capabilities are computed for any user including an `owner`, then they are at most `view` and `comment`, and a commit that changes the region is rejected with `permission_denied`.
+- [x] Given an owner wants to edit an approved region, when they change its state to `draft`, then the change is a control commit and editing is allowed afterwards.
+- [x] Given a server-authored commit (restore of a document or a region, import, repair, migration) that would change an approved region, when it is applied, then it is refused until the state is changed, and nothing is appended; nothing, including server-authored commits, may change an approved region.
+- [x] Given a style, numbering definition or page setup used by an approved region, when anyone, including an owner, changes it, then the commit is rejected (07 §5.3).
+- [x] Given an approved region, when someone removes, moves or retitles it, then the commit is rejected.
+- [x] Given a participant with `fill` and a field inside an approved region, when they fill it under rule P7, then the fill is still accepted.
+- [x] Given an approved region, when a user comments in it, then the comment succeeds.
+- [x] Given a property-tested stream of commits while a region is approved, when the stream ends, then the region's canonical content hash, excluding field values, equals the stored hash.
+
+**Evidence:** `packages/authority/test/leases-states.test.ts`, "an approved region stays as approved (PRM-047)": an owner has at most `view` and `comment` and an owner's state change reopens the region (criterion 1); server commits of restore, import, repair and migration, and a region restore, are refused with nothing appended, and a commit that leaves the region alone is accepted (criterion 3); a style change, a removal and a retitle are refused, a fill under P7 and a comment are accepted (criteria 5 in part, 6 and 7). `packages/authority/test/approved-region.property.test.ts`: "reopening it by a state change is a control commit, after which editing is allowed" (criterion 2); "refuses a move of the approved region by an owner" (criterion 5, the move); "the canonical content, excluding field values, equals the approval when the stream ends (property)", 40 runs of up to 14 mixed fills, edits, comments and refused attacks (criterion 8). `packages/authority/test/approved-region.definitions.test.ts` (criterion 4, round 5): an owner's change to a numbering definition used by a paragraph in the approved region, and to the page setup the region is laid out with, is refused with `permission_denied`; the same change is accepted when the region is not approved.
+
+**Notes:** how field values enter the approval hash, given that fills are allowed inside approved regions, is not specified; the last criterion excludes them until it is answered (Open questions). Round 2 (lane authority-2, 2026-11-13): criterion 8 is ticked on the answer of SR-M25 as the room already computes it (`regionApproval`, which excludes values); the owner has not confirmed it. Criterion 4 is ticked in round 5 (lane authority-2, 2026-11-13): a style, a numbering definition and a page setup used by the region are each refused (`approved-region.definitions.test.ts`; the style case is in `leases-states.test.ts`). Criterion 2 is tested through the room's `permissionsChanged` path, not the `PUT` handler of PRM-046. The error code for a refused restore, import or repair is not named. Review 3.2 S-02. Second review (2026-11-06, SPK-027), SR-M25 proposes the same answer for 07 §11: the approval hash excludes `form_field` values, and the rule reads "except fills under P7 and server commits with origins `sign` and `rules`" ([review](../review/2026-11-06-second-review.md)).
+
+### PRM-048 Show a region's state and why it is locked
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Editor |
+
+**Spec:** 07 §7 (first bullet), §10, §11; 13 §3 · **Requirements:** R3, R11 · **Depends on:** PRM-026, PRM-043, PRM-046
+
+As an editor, I want a locked region to say whether it is approved or leased and by whom, so that I know what to do next.
+
+**Acceptance criteria**
+
+- [x] Given a region with a state, when it is shown, then a label shows `draft`, `in review` or `approved` with an icon and text as well as any colour.
+- [x] Given an approved region, when I see its lock indicator, then it says the region is approved and that an owner must change its state before it can be edited.
+- [ ] Given a region leased to another user, when I see its lock indicator, then it names the holder and when the lease expires.
+- [ ] Given I hold `manage`, when I open the pane for a region, then I can change its state there; without `manage` the control is absent.
+- [ ] Given a state or lease changes, when `perm.changed` arrives, then the labels and indicators update without a reload.
+
+**Evidence (round 15, lane U-PRM-035-051, criterion 5; reviewer, U2 group 3 round 8: criterion 5 unticked, because the spec sets the harness core's regions store directly (`setRegions`), so no `perm.changed` is involved, and a lease change is not shown at all (the lock text carries no lease); only the state half is shown):** `packages/ui/e2e/prm-048-state-update.spec.ts`, "the lock indicator and the pane badge follow a state change": an approved region's lock description is the approved wording, and after the host sends the region list with the region back in `draft` (the list the host sends on `perm.changed`), the lock description reads "It can be edited by document owners." and the pane badge reads Draft, with no reload. Run in Chromium, Firefox and WebKit (`pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/prm-048-state-update.spec.ts`, port 56500); Firefox failed once on a trace-file write in a parallel run and passed when run alone. The check drives the shell with `setRegions`, not a live document service, so the path from the server's event to the host is not covered here.
+
+**Evidence (lane V-PRM-035-051, round 1, criteria 1 and 2):** criterion 2: `packages/ui/test/prm-048-region-lock.test.ts` (3 passed, `pnpm exec vitest run test/prm-048-region-lock.test.ts` in packages/ui, with `test/regions.test.ts` unchanged and passing): an approved region's lock indicator reads "It is approved. An owner must change its state before it can be edited." (`region.lock.approved`, `regionLabels` in `packages/ui/src/shell/regions.ts`); the who-can-edit sentence stays for draft and in-review regions. Criterion 1: `packages/ui/e2e/prm-048-region-lock.spec.ts` (3 passed in Chromium, Firefox and WebKit, `DOCEDIT_UI_PORT=56500 pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/prm-048-region-lock.spec.ts`): each state badge in the permissions pane has a decorative `.de-badge-icon` (aria-hidden) and its text label (`PermissionsPane.svelte`).
+
+**Notes:** Round 11 (lane U-PRM-035-051, 2026-11-13): no criterion ticked. Criterion 2 needs the approved wording to say an owner must change the state first. The text is `region.editors.approved` in `packages/ui/src/i18n/en-GB.ts` ("It is approved, so nobody can edit it."), and `packages/ui/test/regions.test.ts` (line 54) asserts that exact sentence. Changing it means editing that test, which this lane did not write, so the change is left for the main session or the owner of the UX strings. Criterion 3 needs the lease expiry in the `RegionSummary` editors data (`leasedTo` only, today) and in the lock text. Criteria 1, 4 and 5 need a region state label, a `manage`-only state control in the pane and `perm.changed` handling for states in the shell; none is built, and the harness has no state fixtures for them yet. Lane V-PRM-035-051 (round 1): criteria 3, 4 and 5 stay unticked. Criterion 3: the `regions` payload (`services/document-service/src/control-plane/handlers.ts`, `leasedTo`) and its schema (`packages/protocol/src/definition/resources.ts`, a generated artifact in `spec/`) carry no lease expiry, so it needs a protocol change and `pnpm generate`, which is a root or owner step (needsFromOthers). Criterion 4: no UI command sets a region's state (`setRegionState` is not in `packages/ui/src/core-api.ts`); the pane has the policy control only. Criterion 5: the state labels are re-derived from the region list, but no test shows `perm.changed` updating them in the shell; not run. U2 group 3 round 8 fix (lane U-PRM-035-051): criterion 5 stays unticked, and the spec's header now says it shows only the shell's half. The engine path the reviewer asks for does not exist yet: no core produces the `regions` view (`RegionSummary` is built only by the harness's `FakeCore` in `packages/ui/test/support/fake-core.ts`; `packages/engine` and `packages/element` expose no `regions` view and derive no region state from `perm.changed`), so a test cannot drive a state change through `perm.changed` to the labels. It needs the engine (or element) to publish `regions` from the document and refresh it on `perm.changed`, which is another lane's package. The lease half also waits for criterion 3 (lease holder and expiry in the `regions` payload, a protocol change and `pnpm generate`). `packages/ui/e2e/prm-048-state-update.spec.ts` still passes (3 passed in Chromium, Firefox and WebKit, `--retries=0`, DOCEDIT_UI_PORT 56274; a first run on port 56270 had Firefox and WebKit time out because the harness page answered "not found", and the rerun on another port passed).
+
+## Interaction with history
+
+### PRM-049 Check rights when restoring
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Owner |
+
+**Spec:** 07 §13 (first and second bullets), §12; 08 §8; 04 §10 · **Requirements:** R3, R4 · **Depends on:** PRM-047, SYN-030
+
+As an owner, I want a restore to need the right to change what it touches, so that restoring cannot be used to get around permissions.
+
+**Acceptance criteria**
+
+- [x] Given I hold `manage`, when I restore a whole document, then it is applied as a snapshot commit; a user with `edit` but not `manage` is refused.
+- [x] Given I hold `edit` in a region, when I restore that region, then it is accepted; without `edit` in it, or when it is `approved`, or leased to someone else, it is refused.
+- [x] Given the conditions change between the request and the application, such as a region being approved in between, when the room applies the commit, then it re-checks them and refuses.
+- [x] Given I restore an old version, when the restore commits, then grants, region states and leases are not changed and the grants revision does not move: grants are current state, not document content.
+- [ ] Given a restore, when it is applied, then it is audited (PRM-052).
+
+**Evidence:** `packages/authority/test/leases-states.test.ts`, "checking rights when restoring (PRM-049)": a whole-document restore by an editor is refused with `permission_denied` and by an owner is stored as a snapshot (criterion 1); a region restore needs `edit` in the region and is refused for a suggest-only user, an approved region and a region leased to someone else, and a restore that also changes the body is refused (criterion 2); a region approved after the request is refused with `conflict` when the room applies the commit (criterion 3); grants, region states, leases and the revision are the same after an old-version restore (criterion 4).
+
+**Notes:** that a whole-document restore is refused while a workflow is active is stated in 08 §8 and belongs to HIS. Phase 2: 11 §5 (restore of documents and regions). Round 2 (lane authority-2, 2026-11-13): criterion 5 stays open until the audit of PRM-052 exists. The spec names no code for a refusal because a region was approved in between; the room uses `conflict`, its code for a failed precondition. Round 13 (lane U-PRM-035-051, 2026-11-13): criterion 5 stays open. No restore is audited yet: `POST /documents/{id}/restore` is still gated in `services/document-service/src/data-plane/gate.ts` (HIS-026), and the room writes no audit entry for a `restoreRegion` commit (`packages/authority/src/room/room.ts`); the audit entry needs a route and an audit sink for the room first (PRM-052 criterion 4).
+
+### PRM-050 Fall back when a restored region needs a missing definition
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Editor |
+
+**Spec:** 07 §13 (last bullet), §5.3 · **Requirements:** R4 · **Depends on:** PRM-049, PRM-012
+
+As an editor restoring a region, I want to be told when a style it needs no longer exists, so that I know what changed.
+
+**Acceptance criteria**
+
+- [x] Given a region restore needs a definition that no longer exists and I hold `structure`, when the restore is applied, then the definition is recreated, subject to the rules of 07 §5.3.
+- [ ] Given I lack `structure`, when the restore is applied, then the restored paragraphs use the default style and the result tells me which styles were replaced.
+- [ ] Given a `dryRun`, when it is requested, then it reports the same fallback.
+
+**Evidence:** `packages/authority/test/leases-restore.test.ts`, "stores the recreated style in the document, and the restored paragraph uses it": a restore by a user with `structure` is accepted, and the stored document holds `Clause` with the Terms paragraph using it (criterion 1). `packages/authority/test/leases-states.test.ts`, "restoring a region whose definition is gone (PRM-050)": the plan recreates `Clause` with `structure` and falls back to the default style without it; the region-only editor's commit is accepted and changes no definition.
+
+**Notes:** Round 13 (lane U-PRM-035-051): not taken this round. `planRestoreDefinitions` is called only by tests (`packages/authority/src/permissions/restore.ts`); the room's restore path (`packages/authority/src/room/room.ts`) does not call it, so the replaced styles cannot reach the commit result yet. Round 2 (lane authority-2, 2026-11-13): criterion 2 stays open: `planRestoreDefinitions` lists the replaced styles, but the commit result the room sends does not carry them, so the user is not yet told. Criterion 3 stays open: no `dryRun` is built (`packages/authority/src` has none). Round 14 (lane V-PRM-035-051): criteria 2 and 3 not taken. `planRestore` in `packages/history/src/restore.ts` reports `replaced` for a dry run and for a restore alike, but the route `POST /documents/{id}/restore` is still gated (HIS-026, `services/document-service/src/data-plane/gate.ts`), so neither is reachable over HTTP, and the room's commit result still does not carry the replaced styles. Both need the restore route and a change in `packages/authority/src/room/room.ts`.
+
+## Audit and events
+
+### PRM-051 Audit rejected commits and grant changes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Tenant administrator |
+
+**Spec:** 07 §14, §3; 11 §4 (Permissions row); review 3.2 S-02 · **Requirements:** R10 · **Depends on:** PRM-019, PRM-009, BE-014, HIS-001
+
+As a tenant administrator, I want every refused change and every grant change on record, so that I can investigate who tried what.
+
+**Acceptance criteria**
+
+- [x] Given a commit rejected with `permission_denied`, when it is rejected, then the audit trail receives an entry with the actor, the document, the scopes and the server time.
+- [x] Given a commit rejected with `invalid_op`, when it is rejected, then the audit trail receives an entry of the same shape.
+- [x] Given a grant change, when it commits, then the audit trail receives an entry with the actor (the user, or the acting user named in `DEP-Actor`), the document, the region scopes and the server time, and the change is also a control commit in the hash-chained log.
+- [x] Given many rejections in a short time, when the throttled webhook of PRM-053 limits deliveries, then every rejection still has its audit entry.
+- [x] Given the audit store, when it is queried by document, actor and time, then it returns the entries.
+
+**Evidence:** Criteria 1 and 2: `services/document-service/src/data-plane/audit.test.ts`, "refused commits reach the audit store (PRM-051)", over the real data plane, WebSocket clients and an in-memory audit store. A viewer's commit refused with `permission_denied` is read back from the store by document, actor and time range, with the actor, the document, the scopes the `sync.reject` named, the head, the commit identifier and the server time, no reason string and no content, and exactly one entry (criterion 1). An `invalid_op` refusal (base ahead of the head), a commit identifier taken by another user, and a server-authored commit refused for its actor each give one entry of the same shape (criterion 2); an `unavailable` refusal gives none. The entries are made in one place, `services/document-service/src/data-plane/room-host.ts` (`#auditRejection`), with the builder `packages/authority/src/permissions/audit.ts` (`rejectionAudit`), which `packages/authority/test/audit.test.ts` tests by a fast-check property over every refusal code. Criterion 5: the same file, the first test queries the store by document, actor and a time range and gets the one entry. Store half of criterion 4: a burst of 30 refusals while the audit store fails leaves 30 entries in order once it recovers, none dropped.
+
+**Evidence (round 12, lane U-PRM-035-051, 2026-11-13; criterion 3):** `services/document-service/test/data-plane/prm-051-grant-control.pg.test.ts`, run with `pnpm vitest run test/data-plane/prm-051-grant-control.pg.test.ts` in services/document-service against PostgreSQL in Podman (passed, not skipped). A grant change made through the plane over the PostgreSQL stores gives one `grants.changed` audit row with the actor `alice`, the document, scopes `region:<id>` and a time inside the call; a connected owner receives the control commit for revision 2 in `sync.commit`; the stored `doc_commits` rows hold exactly one control commit and their `prev_hash` values link to the previous `hash`.
+
+**Evidence (lane V-PRM-035-051, round 1, criterion 4):** `tests/security/test/prm-051-v-V-PRM-035-051-throttle-audit.test.ts` (memory and PostgreSQL, 2 passed, none skipped; `pnpm vitest run tests/security/test/prm-051-v-V-PRM-035-051-throttle-audit.test.ts` from the repository root). Twelve refusals (`permission_denied`, an editor's policy change) over the wire: the audit store, queried by document and kind `commit.rejected`, holds twelve entries, each with the document and the code, while the composed webhook (window 60 s, maximum 5, test values) delivers exactly five `dep.commit.rejected.v1` bodies and logs `webhook.suppressed`. The window and maximum are test values (ADR 0146).
+
+**Notes:** Review (round 1, 2026-11-13): criteria 1, 2 and 4 were unticked, because the room's `Effects.audit` had no consumer and the room host recorded the same refusals by a second, untested path. Fix (round 1, 2026-11-13): `Effects.audit` and `RoomInit.document` are removed; the room host is the one path, since only it sees every refusal (the room's, the projection gateway's and a requester's), and criteria 1 and 2 are ticked on the end-to-end test above (ADR 0102, round 1 addendum). Criterion 4 stays open: no delivery of `dep.commit.rejected` exists in the document service yet (PRM-053 criterion 3, BE-055), so no test can send a burst through the throttled webhook; the store half is tested. Criterion 3 stays open: `permissionsChanged` receives grants from the control plane with no actor, so the audit entry for a grant change is written by the host that stores it (as `leases.ts` says), and the room adds none. Round 10 (lane U-PRM-035-051, 2026-11-13): the audit half of criterion 3 is met over PostgreSQL by the grant store, which inserts the `grants.changed` entry (actor, document, `region:<id>` scopes, server time) in the same transaction as the change (`services/document-service/src/storage/grant-store.ts`, `change`); `services/document-service/test/control-plane/prm-051.grant-audit.test.ts` checks it (1 passed, PostgreSQL in Podman). The in-memory grant store writes no entry, so that test is PostgreSQL only; an entry added in the control plane was a duplicate and was removed. Round 12 (lane U-PRM-035-051): criterion 3 is ticked; its control commit half is now proven over PostgreSQL in `test/data-plane/prm-051-grant-control.pg.test.ts` (see the evidence above). Criterion 4 stays open (BE-055 has no webhook delivery). Criterion 5 is ticked (round 1, lane PRM-043-056) on the store query in the first test of `audit.test.ts`. The entries carry identifiers only: the reason string is left out, since it can echo what the client sent (ADR 0102). The audit API (`GET /audit`) is UX-076, UX-081. Actors are the per-tenant surrogate identifiers (08 §13). Phase 1b: 11 §4 ("audit of rejections and grant changes").
+
+### PRM-052 Audit the other permission events
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Tenant administrator |
+
+**Spec:** 07 §14, §9, §10, §11, §13 · **Requirements:** R10 · **Depends on:** PRM-051, PRM-046, PRM-045, PRM-022, PRM-049, FRW-025, FRW-029
+
+As a tenant administrator, I want state changes, lease breaks, session revocations, restores and workflow transitions on record, so that the audit trail covers every change of rights.
+
+**Acceptance criteria**
+
+- [x] Given a region state change, when it commits, then the audit trail records actor, document, scope and server time, and a control commit is in the log.
+- [x] Given a lease break, when it commits, then the same holds.
+- [x] Given a session revocation, when it is processed, then the audit trail records the actor, the user revoked, the document if given, and the server time.
+- [ ] Given a restore of a document or a region, when it is applied, then the audit trail records it with the scopes touched.
+- [ ] Given a workflow transition, when it commits, then the audit trail records it and a control commit is in the log.
+
+**Evidence:** services/document-service/test/control-plane/prm-052-revoke-audit.test.ts (criterion 3; memory and PostgreSQL, 2 cases pass, lane U-PRM-052-067): `POST /v1/sessions/revoke` writes a `session.revoke` entry with the caller's actor (`system` for the tenant API key), the document when one is given, the user's surrogate and the server time; `GET /v1/audit` serves both. Built in `services/document-service/src/control-plane/handlers.ts` (`revokeSessions`, through `controlAudit`) and wired in `services/document-service/src/server.ts` (`audit: parts.audit`). Criteria 1 and 2 (lane U-PRM-052-067): tests/security/test/prm-052-control-audit.test.ts (memory and PostgreSQL in Podman, 4 cases pass): a region state change (`PUT .../regions/{rid}/state`) and a lease break (`DELETE .../lease` by a holder of `owner`) each leave a control commit at their revision in the chain, read through the log store; on PostgreSQL each also leaves one `grants.changed` audit entry with the actor, the document, `region:<id>` in its scopes and the server time, and the chain verifier accepts the log.
+
+**Notes:** the transitions are defined by FRW. Round 12 (lane U-PRM-052-067): criteria 1 and 2 are ticked on the PostgreSQL and memory run in Evidence. Their audit entries are the grant store's `grants.changed` rows (PRM-051), not the `region.state` and `lease.break` kinds of `controlAudit`, which no caller writes; the in-memory grant store writes no audit entry, so the audit half is PostgreSQL only. Criteria 4 and 5 stay open: the document service serves no restore route and no workflow transition (FRW). Round 11 (lane U-PRM-052-067): criterion 3 is ticked; criteria 1, 2, 4 and 5 stay open (the control commit, the host's lease break and restore, and the workflow transitions are not built in this lane). The revocation entry carries `subject` (the surrogate) in its data, which `GET /audit` does not project. Phase 2: 11 §5 (Governance row). Round 4 (lane authority-2, 2026-11-13): the audit entry builder for the five changes is `controlAudit` in `packages/authority/src/permissions/control-audit.ts`, tested in `packages/authority/test/permissions.control-audit.test.ts` (identifiers only; the kind requires a subject, and a scope except for a revocation). No criterion is ticked: 1 and 2 need the control commit and the host's store (the control plane stores the change, and the room adds no commit for it); 3 is the control plane's revocation; 4 needs the host's restore to call the builder with the scopes it touched; 5 is the store's query; the transitions of 5 are FRW's. ADR 0146 (Round 4) records the builder and the reasons.
+
+### PRM-053 Tell the host about permission events
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Integrating developer |
+
+**Spec:** 07 §11, §14; 05 §7 · **Requirements:** R10, R15 · **Depends on:** PRM-051, PRM-046, PRO-069, PRO-070, BE-055
+
+As an integrating developer, I want webhooks for grant changes, state changes and rejected commits, so that my application can react and monitor security.
+
+**Acceptance criteria**
+
+- [x] Given a grant change, when it commits, then `dep.grants.changed` is delivered to subscribed webhooks.
+- [x] Given a region state change, when it commits, then `dep.region.state_changed` is delivered.
+- [x] Given a commit rejected with `permission_denied` or `invalid_op`, when it is rejected, then `dep.commit.rejected` is raised, throttled.
+- [x] Given any of these events, when the body is built, then it is a small CloudEvent whose `subject` is the document identifier and whose `data` includes the `seq` and contains no document content.
+- [x] Given a flood of rejections, when deliveries are throttled, then the number of webhook deliveries is bounded.
+
+**Evidence:** `packages/authority/src/permissions/events.ts` (`grantsChangedEvent`, `regionStateChangedEvent`, `commitRejectedEvent`, `carriesNoContent`, `createThrottle`). `packages/authority/test/permissions.events.test.ts`: criterion 4, a property over 300 generated envelopes: each body is a CloudEvent 1.0 whose `subject` is the document, whose `data.seq` is the seq and whose keys are the allowed ones; a property over 200 bodies finds no content key (`steps`, `text`, `content`, `marks`, `attrs`, `doc`). Criterion 5, a property over 400 generated arrival sequences: no window of length `windowMs` holds more than `limit` deliveries, and every offer is either delivered or dropped; 1,000 rejections at one instant with limit 5 give 5 deliveries and 995 drops, all counted. The bound is on the authority's decision; the host's webhook sender applies it (BE-055). Review (round 3): criterion 5 is unticked. `createThrottle` is tested alone and nothing calls it, and no webhook delivery exists to be bounded; it can be ticked when BE-055 delivers through it. Fix (round 3): the builders, `carriesNoContent` and `createThrottle` are exported from `packages/authority/src/index.ts`, and the test imports them from the package entry. Criterion 5 was open in round 3; round 4 ticks it (see the next Evidence line).
+
+**Reviewer (2026-11-13, U3 group 2 round 3):** criteria 1, 2 and 3 are unticked. `WebhookDispatcher` is built only inside tests (`grep "new WebhookDispatcher"` finds no composition in `services/document-service/src/server.ts`); `server.ts` defaults `events` to `MemoryEventSink` and passes no dispatcher to the room or the control plane, so in the service as composed nothing is delivered to a webhook. The test builds the dispatcher and a recording `Transport` itself and passes it through the harness `events` option. Criterion 3 also names `invalid_op` and no test refuses a commit with it. Tick them when `server.ts` builds the dispatcher (subscription store, delivery store, egress transport, `rejectedThrottle`) and passes it as `events`, and a test shows a refused `invalid_op` commit raised. Criterion 5 stays ticked: the dispatcher bound is real and tested alone (1,000 rejections at one instant give 5 deliveries); the figures are test values (ADR 0146).
+
+**Evidence (lane U-PRM-052-067, round 4):** `tests/security/test/prm-053-webhook-events.test.ts` (memory and PostgreSQL in Podman, 8 cases plus 1 dispatcher case, all pass; run with `pnpm vitest run tests/security/test/prm-053-webhook-events.test.ts`). The service runs with the real `WebhookDispatcher` as its event sink (`events` option of the harness), a `WebhookSubscriptions` route table and a recording `Transport` in place of the egress proxy. Criterion 1: a `PATCH .../grants` is delivered as `dep.grants.changed.v1` to the subscribed URL with `data.rev` and `data.seq`. Criterion 2: a `PUT .../regions/{rid}/state` is delivered as `dep.region.state_changed.v1` with its `state` and `seq`. Criterion 3: an editor's refused policy change (`sync.reject`, `permission_denied`) is raised as `dep.commit.rejected.v1` with `code` and `seq`. Criterion 5: 1,000 rejections at one instant in the dispatcher give 5 deliveries and 995 `suppressed` log entries; 12 refused commits over the wire leave the admitted count at the window maximum. The window (60 s) and maximum (5) are test values; the spec gives no figure, so ADR 0146 still owns them. The change that made criteria 1 and 2 true: `grants.changed` and `region.state_changed` now carry `seq` (`services/document-service/src/control-plane/handlers.ts`), since the CloudEvent envelope refuses an event without one; before, both events were silently dropped. `services/document-service/test/control-plane/routes.content.test.ts` asserts `seq` as well as `rev`. Criterion 3 wiring: `DataPlaneDeps.events` (`services/document-service/src/seams.ts`), passed into the room host (`data-plane/index.ts`, `data-plane/room-host.ts` `#auditRejection`) and from `opts.events` in `services/document-service/src/server.ts`.
+
+**Evidence (lane V-PRM-052-067, round 1, criteria 1, 2 and 3):** `tests/security/test/prm-053-webhook-events.test.ts`, run with `pnpm vitest run tests/security/test/prm-053-webhook-events.test.ts` (11 passed, memory and PostgreSQL in the shared Podman container, none skipped). Criterion 1: `PATCH .../grants` delivers `dep.grants.changed.v1`. Criterion 2: `PUT .../regions/{rid}/state` delivers `dep.region.state_changed.v1`. Criterion 3: a `permission_denied` refusal (an editor's policy change) and an `invalid_op` refusal (base ahead of the head, by an editor) each raise `dep.commit.rejected.v1` with their `code`, through `DataPlaneDeps.events` in `services/document-service/src/data-plane/room-host.ts` (`#auditRejection`). The `invalid_op` case is new in this lane. The delivery target is a recording `Transport`, the seam the dispatcher sends through, not a real HTTP egress; the egress proxy (BE-056) is tested in its own story.
+
+**Evidence (lane U-PRM-052-067, round 3 fix, the composed service):** `server.ts` now builds the dispatcher itself. `configFromEnv` reads `DOCEDIT_WEBHOOKS` and four settings with no default (`DOCEDIT_WEBHOOK_REJECTED_WINDOW_MS`, `_REJECTED_MAX`, `_TIMEOUT_MS`, `_MAX_REDIRECTS`; ADR 0146 owns the figures) into `config.webhooks` (`services/document-service/src/config.ts`). `startService` calls `composeWebhooks` (`services/document-service/src/control-plane/webhook-composition.ts`): one in-memory subscription store shared by the `/webhooks` routes and the dispatcher, an in-memory delivery store, `EgressProxy` with the system resolver and `nodeConnector`, and `rejectedThrottle` from the settings. The dispatcher is then `events` for the control plane and for the data plane (`DataPlaneDeps.events`), is exposed as `Service.webhooks`, and is drained on `close()`. `tests/security/test/prm-053-composed-webhooks.test.ts` builds no dispatcher and passes only `DOCEDIT_*` variables through the harness (`env` option); 14 pass, memory and PostgreSQL in the shared Podman container, none skipped (`pnpm vitest run tests/security/test/prm-053-composed-webhooks.test.ts`). Criterion 1: a signed `dep.grants.changed.v1` with `rev`, `seq` and the configured `source`. Criterion 2: `dep.region.state_changed.v1` with `region`, `state` and `seq`. Criterion 3: `permission_denied` (an editor's policy change) and `invalid_op` (an editor changes a node identifier, I2) each raise `dep.commit.rejected.v1` with its `code`; 12 more refusals leave the deliveries at the window maximum and log `webhook.suppressed`. The main run replaces only the transport, because the proxy refuses loopback; a second run keeps the composed `EgressProxy` and shows a subscription to `http://127.0.0.1:56281/` recorded as `failed` with `lastReason: loopback`. Not built: a PostgreSQL subscription store, and the `webhook_deliveries` migration for `PgDeliveryStore`, so subscriptions and delivery rows end with the process.
+
+**Evidence (lane V-PRM-035-051, round 1, criterion 4):** `tests/security/test/prm-053-v-V-PRM-035-051-event-bodies.test.ts` (memory and PostgreSQL, 2 passed, none skipped; `pnpm vitest run tests/security/test/prm-053-v-V-PRM-035-051-event-bodies.test.ts` from the repository root). It reads the bytes the composed service delivers for a grant change, a region state change and a `permission_denied` refusal: each is a CloudEvent 1.0 whose `subject` is the document, whose `data` holds `seq` (a number) and only the keys `seq`, `rev`, `revision`, `region`, `state` and `code`, whose string values are at most 255 characters, and in none of which the refused attribute value appears. The control plane sends `rev` for `dep.grants.changed` where the authority builder names `revision`; the test allows both and records the difference here, which is for the owner or the main session to settle.
+
+**Notes:** Round 1 (lane V-PRM-052-067): criteria 1 to 3 ticked on the evidence above; the test had already passed in round 4, but the boxes were not ticked. Criterion 3 now names `invalid_op` as the review asked. Round 3 review, open: no webhook dispatcher exists (BE-055), and the data plane's rejection path (`#observe` in `services/document-service/src/data-plane/room-host.ts`) records the audit entry but raises no event, because `DataPlaneDeps` (`services/document-service/src/seams.ts`) has no event sink to raise it into. `dep.grants.changed` and `dep.region.state_changed` are already raised by the control plane when it stores the change (`services/document-service/src/control-plane/handlers.ts`, with `rev` and no `seq`), so raising them again from the room's commit path would duplicate them; which component raises them, and with which `seq`, is left to the main session. The throttle's parameters are not stated (Open questions). `createThrottle` takes `limit` and `windowMs` as inputs with no default, so no figure is invented; the owner sets them (ADR 0146). Criteria 1 to 3 were open in round 3; round 4 closes them with the evidence above (the dispatcher exists, and the room raises the refusal through `DataPlaneDeps.events`). Not covered here: a real HTTP egress to a receiver (BE-056 is the proxy, tested in its own story); the dispatcher's `#track` swallows a failed send without a log line, which is noted for BE-055. Phase inferred: webhooks arrive in phase 2 (11 §5, Workflow row). Audit (2026-11-13): criterion 4 is unticked because its evidence tests `grantsChangedEvent`, `regionStateChangedEvent`, `commitRejectedEvent` and `carriesNoContent` in `packages/authority/src/permissions/events.ts`, which no service code calls (the bodies are built by `emit` in `services/document-service/src/control-plane/handlers.ts`, `#auditRejection` in `data-plane/room-host.ts` and `toCloudEvent`), and no test checks that the real `dep.region.state_changed` and `dep.commit.rejected` bodies hold no content keys; it can be re-ticked with an exact key-set assertion on the delivered bodies in `tests/security/test/prm-053-composed-webhooks.test.ts`.
+
+## DOCX mapping
+
+> PRM-054 (Import DOCX editable ranges as regions) was merged into EXP-104 during the cross-check of 2026-11-06.
+
+> PRM-055 (Export regions and protection to DOCX) was merged into EXP-094 during the cross-check of 2026-11-06.
+
+## Authorisation matrix and threat cases
+
+### PRM-056 Hold the authorisation matrix as data and enforce it from one table
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 07 §12; 05 §6.1, §11; review 3.2 (improvements adopted) · **Requirements:** R3, R6 · **Depends on:** PRM-001, PRO-051, PRO-052, PRO-113
+
+As a maintainer, I want the authorisation matrix in machine-readable form and every route guarded from it, so that no route ships without a stated requirement.
+
+**Acceptance criteria**
+
+- [x] Given the 13 rows of 07 §12, when the matrix is read, then it is in `spec/` in machine-readable form with the operation, the routes and messages it covers, and the required capability, credential or gate.
+- [x] Given the control-plane route table, when a test enumerates the routes, then it fails if any route has no matrix row or documented classification.
+- [x] Given the server's guards, when they are built, then they read the matrix and no handler carries its own copy of a requirement.
+- [x] Given "somewhere in the document" (uploading an asset, naming a version), when the requirement is evaluated, then it holds if the capability is present in at least one scope from PRM-004.
+- [ ] Given every row, when the harness runs, then it generates a negative test for every role and principal lacking the requirement and a positive test for those that have it.
+
+**Evidence (lane U-PRM-052-067, round 4, criterion 3):** `tests/security/test/prm-056-matrix-generated.test.ts`, "PRM-056 criterion 3": every `guard(ctx.caller, …)` and `requireRow(ctx.caller, …)` call in `services/document-service/src/control-plane/*.ts` names a row of `MATRIX`, and no handler passes a capability list for a guard. The former `requireSomewhere` call in `asset-routes.ts` (row 6, with its own list of capabilities) is now `requireRow(ctx.caller, 'asset.upload', …)`, which calls `authorise` (`services/document-service/src/control-plane/gate.ts`). Not guards, and not changed: the compile-log `edit` check in `export-routes.ts` (a condition of row 12) and the region editor list in `handlers.ts` (a read model of who may edit a region). Criterion 5 evidence: the same test file, "PRM-056 criterion 5" (see the Notes).
+
+**Evidence:** `packages/authority/src/permissions/matrix.ts` (`MATRIX`, `UNMATRIXED_ROUTES`, `authorise`), published in `spec/permissions/permissions-1.json`. `test/matrix.test.ts`: the 13 rows equal the operations of 07 §12 in order, each with its routes or messages and requirement, and row 10 lists the control-plane `manage` operations of PRM-001; every route of `spec/dep/dep-1.openapi.json` has a row or a classification (`public`, `fields` or `open`) and no entry names a route that does not exist; "somewhere" holds for a viewer with an editor grant on one region and for a filler's `fill`, and not for a commenter.
+
+**Notes:** the matrix has no rows for changing a document's state, reading grants or regions, read markers, activity, resolving asset URLs, deleting an export, or editing a comment (Open questions). Phase inferred: the first control-plane routes ship in 1b (11 §4). These routes, and a few more (document metadata, reading threads, lease heartbeats, deleting a comment, import jobs, fonts), are classified `open` in `UNMATRIXED_ROUTES`; the routes of 12 §10 are `fields`. Round 4 (lane U-PRM-052-067): criterion 3 is ticked with the Evidence line below. Criterion 5 is partly met: the cases are generated in `packages/authority/test/matrix.test.ts` and run against `authorise`, and `tests/security/test/prm-056-matrix-generated.test.ts` (round 4, memory and PostgreSQL in Podman, 128 cases pass) generates them per role, for the outsider and the service credential, against the real service for rows 1, 2, 6, 7, 10, 12 and 13. Still open: rows 3 (a commit over the wire, covered by prm-057-row3-verdicts rather than generated here), 4, 5 and 8 (the service serves no thread or version route), 9 (no region restore route) and 11 (a region lease, checked by region, not by document role). The conformance kit's packaging of the cases for the mock is PRO's.
+
+### PRM-057 Test the matrix: channel, commits, assets, export and service routes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 07 §12 (rows 1, 3, 6, 7, 10 in part, 12 in part, 13), §3; 11 §4 (Protocol row) · **Requirements:** R3, R6 · **Depends on:** PRM-056, PRM-009
+
+As a maintainer, I want negative tests for the matrix rows that exist in the first usable release, so that the conformance kit proves refusals and not only successes.
+
+**Acceptance criteria**
+
+- [x] Given row 1, when a connection without `view` opens a channel, reads content at the head or sends presence, then it is refused; with `view` it succeeds and sees every region's content.
+- [x] Given row 3, when commits are submitted, then the verdicts of PRM-009 to PRM-012 hold.
+- [x] Given row 6, when a viewer or commenter uploads an asset, then it is refused; with `edit`, `suggest` or `fill` in some scope it is accepted.
+- [x] Given row 7, when a user with `view` on a document the asset is attached to reads it, then it succeeds; for another document it is refused.
+- [x] Given row 12, when a user without `view` exports, or without `edit` asks for raw compile logs, then it is refused.
+- [x] Given row 13, when a user token calls import, fork, create, list, search, audit, webhooks, tokens or revoke, then it is refused, and a claim cannot turn a user token into a service credential.
+- [x] Given row 10 for grants, a region's `policy` and deleting the document, when a user without `manage` tries, then it is refused.
+- [ ] Given these tests, when they are packaged, then they are tagged for the profiles `perm-doc` and `perm-region` and run against the reference service and the mock backend.
+
+**Evidence:** tests/security/test/permission-matrix.test.ts (memory and PostgreSQL in the integration environment, lane U-PRM-052-067: 10 cases pass; the PostgreSQL cases skip without that environment). Row 7 (criterion 4, lane U-PRM-052-067): services/document-service/test/control-plane/prm-057-row7-asset-read.test.ts (memory and PostgreSQL, 2 cases pass; the asset worker runs in process, unsandboxed): a viewer of the attached document resolves the asset, an outsider with a role on another document gets 403 `forbidden` on the same route, and the other document's resolve returns no asset. Row 1: an outsider token (role on another document only) is refused `forbidden` on `ch.open`, its presence on an unopened channel never reaches a viewer, and its REST content read is 4xx; a viewer opens the channel (`ch.opened`) and reads the restricted region's text. Row 10: an editor's PATCH on grants and DELETE on the document are 403, its policy `attr` step on the restricted region is `permission_denied`, and the document survives for its owner. Row 13: a user token gets 401 or 403 on create, list, fork, import, search, audit, webhooks (list and create), tokens and revoke; a `dep-svc+jwt` header and `svc`/`scope` claims do not make it a service credential, while the tenant's service credential lists documents (200). Row 6 (round 9): a viewer and a commenter get 403 on `POST /v1/documents/{id}/assets` with no asset identifier in the answer; a suggester, a filler and an editor get 201. Row 3 (round 10, lane PRM-057-067): tests/security/test/prm-057-row3-verdicts.test.ts (memory; 6 cases pass): a suggester's and a filler's direct text insert in the body, and a filler's insert in the restricted region, are `sync.reject` with `permission_denied` and the stored content is unchanged; a filler's wrap of body content in a new region (PRM-011) is refused `permission_denied`; the same wrap by an editor is `sync.ack` (control). The viewer and commenter refusals (PRM-010 P6) are in tests/security/test/bypass-classes.test.ts.
+
+**Evidence (lane V-PRM-052-067, round 1, criterion 5):** `tests/security/test/prm-057-row12-exports.test.ts`, run with `pnpm vitest run tests/security/test/prm-057-row12-exports.test.ts` (3 passed, memory). An outsider with a role on another document only gets 401, 403 or 404 on `POST /v1/documents/{id}/exports` and no job is created. A viewer's read of an export made by an editor shows the output URL and withholds the raw compile log (`result.log` absent); the editor sees the signed log URL, so the absence is not vacuous. The log route is served now (SEC-036, `services/document-service/src/control-plane/export-routes.ts`, `canSeeLog`), which the earlier note said was missing. The log half is met by withholding the log, the route's form of refusal.
+
+**Notes:** the remaining rows are PRM-058. Round 1 (lane V-PRM-052-067): criterion 5 ticked on the evidence above. Open in this story (2026-11-13): criterion 4 is ticked in round 11 (see the Evidence line; this suite still does not run the asset worker); criterion 3 is ticked in round 9; criterion 5 (row 12, the user-without-view export is tested, the raw compile-log half is not, as no log route is served); criterion 8 (the `perm-doc` and `perm-region` profiles and the mock-backend run do not exist yet). Phase inferred: each row is tested when its operation exists; the `perm-region` scenarios are a 1b deliverable (11 §4, Protocol row). Second review (2026-11-06, SPK-027), SR-C4: row 7 lets any viewer read an asset in a region hidden from them, and nothing ties an export job to its requester, so a user restricted with `no-export` can fetch someone else's export; the review proposes per-scope asset access and requester-owned jobs, which changes the row 7 and row 12 criteria ([review](../review/2026-11-06-second-review.md)).
+
+### PRM-058 Test the matrix: comments, versions, restore, leases, states and output restrictions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | M | must | Maintainer |
+
+**Spec:** 07 §12 (rows 2, 4, 5, 8, 9, 10, 11, 12 in part); 13 §5 (output restrictions) · **Requirements:** R3, R6 · **Depends on:** PRM-056, PRM-042, PRM-039, PRM-043, PRM-046, PRM-049
+
+As a maintainer, I want negative tests for the remaining matrix rows, so that every row of 07 §12 has them in the conformance kit.
+
+**Acceptance criteria**
+
+- [ ] Given row 2, when content, history, comparison, attribution or commits at an earlier `seq` are requested, then `view` and the gate of PRM-041 and PRM-042 are both required.
+- [x] Given rows 4 and 5, when threads are created, replied to, resolved, reopened, assigned or deleted, then the rules of PRM-037 and PRM-039 hold.
+- [x] Given row 8, when a user with no `edit` in any scope names a version, then it is refused.
+- [x] Given row 9, when a region restore is requested without `edit`, for an approved region, or for a region leased to someone else, then it is refused.
+- [ ] Given row 10, when a user without `manage` restores a document, changes a region's state, breaks a lease or takes a workflow action, then it is refused.
+- [x] Given row 11, when a user without `edit` in the region acquires a lease, then it is refused.
+- [x] Given row 12, when a caller restricted with `no-export` requests an export, then it is refused.
+- [ ] Given these tests, when they are packaged, then they are tagged for the profiles `history`, `comments`, `exports` and `leases`.
+
+**Evidence:** tests/security/test/prm-058-row2-content-seq.test.ts (row 2, criterion 1; memory and PostgreSQL, 2 cases pass, lane U-PRM-052-067): on `GET /v1/documents/{id}/content?seq=` an outsider with a role on another document gets 403 `forbidden` (`view`), a viewer is refused by the history gate with a 4xx, and an editor gets 200 for an earlier state. Review (round 1, U3 group 2): criterion 1 unticked. The wire test covers `content?seq=` only (the viewer's refusal is any 4xx, not a named code); history, comparison, attribution and `commits` at an earlier seq have no wire test with `view` and the gate together. Fix (round 1, U3 group 2, 2026-11-13): the same file now runs the three served routes that read at an earlier seq, `content?seq=`, `commits?after=` and `field-values?seq=`. On each, the outsider gets 403 `forbidden` without the gate's detail; the viewer gets 200 at the head (so `view` is held) and 403 `forbidden` at the earlier seq, with the gate's detail "below the history visibility of the caller" on `content` and `field-values` (on `commits` a user's page comes from the data plane, whose refusal the pipeline passes on as the code only); the editor gets 200 at the earlier seq. The gate and the `view` refusal share the code `forbidden` (`refuseBelowGate` in services/document-service/src/control-plane/gate.ts), so the code alone cannot name the cause. `pnpm exec vitest run tests/security/test/prm-058-row2-content-seq.test.ts`: 2 of 2 passed (memory, and PostgreSQL in the shared Podman container). Criterion 1 stays unticked: `listHistory`, `getDiff` and `getAttribution` are in spec/dep/dep-1.openapi.json but no handler in services/document-service serves them, so history, comparison and attribution cannot be tested yet. Rows 4, 5, 8, 9, 10 and 11, earlier rounds: `packages/authority/test/threads.test.ts` (row 4 and 5): "needs comment in the scopes of the target to reply (07 §12 row 4)"; "needs comment in the thread's scopes to resolve, reopen or assign; deleting needs the author or manage"; "lets only a comment's author or a holder of manage edit or delete it"; "offers no way to move or re-point a thread". `packages/authority/test/matrix.test.ts` (row 8 and row 12): "version.create" is held by an edit grant and refused to a filler; "refuses user tokens for service rows, `no-export` for exports, and restores of approved or leased regions". `packages/authority/test/leases-states.test.ts` (rows 9, 10 and 11): "needs edit in the region to restore it, refuses it when approved or leased to someone else" (row 9); "refuses a user without edit, an approved region, and a region another user holds" (row 11, acquire); "needs manage to restore a whole document, and refuses it while a workflow is active"; "needs manage; the holder only releases their own"; "binds an approval to the seq and hash the room computes, and refuses a caller without manage" (row 10 for restore, state and break).
+
+**Notes:** Round 10 (lane PRM-057-067, 2026-11-13): criterion 1 stays open. The pinned read `GET /v1/documents/{id}/content?seq=` (services/document-service/src/control-plane/handlers.ts, `getContent`) runs `guard(read.history)` and then `gateFor`; the view half is refused for a caller without a role on the document (`connectionOn`, `forbidden`), but no wire test of this route was written in this lane, and the gate half is in tests/security/test/old-version-gate.test.ts (not run here). Phase inferred: its rows depend on phase 2 features. Open in this story (2026-11-13, lane authority-2): row 2 (view together with the gate of section 8 for content at an earlier `seq`): the gate is tested (`room-content.test.ts`, "refuses a seq below the visibility gate before any rebuild work") and the combined check on the same route is tested in round 11 (lane U-PRM-052-067, see Evidence), so criterion 1 is ticked (unticked on review; after the fix of U3 group 2 it waits for the `history`, `diff` and `attribution` routes, which are not built); row 10 for a workflow action: no test here refuses a workflow action without `manage` (the workflow transition is outside this package); the tags for the profiles `history`, `comments`, `exports` and `leases` (last criterion) need the profiles and the mock backend run, which do not exist yet. The routes of these rows are guarded by the document service (PRO-113), so the tests cover `authorise` and the room, not the handlers.
+
+### PRM-059 Test threat cases: forged and stale commits
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 07 §16 (rows 1 to 6, 9, 13); review 3.2 S-01, S-03, S-15 · **Requirements:** R3, R10 · **Depends on:** PRM-009, PRM-011, PRM-012, PRM-019, PRM-017
+
+As a maintainer, I want each threat case against commits to be an executable test, so that a regression in the authority cannot reopen a known attack.
+
+**Acceptance criteria**
+
+- [x] Given steps that edit a region without a grant, when they are submitted, then the commit is rejected with `permission_denied`.
+- [x] Given an `attr`, mark or node-mark step, or a crafted `replaceAround`, that a range-based rule would not see, when it is submitted, then the outcome check rejects it by what changed.
+- [x] Given steps based on an old version, when they are submitted to slip past a check, then the check runs on the rebased steps against the current document.
+- [x] Given a document-level `editor`, when they delete or move a whole restricted region, then the commit is rejected.
+- [x] Given a user who wraps others' content in a new region, or flips a region to `restricted` to lock others out, when they submit it, then the first needs `structure` and the second needs `manage`.
+- [x] Given a restyle, hide or renumber of protected text through a definition, when it is submitted, then PRM-012 rejects it.
+- [x] Given a node identifier is reused, or a deleted region's identifier is re-created to inherit its grants, when it is submitted, then invariants I2 and I3 reject it.
+- [x] Given a grant removed while the room missed the notification, when the former grantee keeps editing, then no commit is stored under the old grants revision.
+
+**Evidence:** `packages/authority/test/threats.test.ts`, one test per row of 07 §16 that concerns commits: an edit of a region without a grant; attribute, mark, node-mark and crafted `replaceAround` steps judged by what changed; a commit on an old base checked after rebasing against a region wrapped meanwhile; an editor deleting or moving a restricted region; wrapping needing `structure` and restricting needing `manage`; restyling protected text through its style (with `test/outcome.structure.test.ts` for numbering); reused identifiers (I2) and a re-created deleted region (I3); a grant removed with the notification lost, where the conditional write stores nothing and the resubmission is refused.
+
+**Notes:** Phase inferred: the rules it tests ship in 1a and 1b.
+
+### PRM-060 Test threat cases: suggestions, identity, revocation, visibility and load
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Maintainer |
+
+**Spec:** 07 §16 (rows 7, 8, 10, 11, 12, 14, 15, 16); review 3.2 S-04, S-07, S-08, S-13 · **Requirements:** R3, R8, R10 · **Depends on:** PRM-014, PRM-022, PRM-042, EXP-049, EXP-050, SYN-008, SYN-037
+
+As a maintainer, I want the remaining threat cases to be executable tests, so that the whole table of 07 §16 is guarded.
+
+**Acceptance criteria**
+
+- [x] Given an oversized or overlapping equation meant to cover another region in the PDF, when the document is exported, then the math gate bounds and cleans it; the security regression pack runs the test of EXP.
+- [x] Given a suggested deletion of a whole restricted region, when a user without `suggest` there submits it, then it is rejected, because the region's scope differs and P4 needs `suggest` there.
+- [x] Given a suggester changes text directly, accepts their own suggestion or takes over another's suggestion `id`, when they submit it, then P4 rejects it.
+- [x] Given another user's commit identifier is replayed, when it is submitted, then it is rejected with `invalid_op`.
+- [x] Given a client claims another identity in presence or in suggestion marks, when it is submitted, then identity comes from the connection and the marks are checked against it.
+- [x] Given a user is revoked, when they reconnect with a token that has not expired, then they are refused.
+- [ ] Given deleted text, when it is requested through old versions, catch-up or activity, then the gate of section 8 refuses it.
+- [x] Given a flood of expensive commits, when the connection's budget is spent, then admission control answers `rate_limited`.
+
+**Evidence:** tests/security/test/prm-060-math-export.test.ts (criterion 1, lane U-PRM-052-067; Node.js, 3 cases pass, run as part of the security pack): a paint command (`\rlap`) and an oversized space (`\hspace{500cm}`) in an exported equation are refused by the gate (`math_refused`, a placeholder, and no LaTeX of either in any bundle file), and a plain equation passes. `packages/authority/test/suggestions.test.ts`: "refuses a change of the baseline" (text typed into the baseline, rejected); "refuses changing or removing another user's suggestion"; "refuses a mark that names someone else, and an identifier first used by another user"; "refuses accepting one's own suggestion and accepts deleting text one suggested oneself"; "refuses a suggested deletion of a whole restricted region without suggest there" (carol without a grant refused, dave with suggest accepted). `packages/authority/test/room.test.ts`: "refuses another user's commit identifier (step 2)", answered `invalid_op`. `packages/authority/test/room-commits.test.ts`: "rejects with rate_limited, retry and retryAfterMs once the connection budget is spent". Mark identity in every commit: `suggestions.test.ts` "refuses an editor who attributes a new suggestion to someone else". Round 2 (lane PRM-057-067, 2026-11-13), criteria 5 and 6: `tests/security/test/identity-spoofing.test.ts` (presence and suggestion marks; the PostgreSQL cases skip without the integration environment) and `services/document-service/test/data-plane/presence.test.ts`, "relays an update with the identity the server derives from the session" (a forged `user` and `session` in the presence state are ignored); `tests/security/test/revocation.test.ts`, "ends a connected user with auth.revoked and 4401, and refuses the old token on every route": a token minted 1.1 s before the revocation, far inside its 900 s default lifetime, is refused in a new `hello` with `revoked`.
+
+**Notes:** Phase inferred: its rows depend on phase 2 features. Round 2 (lane PRM-057-067, 2026-11-13): criteria 5 and 6 are ticked from the document service and `tests/security` evidence above, where presence identity and the revocation watermark (05 §3.3) are served; they are not in `packages/authority`. Criterion 7 stays open. Round 12 (lane U-PRM-052-067): criterion 1 is ticked on the export path (the converter's gate, EXP-049), in the security pack; the gate's own commit-time and compile tests stay in SEC-034. The threat's "overlapping" case is covered by the paint commands the gate refuses, not by a geometry check. For criterion 7 the activity surface is not served (`services/document-service/src/control-plane/history-routes.ts` says so). Criterion 7 is covered for old versions and catch-up (`room-content.test.ts`, "refuses a seq below the visibility gate before any rebuild work"; `room-resume.test.ts`, "recomputes the gate when access changes") but the activity surface is not in this package.
+## Open issues in the spec
+
+### PRM-061 Decide whether `everyone` may be granted a role on a restricted region
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 0 | S | should | Owner |
+
+**Spec:** 07 §17 (fifth bullet), §1, §4 · **Requirements:** R3 · **Depends on:** none
+
+As an owner, I want to decide whether the principal `everyone` is allowed on a `restricted` region, so that grant validation and the pane follow one rule.
+
+**Acceptance criteria**
+
+- [ ] Given the question, when the owner decides to allow or forbid it, then the decision is recorded in an ADR or in 07, with its effect on the model of PRM-001.
+- [ ] Given the decision, when PRM-018 and PRM-035 are built, then grant validation and the pane's principal choices follow it, and the conformance kit has a test for it.
+- [ ] Given the decision, when the pane explains `restricted`, then the explanation says what `everyone` means for that region.
+
+**Notes:** a `restricted` region with an `everyone` grant behaves like an `inherit` region for that role; that is why the question is open. Phase inferred: placed before 1a so that grant validation (PRM-018) is built once. Round 4 (lane authority-2, 2026-11-13): no criterion ticked, because the decision is the owner's. The spec has no default for this question. `grantMatches` in `src/permissions/access.ts` treats `everyone` as matching every connection, and `validateRegionGrant` in `src/permissions/model.ts` accepts it. The proposal (forbid it on a `restricted` region, fail closed, or allow it and explain it in the pane) is in ADR 0146 (Round 4), proposed; no code changed.
+
+### PRM-062 Specify P4 for block-level suggestions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | 2 | M | must | Maintainer |
+
+**Spec:** 07 §17 (second bullet), §5.2 (P4); 03 §5, §13; review 6 (item 6) · **Requirements:** R3, R8 · **Depends on:** PRM-013, PRM-017
+
+As a maintainer, I want the exact P4 rules for suggested block-level changes written and property-tested, so that the `perm-suggest` profile can exist.
+
+**Acceptance criteria**
+
+- [x] Given the time box, when the spike ends, then a written recommendation states the P4 rules for suggested block-level changes beyond paragraphs and whole table rows (whole tables, table cells, columns, figures, equations, `toc` and extension blocks), or names which stay unsupported in version 1.
+- [x] Given the recommendation, when it is read against the specification, then it reconciles 03 §5 (paragraphs, whole table rows and whole tables) with 07 §17 (paragraphs and whole table rows).
+- [x] Given the recommended rules, when property tests are written against the oracle of PRM-017, then they cover each supported block type, including crafted steps, and pass.
+
+- [ ] Given the result, when the profile is defined, then the `perm-suggest` profile's scope is stated and PRM-013 and PRM-014 are amended.
+
+**Evidence:** `docs/adr/0146-authority-2-backlog-batch.md` (the recommendation: supported paragraphs, whole table rows and whole tables; unsupported cells, columns, figures, equations, `toc`, extension blocks and regions; the reconciliation of 03 §5 with 07 §17); `packages/authority/test/suggestions.test.ts`, "accepts block suggestions on paragraphs, rows and tables and agrees with the oracle (property)" (1,500 cases, crafted steps, named and forged marks) and "refuses block suggestions the model does not allow: on a cell or a region".
+
+**Notes:** remaining open item 6 of the review's section 6. The spike ends in a recommendation; the spec is changed by its owner afterwards. Phase inferred: it must finish before the `perm-suggest` profile, which belongs to phase 2. Criterion 4 stays open (2026-11-13, lane authority-2): the recommendation proposes the scope, but PRM-013 and PRM-014 belong to another lane and the spec is the owner's to change; the recommendation is in ADR 0146 (proposed).
+
+### PRM-063 Decide whether part of `structure` can be granted per region
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 1b | S | could | Owner |
+
+**Spec:** 07 §17 (third bullet), §2; ADR 0009 (consequences); 03 §13 · **Requirements:** R3 · **Depends on:** none
+
+As an owner, I want to decide whether someone who may edit only regions can be given some structure rights per region, such as a new style or a landscape page, so that region-only editors are not stuck.
+
+**Acceptance criteria**
+
+- [ ] Given the options (keep `structure` at document level only; make part of it grantable per region), when the owner decides, then the decision is recorded with its effect on the role table (PRM-001), P2 (PRM-011), definition protection (PRM-012) and region-only editors (PRM-030).
+- [ ] Given a decision to grant part of `structure`, when stories are written, then they define which operations, how grants express them and how the outcome check evaluates them.
+- [ ] Given a decision to keep it as is, when the limitation is documented, then the integration guide says a region-only editor cannot add a new style or a different page setup.
+
+**Notes:** Phase inferred: it affects the 1b role table and region-only editors. Proposed on 2026-11-06 in ADR 0033 item 4 with the specification's default, `structure` at document level only, and its effects; waits for the owner. The integration guide does not exist yet. Round 4 (lane authority-2, 2026-11-13): no criterion ticked, because the decision is the owner's. Checked: `ROLE_CAPABILITIES` in `src/permissions/model.ts` gives `structure` to `editor` and `owner` at document level only, and `validateRegionGrant` refuses a region grant of `structure` or `manage`; ADR 0146 (Round 4) records this.
+
+### PRM-064 Decide a size quota for region-only editors
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 1b | S | should | Owner |
+
+**Spec:** 07 §17 (fourth bullet); review 3.2 S-15; 03 §8 (I7) · **Requirements:** R3, R10 · **Depends on:** none
+
+As an owner, I want to decide whether a region has a size quota, so that a person who may edit only one region cannot fill the document to its size limit.
+
+**Acceptance criteria**
+
+- [ ] Given the question, when the owner decides, then the decision states whether a per-region quota exists, what it measures, its default, and the error code (05 §5.8 has `quota_exceeded`).
+- [ ] Given a decision to have a quota, when stories are written, then they define where the outcome check enforces it and what it costs (PRM-016).
+- [ ] Given a decision not to have one, when the risk is recorded, then it states that a region-only editor can grow the document up to the 16 MiB limit of invariant I7.
+
+**Notes:** Phase inferred: it affects the check built in 1b. Proposed on 2026-11-06 in ADR 0033 item 5 with the specification's default, no quota, and the risk recorded; waits for the owner. Round 4 (lane authority-2, 2026-11-13): no criterion ticked, because the decision is the owner's. Checked: no per-region quota exists in `packages/authority/src` (the only `quota_exceeded` is the thread limit in `src/room/room.ts`); ADR 0146 (Round 4) records this.
+
+### PRM-065 Decide what happens to grants, policy and state when a region is split or merged
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 1b | S | should | Owner |
+
+**Spec:** 07 §2 (`structure`), §3; ADR 0009 (decision); 03 §8 (I3) · **Requirements:** R3 · **Depends on:** none
+
+As an owner, I want to decide how a split or a merge treats identifiers, grants, policy and approval, so that these operations cannot be used to shed or inherit rights.
+
+**Acceptance criteria**
+
+- [ ] Given a split, when the owner decides, then the decision states which resulting region keeps the original identifier (a retired identifier is never reused, I3), and what grants, policy and state the other receives.
+- [ ] Given a merge of regions with different policies, grants or states, when the owner decides, then the decision states the resulting policy, grants and state.
+- [ ] Given the decision, when PRM-034 is built, then its tests and the conformance kit follow it.
+
+**Notes:** found while writing these stories; it is not among the open issues of 07 §17. Phase inferred: it blocks the split and merge criteria of PRM-034 (1b). Proposed on 2026-11-06 in ADR 0033 item 3; the authority's tests follow it (`packages/authority/test/outcome.structure.test.ts`); waits for the owner. Round 4 (lane authority-2, 2026-11-13): no criterion ticked. Criteria 1 and 2 need the owner's decision; criterion 3 waits for PRM-034 and the conformance kit. ADR 0146 (Round 4) records the proposal and that item 3 is unchanged.
+
+## Read restrictions (ADR 0019)
+
+Added on 2026-11-06 from spike S12 (SPK-029; `docs/spikes/2026-11-06-s12-read-restrictions.md`), after the owner decided that version 1 can hide regions and field values from some readers (SPK-005). Every other story that serves content, steps, positions, history, search, exports, comments, presence or field values applies the requester's projection: README §2.2 rule 8.
+
+### PRM-066 Make a region confidential and choose its readers
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Owner |
+
+**Spec:** ADR 0019; 07 §1, §3, §17 · **Requirements:** R3 · **Depends on:** CDM-053, PRM-036
+
+As an owner, I want to make a region confidential and choose who may read it, so that people who can open the document do not see that part.
+
+**Acceptance criteria**
+
+- [x] Given a region, when a user with `manage` sets its policy to `confidential`, then only principals with a grant on the region (any role) and users with `manage` can read it, and everyone else sees a placeholder.
+- [ ] Given a user without `manage`, when they set or clear `confidential`, or change a grant on a confidential region, then the commit or request is refused with `permission_denied`.
+- [ ] Given a confidential region, when its title setting says hidden, then readers without access see a neutral placeholder; when it says shown, they see the title.
+- [x] Given a user with the `owner` role, when the document has confidential regions, then they read every region.
+
+**Evidence:** `packages/authority/test/visibility.test.ts`, "making a region confidential through the room": an editor's change to `confidential` is refused with `permission_denied`; the owner's is stored, after which the owner and the holder of an editor grant read the region and everyone else gets a `hidden_region` placeholder without its text; over 300 random states and documents the owner's hidden set is empty.
+
+**Notes:** Round 10 (lane PRM-057-067, 2026-11-13): criterion 2 stays open on its wording. `tests/security/test/prm-066-confidential-rights.test.ts` (memory; 5 cases pass) shows an editor without `manage` refused when setting or clearing `confidential` (`sync.reject`, `permission_denied`) and when changing a grant on the region (HTTP 403, code `forbidden`, "needs `manage` (07 §12)"). The criterion names `permission_denied` for the request too, so the code for control-plane refusals is the owner's call; the proposal is to keep `forbidden` there and amend the criterion. ADR 0019 open questions: the default title setting, and whether owners always see everything (separation of duties). The criteria use the ADR's defaults until the owner decides. Not met: (2) the commit part is tested (`packages/authority/test/outcome.fields.test.ts`, "confidential regions in the outcome check"), but grant requests are the control plane's (PRM-018, BE). (3) no per-region title setting exists in the CDM or the permission state; the hidden-set function takes one document-wide option, hidden by default as in S12 (ADR 0033 item 8).
+
+### PRM-067 Work out each connection's hidden set and visibility class
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** ADR 0019; 07 §4, §9; 12 §3.2 · **Requirements:** R3, R13 · **Depends on:** PRM-066, FRW-088
+
+As a maintainer, I want one function that gives each connection the regions and values it may not read, so that every path filters by the same rule.
+
+**Acceptance criteria**
+
+- [x] Given a connection, the document and the permission state of a revision, when the function runs, then it returns the hidden regions, the hidden values and whether titles are shown, and connections with equal results share one visibility class.
+- [x] Given random grants, roles, participants and expiries, when a property test runs, then the function agrees with an independent oracle written from 07 and 12.
+- [x] Given any trigger that can change access (a grant, a lease, a region state, a document role, a group membership, a workflow transition, an expiry), when it happens, then the classes of connected readers are derived again.
+- [x] Given the same inputs twice, when the function runs, then the results are equal: it is pure.
+
+**Evidence:** `hiddenSet`, `hiddenSetOf` and `visibility` in `packages/authority/src/permissions/visibility.ts` (the gateway's `Visibility` shape). `test/visibility.test.ts`: over 2,000 random connections, grants (every principal form, invalid roles, expiry either side of the instant), document states, approvals, leases, policies and sensitive fields, the hidden set equals an oracle written in the test from 07 §4, 12 §3.2 and ADR 0019; titles are hidden by default; equal inputs give equal results and nothing is mutated; two connections with equal results share one class key and one projection; the clock given decides expiry. Criterion 3: `packages/authority/test/projection.steps.test.ts`, "every trigger that can change access derives the classes again" (one case per trigger, run with `it.each`): a grant, a lease, a region state, a workflow flag and a document state, each with a new grants revision, make the gateway ask the visibility function about a connected reader, and only the grant closes the reader it changes for; a document role and a group membership, in a refreshed token, close the reader whose class changes; an expiry is covered by "closes a reader whose grant expires (Room.expire)" in the same file.
+
+**Notes:** Criterion 3 is met for the triggers the authority can see: grants, leases, region states, the workflow flag and the document state move the revision, and `ProjectionGateway.finish` derives every class again on that move; expiry (`Room.expire`, PRM-007) and a refreshed token (`auth.refresh`, which carries a document role or group membership) set the gateway's replaced flag. The workflow flag stands in for a workflow transition until FRW ships the transitions (phase 2); a group membership reaches the authority only through a refreshed token, not a directory push, which is the control plane's (PRO).
+
+## Coverage
+
+| Spec 07 section | Stories |
+|---|---|
+| Introduction (version 1 restricts changing; reading is restricted by projection, ADR 0019) | PRM-004, PRM-057, PRM-066, PRM-067 |
+| §1 Concepts | PRM-001, PRM-004, PRM-018, PRM-023 |
+| §2 Roles | PRM-001, PRM-011, PRM-018, PRM-033, PRM-034 |
+| §3 Where permission data lives | PRM-002, PRM-003, PRM-018, PRM-021 |
+| §4 Effective capabilities | PRM-004, PRM-005, PRM-006, PRM-007, PRM-023, PRM-043, PRM-047 |
+| §5 Enforcement by the authority | PRM-009 |
+| §5.1 The outcome check | PRM-008, PRM-009, PRM-017 |
+| §5.2 Rules P1 to P6, `trackChanges` | PRM-010, PRM-011, PRM-013, PRM-014, PRM-015 |
+| §5.2 Rules P7 to P9 | none: owned by FRW (12 §4.2); PRM-010 provides the seam |
+| §5.3 Definitions that affect protected regions | PRM-012, PRM-047, PRM-050 |
+| §5.4 Cost | PRM-016 |
+| §6 Comments | PRM-037, PRM-038, PRM-039, PRM-040 |
+| §7 Behaviour in the editor | PRM-024, PRM-026, PRM-027, PRM-028, FE-037, PRM-030, PRM-031, PRM-032, PRM-033, PRM-034, PRM-035, PRM-036, PRM-048 |
+| §8 History visibility | PRM-041, PRM-042 |
+| §9 Live changes, revocation and races | PRM-019, PRM-020, PRM-021, PRM-022, PRM-024, FE-010 |
+| §10 Leases | PRM-043, PRM-044, PRM-045 |
+| §11 Region states | PRM-046, PRM-047, PRM-048 |
+| §12 Authorisation matrix | PRM-056, PRM-057, PRM-058 |
+| §13 Interaction with history | PRM-049, PRM-050 |
+| §14 Audit | PRM-051, PRM-052, PRM-053 |
+| §15 DOCX mapping | EXP-104, EXP-094 |
+| §16 Threat cases | PRM-059, PRM-060 |
+| §17 Open issues | PRM-061, PRM-062, PRM-063, PRM-064 (read restrictions and the policy engine are Notes: see Open questions) |
+
+## Open questions
+
+### Open issues and owner decisions that shape these stories
+
+| Question | Source | Stories affected |
+|---|---|---|
+| Should `everyone` be allowed on restricted regions? | 07 §17 | PRM-061, PRM-018, PRM-035, PRM-004 |
+| Exact P4 rules for suggested block-level changes beyond paragraphs and whole table rows; the `perm-suggest` profile waits on them | 07 §17; 03 §13; review 6 (item 6) | PRM-062, PRM-013, PRM-014 |
+| Should some of `structure` be grantable per region, so that a region-only editor can add a style or a landscape page? | 07 §17; 03 §13 | PRM-063, PRM-011, PRM-012, PRM-030 |
+| A per-region size quota, so that a region-only editor cannot fill a document to its size limit | 07 §17; review 3.2 S-15 | PRM-064, PRM-016 |
+| Read restrictions per region or field (roadmap decision 5): decided on 2026-11-06, version 1 can hide regions and field values from some readers (SPK-005). Designed in ADR 0019 (proposed) and tested by S12 (SPK-029). Still open there: default title setting, default readers of hidden values, whether owners always see everything | 07 §17; 11 §10 (decision 5); ADR 0011; ADR 0019 | PRM-066, PRM-067; changes to PRM-001, PRM-004, PRM-006, PRM-041, PRM-042, PRM-032 and others listed in the S12 report |
+| A policy engine (for example OpenFGA or SpiceDB) behind `GrantStore` when groups nest or grants need conditions; nothing in the protocol changes | 07 §17 | PRM-002 (no story; not scheduled) |
+
+### Gaps found while writing the stories
+
+| Gap | Stories affected |
+|---|---|
+| For a locked or archived document, 04 §5 step 1 says `read_only` while P6 and 04 step 1's first clause say `permission_denied`; both can apply to the same commit | PRM-005, PRM-010, PRM-038 |
+| P3 speaks of a region's "two boundaries", wording from the paired-marker design that ADR 0009 replaced by a container node; no rejection code is named | PRM-011 |
+| 07 §3 says every change to leases is a control commit; 04 §3.2 and 08 §2 list only lease breaks | PRM-002, PRM-043, PRM-044 |
+| 07 §3 allows only a region's `policy` as permission data in the content. `settings.trackChanges` (07 §5.2) and `form_field.assignee` (12 §3.1) are also read by the permission rules. PRM-002 criterion 3 treats them as document settings, not permission data, because they name no principal, grant, state or lease | PRM-002 |
+| PRM-002 criteria 1 and 2 put the control commit in the same transaction as the grant change; 07 §9 and 06 §3 have the room record it after it learns of the new revision, which is what the room does. Both cannot hold while the room is the only writer of the log | PRM-002, BE-026 |
+| 07 §5.1 does not say that a region's scope excludes the values of fields inside it, yet 12 §4.3 allows fills in approved regions; the approval hash of 07 §11 therefore has no stated treatment of field values | PRM-008, PRM-046, PRM-047 |
+| The identifier format of the scope for one definition node (`defs` per definition node in 07 §5.1) is not given | PRM-008, PRM-012 |
+| "Who can edit" for an `inherit` region cannot be listed fully: document-level roles live in the host's tokens, not in the service | PRM-026, PRM-032 |
+| `minVisibleSeq` is a threshold, but the `editors` setting gives other users named versions only; clamp or refuse for the commits resource and a missing `access_since` claim are not stated; the gate for a fork by a service credential without an actor is not stated | PRM-041, PRM-042 |
+| The authorisation matrix has no rows for changing a document's state, reading grants or regions, read markers, activity, resolving asset URLs, deleting an export, and editing a comment; whether a service credential alone may patch grants is not stated | PRM-018, PRM-032, PRM-056 |
+| No endpoint is named for breaking a lease; the heartbeat interval and whether the default expiry and maximum are configurable are not stated | PRM-043, PRM-044, PRM-045 |
+| Error codes are not named for an invalid grant, a refused thread, the thread limit, a refused lease, or a restore, import or repair refused on an approved region | PRM-018, PRM-037, PRM-040, PRM-043, PRM-047 |
+| 05 §10 passes `permissions` to `applyCommit` but the format is not defined; backends not written in JavaScript must compute the map of 07 §4 themselves | PRM-004, PRM-009 |
+| The export identities callback of 07 §15 is not in the list of callbacks in 05 §8.1 | EXP-094 |
+| For import, "locked" is undefined for ranges that cannot become regions; the policy of imported regions and the file's document protection are not stated | EXP-104 |
+| 07 §5.3 protects styles, numbering definitions and page setup, but `settings` (for example `defaultTabStop`, `dir`, `defaultParagraphStyle`), `role_def` and `rule_def` also change how protected text looks or behaves; how a region "uses" a page setup or numbering definition is not defined | PRM-012 |
+| Who may switch `settings.trackChanges` on is not stated | PRM-015 |
+| Invariant I3 means undoing a region's deletion is rejected; the effect on undo is not discussed. Split, merge and removal of regions leave grants, policy and content fate unspecified | PRM-003, PRM-034, PRM-065 |
+| Under 07 §4 a grant replaces the document-role fallback in a restricted region, so a `viewer` grant can lower a `commenter` to `view` only | PRM-004 |
+| Block suggestions: 03 §5 allows paragraphs, whole table rows and whole tables; 07 §17 names paragraphs and whole table rows | PRM-014, PRM-062 |
+| No budget for the outcome check or the access recomputation; the throttle of `dep.commit.rejected` is not parameterised | PRM-016, PRM-006, PRM-053 |
+| How a per-document revocation is remembered; 06 stores one `revoked_before` per tenant user | PRM-022 |
+| The data that tells a client who changed permissions is not in `sync.reject` or `access` | PRM-024 |
+| Whether a thread spanning several scopes is governed by one scope or all, and whether resolved threads count towards the limit | PRM-039, PRM-040 |
+| Whether `role:<id>` in a grant must name an existing `role_def` | PRM-023 |
+| Whether the DOCX export should tell the user that the file's protection is advisory | EXP-094 |

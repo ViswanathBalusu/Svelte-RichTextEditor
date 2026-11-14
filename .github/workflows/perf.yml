@@ -1,0 +1,124 @@
+# Client performance and the text kernel (FND-007, SPK-018, SPK-023; ADR 0037).
+#
+# Results are only comparable on the reference machine: a dedicated self-hosted runner with the label
+# `docedit-reference`, set up and calibrated as ADR 0037 describes. Until such a runner is
+# registered, the jobs that need it wait in the queue; the cross-browser and Rust jobs run on
+# GitHub-hosted runners.
+name: perf
+
+on:
+  schedule:
+    # Nightly: typing latency, load and memory, and the model's costs, on the reference runner.
+    - cron: '41 3 * * *'
+    # Weekly: spikes S5 and S10 in every engine.
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      calibrate:
+        description: 'Run the calibration first (DOCEDIT_CALIBRATE=1) and report the throttling rate for this runner'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ['packages/perf/wasm/**']
+  pull_request:
+    paths: ['packages/perf/wasm/**']
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    name: Typing latency, load and memory on the reference runner (FND-007)
+    if: (github.event_name == 'schedule' && github.event.schedule == '41 3 * * *') || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, docedit-reference]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
+      - name: Calibration (on demand)
+        if: github.event_name == 'workflow_dispatch' && inputs.calibrate
+        env:
+          DOCEDIT_CALIBRATE: '1'
+        run: pnpm exec playwright test -c packages/perf/playwright.config.ts --project=reference calibrate
+      - name: Harness on the reference profile
+        env:
+          DOCEDIT_COMMIT: ${{ github.sha }}
+        run: pnpm exec playwright test -c packages/perf/playwright.config.ts --project=reference harness
+      - name: Compare with the baseline (fails on a regression beyond the tolerance)
+        run: node packages/perf/scripts/compare-baseline.ts
+      - name: The model's costs (canonical form, hash, validation)
+        run: node packages/perf/scripts/model-costs.ts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: perf-runs-${{ github.sha }}
+          path: packages/perf/test-results/
+          if-no-files-found: warn
+
+  text-kernel:
+    name: S5 and S10 in ${{ matrix.project }} on ${{ matrix.os }} (weekly)
+    if: github.event_name == 'schedule' && github.event.schedule == '23 4 * * 1'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium
+            os: ubuntu-24.04
+          - project: firefox
+            os: ubuntu-24.04
+          - project: webkit
+            os: ubuntu-24.04
+          - project: msedge
+            os: windows-2025
+          # WebKit on macOS, the closest Playwright gets to Safari.
+          - project: webkit
+            os: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install the browser (Edge is the runner's own)
+        if: matrix.project != 'msedge'
+        run: pnpm exec playwright install --with-deps ${{ matrix.project }}
+      - run: pnpm exec playwright test -c packages/perf/playwright.config.ts --project=${{ matrix.project }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: text-kernel-${{ matrix.project }}-${{ matrix.os }}
+          path: packages/perf/test-results/
+          if-no-files-found: warn
+
+  wasm:
+    name: The Rust text kernel builds and matches the committed modules (SPK-023)
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Rust 1.85 with the wasm32 target (rustup is preinstalled on the runner)
+        run: |
+          rustup toolchain install 1.85.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.85.0
+      - name: Build the modules (includes the crate licence check)
+        run: pnpm --filter @docedit/perf run wasm
+      - name: The committed modules match the source
+        run: git diff --exit-code -- packages/perf/wasm/bin

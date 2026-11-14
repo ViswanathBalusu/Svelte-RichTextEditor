@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Unit tests (Vitest, Node.js), the Playwright specs, the scripts and the configuration files. The DOM library types the callbacks that Playwright runs in the page.",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["test/**/*.ts", "e2e/**/*.ts", "scripts/**/*.ts", "src/**/*.d.ts", "*.config.ts"]
+}

@@ -1,0 +1,168 @@
+/**
+ * `@docedit/ui`: Svelte 5 components of the shell (02 §4; 13 §3). Never imports `prosemirror-*`
+ * (ADR 0003): the core is reached only through `CoreApi`. Panes are loaded lazily, each its own
+ * chunk; the shell's stylesheet is `@docedit/ui/styles/shell.css` (load it with `?inline` and adopt
+ * it next to the element's own sheet, 02 §3).
+ *
+ * What the element uses (ADR 0041, ADR 0052):
+ * - `createCommandRegistry(core)`: the one registry; `exec()` is `registry.exec`, `queryCommand()`
+ *   is `registry.state`, and `bindCommandStateEvent` raises `de-command-state`. The shell binds
+ *   the registry's keys itself (`bindShortcuts`) on the shadow root it is mounted in;
+ * - `Strings`: the catalogue; `setLocale` from the `locale` attribute;
+ * - `PeopleDirectory`: names and avatars from the host's `resolveUsers`;
+ * - `SettingsStore`: the `toolbar`, `header`, `locale`, `theme` and `pageTheme` settings;
+ * - `App`, mounted with those as props; its `restoreFocus()` export gives focus back to the
+ *   control a host dialog took it from (UX-039).
+ */
+export { default as App } from './App.svelte';
+export { live } from './live.ts';
+export type {
+  AccessLimit,
+  AccessObject,
+  AccessSummary,
+  Capability,
+  CommandName,
+  ConnectionState,
+  CoreApi,
+  CoreCommandName,
+  CoreLabels,
+  CoreQueryName,
+  CoreQueryName1b,
+  DocumentStats,
+  EditorMode,
+  ExportDiagnostic,
+  ExportJobView,
+  ExportOptions,
+  ExportService,
+  ExportTarget,
+  FillField,
+  FillSummary,
+  GrantsService,
+  GrantsSnapshot,
+  HeaderPaneName,
+  OutlineItem,
+  PaneName,
+  PanelInfo,
+  PeerCaret,
+  PresencePeer,
+  PrincipalInfo,
+  PrincipalQuery,
+  ReadView,
+  RecoveredEdits,
+  RecoveredItem,
+  RefusalNotice,
+  RegionEditors,
+  RegionGrant,
+  RegionLabel,
+  RegionRole,
+  RegionSummary,
+  ResolveUsers,
+  SearchMatch,
+  SearchOptions,
+  SearchPrincipals,
+  SearchResults,
+  SelectionContext,
+  SelectionSummary,
+  ShellCounts,
+  ShellRect,
+  StatusSummary,
+  StyleSummary,
+  SyncState,
+  UserInfo,
+  ViewName,
+} from './core-api.ts';
+export {
+  CommandRegistry,
+  CommandRegistrationError,
+  CORE_QUERY_NAMES,
+  CORE_QUERY_NAMES_1B,
+  ShellQueries,
+  bindCommandStateEvent,
+  bindShortcuts,
+  builtinCommands,
+  canonicalKey,
+  coreCommands,
+  coreQuerySource,
+  createCommandRegistry,
+  eventKey,
+  frameScheduler,
+  immediateScheduler,
+  type CommandContext,
+  type CommandEntry,
+  type CommandState,
+  type CommandView,
+  type ContextTarget,
+  type ExecResult,
+  type QuerySource,
+  type RegistryOptions,
+  type RegistrySnapshot,
+  type Scheduler,
+  type ShortcutOptions,
+  type Unavailable,
+} from './commands/index.ts';
+export {
+  BUILT_IN_LOADERS,
+  DEFAULT_LOCALE,
+  Strings,
+  candidates,
+  sourceTranslator,
+  type StringsOptions,
+  type Translator,
+} from './i18n/strings.ts';
+export { EN_GB, type StringKey } from './i18n/en-GB.ts';
+export type {
+  LocaleTable,
+  Message,
+  MessageParams,
+  PluralMessage,
+  StringTable,
+  TableLoader,
+} from './i18n/types.ts';
+export {
+  PeopleDirectory,
+  safeAvatarUrl,
+  type DirectoryOptions,
+  type Person,
+} from './people/directory.ts';
+export {
+  DEFAULT_SETTINGS,
+  SettingsStore,
+  headerMode,
+  pageThemeMode,
+  themeMode,
+  toolbarMode,
+  type HeaderMode,
+  type ShellSettings,
+  type ToolbarMode,
+} from './shell/settings.ts';
+export type { PageTheme, ThemeSetting } from './shell/theme.ts';
+export {
+  BUILT_IN_PANES,
+  PaneRegistry,
+  type PaneDescriptor,
+  type PaneProps,
+} from './shell/panes.ts';
+export { SHORTCUT_TABLE, type ShortcutRow } from './shortcuts/table.ts';
+export {
+  HookQueue,
+  afterPaint,
+  connectHooks,
+  type ConnectedHooks,
+  type DocumentChangedEvent,
+  type ExtensionHooks,
+  type HookQueueOptions,
+  type HookQueueStats,
+} from './extensions/hooks.ts';
+export {
+  FilterRegistrationError,
+  FilterRegistry,
+  NO_EXPORT,
+  toBlob,
+  type ExportFilter,
+  type ExportOutcome,
+  type Filter,
+  type FilterChoice,
+  type FilterKind,
+  type ImportFilter,
+  type ImportOutcome,
+} from './extensions/filters.ts';

@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "The harness pages, bundled by Vite (scripts/build-pages.ts): the DOM is available, Node.js is not.",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"]
+  },
+  "include": ["src/browser/**/*.ts", "src/**/*.d.ts"]
+}

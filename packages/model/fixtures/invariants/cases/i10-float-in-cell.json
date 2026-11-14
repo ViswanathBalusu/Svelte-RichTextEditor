@@ -1,0 +1,42 @@
+{
+  "name": "i10-float-in-cell",
+  "doc": "replace: a floating figure in a table cell.",
+  "base": "kitchen-sink",
+  "steps": [
+    {
+      "stepType": "replace",
+      "from": 170,
+      "to": 170,
+      "slice": {
+        "content": [
+          {
+            "type": "figure",
+            "attrs": {
+              "id": "fgFloat000000001",
+              "asset": "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+              "width": 10,
+              "height": 10,
+              "alt": null,
+              "align": null,
+              "placement": "float",
+              "preserved": null,
+              "ext": {}
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I10"]
+}

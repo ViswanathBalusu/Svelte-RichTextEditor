@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:docedit:dep:1:draft:webhook:dep.grants.changed.v1",
+  "title": "dep.grants.changed.v1",
+  "description": "The body of `dep.grants.changed.v1`: a CloudEvents 1.0 event in structured JSON mode. Requests are signed as described by Standard Webhooks: headers `webhook-id`, `webhook-timestamp`, `webhook-signature`, HMAC-SHA256, five-minute tolerance.",
+  "$comment": "05 §7; gaps: G82",
+  "type": "object",
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "enum": [
+        "1.0"
+      ]
+    },
+    "id": {
+      "description": "Event identifier.",
+      "$comment": "gaps: G82",
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "$comment": "gaps: G82",
+      "type": "string",
+      "format": "uri-reference",
+      "minLength": 1
+    },
+    "type": {
+      "description": "The event name with its version suffix, for example `dep.export.completed.v1`.",
+      "const": "dep.grants.changed.v1"
+    },
+    "subject": {
+      "description": "The document identifier.",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "time": {
+      "$comment": "gaps: G82",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "datacontenttype": {
+      "type": "string",
+      "enum": [
+        "application/json"
+      ]
+    },
+    "data": {
+      "description": "Data of `dep.grants.changed.v1`: Region grants changed.",
+      "$comment": "05 §7; gaps: G83",
+      "type": "object",
+      "properties": {
+        "seq": {
+          "description": "The document head the event refers to.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "seq"
+      ]
+    }
+  },
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "subject",
+    "data"
+  ]
+}

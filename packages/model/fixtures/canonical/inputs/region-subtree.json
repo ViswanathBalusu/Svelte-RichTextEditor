@@ -1,0 +1,19 @@
+{
+  "type": "region",
+  "attrs": { "id": "rG7mK2pQ9xYt4HcD", "title": "Legal review", "policy": "restricted" },
+  "content": [
+    {
+      "type": "paragraph",
+      "attrs": { "id": "pA1b2C3d4E5f6G7h", "style": "Normal" },
+      "content": [
+        { "type": "text", "text": "Liability is limited to " },
+        {
+          "type": "text",
+          "text": "direct",
+          "marks": [{ "type": "bold", "attrs": { "value": true } }]
+        },
+        { "type": "text", "text": " damages." }
+      ]
+    }
+  ]
+}

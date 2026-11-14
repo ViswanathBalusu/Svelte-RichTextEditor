@@ -1,0 +1,52 @@
+{
+  "rule": "whitespace",
+  "spec": "09 §3.2 (Spaces); 02 §9.3",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "spaceRuns in packages/model/src/spacing/whitespace.ts",
+  "description": "Runs of spaces are kept in every writer; which spaces a TeX writer writes explicitly.",
+  "format": "`text` is the whole text of a paragraph; `expected` lists its runs of U+0020 with their UTF-16 `start`, `length`, `position` (leading, between or trailing) and how many spaces are `explicit` for TeX.",
+  "cases": [
+    {
+      "id": "single-spaces",
+      "description": "Single spaces between words need nothing explicit.",
+      "text": "a b c",
+      "expected": [
+        { "start": 1, "length": 1, "position": "between", "explicit": 0 },
+        { "start": 3, "length": 1, "position": "between", "explicit": 0 }
+      ]
+    },
+    {
+      "id": "run-of-spaces",
+      "description": "A run of three spaces is kept: a TeX writer writes the second and third explicitly.",
+      "text": "Total:   12",
+      "expected": [{ "start": 6, "length": 3, "position": "between", "explicit": 2 }]
+    },
+    {
+      "id": "leading-and-trailing",
+      "description": "Leading and trailing spaces are kept, every one explicit.",
+      "text": "  indented ",
+      "expected": [
+        { "start": 0, "length": 2, "position": "leading", "explicit": 2 },
+        { "start": 10, "length": 1, "position": "trailing", "explicit": 1 }
+      ]
+    },
+    {
+      "id": "only-spaces",
+      "description": "A paragraph of spaces only is one leading run.",
+      "text": "   ",
+      "expected": [{ "start": 0, "length": 3, "position": "leading", "explicit": 3 }]
+    },
+    {
+      "id": "no-break-space-is-ordinary",
+      "description": "A no-break space is an ordinary character, so it splits a run.",
+      "text": "a  b",
+      "expected": [{ "start": 2, "length": 1, "position": "between", "explicit": 0 }]
+    },
+    {
+      "id": "empty",
+      "description": "An empty paragraph has no spaces.",
+      "text": "",
+      "expected": []
+    }
+  ]
+}

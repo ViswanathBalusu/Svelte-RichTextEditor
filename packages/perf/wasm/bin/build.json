@@ -1,0 +1,178 @@
+{
+  "rustc": "rustc 1.89.0 (29483883e 2025-08-04)",
+  "target": "wasm32-unknown-unknown",
+  "profile": "release (opt-level 3, LTO, one codegen unit, panic abort, stripped; no wasm-opt)",
+  "builds": [
+    {
+      "file": "text-kernel.wasm",
+      "features": "kernel (default)",
+      "bytes": 1171586,
+      "gzip9": 419844,
+      "brotli11": 327467,
+      "sha256": "c15b720b65fc5d8235c4b58fc223f260a6473d688888c8eb95a9c8c23785819f",
+      "buildSeconds": 94.6
+    },
+    {
+      "file": "harfrust-shaper.wasm",
+      "features": "none (shaper only)",
+      "bytes": 1094813,
+      "gzip9": 376958,
+      "brotli11": 291012,
+      "sha256": "9a44ffe5bc09dbc683777465865f572f35254e8b00053f357135a22181630316",
+      "buildSeconds": 1.8
+    }
+  ],
+  "licences": {
+    "checked": 21,
+    "crates": [
+      {
+        "name": "bitflags",
+        "version": "2.13.2",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "bytemuck",
+        "version": "1.25.2",
+        "licence": "Zlib OR Apache-2.0 OR MIT",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "bytemuck_derive",
+        "version": "1.12.1",
+        "licence": "Zlib OR Apache-2.0 OR MIT",
+        "option": "MIT",
+        "ships": false
+      },
+      {
+        "name": "foldhash",
+        "version": "0.2.0",
+        "licence": "Zlib",
+        "option": "Zlib",
+        "ships": true
+      },
+      {
+        "name": "font-types",
+        "version": "0.12.7",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "harfrust",
+        "version": "0.15.0",
+        "licence": "MIT",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "hypher",
+        "version": "0.1.8",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "once_cell",
+        "version": "1.21.4",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "proc-macro2",
+        "version": "1.0.107",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": false
+      },
+      {
+        "name": "quote",
+        "version": "1.0.47",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": false
+      },
+      {
+        "name": "read-fonts",
+        "version": "0.46.0",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "smallvec",
+        "version": "1.16.4",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "stable_deref_trait",
+        "version": "1.2.1",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": true
+      },
+      {
+        "name": "syn",
+        "version": "3.0.9",
+        "licence": "MIT OR Apache-2.0",
+        "option": "MIT",
+        "ships": false
+      },
+      {
+        "name": "synstructure",
+        "version": "0.14.0",
+        "licence": "MIT",
+        "option": "MIT",
+        "ships": false
+      },
+      {
+        "name": "unicode-ident",
+        "version": "1.0.27",
+        "licence": "(MIT OR Apache-2.0) AND Unicode-3.0",
+        "option": "MIT AND Unicode-3.0",
+        "ships": false
+      },
+      {
+        "name": "unicode-linebreak",
+        "version": "0.1.5",
+        "licence": "Apache-2.0",
+        "option": "Apache-2.0",
+        "ships": true
+      },
+      {
+        "name": "yoke",
+        "version": "0.8.4",
+        "licence": "Unicode-3.0",
+        "option": "Unicode-3.0",
+        "ships": true
+      },
+      {
+        "name": "yoke-derive",
+        "version": "0.8.4",
+        "licence": "Unicode-3.0",
+        "option": "Unicode-3.0",
+        "ships": false
+      },
+      {
+        "name": "zerofrom",
+        "version": "0.1.8",
+        "licence": "Unicode-3.0",
+        "option": "Unicode-3.0",
+        "ships": true
+      },
+      {
+        "name": "zerofrom-derive",
+        "version": "0.1.8",
+        "licence": "Unicode-3.0",
+        "option": "Unicode-3.0",
+        "ships": false
+      }
+    ],
+    "problems": []
+  }
+}

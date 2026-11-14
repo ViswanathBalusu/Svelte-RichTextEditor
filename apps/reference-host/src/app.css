@@ -1,0 +1,231 @@
+/*
+ * Styles of the reference host's own pages. Deliberately plain: the product's visual design is not
+ * specified yet (13 §13). Colours meet WCAG 2.1 AA contrast, focus is always visible, and nothing
+ * depends on colour alone.
+ */
+:root {
+  --host-ink: #1b1f24;
+  --host-muted: #4a5360;
+  --host-paper: #ffffff;
+  --host-wash: #f3f5f7;
+  --host-line: #c9d0d8;
+  --host-accent: #0b5cad;
+  --host-accent-ink: #ffffff;
+  --host-warn-wash: #fff4d6;
+  --host-warn-line: #9a6b00;
+  --host-danger: #a4161a;
+  --host-focus: #0b5cad;
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  color: var(--host-ink);
+  background: var(--host-paper);
+}
+
+body {
+  margin: 0;
+}
+
+.skip {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+}
+
+.skip:focus {
+  left: 1rem;
+  top: 0.5rem;
+  z-index: 10;
+  background: var(--host-paper);
+  padding: 0.5rem 0.75rem;
+}
+
+:focus-visible {
+  outline: 3px solid var(--host-focus);
+  outline-offset: 2px;
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  align-items: baseline;
+  padding: 0.5rem 1rem;
+  background: var(--host-warn-wash);
+  border-bottom: 2px solid var(--host-warn-line);
+}
+
+.banner p {
+  margin: 0;
+}
+
+.product {
+  font-weight: 700;
+}
+
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+main:focus {
+  outline: none;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0.5rem 0 1rem;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+a {
+  color: var(--host-accent);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--host-accent);
+  background: var(--host-paper);
+  color: var(--host-accent);
+  border-radius: 4px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--host-accent);
+  color: var(--host-accent-ink);
+}
+
+button.danger {
+  border-color: var(--host-danger);
+  color: var(--host-danger);
+}
+
+button[aria-disabled='true'],
+button:disabled {
+  border-color: var(--host-line);
+  color: var(--host-muted);
+  cursor: not-allowed;
+}
+
+input,
+select {
+  border: 1px solid var(--host-muted);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  background: var(--host-paper);
+  color: var(--host-ink);
+}
+
+label {
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--host-muted);
+}
+
+.people {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+.people li {
+  border: 1px solid var(--host-line);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.people form {
+  margin-top: 0.5rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--host-line);
+  vertical-align: top;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.inline-form {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.notice {
+  border: 1px solid var(--host-line);
+  border-left: 4px solid var(--host-accent);
+  background: var(--host-wash);
+  padding: 0.5rem 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.notice.problem {
+  border-left-color: var(--host-danger);
+}
+
+.editor-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.host-toolbar {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+doc-editor {
+  display: block;
+  min-height: 28rem;
+  border: 1px solid var(--host-line);
+  border-radius: 6px;
+}
+
+.panel {
+  border: 1px solid var(--host-line);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 1rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

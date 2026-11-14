@@ -1,0 +1,162 @@
+{
+  "artifact": "export-diagnostic-codes",
+  "version": 1,
+  "classVersion": "0.2.3",
+  "codes": [
+    {
+      "code": "bundle_refused",
+      "severity": "error",
+      "message": "The bundle did not come from the converter and was not compiled."
+    },
+    {
+      "code": "class_error",
+      "severity": "error",
+      "message": "The house class refused part of the document."
+    },
+    {
+      "code": "font_file_mismatch",
+      "severity": "error",
+      "message": "A font file does not hash to the name the manifest gives it."
+    },
+    {
+      "code": "font_file_missing",
+      "severity": "error",
+      "message": "A font of the manifest is not in the worker font directory."
+    },
+    {
+      "code": "font_substituted",
+      "severity": "warning",
+      "message": "A font shape was replaced by another."
+    },
+    {
+      "code": "latex_error",
+      "severity": "error",
+      "message": "LaTeX reported an error."
+    },
+    {
+      "code": "layout_invalid",
+      "severity": "warning",
+      "message": "The layout report was invalid and is not used."
+    },
+    {
+      "code": "limit_memory",
+      "severity": "error",
+      "message": "The compile passed its memory limit."
+    },
+    {
+      "code": "limit_output",
+      "severity": "error",
+      "message": "The compile passed its output size limit."
+    },
+    {
+      "code": "limit_pages",
+      "severity": "error",
+      "message": "The document passed the page limit."
+    },
+    {
+      "code": "limit_processes",
+      "severity": "error",
+      "message": "The compile passed its process limit."
+    },
+    {
+      "code": "limit_time",
+      "severity": "error",
+      "message": "The compile passed its time limit."
+    },
+    {
+      "code": "limit_workdir",
+      "severity": "error",
+      "message": "The compile filled its working directory."
+    },
+    {
+      "code": "log_truncated",
+      "severity": "warning",
+      "message": "The output was truncated at a limit of the parser; later messages are not listed."
+    },
+    {
+      "code": "missing_glyph",
+      "severity": "error",
+      "message": "No font of the document has this character."
+    },
+    {
+      "code": "option_ignored",
+      "severity": "info",
+      "message": "An export option this worker does not know was ignored."
+    },
+    {
+      "code": "option_invalid",
+      "severity": "error",
+      "message": "An export option has a value outside its schema."
+    },
+    {
+      "code": "option_unsupported",
+      "severity": "error",
+      "message": "An export option is not supported yet."
+    },
+    {
+      "code": "overfull_line",
+      "severity": "warning",
+      "message": "A line is wider than its column."
+    },
+    {
+      "code": "package_error",
+      "severity": "error",
+      "message": "A package of the house class reported an error."
+    },
+    {
+      "code": "package_warning",
+      "severity": "info",
+      "message": "A package of the house class gave a warning."
+    },
+    {
+      "code": "pdf_standard_substituted",
+      "severity": "warning",
+      "message": "The PDF declares PDF/A-4f instead of PDF/A-4, because tagged PDF embeds files."
+    },
+    {
+      "code": "preview_one_pass",
+      "severity": "info",
+      "message": "A preview runs one pass: page numbers in the table of contents and in references may be stale."
+    },
+    {
+      "code": "references_changed",
+      "severity": "warning",
+      "message": "Page references changed in the last pass; page numbers may be stale."
+    },
+    {
+      "code": "references_not_converged",
+      "severity": "warning",
+      "message": "Page references did not settle within the pass limit; page numbers may be wrong."
+    },
+    {
+      "code": "suggestions_unsupported",
+      "severity": "error",
+      "message": "Documents with unresolved suggestions cannot be exported yet."
+    },
+    {
+      "code": "tex_error",
+      "severity": "error",
+      "message": "The typesetter stopped with an error."
+    },
+    {
+      "code": "tex_fatal",
+      "severity": "error",
+      "message": "The compile stopped and produced no PDF."
+    },
+    {
+      "code": "tex_undefined",
+      "severity": "error",
+      "message": "The typesetter met a command it does not know."
+    },
+    {
+      "code": "undefined_reference",
+      "severity": "warning",
+      "message": "A reference has no target."
+    },
+    {
+      "code": "view_unsupported",
+      "severity": "error",
+      "message": "Exports of a view with hidden regions or values are not available yet."
+    }
+  ]
+}

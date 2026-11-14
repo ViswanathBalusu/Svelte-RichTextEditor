@@ -1,0 +1,17 @@
+# Package layout of 01 §6. Packages are created only when their first story needs them (FND-001).
+packages:
+  - packages/*
+  - services/*
+  - apps/*
+  # Cross-cutting test suites that belong to no one package: security proofs (PLAN-1a packet F).
+  - tests/*
+
+# pnpm refuses releases younger than its minimum release age (supply-chain hygiene). Playwright is
+# pinned to its newest release so that the browser builds match the supported versions (FND-002).
+minimumReleaseAgeExclude:
+  - playwright-core@1.65.0
+  - playwright@1.65.0
+  - '@playwright/test@1.65.0'
+
+# Dependencies run no install scripts unless they are listed here (supply-chain hygiene, SEC epic).
+onlyBuiltDependencies: []

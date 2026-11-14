@@ -1,0 +1,9 @@
+{
+  "//": "What Node.js runs directly (scripts/, the host's server modules) and the Node tests (test/), with the workspace's settings: NodeNext, relative imports ending in .ts. The DOM types are added only because the tests import the glue in src/lib/glue, which is written against the DOM. The browser scenario is tsconfig.e2e.json; the SvelteKit app is tsconfig.json.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.ts", "test/**/*.ts", "src/lib/server/**/*.ts", "vite.config.ts"]
+}

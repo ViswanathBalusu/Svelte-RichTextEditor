@@ -1,0 +1,39 @@
+{
+  "name": "rows-deleted",
+  "description": "The second row of a table is deleted.",
+  "expected": ["removed:trFees0000000002"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "removed",
+        "blockId": "trFees0000000002",
+        "type": "table_row",
+        "path": ["tFees00000000001"],
+        "user": "carol",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "removed",
+        "blockId": "trFees0000000002",
+        "type": "table_row",
+        "path": ["tFees00000000001"]
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

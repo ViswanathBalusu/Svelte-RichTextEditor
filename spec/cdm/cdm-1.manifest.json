@@ -1,0 +1,17 @@
+{
+  "cdm": 1,
+  "status": "draft",
+  "generator": "packages/model/scripts/generate.ts",
+  "prosemirrorSchemaHash": "114aaf8efd1fcdc419226436613a8613f2954bfec5f9e393a714e3a66b841ca5",
+  "projectionSchemaHash": "7788ae07fe4c4de83a928b099322f5affd29db2192696e71cc5465b3a129b795",
+  "files": {
+    "spec/cdm/cdm-1.schema.json": "b6199182f27e8eee2076c83458d3cc4c24ea51a9266f4ff7700fada9c9d3fef7",
+    "spec/cdm/cdm-1.prosemirror.json": "cd9651b46907a84c604606da4cc45a2d2c1f54059eff079271011ae4547333a8",
+    "spec/cdm/cdm-1.projection.json": "6d542c7d312bb3b8f5be977bf768dd919a64005b8c279bc0ee90d4beda83724a",
+    "spec/cdm/cdm-1.attributes.md": "c194620815528ae29e2663a30af2f6ba6aa58036bbaf44d37dfa5edb73708789",
+    "spec/cdm/cdm-1.writer-support.md": "d7dc6d13fc0d8cba98fdf1b3b56338f6292f0aa387e5a85fe9688a29e2bd02a9",
+    "spec/cdm/cdm-1.writer-support.json": "a3d9f41255c81d9d6e9e231a738db0ee9a86f3d2efa1ba5d1c8b1799c6e8db67",
+    "spec/cdm/cdm-1.violations.json": "faf01dcfdd1e1dbf81b2d3e527350989854427a448cc4c199c8e81d43431e308",
+    "packages/model/src/generated/types.ts": "e75c17fb77a16b265ca9f30d04319c7fda471c1cfd90c7e1faab8430452f917d"
+  }
+}

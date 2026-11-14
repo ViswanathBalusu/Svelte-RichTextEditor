@@ -1,0 +1,411 @@
+/**
+ * The job queue port (06 §4.1 `jobs`, §14 `Queue`; BE-049) and its in-memory implementation.
+ *
+ * A job is claimed by one worker at a time and held under a lock that the worker renews with
+ * heartbeats. A worker that dies stops renewing; once the lock has passed the job can be claimed
+ * again, with one more attempt, until `maxAttempts`, after which it fails. States (decision of
+ * ADR 0036; the spec names none): queued, running, completed, failed, cancelled. A running job
+ * reports its `stage` (for an export: converting, compiling) and `progress`.
+ *
+ * Phase 1b (ADR 0054): jobs have a priority, and a claim takes the highest first, so that previews
+ * (their own kind) start before a backlog of requested exports drains (BE-050, EXP-007); a tenant
+ * that runs as many jobs of a kind as its limit gets no more of that kind until one ends; a job
+ * may carry a cache key, so that the result of an earlier job for the same request is found
+ * (EXP-006); and a job can be enqueued only if absent, which the scheduler's deterministic
+ * identifiers use (BE-052).
+ */
+import { uuid7 } from '@docedit/model';
+
+export type JobState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface JobError {
+  /** A code of the registry (05 §5.8), for example `internal` or `validation_failed`. */
+  code: string;
+  /** Identifiers and rules only, never content (BE-088). */
+  message: string;
+}
+
+export interface JobRecord {
+  id: string;
+  tenant: string;
+  doc: string | null;
+  kind: string;
+  state: JobState;
+  stage: string | null;
+  progress: number | null;
+  payload: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+  error: JobError | null;
+  attempts: number;
+  maxAttempts: number;
+  /** Unix ms; a queued job is not claimed before it. */
+  runAfter: number;
+  lockedBy: string | null;
+  lockedUntil: number | null;
+  /** The requester's surrogate (BE-013), or `system`. */
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+  finishedAt: number | null;
+  /** Higher first (ADR 0054); 0 by default. */
+  priority: number;
+  /** What the job produces, for finding an earlier result (EXP-006): 64 hexadecimal digits. */
+  cacheKey: string | null;
+}
+
+export interface NewJob {
+  id?: string;
+  doc?: string | null;
+  kind: string;
+  payload: Record<string, unknown>;
+  createdBy: string;
+  maxAttempts?: number;
+  /** Delay before the first claim, ms. */
+  delayMs?: number;
+  /**
+   * No claim before this time, ms since the epoch, in the queue's own clock: a time derived from a
+   * record the queue returned, such as another job's `createdAt` (BE-051). The later of this and
+   * `delayMs` applies. It lets a caller hold a job behind another without comparing its own clock
+   * with the queue's (06 §2.1).
+   */
+  notBefore?: number;
+  priority?: number;
+  cacheKey?: string;
+  /** Creates the job already completed with this result: an earlier job's (EXP-006). */
+  completedWith?: Record<string, unknown>;
+  /** When a job with the same identifier exists, returns it and creates nothing (BE-052). */
+  ifAbsent?: boolean;
+}
+
+export interface JobRef {
+  tenant: string;
+  id: string;
+}
+
+export type Heartbeat = 'ok' | 'cancelled' | 'lost';
+
+export interface ClaimOptions {
+  /**
+   * Running jobs per tenant and kind when the tenant has no limit of its own (EXP-007 criterion
+   * 3); null or absent: no limit.
+   */
+  defaultLimit?: number | null;
+}
+
+export interface QueueDepth {
+  kind: string;
+  priority: number;
+  queued: number;
+  running: number;
+}
+
+export interface JobQueue {
+  enqueue(tenant: string, job: NewJob): Promise<JobRecord>;
+  get(tenant: string, id: string): Promise<JobRecord | null>;
+  /**
+   * Claims the next ready job of one of `kinds`, across tenants, the highest priority first,
+   * skipping tenants at their limit for the job's kind; null when none is ready.
+   */
+  claim(
+    kinds: readonly string[],
+    worker: string,
+    leaseMs: number,
+    opts?: ClaimOptions,
+  ): Promise<JobRecord | null>;
+  /** Renews the lock and records the stage and progress; says whether the worker should go on. */
+  heartbeat(
+    job: JobRef,
+    worker: string,
+    leaseMs: number,
+    report?: { stage?: string; progress?: number },
+  ): Promise<Heartbeat>;
+  /** Stores the result; false when the job is no longer this worker's (cancelled, or lost). */
+  complete(job: JobRef, worker: string, result: Record<string, unknown>): Promise<boolean>;
+  /**
+   * Fails the attempt; with `retryAfterMs` and attempts left, the job is queued again. When the job
+   * ends failed, `result` (if given) is kept as its result, for example an export's diagnostics.
+   */
+  fail(
+    job: JobRef,
+    worker: string,
+    error: JobError,
+    retryAfterMs?: number,
+    result?: Record<string, unknown>,
+  ): Promise<boolean>;
+  /** Cancels a queued or running job; a finished job is returned unchanged; null if none. */
+  cancel(tenant: string, id: string): Promise<JobRecord | null>;
+  // --- Phase 1b (ADR 0054). --------------------------------------------------------------------
+  /** The newest completed job of the tenant with `cacheKey` that finished at or after `since`. */
+  findCompleted(tenant: string, cacheKey: string, since: number): Promise<JobRecord | null>;
+  /** The newest job of `kind` for a document, whatever its state. */
+  latestFor(tenant: string, doc: string, kind: string): Promise<JobRecord | null>;
+  /** Queued and running jobs by kind and priority, across tenants (BE-050 criterion 5). */
+  depth(): Promise<QueueDepth[]>;
+  /** Sets a tenant's limit of running jobs for a kind, or clears it with null (EXP-007). */
+  setLimit(tenant: string, kind: string, maxRunning: number | null): Promise<void>;
+}
+
+/** Defaults of the queue, settings rather than measurements (ADR 0036). */
+export const QUEUE_DEFAULTS = { maxAttempts: 3 } as const;
+
+const KIND = /^[a-z][a-z0-9_.-]{0,63}$/;
+const CACHE_KEY = /^[0-9a-f]{64}$/;
+
+export function checkNewJob(job: NewJob): void {
+  if (!KIND.test(job.kind)) throw new RangeError('a job kind is a lower-case name');
+  const max = job.maxAttempts ?? QUEUE_DEFAULTS.maxAttempts;
+  if (!Number.isSafeInteger(max) || max < 1) throw new RangeError('maxAttempts is at least 1');
+  if (job.notBefore !== undefined && !Number.isFinite(job.notBefore))
+    throw new RangeError('notBefore is a time in milliseconds');
+  if (job.priority !== undefined && !Number.isSafeInteger(job.priority))
+    throw new RangeError('a priority is an integer');
+  if (job.cacheKey !== undefined && !CACHE_KEY.test(job.cacheKey))
+    throw new RangeError('a cache key is a SHA-256 in hexadecimal');
+}
+
+export function checkLimit(kind: string, maxRunning: number | null): void {
+  if (!KIND.test(kind)) throw new RangeError('a job kind is a lower-case name');
+  if (maxRunning !== null && (!Number.isSafeInteger(maxRunning) || maxRunning < 0))
+    throw new RangeError('a limit is a non-negative integer');
+}
+
+export class MemoryJobQueue implements JobQueue {
+  readonly #jobs = new Map<string, JobRecord>();
+  readonly #limits = new Map<string, number>();
+  readonly #now: () => number;
+
+  constructor(now: () => number = Date.now) {
+    this.#now = now;
+  }
+
+  #find(job: JobRef): JobRecord | undefined {
+    const j = this.#jobs.get(job.id);
+    return j && j.tenant === job.tenant ? j : undefined;
+  }
+
+  async enqueue(tenant: string, job: NewJob): Promise<JobRecord> {
+    checkNewJob(job);
+    const now = this.#now();
+    const id = job.id ?? uuid7(now);
+    const existing = this.#jobs.get(id);
+    if (existing) {
+      if (job.ifAbsent && existing.tenant === tenant) return structuredClone(existing);
+      throw new Error(`job ${id} exists`);
+    }
+    const done = job.completedWith !== undefined;
+    const record: JobRecord = {
+      id,
+      tenant,
+      doc: job.doc ?? null,
+      kind: job.kind,
+      state: done ? 'completed' : 'queued',
+      stage: null,
+      progress: done ? 100 : null,
+      payload: structuredClone(job.payload),
+      result: done ? structuredClone(job.completedWith!) : null,
+      error: null,
+      attempts: 0,
+      maxAttempts: job.maxAttempts ?? QUEUE_DEFAULTS.maxAttempts,
+      runAfter: Math.max(now + (job.delayMs ?? 0), job.notBefore ?? -Infinity),
+      lockedBy: null,
+      lockedUntil: null,
+      createdBy: job.createdBy,
+      createdAt: now,
+      updatedAt: now,
+      finishedAt: done ? now : null,
+      priority: job.priority ?? 0,
+      cacheKey: job.cacheKey ?? null,
+    };
+    this.#jobs.set(record.id, record);
+    return structuredClone(record);
+  }
+
+  async get(tenant: string, id: string): Promise<JobRecord | null> {
+    const j = this.#find({ tenant, id });
+    return j ? structuredClone(j) : null;
+  }
+
+  #running(tenant: string, kind: string, except: string, now: number): number {
+    let n = 0;
+    for (const j of this.#jobs.values())
+      if (
+        j.tenant === tenant &&
+        j.kind === kind &&
+        j.state === 'running' &&
+        (j.lockedUntil ?? 0) >= now &&
+        j.id !== except
+      )
+        n++;
+    return n;
+  }
+
+  async claim(
+    kinds: readonly string[],
+    worker: string,
+    leaseMs: number,
+    opts: ClaimOptions = {},
+  ): Promise<JobRecord | null> {
+    const now = this.#now();
+    const ready = [...this.#jobs.values()]
+      .filter(
+        (j) =>
+          kinds.includes(j.kind) &&
+          ((j.state === 'queued' && j.runAfter <= now) ||
+            (j.state === 'running' && (j.lockedUntil ?? 0) < now)),
+      )
+      .sort((a, b) => b.priority - a.priority || a.runAfter - b.runAfter || (a.id < b.id ? -1 : 1));
+    for (const j of ready) {
+      if (j.state === 'running' && j.attempts >= j.maxAttempts) {
+        Object.assign(j, {
+          state: 'failed',
+          lockedBy: null,
+          lockedUntil: null,
+          finishedAt: now,
+          updatedAt: now,
+          error: { code: 'internal', message: 'the worker stopped and no attempts are left' },
+        });
+        continue;
+      }
+      const limit = this.#limits.get(`${j.tenant}/${j.kind}`) ?? opts.defaultLimit ?? null;
+      if (limit !== null && this.#running(j.tenant, j.kind, j.id, now) >= limit) continue;
+      Object.assign(j, {
+        state: 'running',
+        attempts: j.attempts + 1,
+        lockedBy: worker,
+        lockedUntil: now + leaseMs,
+        updatedAt: now,
+      });
+      return structuredClone(j);
+    }
+    return null;
+  }
+
+  #owned(job: JobRef, worker: string): JobRecord | undefined {
+    const j = this.#find(job);
+    return j && j.state === 'running' && j.lockedBy === worker ? j : undefined;
+  }
+
+  async heartbeat(
+    job: JobRef,
+    worker: string,
+    leaseMs: number,
+    report: { stage?: string; progress?: number } = {},
+  ): Promise<Heartbeat> {
+    const found = this.#find(job);
+    if (found?.state === 'cancelled') return 'cancelled';
+    const j = this.#owned(job, worker);
+    if (!j) return 'lost';
+    const now = this.#now();
+    j.lockedUntil = now + leaseMs;
+    if (report.stage !== undefined) j.stage = report.stage;
+    if (report.progress !== undefined) j.progress = report.progress;
+    j.updatedAt = now;
+    return 'ok';
+  }
+
+  async complete(job: JobRef, worker: string, result: Record<string, unknown>): Promise<boolean> {
+    const j = this.#owned(job, worker);
+    if (!j) return false;
+    const now = this.#now();
+    Object.assign(j, {
+      state: 'completed',
+      result: structuredClone(result),
+      progress: 100,
+      lockedBy: null,
+      lockedUntil: null,
+      finishedAt: now,
+      updatedAt: now,
+    });
+    return true;
+  }
+
+  async fail(
+    job: JobRef,
+    worker: string,
+    error: JobError,
+    retryAfterMs?: number,
+    result?: Record<string, unknown>,
+  ): Promise<boolean> {
+    const j = this.#owned(job, worker);
+    if (!j) return false;
+    const now = this.#now();
+    const again = retryAfterMs !== undefined && j.attempts < j.maxAttempts;
+    Object.assign(j, {
+      state: again ? 'queued' : 'failed',
+      result: !again && result ? structuredClone(result) : j.result,
+      error: { ...error },
+      lockedBy: null,
+      lockedUntil: null,
+      runAfter: again ? now + retryAfterMs : j.runAfter,
+      finishedAt: again ? null : now,
+      updatedAt: now,
+    });
+    return true;
+  }
+
+  async cancel(tenant: string, id: string): Promise<JobRecord | null> {
+    const j = this.#find({ tenant, id });
+    if (!j) return null;
+    if (j.state === 'queued' || j.state === 'running') {
+      const now = this.#now();
+      Object.assign(j, {
+        state: 'cancelled',
+        lockedBy: null,
+        lockedUntil: null,
+        finishedAt: now,
+        updatedAt: now,
+      });
+    }
+    return structuredClone(j);
+  }
+
+  async findCompleted(tenant: string, cacheKey: string, since: number): Promise<JobRecord | null> {
+    let best: JobRecord | null = null;
+    for (const j of this.#jobs.values())
+      if (
+        j.tenant === tenant &&
+        j.state === 'completed' &&
+        j.cacheKey === cacheKey &&
+        (j.finishedAt ?? 0) >= since &&
+        (!best || (j.finishedAt ?? 0) > (best.finishedAt ?? 0))
+      )
+        best = j;
+    return best ? structuredClone(best) : null;
+  }
+
+  async latestFor(tenant: string, doc: string, kind: string): Promise<JobRecord | null> {
+    let best: JobRecord | null = null;
+    for (const j of this.#jobs.values())
+      if (
+        j.tenant === tenant &&
+        j.doc === doc &&
+        j.kind === kind &&
+        (!best ||
+          j.createdAt > best.createdAt ||
+          (j.createdAt === best.createdAt && j.id > best.id))
+      )
+        best = j;
+    return best ? structuredClone(best) : null;
+  }
+
+  async depth(): Promise<QueueDepth[]> {
+    const out = new Map<string, QueueDepth>();
+    for (const j of this.#jobs.values()) {
+      if (j.state !== 'queued' && j.state !== 'running') continue;
+      const k = `${j.kind}\u0000${j.priority}`;
+      let d = out.get(k);
+      if (!d) out.set(k, (d = { kind: j.kind, priority: j.priority, queued: 0, running: 0 }));
+      if (j.state === 'queued') d.queued++;
+      else d.running++;
+    }
+    return [...out.values()].sort((a, b) =>
+      a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.priority - b.priority,
+    );
+  }
+
+  async setLimit(tenant: string, kind: string, maxRunning: number | null): Promise<void> {
+    checkLimit(kind, maxRunning);
+    if (maxRunning === null) this.#limits.delete(`${tenant}/${kind}`);
+    else this.#limits.set(`${tenant}/${kind}`, maxRunning);
+  }
+}

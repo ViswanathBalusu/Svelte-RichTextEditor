@@ -1,0 +1,9 @@
+# Build output: the SvelteKit app (dist/host) and SvelteKit's generated files (dist/.svelte-kit).
+dist/
+# The demo stack's data: generated secrets (demo only), the host's catalogue, logs.
+.stack/
+# Local settings of the demo stack (test values only; see stack/.env.example).
+stack/.env
+# Playwright output.
+test-results/
+playwright-report/

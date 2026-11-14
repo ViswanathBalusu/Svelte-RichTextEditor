@@ -1,0 +1,39 @@
+{
+  "name": "paragraph-pasted",
+  "description": "A copy of a paragraph is pasted after the introduction with a new identifier.",
+  "expected": ["added:pPasted000000001"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "added",
+        "blockId": "pPasted000000001",
+        "type": "paragraph",
+        "user": "dave",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "added",
+        "blockId": "pPasted000000001",
+        "type": "paragraph",
+        "user": "dave",
+        "seq": 1
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

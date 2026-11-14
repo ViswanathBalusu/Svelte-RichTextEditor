@@ -1,0 +1,27 @@
+{
+  "name": "@docedit/security-tests",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Security proofs (10; PLAN-1a packet F): black-box tests that attack the service, the room and the component, one file per threat-model item.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@docedit/authority": "workspace:*",
+    "@docedit/document-service": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*",
+    "@types/pg": "8.23.1",
+    "@types/ws": "8.18.2",
+    "fast-check": "4.10.2",
+    "pg": "8.23.1",
+    "prosemirror-model": "1.25.12",
+    "prosemirror-transform": "1.12.5",
+    "ws": "8.22.1"
+  }
+}

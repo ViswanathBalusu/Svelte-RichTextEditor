@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Tests and the generator run in Node.js; the *.universal.test.ts files also run in Chromium, Firefox and WebKit. The package's own sources stay universal (tsconfig.json).",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts", "test/**/*.ts", "scripts/**/*.ts"]
+}

@@ -1,0 +1,28 @@
+# The image of the demo stack's Node.js services (compose.json: setup, document-service, seed,
+# reference-host, export-worker): the workspace with its dependencies installed and the element and
+# the host built. Build context: the repository root, with the ignore file next to this one
+# (Compose reads `Containerfile.dockerignore` next to this file; with Podman directly pass
+# `--ignorefile apps/reference-host/containers/Containerfile.dockerignore`). Demo only: a production image would hold one
+# service and its production dependencies (`pnpm deploy`), not the whole workspace.
+#
+# Node.js 22.18.0 (.node-version) on Debian 12, pinned by its multi-arch index digest (2026-11-06).
+FROM docker.io/library/node:22.18.0-bookworm-slim@sha256:752ea8a2f758c34002a0461bd9f1cee4f9a3c36d48494586f60ffce1fc708e0e
+
+# The export worker starts one sandbox container per job through the machine's Podman socket
+# (CONTAINER_HOST): it needs the Podman client, nothing else of Podman.
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends podman ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+# pnpm at the version of package.json's `packageManager`, through Corepack.
+RUN corepack enable
+COPY . .
+RUN pnpm install --frozen-lockfile \
+  && pnpm --filter @docedit/element build \
+  && pnpm --filter @docedit/reference-host build \
+  && mkdir -p /stack && chown node:node /stack
+
+USER node
+ENV DOCEDIT_DEMO_DATA=/stack
+CMD ["node", "apps/reference-host/scripts/run.ts", "host"]

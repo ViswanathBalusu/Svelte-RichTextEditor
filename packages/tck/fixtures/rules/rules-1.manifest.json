@@ -1,0 +1,13 @@
+{
+  "rules": "rules/1",
+  "status": "draft",
+  "profile": "rules",
+  "feature": "rules",
+  "generator": "packages/rules/scripts/generate.ts",
+  "decision": "docs/adr/0030-rule-semantics.md",
+  "cases": 426,
+  "files": {
+    "spec/rules/rules-1.schema.json": "dfa99796559befeccd67427cb685f6f9a75391f3f29cb430348a1fec2a634a9a",
+    "spec/rules/rules-1.fixtures.json": "570809b1b153823acc5ff8f8216b5610756ed58cd2bfaad4265696ffedd9ffb2"
+  }
+}

@@ -1,0 +1,8 @@
+# A test image that stands for a compromised or broken decoder (BE-043 criterion 6; SEC-038
+# criterion 4). It is the real sandbox image with another entry point, so it runs under exactly the
+# same limits; the production image contains none of this. Built by test/sandbox.podman.test.ts:
+#   podman build --build-arg BASE=localhost/docedit-asset-worker:dev -t localhost/docedit-asset-worker-hostile:dev test/hostile
+ARG BASE=localhost/docedit-asset-worker:dev
+FROM ${BASE}
+COPY decoder.ts /opt/docedit/hostile/decoder.ts
+ENTRYPOINT ["node", "--permission", "--allow-fs-read=/opt/docedit/", "/opt/docedit/hostile/decoder.ts"]

@@ -1,0 +1,49 @@
+{
+  "name": "i1-feature-not-required",
+  "doc": "replace: a form field in a document whose requires lacks `fields`.",
+  "base": "example",
+  "steps": [
+    {
+      "stepType": "replace",
+      "from": 58,
+      "to": 58,
+      "slice": {
+        "content": [
+          {
+            "type": "form_field",
+            "attrs": {
+              "id": "ffField000000001",
+              "key": "a",
+              "kind": "text",
+              "label": "A",
+              "assignee": null,
+              "required": false,
+              "readOnly": false,
+              "value": null,
+              "default": null,
+              "placeholder": null,
+              "options": null,
+              "format": null,
+              "validation": null,
+              "width": null,
+              "sensitive": false,
+              "ext": {}
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I1"]
+}

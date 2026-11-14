@@ -1,0 +1,811 @@
+{
+  "rule": "numbering.footnotes",
+  "spec": "03 §4.1, §4.3, §4.4, §7 (Numbering)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "computeLabels, counterEffects and referenceText in packages/model/src/numbering/labels.ts",
+  "description": "Footnote marks: counted through the body, restarted per page section, in the format of settings.footnoteFormat.",
+  "format": "Each case is one document. Its defs are, in this order: a settings node with the attributes of the file's `settings` and then the case's `settings`; the file's `styles` and then the case's `styles` (a case style replaces a file style with the same identifier); the file's `numberings` and then the case's; and the page setup `ps1` with every attribute at its default. Then come the case's `stories`, then a body with page setup `ps1` and the case's `body`. Every such document is valid (model.validate) unless the case says `\"valid\": false`. `expected` lists, for each kind it names, every label of that kind in the document: `lists` by paragraph id; `sequences` by the id of the block holding the `seq` fields (paragraph, figure or footnote), one text per field in order; `equations` by equation block id; `footnotes` by footnote id; `references` as the text a `ref` field with that target prints (null: no label).",
+  "settings": { "lang": "en-GB", "defaultParagraphStyle": "Normal" },
+  "styles": [
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Normal",
+        "kind": "paragraph",
+        "name": "Normal",
+        "builtIn": true,
+        "fontSize": 220,
+        "spaceAfter": 160
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading1",
+        "kind": "paragraph",
+        "name": "Heading1",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 1,
+        "numbering": { "numberingId": "outline", "level": 0, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading2",
+        "kind": "paragraph",
+        "name": "Heading2",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 2,
+        "numbering": { "numberingId": "outline", "level": 1, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading3",
+        "kind": "paragraph",
+        "name": "Heading3",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 3,
+        "numbering": { "numberingId": "outline", "level": 2, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "ListParagraph",
+        "kind": "paragraph",
+        "name": "ListParagraph",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "indentLeft": 720,
+        "contextualSpacing": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Caption",
+        "kind": "paragraph",
+        "name": "Caption",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "italic": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "FootnoteText",
+        "kind": "paragraph",
+        "name": "FootnoteText",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "fontSize": 180,
+        "spaceAfter": 0
+      }
+    }
+  ],
+  "numberings": [
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "decimal-list",
+        "name": "decimal-list",
+        "levels": [
+          { "format": "decimal", "text": "%1.", "start": 1 },
+          { "format": "lowerLetter", "text": "%2)", "start": 1 },
+          { "format": "lowerRoman", "text": "(%3)", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "outline",
+        "name": "outline",
+        "levels": [
+          { "format": "decimal", "text": "%1", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1 },
+          { "format": "decimal", "text": "%1.%2.%3", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "bullets",
+        "name": "bullets",
+        "levels": [
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "•" },
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "◦" }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "articles",
+        "name": "articles",
+        "levels": [
+          { "format": "upperRoman", "text": "§ %1.", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1, "legal": true },
+          { "format": "lowerLetter", "text": "(%3)", "start": 1, "restartAfter": 0 }
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "continuous-through-regions-and-tables",
+      "description": "Footnotes count in document order through the body, regions and table cells.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "One" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "region",
+          "attrs": { "id": "regionAxxxxxxxxx", "title": "Region", "policy": "restricted" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p02xxxxxxxxxxxxx" },
+              "content": [
+                { "type": "text", "text": "Two" },
+                {
+                  "type": "footnote",
+                  "attrs": { "id": "fn02xxxxxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "fp02xxxxxxxxxxxx", "style": "FootnoteText" },
+                      "content": [{ "type": "text", "text": "A note." }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "attrs": { "id": "tableAxxxxxxxxxx", "grid": [4500, 4500] },
+          "content": [
+            {
+              "type": "table_row",
+              "attrs": { "id": "rowA0xxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA00xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p03xxxxxxxxxxxxx" },
+                      "content": [
+                        { "type": "text", "text": "Three" },
+                        {
+                          "type": "footnote",
+                          "attrs": { "id": "fn03xxxxxxxxxxxx" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "fp03xxxxxxxxxxxx", "style": "FootnoteText" },
+                              "content": [{ "type": "text", "text": "A note." }]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA01xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p04xxxxxxxxxxxxx" },
+                      "content": [
+                        { "type": "text", "text": "Four" },
+                        {
+                          "type": "footnote",
+                          "attrs": { "id": "fn04xxxxxxxxxxxx" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "fp04xxxxxxxxxxxx", "style": "FootnoteText" },
+                              "content": [{ "type": "text", "text": "A note." }]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p05xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Five" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn05xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp05xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            },
+            { "type": "text", "text": " and six" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn06xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp06xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "footnotes": [
+          { "id": "fn01xxxxxxxxxxxx", "text": "1" },
+          { "id": "fn02xxxxxxxxxxxx", "text": "2" },
+          { "id": "fn03xxxxxxxxxxxx", "text": "3" },
+          { "id": "fn04xxxxxxxxxxxx", "text": "4" },
+          { "id": "fn05xxxxxxxxxxxx", "text": "5" },
+          { "id": "fn06xxxxxxxxxxxx", "text": "6" }
+        ]
+      }
+    },
+    {
+      "id": "restart-per-page-section",
+      "description": "With footnoteRestart perPageSection, numbering restarts at every section break.",
+      "settings": { "footnoteRestart": "perPageSection" },
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn02xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp02xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        { "type": "section_break", "attrs": { "id": "sectAxxxxxxxxxxx", "pageSetup": "ps1" } },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn03xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp03xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p04xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn04xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp04xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        { "type": "section_break", "attrs": { "id": "sectBxxxxxxxxxxx", "pageSetup": "ps1" } },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p05xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn05xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp05xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "footnotes": [
+          { "id": "fn01xxxxxxxxxxxx", "text": "1" },
+          { "id": "fn02xxxxxxxxxxxx", "text": "2" },
+          { "id": "fn03xxxxxxxxxxxx", "text": "1" },
+          { "id": "fn04xxxxxxxxxxxx", "text": "2" },
+          { "id": "fn05xxxxxxxxxxxx", "text": "1" }
+        ]
+      }
+    },
+    {
+      "id": "continuous-across-section-breaks",
+      "description": "With footnoteRestart continuous (the default), section breaks do not restart footnotes.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn02xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp02xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        { "type": "section_break", "attrs": { "id": "sectAxxxxxxxxxxx", "pageSetup": "ps1" } },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn03xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp03xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "footnotes": [
+          { "id": "fn01xxxxxxxxxxxx", "text": "1" },
+          { "id": "fn02xxxxxxxxxxxx", "text": "2" },
+          { "id": "fn03xxxxxxxxxxxx", "text": "3" }
+        ]
+      }
+    },
+    {
+      "id": "lower-roman",
+      "description": "settings.footnoteFormat sets the format of the marks.",
+      "settings": { "footnoteFormat": "lowerRoman" },
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn02xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp02xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn03xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp03xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p04xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn04xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp04xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "footnotes": [
+          { "id": "fn01xxxxxxxxxxxx", "text": "i" },
+          { "id": "fn02xxxxxxxxxxxx", "text": "ii" },
+          { "id": "fn03xxxxxxxxxxxx", "text": "iii" },
+          { "id": "fn04xxxxxxxxxxxx", "text": "iv" }
+        ]
+      }
+    },
+    {
+      "id": "symbols",
+      "description": "The symbol format cycles * † ‡ §, then doubles them.",
+      "settings": { "footnoteFormat": "symbol" },
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn02xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp02xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn03xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp03xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p04xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn04xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp04xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p05xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn05xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp05xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p06xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn06xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp06xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p07xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn07xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp07xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p08xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn08xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp08xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p09xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn09xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp09xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "footnotes": [
+          { "id": "fn01xxxxxxxxxxxx", "text": "*" },
+          { "id": "fn02xxxxxxxxxxxx", "text": "†" },
+          { "id": "fn03xxxxxxxxxxxx", "text": "‡" },
+          { "id": "fn04xxxxxxxxxxxx", "text": "§" },
+          { "id": "fn05xxxxxxxxxxxx", "text": "**" },
+          { "id": "fn06xxxxxxxxxxxx", "text": "††" },
+          { "id": "fn07xxxxxxxxxxxx", "text": "‡‡" },
+          { "id": "fn08xxxxxxxxxxxx", "text": "§§" },
+          { "id": "fn09xxxxxxxxxxxx", "text": "***" }
+        ]
+      }
+    },
+    {
+      "id": "footnotes-in-a-story-get-no-mark",
+      "description": "A footnote in a header or footer story gets no mark and does not count.",
+      "stories": [
+        {
+          "type": "story",
+          "attrs": { "id": "storyAxxxxxxxxxx", "kind": "footer" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p09xxxxxxxxxxxxx" },
+              "content": [
+                { "type": "text", "text": "Footer" },
+                {
+                  "type": "footnote",
+                  "attrs": { "id": "fn09xxxxxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "fp09xxxxxxxxxxxx", "style": "FootnoteText" },
+                      "content": [{ "type": "text", "text": "A note." }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Text" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn02xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp02xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "footnotes": [
+          { "id": "fn01xxxxxxxxxxxx", "text": "1" },
+          { "id": "fn02xxxxxxxxxxxx", "text": "2" }
+        ]
+      }
+    }
+  ]
+}

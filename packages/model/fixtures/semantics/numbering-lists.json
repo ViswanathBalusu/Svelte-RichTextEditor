@@ -1,0 +1,1819 @@
+{
+  "rule": "numbering.lists",
+  "spec": "03 §4.1, §4.3, §4.4, §7 (Numbering)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "computeLabels, counterEffects and referenceText in packages/model/src/numbering/labels.ts",
+  "description": "List and heading labels: counters per list instance, restarts, skipped levels, templates, formats, legal numbering, lists across regions and tables, headings numbered by styles.",
+  "format": "Each case is one document. Its defs are, in this order: a settings node with the attributes of the file's `settings` and then the case's `settings`; the file's `styles` and then the case's `styles` (a case style replaces a file style with the same identifier); the file's `numberings` and then the case's; and the page setup `ps1` with every attribute at its default. Then come the case's `stories`, then a body with page setup `ps1` and the case's `body`. Every such document is valid (model.validate) unless the case says `\"valid\": false`. `expected` lists, for each kind it names, every label of that kind in the document: `lists` by paragraph id; `sequences` by the id of the block holding the `seq` fields (paragraph, figure or footnote), one text per field in order; `equations` by equation block id; `footnotes` by footnote id; `references` as the text a `ref` field with that target prints (null: no label).",
+  "settings": { "lang": "en-GB", "defaultParagraphStyle": "Normal" },
+  "styles": [
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Normal",
+        "kind": "paragraph",
+        "name": "Normal",
+        "builtIn": true,
+        "fontSize": 220,
+        "spaceAfter": 160
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading1",
+        "kind": "paragraph",
+        "name": "Heading1",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 1,
+        "numbering": { "numberingId": "outline", "level": 0, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading2",
+        "kind": "paragraph",
+        "name": "Heading2",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 2,
+        "numbering": { "numberingId": "outline", "level": 1, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading3",
+        "kind": "paragraph",
+        "name": "Heading3",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 3,
+        "numbering": { "numberingId": "outline", "level": 2, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "ListParagraph",
+        "kind": "paragraph",
+        "name": "ListParagraph",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "indentLeft": 720,
+        "contextualSpacing": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Caption",
+        "kind": "paragraph",
+        "name": "Caption",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "italic": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "FootnoteText",
+        "kind": "paragraph",
+        "name": "FootnoteText",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "fontSize": 180,
+        "spaceAfter": 0
+      }
+    }
+  ],
+  "numberings": [
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "decimal-list",
+        "name": "decimal-list",
+        "levels": [
+          { "format": "decimal", "text": "%1.", "start": 1 },
+          { "format": "lowerLetter", "text": "%2)", "start": 1 },
+          { "format": "lowerRoman", "text": "(%3)", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "outline",
+        "name": "outline",
+        "levels": [
+          { "format": "decimal", "text": "%1", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1 },
+          { "format": "decimal", "text": "%1.%2.%3", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "bullets",
+        "name": "bullets",
+        "levels": [
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "•" },
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "◦" }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "articles",
+        "name": "articles",
+        "levels": [
+          { "format": "upperRoman", "text": "§ %1.", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1, "legal": true },
+          { "format": "lowerLetter", "text": "(%3)", "start": 1, "restartAfter": 0 }
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "consecutive-items",
+      "description": "Three items at level 0 count 1, 2, 3.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p03xxxxxxxxxxxxx", "text": "3." }
+        ]
+      }
+    },
+    {
+      "id": "deeper-levels-restart",
+      "description": "A deeper level restarts after every item at a higher level (restartAfter null).",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p05xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p05." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p06xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 2,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p06." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p07xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 2,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p07." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p08xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p08." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p09xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 2,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p09." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "a)" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "b)" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p05xxxxxxxxxxxxx", "text": "a)" },
+          { "id": "p06xxxxxxxxxxxxx", "text": "(i)" },
+          { "id": "p07xxxxxxxxxxxxx", "text": "(ii)" },
+          { "id": "p08xxxxxxxxxxxxx", "text": "b)" },
+          { "id": "p09xxxxxxxxxxxxx", "text": "(i)" }
+        ]
+      }
+    },
+    {
+      "id": "skipped-level",
+      "description": "A level that was skipped shows start - 1, here 0: level 0 then level 2 gives 1.0.1.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "outline", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "outline", "level": 2, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "outline", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "outline", "level": 2, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "1.0.1" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1.1" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "1.1.1" }
+        ]
+      }
+    },
+    {
+      "id": "skipped-level-with-start",
+      "description": "A skipped level whose start is 5 shows 4; once counted it starts at 5.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "start5",
+            "name": "start5",
+            "levels": [
+              { "format": "decimal", "text": "%1", "start": 1 },
+              { "format": "decimal", "text": "%1.%2", "start": 5 },
+              { "format": "decimal", "text": "%1.%2.%3", "start": 1 }
+            ]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "start5", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "start5", "level": 2, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "start5", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "start5", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "1.4.1" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1.5" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "1.6" }
+        ]
+      }
+    },
+    {
+      "id": "skipped-level-start-zero",
+      "description": "A skipped level whose start is 0 shows 0, never -1; counted, its first value is 0.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "start0",
+            "name": "start0",
+            "levels": [
+              { "format": "decimal", "text": "%1", "start": 1 },
+              { "format": "decimal", "text": "%1.%2", "start": 0 },
+              { "format": "decimal", "text": "%1.%2.%3", "start": 1 }
+            ]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "start0", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "start0", "level": 2, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "start0", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "start0", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "1.0.1" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1.0" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "1.1" }
+        ]
+      }
+    },
+    {
+      "id": "template-names-deeper-level",
+      "description": "A template may name a deeper level; it shows that level after the restart this item causes (start - 1).",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "deeper",
+            "name": "deeper",
+            "levels": [
+              { "format": "decimal", "text": "%1-%2", "start": 1 },
+              { "format": "decimal", "text": "%2", "start": 3 }
+            ]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "deeper", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "deeper", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "deeper", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "deeper", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1-2" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "3" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "4" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "2-2" }
+        ]
+      }
+    },
+    {
+      "id": "template-names-missing-level",
+      "description": "A placeholder for a level the definition does not have is replaced by nothing.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "short",
+            "name": "short",
+            "levels": [{ "format": "decimal", "text": "%1.%2", "start": 1 }]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "short", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "short", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2." }
+        ]
+      }
+    },
+    {
+      "id": "two-lists-on-one-definition",
+      "description": "Two list instances (listId) on one definition number independently, even when interleaved.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listBxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p05xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listBxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p05." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p06xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listBxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p06." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p04xxxxxxxxxxxxx", "text": "3." },
+          { "id": "p05xxxxxxxxxxxxx", "text": "a)" },
+          { "id": "p06xxxxxxxxxxxxx", "text": "2." }
+        ]
+      }
+    },
+    {
+      "id": "first-item-deleted",
+      "description": "The items left after the first one was deleted keep their listId and number as one list from the start.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p02xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p03xxxxxxxxxxxxx", "text": "2." }
+        ]
+      }
+    },
+    {
+      "id": "restart",
+      "description": "numberingRestart sets the item's own level; later items continue from it.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            },
+            "numberingRestart": 1
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p05xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            },
+            "numberingRestart": 10
+          },
+          "content": [{ "type": "text", "text": "Item p05." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p06xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p06." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p04xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p05xxxxxxxxxxxxx", "text": "10." },
+          { "id": "p06xxxxxxxxxxxxx", "text": "11." }
+        ]
+      }
+    },
+    {
+      "id": "restart-at-a-deeper-level",
+      "description": "A restart at level 1 changes only level 1 and below; the higher level continues.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            },
+            "numberingRestart": 4
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p05xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p05." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p06xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p06." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "a)" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "d)" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "e)" },
+          { "id": "p05xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p06xxxxxxxxxxxxx", "text": "a)" }
+        ]
+      }
+    },
+    {
+      "id": "list-across-a-table",
+      "description": "A list continues into a table cell and out of it again, in document order.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "table",
+          "attrs": { "id": "tableAxxxxxxxxxx", "grid": [4500, 4500] },
+          "content": [
+            {
+              "type": "table_row",
+              "attrs": { "id": "rowA0xxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA00xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "id": "p02xxxxxxxxxxxxx",
+                        "style": "ListParagraph",
+                        "numbering": {
+                          "numberingId": "decimal-list",
+                          "level": 0,
+                          "listId": "listAxxxxxxxxxxx"
+                        }
+                      },
+                      "content": [{ "type": "text", "text": "Item p02." }]
+                    }
+                  ]
+                },
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA01xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {
+                        "id": "p03xxxxxxxxxxxxx",
+                        "style": "ListParagraph",
+                        "numbering": {
+                          "numberingId": "decimal-list",
+                          "level": 1,
+                          "listId": "listAxxxxxxxxxxx"
+                        }
+                      },
+                      "content": [{ "type": "text", "text": "Item p03." }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p03xxxxxxxxxxxxx", "text": "a)" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "3." }
+        ]
+      }
+    },
+    {
+      "id": "list-across-a-region",
+      "description": "A list continues through a region; regions are not visible to numbering.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "region",
+          "attrs": { "id": "regionAxxxxxxxxx", "title": "Region", "policy": "restricted" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p02xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listAxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p02." }]
+            },
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p03xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listAxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p03." }]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p03xxxxxxxxxxxxx", "text": "3." },
+          { "id": "p04xxxxxxxxxxxxx", "text": "4." }
+        ]
+      }
+    },
+    {
+      "id": "legal-and-restart-after",
+      "description": "legal shows higher levels as decimals (1.1, not I.1); restartAfter 0 on level 2 keeps (c) running across level-1 items until the next level-0 item.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 2, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 2, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p05xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p05." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p06xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 2, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p06." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p07xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p07." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p08xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p08." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p09xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "articles", "level": 2, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p09." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "§ I." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "1.1" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "(a)" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "(b)" },
+          { "id": "p05xxxxxxxxxxxxx", "text": "1.2" },
+          { "id": "p06xxxxxxxxxxxxx", "text": "(c)" },
+          { "id": "p07xxxxxxxxxxxxx", "text": "§ II." },
+          { "id": "p08xxxxxxxxxxxxx", "text": "2.1" },
+          { "id": "p09xxxxxxxxxxxxx", "text": "(a)" }
+        ]
+      }
+    },
+    {
+      "id": "restart-after-never",
+      "description": "restartAfter at or above the level itself means the level never restarts.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "never",
+            "name": "never",
+            "levels": [
+              { "format": "decimal", "text": "%1.", "start": 1 },
+              { "format": "lowerLetter", "text": "%2)", "start": 1, "restartAfter": 1 }
+            ]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "never", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "never", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "never", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "never", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p05xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "never", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p05." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "a)" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "b)" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p05xxxxxxxxxxxxx", "text": "c)" }
+        ]
+      }
+    },
+    {
+      "id": "letters-past-z",
+      "description": "Letters go a to z, then aa to zz, then aaa (Word's convention); upper case alike.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "letters",
+            "name": "letters",
+            "levels": [{ "format": "lowerLetter", "text": "%1", "start": 1 }]
+          }
+        },
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "LETTERS",
+            "name": "LETTERS",
+            "levels": [{ "format": "upperLetter", "text": "%1", "start": 1 }]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "letters", "level": 0, "listId": "listAxxxxxxxxxxx" },
+            "numberingRestart": 26
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "letters", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "letters", "level": 0, "listId": "listBxxxxxxxxxxx" },
+            "numberingRestart": 52
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "letters", "level": 0, "listId": "listBxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p05xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "LETTERS", "level": 0, "listId": "listCxxxxxxxxxxx" },
+            "numberingRestart": 28
+          },
+          "content": [{ "type": "text", "text": "Item p05." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "z" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "aa" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "zz" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "aaa" },
+          { "id": "p05xxxxxxxxxxxxx", "text": "BB" }
+        ]
+      }
+    },
+    {
+      "id": "roman-numerals",
+      "description": "Roman numerals; thousands beyond three are written as repeated m, so 4000 is mmmm.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "roman",
+            "name": "roman",
+            "levels": [{ "format": "lowerRoman", "text": "%1", "start": 1 }]
+          }
+        },
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "ROMAN",
+            "name": "ROMAN",
+            "levels": [{ "format": "upperRoman", "text": "%1", "start": 1 }]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "roman", "level": 0, "listId": "listAxxxxxxxxxxx" },
+            "numberingRestart": 4
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "roman", "level": 0, "listId": "listBxxxxxxxxxxx" },
+            "numberingRestart": 1994
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "ROMAN", "level": 0, "listId": "listCxxxxxxxxxxx" },
+            "numberingRestart": 3999
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "ROMAN", "level": 0, "listId": "listCxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "iv" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "mcmxciv" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "MMMCMXCIX" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "MMMM" }
+        ]
+      }
+    },
+    {
+      "id": "zero-in-every-format",
+      "description": "Letters and Roman numerals have no zero; a value of 0 is written 0.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "z-letter",
+            "name": "z-letter",
+            "levels": [{ "format": "lowerLetter", "text": "%1", "start": 0 }]
+          }
+        },
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "z-roman",
+            "name": "z-roman",
+            "levels": [{ "format": "upperRoman", "text": "%1", "start": 0 }]
+          }
+        },
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "z-decimal",
+            "name": "z-decimal",
+            "levels": [{ "format": "decimal", "text": "%1", "start": 0 }]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "z-letter", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "z-letter", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "z-roman", "level": 0, "listId": "listBxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "z-decimal", "level": 0, "listId": "listCxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "0" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "a" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "0" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "0" }
+        ]
+      }
+    },
+    {
+      "id": "bullets",
+      "description": "A bullet level prints its bulletChar (• when null) and still counts, so deeper levels restart.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "no-char",
+            "name": "no-char",
+            "levels": [{ "format": "bullet", "text": "", "start": 1 }]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "bullets", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "bullets", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "bullets", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "no-char", "level": 0, "listId": "listBxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "•", "kind": "bullet" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "◦", "kind": "bullet" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "•", "kind": "bullet" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "•", "kind": "bullet" }
+        ]
+      }
+    },
+    {
+      "id": "format-none",
+      "description": "A level of format none shows no number of its own, but its template may show higher levels.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "quiet",
+            "name": "quiet",
+            "levels": [
+              { "format": "decimal", "text": "%1.", "start": 1 },
+              { "format": "none", "text": "%1.%2", "start": 1 }
+            ]
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "quiet", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "quiet", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "quiet", "level": 1, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1.", "kind": "number" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "1.", "kind": "none" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1.", "kind": "none" }
+        ]
+      }
+    },
+    {
+      "id": "headings-numbered-by-style",
+      "description": "Heading styles carry numbering with one listId, so headings form one list; a skipped level shows 0.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Heading1" },
+          "content": [{ "type": "text", "text": "Heading p01" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Heading2" },
+          "content": [{ "type": "text", "text": "Heading p02" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx", "style": "Heading2" },
+          "content": [{ "type": "text", "text": "Heading p03" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p04xxxxxxxxxxxxx", "style": "Heading1" },
+          "content": [{ "type": "text", "text": "Heading p04" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p05xxxxxxxxxxxxx", "style": "Heading3" },
+          "content": [{ "type": "text", "text": "Heading p05" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p06xxxxxxxxxxxxx", "style": "Heading2" },
+          "content": [{ "type": "text", "text": "Heading p06" }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "1.1" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1.2" },
+          { "id": "p04xxxxxxxxxxxxx", "text": "2" },
+          { "id": "p05xxxxxxxxxxxxx", "text": "2.0.1" },
+          { "id": "p06xxxxxxxxxxxxx", "text": "2.1" }
+        ]
+      }
+    },
+    {
+      "id": "style-numbering-inherited-and-overridden",
+      "description": "A style based on Heading1 inherits its numbering and joins its list; a paragraph's own numbering wins over its style's.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": { "id": "Clause", "kind": "paragraph", "name": "Clause", "basedOn": "Heading1" }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Heading1" },
+          "content": [{ "type": "text", "text": "Heading p01" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Clause" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "Heading1",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Heading p03" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p04xxxxxxxxxxxxx", "style": "Heading1" },
+          "content": [{ "type": "text", "text": "Heading p04" }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1" },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p04xxxxxxxxxxxxx", "text": "3" }
+        ]
+      }
+    },
+    {
+      "id": "one-list-two-definitions",
+      "description": "A list instance is its listId: paragraphs on two definitions with one listId share counters, each in its own format.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": { "numberingId": "outline", "level": 0, "listId": "listAxxxxxxxxxxx" }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2" },
+          { "id": "p03xxxxxxxxxxxxx", "text": "3." }
+        ]
+      }
+    },
+    {
+      "id": "lists-in-a-story-count-on-their-own",
+      "description": "A header story is numbered on its own, not as a continuation of the body.",
+      "stories": [
+        {
+          "type": "story",
+          "attrs": { "id": "storyAxxxxxxxxxx", "kind": "header" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p09xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listAxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p09." }]
+            }
+          ]
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p02xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p09xxxxxxxxxxxxx", "text": "1." }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$comment": "Recorded decisions for dependencies the policy does not allow as they are (FND-011). Each entry: package, version range or exact version, licence as the registry states it, the option chosen for a dual licence, the reason, the decision record, and an expiry date (YYYY-MM-DD) after which the gate fails again.",
+  "exceptions": [
+    {
+      "package": "is-reference",
+      "version": "3.0.3",
+      "licence": "MIT",
+      "reason": "MIT on the registry (author Rich Harris); the published tarball has no licence file. A dependency of svelte. The notices must carry the MIT text with the author's copyright line from the repository (github.com/Rich-Harris/is-reference).",
+      "decision": "FND-011, 2026-11-06",
+      "expires": "2027-05-06"
+    },
+    {
+      "package": "locate-character",
+      "version": "3.0.0",
+      "licence": "MIT",
+      "reason": "MIT on the registry (author Rich Harris); the published tarball has no licence file. A dependency of svelte. The notices must carry the MIT text with the author's copyright line from the repository (gitlab.com/Rich-Harris/locate-character).",
+      "decision": "FND-011, 2026-11-06",
+      "expires": "2027-05-06"
+    },
+    {
+      "package": "pg-types",
+      "version": "2.2.0",
+      "licence": "MIT",
+      "reason": "MIT on the registry (author Brian M. Carlson); the published tarball has no licence file. A dependency of the PostgreSQL client of services/document-service. The notices must carry the MIT text with the copyright line from github.com/brianc/node-pg-types.",
+      "decision": "FND-011, 2026-11-06",
+      "expires": "2027-05-06"
+    },
+    {
+      "package": "pgpass",
+      "version": "1.0.5",
+      "licence": "MIT",
+      "reason": "MIT on the registry (author Hannes Hörl); the published tarball has no licence file. A dependency of the PostgreSQL client of services/document-service. The notices must carry the MIT text with the copyright line from github.com/hoegaarden/pgpass.",
+      "decision": "FND-011, 2026-11-06",
+      "expires": "2027-05-06"
+    },
+    {
+      "package": "omggif",
+      "version": "1.0.10",
+      "licence": "MIT",
+      "reason": "MIT on the registry (author Dean McNamee); the published tarball has no file named LICENSE, but its README and the header of omggif.js carry the MIT text with the line \"(c) Dean McNamee <dean@gmail.com>, 2013\". The GIF encoder of services/asset-worker (ADR 0043). The notices must carry that MIT text with the copyright line from github.com/deanm/omggif.",
+      "decision": "BE-043, 2026-11-06",
+      "expires": "2027-05-06"
+    }
+  ]
+}

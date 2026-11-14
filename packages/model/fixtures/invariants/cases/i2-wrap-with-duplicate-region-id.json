@@ -1,0 +1,42 @@
+{
+  "name": "i2-wrap-with-duplicate-region-id",
+  "doc": "replaceAround: wraps the last paragraph in a region whose identifier the first region has.",
+  "base": "example",
+  "steps": [
+    {
+      "stepType": "replaceAround",
+      "from": 57,
+      "to": 59,
+      "gapFrom": 57,
+      "gapTo": 59,
+      "insert": 1,
+      "slice": {
+        "content": [
+          {
+            "type": "region",
+            "attrs": {
+              "id": "rG7mK2pQ9xYt4HcD",
+              "title": null,
+              "policy": "inherit",
+              "preserved": null,
+              "ext": {}
+            }
+          }
+        ]
+      },
+      "structure": true
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I2"]
+}

@@ -1,0 +1,389 @@
+{
+  "cdm": 1,
+  "requires": [],
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "defs",
+        "content": [
+          {
+            "type": "settings",
+            "attrs": { "lang": "en-GB", "defaultTabStop": 720, "defaultParagraphStyle": "Normal" }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Normal",
+              "kind": "paragraph",
+              "name": "Normal",
+              "builtIn": true,
+              "fontFamily": "Noto Serif",
+              "fontSize": 220,
+              "spaceAfter": 160,
+              "lineSpacing": 1150,
+              "lineRule": "multiple",
+              "align": "justify",
+              "widowControl": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Title",
+              "kind": "paragraph",
+              "name": "Title",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "fontFamily": "Noto Sans",
+              "fontSize": 480,
+              "bold": true,
+              "spaceAfter": 240,
+              "align": "start"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading1",
+              "kind": "paragraph",
+              "name": "Heading 1",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "outlineLevel": 1,
+              "fontFamily": "Noto Sans",
+              "fontSize": 320,
+              "bold": true,
+              "spaceBefore": 360,
+              "spaceAfter": 120,
+              "keepNext": true,
+              "align": "start",
+              "color": "#1F3864"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading2",
+              "kind": "paragraph",
+              "name": "Heading 2",
+              "builtIn": true,
+              "basedOn": "Heading1",
+              "next": "Normal",
+              "outlineLevel": 2,
+              "fontSize": 260,
+              "spaceBefore": 240
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Quote",
+              "kind": "paragraph",
+              "name": "Quote",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "italic": true,
+              "indentLeft": 720,
+              "indentRight": 720,
+              "align": "start"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "FootnoteText",
+              "kind": "paragraph",
+              "name": "Footnote Text",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "fontSize": 180,
+              "spaceAfter": 0,
+              "lineSpacing": 1000
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Footer",
+              "kind": "paragraph",
+              "name": "Footer",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "fontSize": 180,
+              "align": "center",
+              "spaceAfter": 0
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Header",
+              "kind": "paragraph",
+              "name": "Header",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "fontSize": 180,
+              "align": "end",
+              "spaceAfter": 0,
+              "color": "#595959"
+            }
+          },
+          {
+            "type": "numbering_def",
+            "attrs": {
+              "id": "bulletList",
+              "name": "Bullets",
+              "levels": [
+                {
+                  "format": "bullet",
+                  "text": "",
+                  "start": 1,
+                  "bulletChar": "•",
+                  "indentLeft": 720,
+                  "hanging": 360
+                },
+                {
+                  "format": "bullet",
+                  "text": "",
+                  "start": 1,
+                  "bulletChar": "–",
+                  "indentLeft": 1440,
+                  "hanging": 360
+                }
+              ]
+            }
+          },
+          {
+            "type": "numbering_def",
+            "attrs": {
+              "id": "numberedList",
+              "name": "Numbers",
+              "levels": [
+                {
+                  "format": "decimal",
+                  "text": "%1.",
+                  "start": 1,
+                  "indentLeft": 720,
+                  "hanging": 360
+                },
+                {
+                  "format": "lowerLetter",
+                  "text": "(%2)",
+                  "start": 1,
+                  "indentLeft": 1440,
+                  "hanging": 432
+                }
+              ]
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "ps1",
+              "width": 11906,
+              "height": 16838,
+              "marginTop": 1440,
+              "marginRight": 1440,
+              "marginBottom": 1440,
+              "marginLeft": 1440,
+              "headerDefault": "fEZxSMCblzSNqiwM",
+              "footerDefault": "oAh_9Rnub-dfIZPJ"
+            }
+          }
+        ]
+      },
+      {
+        "type": "story",
+        "attrs": { "id": "fEZxSMCblzSNqiwM", "kind": "header" },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "id": "zMr5SZ83IxFjXKGM", "style": "Header" },
+            "content": [{ "type": "text", "text": "Measurement document s4-01p" }]
+          }
+        ]
+      },
+      {
+        "type": "story",
+        "attrs": { "id": "oAh_9Rnub-dfIZPJ", "kind": "footer" },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "id": "ajI8VDcMWAo9_Oyj", "style": "Footer" },
+            "content": [
+              { "type": "text", "text": "Page " },
+              { "type": "field", "attrs": { "kind": "page" } },
+              { "type": "text", "text": " of " },
+              { "type": "field", "attrs": { "kind": "pageCount" } }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "body",
+        "attrs": { "pageSetup": "ps1" },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "id": "udx-PwJUaPJukIQD", "style": "Title" },
+            "content": [{ "type": "text", "text": "Measurement document s4-01p" }]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "n3P-tZTr87s617HC", "style": "Normal" },
+            "content": [
+              {
+                "type": "text",
+                "text": "Characters TeX treats specially print as typed: \\ { } $ & # _ % ^ ~ and [brackets], -- and --- stay as typed, no-break spaces stay, and  double  spaces  stay."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "3S4g7tKr8I_KYHZU", "style": "Heading1" },
+            "content": [{ "type": "text", "text": "Scope" }]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "F-_A3HZmhYtIS9ni", "style": "Normal" },
+            "content": [
+              {
+                "type": "text",
+                "text": "Years was section standard if which would version when his another much other he or? System another he where back their notice has process table change the. "
+              },
+              {
+                "type": "text",
+                "text": "Measure other policy change be has change notice.",
+                "marks": [{ "type": "bold", "attrs": { "value": true } }]
+              },
+              { "type": "text", "text": " " },
+              {
+                "type": "text",
+                "text": "From into well when owner so evidence document under. May who were been account result at other was a payment."
+              },
+              {
+                "type": "footnote",
+                "attrs": { "id": "PJ0T5hbrWPiwyDNo" },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": { "id": "kky2Gznn4B4LQDGU", "style": "FootnoteText" },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "In other first request another them many each and access way three same this as review or."
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": " Must will well access as not but public is years may payment."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "Znky3ZwtPK5Y9gpb", "style": "Normal" },
+            "content": [
+              { "type": "text", "text": "Last can at must great and it in could public. " },
+              {
+                "type": "text",
+                "text": "Same system table to change access to approval well right these on with order these and after much order.",
+                "marks": [{ "type": "italic", "attrs": { "value": true } }]
+              },
+              { "type": "text", "text": " " },
+              {
+                "type": "text",
+                "text": "It could level were request payment by an number in term table its evidence quality last now each also. Market same is each between at from table if of. Method under such the under in period result have same region between."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "mpgCUFo-6fzfBQ7D", "style": "Normal" },
+            "content": [
+              {
+                "type": "text",
+                "text": "Last customer this of period payment one no schedule a we that who market so into system his same. "
+              },
+              {
+                "type": "text",
+                "text": "underlined words",
+                "marks": [{ "type": "underline", "attrs": { "style": "single" } }]
+              },
+              { "type": "text", "text": " and " },
+              {
+                "type": "text",
+                "text": "struck words",
+                "marks": [{ "type": "strike", "attrs": { "value": true } }]
+              },
+              { "type": "text", "text": ". " },
+              {
+                "type": "text",
+                "text": "On into audit our evidence project long you must still between evidence then audit that. And after our notice who section evidence two an before way. Another through such is could they much a before about right all or if who will under own was only but payment. Such the his many own method these great through could some?"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "XgeVts_E_SGYqYhX",
+              "style": "Normal",
+              "numbering": {
+                "numberingId": "numberedList",
+                "level": 0,
+                "listId": "W13Zw0nLDLoegdVo"
+              }
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Approval with request much many request where out them budget right quality one version time schedule are will no."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "YflpEoXQw4Vw4-20",
+              "style": "Normal",
+              "numbering": {
+                "numberingId": "numberedList",
+                "level": 0,
+                "listId": "W13Zw0nLDLoegdVo"
+              }
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Audit schedule by other when but years that as other time more system all is while much method."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "uE4MYCor37E6pnUD",
+              "style": "Normal",
+              "numbering": {
+                "numberingId": "numberedList",
+                "level": 0,
+                "listId": "W13Zw0nLDLoegdVo"
+              }
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Time one version level that her delivery last supplier the must down that all?"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

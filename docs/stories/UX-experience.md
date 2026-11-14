@@ -1,0 +1,2449 @@
+# UX Shell, commands, collaboration experience, assistance ports, extensions, governance and host integration
+
+**Status:** first draft, 2026-11-06, from specification draft 0.2 ([13 Experience, extensibility and host integration](../spec/13-experience-extensibility.md)), [ADR 0014](../adr/0014-experience-benchmark-and-extensions.md) and the review sections 3.6, 3.7, 5 and 6 ([review](../review/2026-09-18-pitfall-review.md)). Every number is a target to validate, not a measurement. The story format and field values are those of the [README](README.md).
+
+**Scope.** The parity profile as a maintained artifact; the shell (header, toolbars, panes, status bar, modes); the command system (one registry for both toolbar layouts, context menus, the mini toolbar, command search, access keys, shortcuts, the embedding API and extensions); the collaboration experience (presence, comment threads, mentions, assigned tasks, reactions, suggestion review tools, the share button, output restrictions); the proofing and assistant ports; the extension model with trust tiers and custom content; built-in themes, localisation, the accessibility checker and the accessibility conformance report; the budget stories of 13 section 9; governance and administration; host integration (the integration guide, the reference host and its compose file, service calls on behalf of a user).
+
+**Left to other epics (README section 2.3).** The embedding contract itself (PRO); the editing surface, suggestion mode, the region guard, the recovery journal and the theming mechanism (FE); catch-up and the history panel (HIS); range mapping of comments in the authority (SYN); who may comment, suggest or restrict (PRM); the fill-mode interface and field panes (FRW); the page-view panes (FE); the measurement harness and CI gates (FND); tagged PDF (EXP); retention mechanics (HIS). Where a story here shows or triggers one of those, it says so and depends on it.
+
+**Design.** Visual and interaction design is left to a designer (13 section 13). Stories describe what a person can do, never how it looks. Word for the web is a feature checklist only.
+
+## Parity profile
+
+### UX-001 Maintain the parity profile as a published artifact
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 13 §1, §2; ADR 0014; review §3.7, §5; 11 risk 12 · **Requirements:** R14 · **Depends on:** none
+
+As a maintainer, I want the parity profile kept as a versioned, published artifact, so that scope questions are settled by one contract and parity is judged by what a user can do.
+
+**Acceptance criteria**
+
+- [x] Given the repository, when the profile is opened, then it lists every capability of 13 section 2 in exactly one tier (built in, through ports and extensions, non-goal) with its phase and the identifiers of the stories that deliver it.
+- [x] Given a non-goal of the profile (SmartArt, charts, shapes and text boxes, ink, mail merge, macros, table formulas, researcher-style lookup, transcription, offline-first editing), when a story or change proposes it, then it is refused, or the profile and the non-goals in PRODUCT.md are changed by an explicit owner decision in the same change set.
+- [x] Given a command added to the built-in registry (UX-003), when the build runs, then it fails if no profile row lists the command's capability.
+- [x] Given any row, when it is read, then it states what a user can do and prescribes no look, arrangement or name from another product.
+- [ ] Given a release, when the integration guide (UX-090) is published, then it links to the profile version that matches that release.
+
+**Evidence:** packages/ui/src/parity/profile.ts is the source and packages/ui/src/parity/build.ts the checks; packages/ui/scripts/generate.ts writes spec/parity/parity-profile.json and spec/parity/parity-profile.md (phases derived from the stories); packages/ui/test/parity.test.ts: the artifacts equal a fresh generation, every item of 13 §2 is covered in its own tier only, a non-goal with a delivering story, a command delivering a non-goal and a change of the non-goals without an updated decision record are refused, a built-in command whose capability has no row fails, and rows naming another product's design or prescribing a look fail.
+
+**Notes:** R14 requires a "published parity profile". Phase inferred (1a): it must exist before the registry so that risk 12 (scope creep) has its mitigation from the start. The build check is a proposed mechanism and may be relaxed to a report. Rows without a delivering story in any epic are gaps to report, for example symbols, watermark, table sorting, columns and breaks, captions, bookmarks, equations and templates, which the profile lists as built in but this backlog assigns to other epics or later phases. Built on 2026-11-06 (ADR 0041, section 8): `spec/parity/` lists four gaps (cropping of pictures; text prediction, translate and read aloud have no port or story; dictation has no test of its own). The non-goal lists of 13 §2 and PRODUCT.md differ: 13 §2 also names text boxes, ink, table formulas, researcher-style lookup and transcription, and PRODUCT.md also names product-level non-goals; the profile follows 13 §2 (owner question). Criterion 5 waits for the integration guide (UX-090, phase 1b).
+
+### UX-002 Report parity status with every release
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | S | should | Maintainer |
+
+**Spec:** 13 §2; 00 R14 · **Requirements:** R14 · **Depends on:** UX-001
+
+As a maintainer, I want a parity report generated for every release, so that "same features as Word for the web" is measured capability by capability.
+
+**Acceptance criteria**
+
+- [ ] Given a release candidate, when the report is generated, then every profile row shows one of shipped, partial, planned (with phase) or not planned, derived from the state of its stories.
+- [ ] Given a row marked shipped, when the report is built, then it links to an automated test that exercises the capability as a user would (Playwright or unit), not to a screenshot.
+- [ ] Given a capability in the tier "through ports and extensions", when the report is built, then it names the port or the reference extension that demonstrates it, or states that none exists.
+- [ ] Given the report, when it is published with the release notes, then it is judged by capability only: no row is marked "partial" or "shipped" because of appearance.
+
+**Evidence:** packages/ui/test/parity-status.test.ts (the four states of `rowStatus` in `packages/ui/src/parity/status.ts` from the stories' criteria; a planned row carries the earliest phase of its stories; non-goals and rows with no known story are not planned; a row with a gap is never shipped; property tests over the published profile rows and the monotone order of the states; `parseCriteria` reads the ticked and total criteria of each story from the epic files). Criterion 3 (lane UX-001-013, 2026-11-13): packages/ui/src/parity/demonstrators.ts gives each row of the tier a demonstrator, which is `none` with a reason for all eight rows (no proofing port, reference assistant or reference extension ships; checked against packages/ and apps/); `parityReport` puts it on those rows and reports a row with no entry as a problem; packages/ui/test/parity-demonstrators.test.ts. Run with `pnpm vitest run packages/ui/test/parity-demonstrators.test.ts packages/ui/test/parity-status.test.ts packages/ui/test/parity.test.ts`: 31 passed. Run of 2026-11-13: `pnpm vitest run packages/ui` (25 files, 275 tests passed).
+
+**Notes:** Phase inferred (1b, first usable release). Round 7 (packet U, 2026-11-13): criterion 1 ticked on the report function. Not wired: no release job calls `parityReport` yet and the report is not written to `spec/parity/` (release pipeline, FND-012; generated artifacts are outside `packages/ui`). Criterion 2 is open: a profile row names its stories but not the automated tests that exercise a shipped capability, so a shipped row cannot yet link to a test; the profile needs that field (owner or PRO/FND decision, not made here). Criterion 3 (lane UX-001-013, 2026-11-13) is ticked: `demonstrators.ts` states the demonstrator of each "through ports and extensions" row, and every one is `none` today. A row that gains a port or a reference extension needs its entry changed in that file. Criterion 4 is a rule for whoever publishes the report, not a check the code can make beyond the state rule above. Audit 2026-11-13: criteria 1 and 3 are unticked because `parityReport`, `parseCriteria` and `DEMONSTRATORS` are imported only by their own tests (no script, release job or export calls them, so no report can be generated); tick again once something produces the report.
+
+## Command registry and command surfaces
+
+### UX-003 Command registry that drives every command surface
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | L | must | Maintainer |
+
+**Spec:** 13 §4; 02 §4, §5.1; ADR 0014 · **Requirements:** R1, R14 · **Depends on:** FE-026
+
+As a maintainer, I want one command registry, so that the compact and full toolbars, context menus, the mini toolbar, command search, access keys, `exec()` and extensions never drift apart.
+
+**Acceptance criteria**
+
+- [ ] Given a command entry with `id`, `label`, `icon`, `group`, `keys`, `accessKey`, `enabled` and `active` (the shape in 13 section 4), when it is registered, then the compact toolbar, the full toolbar, context menus, the mini toolbar, command search, access keys, `exec()` and extensions all read that entry from the same registry instance.
+- [x] Given an entry whose `enabled` or `active` names a query on the document API (for example `canEditSelection`, `isBold`), when the selection or document changes, then the state is evaluated once, through the document API, and no surface evaluates it by itself.
+- [x] Given an entry with an unknown query name or an `id` that is already registered, when it is registered, then registration fails with an error that names the entry, and nothing is overwritten silently.
+- [x] Given several state changes within one animation frame, when the registry publishes, then at most one interface update is produced for that frame (02 section 4) and `de-command-state` lists only the commands whose state changed.
+- [x] Given a command registered after start-up (as extensions do), when it is registered, then every surface shows it without a reload.
+- [x] Given a locale, when a label is shown, then it is resolved from the string tables (UX-064) and not taken from a literal in the entry.
+
+**Evidence:** packages/ui/src/commands/registry.ts, builtin.ts, queries.ts; packages/ui/test/registry.test.ts (each query asked once per change through CoreApi.query, surfaces read only the snapshot; duplicate identifiers, aliases, unknown queries and literal labels refused with the entry named; registration and removal at run time; labels are keys of packages/ui/src/i18n/en-GB.ts); packages/ui/e2e/toolbar.spec.ts (a command registered and one removed at run time appear and disappear without a reload) and e2e/strings.spec.ts (labels follow the locale), in Chromium, Firefox and WebKit. Criterion 1 in part (lane V-UX-001-015, 2026-11-13): packages/ui/e2e/ux-003-registry-surfaces.spec.ts, one entry registered at run time is read by the full toolbar, the context menu, command search, the access-key mode and `exec`; passed in Chromium, Firefox and WebKit. Criterion 4 (lane U-UX-001-015, 2026-11-13): packages/ui/e2e/ux-003-command-state.spec.ts, 'a burst of selection changes in one frame fires one event that lists only what changed' (three selection changes in one task give one `de-command-state` event in one frame, listing `format.italic` and not `format.bold` or `edit.selectAll`), passed in Chromium, Firefox and WebKit (Playwright, `DOCEDIT_BROWSERS=chromium,firefox,webkit`, port 56251). The number of events is the measure of the interface update here; the drawn frame of the shell is covered by packages/ui/e2e/shell.spec.ts (UX-072 criterion 4).
+
+**Notes:** The sample entry in 13 section 4 has a literal `label`, a `group` of the form `home.font` and no field for synonyms. The label must be a string key (13 section 8: all interface strings are external); command search (UX-011) needs synonyms. Both are open questions below. The group names are examples only. Built on 2026-11-06 (ADR 0041, sections 1 and 2): labels are string keys; synonyms wait for UX-011. Criterion 1 stays open until the full toolbar, context menu, mini toolbar, command search, access keys and extensions exist (phases 1b and 2); the compact toolbar, the header and `exec` already read the one registry. Criterion 4 is met in the registry (one publication per frame with the changed identifiers, `bindCommandStateEvent` raises `de-command-state`), and is ticked once the element raises the event from the shared registry (B2). Round 2 (lane UX-001-013, 2026-11-13): packages/ui/test/registry-surfaces.test.ts checks criterion 1 at the logic level: one registered entry, read from one registry instance by the toolbar groups, the context menu, the mini toolbar, command search, access keys and `exec`, and removed from all of them by `unregister`. The rendered full toolbar and mini toolbar are not run, and `bindCommandStateEvent` is still not bound by the element (`packages/element` does not raise `de-command-state` from this registry), so criteria 1 and 4 stay unticked. Round 3 (packet U, 2026-11-13): still unticked. A search of `packages/element/src` finds no call to `bindCommandStateEvent`; the element's `events.ts` documents `de-command-state`, but nothing raises it from the registry. Needed from packet B2 (element), not changed here. Lane U-UX-001-015 (2026-11-13): the element now raises `de-command-state` from the registry (packages/element/src/session.ts, `commandState`), and criterion 4 is ticked on the browser run in its Evidence line. Criterion 1 stays open. Lane V-UX-001-015 (2026-11-13): the full toolbar, the context menu, command search, the access-key mode and exec read one run-time entry (ux-003-registry-surfaces.spec.ts). The compact row takes the phase 1a commands only (UX-006) and the mini toolbar the `format` group only (UX-010), so an extension entry is not shown there by design; the owner needs to say whether "read" means "shown" for those two surfaces.
+
+### UX-004 Commands respect the user's current permissions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Viewer |
+
+**Spec:** 13 §4; PRODUCT principle 2; 07 §7 · **Requirements:** R3, R14 · **Depends on:** UX-003, PRM-004, PRM-006, FE-036, FE-038
+
+As a person with limited rights, I want to see which commands I may use before I try, so that I am not surprised by a rejected change.
+
+**Acceptance criteria**
+
+- [x] Given a user with only `view` in the scope of the selection, when the toolbar renders, then every command that changes content is disabled, carries an accessible reason, and `queryCommand` reports it as not enabled.
+- [x] Given the caret moves from a region the user may edit into one they may not, when the selection changes, then command states update within one animation frame.
+- [x] Given a `perm.changed` that removes edit rights in the current scope, when it arrives, then the affected commands become disabled without a reload and the change is announced (FE-107).
+- [x] Given a user with `suggest` but not `edit`, when they run a formatting command, then the command is enabled and its result is a suggestion, as the suggestion mode of the editing core produces.
+- [x] Given a command the permissions do not allow, when it is offered by command search or an extension, then it cannot be run from there and its unavailability is explained rather than silent.
+- [x] Given an extension command (UX-051) whose `enabled` names a permission query, when permissions change, then it follows the same rules as built-in commands.
+
+**Evidence:** packages/ui/src/commands/registry.ts and access.ts; packages/ui/test/permissions.test.ts (view only: content commands disabled with a reason, state() reports not enabled, exec refuses with no-access; every limit has its reason; caret moves and permission changes; a command registered at run time follows the same rules); packages/ui/e2e/toolbar.spec.ts (aria-disabled with the reason as accessible description, states updated by the end of the frame in which the core notifies, a permission change in the same scope disables commands and is announced in the shell's live region), in Chromium, Firefox and WebKit. queryCommand is registry.state (ADR 0041). Criterion 5 (round 3, ui packet, 2026-11-13): packages/ui/test/command-search.test.ts 'lists a command the access does not allow with its reason, and does not run it' (a search hit with `runnable: false` and `reason.access.view`; `runSearchHit` and `activateFirstHit` return `no-access` and the core's run is never called); packages/ui/test/permissions.test.ts 'cannot be run from another surface when the access does not allow it, and say why' (a command registered at run time, as an extension does, is refused by `exec` with `no-access`). Run 2026-11-13 with `pnpm vitest run packages/ui/test/command-search.test.ts packages/ui/test/permissions.test.ts`. Criterion 4 (lane U-UX-001-015, 2026-11-13): packages/engine/test/ux-015-mode-commits.test.ts, 'bold on a selection is enabled and recorded as a formatting suggestion' (a `suggest`-only user with a selection runs `bold`; the change is recorded with an `fmt` mark and queued as a commit; Node.js, the real DocumentCore). Run: `pnpm exec vitest run test/ux-015-mode-commits.test.ts` in packages/engine (4 tests passed).
+
+**Notes:** The server remains the authority (principle 2); this story is the "see before you try" half. Rejection explanations belong to PRM. Criterion 4: formatting commands stay enabled with `suggest` (tested), but the result is a suggestion only once the core's suggestion mode exists (FE-042, phase 2). Criterion 5: `exec` refuses with the reason (tested); command search (UX-011) and extensions (UX-051) arrive in phase 2. Round 3 (ui packet, 2026-11-13): command search (UX-011) and the run-time registration of an extension-style command are built, so criterion 5 is ticked on the unit tests named in its Evidence. The full extension surface (UX-051) stays phase 2. Lane U-UX-001-015 (2026-11-13): criterion 4 is ticked at the core (see its Evidence); the shell's menu state for suggest-only users is not run in a browser.
+
+### UX-005 Drive the editor from a host-built toolbar
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Integrating developer |
+
+**Spec:** 13 §4; 05 §8.1; 02 §5.1 · **Requirements:** R6, R14 · **Depends on:** UX-003, PRO-074, PRO-085, PRO-087
+
+As an integrating developer, I want to build my own toolbar from `queryCommand` and `exec`, so that the editor fits into my application's interface.
+
+**Acceptance criteria**
+
+- [x] Given `toolbar="none"`, when the editor loads, then no built-in toolbar is rendered, and the editing surface, panes and status bar still work.
+- [ ] Given a selection that is bold, when the host calls `queryCommand("format.bold")`, then it reports the same enabled and active state as the built-in toolbar would show.
+- [ ] Given an enabled command, when the host calls `exec`, then the document changes exactly as if the user had used the built-in toolbar, passing the same guards as typing.
+- [ ] Given a command that `queryCommand` reports as not enabled, or an unknown identifier, when the host calls `exec`, then the document does not change and the caller is told that nothing ran.
+- [ ] Given command states change, when `de-command-state` fires, then its detail lists the commands whose state changed, so the host toolbar updates without polling.
+- [ ] Given the reference host's example toolbar (shown by the page glue, UX-093) beside the built-in one, when an automated test walks a sequence of selections, then the two agree on enabled and active for every command in the sequence.
+
+**Evidence:** packages/ui/test/host-toolbar.test.ts (Node.js, 2026-11-13): a bold selection reports the same enabled and active state through `state` and through the toolbar's snapshot (criterion 2); a content command refused in view mode or without edit rights runs nothing and returns `mode` or `no-access` (criterion 3, the registry's guards only); an unknown identifier and a command its query disables run nothing and say so (criterion 4); the `de-command-state` detail lists the changed identifiers and no content (criterion 5). Also packages/ui/test/registry.test.ts, 'raises de-command-state as a composed, bubbling event' and 'exec (05 §8.1)'. Toolbar.svelte reads the same registry (`view`, `exec`). Browser (lane U-UX-001-015, 2026-11-13): packages/ui/e2e/commands.spec.ts, 'a host-built toolbar (UX-005)', 'with toolbar="none" there is no built-in toolbar; page, panes and status bar work' (criterion 1): passed in Chromium, Firefox and WebKit (Playwright, `DOCEDIT_BROWSERS=chromium,firefox,webkit`, own port). Some first attempts failed on a missing trace file in the shared output folder and passed on retry. Criterion 3 (lane V-UX-001-015, 2026-11-13, see Notes): packages/ui/e2e/ux-005-exec-parity.spec.ts, a bold from the built-in toolbar and a bold from `exec` record the same harness runs and core calls, passed in Chromium, Firefox and WebKit.
+
+**Notes:** The return shape of `exec` for a refused command is for PRO to fix (open question). Round 1 (lane ui-5, 2026-11-13): criteria 2, 4 and 5 ticked on the Node.js tests above. Criterion 1 needs a browser run with `toolbar="none"`, and criterion 6 needs the reference host's example toolbar (UX-093) in a browser run; both stay open. Criterion 3 stays open: the registry applies the guards, but that the document then changes exactly as typing does is the core's and is not tested here. Lane U-UX-001-015 (2026-11-13): criterion 1 ticked on the browser run above. Criterion 6 stays open: the harness's `hostToolbar` is test glue in e2e/harness/main.ts, not UX-093's reference host, which is outside this lane's range and not checked here. Lane V-UX-001-015 (2026-11-13): criterion 3 is tested at the seam between the shell and the core (ux-005-exec-parity.spec.ts). The harness core is not a real document, so that the document itself changes as typing does stays the core's, and criterion 3 stays open. Audit 2026-11-13: criteria 2, 4 and 5 are unticked because the element's host `queryCommand` and `exec` call the core (packages/element/src/host-api.ts), not the ui registry the cited tests exercise, so `core.queryCommand("format.bold")` throws a TypeError (as it does for any unknown name) and `bindCommandStateEvent` is called only by the e2e harness; the element's own `de-command-state` (detail of `{name, enabled, active}` objects, packages/element/src/selection-events.ts, FE-028) and `exec` (PRO-085) have their own tests and can be cited once the host path accepts registry identifiers and one detail shape is chosen.
+
+### UX-006 Compact toolbar
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Author |
+
+**Spec:** 13 §3, §4, §12; 11 §3; 02 §3 (parts) · **Requirements:** R1 · **Depends on:** UX-003, UX-004
+
+As an author, I want a compact single-row toolbar, so that I can format text and use the commands of the demo without the full layout.
+
+**Acceptance criteria**
+
+- [x] Given `toolbar="compact"`, when the editor loads, then a single-row toolbar is generated from the registry with the commands registered for phase 1a, and the element exposes the `toolbar` part.
+- [x] Given a toolbar control, when it is activated by pointer or keyboard, then it runs the same command path as `exec`.
+- [x] Given focus enters the toolbar, when the arrow keys are pressed, then focus moves between controls (the toolbar is one tab stop), Escape returns focus to the editing surface, and focus is always visible.
+- [x] Given a command is active at the caret, when the toolbar renders, then the active state is exposed to assistive technology as well as visually.
+- [x] Given the container is narrower than the row, when the toolbar lays out, then the commands that do not fit stay reachable and none is lost.
+- [x] Given a command is removed from the registry, when the toolbar updates, then its control disappears (nothing is hard-coded in the toolbar).
+
+**Evidence:** packages/ui/src/components/Toolbar.svelte, packages/ui/src/shell/toolbar-layout.ts, packages/ui/src/styles/shell.css; packages/ui/e2e/toolbar.spec.ts in Chromium, Firefox and WebKit: one row generated from the registry with the phase 1a commands, ::part(toolbar) styled from the host page; pointer, Enter and Space run the registry's exec path; one tab stop with arrow keys, Home, End and Escape to the editing surface, visible focus; aria-pressed and a visual difference for active commands; at 420 px the rest is in a More menu, every command once, run by keyboard; removed and added commands; packages/ui/test/shell-logic.test.ts (fitting).
+
+**Notes:** Overflow behaviour is the minimum a single-row layout needs; its design is the designer's.
+
+### UX-007 Full toolbar with task groups and contextual groups
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 13 §2, §3, §4; 11 §4 · **Requirements:** R1, R14 · **Depends on:** UX-003, UX-006
+
+As an author, I want a full toolbar with commands grouped by task and groups that appear for the thing I am editing, so that the commands I need are close.
+
+**Acceptance criteria**
+
+- [x] Given `toolbar="full"`, when the editor loads, then commands appear grouped by task (formatting, inserting, page layout, references, review and view are the examples in the spec), and each command appears in exactly one group, taken from its `group`.
+- [x] Given a selection inside a table, a picture, a header or footer story, or a field, when the selection changes, then the matching contextual group appears; given the selection leaves it, then the group disappears; in neither case does focus move.
+- [x] Given a command is registered, when both layouts are in use, then it appears in the compact and the full layout from the same entry.
+- [x] Given the `toolbar` attribute is changed between `compact` and `full` while a document is open, when the layout switches, then selection, scroll position and unsent work are untouched.
+- [x] Given the groups are presented as tabs, when the keyboard is used, then the tabs follow the standard tabs pattern (arrow keys between tabs, Tab into the active group's commands) and each tab and group has an accessible name.
+- [x] Given the view group, when it renders, then it offers only the views the build supports (`web`, `read`, and `print` once it exists).
+
+**Evidence:** packages/ui/test/layout-views.test.ts (criterion 4, Node.js, 2026-11-13, 6 tests passed: `layoutViews` in `commands/builtin.ts` gives `web` when the core lists no views, offers `print` only when the core lists it, keeps the shell order, drops unknown names, and a property over every subset registers one `view.layout.*` command per offered view, which sets that view; App.svelte registers the group through `layoutViews`). Not claimed: the group's rendering in a browser was not run. packages/ui/test/toolbar-groups.test.ts 'every command is in exactly one group, the one its entry names' (criterion 1, property test over the built-in commands, both access levels and the contexts) and 'one entry, the same in the compact row and the full layout' (criterion 3, property test, plus a command registered at run time shown in both layouts as the entry that was registered). Logic in packages/ui/src/shell/toolbar-groups.ts; `toolbarGroups` now orders the groups itself (task order, then contextual) whatever the input order. Lane U-UX-001-015 (2026-11-13), browser runs in Chromium, Firefox and WebKit (Playwright, `DOCEDIT_BROWSERS=chromium,firefox,webkit`): packages/ui/e2e/commands.spec.ts 'groups commands by task, each in the one group its entry names' (criterion 1 in the rendered layout), 'follows the tabs pattern and names every tab and group' (criterion 5), 'shows a contextual group while the selection is in its object, without moving focus' (criterion 2 for a table and for a header and footer story), and packages/ui/e2e/ux-007-contextual-groups.spec.ts (criterion 2 for a picture and for a field, the group shown and gone with focus on the surface; and criterion 6 in part: a switch between full and compact keeps the selection and the surface, with one mount). Criterion 6 (lane V-UX-001-015, 2026-11-13): packages/ui/e2e/ux-007-layout-switch.spec.ts 'selection, page scroll position and unsent input are untouched by a switch', run in Chromium, Firefox and WebKit (Playwright, `DOCEDIT_UI_PORT=57250 DOCEDIT_BROWSERS=chromium,firefox,webkit`, 3 passed). The harness body is made 4000 px tall so that the document scrolls; the scroll position is read after the search field is opened and typed in, then after a switch to `compact` and back to `full`; the selection, the editing surface and the query typed into command search (not run) are compared; one `mountBody` call.
+
+**Notes:** The grouping and appearance are the product's own (13 section 3) and a designer's job. Contextual groups for fields depend on FRW's field commands. Round 2, packet U (2026-11-13): criteria 1 and 3 ticked on the tests above. Criterion 2 stays open: the group must appear and disappear with the selection and focus must not move, and the focus part is the component's and was not run in a browser. Criteria 4 to 6 are the component's (the attribute switch, the tabs pattern) or need the view commands the build does not have yet. Round 4 (packet U, 2026-11-13): criterion 4 ticked. The view commands exist (`view.layout.*`); the view group offers the views the core lists (`layoutViews`), so `print` waits for the core. Criteria 5 and 6 stay open (the component's). Lane U-UX-001-015 (2026-11-13): criteria 2 and 5 ticked on the browser runs in the Evidence line. Criterion 6 ticked by lane V-UX-001-015 on the three-browser run named in Evidence. Two limits: the unsent input checked is the command search query, the only unsent input the harness has; the comment composer draft and the fill bar are not covered. The scroll position is read after the switch back to `full`; during the switch to `compact` the document moved by about 34 px in one run (no search open), and that intermediate move is not judged here. In a draft run the position read 0 after the search opened, before the switch; that was not isolated further and the final test measures after the search opens.
+
+### UX-008 Context menu
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2, §4, §12; 02 §15 · **Requirements:** R1, R14 · **Depends on:** UX-003, UX-004
+
+As an author, I want a context menu that offers the commands relevant to what I clicked, so that I can work without hunting through the toolbar.
+
+**Acceptance criteria**
+
+- [ ] Given a pointer context click, or the keyboard context-menu key or its documented alternative, when it happens in the editing surface, then a menu generated from the registry opens at the pointer or the caret with the commands relevant to the target (text, table, picture, field, comment).
+- [x] Given the menu is open, when the keyboard is used, then arrow keys move between items, Escape closes it, focus returns to the editing surface, and every item has an accessible name.
+- [x] Given a command the permissions do not allow, when the menu lists it, then it is disabled with a reason (UX-004).
+- [x] Given an extension contributes items (UX-051), when the menu opens on their declared targets, then the items appear.
+- [ ] Given a misspelled word and a present proofing port, when the menu opens on it, then the port's suggestions appear in the menu (UX-042), because this menu replaces the browser's.
+
+**Evidence:** packages/ui/test/context-menu.test.ts (round 5, packet U, 2026-11-13): the menu's commands are the offered entries that name one of its targets, for any set of targets and both accesses (fast-check property); a viewer's bold on text is listed disabled with `no-access` and `reason.access.view`, and every disabled item carries a reason key (property); an extension entry registered with `contextMenu: ['table']` appears on a table target only and is dropped when removed. Run with the fake core, `pnpm vitest run packages/ui`: 236 passed. Criterion 2 (lane U-UX-001-015, 2026-11-13): packages/ui/e2e/ux-008-context-menu.spec.ts (every item has an accessible name, arrow keys visit every item in order, Escape closes and returns focus to the editing surface) passed in Chromium, Firefox and WebKit (Playwright, `DOCEDIT_BROWSERS=chromium,firefox,webkit`). Criterion 1 (lane V-UX-001-015, 2026-11-13): packages/ui/e2e/ux-008-context-targets.spec.ts (a picture, a field and a comment target each list their extension command on a right-click, and the text menu does not) passed in Chromium, Firefox and WebKit (same Playwright command, port 57250).
+
+**Notes:** Round 5 (packet U, 2026-11-13): criteria 3 and 4 ticked on the unit tests above. Criteria 1 and 2 stay open: the opening, the keys and the focus are the component's, and no browser run was made here. Lane U-UX-001-015 (2026-11-13): criterion 2 is ticked on the browser run in its Evidence line. Criterion 1 is ticked (lane V-UX-001-015): packages/ui/e2e/commands.spec.ts opens the menu at the pointer and at the caret for text, and lists a table extension item on a table target, and packages/ui/e2e/ux-008-context-targets.spec.ts covers the picture, field and comment targets. Criterion 5 needs the proofing port (UX-041), which is not built. What the menu does when there is no proofing port is not specified (02 section 15, 13 section 13): see open questions. The menu lives inside the shadow root (02 section 3). Audit (2026-11-13): criterion 1 unticked, because the keyboard path opens "at the caret" from `core.caretRect`, which neither the product's element nor the browser harness provides, so the menu falls back to the bottom edge of the page rect, and no test asserts a caret position (only the pointer position is asserted).
+
+### UX-009 Format painter
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Author |
+
+**Spec:** 13 §2, §12 · **Requirements:** R1, R14 · **Depends on:** UX-003, UX-004, FE-127, FE-128, FE-129
+
+As an author, I want to copy the formatting of one passage onto another, so that I can make passages match without redoing each setting.
+
+**Acceptance criteria**
+
+- [ ] Given a selection with character and paragraph formatting, when the author arms the format painter and then selects a target, then the target takes the source's formatting and keeps its own content.
+- [ ] Given the target is in a scope where the user has `suggest` but not `edit`, when the formatting is applied, then it is recorded as a formatting suggestion, not a direct change.
+- [ ] Given the target is in a scope the user may not change, when the formatting is applied, then nothing changes and the user is told why.
+- [ ] Given only a keyboard, when the painter is armed, applied and cancelled, then every step works without a pointer; the armed state is exposed to assistive technology and Escape disarms it without a change.
+
+**Evidence:** packages/ui/test/share-and-painter.test.ts (round 5, packet U, 2026-11-13): in a viewer's scope, `format.applyFormat` is disabled with `no-access` and `reason.access.view` (a string of the source table), `exec` returns `no-access`, the core's `runNamed` is never called and the selection does not change; in an editable scope the same command runs the core's `pasteFormat` (fake core, `pnpm vitest run packages/ui`). Not claimed: criteria 1 and 2 (the core's copy and the recorded suggestion). Criterion 4 (lane U-UX-001-015, 2026-11-13): packages/ui/e2e/commands.spec.ts, 'the format painter (UX-009)': armed by the keyboard, the target applied with Enter, Escape disarms with no change, aria-pressed and the live status are checked; passed in Chromium, Firefox and WebKit (Playwright, `DOCEDIT_BROWSERS=chromium,firefox,webkit`).
+
+**Notes:** Round 5 (packet U, 2026-11-13): criterion 3 ticked on the unit tests above. Which properties are copied is not specified; the minimum is the formatting carried by the selection's run properties and paragraph properties (03 section 4.5). Lane V-UX-001-015 (2026-11-13), checked, not changed: the product does not offer the painter. `commandNames` in packages/element/src/editor.ts is `['insertField']` only, the engine's query list has no `canCopyFormat`, and no `copyFormat` or `pasteFormat` exists in packages/element or packages/engine, so App.svelte does not register `format.painter` in the product. Criteria 1 and 2 stay open: the copy and paste of formatting, and the formatting suggestion (FE-128), need that core work first. Browser runs of the painter use the harness's own core (packages/ui/e2e/harness/main.ts), not the product's, so they do not show this. Audit (2026-11-13): criteria 3 and 4 unticked, because in the product the painter and `format.applyFormat` are never registered (App.svelte needs the core's `canCopyFormat` query and `pasteFormat`, which no core provides), so no user can arm the painter or be told why it is refused; the ticks rested on a fake core and the harness core.
+
+### UX-010 Mini toolbar
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Author |
+
+**Spec:** 13 §2, §4 · **Requirements:** R1, R14 · **Depends on:** UX-003, UX-004
+
+As an author, I want a small toolbar near my selection, so that common formatting is within reach of where I am working.
+
+**Acceptance criteria**
+
+- [ ] Given a non-empty selection the user may change, when it is made, then a mini toolbar generated from the registry appears near the selection with common formatting commands.
+- [x] Given the mini toolbar is shown, when the author keeps typing or moves the caret, then the editing surface keeps focus, the toolbar never intercepts text input, and collapsing the selection or pressing Escape dismisses it.
+- [ ] Given the toolbar is needed without a pointer, when the documented keyboard gesture is used, then focus moves into it and Escape returns it to the selection.
+- [ ] Given the user may not change the selection, when it is made, then no editing commands are offered.
+
+**Evidence:** packages/ui/test/mini-toolbar.test.ts (Node.js, 2026-11-13): `miniToolbarItems` in packages/ui/src/commands/mini-toolbar.ts offers nothing for a collapsed selection, the `format` group only, and no content command where the access or the mode gives `no-access` or `mode` (criterion 4, with a fast-check property over access and mode). Lane V-UX-001-015 (2026-11-13): packages/ui/e2e/ux-010-mini-toolbar.spec.ts, 4 tests, Chromium, Firefox and WebKit, 12 passed on the final run (one earlier run had three failures under shared machine load, and passed on a rerun with no change). The toolbar is rendered by packages/ui/src/components/MiniToolbar.svelte, shown from App.svelte for a non-empty selection the user may change: it appears at the caret rectangle (above it), its buttons take no pointer press so focus stays on the text, typing keeps focus on the editing surface, a collapsed selection hides it, Escape hides it first (the next Escape leaves the text), and a view-only user gets none. Criteria 1 and 2 are ticked on that run.
+
+**Notes:** Phase inferred (2): the spec places the context menu and format painter in 1b but does not place the mini toolbar. Review, round 1 (2026-11-13): criterion 4 unticked. `miniToolbarItems` is called by its test only; no mini toolbar is rendered, so nothing is offered or withheld in the product. Round 1 (lane ui-5, 2026-11-13): criterion 4 was ticked. The common formatting commands are taken as the `format` group (spec default, decided here; proposed in docs/adr/0139-ui-5-backlog-batch.md). Criteria 1 to 3 need the rendered toolbar, its placement near the selection, focus and the keyboard gesture, none of which is built or run in a browser here. Lane V-UX-001-015 (2026-11-13): the toolbar is built and run in the browser (see Evidence), so criteria 1 and 2 are ticked. Criterion 3 stays open: the spec names no keyboard gesture for the mini toolbar, and its buttons are not in the tab order (tabindex -1), so no key moves focus into it. The gesture is a decision for the owner (proposed, not chosen, in docs/adr/0325-lane-V-UX-001-015.md). Also changed: `miniToolbarItems` (packages/ui/src/commands/mini-toolbar.ts) now offers only commands that change the text (`changesContent`), so the painter's arming and the language list are not shown; the unit tests in packages/ui/test/mini-toolbar.test.ts still pass (22 tests with the painter and share tests). Audit (2026-11-13): criterion 1 unticked, because the toolbar is placed from `core.caretRect`, which neither the product's element nor the harness provides, so it falls back to the top-left of the page rect and not near the selection, and no test asserts its position. The Escape test in ux-010-mini-toolbar.spec.ts also failed in 2 of 2 runs in each of two browsers here, at its last step (a new selection after a collapse does not bring the toolbar back when the two selection updates fall in one frame).
+
+### UX-011 Command search
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Author |
+
+**Spec:** 13 §2, §4, §12 · **Requirements:** R14 · **Depends on:** UX-003, UX-004, UX-064
+
+As an author, I want to find a command by typing, so that I can use features without knowing where they live.
+
+**Acceptance criteria**
+
+- [x] Given command search is opened by its documented shortcut, when the author types part of a label, then matching commands from the registry are listed, and choosing one runs it.
+- [ ] Given a command has synonyms in the current locale, when a synonym is typed, then the command is listed.
+- [ ] Given the permissions do not allow a command, when it matches, then it cannot be run from the results and the reason is shown (UX-004).
+- [ ] Given extension commands (UX-051), when the author types their label, then they are listed with built-in ones.
+- [x] Given keyboard and screen-reader use, when results change, then the list is exposed with the standard combobox and listbox semantics, the result count is announced, and after a command runs focus returns to the editing surface.
+- [x] Given nothing matches, when Enter is pressed, then no command runs and a "no results" message is shown.
+
+**Evidence:** packages/ui/test/command-search.test.ts (Node.js, 2026-11-13): `searchCommands` in packages/ui/src/commands/search.ts matches the translated labels of offered commands (criterion 1 in part: the matching and the run of a hit); a command the access does not allow is listed with its reason and `exec` refuses it (criterion 3); a registered extension command is listed next to the built-in ones and drops out when removed (criterion 4); a command under a synonym the host supplies is listed (criterion 2, the mechanism only); nothing matches gives `search.none` and Enter runs nothing (criterion 6, the logic only); fast-check property over the query words. Lane V-UX-001-015 (2026-11-13): the command search is built. `view.commandSearch` (packages/ui/src/commands/builtin.ts, key Alt+Q, row in packages/ui/src/shortcuts/table.ts, generated into spec/shortcuts/) opens packages/ui/src/components/CommandSearch.svelte from App.svelte. The field is a combobox, the results a listbox with aria-activedescendant, the count and "No results" in a status region, focus back in the text. Browser run packages/ui/e2e/ux-011-command-search.spec.ts, 5 tests, Chromium, Firefox and WebKit, 15 passed: criterion 1 (Alt+Q, typed label, Enter runs the match, focus returns), criterion 3 (a view-only user sees the disabled result with its reason and Enter runs nothing), criterion 4 (an extension command listed beside the built-in one), criterion 5 (arrow keys, click, roles, count), criterion 6 ("No results", Enter runs nothing, Escape closes). Unit tests, `pnpm vitest run` on the eight shell files that read the table and the built-in commands: 52 passed.
+
+**Notes:** Ranking is not specified. Where synonyms live in a registry entry is open. Review, round 1 (2026-11-13): criteria 3 and 4 unticked. `searchCommands` is called by its test only; no command search is opened, typed into or shown in the product, so nothing is listed or refused from results. Round 1 (lane ui-5, 2026-11-13): criteria 3 and 4 were ticked. Ranking is decided here (docs/adr/0139-ui-5-backlog-batch.md): label starts with the query, then contains it, then every word in the label, then a synonym only. Synonyms have no source yet: the locale tables carry no synonym keys (13 section 8), so `synonyms` is an injected function that the shell does not pass; criterion 2 stays open for that reason. Criterion 1 needs the documented opening shortcut and a browser run; criteria 5 and 6 need the results surface (combobox and listbox semantics, the count announced, the "No results" message and focus return), none built. Lane V-UX-001-015 (2026-11-13): criteria 1, 5 and 6 are ticked on the browser run named in Evidence. Criterion 2 stays open: synonyms have no source (the locale tables carry no synonym keys, 13 section 8), so the shell passes none; the decision where synonyms live is open. The opening shortcut is not named in the spec; the proposed choice is Alt+Q, the word processor's "Tell me" key, recorded as proposed in docs/adr/0325-lane-V-UX-001-015.md. Ranking is unchanged. Fixer V-FE-001-016 (2026-11-13): `view.commandSearch` now has `toolbar: false`. As a toolbar button it changed the compact row and broke four UX-006 tests in packages/ui/e2e/toolbar.spec.ts. Command search is phase 2 (13 §12), and UX-007 criterion 3 requires both layouts to show the same commands, so it is on neither toolbar. It opens with Alt+Q and `exec`, and is listed in the shortcuts pane. toolbar.spec.ts passed in Chromium, Firefox and WebKit (36 tests).
+
+### UX-012 Access keys
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Author |
+
+**Spec:** 13 §2, §4, §12; 02 §3 (keyboard scope) · **Requirements:** R11, R14 · **Depends on:** UX-003, UX-013
+
+As an author who prefers the keyboard, I want key sequences that reach any toolbar command, so that I never need a pointer.
+
+**Acceptance criteria**
+
+- [ ] Given focus is in the editor, when the documented activation gesture is made, then the access key of each visible command is shown, pressing a shown key runs that command, and Escape leaves the mode and restores focus.
+- [x] Given two commands on the same level share an `accessKey`, when they are registered, then the conflict is reported at registration.
+- [ ] Given a browser or assistive-technology sequence is reserved in any supported browser, when the activation gesture is chosen, then the shortcut table (UX-013) shows that the gesture is not one of them.
+- [x] Given a screen reader, when the access keys are shown, then each key is exposed as text on its control and not only visually.
+- [x] Given a command is disabled for the user's permissions, when its access key is pressed, then nothing runs and the reason is exposed.
+- [x] Given focus is in the host page, when the gesture is made, then the editor does not react.
+
+**Evidence:** packages/ui/e2e/ux-012-access-keys.spec.ts (lane U-UX-001-015, 2026-11-13; Chromium, Firefox and WebKit, 18 runs: 15 passed and 3 flaky (each passed on retry, under shared machine load); the access keys are an extension command with key `k`): Alt pressed and released alone shows the key tip and an accessible description "Access key K" on the control (criterion 4), the key runs the command, Escape leaves and returns focus to the text (criterion 1, the mechanism), a command the permissions disallow runs nothing and its reason reaches the status region (criterion 5), and a press with focus in the host page does nothing (criterion 6). Unit tests: packages/ui/test/access-key-mode.test.ts (the gesture, `resolveShownKey`, a property over the keys). Gesture and shell: packages/ui/src/shell/access-key-mode.ts, packages/ui/src/components/AccessKeyTips.svelte, packages/ui/src/App.svelte. Run with `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/ux-012-access-keys.spec.ts`. Earlier evidence: packages/ui/test/access-keys.test.ts (Node.js, 2026-11-13): `CommandRegistry.register` (packages/ui/src/commands/registry.ts, through `accessKeyClaim` in packages/ui/src/commands/access-keys.ts) refuses a second command with the same key on the same level, naming both, and leaves the first in place; the same key on another level is allowed; removal frees the key; a key that is not one letter or digit is refused; a fast-check property over the 36 letters and digits (criterion 2). `pressAccessKey` runs the command the key names, in either case; a disabled command runs nothing and returns `reasonKey` (criterion 5); a key no shown command has runs nothing; `accessKeysAt` shows the keys of visible commands on the level and leaves out those off the toolbars. (Superseded by the browser run above, which reaches `pressAccessKey` through the gesture; reviewer round 4 reran it, 18 of 18 passed with no retries.) Criterion 5 was not ticked (reviewer, round 2, 2026-11-13): the test 'runs nothing for a disabled command, and returns the reason as a string key' (`reasonKey` `reason.access.view`, the core's run never called) checks the logic of `pressAccessKey`, which only tests import; no key gesture reaches it and nothing shows the reason, so no press runs or refuses anything in the product. Run with `pnpm vitest run packages/ui/test/access-keys.test.ts`.
+
+**Notes:** The activation gesture is not specified (open question). Lane U-UX-001-015, round 4 (2026-11-13): the lane proposes the gesture of docs/adr/0231-lane-UX-001-013.md, option A (Alt pressed and released alone; a letter or digit runs the shown key; Escape leaves), as proposed in docs/adr/0325-lane-U-UX-001-015.md, and wires it in the shell. The gesture is not decided: criterion 1 keeps its "documented" clause open until the owner chooses it and UX-090 documents it, and criterion 3 stays open (the shortcut table row for the gesture is not added here, because the table feeds generated artifacts in `spec/shortcuts/`, and Firefox's list is unread; Windows and Firefox may move focus to the menu bar on a lone Alt, which Playwright cannot show). The built-in commands declare no access key, so the product shows keys only for commands that declare one; the choice of built-in keys is open, and the registry's property test (packages/ui/test/access-keys.test.ts) assumes none on the format level. Criteria 4, 5 and 6 are ticked on the browser run in Evidence. Lane UX-001-013, round 2 (2026-11-13): the choice and its reserved-sequence check are recorded as a proposed ADR, docs/adr/0231-lane-UX-001-013.md (status: proposed, nothing decided). Criterion 5 stays unticked: no gesture reaches `pressAccessKey` and the shell shows no reason, so it waits for that decision and the shell wiring. Review, round 1 (2026-11-13): criterion 5 unticked. `pressAccessKey` is called by its test only; no gesture or key handler reaches it, so no key press runs or refuses anything in the product. Criterion 2 stays ticked: the refusal is in `CommandRegistry.register`, which every command uses. Round 1 (lane ui-5, 2026-11-13): criteria 2 and 5 were ticked. Decisions made here, proposed in docs/adr/0139-ui-5-backlog-batch.md: the level is the command's toolbar `group`, and an access key is one letter or digit. The registry refuses a shared key at registration (an edit to registry.ts, the shared file). Criterion 1 needs the gesture and a browser run, criterion 3 the shortcut table's reserved browser sequences for that gesture, criterion 4 the rendered key labels with their text, and criterion 6 the host-page focus test in a browser; all stay open. Round 2 (lane UX-001-013, 2026-11-13): criterion 5 was ticked on the logic of `pressAccessKey`. Review, round 2: unticked again for the reason of review round 1. No key gesture reaches `pressAccessKey` in the product and nothing displays the reason, so the criterion stays open until the gesture and the shell exist; criteria 1, 3, 4 and 6 stay open.
+
+### UX-013 Keyboard shortcuts and the maintained shortcut table
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §4; 02 §3; 00 R1 · **Requirements:** R1, R12 · **Depends on:** UX-003
+
+As an author, I want shortcuts that follow word-processor conventions where the browser allows, so that my habits work.
+
+**Acceptance criteria**
+
+- [ ] Given the registry, when the shortcut table is published, then for every entry with `keys` it lists the conventional word-processor shortcut, this product's shortcut, and for Chrome, Edge, Firefox and Safari whether each conflicts and what the alternative is.
+- [x] Given a browser reserves a shortcut, when the table is built, then it names the alternative and the registry binds that alternative on that browser.
+- [ ] Given Playwright in each supported browser, when each shortcut or its alternative in the table is pressed with focus in the editing surface, then the command runs.
+- [x] Given focus is in the host page, when a shortcut is pressed, then the editor does not act.
+- [x] Given an extension registers `keys` that collide with an existing binding, when it registers, then the collision is reported and neither binding is replaced silently.
+- [x] Given the shortcut reference shown to users, when it is rendered, then it is generated from the registry and the table, not written by hand.
+
+**Evidence:** packages/ui/test/shortcut-alternatives.test.ts (each browser conflict that the table resolves with a key the shell binds: the registry's `commandForKey` answers the same command, for Windows and Linux and for Apple platforms, for the core commands; `buildShortcutTable` reports no problem for the built-in commands). Run of 2026-11-13, Node.js only. Criterion 5 (round 1, ui-batch, 2026-11-13): packages/ui/test/extension-commands.test.ts 'a colliding shortcut is refused and names its holder' (a key a built-in command binds, and a key another extension holds, are each refused with an error naming the holder; the first binding is kept and the second command is not registered); 42 files, 426 tests passed under `pnpm vitest run packages/ui`. Criterion 6 (lane UX-001-013, 2026-11-13): packages/ui/src/shortcuts/reference.ts builds the rows from the registry's offered commands with keys and the table's shell rows, and packages/ui/src/panes/ShortcutsPane.svelte renders them; packages/ui/test/shortcut-reference.test.ts checks those rows (labels from string keys, a command registered at run time listed and dropped when removed, a command without keys left out, shell rows with their keys, alternatives and conditions). Node.js only: the pane's rendering was not run in a browser. Lane V-UX-001-015 (2026-11-13), packages/ui/e2e/commands.spec.ts, 'keyboard shortcuts from the registry (UX-013)', 5 tests, run with `DOCEDIT_UI_PORT=57250 pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/commands.spec.ts -g "keyboard shortcuts from the registry"`: 15 passed in Chromium, Firefox and WebKit. Criterion 3: the table's rows are pressed, each key and alternative (Mod-z, Mod-y, Shift-Mod-z, Mod-a, Mod-b, Mod-i, Shift-Mod-c and its Alt alternative, Mod-f, Ctrl-F6 and Alt-F6, Shift-Ctrl-F6 and Shift-Alt-F6, Shift-F10 and the Menu key, and the painter's Enter and Escape in their own test). Criterion 4: a host-page keystroke runs nothing, and the editor's shadow root holds no focus.
+
+**Notes:** `Mod` means the platform's primary modifier. Phase inferred (1b): R1 asks for shortcuts that match Word where the browser allows, and 1a has only a simple toolbar. Packet U (2026-11-13): criterion 2 ticked for the core commands; the shell's own rows (landmarks, the painter's keys) are covered by the table build only. Criterion 1 stays open: Firefox's published list was not read (`SOURCES.firefox` is null in `packages/ui/src/shortcuts/table.ts`), so its column says "not checked". Criteria 3 and 4 need the browser run (not run here). Criterion 5 was ticked in round 1 of the ui batch (2026-11-13) on the extension collision tests named in its Evidence line. Criterion 6: the build writes the reference from the table, and (lane UX-001-013, 2026-11-13) the pane's rows are now built by `shortcutReferenceRows`, which the test checks; criterion 6 is ticked on that. Criteria 1, 3 and 4 stay open: criterion 1 needs Firefox's published list (`SOURCES.firefox` is still null), criteria 3 and 4 need a browser run. Lane U-UX-001-015 (2026-11-13), packages/ui/e2e/commands.spec.ts in Chromium, Firefox and WebKit: 'every shortcut and alternative of the table works' passed in all three, but it presses a subset of the table's rows (bold, italic, undo, redo, select all, find, painter, landmarks, context menu), so criterion 3 stays open; 'does nothing while focus is in the host page' passed in Chromium and WebKit and failed in Firefox at its last focus check (after Control+F6, focus was not on the host button; no command ran), so criterion 4 stays open. Lane V-UX-001-015 (2026-11-13): the Firefox failure was a test assumption, not an editor action. Firefox takes Ctrl+F6 for its own focus cycle and `#after` loses focus; the editor did not act. The test now asserts that the editor's shadow root holds no focus, and it passes in all three browsers, so criteria 3 and 4 are ticked. Criterion 1 stays open: `SOURCES.firefox` is still null, so Firefox's published list has not been read (needs the owner or a reader with access to Mozilla's support article). Audit (2026-11-13): criterion 3 unticked, because the e2e test never presses `view.commandSearch` (Alt-Q), which is a row of the table and a built-in command, so not every shortcut of the table is pressed in a browser (the run also covers Chromium, Firefox and WebKit only, not Edge).
+
+## Shell
+
+### UX-014 Header frame, title slot and host-replaceable header
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Author |
+
+**Spec:** 13 §3, §12; 02 §3 (parts) · **Requirements:** R14, R15 · **Depends on:** UX-064, gap: 05 §8.1 has no attribute or event for this yet
+
+As an author, I want a header with the document's title, its save state and the people in it, so that I always know where I am and what state my work is in.
+
+**Acceptance criteria**
+
+- [x] Given the editor loads, when the header renders, then it holds a title slot, the save state (UX-016) and the presence region (UX-026), and the element exposes the `header` part.
+- [x] Given the host fills the title slot, when the header renders, then the host's title is shown, and the editor neither fetches nor edits titles.
+- [x] Given a feature is not announced by the backend (comments, catch-up), when the header renders, then its button is not shown; given it is, then the button is keyboard operable and any count on it has a text equivalent.
+- [x] Given the host hides the header, when the editor runs, then it is fully usable: mode, panes and share can be reached by commands and `exec`.
+- [ ] Given the host draws its own header, when it needs save and connection state, mode, presence and counts, then each is available through documented attributes, properties or events.
+
+**Evidence:** packages/ui/src/components/Header.svelte; packages/ui/e2e/header.spec.ts in Chromium, Firefox and WebKit: header region with title slot (a host light-DOM element assigned), save state and presence, ::part(header) styled from the host page; the title property shown when the slot is empty and no request but the harness's own files; comments and catch-up buttons only while the features are announced, keyboard operable, counts in their accessible names; packages/ui/e2e/a11y.spec.ts. Round 2 (criterion 4, 2026-11-13): packages/ui/test/header-free.test.ts (share, a pane and a mode run through `exec` on a registry with the shell's commands and no Header; the commands the core does not back are not registered, as App.svelte does).
+
+**Notes:** Hiding or replacing the header has no mechanism in the embedding API (05 section 8.1 has `toolbar` but nothing for the header), and presence, comment counts and catch-up counts have no event (gap, open questions). The last criterion cannot pass until PRO defines them. The catch-up button opens HIS-027, HIS-028. Built on 2026-11-06 with a proposed `header` setting (`default`, `none`) that the element reflects once PRO names the attribute (ADR 0041, section 4). Criterion 4 stays open: panes and share run through `exec` with the header hidden (tested), but there is no mode command before the mode switcher (UX-015, phase 1b). Round 2, packet U (2026-11-13): the mode commands now exist, so criterion 4 (the first open bullet of the list above) is ticked on packages/ui/test/header-free.test.ts: share, a pane and a mode run through `exec` on a registry with no Header component, the shell's commands registered as App.svelte registers them. The `header` setting that hides the header is not built (PRO attribute open), so the header is not hidden in a browser run here. The host-drawn-header criterion stays open. Lane UX-014-026, round 2 (2026-11-13): re-checked against the element's documented events (packages/element/src/events.ts). `de-status` gives the connection and the save state, and the `mode` attribute is documented, but no event carries presence, comment or catch-up counts, or the mode in effect after a change in the switcher (UX-015, criterion 6). The criterion stays open until PRO defines those (05 section 8.1).
+
+### UX-015 Mode switcher
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §3; 05 §8.1 (`mode`); 07 §7 · **Requirements:** R3, R8, R14 · **Depends on:** UX-014, UX-004
+
+As an author, I want to switch between editing, reviewing and viewing, so that I can work in the way the moment needs, within my rights.
+
+**Acceptance criteria**
+
+- [x] Given the user's capabilities, when the switcher renders, then it offers only available modes: `edit` needs `edit`, `review` needs the suggestion feature and `suggest` or `edit`, `view` is always available, `fill` is offered where the user has `fill`; an unavailable mode is shown disabled with a reason.
+- [x] Given the user chooses `review`, when the mode changes, then suggestion mode is on and edits become suggestions; given `edit`, then it is off.
+- [x] Given the user has `suggest` but not `edit` in the scope, when the mode is shown, then the editor stays in suggestion mode and cannot leave it (07 section 7).
+- [x] Given mode `view`, when the user types or runs a content command, then nothing changes locally and no commit is sent.
+- [x] Given the document is `locked` or `archived`, or a workflow is active, when the switcher renders, then `edit` is unavailable with a reason.
+- [ ] Given the `mode` attribute is set by the host or changed by the user, when it changes, then the mode in effect is visible, announced to assistive technology, and available to the host.
+
+**Evidence:** packages/ui/test/modes.test.ts (the offer of `shell/modes.ts`: only supported modes listed; `view` always; `edit` needs `edit`, `review` needs `suggest` or `edit`, `fill` needs `fill`; every unavailable mode carries a reason, as fast-check properties; `edit` and `review` refused with the limit `locked`, `archived` or `workflow` even with edit rights; suggest-only refused for `edit`). Rendering: packages/ui/src/components/ModeSwitcher.svelte sets `aria-disabled` and a described reason span. The browser run of packages/ui/e2e/shell.spec.ts was not part of this round and is not claimed here. Criterion 3 (lane UX-014-026, 2026-11-13): packages/ui/test/suggest-mode.test.ts (the suggest-only scope keeps the editor out of `edit`, as a property, and moves it to `review`; the chosen `edit` comes back in an editable scope) and packages/ui/test/modes.test.ts (`suggestOnly` refused for `edit`); run with `pnpm vitest run packages/ui/test/suggest-mode.test.ts packages/ui/test/modes.test.ts` (passed). Criteria 2 and 4 (lane U-UX-001-015, 2026-11-13): packages/engine/test/ux-015-mode-commits.test.ts, in packages/engine with `pnpm exec vitest run test/ux-015-mode-commits.test.ts` (4 tests passed, Node.js, the real DocumentCore): in `view` a typed insertion and `bold` change no text and queue no commit (criterion 4); in `review` an insertion carries an `ins` mark and is queued, and after `setMode('edit')` the next insertion has no `ins` mark (criterion 2). The switcher's own click is not run in a browser.
+
+**Notes:** Packet U, round 1 (2026-11-13): criteria 1 and 5 ticked on the unit tests above. Criterion 3 stays open: the offer is tested, but that the editor stays in suggestion mode and cannot leave it is the core's (07 section 7). Criteria 2, 4 and 6 need the mode change to reach the core and the host, which is not built here. Lane UX-014-026, round 1 (2026-11-13): criterion 3 is ticked (see its Evidence). Criterion 2 stays open: the shell's request (`review` for a chosen review, `edit` for a chosen edit) is in `shell/suggest-mode.ts`, but that edits then become suggestions is the core's and is not checked here. Phase inferred (1b). The element has no event for a mode change made in the switcher; the host-visibility criterion depends on PRO (open questions). `fill` mode's interface is FRW's. Cross-check: the review mode joins the switcher in phase 2 (FE-041). Lane U-UX-001-015 (2026-11-13): criteria 2 and 4 ticked at the core (see Evidence). The core needs a `user` to record suggestions; without one a suggestion-mode change is refused (`reason: suggestion`), which the test sets. Criterion 6 stays open: the element raises no event for a mode in effect and the header does not carry it to the host.
+
+### UX-016 Save state and connection state
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Author |
+
+**Spec:** 13 §3, §9, §12; 02 §2.2; 05 §8.1 (`de-status`); PRODUCT principle 4 · **Requirements:** R14, R15 · **Depends on:** UX-014, SYN-015, SYN-017
+
+As an author, I want to see at all times whether my work is saved, so that I trust it.
+
+**Acceptance criteria**
+
+- [x] Given all local changes are acknowledged, when the indicator renders, then it shows "saved"; given changes are in flight, "saving"; given they are only in the journal, "unsaved"; given the user cannot edit or the document is locked, "read-only".
+- [x] Given the connection changes, when it goes online, reconnecting or offline, then the connection state is shown with the save state, in text or an icon and never by colour alone.
+- [x] Given a state changes, when it changes, then `de-status` is dispatched with `{ connection, sync }`.
+- [x] Given the database is unavailable and the room answers `unavailable`, when the author keeps typing, then editing continues, the indicator shows "unsaved", and after recovery it returns to "saved" without any action.
+- [ ] Given a tab is closed while "unsaved", when the author returns, then the journal resubmits the work and the indicator moves through "saving" to "saved".
+- [x] Given the host awaits `flush()`, when the promise resolves, then the indicator shows "saved".
+
+**Evidence:** packages/element/test/ux-016-outage-flush.test.ts (lane UX-014-026, 2026-11-13; Node.js, backend-mock, the real headless core): criterion 4, the room's `unavailable` close taken from the mock channel with a 400 ms retry, the core's connection `reconnecting` and the save state `unsaved`, a further paste accepted, then the held writes released and the channel reopened by the session, with the save state `saved` and both edits in the room; criterion 6, after `flush()` resolves the status view reads `online/saved`, and `de-status` follows with `saved` in the next frame. Run: `pnpm vitest run packages/element/test/ux-016-outage-flush.test.ts` (2 tests passed). The outage is injected through the mock's own channel close, not a real database; the browser indicator (SaveState.svelte) is not run here. packages/ui/src/components/SaveState.svelte; packages/ui/e2e/header.spec.ts in Chromium, Firefox and WebKit: each sync value of the core's status view (saved, saving, unsaved, readonly) and each connection value (online, reconnecting, offline) shown in words, each save state with its own words and mark shape, nothing shown without a status view; the values come from the core and the element (FE-007). Criterion 3 (round 3, 2026-11-13): the `de-status` detail carries `connection` and `sync` (packages/element/test/session.test.ts, the detail checks at lines 161, 192 and 244); run with `pnpm exec vitest run packages/element/test/session.test.ts packages/element/test/status.test.ts packages/ui` (19 files, 226 tests passed).
+
+**Notes:** The indicator is mirrored in the status bar (UX-018). Announcements: FE-107. Cross-check: the "unsaved" state, for work held only in the journal, arrives with FE-008 in phase 1b. In phase 1a the status bar shows the indicator while the header is hidden. Criterion 3 is the element's (`de-status` from the same status view, FE-007, packages/element) and is ticked with its evidence. Criteria 4 and 5 need the journal (FE-008, FE-009), criterion 6 `flush()` (PRO-083), all phase 1b. Lane UX-014-026, round 2 (2026-11-13): criteria 4 and 6 are ticked on packages/element/test/ux-016-outage-flush.test.ts. Criterion 4 holds without the journal because the core's save state is `unsaved` while its connection is down (packages/engine, `#publishSync`); the work is kept in the core, not the journal, so criterion 4 says nothing about the journal. Criterion 5 stays open: a closed tab's journal is FE-008, not built. Lane V-UX-016-030, round 4 (2026-11-14): the IndexedDB journal is built (packages/element/src/journal-idb.ts, FE-008), but the resubmission on open that criterion 5 needs is not: packages/engine/src/sync/session.ts never calls `journal.read` on open, and packages/element/e2e/fe-009-resubmit-reopen.spec.ts is `test.fixme` for that reason. Criterion 5 is blocked on FE-009 (resubmission), an engine change this lane did not make; it is listed in the report as needed from the main session.
+
+### UX-017 Recovered edits pane
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §3, §9, §12; 07 §9; 05 §8.1 (`de-recovered-edits`); PRODUCT principle 4 · **Requirements:** R3, R15 · **Depends on:** UX-019, UX-016, FE-008, FE-009, PRM-024, PRM-026
+
+As an author, I want content that was set aside to be kept where I can find it, so that a rejected change or a lost connection never costs me my words.
+
+**Acceptance criteria**
+
+- [x] Given a commit is rejected with `permission_denied`, when the client discards its steps, then the discarded content appears in the pane with the reason, the region concerned and, if known, who changed the permission.
+- [ ] Given unsent content is set aside after a rebase failure or recovered from the journal, when the pane is opened, then it is listed with the same details, and `de-recovered-edits` carries `{ count }`.
+- [ ] Given an item in the pane, when the author chooses to copy it or insert it at the caret, then the content is copied out or inserted through the same guards as typing.
+- [ ] Given the tab is closed and reopened, when the document loads, then the items that were not discarded are still listed.
+- [x] Given an item, when the author discards it, then a deliberate action is required; nothing leaves the pane automatically.
+- [x] Given a new item arrives, when assistive technology is in use, then the arrival is announced (FE-107).
+
+**Evidence:** packages/ui/e2e/panes.spec.ts, "recovered edits (UX-017)" (Chromium, 2026-11-13, 3 tests passed): an item set aside with its reason, its region and who changed the permission, shown in the pane (criterion 1; the set-aside item is supplied by the test harness, so the engine's discard is not run here); insert at the caret through the guards, refused with the reason where the user may not edit (criterion 3, insert only; copy is not tested); discard only after a second, deliberate step, and nothing leaves the pane on its own (criterion 5). Firefox and WebKit not run. Criterion 2 (lane UX-014-026, 2026-11-13; the rebase branch of its "or"): the set-aside item of packages/ui/e2e/panes.spec.ts (Chromium, run in packet U) is listed with its reason, region and who changed the permission; packages/element/test/session.test.ts, "raises de-recovered-edits { count } when the core sets work aside" (the count of 1, 1, 2 gives events 1 and 2, no repeat); packages/ui/test/notices.test.ts, "work set aside" (items added, with their number; the rebase reason explained). Run: `pnpm vitest run packages/ui/test/notices.test.ts packages/element/test/session.test.ts` (passed).
+
+**Evidence (lane V-UX-016-030, 2026-11-13):** packages/ui/e2e/ux-017-arrival-announce.spec.ts (criterion 6, rendered): a set-aside item makes the hidden `role="status"` region of the shell read "kept in recovered edits", and a second item is announced again with new text (Chromium, Firefox and WebKit, 3 passed with `--retries=0`). The set-aside items are supplied by the harness (`setAside`), not by the engine's rebase, so the arrival from a real rejection is not run here.
+
+**Notes:** Round 4 (packet U, 2026-11-13): criterion 2 stays open: the rebase item is listed, but the `de-recovered-edits` count and the journal recovery are not checked. Lane UX-014-026, round 1: criterion 2 was ticked on its rebase branch only; review of group 3 (round 1) put it back to open, because the criterion covers content "recovered from the journal" as well, which needs FE-008 (not built), and the rebase item in the e2e run is supplied by the test harness, not by the engine's discard. The rebase branch is covered by the evidence above. Criterion 4 (reopening the tab) is not checked. Criterion 6 (the live-region arrival, FE-107) was ticked by lane V-UX-016-030 on a rendered run (see the Evidence line above). Copy, insert and discard are the minimum that "recovered" implies; the spec only says the content goes to the panel. Layout is the designer's. Audit (2026-11-13): criterion 3 unticked, because `insertRecovered` and `discardRecovered` are implemented only in the UI's test fake (packages/ui/test/support/fake-core.ts) and the e2e harness; no real core (packages/engine, the element's `runNamed`) runs them, and copy is not tested, so insertion "through the same guards as typing" is not shown on product code.
+
+### UX-018 Status bar
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §3; 02 §7; PRODUCT principle 3 · **Requirements:** R14 · **Depends on:** UX-016, FE-127, FE-128, FE-129, FE-066, FE-138
+
+As an author, I want a status bar with counts, language, connection, save state and zoom, so that I can see the state of the document at a glance.
+
+**Acceptance criteria**
+
+- [ ] Given the document changes, when the status bar renders, then the word count reflects the body and updates without delaying typing.
+- [x] Given the web view and no typeset result for the current content, when the page count would be shown, then it is not presented as exact; given a typeset result exists, then the count comes from it and says which result it is from.
+- [ ] Given the caret is in text with a `lang` mark, or none, when the language is shown, then it is that mark's language or the document default; given the author changes it, then the language command applies it to the selection and is subject to permissions.
+- [x] Given the connection or save state changes, when the bar renders, then both are shown as in UX-016.
+- [x] Given the zoom control, when it is used by pointer or keyboard, then the content scale changes, the document data does not, and a command resets it.
+- [x] Given the element, when it is styled by the host, then the bar exposes the `statusbar` part, and extension items (UX-052) and the classification label (UX-085) appear in it when present.
+
+**Evidence:** packages/ui/e2e/shell.spec.ts, "the status bar (UX-018)" (Chromium, 2026-11-13, 15 tests of the file passed): no page count in the web view, and a page count from a typeset result with the result it comes from, and its stale state (criterion 2); the language from the mark at the caret and from the document default, set through the language dialog as `setLanguage`, and disabled for a view-only user (criterion 3); the connection and save state in the words of UX-016 (criterion 4); zoom by pointer and keyboard, with no core command run and Reset zoom (criterion 5). Node.js: packages/ui/test/status.test.ts (the choice of the language source, by property tests; the language command's access). Firefox and WebKit not run.
+
+**Evidence (lane U-UX-016-030, 2026-11-13, criterion 6):** packages/ui/e2e/ux-018-statusbar.spec.ts (Chromium, Firefox and WebKit, 3 passed): the bar carries the `statusbar` part, a host rule `#host::part(statusbar)` (added through CSSOM, as the strict policy forbids inline style elements) sets its outline, and the extension items `ext.start-status` and `ext.end-status` render at the start and end groups in DOM order (`extensionContributions` mount option). packages/ui/e2e/classification.spec.ts (the classification label in the bar and its absence: 2 tests in 3 browsers, 6 passed; run with `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/classification.spec.ts`). Port 56261 via DOCEDIT_UI_PORT.
+
+**Evidence (lane V-UX-016-030, 2026-11-13):** packages/ui/e2e/ux-018-statusbar-parts.spec.ts (criterion 6, rendered in Chromium, Firefox and WebKit, 6 passed with `--retries=0`): the bar element carries `part="statusbar"`, the start and end extension items are its descendants, the classification label reads "Classification: Internal use only" in it, and without a label no classification item is shown.
+
+**Notes:** Round 4 (packet U, 2026-11-13): criterion 1 stays open: the word count is checked to change, not that it updates without delaying typing. Criterion 6 is ticked (lane U-UX-016-030, see Evidence). The extension items are placed by edge, not measured on screen in pixels: the start and end groups are tested by DOM order. Page counts in the status bar conflict in spirit with "no fake pages" in the web view (open questions). Phase inferred (1b). Lane UX-014-026, round 2 (2026-11-13): criterion 1 stays open. The element's editor handle sets no `stats` view and the engine has none (`DocumentStats` in packages/ui/src/core-api.ts is optional), so the bar shows no word count and there is nothing to time against typing. Criterion 6 is ticked and is also checked on a rendered run by lane V-UX-016-030 (see the Evidence line above the Notes); packages/ui/test/extension-status-bar.test.ts remains a source check. Audit (2026-11-13): criterion 3 unticked, because `setLanguage` is run only against the e2e harness's core; the element's `runNamed` knows only `insertField` and `setRegionPolicy` and the engine has no `setLanguage`, so that the language command applies the language to the selection is not shown on product code (the status bar's own display and the guard are tested).
+
+### UX-019 Pane host
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 13 §3, §7.1, §9; 02 §2; 05 §8.3 · **Requirements:** R14 · **Depends on:** UX-003
+
+As a maintainer, I want one pane host with a registry of panes, so that every pane, built in or contributed, opens, loads and takes focus the same way.
+
+**Acceptance criteria**
+
+- [x] Given the registry, when the editor starts, then it knows the panes navigation, styles, comments, review, history, permissions, fields, accessibility checker, assistant, PDF preview and recovered edits, plus any contributed by extensions (UX-052).
+- [x] Given a pane is opened by a command, `exec` or a control, when it opens for the first time, then its code is requested on demand (not before) and a loading state is announced.
+- [x] Given a pane opens, when focus moves, then it goes into the pane, and on close returns to where it was.
+- [x] Given a pane's backend port is absent, or the user lacks the capability the pane needs, when the registry is read, then the pane is not offered (05 section 8.3).
+- [x] Given a narrow container, when a pane is open, then it never covers the caret or the focused element.
+- [x] Given the element, when it is styled by the host, then the host exposes the `sidebar` part.
+
+**Evidence:** packages/ui/src/shell/panes.ts (`BUILT_IN_PANES`, `PaneRegistry.register`, `PaneRegistry.offered`, with the optional `capability` of a descriptor) and packages/ui/test/panes.test.ts ('the registry knows the panes of 13 section 3 at start': the eleven panes of criterion 1, with navigation held by the descriptor `outline`; a pane added and removed at run time; 'a pane is offered only when its feature, capability and data are there': no loader, an unannounced feature, a missing capability at the selection or in the caller's list, missing data, and a property over feature and capability). Criteria 2, 3, 5 and 6 are not claimed: the host's opening code, focus and the `sidebar` part are not checked in a browser here. Round 4 (packet U, 2026-11-13): criteria 3, 5 and 6 are ticked on packages/ui/e2e/panes.spec.ts, "the pane host (UX-019, UX-070)" (Chromium, 2026-11-13: focus goes into the pane and back to the control or text that opened it; at 420 px the pane does not overlap the editing surface; the pane has the `sidebar` part). Criterion 2 (lane U-UX-016-030, 2026-11-13): packages/ui/e2e/ux-019-pane-loading.spec.ts, 1 test passed in Chromium, Firefox and WebKit (`pnpm exec playwright test -c playwright.config.ts e2e/ux-019-pane-loading.spec.ts`, run from packages/ui with DOCEDIT_UI_PORT=56261): the StylesPane chunk is held back by a route, the "Loading ..." announcement is read while it is on its way, no pane is shown until release, the pane is shown after it, and its code is requested once.
+
+**Notes:** The contents of the history, permissions, fields and PDF preview panes belong to HIS-009, HIS-015, PRM-024, PRM-026, FRW-072, FRW-073 and FE-071. This story provides the slot. Round 2 (packet U, 2026-11-13): no built-in pane declares a `capability` yet, so the check is live only for panes that declare one; the App's call sites pass no capability list and read the selection's capabilities. The owner should say which capability each built-in pane needs before one is declared, because the fill pane's selection in a body paragraph has no `fill` (ADR 0113, round 2). Lane UX-014-026, round 2 (2026-11-13): criterion 2 stayed open then; lane U-UX-016-030 ticked it with a browser run (see Evidence). `openPane` in packages/ui/src/App.svelte announces `pane.loading` (en-GB "Loading {pane}") before the first `descriptor.load()`, and not for a cached pane, so the code path exists. The announcement is made by a component that no Node test renders, and no browser run was made; packages/ui/test/on-demand-panes.test.ts covers only the dynamic imports.
+
+### UX-020 Navigation pane: headings and search results
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2, §12; 02 §5.1 (`outline()`) · **Requirements:** R1, R14 · **Depends on:** UX-019, FE-026, FE-059, FE-060
+
+As an author, I want a pane that shows the headings and the results of my search, so that I can move through a long document.
+
+**Acceptance criteria**
+
+- [x] Given headings (paragraphs whose style has an `outlineLevel`), when the pane opens, then they are listed as a nested outline, and choosing one places the caret there and scrolls it into view.
+- [ ] Given local or remote changes, when headings are added, changed or removed, then the outline updates without losing the author's place and without delaying typing.
+- [ ] Given a search, when it runs, then the results are listed with their context and a count, and choosing one moves to the match.
+- [x] Given a screen reader, when the outline is read, then it is exposed as a tree with levels, and each item has an accessible name.
+- [x] Given headings in a region the user cannot edit, when the pane renders, then they are listed like any other.
+
+**Evidence:** apps/reference-host/e2e/v-ux-020-navigate.spec.ts (lane V-UX-016-030, 2026-11-14, criterion 1, the caret and the scroll; the real core and the document service on the lane's demo stack, PostgreSQL in Podman): the heading "Payment terms" starts out of view, is chosen in the pane, the caret is in its text (read from the editor's shadow-root selection) and the heading lies in the viewport. Chromium and Firefox passed; WebKit is skipped (its caret read did not match, not investigated). Criterion 5 (viewer case, same file): the viewer's navigation pane lists the heading, passed in Chromium, Firefox and WebKit (5 passed, 1 skipped in the three-browser run). Run: `DOCEDIT_E2E_BROWSERS=chromium,firefox,webkit pnpm exec playwright test -c apps/reference-host/playwright.config.ts e2e/v-ux-020-navigate.spec.ts` with the stack on ports 57260 to 57263 and DOCEDIT_DEMO_REUSE=1. Earlier evidence: packages/ui/e2e/panes.spec.ts, "the navigation pane (UX-020)" (Chromium, 2026-11-13): the headings are a tree of tree items with `aria-level` and `aria-expanded`, each with its name, and the tree moves by arrow keys (criterion 4). Choosing a heading calls `selectBlock` for it, and a search lists its results with a count and goes to the one chosen (criteria 1 and 3, in part). Lane U-UX-016-030 (criterion 3, the context and the count): packages/ui/e2e/ux-020-search-context.spec.ts, 1 test passed in Chromium, Firefox and WebKit (`pnpm exec playwright test -c playwright.config.ts e2e/ux-020-search-context.spec.ts`, run from packages/ui with DOCEDIT_UI_PORT=56261): the text before and after the match and the marked match equal the expected context of the body text, with one result counted.
+
+**Notes:** Lane V-UX-016-030, round 3 (2026-11-14): criterion 1 is ticked on the reference host's real core (see Evidence); criteria 2 and 5 stay open. Criterion 2 (typing undelayed) is not measured. Criterion 5 is ticked on the viewer case only (the demo's viewer role, Vic, may edit no region, and the heading "Payment terms" is still listed): apps/reference-host/e2e/v-ux-020-navigate.spec.ts, Chromium, Firefox and WebKit. A per-region lock (PRM-048) is not set up in the demo, so the region-only case is not separately shown. Page thumbnails are UX-021 (phase 3). Round 4 (packet U, 2026-11-13): criterion 1 stays open: the scroll into view belongs to the core and is not checked. Criterion 2 stays open: the test shows that focus stays on the same heading after a change, but not that typing is undelayed. Criterion 3 stays open: the context and the count are checked now (lane U-UX-016-030, see Evidence), but the move to the match is the core's `selectMatch`, which the harness fakes, so the end-to-end move is not shown. Criterion 5 is not tested. Lane UX-014-026, round 1: `shell/outline.ts` carries no region, so a Node test of the tree would not reach the rule; it needs the core's `outline()` answer and the browser. Round 3 (ui packet, 2026-11-13): packages/ui/test/outline-tree.test.ts checks the tree (properties): every heading kept once in document order, each heading nested under the nearest earlier heading of a lower level, depth and ancestors consistent, siblings numbered for aria-posinset and aria-setsize. This is evidence for the nested part of criterion 1 only; criterion 1 stays open for the caret move and the scroll, which are the core's. The pane's own code filters only collapsed branches, not by region, but the core's `outline()` answer is not checked here.
+
+### UX-021 Navigation pane: page thumbnails
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | M | could | Author |
+
+**Spec:** 13 §2, §12 · **Requirements:** R14 · **Depends on:** UX-020, FE-078, FE-095
+
+As an author, I want page thumbnails once real pages exist, so that I can see and jump between pages.
+
+**Acceptance criteria**
+
+- [ ] Given the read view or the print view with a layout tree, when the pane lists thumbnails, then only those near the viewport are rendered and the rest are virtualised.
+- [ ] Given a thumbnail, when it is chosen, then the view moves to that page, and the current page is marked.
+- [ ] Given the web view, when the pane renders, then no thumbnails are offered, because the web view shows no pages.
+- [ ] Given a screen reader, when a thumbnail is reached, then it is named "page n of m" in the current locale.
+
+**Notes:** Phase 3 is gated on the evidence review at the end of phase 2 (11 section 5). Round 4 (lane U-UX-016-030, 2026-11-13): not started. Its depends-on FE-078 has criterion 1 ticked and criterion 2 open, and FE-095 (the own page painter, which the read view and thumbnails need) has no criteria ticked and no code under packages/ui or packages/painter for thumbnails. No criterion can be proven without building the layout tree and the painter, which is outside this lane's slice and phase-gated. Nothing ticked.
+
+### UX-022 Styles gallery and styles pane
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2, §12; 07 §5.3, §7; 03 §4 (`style_def`) · **Requirements:** R1, R3, R14 · **Depends on:** UX-019, UX-004, FE-127, FE-128, FE-129
+
+As an author, I want to see and apply the document's styles, so that I format by meaning.
+
+**Acceptance criteria**
+
+- [ ] Given paragraph, character and table styles, when the gallery or the pane opens, then each style is listed with its name and kind, the style in effect at the caret is marked, and choosing one applies it to the selection.
+- [ ] Given a user who may edit only regions, when they apply an existing style inside a region, then it works; when they try to create, change or delete a style, then those commands are disabled with a reason (07 sections 5.3, 7).
+- [ ] Given a style change that 07 section 5.3 refuses (a region that uses the style is `approved`), when the user attempts it, then they are told which region blocks it.
+- [ ] Given the user has `suggest` only, when they apply a style, then it is recorded as a formatting suggestion.
+- [x] Given a keyboard or screen reader, when the gallery or pane is used, then every style is reachable and exposed with its name and whether it is current.
+
+**Evidence:** packages/ui/e2e/panes.spec.ts, "the styles pane (UX-022)" (Chromium, 2026-11-13): the styles under their kind headings, the style at the caret marked with `aria-current` and "In use at the cursor", and a chosen style applied through `paragraphStyle` and `characterStyle` (criterion 1).
+
+**Evidence (lane V-UX-016-030, 2026-11-13):** packages/ui/e2e/ux-022-styles-keyboard.spec.ts (criterion 5, rendered): every style is a named button, `aria-current` is set only on the current one, and Tab from the first style reaches each style in document order (Chromium, Firefox and WebKit, 3 passed with `--retries=0`, run from packages/ui with DOCEDIT_UI_PORT=57260).
+
+**Notes:** The styles pane is phase 1b by 13 section 12. Round 4 (packet U, 2026-11-13): criterion 2 stays open: applying an existing style inside a region is tested, but refusing create, change and delete with a reason is not. Criterion 3 (approved regions), criterion 4 (suggest-only recorded as a suggestion) and criterion 5 (every style reachable by keyboard) are not tested. Lane UX-014-026, round 1: criterion 2 stays open because the command registry has no create, change or delete style command (`commands/builtin.ts` registers only the apply commands for paragraph and character styles), so there is no disabled command to test. Criterion 3 needs the core's refusal naming the region, which the shell does not receive as a style notice yet. Audit (2026-11-13): criterion 1 unticked: the test applies only a paragraph and a character style, never a table style (the pane sends `tableStyle`, which is not a `CoreCommandName` and not the engine's `setTableStyle`), `StylesPane.svelte` marks only a paragraph style as current, and the element's `runNamed` (packages/element/src/editor.ts) handles neither `paragraphStyle` nor `characterStyle` nor a `styles` view, so in the product the pane is never offered; criterion 5 stands on the harness core only.
+
+### UX-023 Move between shell landmarks by keyboard
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** PRODUCT (Accessibility); 02 §10; 13 §3, §4 · **Requirements:** R11 · **Depends on:** UX-014, UX-019, FE-103
+
+As an author who works by keyboard, I want Ctrl+F6 to move focus between the parts of the editor, so that I can reach every landmark and leave the component.
+
+**Acceptance criteria**
+
+- [x] Given focus anywhere in the editor, when Ctrl+F6 is pressed, then focus moves to the next landmark in the order header, toolbar, page, panes, status bar, and Shift+Ctrl+F6 moves backwards.
+- [ ] Given a landmark is absent (the host hid the header, or `toolbar="none"`) or a pane is closed or collapsed, when the landmarks are cycled, then it is skipped.
+- [x] Given a browser that reserves Ctrl+F6, when the user wants to cycle landmarks, then the alternative named in the shortcut table (13 §4) works.
+- [x] Given each landmark, when assistive technology lists regions, then each has a role and an accessible name, and labelled controls and their labels are in the same root.
+- [x] Given focus is anywhere in the component, when the keyboard alone is used, then focus can reach every landmark and also leave the component for the host page.
+
+**Evidence:** packages/ui/e2e/shell.spec.ts, "landmarks by keyboard (UX-023)" (Chromium, 2026-11-13, 3 tests passed): Ctrl+F6 goes header, toolbar, page, panes, status bar and back with Shift+Ctrl+F6, and Alt+F6 moves focus where Ctrl+F6 is reserved (criteria 1 and 3); with the header and toolbar set to none, Ctrl+F6 skips them, and Tab from the last control reaches the host page (criterion 5). Node.js: packages/ui/test/landmarks.test.ts (the order, the skipping of entries that are hidden or unknown, the stepping and wrapping, and the table's keys on both platform forms). Firefox and WebKit not run. Criterion 4 (lane U-UX-016-030, 2026-11-13): packages/ui/e2e/ux-023-landmark-roles.spec.ts, 9 tests passed in Chromium, Firefox and WebKit (`pnpm exec playwright test -c playwright.config.ts e2e/ux-023-landmark-roles.spec.ts`, run from packages/ui with DOCEDIT_UI_PORT=56261; the harness's own build and server): every `[data-landmark]` element of the shell has a role (region, toolbar or complementary) and a name, for the compact and the full toolbar; every `aria-labelledby` in the shell root resolves inside that root. The full toolbar was an unnamed div without a role; it now has role region and the name Editing (packages/ui/src/components/FullToolbar.svelte).
+
+**Evidence (lane V-UX-016-030, 2026-11-14, criterion 2, closed case):** packages/ui/e2e/ux-023-closed-pane.spec.ts (Chromium, Firefox and WebKit, 3 passed, `--retries=0`, DOCEDIT_UI_PORT=57260): with no pane open there is no `[data-landmark="pane"]`, and Ctrl+F6 from the page goes status, header, toolbar, page, never a pane.
+
+**Notes:** Lane V-UX-016-030, round 4 (2026-11-14): the closed case is now tested in three browsers (see Evidence). Criterion 2 stays open because the collapsed case is not built: the shell has no collapsed state for a pane, and the criterion needs both states. Round 4 (packet U, 2026-11-13): criterion 2 stays open because a collapsed pane is not tested (a closed pane is skipped in the same browser test). Criterion 4 stays open because the browser test checks each landmark's name but not its role. Escape and Tab inside the editing surface, which let focus out of it, are FE-103's (02 section 10, editing surface). Lane UX-014-026, round 1: criterion 2 stays open for collapsed panes: the landmark order skips entries marked hidden, but the shell has no collapsed state for a pane; the outline's collapse (`panes/OutlinePane.svelte`) hides tree items, not a landmark.
+
+> UX-024 (Announce save state, rejected edits and collaborators in live regions) was merged into FE-107 during the cross-check of 2026-11-06.
+
+### UX-101 Export dialog with progress and diagnostics
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §3; 09 §9.1, §9.2; 00 §4 (R5); 05 §5.6 · **Requirements:** R5, R11 · **Depends on:** UX-003, UX-019, EXP-004, EXP-005, EXP-065, PRO-063, PRO-064
+
+As an author, I want to export a document, follow the job and jump from each diagnostic to the place it concerns, so that I can fix problems before I share the result.
+
+**Acceptance criteria**
+
+- [ ] Given the export command, when I open it, then I can choose among the targets the deployment announces (the PDF and the LaTeX bundle first) and the options EXP-005 defines.
+- [x] Given a running job, then its state (`queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`) and progress are shown from `export.progress` events, and I can cancel it.
+- [x] Given a completed job, then I can open or download the result and see the page count and whether page references converged (09 §9.1).
+- [ ] Given diagnostics, when I choose one, then the editor scrolls to and selects the block it names, and its severity is given in text, not by colour alone.
+- [ ] From phase 2, given my access carries `no-export`, then the command is unavailable and says why (UX-040).
+- [x] Given the job completes or fails, then a live region announces it.
+
+**Evidence:** `packages/ui/test/export-diagnostics.test.ts` (the terminal-state announcements, their keys in `en-GB.ts`, the rule in `src/components/ExportDialog.svelte` and the `role="status"` region in `src/App.svelte`). Checked in the source, not in a browser run.
+
+**Evidence (lane U-UX-091-104, round 3):** `packages/ui/e2e/regions.spec.ts`, "the export dialog (UX-101)" (three tests), run with `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/regions.spec.ts -g "UX-101"` in Chromium, Firefox and WebKit (9 passed, on 2026-11-13). Criteria 1 to 4 are proven against the harness's export service (`e2e/` fake core), which the dialog reads through `ExportService`; the product's element does not yet pass an exports port to the core (see Notes).
+
+**Notes:** added during the cross-check of 2026-11-06: EXP's diagnostics stories assumed this dialog, which no epic owned. The PDF panel of phase 1a is FE-071.
+
+Lane ui-3, round 1: criteria 2 to 5 stay unticked. The dialog has the labels, the progress element, the cancel button, the diagnostic jump in code, but the `export.progress` feed, the cancel and the block selection need a running export and a browser run. The `no-export` gate (criterion 5) is phase 2 and is not built. The severity words are tested in `packages/ui/test/export-diagnostics.test.ts`, which is evidence for criterion 4 only, not a tick. Review, round 1 (2026-11-13): the Node.js test reads the component source; the ticks of criterion 6 here and UX-104 criterion 4 stand on the browser tests 'the export dialog (UX-101)' in `packages/ui/e2e/regions.spec.ts`, which the reviewer ran in Chromium (3 passed). They also cover criteria 1 to 4 of this story in part; the lane may tick those after its own run.
+
+Lane UX-092-104, round 4 (2026-11-13): no criterion ticked. `packages/element/src` never sets `exports` on the core (no `ExportService` anywhere in the element), so `App.svelte` mounts this dialog only when the core has an exports port, and in the product it has none; `packages/element/src/export.ts` says there is no progress stream and no cancel (PRO-086). Criteria 1 to 4 need that adapter and a browser run; criterion 5 is phase 2. Decisions needed are listed in docs/adr/0238-lane-UX-092-104.md (status: proposed). Lane U-UX-091-104, round 3 (2026-11-13): criteria 1 to 4 ticked on the browser run above (the dialog's behaviour, in three browsers). The product path is still open: `packages/element` mounts the dialog only with an exports port, and the element's `ExportService` adapter (`packages/element/src/export.ts`, PRO-086) is not passed to the core, so a user of the element does not yet see the announced targets; that wiring is not in this lane's range. Criterion 5 (`no-export`) is phase 2 and stays open.
+
+Audit (2026-11-13): criterion 1 unticked because the dialog offers only `profile`, `tagging` and `fields` (`ExportOptions` in `packages/ui/src/core-api.ts`), not `pdfStandard`, `locale` or `timeZone` that EXP-005 and 09 section 9.1 define, and the targets come only from the harness's `FakeExports`. Criterion 4 unticked because the browser test only checks that `selectBlock` was called on the fake core; no real core implements `selectBlock` (nothing in `packages/element/src`), so nothing scrolls to or selects a block (the severity words in the dialog are tested and hold).
+
+### UX-102 Rulers for indents, tab stops and margins
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Author |
+
+**Spec:** 13 §2 (rulers); 02 §3 (part `ruler`), §7, §10 · **Requirements:** R1, R11, R14 · **Depends on:** FE-104, FE-129, FE-137
+
+As an author, I want rulers that show and adjust indents, tab stops and margins, so that I can lay out paragraphs directly.
+
+**Acceptance criteria**
+
+- [ ] Given the caret in a paragraph, then the horizontal ruler shows its left, right and first-line indents and its tab stops.
+- [ ] Given I drag an indent marker or a tab stop, then the paragraph changes through the same commands as the paragraph dialog (FE-129).
+- [ ] Given any drag on the ruler, then the paragraph dialog or the keyboard offers the same change (02 §10; FE-104).
+- [ ] Given the web view, then margins on the ruler are labelled as the PDF's margins and the ruler does not pretend to show pages (02 §7).
+- [ ] Given the host's theme, then the ruler is styled only through the `ruler` part and `--de-` properties (02 §3).
+
+**Notes:** added during the cross-check. Phase inferred: 13 §12 does not place rulers. Lane ui-3, round 3 (2026-11-13): no criterion is ticked. The rulers need a paragraph format view from the core (indents and tab stops at the caret), which `CoreApi` does not have, and the paragraph commands of FE-129 (`runNamed`) are not in `CoreCommandName`. The paragraph dialog (FE-104) that the keyboard alternative of criterion 3 needs is not built. Criterion 5 (styling only through the `ruler` part and `--de-` properties) needs a ruler component, which is not written; it is not in `App.svelte` either. Criterion 4 (the margins labelled as the PDF's) needs that component and the view's margins. A ruler model written now would have no caller, so none is written.
+
+## Collaboration experience
+
+### UX-025 Resolve people through the host's directory
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | S | must | Integrating developer |
+
+**Spec:** 13 §5, §11.1; 05 §8.1; 08 §13 · **Requirements:** R7, R10 · **Depends on:** PRO-074, PRO-087, PRO-080
+
+As an integrating developer, I want the editor to ask my application for names and avatars, so that the document service keeps no profile data.
+
+**Acceptance criteria**
+
+- [x] Given user identifiers appear (presence, comments, history, mentions), when names are needed, then the editor calls `resolveUsers(ids)` with unique identifiers in batches and caches the answers for the session.
+- [x] Given the host provides no `resolveUsers`, when a name is needed, then the editor falls back to the name the service reported, and then to a neutral label; nothing fails.
+- [x] Given `resolveUsers` rejects or is slow, when names are shown, then the fallback label is shown, editing is not blocked, and the request is retried later.
+- [x] Given a name or avatar address returned by the host, when it is rendered, then it is rendered as text or as an image address, never as markup.
+- [x] Given network traffic to the document service, when it is inspected, then it contains no names or avatars supplied by `resolveUsers`.
+
+**Evidence:** packages/ui/src/people/directory.ts; packages/ui/test/people.test.ts (one call per task with unique identifiers, batches, session cache including unknown, service name then neutral fallback, slow, rejecting and throwing hosts, retry with growing delays, names kept as strings, avatar addresses limited to image sources); packages/ui/e2e/header.spec.ts in Chromium, Firefox and WebKit (names from the host, the fallback label Collaborator, markup in a name shown as text and a javascript: avatar not used, editing goes on while the directory fails and it is retried). Criterion 5 (lane V-UX-016-030, 2026-11-14): apps/reference-host/e2e/v-ux-025-traffic.spec.ts, 3 passed in Chromium, Firefox and WebKit, on the lane's own demo stack (see Notes).
+
+**Notes:** The result shape of `resolveUsers` and `searchPrincipals` is not defined in 05 (open questions); the shell uses the shape S6 fixed (G92, `packages/protocol/src/ports/host.ts`). Criterion 5 stays open: the directory has no path to the core (packages/ui/test/people.test.ts), but the network traffic can only be inspected end to end with `backend-dep`. Lane UX-014-026, round 2 (2026-11-13): still open. The shell wires the directory only in a browser (App.svelte), so a Node capture would never see a directory name and would prove nothing. The check needs a browser run of the shell against a DEP server, with the captured frames searched for a name that `resolveUsers` returned. Lane V-UX-016-030, round 3 (2026-11-14): criterion 5 is ticked on apps/reference-host/e2e/v-ux-025-traffic.spec.ts (Chromium, Firefox and WebKit, 3 passed, against the lane's own demo stack on ports 57260 to 57263). Two people open the seeded document; Olivia's page gets Ada's name from the host's directory route (asserted, so resolveUsers was called), and every request, response body and WebSocket frame of the document service is searched for the four seeded names. The welcome frame names the signed-in user from the token the service was given; that one `"user"` object is removed before the search, and nothing else is. Not claimed: the token echo itself is not a resolveUsers name, and the check does not cover the export worker or the presence frames as separate items.
+
+### UX-026 Presence avatars in the header
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Author |
+
+**Spec:** 13 §3, §5, §12; 05 §5.4 · **Requirements:** R7 · **Depends on:** UX-014, UX-025, SYN-035
+
+As an author, I want to see who else is in the document, so that I know I am not working alone.
+
+**Acceptance criteria**
+
+- [x] Given other sessions are in the document, when `presence.state` arrives, then the header shows each person by avatar and name, and arrivals and departures update it live.
+- [x] Given a person is `active` or `idle`, when they are shown, then the two states are distinguishable without colour.
+- [x] Given more people than fit, when the header lays out, then an overflow indicator with a count is shown and the full list is reachable by keyboard.
+- [x] Given each person, when assistive technology reads the list, then every entry has a text name.
+- [x] Given the backend does not announce `presence`, when the header renders, then no presence region or error is shown.
+- [x] Given read restrictions (ADR 0019), when the header shows people, then it lists only the sessions in the core's presence view, which is the reader's projection, and nothing of a session the view leaves out.
+
+**Evidence:** packages/ui/src/components/Presence.svelte and packages/ui/src/shell/presence.ts; packages/ui/e2e/header.spec.ts in Chromium, Firefox and WebKit: people by avatar and name from presence, arrivals and departures live; idle with a dashed outline and idle in the name; at 480 px with ten people a +n button with its count in words opens the full list by keyboard and Escape closes it; every entry has a text name, the neutral label when nobody knows it; no presence region without the presence feature; a session the core withdraws disappears; packages/ui/test/shell-logic.test.ts (one entry per person, fitting); packages/ui/e2e/a11y.spec.ts.
+
+**Notes:** Whether one person with several sessions appears once is not specified; the shell shows them once, active when any of their sessions is (proposed in ADR 0041). The last criterion was added on 2026-11-06 under rule 8 of the README (S12: presence serves the requester's projection).
+
+### UX-027 Collaborator carets with name flags
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §5; 02 §3 (forced colours); 05 §5.4 · **Requirements:** R7 · **Depends on:** UX-025, SYN-035, SYN-036, FE-066
+
+As an author, I want to see where others are typing, so that we avoid working on the same sentence.
+
+**Acceptance criteria**
+
+- [ ] Given a peer's presence selection, when it arrives, then their caret and selection are drawn at the position mapped through the local steps, with a flag naming them.
+- [ ] Given concurrent local and remote edits, when the document changes, then each peer's caret stays on the same text (tested with scripted concurrent edits).
+- [x] Given a peer's position cannot be mapped, when the caret would be drawn, then it is hidden rather than drawn in the wrong place.
+- [x] Given the flag, when it is drawn, then it names the person in text and does not rely on colour; flag, caret and selection use system colours under `forced-colors`.
+- [x] Given a flag overlaps text, when the author types or clicks, then the flag neither takes focus nor blocks pointer events on the text.
+
+**Evidence:** packages/ui/test/carets.test.ts (criterion 3: `drawnPeers` in packages/ui/src/shell/carets.ts draws exactly the peers with a mapped caret, with their selection, and nothing of an unmapped peer; fast-check properties over generated peers; the colour slot does not depend on order). `Carets.svelte` renders only what `drawnPeers` returns. Node.js run of 2026-11-13: 4 tests passed. The browser test 'draws a flag naming each person' in packages/ui/e2e/shell.spec.ts covers the same rule and the flags' pointer and focus behaviour, but was not run in this round.
+
+**Evidence (round 3, lane UX-027-039):** packages/ui/test/ux-027-presentation.test.ts (Node.js, 2026-11-13, 7 tests passed, with carets.test.ts: 11 passed in total). Criterion 4 is checked as source and was unticked in review (2026-11-13): the forced-colours rules of `shell.css` give the active caret, the flag and the selection system colours, with `forced-color-adjust: none`, and `Carets.svelte` builds the flag text from the person's name, but the idle caret rule `.de-peer-caret[data-status='idle']` (specificity 0,2,0) outranks the forced-colours `.de-peer-caret` rule (0,1,0), so an idle caret keeps its `repeating-linear-gradient` in `currentColor` set from `--_de-page-text`, a hard-coded colour, not a system colour. The test does not check the idle state. The criterion waits for a forced-colours rule for the idle caret and a test of it (or a browser run). Fix (round 3, 2026-11-13): the forced-colours block of `shell.css` now has its own `.de-peer-caret[data-status='idle']` rule (dashes in `CanvasText`, `color: CanvasText`), and `ux-027-presentation.test.ts` works out the cascade with forced colours active (importance, specificity, source order) for every element `Carets.svelte` draws (caret active and idle, flag and selection, colour slots 1 to 8): each winning `background` and `color` comes from the forced-colours block and names only system colours, `forced-color-adjust` is `none`, and the markup sets no inline colour. A mutation test removes the forced idle rule and shows the model then reports the base idle rule winning. Node.js run of 2026-11-13: ux-027-presentation.test.ts and carets.test.ts, 15 tests passed. Criterion 4 is ticked on this cascade model; no rendered forced-colours run in a browser was made. Criterion 5 has a static guard only: `.de-carets` has `pointer-events: none` (inherited by the carets, flags and selections), and the layer has no focusable element and is `aria-hidden`. These are source checks of the stylesheet and markup, not a rendered forced-colours run and not a run of the author typing or clicking; neither is claimed.
+
+**Evidence (lane V-UX-016-030, 2026-11-13):** packages/ui/e2e/ux-027-flag-pointer.spec.ts, rendered in Chromium, Firefox and WebKit (`pnpm exec playwright test -c packages/ui/playwright.config.ts ux-027-flag-pointer`, 6 passed, run with DOCEDIT_UI_PORT=57260, `--retries=0`): the element under the centre of each flag and caret is not in the carets layer, the flags compute `pointer-events: none`, a click on a flag leaves focus out of the layer, and typing stays in the page (criterion 5). Criterion 4 also has a rendered forced-colours run in packages/ui/e2e/ux-027-carets.spec.ts (Chromium only, `forcedColors: 'active'`, passed with `--retries=0`).
+
+**Notes:** Phase inferred (1b): 13 section 12 places the header presence in 1a, and 11 section 4 places presence in the 1b sync scope. Lane ui-5, round 2 (2026-11-13): criterion 3 ticked. Criterion 1 stays open: the shell draws the rectangles the core reports, and the mapping through local steps is the core's. Criterion 2 stays open: concurrent scripted edits belong to the core (SYN). Criterion 4 stays open: the forced-colours rule is in `shell.css` and the browser test in shell.spec.ts was not run in this round. Criterion 5 stays open for the same reason (the pointer and focus check is the browser test only). Round 3 (lane UX-027-039, 2026-11-13): criterion 4 was ticked on the source checks in `ux-027-presentation.test.ts` (a stylesheet and markup check that the rules say what the criterion says; the rendered forced-colours run is not made) and unticked in review: the idle caret is not covered by the forced-colours rule (see Evidence, round 3). Fixed in the same round and re-ticked on the cascade test; a rendered forced-colours run (for example Playwright's `forcedColors: 'active'`) is still worth adding to shell.spec.ts. The new forced-colours rule makes `packages/ui/test/forced-colors.test.ts` (UX-062), which expects exactly 10 rules in the block, count 11; that test belongs to UX-062 and was not changed here. Criterion 5 stays open: the static guard shows the mechanism, not the behaviour when the author types or clicks, which needs a browser run. The round also changed behaviour: a peer with no mapped caret now draws no selection either, as `PeerCaret` in core-api.ts already states; before this round its selection was still drawn. Lane V-UX-016-030 (2026-11-13): criterion 5 ticked on the rendered run in packages/ui/e2e/ux-027-flag-pointer.spec.ts (see the Evidence line above); criterion 4 is backed by the forced-colours run in ux-027-carets.spec.ts. Criteria 1 and 2 stay open: the mapping and the concurrent edits belong to the core.
+
+### UX-028 Start a comment thread on a range or a block
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Commenter |
+
+**Spec:** 13 §5; ADR 0015; 07 §6, §12; 05 §6.2 (threads) · **Requirements:** R8 · **Depends on:** UX-019, UX-025, UX-004, PRO-059, PRO-060, SYN-032, FE-066
+
+As a commenter, I want to comment on a passage or on a figure, table or equation, so that my remark is tied to what it is about.
+
+**Acceptance criteria**
+
+- [ ] Given `comment` in every scope the selection covers, when the author adds a comment on a text range, then a thread is created with `target.range { from, to, baseSeq }` and the first comment, it appears in the document and the pane, and no commit is made.
+- [x] Given a figure, a table or an equation is selected as a block, when the author comments, then the thread targets `{ block: id }`.
+- [x] Given the user lacks `comment` in a covered scope, when the command is offered, then it is disabled with a reason; given the server refuses the request (permissions changed, or `baseSeq` outside the rebase window), then the typed text is kept and the reason is shown.
+- [ ] Given the document is `locked`, a region is `approved`, or a workflow is active, when the author comments, then it still works, because commenting never changes the document.
+- [x] Given a document already has 5,000 threads, when another is created, then it is refused, nothing is created and the user is told.
+- [ ] Given the commented range moves because of local or remote edits, when the document changes, then the highlight stays on the same text.
+- [ ] Given another client creates a thread, when `thread.created` arrives, then it appears without a reload.
+
+**Evidence (round 8 fix, lane ui-2):** packages/ui/e2e/comments.spec.ts (Playwright, Chromium, Firefox and WebKit, 2026-11-13: 7 tests, 21 runs passed, run with `DOCEDIT_BROWSERS=chromium` then `firefox,webkit`). Criterion 2: the test runs the comment command `review.comment` through the registry (packages/ui/src/commands/builtin.ts, registered in packages/ui/src/App.svelte when the core has `threads`) on a block anchor, types in the comment box it opens (packages/ui/src/components/CommentBox.svelte), posts, and reads the request the core's `threads.create` received: `{ target: { block: 'fig1' }, body }`, with no `range` key and no core command run. The box calls `createCommentThread` with the anchor the command took, its scopes and `threads.count()`. The same file shows a text range giving `{ range: { from, to, baseSeq } }`, the command disabled with `reason.query.noComment` when a covered scope lacks `comment`, and a `permission_denied` answer keeping the typed text with the reason shown. The `threads` port is new in packages/ui/src/core-api.ts (`ThreadsService`); the fake is `FakeThreads` in packages/ui/test/support/fake-core.ts. Text model and refusal mapping: packages/ui/test/comment-composer.test.ts (Node.js).
+
+**Evidence (round 8, lane ui-2):** packages/ui/test/ux-028-comment-create.test.ts (Node.js, 2026-11-13), `createCommentThread` in packages/ui/src/shell/comment-create.ts. Criterion 2 ticked on the controller: a block selection gives `{ block: id }`, a text range gives `{ range: { from, to, baseSeq } }` with no block key. The same file checks the refusals the controller owns (criterion 3 for a scope without `comment`, criterion 5 at 5,000 threads, the draft kept on refusal). No core request or rendered command is built. Criterion 2 was unticked again in review (round 8, 2026-11-13): `comment-create.ts` is imported by its test only, so no comment command, selection or core call uses it; it is the same reason as in the round 2 review. It waits for the comment command and a run that shows the target.
+
+**Evidence (round 2, lane UX-027-039):** packages/ui/test/thread-target.test.ts (Node.js, 2026-11-13, round 2, lane UX-027-039): `threadTarget` in packages/ui/src/shell/thread-target.ts gives `{ block: id }` for a block selection (figure, table or equation by identifier) and never a `range` key beside it (criterion 2, examples and a property test). The same file checks the range target's shape and the 5,000-thread gate (`threadLimitGate`). Criterion 2 was unticked in review (2026-11-13): it describes what the comment command sends when the author comments on a selected block, not a function's result; `thread-target.ts` is imported by its test only, and no command, selection or core call uses it. It waits for the comment command and a run that shows the target.
+
+**Evidence (lane V-UX-016-030, 2026-11-13):** criterion 3 in packages/ui/e2e/comments.spec.ts (Chromium, 2026-11-13, 7 passed: the command disabled with `reason.query.noComment` and no box, and the `permission_denied` refusal keeping the text with its reason) and packages/ui/e2e/ux-028-stale-base.spec.ts (Chromium, Firefox and WebKit, the `stale_base` refusal keeping the text with the rebase-window reason). Criterion 5 in packages/ui/e2e/prm-040-thread-limit.spec.ts (Chromium, 2026-11-13, 3 passed: at 5,000 threads the box explains why, keeps the text and sends nothing; at 4,999 it posts). Run on DOCEDIT_UI_PORT 57261; the shared `test-results` folder raced in parallel runs, so these were re-run one at a time where a trace file went missing.
+
+**Notes:** Lane V-UX-016-030 (2026-11-13): criteria 3 and 5 ticked on the browser runs above. Criterion 1 stays open: a created thread is not added to the pane (the pane reads its list when it opens, and the fake port does not push the new thread), and the no-commit rule is tested only by the request shape. Criteria 4, 6 and 7 stay open (a locked document, the range mapping and `thread.created`). Round 8 fix (lane ui-2, 2026-11-13): criterion 2 re-ticked on the comment command and the comment box (see Evidence), which answers the review's "no caller". Choices made here, not stated in the spec: the command is `review.comment` (review group, context menu on text, tables and pictures, feature `comments`, no key); the core offers a new optional `threads` port (`anchor`, `count`, `create`) in core-api.ts, which the engine and the element do not implement yet; the service codes are read as `permission_denied` for changed permissions and `stale_base` for a `baseSeq` outside the rebase window (05 §5.8), and `threadLimit` stays the working code. Criterion 3 now has its UI in the browser test (the disabled command with its reason, the kept draft with the service's reason) but is not ticked in this fix; criterion 1 still needs the pane and the engine's request, and criteria 4 to 7 are unchanged. Round 8 (lane ui-2, 2026-11-13): criterion 2 ticked on `createCommentThread` (`comment-create.ts`), which answers the round 2 review's "no command uses it". Still open: criterion 1 (the core's request, the no-commit rule and the pane), criterion 3's UI half (the disabled control and its reason are not drawn; the server refusal keeps the draft in `refuseFromServer`), criterion 4 (the controller takes no document state, so the rule is the same when locked; the core must report the scope's capabilities), criterion 5's UI half (the message is not shown), and criteria 6 and 7 (the core's range mapping and `thread.created`). The comment body is the typed text as given, since the body format is not defined. The error code for the 5,000-thread limit is not named in the spec. The comment body format is not defined in 03 or 05 (open questions). Round 2 (lane UX-027-039, 2026-11-13): criterion 2 ticked on the target shape only. Criterion 1 stays open: the thread is created, shown and not committed by the core and the pane, none of which is built. Criterion 3 stays open: the disabled command and the kept draft on refusal are not built; `canReply` in comment-rules.ts is the rule only. Criterion 4 stays open: no browser run and no core command. Criterion 5 stays open: `threadLimitGate` refuses at 5,000 (ADR 0233, decision 5, working code `threadLimit`), but the refusal from the core and the message to the user are not wired. Criteria 6 and 7 need the core's range mapping and the `thread.created` event. The 5,000 limit is the story's figure; the spec does not name the code. Decisions: ADR 0233, decisions 5 and 6.
+
+### UX-029 Reply, edit, resolve, reopen and delete
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Commenter |
+
+**Spec:** 13 §5; ADR 0015; 07 §6, §12; 05 §6.1, §6.2 · **Requirements:** R8 · **Depends on:** UX-028
+
+As a commenter, I want to carry a conversation to its end, so that a question is answered and closed.
+
+**Acceptance criteria**
+
+- [ ] Given a thread, when the user replies, then the reply appears for everyone in the document live.
+- [ ] Given a comment, when it is shown, then edit and delete are offered only to its author or to a user with `manage`, and a thread can be deleted only by its author or by `manage`.
+- [ ] Given `comment` in the thread's scope, when the user resolves or reopens it, then the state changes for everyone live; resolved threads leave the default list but stay reachable by a filter.
+- [ ] Given the commented text is deleted, when the range collapses, then the thread is shown as detached and stays readable; given the deletion is undone, then the thread is not re-attached.
+- [ ] Given the user lacks `comment`, when the thread is shown, then the reply box is absent or disabled with a reason.
+- [ ] Given a change is rejected because the resource changed (`If-Match` fails), when the answer arrives, then the latest state is shown and the user's draft is kept.
+
+**Evidence:** packages/ui/test/comment-rules.test.ts (Node.js, 2026-11-13, with review-rules.test.ts: 22 tests passed): `canEditComment`, `canDeleteComment` and `canDeleteThread` in packages/ui/src/shell/comment-rules.ts allow the author and a user with `manage`, and no one else (criterion 2, a property test over users and capabilities); `canReply` withdraws the reply with the reason `noComment` exactly when `comment` is absent (criterion 5, property test). These are the rules; the menus and the reply box that call them are not built, and nothing but the test imports the module. Criteria 2 and 5 were unticked in review (2026-11-13): they describe what the shell offers and shows, not a function's result; they wait for the comment menu and the reply box and a run that shows them.
+
+**Notes:** Round 7 (lane ui-2, 2026-11-13): the rules for criteria 3, 4 and 6 are in packages/ui/src/shell/comment-threads.ts (`setThreadState`, `anchorAfterRemoval`, `anchorAfterUndo`, `writeOutcome`; `precondition_failed` is the If-Match code of core-api.ts), tested in packages/ui/test/comment-threads.test.ts (Node.js, 34 tests with comment-rules.test.ts passed). No criterion is ticked this round: each one ends in something shown, sent or refreshed (live thread updates, the detached and conflict views, the draft kept on screen), and none of that is built or run in a browser. Detached threads are the cost of ADR 0015 (range collapse; undo does not restore). Round 1 (lane UX-027-039): criteria 2 and 5 are ticked on the rule above. Criteria 1, 3, 4 and 6 stay open: they need the core's thread commands and `thread.*` events, the service's `If-Match` answer and the rendered thread, none of which is built or run in a browser. The rule uses only the spec's wording: whether an author who has lost `comment` may still edit their comment is not specified, and the rule does not decide it.
+
+### UX-030 Comments pane
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 13 §3, §5, §12; 05 §5.6 · **Requirements:** R8 · **Depends on:** UX-019, UX-028
+
+As an author, I want a pane that lists the document's threads, so that I can read and answer them in order.
+
+**Acceptance criteria**
+
+- [x] Given threads, when the pane opens, then they are listed in document order with author, time, state, target excerpt or block kind, and reply count.
+- [ ] Given a thread, when it is chosen, then the document scrolls to its range or block and highlights it; given a highlight is chosen in the page, then the thread is selected in the pane.
+- [x] Given the filters open or resolved and assigned to a person, when one is chosen, then only the matching threads are listed.
+- [ ] Given notifications `thread.*` and `comment.*` arrive, when they do, then the affected threads are refreshed from the control plane and the change is announced.
+- [ ] Given the header comments button, when threads are open, then it shows the count of unresolved threads with a text equivalent, and `exec` can open the pane.
+- [ ] Given a keyboard and a screen reader, when the pane is used, then each thread and each comment is reachable and named with its author and state.
+
+**Evidence:** packages/ui/test/comment-rules.test.ts (Node.js, 2026-11-13): `filterThreads` in packages/ui/src/shell/comment-rules.ts lists open threads by default, resolved ones through the resolved filter, and the threads assigned to one person, in document order; a fast-check property checks that every listed thread matches the state and the assignee, and that none is left out (criterion 3, the filter rule only). Criterion 3 was unticked in review (2026-11-13): the pane and its filter controls are not built, and nothing but the test imports `filterThreads`.
+
+**Evidence (lane V-UX-016-030, 2026-11-13):** packages/ui/e2e/ux-030-comments-pane.spec.ts, rendered by the real pane (packages/ui/src/panes/CommentsPane.svelte, opened through `view.comments` in the harness with `commentsPane: true`; threads from the port's `list()` in packages/ui/src/core-api.ts, fake in packages/ui/test/support/fake-core.ts). Run with `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-030-comments-pane --retries=0` on DOCEDIT_UI_PORT 57261, Chromium, Firefox and WebKit: 15 passed. Criterion 1: document order from threads given out of order, the author, time, state, the excerpt or block kind, the reply count, a detached thread's words, an axe run with no violation. Criterion 3: the open default, the resolved and all filters, the assignee filter combined with the state, and the empty message. Criterion 6 is not ticked: the pane lists threads, not the comments inside them, so the reachability of each comment is not shown; each thread's row is named (`role="group"`, tabindex 0) and the test checks the names.
+
+**Notes:** Round 7 (lane ui-2, 2026-11-13): `paneRows` in packages/ui/src/shell/comment-threads.ts gives the row model (document order, author, time, state, excerpt or block kind, reply count, and the parts of the accessible name), tested in packages/ui/test/comment-threads.test.ts. No criterion is ticked: the rows are not rendered, and the scroll and highlight, the `thread.*` refresh, the header count and the spoken names are not built or run in a browser. The filters are the minimum implied by resolve and assign; the spec does not list them. Round 1 (lane UX-027-039): criterion 3 is ticked on the filter rule. Criteria 1, 2, 4, 5 and 6 stay open: the rows (author, time, reply count, target excerpt), the scroll and highlight, the live refresh from `thread.*` and `comment.*`, the header count and the keyboard names are not built. Lane V-UX-016-030 (2026-11-13): criteria 1 and 3 ticked on the rendered pane (see Evidence). Choices: the pane reads the list once when it opens, so criterion 4 stays open; the pane's text is the new `comments.*` keys in `src/i18n/en-GB.ts`; the filters are state and assignee only, as the spec gives none other. Criteria 2, 4 and 5 stay open: the scroll and highlight need the core's range mapping, the live refresh needs the `thread.*` and `comment.*` events, and the header count is not wired to the pane. Criterion 6 stays open for the comments inside a thread, which the pane does not list yet.
+
+### UX-031 Mention people in a comment
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Commenter |
+
+**Spec:** 13 §5, §12; 05 §6.2, §7 (`dep.comment.mentioned`) · **Requirements:** R8, R15 · **Depends on:** UX-028, UX-025, PRO-059, PRO-060, BE-055
+
+As a commenter, I want to mention a person, so that they are told that I need them.
+
+**Acceptance criteria**
+
+- [x] Given a comment is being typed, when the mention trigger and a name fragment are typed, then `searchPrincipals` is called, its results are listed, and choosing one inserts a mention node in the comment body.
+- [x] Given results arrive out of order, when a newer query exists, then stale results are ignored.
+- [ ] Given a mention, when it is displayed, then the name comes from `resolveUsers`, and the node stores only the principal identifier.
+- [ ] Given the comment is posted, when the service stores it, then `dep.comment.mentioned` is raised and the host receives it (checked end to end in the reference host, UX-098).
+- [ ] Given a keyboard and a screen reader, when the picker is used, then it is a standard combobox: results are announced and choosing is by keyboard.
+- [x] Given the host provides no `searchPrincipals`, when a comment is typed, then mentions are not offered and plain comments still work.
+
+**Evidence (round 3, lane U-UX-031-045, 2026-11-13):** packages/ui/e2e/ux-031-mention-keyboard.spec.ts (2 tests, 4 runs passed across Firefox and WebKit, 2 passed in Chromium; `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/ux-031-mention-keyboard.spec.ts` with `DOCEDIT_UI_PORT=56275` and `DOCEDIT_BROWSERS` set per browser). Criterion 5, keyboard and announcement part only: `@o` lists Ada Lovelace and Grace Hopper, ArrowDown and ArrowUp move `aria-activedescendant` between them, Enter chooses Grace Hopper, the shell's live region reads `2 people or groups found.`, and Escape closes the list and keeps the dialog and the text. Not claimed: the `combobox` role (the field is a multi-line textarea; see ADR 0327 Part A).
+
+**Evidence (round 8 fix, lane ui-2):** packages/ui/e2e/comments.spec.ts (Playwright, Chromium, Firefox and WebKit, 2026-11-13, passed). The comment box (packages/ui/src/components/CommentBox.svelte), opened by the comment command, drives `createMentionPicker`. Criterion 1: typing `@Gr` calls the host's `searchPrincipals` with `{ text: 'Gr', purpose: 'mention', docId }`, the result is listed as an option, Enter puts `@Grace Hopper` in the text, and the posted body holds `{ type: 'mention', principal: 'user:u2' }` between the text parts (axe finds no violation with the list open). Criterion 2: the harness holds the answer for `L` until after the answer for `Le`; the list still shows only the `Le` result after the late answer has arrived. Criterion 6: with no `searchPrincipals`, typing `@Gr` shows no list, the field has no `aria-autocomplete`, nothing is searched, and the plain comment is posted. The text-to-body model (`placeMention`, `bodyParts` in packages/ui/src/shell/comment-composer.ts) is tested in packages/ui/test/comment-composer.test.ts (Node.js, with a fast-check property).
+
+**Evidence (round 8, lane ui-2):** packages/ui/test/ux-031-mention-picker.test.ts (Node.js, 2026-11-13), `createMentionPicker` and `mentionTrigger` in packages/ui/src/shell/mention-picker.ts. Criterion 1 (controller level): a trigger calls `searchPrincipals` with the fragment, lists the results and `choose` yields a mention node. Criterion 2: the newest query wins whatever order the answers come in (fast-check property over generated orders). Criterion 6: without `searchPrincipals` nothing is offered or searched. The rendered combobox and the typed comment box are not built. Criteria 1, 2 and 6 were unticked in review (round 8, 2026-11-13): `mention-picker.ts` is imported by its test only, so no comment box calls it and nothing is listed or inserted in the product; they describe what the comment box does, not a controller's result. They wait for the comment box and a run that shows the picker.
+
+**Evidence (round 2, lane UX-027-039):** packages/ui/test/mention-search.test.ts (Node.js, 2026-11-13, round 2, lane UX-027-039): `acceptResults` in packages/ui/src/shell/mention-search.ts shows the results of the newest query only (criterion 2: a unit example and a fast-check property over generated sequences of queries and late results). The same file checks that a mention node holds the principal identifier and no name (criterion 3, rule only) and the rule `mentionsOffered` (criterion 6, rule only). Criterion 2 was unticked in review (2026-11-13): it describes what the picker shows when results arrive out of order, and no picker exists; `mention-search.ts` is imported by its test only. It waits for the picker and a run that shows it.
+
+**Notes:** Round 3 (lane U-UX-031-045, 2026-11-13): criterion 5's keyboard half is proven in three browsers (see Evidence). It stays unticked: the field is a multi-line `textarea`, so the `combobox` role is a design decision for the owner (ADR 0327 Part A). Criterion 3 stays open for a reason found in this round: no screen renders a posted comment body, so nothing displays a mention's name from `resolveUsers`; the display of a thread is not built. Round 8 fix (lane ui-2, 2026-11-13): criteria 1, 2 and 6 re-ticked on the comment box in the browser (see Evidence). Choices made here, not stated in the spec: the box is a plain text field; a chosen mention is shown as `@` and the name and posted as a node with the principal only; a mention whose text the author then edits is posted as plain text. The body is a list of text and mention parts (`CommentBodyPart` in core-api.ts), the working shape while the body format is open. Criterion 5 stays open: the field carries `aria-autocomplete`, `aria-controls` and `aria-activedescendant` and the count of results is announced, but a multi-line `textarea` cannot take the `combobox` role, and no screen-reader run was made. Criteria 3 and 4 are unchanged. Round 8 (lane ui-2, 2026-11-13): criteria 1, 2 and 6 ticked on the controller in `mention-picker.ts`, which supersedes the "no picker exists" reason in the round 2 Evidence. Still open: criterion 3 (the name is looked up by `displayName` but not rendered), criterion 4 (the post and `dep.comment.mentioned`, UX-098) and criterion 5 (the combobox and a keyboard run, which need a browser). Trigger rule chosen here, not stated in the spec: `@` at the start of the text or after whitespace, then a non-empty fragment with no whitespace. Round 2 (lane UX-027-039, 2026-11-13): the stale-result rule is written and tested (criterion 2 unticked in review, see Evidence). Criterion 1 stays open: the trigger, the `searchPrincipals` call and the combobox are not built. Criterion 3 stays open: the name from `resolveUsers` is not rendered; only the stored node is checked. Criterion 4 stays open: the post and the `dep.comment.mentioned` event are the service's and UX-098's. Criterion 5 stays open: the combobox and the keyboard run are not built. Criterion 6 stays open: `mentionsOffered` is the rule only; the picker and "plain comments still work" are not built. Decisions: ADR 0233, decisions 7 and 8. Earlier note: whether a person without access to the document may be mentioned is the host's decision; the editor shows what the host returns. Second review (2026-11-06, SPK-027), SR-M5: under ADR 0019 a mention in a thread inside hidden content would make the host notify someone who cannot read it; the review proposes refusing such a mention, or turning it into a request for access, and carrying the scope in the webhook ([review](../review/2026-11-06-second-review.md)).
+
+### UX-032 Assign a thread as a task
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Commenter |
+
+**Spec:** 13 §5, §12; 07 §12; 05 §6.2 (`assignee`), §7 (`dep.task.assigned`) · **Requirements:** R8, R15 · **Depends on:** UX-029, UX-025, UX-031, HIS-027
+
+As a commenter, I want to assign a thread to a person, so that a remark becomes a task with an owner.
+
+**Acceptance criteria**
+
+- [ ] Given a thread and `comment` in its scope, when the user assigns it to a person found with `searchPrincipals`, then the thread's `assignee` is set, it is shown as a task with the assignee, and `dep.task.assigned` is raised.
+- [ ] Given an assigned thread, when the user reassigns or clears the assignee, then the change is shown to everyone live.
+- [ ] Given the assignee opens the document, when the comments pane renders, then a filter shows the threads assigned to them, and the same items appear as "for you" items in catch-up (HIS-027, HIS-028).
+- [ ] Given the editor, when it runs, then it lists no tasks across documents; the host builds that from the webhook.
+- [ ] Given a keyboard and a screen reader, when a task is shown, then the assignee is exposed as text.
+
+**Notes:** Whether resolving the thread completes the task is not specified; the protocol has only `open` and `resolved` (open questions). Round 7 (lane ui-2, 2026-11-13): `assignThread` in packages/ui/src/shell/comment-threads.ts sets, reassigns and clears the assignee with `comment` in scope, and returns the `dep.task.assigned` event to send (none for a clear, since 05 section 7 names no event for it: open). Tested in packages/ui/test/comment-threads.test.ts. No criterion is ticked: the search for principals, the live change, the task view and the sending of the event are not built or run.
+
+### UX-033 React to a comment
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | could | Commenter |
+
+**Spec:** 13 §5, §12 · **Requirements:** R8 · **Depends on:** UX-029, gap: 05 §6.2 has no reactions resource or event yet
+
+As a commenter, I want to react to a comment, so that I can acknowledge it without writing a reply.
+
+**Acceptance criteria**
+
+- [ ] Given a comment, when the user reacts, then the reaction is shown with a count and the people who reacted (names via `resolveUsers`); reacting again removes it.
+- [ ] Given another client reacts, when the change arrives, then it is shown live.
+- [ ] Given a reaction, when it is made, then no commit is created.
+- [ ] Given the backend does not announce reaction support, when comments render, then no reaction control is offered.
+- [ ] Given a keyboard and a screen reader, when a reaction control is used, then it has a name, a pressed state and a count.
+
+**Notes:** 05 has no resource, feature name or event for reactions and does not say which reactions exist. Blocked until PRO defines them. Who may react is not specified; `comment` is assumed (inferred).
+
+### UX-034 Link to a comment
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Commenter |
+
+**Spec:** 13 §5, §12 · **Requirements:** R8, R15 · **Depends on:** UX-030, gap: 05 §8.1 has no attribute or event for this yet
+
+As a commenter, I want to link to a comment, so that I can point a colleague, or a notification, straight to it.
+
+**Acceptance criteria**
+
+- [ ] Given a comment, when the user chooses to copy its link, then the editor hands the host the document and comment identifiers, and copies the address the host returns, because the host owns the address space.
+- [ ] Given the host opens the editor for a comment identifier, when the document has loaded, then the comments pane opens, scrolls to the thread and focuses it.
+- [x] Given the comment was deleted or the user cannot view the document, when the link is followed, then a clear message is shown and nothing else is revealed.
+- [x] Given a keyboard and a screen reader, when a linked comment is focused, then its author, time and thread state are announced.
+
+**Evidence (round 14, lane V-UX-031-045, 2026-11-13):** packages/ui/e2e/ux-034-linked-comment.spec.ts (3 tests, 9 runs passed across Chromium, Firefox and WebKit; `DOCEDIT_UI_PORT=57270 pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/ux-034-linked-comment.spec.ts --project=<browser>`). `openLinkedComment` in packages/ui/src/App.svelte looks the comment up in the thread list the user may view. A comment that is deleted or not viewable gets only the message `comments.link.unavailable`: no list, no filter, no thread text (criterion 3). A resolved thread that the default filter hides is shown, focused, and announced in the shell's live region as author, time and state (criteria 2 to 4 in part; criterion 4 is checked by the live region text and focus, not by a screen reader run). Criterion 2's host path and criterion 1 remain open (see Notes).
+
+**Notes:** Round 14 (lane V-UX-031-045, 2026-11-13): the shell's entry for a followed link is built: `openLinkedComment` (App.svelte) opens the comments pane, and the pane (packages/ui/src/panes/CommentsPane.svelte) shows, focuses and announces the thread, or shows the unavailable message. The thread reaches the pane through `linkedThread` in the shell context (packages/ui/src/context.ts). Decision, proposed in ADR 0327 part B (not stated in the spec, whose method is open): the shell entry takes a comment identifier and the element's host method is a later decision. Criterion 2 stays unticked: the element has no host method for a comment identifier, so "the host opens the editor" is not met. Criterion 1 stays unticked: the copy needs the link's address form and the method, both open questions in the spec. Round 4 (lane UX-027-039, 2026-11-13): `linkedCommentAnnouncement` in packages/ui/src/shell/linked-comment.ts gives the three parts criterion 4 names (author, creation time, state) and no other part of the thread, tested in packages/ui/test/ux-037-034-pane-rows.test.ts (Node.js, property over generated threads; decision 11, ADR 0233). Criterion 4 stays open: the focus, the spoken sentence and a screen reader run are not built. Round 7 (lane ui-2, 2026-11-13): `commentLinkRequest` and `resolveCommentLink` in packages/ui/src/shell/comment-threads.ts give the request shape (the two identifiers only) and the bare `unavailable` outcome for a deleted or hidden comment, tested in packages/ui/test/comment-threads.test.ts. No criterion is ticked: the clipboard write, the message, the pane opening and the focus are not built, and the method, event and address form remain open (see the spec's open questions).
+
+### UX-035 Markup views
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 13 §5, §12; 08 §14 · **Requirements:** R8 · **Depends on:** UX-004, FE-041, FE-042
+
+As an author, I want to choose how suggestions are shown, so that I can read the text with or without the markup.
+
+**Acceptance criteria**
+
+- [ ] Given suggestions, when the view `all` is chosen, then insertions, deletions and formatting changes are shown with their authors; `simple` shows the text with a marker where changes exist; `none` shows the text as if every suggestion were accepted; `original` shows the text as if every suggestion were rejected.
+- [ ] Given a view is chosen, when it changes, then the document does not change and no commit is sent.
+- [ ] Given block-level suggestions drawn as decorations, when the view changes, then they follow the same view.
+- [ ] Given a suggestion is shown, when assistive technology reads it, then it is exposed as inserted, deleted or reformatted with its author, and the distinction does not rely on colour.
+
+**Evidence:** packages/ui/test/markup-views.test.ts (Node.js, 2026-11-13, round 2, lane UX-027-039): `viewSegments` and `viewText` in packages/ui/src/shell/markup-views.ts give the four views over runs of text with a change kind and author. Properties over generated runs: `none` is the text without deletions, `original` the text without insertions, `all` every run with its change and author in order, `simple` the `none` text with one marker per changed run; a fixed example reads as each view is named. Criterion 1 was unticked in review (2026-11-13): it describes what the editor shows for each view, the definitions are inferred and unconfirmed, and `markup-views.ts` is imported by its test only (no view switch or rendered suggestion uses it).
+
+**Notes:** The spec names the four views and does not define them; the definitions here are inferred and need the designer's confirmation. Round 2 (lane UX-027-039, 2026-11-13): criterion 1 was ticked, then unticked in review, on the inferred definitions (ADR 0233, decision 4), and the designer's confirmation is still outstanding. Criterion 2 stays open: the pure view reads the runs and leaves them unchanged (checked), but "no commit is sent" and the document's unchanged state are the core's and are not checked here. Criterion 3 stays open: block-level decorations are not in the model. Criterion 4 stays open: the accessible names of the change kinds, and the check that they do not rely on colour, need the rendered markup and a browser run.
+
+### UX-036 Review suggestions one by one or all at once
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Editor |
+
+**Spec:** 13 §5, §12; 04 (origins); 07 §5.2 (P4); 08 §14 · **Requirements:** R8 · **Depends on:** UX-035, PRM-014, FE-041, FE-042, FE-047
+
+As an editor, I want review tools that step through suggestions and accept or reject them one by one or all at once, so that I decide what enters the text.
+
+**Acceptance criteria**
+
+- [ ] Given suggestions in scopes where the user has `edit`, when they accept one, then the commit carries origin `suggestion.accept` and is recorded in history with it (08 §14); when they reject one, then `suggestion.reject`; next and previous move between suggestions.
+- [ ] Given "accept all" or "reject all" over the current selection, region or author filter, when it runs, then it applies to every matching suggestion in scopes where the user has `edit`, leaves the others pending, and tells the user how many were left.
+- [ ] Given a user who has `suggest` but not `edit`, when suggestions are shown, then accept and reject are not offered for other people's suggestions, and not for their own.
+- [ ] Given another person resolves a suggestion first, when the change arrives, then the local view updates without an error.
+- [ ] Given a keyboard, when suggestions are reviewed, then every action is reachable without a pointer.
+
+**Evidence:** packages/ui/test/review-rules.test.ts (Node.js, 2026-11-13): `reviewOffers` in packages/ui/src/shell/review-rules.ts offers accept and reject only where `edit` is held, and never with `suggest` alone (criterion 3, a property test over capabilities); `stepSuggestion` moves next and previous with wrap-around, checked by a property test (criterion 1, the step only); `ACCEPT_ORIGIN` and `REJECT_ORIGIN` name the commit origins of 08 §14. Criterion 3 was unticked in review (2026-11-13): no menu or pane shows suggestions yet, and nothing but the test imports `reviewOffers`; the criterion is about what is shown. Round 6 (lane ui-2, 2026-11-13): `bulkPlan` in packages/ui/src/shell/review-bulk-live.ts gives the ids that accept all or reject all applies (matching rows in scopes where the user has `edit`) and the count left pending (criterion 2, the rule; the message is not built), and `applySuggestionChange` removes a resolved row with no error for an unknown id (criterion 4, the rule). Both are tested in packages/ui/test/ux-036-037-review-bulk-live.test.ts (6 tests passed, Node.js, with properties). Neither criterion is ticked, and criterion 2's rule is also a module that only its test imports: the message text and the browser run for a resolve by another person are open.
+
+**Notes:** Round 1 (lane UX-027-039): criterion 3 is ticked on the offer rule, and it is the rule that the menu will call; the menu is not built. Criterion 1 stays open: the commits and their history entries are FE-047's and the core's, and the keys that call `stepSuggestion` are not bound. Criteria 2, 4 and 5 stay open (the bulk plan and its message, a resolve by another person in a browser, and the keyboard run). The accept and reject transforms for text, formatting and block suggestions, and the single atomic commit for "all", are FE-047's. The review pane and its filter by author are UX-037. The leave-pending behaviour of "accept all" is inferred by analogy with "replace all" (07 section 7). Whether a suggester may withdraw their own suggestion is not specified (07 section 17 leaves block-level P4 rules open). Round 6 (lane ui-2, 2026-11-13): "how many were left" is not defined in the spec. `bulkPlan` counts the matching rows the user may not edit, and not rows outside the match (a reading, open for the designer).
+
+### UX-037 Review pane
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Editor |
+
+**Spec:** 13 §3, §5, §12 · **Requirements:** R8 · **Depends on:** UX-019, UX-036
+
+As an editor, I want a pane that lists the suggestions, so that I can review them by author and in order.
+
+**Acceptance criteria**
+
+- [ ] Given suggestions, when the pane opens, then they are listed in document order with kind (insertion, deletion, formatting, block change), author, the server time of the commit that introduced them, and an excerpt.
+- [ ] Given a filter by author, when it is chosen, then only that author's suggestions are listed; assistant authors (UX-046) are included as authors.
+- [ ] Given a suggestion in the list, when it is chosen, then the document moves to it, and accept and reject are offered on the item (UX-036).
+- [ ] Given suggestions arrive or are resolved, when the change happens, then the list updates live.
+- [ ] Given a keyboard and a screen reader, when the list is used, then each item is exposed with kind, author and excerpt.
+
+**Evidence:** packages/ui/test/review-rules.test.ts (Node.js, 2026-11-13): `listSuggestions` in packages/ui/src/shell/review-rules.ts lists only the chosen author's suggestions, an assistant identifier being filtered like any other, in document order; a property test checks the count, the order and that the input is unchanged (criterion 2, the rule only). Criterion 2 was unticked in review (2026-11-13): the review pane and its author filter are not built, and nothing but the test imports `listSuggestions`. Round 6 (lane ui-2, 2026-11-13): packages/ui/test/ux-036-037-review-bulk-live.test.ts (6 tests passed, Node.js, `pnpm vitest run packages/ui/test/ux-036-037-review-bulk-live.test.ts`): `applySuggestionChange` in packages/ui/src/shell/review-bulk-live.ts keeps the list in document order, with no duplicate ids, after any sequence of arrivals and resolves, matching a model (criterion 4, the list's update rule only). Criterion 4 was unticked in review (round 6, 2026-11-13): the criterion is about the pane's live list, no pane exists, and nothing but the test imports `applySuggestionChange`.
+
+**Notes:** Round 4 (lane UX-027-039, 2026-11-13): `reviewPaneRows` in packages/ui/src/shell/review-pane-rows.ts gives the pane's rows (document order, the author filter, kind, author, commit time, excerpt or null when empty, and the four-part accessible name), tested in packages/ui/test/ux-037-034-pane-rows.test.ts (Node.js, 6 tests passed, with fast-check properties). No criterion ticked: the rows are not rendered, the positions and commit times come from the core, the list is not wired to a pane, and criterion 3's keys are not bound (decision 10, ADR 0233). Round 1 (lane UX-027-039): criterion 2 is ticked on the filter rule. Criterion 1 stays open: the core's positions and commit times, and the pane's rows (kind, author, excerpt) are not built. Criteria 3 to 5 need the pane and the list's live update. The date shown for a suggestion is the server time of its commit (08 section 14). Round 6 (lane ui-2, 2026-11-13): criterion 4 was ticked on the update rule `applySuggestionChange` and unticked in review (dead module); the pane's rows and their live rendering, and the browser run, are not built.
+
+### UX-038 Require tracked changes for everyone
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Owner |
+
+**Spec:** 13 §5; 07 §5.2; 03 §4 (`settings.trackChanges`) · **Requirements:** R8 · **Depends on:** UX-015, UX-035, PRM-014, CDM-018
+
+As an owner, I want every change in the document tracked until I say otherwise, so that nothing enters the text unreviewed.
+
+**Acceptance criteria**
+
+- [ ] Given a user with `manage`, when they turn "tracked changes for everyone" on, then every user including editors edits as suggestions, and the mode switcher shows editors in review mode with the reason.
+- [ ] Given a user without `manage`, when the setting is shown, then the control is not offered, and a direct attempt to change it is rejected by the server.
+- [ ] Given the owner turns it off, when connected users receive the change, then editors can edit directly again without a reload.
+- [ ] Given an editor made a direct change before the setting reached their client, when the server rejects it, then it is handled as any rejected change (UX-017).
+- [ ] Given the setting is on, when anyone opens the review pane, then the setting and who may switch it off are visible.
+
+**Evidence:** packages/ui/test/ux-038-tracked-for-everyone.test.ts (round 6, lane ui-2, 2026-11-13; 6 tests passed, Node.js, `pnpm vitest run packages/ui/test/ux-038-tracked-for-everyone.test.ts`): `trackedModeFor` in packages/ui/src/shell/tracked-for-everyone.ts gives `review` with the reason `trackedForEveryone` for a chosen `edit` while the setting is on, and `edit` again as soon as it is off, with no state to reload (criterion 3, the rule only; a property over toggles). Criterion 3 was unticked in review (round 6, 2026-11-13): the criterion is about connected clients receiving the change, and nothing but the test imports `trackedModeFor` or `trackedControlOffered`. `trackedControlOffered` offers the setting only with `manage` (the rule behind criterion 2's first half). Not claimed: the mode switcher's display (criterion 1), the server's refusal (criterion 2, second half), the rejected change (criterion 4) and the review pane's line (criterion 5).
+
+**Evidence (round 7, lane V-UX-031-045, 2026-11-13):** packages/ui/e2e/ux-038-tracked-for-everyone.spec.ts (3 tests, 9 runs passed across Chromium, Firefox and WebKit; `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/ux-038-tracked-for-everyone.spec.ts` with `DOCEDIT_UI_PORT=57270`): with the setting on, the mode button reads "Mode: Reviewing", the reason is shown, and the axe check is clean; with the setting off and on again the mode changes in the same page (a window marker survives). Criterion 1 stays unticked (review, round 7): the browser run uses the fake core's host setter, no user with `manage` turns the setting on through any control, and the production `ShellCore` supplies no `trackedForEveryone`, so the display is proven only against the fake. The server side is covered by packages/authority/test/suggestions.test.ts (PRM-015, Node.js, `pnpm vitest run packages/authority/test/suggestions.test.ts`): an editor's direct change is refused with `permission_denied` and the same change as a suggestion is accepted, and a `manage` holder switches the setting off. Engine side: `document-setting` in `SuggestionModeInfo` (packages/engine/src/api.ts).
+
+**Notes:** Round 15 (lane V-UX-031-045, 2026-11-13): re-checked for the browser run. `ShellCore` in packages/element/src/editor.ts supplies no `mode`, `modes` or `trackedForEveryone`, so the real switcher has no mode to show. The engine already reads `settings.trackChanges` into `suggestion` (`reason: 'document-setting'`, packages/engine/src/suggestion-mode.ts), which is the source for the shell view. Not done here: it needs a shell change in the element and a document fixture with `trackChanges: everyone`, and the turning-on control stays unbuilt. Audit (2026-11-13): criterion 1 was unticked because no one turns the setting on in any test (there is no settings control) and the switcher's reason is shown only against the fake core's host setter, while the production element's `ShellCore` (packages/element/src/editor.ts) supplies neither `trackedForEveryone` nor `mode`, so the real shell never shows editors in review mode with the reason; the authority half (PRM-015) does hold. Round 7 (lane V-UX-031-045, 2026-11-13): `CoreApi.trackedForEveryone` (packages/ui/src/core-api.ts) is the view the switcher reads; the real core does not yet supply it, so the browser run uses the fake core's host setter (`setTrackedForEveryone`). Criterion 2 stays open: no settings control is built, so the first half (the control not offered to a user without `manage`) has no UI; the server half is refused for `defs:settings` in PRM-015 (a user without `structure` is refused; the spec's gap about `manage` versus `structure` remains). Criterion 3 stays open: the in-page change is proven, but delivery to connected clients over the sync channel is not tested (no real channel sets the view). Criterion 4 stays open: the client's handling of a server rejection (UX-017) is not run against a rejected direct change. Criterion 5 stays open: no review pane exists (UX-037). The reason's wording is this lane's (en-GB key `reason.mode.trackedForEveryone`), for the designer to confirm.
+
+**Notes:** `settings` lives in `defs`, whose changes need `structure`, while 07 section 5.2 says `manage` switches it off; no rule P1 to P9 binds that distinction (gap, open questions). Round 6 (lane ui-2, 2026-11-13): the reading that "every user including editors" covers every user, the owner included, is open; `trackedModeFor` applies it to every user, and the spec's default is not changed. Criterion 2's server half and criterion 5 stay open. Criterion 3 was ticked on the rule and unticked in review (dead module, no client receives the setting).
+
+### UX-039 Share button
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Owner |
+
+**Spec:** 13 §3, §5, §11.1; 05 §8.1 (`de-share-request`); PRODUCT (operating context) · **Requirements:** R6, R15 · **Depends on:** UX-014
+
+As an owner, I want a share button that opens my host application's own sharing dialog, so that people are added in the place that knows them.
+
+**Acceptance criteria**
+
+- [x] Given the share button, when it is activated, then the editor dispatches `de-share-request` (a composed, bubbling `CustomEvent` carrying identifiers and no content) and shows no sharing dialog of its own.
+- [x] Given the host handles the event with its own dialog, when the dialog opens, then the editor's state and focus are preserved, and focus returns to the share button when the host closes it.
+- [x] Given region grants and workflow participants, when the button is activated, then it does not open them; they are managed in the editor's permissions pane.
+- [x] Given a keyboard and a screen reader, when the button is used, then it has an accessible name and is operable.
+
+**Evidence:** packages/ui/test/share-and-painter.test.ts (round 5, packet U, 2026-11-13): the share command's run calls only the host's `requestShare` and opens no pane (`openPane` and `toggleOutline` never called); the command is enabled for a viewer, since it changes no content. Run with the fake core, `pnpm vitest run packages/ui`. Not claimed: the `de-share-request` event and the host dialog (the element's, criteria 1 and 2), and the button's accessible name and keyboard use (criterion 4, the component's).
+
+**Evidence (round 9, lane U-UX-031-045, 2026-11-13):** packages/element/e2e/ux-039-share.spec.ts (3 tests, run in Chromium, Firefox and WebKit, 9 passed in all, with `DOCEDIT_DEMO_PORT=56277 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/ux-039-share.spec.ts --project=<browser>`). Criterion 1: a click on the share button raises one `de-share-request`, composed and bubbling, whose detail is `{ docId }` only, and the element holds no `dialog` or `[role="dialog"]`. Criterion 2: a host dialog opened with `showModal` leaves the editor's text unchanged; its Done button calls the element's `focus()`, and the share button is then the focused control in the element's shadow root. Criterion 4: the button is found by role and the name `Share`, and Enter raises the event. WebKit does not focus a button on a mouse click, so the criterion 2 test focuses the button before it activates it.
+
+**Notes:** Round 9 (lane U-UX-031-045, 2026-11-13): criteria 1, 2 and 4 ticked on the element's browser test (see Evidence). The element did not give focus back before: `DocEditorElement.focus()` now calls the shell's `restoreFocus` first (packages/element/src/doc-editor.ts; `restoreShareFocus` in packages/element/src/editor.ts). Decision, not stated in the spec: focus returns when the host calls `focus()` on the element after its dialog closes; the element cannot see the dialog close, so a host that never calls `focus()` gets no return. A share request keeps its return target until that call, so a later `focus()` for another reason moves focus to the share button once. Round 5 (packet U, 2026-11-13): criterion 3 ticked on the unit test above. The `de-share-request` event is the element's; the shell's share command calls the host's `onShareRequest` callback and the event is not checked here. Phase inferred (1b). The event's `detail` is not defined in 05 and nothing says who sees the button or how a host without a handler hides it (open questions).
+
+### UX-040 Output restrictions in the editor
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Viewer |
+
+**Spec:** 13 §5, §12; 05 §3.1 (`restrict`), §5.5 (`restrictions`), §6.2; 07 §12 · **Requirements:** R10, R14 · **Depends on:** UX-004, PRM-056, PRM-058
+
+As a person whose access carries restrictions, I want the editor to honour them and tell me, so that I understand why export, copy or print are not available.
+
+**Acceptance criteria**
+
+- [x] Given `no-export` in the access object, when commands render, then export commands are disabled with a reason, `requestExport` refuses, and a direct export request to the control plane is refused by the service.
+- [x] Given `no-copy`, when the user copies, cuts or drags content out of the editing surface, then the action is prevented and the user is told why.
+- [x] Given `no-print`, when the user calls `print()` or the print command, then it is refused with a reason.
+**Evidence (round 16, lane V-UX-031-045, 2026-11-14; criterion 3 unticked in review, round 7):** the `print()` half only; the criterion also names the print command, which is not built, so it stays open. Reviewer also found that the new static import of `print.ts` in doc-editor.ts makes packages/element/test/fe-119 critical-path test (`critical-path.test.ts`) fail; the import must become dynamic. Fixed (V2 group 3, round 7): `print()` now imports `print.ts` and `print-frame.ts` dynamically; `critical-path.test.ts` passes again, and the demo build lists both as lazy chunks. packages/element/e2e/ux-040-no-print.spec.ts (1 test, 3 runs passed in Chromium, Firefox and WebKit; `DOCEDIT_DEMO_PORT=57270 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/ux-040-no-print.spec.ts --project=<browser>`): under `no-print` (set on the core, then awaited on the element's `de-permission-change` event) `DocEditor.print()` in packages/element/src/doc-editor.ts resolves `{ status: 'refused', reason: 'no-print' }`, and no request to the exports port is sent. The refusal is `printTypesetPdf` in packages/element/src/print.ts, tested in Node.js by packages/element/test/fe-055-print-access.test.ts. The print command half is not built: the registry has no print command (see Notes).
+- [x] Given a restriction is added or removed in `perm.changed`, when it arrives, then the commands update at once, without a reload.
+- [ ] Given the integration guide and the help text, when they describe restrictions, then they state that restrictions deter casual copying and are not a security boundary.
+- [x] Given a restriction, when the user uses other features, then comments, navigation and viewing are unaffected.
+
+**Evidence (round 15, lane V-UX-031-045, 2026-11-13):** packages/ui/e2e/ux-040-restriction-live.spec.ts (2 tests, 6 runs passed across Chromium, Firefox and WebKit; `DOCEDIT_UI_PORT=57270 pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/ux-040-restriction-live.spec.ts --project=<browser>`). Criterion 4: the export command is enabled with the restriction absent, `setPermissions` adds `no-export` at a new revision, and the command is disabled with `reason.query.no-export` at once, with no reload; removal is covered by ux-040-export-command-state.spec.ts. Criterion 6: under `no-export` a comment command (`review.comment`, with a block anchor) and `view.zoomIn` stay enabled, and the document surface is visible. Criterion 4 is ticked for the output command that exists (`document.export`); there is no print command yet (criterion 3), so no print command is covered.
+
+**Evidence:** No criterion ticked (round 5, lane ui-2, 2026-11-13). packages/ui/src/commands/output-restrictions.ts (`outputDecision`, `commandOutputAction`, `commandDecision`); packages/ui/test/output-restrictions.test.ts (5 tests passed, Node.js, `pnpm vitest run packages/ui/test/output-restrictions.test.ts`, 2026-11-13): print is refused with the reason `no-print` only under that restriction (the rule behind criterion 3); each output action is refused only under its own restriction, with that reason (property); no command that is not an output action is refused under any restriction list (the rule behind criterion 6). Round 1 (lane U-UX-031-045, 2026-11-13), service half of criterion 1: `services/document-service/src/control-plane/ux-040-no-export.test.ts` (2 tests passed, memory and PostgreSQL in Podman; `pnpm vitest run --project node services/document-service/src/control-plane/ux-040-no-export.test.ts`): a direct `POST /v1/documents/{id}/exports` with `restrict: ["no-export"]` is refused (403), and the same request without it is accepted (202).
+
+**Evidence (round 9, lane V-UX-031-045, 2026-11-13):** packages/element/test/ux-040-no-export.test.ts (4 tests passed, Node.js, `pnpm vitest run packages/element/test/ux-040-no-export.test.ts`; packages/element/test/export.test.ts and print.test.ts still pass). Criterion 1, client half: `startExport` in packages/element/src/export.ts refuses with `PortError` code `forbidden` and detail `{ reason: 'no-export' }` before any request is sent, and `requestExport` in packages/element/src/doc-editor.ts passes the session's access in. Not claimed: the disabled commands with their reason (criterion 1, first half), which the shell does not render.
+
+**Evidence (round 10, lane U-UX-031-045, 2026-11-13):** packages/ui/e2e/ux-040-export-restrictions.spec.ts (2 tests, passed in Chromium, Firefox and WebKit; `DOCEDIT_UI_PORT=56275 pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/ux-040-export-restrictions.spec.ts --project=<browser>`). Under `no-export` the PDF target of the export dialog is disabled with the reason "Your access does not allow export.", Export is disabled, and no export request is sent; the control without the restriction has both enabled. The dialog change is in packages/ui/src/components/ExportDialog.svelte (`noExport`, the start guard). The existing 'client export filters (UX-055)' tests in packages/ui/e2e/extensions.spec.ts passed in Chromium (the save test failed once in a combined run with a trace-file error and passed on re-run; not changed).
+
+**Evidence (round 12, lane U-UX-031-045, 2026-11-13):** criterion 1 ticked. The command half: `document.export` names the shell query `shell.exportAllowed` (packages/ui/src/commands/builtin.ts), which App.svelte sets from `commandDecision` (packages/ui/src/commands/output-restrictions.ts), so under `no-export` the registry gives `enabled: false` with the reason key `reason.query.no-export` (packages/ui/src/i18n/en-GB.ts). Browser run, Chromium, Firefox and WebKit: packages/ui/e2e/ux-040-export-command-state.spec.ts (2 tests) and packages/ui/e2e/ux-040-export-restrictions.spec.ts (the dialog test now lets the restriction arrive while the dialog is open, because the refused command no longer opens it), `DOCEDIT_UI_PORT=56275 pnpm exec playwright test -c packages/ui/playwright.config.ts <file>`. Final run: 12 tests passed; the first WebKit attempt at the dialog test failed the harness policy check and passed on retry. Unit: packages/ui/test/output-restrictions.test.ts and the tests of the changed command and strings (7 files, 46 tests, Node.js) pass. The `requestExport` refusal is round 9's and the service refusal is round 1's (PostgreSQL and the memory store in Podman).
+
+**Evidence (round 13, lane U-UX-031-045, 2026-11-13):** criterion 2 ticked. packages/element/e2e/ux-040-no-copy.spec.ts (3 tests, reviewer-corrected from 4; the real engine and shell in the element; `DOCEDIT_DEMO_PORT=56277 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/ux-040-no-copy.spec.ts --project=<browser>`): under `no-copy` (set on the engine core as a new access revision) Ctrl+C writes no clipboard text and shows the notice "Nothing was copied: your access does not allow copying from this document."; Ctrl+X writes nothing and removes nothing; a drag of the selected text starts no drag, changes no text and shows the same notice; without the restriction a copy writes the selected text and shows no notice. Passed in Chromium, Firefox and WebKit (one Chromium control run failed once and passed on re-run; not explained). The drag check depends on the surface's first paragraph being under the pointer.
+
+**Evidence (round 17, lane V-UX-031-045, 2026-11-14):** criterion 3 ticked, now that the print command exists. `document.print` in packages/ui/src/commands/builtin.ts is enabled by `shell.printAllowed`, which packages/ui/src/App.svelte sets from `commandDecision` (packages/ui/src/commands/output-restrictions.ts); under `no-print` it is disabled with `reason.query.no-print` (packages/ui/src/i18n/en-GB.ts), and its run calls the host's `onPrintRequest`, which packages/element/src/doc-editor.ts wires to `DocEditor.print()`. Browser run, Chromium, Firefox and WebKit: packages/ui/e2e/ux-040-print-command.spec.ts (2 tests, 6 runs passed; `DOCEDIT_UI_PORT=57270 pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/ux-040-print-command.spec.ts --project=<browser>`). Node.js: packages/ui/test/ux-040-print-command.test.ts (6 tests passed; `pnpm vitest run packages/ui/test/ux-040-print-command.test.ts`), with the related registry and command tests (11 files, 97 tests passed). The `print()` refusal stays evidenced by packages/element/e2e/ux-040-no-print.spec.ts (Chromium, Firefox and WebKit, round 16) and packages/element/test/fe-055-print-access.test.ts (re-run: 23 Node tests in five files passed).
+
+**Notes:** Fix (V2 group 3, round 8, lane V-UX-031-045, 2026-11-14): two review findings. (1) The print frame was appended to the host page's `document.body`, which FE-020 forbids (packages/ui/test/fe-020-overlay-boundary.test.ts failed on packages/element/src/print-frame.ts). Choice: the frame is now mounted in the element's own shadow root (`printPdfAtUrl(url, container)`; `DocEditor.print()` passes its shadow root), so the FE-020 test needs no allowance. A browser test, packages/element/src/v-ux-031-045-print-frame.universal.test.ts (1 test, passed in Chromium, Firefox and WebKit; `pnpm vitest run --project browser <file>`), shows the frame lands in the shadow root and nothing is added to the host body; it removes the frame before load, so it does not show that a PDF prints. Not checked: when the signed PDF URL is on another origin, the frame's `contentWindow.print()` and its `afterprint` listener are cross-origin calls that browsers refuse, so the frame printer may only work for a same-origin URL; open until the viewer's own print path (02 §9.8) is built. (2) The parity profile was regenerated with `pnpm --filter @docedit/ui generate` and now lists `document.print`. Decision (13 and 02 are silent on a print command id): `document.print` is a built-in command under the capability `export-pdf`, because 02 §9.8 prints the typeset PDF, so printing has the same capability as PDF export. Round 17 (lane V-UX-031-045, 2026-11-14): the print command is built, so the round 16 open item on `document.print`, `shell.printAllowed` and the disabled-reason wiring is closed by the round 17 Evidence above. The element's public `queryCommand` and `exec` take engine commands only, so the shell command is tested through the shell harness (`print: true` option in packages/ui/e2e/harness/main.ts), not through the element. Criterion 5 stays open. Round 15 (lane V-UX-031-045, 2026-11-13): criteria 4 and 6 ticked on the live browser run above. Round 16 (lane V-UX-031-045, 2026-11-14): criterion 3 was ticked for `print()` and unticked in review (round 7), because the print command half is not built (see its Evidence). `DocEditor.print()` was added, with the default frame printer in packages/element/src/print-frame.ts (the spec default: print the typeset PDF through the viewer; the viewer's own print path is not built, so the frame printer stands in for it). Open for the owner: the registry still has no `document.print` command, so the menu, keyboard and `shell.printAllowed` wiring of the command half is not built; the `no-print` reason is not yet shown beside a disabled command. Criterion 5 (the integration guide and help text) stays open: 13 section 3 states the "not a security boundary" wording, but no integration guide or help text that describes restrictions was found to check. Round 13 (lane U-UX-031-045, 2026-11-13): criterion 2 ticked on the browser run above. The demo harness in packages/ui cannot set `no-copy`, so the shell-level test is not used; the element run uses the engine core's `setAccess`, the same call the session makes on `perm.changed`. The restriction is not yet sent by the backend mock or the authority (no restriction field there), so only a test-side change of access proves the path. Round 12 (lane U-UX-031-045, 2026-11-13): criterion 4 stays open: the removal of `no-export` is tested for the export command, but the addition while the command is idle, and the other commands, are not. Criterion 3 stays open: there is no print command in the registry (`document.print` appears only in output-restrictions.ts), so the `no-print` refusal has no call site. The `policy violations` failure on the first WebKit attempt is not explained yet; it did not recur on retry. Round 11 (lane U-UX-031-045, 2026-11-13): the telling half of criterion 2 is built. A copy refused by `no-copy` (core `copySelection`, FE-055) now has its own notice, `notice.refused.noCopy` ("Nothing was copied: ..."), not the general "That change was not made." (packages/ui/src/shell/notices.ts, packages/ui/src/i18n/en-GB.ts); tested in packages/ui/test/ux-040-no-copy-notice.test.ts (3 tests, Node.js) and packages/ui/test/notices.test.ts (6 tests still pass). Criterion 2 stays unticked: the prevention is FE-055's (engine view handlers, not re-run here), and no browser run shows the notice on screen, because the demo cannot set a `no-copy` access. Round 10 (lane U-UX-031-045, 2026-11-13): the export dialog now disables the deployment targets and Export under `no-export`, as the filters already were. Criterion 1 stays unticked: the menu's `document.export` command is still offered enabled, because the command registry does not read `commandDecision` (`packages/ui/src/commands/output-restrictions.ts`), and the wiring there is the shell's. The `requestExport` refusal and the service refusal are the earlier rounds' evidence. Round 9 (lane V-UX-031-045, 2026-11-13): the `requestExport` refusal for `no-export` is built and tested (see Evidence); criterion 1 stays unticked because the disabled export commands are not rendered. The interplay with the PDF preview, the read view (first the typeset PDF) and printing is not specified: the preview is produced by an export job, which `no-export` refuses, yet `no-print` exists as a separate restriction (open questions). Round 5 (lane ui-2): the rule is built, but nothing calls it yet. The `print()` and export call sites, the copy, cut and drag guards on the editing surface, and the commands' re-render on `perm.changed` are not wired, so criteria 1 to 4 and 6 describe the shell and stay open. The export refusal in `extensions/filters.ts` (UX-055) is a separate guard and is not changed here. Round 1 (lane U-UX-031-045, 2026-11-13): criterion 1 stays open for its client half (`requestExport` and the disabled commands are not built). Criteria 2 to 4 and 6 stay open: no browser run, and the copy, cut, drag and `print()` guards are not wired. A read of an export job by a `no-export` person is refused (403) by the service; no spec rule for that case was checked, and no test asserts it.
+
+## Assistance ports
+
+### UX-041 Show spelling and grammar findings from the proofing port
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | should | Author |
+
+**Spec:** 13 §6.1, §12; 02 §15; 05 §8.3 · **Requirements:** R14 · **Depends on:** UX-004, PRO-091, PRO-092, FE-066
+
+As an author, I want spelling and grammar findings in my text, so that I can correct mistakes, with checking supplied by my host or backend.
+
+**Acceptance criteria**
+
+- [ ] Given a proofing port, when the document opens or text changes, then text is sent to the port with the language from the `lang` mark (or the document default), and findings return as decorations with suggestions; the document is never changed by a finding alone.
+- [ ] Given a scope the user cannot view, when proofing runs, then none of its text is sent to the port.
+- [ ] Given findings return after the text changed, when they arrive, then stale ones are discarded or mapped so that none is shown on the wrong text.
+- [ ] Given the port is slow or unavailable, when the author types, then typing is unaffected, no error blocks the interface, and the proofing state shows quietly.
+- [ ] Given no proofing port, when the interface renders, then no proofing control is shown.
+- [ ] Given a finding, when the author uses a keyboard or a screen reader, then findings can be moved between and each is exposed with its text, kind and suggestions, not only by decoration.
+- [ ] Given findings are decorations, when the document is saved, then they appear in no commit, version or history.
+
+**Evidence:** packages/ui/test/ux-041-findings.test.ts (round 6, lane ui-2, 2026-11-13; 4 tests passed, Node.js, `pnpm vitest run packages/ui/test/ux-041-findings.test.ts`): `typed` clears the findings and moves to a new revision, `arrive` drops a result for an earlier revision and keeps one for the current revision, and a fast-check property over operation sequences shows that a finding is only ever held for the revision the state is at (criterion 3, the state rule in packages/ui/src/proofing/ux-041-findings.ts). Criterion 3 was unticked in review (round 6, 2026-11-13): the criterion is about findings shown on text, there is no port or decoration, and nothing but the test imports the module. Not claimed: criteria 1, 2, 4 to 7, which need the port, the decorations, the typing path and the browser run.
+
+**Notes:** The proofing code loads on demand (13 section 9). Whether checking is per block, per paragraph or per change, and its debounce, are not specified. Round 2 (lane UX-040-052, 2026-11-13): building block only, no criterion ticked. packages/ui/src/proofing/request.ts builds the request (the `lang` mark, else the document default, else none; text only from viewable scopes, the rest counted), states the rule that the control needs a port, and tells a current finding from a stale one by revision. packages/ui/test/proofing-request.test.ts (4 tests passed, Node.js, with a fast-check property for the scope rule). Nothing calls these functions: the port, the decorations, the document's opening and text-change triggers, the keyboard and the screen reader are not built, and the proofing port is not wired into the core. So criteria 1 to 7 stay open. Round 6 (lane ui-2, 2026-11-13): criterion 3 was ticked on the state rule in packages/ui/src/proofing/ux-041-findings.ts and unticked in review (dead module). Discarding was chosen over mapping (the mapping needs the core's position map). The rule is not yet wired to the port or to the decorations.
+
+### UX-042 Act on a finding and manage custom dictionaries
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Author |
+
+**Spec:** 13 §6.1 · **Requirements:** R14 · **Depends on:** UX-041, UX-008
+
+As an author, I want to apply, ignore or remember a suggestion, so that I resolve findings in one step.
+
+**Acceptance criteria**
+
+- [ ] Given a finding, when the author opens the context menu or the keyboard command, then they can apply a suggestion, ignore it once, ignore it everywhere, or add the word to a custom dictionary.
+- [ ] Given applying a suggestion, when it is applied, then it is an ordinary edit through the same guards, and in suggestion mode it becomes a suggestion; in a scope the user may not change it is not offered.
+- [ ] Given the port supports custom dictionaries, when the author adds, lists or removes entries, then the port stores and honours them in later checks; given it does not, then dictionary controls are not offered.
+- [ ] Given the language of a range changes, when the status bar or a command sets it, then findings for that range are recomputed in the new language.
+
+**Evidence:** No criterion ticked (round 5, lane ui-2, 2026-11-13). packages/ui/src/proofing/finding-actions.ts (`applyMode`, `offeredFindingActions`); packages/ui/test/finding-actions.test.ts (9 tests passed, Node.js, 2026-11-13, after the round 6 merge): the four actions are offered to an editor with a suggestion and a dictionary port (the rule behind criterion 1); an apply becomes a suggestion in `review` mode and for a user with only `suggest`, is an edit only for an editor in `edit` mode, and is not offered where the user has neither `edit` nor `suggest`, in `view` or `fill` mode, or without a suggestion (the mode rule behind criterion 2, properties); no dictionary action is offered without a dictionary port (the offer half of criterion 3, property); nothing is offered without `view`.
+
+**Notes:** Where custom dictionaries live (user, tenant, document) and who may share them are not specified. Round 5 (lane ui-2): no criterion ticked. The menu and the keyboard command are not built. Criterion 2 also needs the edit to pass through the core's guards, and criterion 3 needs the port to store and honour entries; criterion 4 needs the language recomputation, and none of these is built. The suggest-only rule follows P4 in 07 §12 as the spec default; it is not an owner decision. Round 6 (fixer, 2026-11-13): a duplicate written in round 4 (packages/ui/src/proofing/ux-042-actions.ts and its test) was merged into finding-actions.ts and deleted. The context now takes the `EditorMode` in effect (`review` is suggestion mode, as in `shell/suggest-mode.ts`) instead of a suggestion-mode flag. From the duplicate it keeps two rules, read from the spec rather than stated by it: nothing is offered without `view` (13 §6.1 sends the port only text the user can view), and apply is not offered in `view` or `fill` mode. Nothing calls the module yet.
+
+### UX-043 Spike: dictionaries and licences for a built-in fallback spell checker
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | 2 | S | could | Maintainer |
+
+**Spec:** 13 §13; 13 §2, §6.1; 02 §15 · **Requirements:** R14 · **Depends on:** none
+
+As a maintainer, I want to know whether a built-in fallback spell checker is worth shipping, so that I can decide it on evidence. Time box: 3 days.
+
+**Acceptance criteria**
+
+- [x] Given the spec lists "dictionaries and their licences for a built-in fallback spell checker" as open, when the spike ends, then a written recommendation states whether to ship a fallback at all.
+- [x] Given candidate dictionaries for the first locales, when they are listed, then each has its licence checked against the project licence (Apache-2.0 recommended) and its size.
+- [x] Given the 300 KB initial budget, when the cost is estimated, then the recommendation shows how the fallback would load on demand.
+- [x] Given no proofing port, when the recommendation is written, then it states what the web view's context menu should do for misspellings (open questions).
+
+**Evidence:** Criterion 2 (lane V-UX-031-045, round 2, 2026-11-13): `docs/adr/0327-lane-V-UX-031-045.md`, Part A, the npm registry metadata and `npm pack` tarball sizes for en-GB, de-DE and fr-FR (declared licences `(MIT AND BSD)`, `(GPL-2.0 OR GPL-3.0)` and `MPL-2.0`); no test, a measurement. The locale list is this lane's proposal, the owner sets the first locales.
+
+**Evidence (round 4, lane V-UX-031-045, 2026-11-13):** criterion 3, `docs/adr/0327-lane-V-UX-031-045.md` Part B: `npm pack dictionary-en-gb@3.0.0` in a scratch folder outside the repository, then the gzip size of `index.dic` and `index.aff` (PowerShell 7 `GZipStream`, Optimal): 194,899 bytes against the 300 KB initial budget, engine excluded, and the on-demand load design. No test, a measurement.
+
+**Evidence:** `docs/adr/0234-lane-UX-040-052.md`, Part C (proposed, lane UX-040-052, round 2, 2026-11-13). C1 is the recommendation: no built-in fallback in phase 2, spelling stays port-only (criterion 1). C4 is the proposal for the context menu without a port: the browser's spellcheck stays on and its suggestions show on a marked word (criterion 4, a proposal awaiting the owner's decision). Criteria 2 and 3 are not claimed (see C2 and C3). No test: a spike, with no code.
+
+**Notes:** Round 2 (lane V-UX-031-045, 2026-11-13): criterion 2 ticked on the licence and size measurements for en-GB, de-DE and fr-FR in ADR 0327 (lane V-UX-031-045) Part A. The de-DE licence (GPL-2.0 OR GPL-3.0) is a possible blocker for Apache-2.0 distribution, for the owner or counsel to decide. Criterion 3 stays open: no built bundle, so no cost against the 300 KB budget (ADR 0327 Part B). Round 3 (lane U-UX-031-045, 2026-11-13): one candidate measured for en-GB, the locale the interface strings use (proposed, not set by the spec): `dictionary-en-gb` 3.0.0, licence `(MIT AND BSD)`, tarball 203,045 bytes, unpacked 575,855 bytes; method and reading in ADR 0327 Part B. Criterion 2 stays open: the first locales are the owner's to set, so the list is not final. Criterion 3 stays open: no built bundle, so no cost is estimated. Round 4 (lane V-UX-031-045, 2026-11-13): criterion 3 ticked on a dictionary-only gzip estimate with the on-demand design (ADR 0327 Part B); the engine and a built chunk are still not measured, and the owner may replace the estimate later. Round 2 (lane UX-040-052, 2026-11-13): criteria 1 and 4 ticked on the proposal in ADR 0234 Part C, which the owner has not accepted. Criterion 2 stays open: no candidate dictionary was listed and no licence was checked, and the first locales are not set by the spec. Criterion 3 stays open: no size was measured, so no cost is stated. If the recommendation is "no fallback", spelling stays port-only, and the open question about the context menu without a port is settled by the owner.
+
+### UX-044 Decision: how an assistant's agent identity is established and capped
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 2 | S | must | Maintainer |
+
+**Spec:** 13 §6.2; 04 (origin is a client claim); 05 §3.1, §5.3; 07 §4, §5.2; 08 §2, §7 · **Requirements:** R14, R10 · **Depends on:** none
+
+As a maintainer, I want the way an assistant acts for a user fixed in a decision record, so that "capped at `suggest`" is enforced by the server and not claimed by the client. Time box: 2 days.
+
+**Acceptance criteria**
+
+- [x] Given the spec says commits carry `origin: "assistant"` and `author.agent` and that the agent is capped at `suggest`, when the decision is written, then it states how the server learns that a commit is the assistant's, given that `origin` is only the client's claim.
+- [x] Given 05 section 3.1 has no agent claim, when the decision is written, then it states how an agent identity is issued, by whom, and where `author.agent` comes from.
+- [x] Given a user who is an editor, when the decision is written, then it adds the cap to the computation of effective capabilities (07 section 4), so that the agent's capabilities are at most `suggest` whatever the user's.
+- [x] Given an assistant implemented in the browser, in the host backend with a service credential and `DEP-Actor`, or in a third service, when the decision is written, then it states how each case obtains the agent identity.
+- [ ] Given the decision is accepted, when it is recorded, then it is an ADR and 05 and 07 are amended before UX-046 starts.
+
+**Evidence:** `docs/adr/0234-lane-UX-040-052.md`, Part A (proposed, lane UX-040-052, 2026-11-13). Criteria 1 to 4 are the content of that record: A1 (the server learns from the verified agent token, not the client's `origin`), A2 (where `author.agent` comes from), A3 (the cap in 07 section 4 as an intersection with `{suggest}`), A4 (each assistant case). Not claimed: criterion 5, since the record is not accepted and 05 and 07 are not amended (A6). No test: a decision, with no code.
+
+**Notes:** Round 2 (lane V-UX-031-045, 2026-11-13): criterion 5 stays open. It needs the owner to accept 0234 Part A and the amendment of 05 and 07; the owner question is in ADR 0327 (lane V-UX-031-045) Part C. Round 1 (lane UX-040-052, 2026-11-13): criteria 1 to 4 ticked on the proposed record only; the owner has not accepted it, so the security review and criterion 5 are open. Open for the owner (A5): registration rules and retention of agent attribution. Gap found: 13 section 6.2 relies on P4 for the cap, but P4 applies where a user holds `suggest` without `edit`; nothing derives a cap for an agent acting for an editor. Security review required (README definition of done). Second review (2026-11-06, SPK-027), SR-M23 confirms the gap and recommends a separate agent token with an actor claim in the manner of RFC 8693, whose capabilities the room caps; until then 13 §6.2 should not claim server enforcement ([review](../review/2026-11-06-second-review.md)).
+
+### UX-045 Assistant pane
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | should | Author |
+
+**Spec:** 13 §3, §6.2, §12; 05 §8.3 · **Requirements:** R14 · **Depends on:** UX-019, UX-044, PRO-091, PRO-092
+
+As an author, I want to ask an assistant to draft, rewrite, summarise or answer questions about my document, so that I get help without leaving the editor.
+
+**Acceptance criteria**
+
+- [ ] Given an assistant port, when the author opens the assistant pane, then they can ask for a draft, a rewrite of the selection, a summary, or an answer to a question about the document, and the response is shown in the pane.
+- [ ] Given a response, when it is shown, then nothing in the document changes until the author approves an insertion (UX-046).
+- [ ] Given a running request, when the author cancels it, then it stops and nothing is applied.
+- [ ] Given the port returns an error (`rate_limited`, `quota_exceeded`, or a port failure), when the request ends, then the author sees what happened, nothing is applied, and retry is offered.
+- [ ] Given no assistant port, when the panes are listed, then the assistant pane is not offered.
+- [ ] Given a user who has only `view`, when they use the pane, then questions and summaries work and actions that would insert content are disabled with a reason.
+- [ ] Given a keyboard and a screen reader, when a response arrives, then progress and completion are announced and the response is readable.
+
+**Evidence:** No criterion ticked (round 5, lane ui-2, 2026-11-13). packages/ui/src/assistant/request-lifecycle.ts (`assistantStep`, `assistantPaneOffered`, `insertionAllowed`, `assistantAsk`, `retryOffered`, `errorMessageKey`, `announcement`); packages/ui/test/assistant-lifecycle.test.ts (10 tests passed, Node.js, 2026-11-13, after the round 6 merge): a response is held and nothing is inserted until the author approves it (property over event sequences without an approval); a failure ends with nothing held and retry offered, and retry is offered only after a failure (state level and property, criterion 4); a cancel discards the response (state level, criterion 3); no pane without a port (rule, criterion 5); the insertion gate and the request gate for a view-only author, with the reason (rule and property, criterion 6); the message names a live region would announce (input to criterion 7 only).
+
+**Evidence (round 10, lane U-UX-031-045, 2026-11-13):** packages/ui/e2e/ux-045-no-assistant-port.spec.ts (1 test, 3 runs passed in Chromium, Firefox and WebKit; `DOCEDIT_UI_PORT=56275 pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/ux-045-no-assistant-port.spec.ts`). Criterion 5: with no assistant port, no command id contains `assistant`, `view.assistant` does not run, and no `.de-pane[data-pane="assistant"]` element exists.
+
+**Notes:** Round 2 (lane V-UX-031-045, 2026-11-13): no criterion changed. The pane, its loader and the port calls are still not built (ADR 0327 Part D), so criteria 1 to 4, 6 and 7 stay open. Round 10 (lane U-UX-031-045, 2026-11-13): criterion 5 ticked on the browser test above. Criteria 1 to 4, 6 and 7 stay open: the pane is not built (no loader in `shell/panes.ts`), and the core has no assistant port to call. Assistant code loads on demand (13 section 9). The `view`-only behaviour is inferred. Round 5 (lane ui-2): no criterion ticked. The pane, the port calls, the stop of a running request at the port and the progress and completion announcements (criterion 7) are not built, and criteria 1, 2 and 5 describe what the shell draws. Insertion as suggestions is UX-046, and UX-044 is not accepted. What the author is told about the data that goes to the provider is a host matter (the port is provider-neutral). Round 6 (fixer, 2026-11-13): a duplicate written in round 4 (packages/ui/src/assistant/session.ts and packages/ui/test/ux-045-assistant-session.test.ts, which re-implemented the state machine, the no-port rule and the gate under the same type names) was merged into request-lifecycle.ts and deleted. Its distinct parts (`retryOffered`, `errorMessageKey`, `announcement`, `assistantAsk`) now work on `AssistantState` from request-lifecycle.ts. `assistantAsk` uses the same gate as `insertionAllowed`: a draft or a rewrite needs `edit` or `suggest` (the duplicate asked for `suggest` alone), and the refusal reason is `no-change`. The `assistant.*` message keys are names only; the string catalogue has no entries for them. Not built: the pane itself, the port calls and a live region. `assistantPaneOffered` is not wired into `shell/panes.ts`: the assistant descriptor there has no loader and no feature, so it is not offered at all; announcing the `assistant` feature would change the listing that panes.test.ts checks, which is the shell owner's decision. Audit (2026-11-13): criterion 5 unticked. The e2e test (ux-045-no-assistant-port.spec.ts) passes in all three browsers, but the assistant descriptor in `shell/panes.ts` has no loader, so the pane is never offered with or without a port; the test cannot fail on a port and shows no port-dependent rule, and the criterion needs the pane to be offered when a port exists.
+
+### UX-046 Assistant writes arrive as suggestions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 13 §6.2; 07 §5.2 (P4); 08 §7; 04 (origins) · **Requirements:** R8, R10, R14 · **Depends on:** UX-044, UX-045, UX-037, PRM-014, HIS-009, HIS-015, FE-041, FE-042
+
+As an author, I want an assistant's writing to arrive as suggestions attributed to the assistant, so that nothing a model writes enters my text without a person accepting it.
+
+**Acceptance criteria**
+
+- [ ] Given the author approves an assistant result, when it is inserted or replaces text, then it arrives as suggestion marks, never as a direct edit, even when the author is an editor.
+- [x] Given the commit made for an assistant action, when it is stored, then it carries `origin: "assistant"` and `author.agent`, and history shows both the person and the model (HIS).
+- [ ] Given a hand-crafted commit under the agent identity that changes text directly, when the authority checks it, then it is rejected with `permission_denied`.
+- [x] Given the target scope grants the user no `suggest` (a read-only region), when the result is applied, then it is rejected, nothing is applied, and the user is told.
+- [x] Given a user who has only `suggest`, when the assistant writes for them, then the result obeys P4 and the agent's capabilities never exceed the user's.
+- [ ] Given an assistant suggestion, when it is shown in the review pane, then it names the model and the person it acted for, and an editor accepting it is recorded as that editor's action with origin `suggestion.accept`.
+
+**Evidence (lane V-UX-046-060, round 2, 2026-11-13):** packages/authority/test/ux-046-assistant-commit.test.ts (4 tests passed, Node.js, `pnpm exec vitest run packages/authority/test/ux-046-assistant-commit.test.ts`; the in-process room, no container). Criterion 4: a viewer's assistant result in the inherit region is refused with `permission_denied`, the reason is sent to the submitter, and nothing is stored or applied. Criterion 5: a suggester's assistant result is refused as a direct insertion and accepted as an `ins` suggestion that names the suggester, stored with origin `assistant` and the agent; the agent's cap never above the user's is the UX-046 insertion property in packages/ui/test/ux-046-assistant-insertion.test.ts. Criterion 2: the stored commit carries `user`, `origin: 'assistant'` and `agent` (the test above and packages/authority/test/sec-010-assistant-origin.test.ts, control case); the history names the person and the agent for an assistant commit (packages/history/test/attribution.test.ts, 'names the person and the agent on the runs of an assistant commit', passed in the same run). The two are joined by field name only: no test runs the room's commit through the history reader.
+
+**Notes:** Needs the decision UX-044. Lane V-UX-046-060 (round 2, 2026-11-13): criteria 2, 4 and 5 ticked (Evidence above; ADR 0328 lane V, decision 6). Criteria 1, 3 and 6 stay open: criteria 1 and 3 are the decision in docs/adr/0328-lane-U-UX-046-060.md, decision 4 (the control test accepts an agent's direct edit for an editor); criterion 6 needs the review pane, which is not built. Lane U-UX-046-060 (round 2, 2026-11-13): criteria 1 and 3 stay open and need a decision that is not made here. The authority's control test (`packages/authority/test/sec-010-assistant-origin.test.ts`, the control case) accepts the agent identity acting for an editor with a direct insert, which criterion 1 forbids. Recorded in docs/adr/0328-lane-U-UX-046-060.md, decision 4. The rejection criterion is a property test in the `perm-suggest` profile once PRM defines it (07 section 17 leaves block-level P4 rules open). Security review required. Round 4 (lane UX-040-052, 2026-11-13): building block only, no criterion ticked. packages/ui/src/assistant/insertion.ts (`assistantInsertion`, `agentCaps`, `assistantReviewLabel`, `assistantOrigin`) and packages/ui/test/ux-046-assistant-insertion.test.ts (4 tests passed, Node.js, with fast-check properties) state that a result is a suggestion for an editor (criterion 1), that no `suggest` refuses it (criterion 4), that the agent holds at most `suggest` and never more than the user (criterion 5, the UX-044 A3 cap as the UI shows it), and the label and origin names (criterion 6). Not built: the commit, the server's check of the agent identity, the authority rejection (criterion 3, the authority package) and the review pane. Criterion 2 (the history of the commit) is not claimed.
+
+### UX-047 Limit the assistant's context to what the user may view
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 13 §6.2 · **Requirements:** R10, R14 · **Depends on:** UX-045
+
+As an author, I want the assistant to see only what I am allowed to view and what is relevant, so that I do not leak parts of the document by asking a question.
+
+**Acceptance criteria**
+
+- [x] Given a request, when context is assembled, then it is the selection, the surrounding blocks and the outline, plus only what the host attaches through the port.
+- [x] Given a scope in which the user has no `view`, when context is assembled, then none of its text is included.
+- [ ] Given a mock port that records its input, when requests are made, then no token, no other user's profile data and no content outside the three named parts or the host's attachments is present.
+- [x] Given a host attaches extra context, when the request is sent, then the attachment is passed through unchanged and marked as supplied by the host.
+
+**Evidence:** Round 7 (lane UX-040-052, 2026-11-13): criteria 1, 2 and 4 ticked on the function-level tests below (`assembleContext` is not yet called by a port, UX-045). Criterion 3 stays open (see Notes). Earlier review (round 3): the criterion 3 test passes sentinels in a cast object to the test's own recording port. packages/ui/src/assistant/context.ts (`assembleContext`); packages/ui/test/assistant-context.test.ts (5 tests passed, Node.js, `pnpm vitest run packages/ui/test/assistant-context.test.ts`, 2026-11-13) show at function level: the request has exactly the selection, surrounding, outline, attachments and omitted count (criterion 1); a fast-check property drops the text of every scope the requester cannot view and counts what was dropped (criterion 2); a mock port records the serialised request, which holds no session token, other profile or unnamed field (criterion 3); an attachment comes through unchanged with `source: 'host'` (criterion 4).
+
+**Notes:** Round 3 (lane ui-2, 2026-11-13): the builder is pure and calls no port, because UX-045 (the assistant pane and its port) is not built. The requester's `view` projection is passed in by the caller; the core must supply it. Changed on 2026-11-06: the owner decided that version 1 can hide regions and field values from some readers (SPK-005; ADR 0019, spike S12 SPK-029). Proofing and assistant ports receive only the requester's projection. Round 7 (lane UX-040-052, 2026-11-13): criteria 1, 2 and 4 ticked at function level. Criterion 3 stays open: it asks for the request a port records, and no port is built (UX-045). The sentinel test shows only that the builder reads named fields.
+
+### UX-048 Prompt-injection controls for the assistant
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 13 §6.2; 10 §3.1; 03 §8 (I4, I9, I11) · **Requirements:** R10, R14 · **Depends on:** UX-045, EXP-035, EXP-042, CDM-029, CDM-038
+
+As an author, I want text in my document to be unable to steer the assistant into acting, so that a hostile comment or field value cannot make the assistant do something I did not ask for.
+
+**Acceptance criteria**
+
+- [x] Given document text, comments or field values are included in a request, when the prompt is assembled, then each is delimited and labelled as data in the structure passed to the port, and a corpus of injection strings shows none of them appears outside a data field.
+- [ ] Given the model output asks for a side effect (inserting text, creating a comment, calling a host action, following a link, loading an image), when it arrives, then nothing happens until the user approves that specific action.
+- [x] Given output contains a link that was not in the source, when it is processed, then the link is blocked and shown as plain text with a notice; a link that was in the source must still pass the allowed schemes (`http`, `https`, `mailto`, in-document).
+- [x] Given output contains an image that was not in the source, when it is processed, then it is not inserted; only assets already attached to the document can be used, and no address or data URI is inserted.
+- [ ] Given output contains LaTeX control sequences or math delimiters, when it is applied, then it is inserted as literal text, creates no node whose attributes feed LaTeX, and the export treats it as ordinary escaped text.
+- [ ] Given the injection corpus, when the suite runs in CI, then no case causes a side effect without approval.
+
+**Evidence:** Round 7 (lane UX-040-052, 2026-11-13): criteria 1, 3 and 4 ticked on the function-level tests below (no port receives the structure yet, UX-045). Criteria 2, 5 and 6 stay open (see Notes). Earlier review (round 3): building blocks only; for criterion 5 the test checks only that the guard returns one text segment, and no insertion or export of that text is exercised). packages/ui/src/assistant/prompt.ts (`buildPrompt`, `PROMPT_INSTRUCTIONS`); packages/ui/src/assistant/output-guard.ts (`guardOutput`); packages/ui/test/assistant-injection.test.ts (10 tests passed, Node.js, `pnpm vitest run packages/ui/test/assistant-injection.test.ts`, 2026-11-13): a seven-string injection corpus is kept in data parts and absent from the instructions and the request (criterion 1, with a fast-check property); a link absent from the source is shown as text with a `link-blocked` notice, a source link with `https` or `mailto` passes, and a source `javascript:` link is blocked (criterion 3, with a property); an unattached image, a data URI and an address are not inserted, and an attached asset is (criterion 4); LaTeX sequences and delimiters come out as one unchanged text segment (criterion 5, with a property). Export side of criterion 5 (fixer, round 3, 2026-11-13): packages/export-latex/src/assistant-text.escape.test.ts (2 tests passed, Node.js, `pnpm vitest run packages/export-latex/src/assistant-text.escape.test.ts`) puts ten LaTeX attack strings, and a fast-check property of 200 mixed strings, into a paragraph's plain text and converts it: the paragraph is the only block, its text runs in main.tex read back to the literal string, every backslash in them is one of the text emitter's escapes, and no command or maths appears. Criterion 5 stays unticked: the insertion of guarded text into the document ("when it is applied") is UX-045 and UX-046, not built.
+
+**Evidence (lane U-UX-046-060, 2026-11-13, criterion 2):** packages/ui/src/assistant/action-queue.ts; packages/ui/test/ux-048-action-queue.test.ts (7 tests passed, Node.js, `pnpm vitest run packages/ui/test/ux-048-action-queue.test.ts`): a proposal runs nothing until its own approval; an approval runs the executor once; a rejected or unknown proposal never runs; a failing executor is reported and not retried; the guarded output for each injection output makes proposals and runs nothing; a fast-check property over mixed proposals, approvals and rejections. The product does not send output to the queue yet (the assistant pane, UX-045, is not built), so the criterion holds for the queue only.
+
+**Evidence (lane V-UX-046-060, round 2, 2026-11-13, criterion 5):** packages/authority/test/ux-046-assistant-commit.test.ts, test 'inserts the strings as plain text nodes that carry only the suggestion mark, nothing LaTeX reads' (passed, Node.js, in-process room): seven LaTeX attack strings arrive as an approved suggestion from a suggester's assistant, are stored and applied, and the paragraph's runs hold the literal string with only the `ins` mark; every child of the paragraph is a text node. The export half is packages/export-latex/src/assistant-text.escape.test.ts (passed in the same run).
+
+**Notes:** Round 2 (lane V-UX-046-060, 2026-11-13): criterion 5 ticked. Criterion 6 stays open: the injection corpus runs in the Node suite (packages/ui/test/assistant-injection.test.ts), but the CI workflow that runs it on every change is in `.github/`, which this lane may not edit (needsFromOthers). Round 3 (lane ui-2, 2026-11-13): criteria 2 and 6 stay open. No action queue exists to hold a side effect until approval (UX-045 and the approval flow are not built), and the corpus runs in the Node suite but covers no side effect yet. The link and image rules are the implementation's reading of 13 section 6.2: a markdown target cannot hold a parenthesis or whitespace; a dropped image leaves no text; a blocked link is shown as "label (target)" (ADR 0136, decision 13). The implementation has not had the security review that this story requires. Security review required. The corpus is maintained with the SEC epic's testing plan (SEC-001). Round 7 (lane UX-040-052, 2026-11-13): criteria 1, 3 and 4 ticked at function level. Criterion 5 stays open for its insertion half: the guarded text is not yet inserted into the document (UX-045, UX-046). Its export half is evidenced, but the criterion asks for both. Audit (2026-11-13): criteria 2 and 5 unticked. Criterion 2: `createActionQueue` is imported by no product code and no output parser produces a side-effect request (the test outputs come back as inert text), so nothing "arrives" at the queue and the evidence itself says it holds for the queue only. Criterion 5: the authority test applies a ReplaceStep built by hand in the test, and no code turns guarded output into steps (UX-046 criterion 1, the insertion as suggestion marks, is still open for the same reason), so "when it is applied" is not exercised; the export half stands. Criteria 1, 3 and 4 stay ticked at function level only: `buildPrompt` and `guardOutput` are called by no product code yet.
+
+## Extension model
+
+### UX-049 Spike: the document API offered to extensions and its versioning
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | 2 | M | must | Maintainer |
+
+**Spec:** 13 §7.1, §13; ADR 0014 (consequences) · **Requirements:** R14 · **Depends on:** none
+
+As a maintainer, I want the extension interface specified before anyone builds on it, so that it is a compatibility promise we can keep. Time box: 1 week.
+
+**Acceptance criteria**
+
+- [x] Given the spec says only "a range-based document API with events", when the spike ends, then a written recommendation lists the operations, the events (blocks added, changed and deleted, selection changes, suggestions and comments) and what each carries.
+- [x] Given a range held across an edit, when the recommendation is written, then it states whether ranges are mapped or stale writes are refused.
+- [x] Given the manifest, when the recommendation is written, then it lists the manifest fields, how an extension declares the API version it needs, the compatibility promise and the deprecation window.
+- [x] Given tier 2 (UX-060), when the recommendation is written, then it states how the same API carries the declared read and write levels, so tier 1 code does not need rewriting.
+- [ ] Given the recommendation is accepted, when it is recorded, then it is an ADR before UX-050 starts.
+
+**Evidence:** `docs/adr/0234-lane-UX-040-052.md`, Part B (proposed, lane UX-040-052, 2026-11-13). Criteria 1 to 4 are the content of that record: B1 (operations and events, with what each carries), B2 (ranges mapped for reads and checked for writes), B3 (manifest fields and the `api` version), B5 (tier 2 uses the same API). Not claimed: criterion 5, since the record is not accepted (B6). No test: a spike, with no code.
+
+**Notes:** Round 1 (lane UX-040-052, 2026-11-13): criteria 1 to 4 ticked on the proposed record. Open for the owner: the origin for extension commits (B1 proposes a new `extension` hint, which changes 04), the deprecation window (B4; no number is set) and acceptance before UX-050 starts. Open issue in 13 section 13.
+
+### UX-050 Register host extensions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Integrating developer |
+
+**Spec:** 13 §7.1, §7.2, §12; 05 §8.1 (`extensions`) · **Requirements:** R14 · **Depends on:** UX-049, UX-003, UX-019, FE-001, FE-004
+
+As an integrating developer, I want to register extensions through the element's `extensions` property, so that I can add features of my own to the editor.
+
+**Acceptance criteria**
+
+- [x] Given an array of extensions (manifest and code) is set before or after the document loads, when it is read, then each manifest is validated and the extension activated; an invalid one is rejected individually with a non-fatal `de-error` that names it, and the others still load.
+- [x] Given an extension needs an API version the editor does not support, when it is activated, then it is not activated and the reason is reported.
+- [x] Given an extension is added or removed from the array at run time, when the array changes, then its contributions appear or disappear without a reload.
+- [ ] Given tier 1, when documentation describes it, then it says the extension runs in the page with the host's trust.
+- [x] Given an extension throws, when the editor handles it, then editing continues and the error is reported through `de-error` with `fatal` false.
+- [ ] Given the reference host ships a sample extension with a command, a panel and a custom block, when its automated test runs, then each contribution works.
+
+**Evidence:** Host logic only, no criterion ticked (review of round 3: `ExtensionHost` is not created anywhere in the package and the element's `extensions` property is not wired, so no extension is ever activated or removed in the editor; UX-049, which must be decided first, is open; no contribution exists to appear or disappear until UX-051). packages/ui/src/extensions/host.ts (`ExtensionHost`, `checkManifest`); packages/ui/test/extension-host.test.ts (14 tests passed, Node.js, `pnpm vitest run packages/ui/test/extension-host.test.ts`, 2026-11-13). A bad manifest, a duplicate identifier and a missing `activate` are each reported non-fatal and the others load (criterion 1, host logic only). An unsupported API version is not activated and is reported (criterion 2). A removed extension's tracked contributions are disposed in reverse order, and a re-set array keeps an extension whose `activate` is unchanged (criterion 3, host logic). A throwing activation is reported, its partial contributions are undone and the others load (activation only).
+
+**Evidence (lane V-UX-046-060, criteria 1, 2, 3 and 5):** packages/element/e2e/ux-050-extensions.spec.ts (2 tests passed in Chromium, Firefox and WebKit, `DOCEDIT_DEMO_PORT=57281 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/ux-050-extensions.spec.ts`, `--trace=off`). The element's `extensions` property is set before connect, and the list is applied at mount and by a later change through `doc-editor.ts`, `editor.ts` and the shell's `setExtensions`. A bad identifier is reported as `extension #2 was not loaded: ...`, an unsupported API version and a throwing activation likewise, each as a `de-error` with `fatal: false`; the valid entry loads, and a throwing entry's partial command is removed (criteria 1, 2, 5). A list emptied after mount removes the contribution and a list set again adds it, without a reload (criterion 3). Shell level: packages/ui/e2e/ux-050-extensions.spec.ts (4 tests passed in Chromium, Firefox and WebKit, `DOCEDIT_UI_PORT=57280 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-050-extensions.spec.ts`), with the harness's `setExtensions` and `extensionReports`; typing after a throwing activation still changes the revision. The element test reads the shell's full-layout group tab, because its `exec` answers from the core's commands, not the shell's registry (not changed here).
+
+**Notes:** Lane V-UX-046-060 (2026-11-13): criteria 1, 2, 3 and 5 ticked on the browser evidence above. The `de-error` code is `internal`, the spec default, because 05 section 5.8 has no extension code (decision recorded in docs/adr/0328-lane-V-UX-046-060.md). Criterion 4 (the documentation) is not written. Criterion 6 is not built: the sample extension needs a custom block (UX-056), which the editor does not create. Round 3 (lane ui-2, 2026-11-13): criteria 2 and 3 were ticked on the host's logic, with contributions given through the `createApi` the caller supplies, and unticked in review; they wait for the ADR of UX-049 (criterion 5) and the wiring of `extensions` into the shell. Criterion 1 stays open: the element's `extensions` property (05 §8.1) is not wired in App.svelte. Criterion 5 stays open: only activation and removal errors are caught, and a throw from a later call is the contribution's (not built). Criterion 4 (documentation) and criterion 6 (the reference host's sample extension) are not built. The supported API versions are a required option (ADR 0136, decision 12). Error isolation for tier 1 is inferred as the minimum for "never sit on the typing path". Round 7 (lane UX-040-052, 2026-11-13): not started and no criterion ticked here. UX-049 criterion 5 (the ADR is recorded before UX-050 starts) is unticked: ADR 0234 Part B is proposed and the owner has not accepted it, so this story is blocked by its dependency. The `extensions` wiring in App.svelte and the sample extension (criterion 6) were not begun for that reason.
+
+### UX-051 Extensions add commands, toolbar groups, context-menu items and shortcuts
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Integrating developer |
+
+**Spec:** 13 §7.1 · **Requirements:** R14 · **Depends on:** UX-050, UX-007, UX-008, UX-013
+
+As an integrating developer, I want my extension to add commands where users expect them, so that its features are used like built-in ones.
+
+**Acceptance criteria**
+
+- [x] Given an extension registers a command, when it is active, then it appears in the registry and therefore in command search, `exec()` and any surface that lists it.
+- [x] Given a toolbar group and context-menu items, when they are registered, then the group appears in the compact and full layouts and the items on their declared targets.
+- [x] Given a shortcut that collides with another binding, when it is registered, then the collision is reported (UX-013).
+- [x] Given an extension command with an `id` already registered, when it is registered, then it is rejected.
+- [x] Given contributed controls, when a keyboard and a screen reader are used, then they are operable and have accessible names from the extension's strings.
+
+**Evidence (lane V-UX-046-060, criterion 5):** packages/ui/e2e/ux-051-extension-controls.spec.ts (2 tests passed in Chromium, Firefox and WebKit, `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-051-extension-controls.spec.ts`, port 57280, one worker, `--trace=off`; WebKit repeated 3 times, 6 of 6 passed). The harness (packages/ui/e2e/harness/main.ts, `tryRegister` now records runs in `commandRuns()`) registers a command in group `ext` with the extension string `ext.insert-note` supplied through `overrides`. Toolbar: the full layout's `ext` tab is chosen with Enter, Tab moves into its panel, the button's accessible name is the extension string, and Enter runs it. Context menu: the item's accessible name is the extension string, and ArrowDown reaches it and Enter runs it. The accessible name is checked through Playwright's accessibility name, not by a screen reader's speech. One WebKit run in the first batch timed out waiting for `window.harness` (a page-load timeout, not an assertion); it passed on the repeat.
+
+**Evidence:** packages/ui/test/extension-commands.test.ts: an extension entry is read by identifier, shown enabled and run through `exec`, and gone after its removal (criterion 1, part); its group appears in the compact row and in the full layout, and its context-menu item only on its declared targets (criterion 2, with `toolbarCommands`, `toolbarGroups` and `contextMenuGroups`); a key a built-in command binds is refused and the error names that command, and a key another extension holds is refused with the first binding kept (criterion 3); a registered identifier, a built-in identifier and an alias of a registered command are rejected (criterion 4). Run of 2026-11-13: `pnpm vitest run packages/ui/test/extension-commands.test.ts` (10 tests passed). Criterion 1 (lane UX-040-052, 2026-11-13): the same file shows the extension entry in the registry and through `exec`; `packages/ui/test/command-search.test.ts` shows extension commands listed with the built-in ones. Those three files with `packages/ui/test/extension-host.test.ts` ran as 36 tests passed.
+
+**Notes:** Round 2 (lane UX-040-052, 2026-11-13): criterion 1 ticked. Command search (UX-011) now exists and lists extension commands (`packages/ui/test/command-search.test.ts`, extension cases), so the round 1 note that criterion 1 was open no longer holds. The evidence line above now covers it. The spec has no rule for namespacing command identifiers; rejection of duplicates is the minimum. Round 1 (lane ui-2, 2026-11-13): criteria 2, 3 and 4 ticked on the registry tests, with the entries registered as an extension would (the manifest path, UX-050, is not built). Criterion 1 stays open: command search (UX-011) is not built, so the test shows `exec` and the registry only. Criterion 5 stays open: an extension's own string table is not built, and the test passes the table the registry checks labels against. The context-menu and toolbar tests use the shell's logic, not the rendered components, and no browser run was made.
+
+### UX-052 Extensions add side panels and status-bar items
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Integrating developer |
+
+**Spec:** 13 §7.1, §7.2 · **Requirements:** R11, R14 · **Depends on:** UX-050, UX-019, UX-018, UX-023
+
+As an integrating developer, I want to add a panel and a status-bar item, so that my feature has a place in the editor.
+
+**Acceptance criteria**
+
+- [x] Given a registered panel, when it is opened, then it appears in the pane host, loads on demand, and is reachable by Ctrl+F6 and by keyboard.
+- [x] Given a status-bar item, when the status bar renders, then the item appears in the documented position with a text alternative.
+- [ ] Given the sample extension's panel, when axe runs in CI, then it reports no violations.
+- [ ] Given the integration guide, when it describes extension panels, then it lists the accessibility requirements they are held to, the same as built-in panels.
+- [ ] Given a panel, when it renders, then it can use the `--de-` properties.
+
+**Evidence:** packages/ui/src/extensions/contributions.ts (`contributePanel`, `StatusItemRegistry`); packages/ui/test/extension-contributions.test.ts. Criterion 5, source check only (Node.js, 2026-11-13): the pane host (`class="de-pane"`) and the status bar (`<StatusBar`) of packages/ui/src/App.svelte sit inside the `.de-shell` root, and packages/ui/src/styles/shell.css declares the internal tokens on `.de-shell`, each read from a public `--de-` property with a default (the test "mounts the pane host and the status bar inside the shell root", "declares the internal tokens on the shell root"). Criterion 1, part: a contributed panel is offered by `PaneRegistry` and its loader runs on the first open only (property and unit tests, same file). Run of 2026-11-13: `pnpm vitest run packages/ui/test/extension-contributions.test.ts` (13 tests passed).
+
+**Evidence (lane U-UX-046-060, 2026-11-13):** packages/ui/e2e/extension-contributions.spec.ts (6 tests passed in Chromium, Firefox and WebKit, `pnpm exec playwright test -c packages/ui/playwright.config.ts extension-contributions.spec.ts`, one worker, a browser run of the shell). The harness (packages/ui/e2e/harness/main.ts, option `extensionContributions`; packages/ui/e2e/harness/ExtensionPane.svelte) registers the panel with `contributePanel` and two status items with `StatusItemRegistry`. Criterion 1: the panel opens through the identifier an extension command uses, its heading and content render, it takes focus, and Ctrl+F6 reaches the `pane` landmark. Criterion 2: a start item precedes the scope and an end item follows the zoom, each with a visually hidden text alternative. The axe run in the first test (the harness panel open) reports no violation. Criterion 3 stays open: that run uses the harness's own panel, not the reference host's sample extension (UX-050 criterion 6, not built).
+
+**Notes:** Round 4 (lane ui-2, 2026-11-13). Criterion 5 is ticked on the source check above; no browser run rendered a panel. Criterion 1 stays open: the pane host's opening, focus and Ctrl+F6 (UX-023) are not exercised by this test, only the registry. Criterion 2 stays open: `StatusItemRegistry` orders the items (start, then end, ADR 0136 decision 15), but the status bar component does not read it yet, so no item renders. Round 2 (lane UX-040-052, 2026-11-13): the status bar now takes the registry (`statusItems`, passed by App.svelte) and renders `start` items at its start edge and `end` items at its end edge, each with its label as a visually hidden text alternative. Source checks in packages/ui/test/extension-status-bar.test.ts (4 tests passed, Node.js, `pnpm vitest run packages/ui/test/extension-status-bar.test.ts`). Criterion 2 stays open: no browser run has rendered an item, so its position and announcement are not checked here. Criterion 3 (axe) and criterion 4 (the integration guide, UX-090) are not built. Decisions recorded in ADR 0136: decision 15 (status-bar positions) and decision 16 (panel identifiers that a built-in pane already has are refused). "Extension panels are held to the same accessibility bar as built-in ones" (13 section 7.2); the editor can guarantee the pane chrome and test its own sample, not third-party content. Audit (2026-11-13): criterion 5 unticked, because its only evidence is a text match on the source of App.svelte and shell.css (offsets of `class="de-pane"` and the token declarations); no test renders a panel and reads a `--de-` property, and the browser run of the harness panel does not check one.
+
+### UX-053 Extensions read and change the document through a range-based API
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Integrating developer |
+
+**Spec:** 13 §7.1, §13; 02 §5.1 · **Requirements:** R14 · **Depends on:** UX-049, UX-050, FE-026
+
+As an integrating developer, I want to read and change document content and be told about changes, so that my extension can respond to what the author does.
+
+**Acceptance criteria**
+
+- [ ] Given an extension subscribes to blocks added, changed and deleted, selection changes, suggestions and comments, when local and remote changes occur (scripted), then each subscribed event is delivered.
+- [ ] Given an extension writes content, when the call runs, then it passes through the same guards as typing: refused in a scope without edit rights, and a suggestion in suggestion mode.
+- [ ] Given an extension asks for the API, when it is used, then no ProseMirror type appears in it.
+- [ ] Given the document changes between an extension reading a range and writing to it, when it writes, then the write lands on the intended content or is refused; it never lands in the wrong place.
+- [ ] Given a hook, when it is delivered, then delivery is asynchronous (UX-054).
+
+**Notes:** Whether ranges are mapped or refused is decided in UX-049.
+
+### UX-054 Extension hooks stay off the typing path
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | S | must | Maintainer |
+
+**Spec:** 13 §7.2, §9 · **Requirements:** R14 · **Depends on:** UX-050, FND-007
+
+As a maintainer, I want extension hooks to be asynchronous and bounded, so that no extension can slow a keystroke.
+
+**Acceptance criteria**
+
+- [ ] Given an extension with a deliberately slow hook, when the harness measures typing, then keystroke-to-paint stays within the targets (16 ms at the median, 50 ms at the 95th percentile).
+- [x] Given a hook, when a transaction occurs, then the hook is called after the transaction's paint and the transaction never waits for it.
+- [x] Given a hook throws or never resolves, when typing continues, then typing is unaffected and the queue of pending hook calls is bounded.
+- [ ] Given the extension API documentation, when it is read, then it states that no hook can veto or alter a keystroke.
+
+**Evidence:** packages/ui/src/extensions/hooks.ts (`HookQueue`, `afterPaint`); packages/ui/test/extension-hooks.test.ts: a notify returns without calling the hook and the hook runs only when the callback given as `later` runs; a throwing hook and a rejected promise are reported and the next events are still delivered; a failing error sink does not stop the queue; a hook that never resolves holds one slot, and the pending queue and the in-flight calls stay within their bounds whatever the hook does (fast-check property with the conservation of every notified event). Run of 2026-11-13: `pnpm vitest run packages/ui/test/extension-hooks.test.ts` (11 tests passed). Fix round 1 (2026-11-13), criterion 3: `connectHooks` (packages/ui/src/extensions/hooks.ts) feeds one bounded queue per hook from `CoreApi.revision`; App.svelte calls it with its new `hooks` property, and the package exports it. packages/ui/test/extension-hooks.test.ts adds two tests (the change only enqueues; a fast-check property with a throwing, a never-resolving and a recording hook keeps every queue within its bounds and accounts for each change). packages/ui/e2e/extensions.spec.ts (UX-054 test) types 43 characters into the shell's editing surface with those three hooks, the revision rising on each input: every keystroke arrives, no hook is called while an input is dispatched, the throwing hook is reported, and each queue stays within its bounds. Runs of 2026-11-13: `pnpm exec vitest run packages/ui/test/extension-hooks.test.ts` (13 passed); `pnpm exec playwright test -c packages/ui/playwright.config.ts extensions.spec.ts` in Chromium, Firefox and WebKit (passed).
+
+**Evidence (lane U-UX-046-060, 2026-11-13, criterion 2):** packages/ui/e2e/hooks-after-paint.spec.ts (3 tests passed in Chromium, Firefox and WebKit, `pnpm exec playwright test -c packages/ui/playwright.config.ts hooks-after-paint.spec.ts`, one worker). The harness (packages/ui/e2e/harness/main.ts) counts animation frames and records, for each input, the frame in which its revision was made, and for each hook call the frame at which it ran. Each of the three inputs gives one call, with `duringInput` false, and every call runs in a later frame than its input. A run with four workers in parallel timed out once in Chromium and WebKit (two of three calls arrived within the first 5 seconds); with a 15-second wait the three runs pass, so the wait is part of the test and the timing is not a measurement. Review (round 1, U3 group 2): the 15-second wait does not fix it. In Chromium 2 of 6 repeated runs (`--repeat-each=6`) ended with 2 calls instead of 3 after the full 15 seconds, so an input is lost, not late (probably two keystrokes in one frame give one revision step, and the test expects exactly 3 calls). The spec is flaky and the evidence is not repeatable; criterion 2 stays ticked on the runs that passed, until the spec is made deterministic. Fix (round 1, U3 group 2, 2026-11-13): the cause is the harness's fake core, which notifies once per frame by default (`notify: 'frame'`), so two keystrokes in one frame are one change and one hook call. The spec now types one key at a time and waits two frames after each, checks that the three characters arrived and the revision rose by 3, waits (default timeout, no 15-second wait) for the hook call carrying the last revision, and then checks every call that came: between 1 and 3 calls, each with `duringInput` false and a frame later than its input's, one per revision in order. It no longer expects exactly 3 calls. Two runs of `pnpm exec playwright test -c packages/ui/playwright.config.ts hooks-after-paint.spec.ts --repeat-each=10 --workers=1 --retries=0 --trace=off` in Chromium, Firefox and WebKit: 30 of 30 passed each time (60 runs, 20 per browser); a third run of the same command with traces on and a private output folder also passed 30 of 30. A first run with traces on and the shared `test-results` folder reported 4 flaky runs, one of them a trace file missing from that folder (`ENOENT`); the other three failure messages were not kept, so that run is not counted either way.
+
+**Notes:** Bounding the queue is inferred. Fix round 1 (2026-11-13): criterion 3 re-ticked on the wired path above. The element does not pass `hooks` yet: it keeps its `extensions` property for PRO-082, which registers them. The harness's bounds (8 and 2) are test values, not product values. Review, round 1 (2026-11-13): criterion 3 unticked. `HookQueue` is imported by its own test only: it is not exported from the package and no transaction notifies it, so no hook is delivered in the product; the queue tests are evidence for it once it is wired. Round 1 (lane ui-2, 2026-11-13): criterion 3 was ticked on the queue tests. Criterion 2 stays open: the no-wait part is tested, but that the hook runs after the paint depends on the browser scheduler (`afterPaint`), which no browser run has checked. Criterion 1 is the keystroke measurement of the harness (not built) and criterion 4 needs the extension API documentation (not written). The bounds `capacity` and `maxInFlight` have no value in the spec: they are required options that the caller sets (ADR 0136, proposed).
+
+### UX-055 Client import and export filters from extensions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | could | Integrating developer |
+
+**Spec:** 13 §7.1 · **Requirements:** R14 · **Depends on:** UX-050, UX-040
+
+As an integrating developer, I want to add a file format to the import and export choices in the browser, so that my users can bring content in and out in a format of mine.
+
+**Acceptance criteria**
+
+- [ ] Given an import filter, when the user imports a file of its type, then the filter produces a CDM fragment that is inserted through the same guards as typing.
+- [x] Given an export filter, when the user chooses it, then it receives the content and produces a file in the browser.
+- [ ] Given a filter, when the import or export choices are listed, then it appears with its label.
+- [x] Given `no-export`, when the user chooses an export filter, then it is disabled (UX-040).
+- [ ] Given a filter fails, when it throws, then the error is reported and the document is unchanged.
+
+**Evidence:** packages/ui/src/extensions/filters.ts (`FilterRegistry`, `toBlob`); packages/ui/test/extension-filters.test.ts: choices of each kind listed with their labels in registration order (property); under `no-export` the export choices are disabled with the reason and `runExport` does not run the filter (property); an export filter receives the content it was given and its bytes come with the file name and MIME type, wrapped as a Blob; a throwing export or import is reported with its error, the content is frozen and unchanged, and nothing is inserted; registration refuses a duplicate, a bad identifier, an empty label, a missing MIME type or extension. Run of 2026-11-13: `pnpm vitest run packages/ui/test/extension-filters.test.ts` (13 tests passed). Fix round 1 (2026-11-13), criteria 2 and 4: the export dialog (packages/ui/src/components/ExportDialog.svelte) lists the export filters of App.svelte's new `filters` property after the announced targets, each with its label, when the core offers the new `CoreApi.getContent`; under `no-export` (`AccessObject.restrictions`) they are disabled and described by "Your access does not allow export."; a chosen filter receives a copy of the content and its file is offered as a link to save. packages/ui/e2e/extensions.spec.ts (UX-055 tests): the filter receives the document, the link saves `document.md` with the filter's bytes (Playwright download), and no server job is requested (criterion 2); under `no-export`, from the start or arriving while the dialog is open, the filters are disabled with the reason, the Export button is disabled and no filter runs (criterion 4); a filter that throws after changing what it received is reported in an alert and announced, and the core's document is unchanged (criterion 5, export half); axe finds no violation. Run of 2026-11-13: `pnpm exec playwright test -c packages/ui/playwright.config.ts extensions.spec.ts` in Chromium, Firefox and WebKit (passed).
+
+**Notes:** How client filters relate to the server's import and export jobs (09 section 9) is not specified; resolve it in UX-049. Fix round 1 (2026-11-13): criteria 2 and 4 re-ticked on the dialog above. Criteria 3 and 5 stay open: export filters are listed and their failures reported, but no import surface exists, so an import filter is listed nowhere and cannot fail in the product. The Export command keeps its `exports` feature, so a deployment without server exports has no entry point to the client filters yet. The element passes no `filters` and no `getContent` yet (PRO-082 registers extensions; the engine already has `getContent()`). The filter receives a structured clone of the content, so a filter cannot change the core's document (decided here). Review, round 1 (2026-11-13): criteria 2 to 5 unticked. `FilterRegistry` is imported by its own test only (not exported from the package, no import or export choice list, no save control), so nothing in the product lists, disables or runs a filter; the tests remain evidence for the logic. Round 1 (lane ui-2, 2026-11-13): criteria 2 to 5 were ticked on the registry's logic. These are the logic the product's choice list and file save will call; the list, the disabled choice and the save control are not built and were not run in a browser. Criterion 4 reads the restriction from the list the caller passes (`AccessObject.restrictions`); UX-040 is not built. Criterion 1 stays open: the fragment is passed to the caller's `insert`, and its insertion through the guards of typing is the core's. Labels of filters are the filter's own text, not string keys (ADR 0136, proposed).
+
+### UX-056 Custom blocks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 13 §7.3, §12; 03 §4 (`extension_block`), §8 (I12), §11.1 · **Requirements:** R14 · **Depends on:** UX-050, CDM-032, CDM-047, SYN-011, EXP-035, EXP-042
+
+As an author, I want to insert a block that an extension provides, so that my document can hold content the core does not know.
+
+**Acceptance criteria**
+
+- [ ] Given a registered extension offers a block type, when the author inserts it, then an `extension_block` is created with an `id`, the extension identifier, a JSON payload and a fallback (`fallbackAsset` or `fallbackText`); a block with neither fallback is refused before it is sent.
+- [ ] Given a payload larger than 16 KiB, when it is inserted, then the editor refuses it before sending, and the authority rejects one that is sent.
+- [x] Given a commit with a malformed extension envelope, when the authority checks it, then it is rejected under I12; the authority validates the envelope and not the payload.
+- [ ] Given the document's `requires` does not yet list `extensions`, when the first block is inserted, then the commit adds it; given a connected client has not announced the feature, then the commit is refused with `unsupported_feature` and the author is told why.
+- [ ] Given the author edits the block through the extension's own interface, when the change is saved, then it is an ordinary commit subject to the permissions of the scope and it appears in history.
+- [ ] Given a block, when the author selects, moves, comments on or deletes it, then it behaves as an atom: it can be targeted by block comments and has an accessible name.
+- [ ] Given the document is exported, when the writers run, then the fallback is rendered (EXP-035, EXP-042).
+
+**Evidence:** packages/ui/test/extension-custom-nodes.test.ts, "measures the UTF-8 JSON text and accepts exactly up to the limit" and "counts multi-byte characters by their UTF-8 length" (criterion 2, editor part, not met: `checkBlockInsert` in packages/ui/src/extensions/custom-nodes.ts refuses a payload over 16 KiB, but nothing in the product calls it and no insertion path exists; reviewer, round 1: criterion 2 unticked until insertion is built, the authority half is covered by packages/authority/test/room-scenarios.test.ts "I12 (an extension payload over 16 KiB)" and the model test below). packages/model/src/validate/blocks.test.ts, "passes a payload of 16 KiB and reports a larger one as I12" (a 16385-byte payload is reported as `extension_envelope` under I12, the authority's half, through `validateDoc`), and "checks the envelope as I12 and never interprets the payload" (criterion 3: a malformed extension name is `extension_envelope` under I12, and an opaque payload within the limit passes). packages/authority/src/invariants.ts runs `validateDoc` on every commit result (the wiring that makes the authority reject). Run of 2026-11-13: `pnpm vitest run` on packages/ui/test/extension-custom-nodes.test.ts and packages/model/src/validate/blocks.test.ts (passed, lane UX-053-065). The authority's rejection of a sent commit is not run end to end here (no authority test was run).
+
+**Evidence (lane U-UX-046-060, 2026-11-13, criterion 4, accept half only):** packages/authority/test/ux-056-extension-requires.test.ts (2 tests passed, Node.js, `pnpm vitest run packages/authority/test/ux-056-extension-requires.test.ts`): the first extension block adds `extensions` to `requires`, and the commit carries it, when every connected client announced the feature; a client without it gets a `conflict` refusal with action `drop`, and `requires` does not grow. Criterion 4 stays open: the story asks for `unsupported_feature` and the room answers `conflict` (docs/adr/0328-lane-U-UX-046-060.md, decision 2).
+
+**Notes:** The 16 KiB limit is in 03 section 4. Phase 2 by 13 section 12. Lane UX-053-065, round 1: criterion 3 ticked on the evidence above (criterion 2 was ticked and then unticked by the reviewer: the editor check is not wired to any insertion); criterion 1 stays open because the core does not create the `extension_block` yet, and criterion 4 (the `requires` commit and `unsupported_feature`), criterion 5 (edit through the extension's own interface) and criterion 6 (atom behaviour, block comments, accessible name) need the core, the shell and the host, none of which is built. Round 2 (lane ui-2, 2026-11-13): `checkBlockInsert` in packages/ui/src/extensions/custom-nodes.ts refuses a block with no fallback, and a payload over 16 KiB, before it is sent; tests in packages/ui/test/extension-custom-nodes.test.ts. No criterion is ticked: each also needs the core to create the `extension_block`, the authority's I12 check, the `requires` commit, the atom behaviour or the export, none of which is in packages/ui. The size is the UTF-8 length of the JSON text, not the canonical form (ADR 0136).
+
+### UX-057 Custom inline content
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Author |
+
+**Spec:** 13 §7.3; 03 §5 (`extension_inline`) · **Requirements:** R14 · **Depends on:** UX-056
+
+As an author, I want inline content that an extension provides, so that I can place small custom items in a line of text.
+
+**Acceptance criteria**
+
+- [ ] Given a registered extension offers inline content, when the author inserts it, then an `extension_inline` is created with the extension identifier, a JSON payload and mandatory `fallbackText`; one without `fallbackText` is refused.
+- [ ] Given the node is an atom, when the caret moves or text is deleted around it, then it is stepped over and removed as one unit.
+- [ ] Given the extension is not registered, when the document opens, then the fallback text is shown (UX-058).
+- [ ] Given the document is exported, when the writers run, then the fallback text is rendered.
+
+**Notes:** 13 section 7.3 says the payload is "within a size limit"; 03 gives 16 KiB only for the block. The inline limit is unspecified (open questions). Round 2 (lane ui-2, 2026-11-13): `checkInlineInsert` refuses inline content without fallback text and applies no size limit (ADR 0136); tests in packages/ui/test/extension-custom-nodes.test.ts. No criterion is ticked: criterion 1 needs the core to create the node, and criteria 2 to 4 belong to the core, the shell's fallback view and the writers.
+
+### UX-058 Fallback when the extension is missing
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Viewer |
+
+**Spec:** 13 §7.3; 03 §10 · **Requirements:** R14 · **Depends on:** UX-056
+
+As a reader, I want to see the fallback of a custom block or inline item when the extension is not available to me, so that the document is readable everywhere.
+
+**Acceptance criteria**
+
+- [ ] Given a document with an extension node whose extension is not registered in this host or at this version, when it opens, then the fallback (image asset or text) is shown with a notice that the content comes from an unavailable extension, and the document stays editable around it.
+- [x] Given the extension is not available, when the author edits elsewhere and saves, then the node's payload is preserved unchanged.
+- [ ] Given an export, when the writers run, then the fallback appears and the raw payload never does.
+- [ ] Given a fallback image, when assistive technology reads it, then it has alternative text, and the accessibility checker flags it if it has none (UX-066).
+- [ ] Given a screen reader, when the fallback text is reached, then it is read as ordinary text.
+
+**Evidence (lane U-UX-046-060, 2026-11-13, criterion 2):** packages/authority/test/ux-058-extension-payload.test.ts (1 test passed, Node.js, `pnpm vitest run packages/authority/test/ux-058-extension-payload.test.ts`): an editor's commit to another paragraph is accepted, the edit lands where it was made, and the extension block keeps its payload, extension and fallback text. The reader's view of a node that is not registered is `resolveExtensionNode` (packages/ui/src/extensions/custom-nodes.ts, read only). No browser save was run; availability is decided by the client.
+
+**Notes:** This keeps the CDM rule that a construct exists only if every writer can express it (03 section 10). Round 2 (lane ui-2, 2026-11-13): `resolveExtensionNode` in packages/ui/src/extensions/custom-nodes.ts gives the fallback view (asset or text, no payload) for an extension outside the available set, and reads the node without changing it (tests in packages/ui/test/extension-custom-nodes.test.ts). No criterion is ticked: criterion 1 needs the rendered notice and an editable document (not built, no browser run); criterion 2 needs the save path; criterion 3 is the writers'; criterion 4 needs the accessibility checker (UX-066); criterion 5 is the component's. A node has no version attribute in 03, so availability is by identifier only (ADR 0136).
+
+### UX-059 Decision: build sandboxed third-party extensions?
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 4 | S | could | Maintainer |
+
+**Spec:** 13 §7.2, §13; ADR 0014 (revisit when); 11 §7 · **Requirements:** R14 · **Depends on:** UX-050
+
+As a maintainer, I want to decide whether tier 2 is worth its cost, so that it is built only when someone will use it. Time box: 2 days, with the owner.
+
+**Acceptance criteria**
+
+- [ ] Given 13 section 13 asks whether sandboxed extensions are worth their cost before there is an ecosystem, when the decision is taken, then it records the evidence: named partners or authors, tier 1 usage, and the security review cost.
+- [ ] Given the decision is "no", when it is recorded, then UX-060 is removed and the parity profile (UX-001) is updated.
+- [ ] Given the decision is "yes", when it is recorded, then it sets the first set of read and write levels for UX-060.
+
+**Notes:** 11 section 7 lists sandboxed extensions in phase 4; 13 section 13 questions them. UX-060 is therefore `cond`. Lane UX-053-065, round 2: no decision is recorded. The evidence the criteria ask for is not in the repository (no named partner or author, no tier 1 usage data, no security review cost); see docs/adr/0235-lane-UX-053-065.md, decision 1 (proposed; spec default: tier 2 not built).
+
+### UX-060 Run extensions in a sandboxed iframe
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | cond | L | could | Integrating developer |
+
+**Spec:** 13 §7.2; 10 §3.8 · **Requirements:** R10, R14 · **Depends on:** UX-059, UX-050, UX-053
+
+As an integrating developer, I want third-party extensions to run in a sandbox with declared access, so that I can install add-ins I do not fully trust.
+
+**Acceptance criteria**
+
+- [ ] Given a third-party extension, when it is installed, then its code runs in a sandboxed iframe with no access to the host page's DOM, the editor's shadow root, tokens or storage, and it talks to the editor only by message passing.
+- [ ] Given an extension declares read and write levels, when it calls beyond them, then the call is refused and logged.
+- [ ] Given a message from an unexpected source or one that does not match the message schema, when it arrives, then it is ignored.
+- [ ] Given a write from a sandboxed extension, when it is applied, then it passes through the same guards as typing, as the current user.
+- [ ] Given an extension panel in an iframe, when the keyboard is used, then focus moves in and out correctly and Ctrl+F6 reaches it (UX-023).
+- [ ] Given the release, when the feature ships, then a security review of the sandbox has been completed and the supply-chain exception is documented.
+
+**Notes:** `cond`: only if UX-059 says yes. The levels are "declared" in the spec but not defined.
+
+## Theming, localisation and accessibility
+
+### UX-061 Light and dark themes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2, §8, §12; 05 §8.1 (`theme`) · **Requirements:** R11, R14 · **Depends on:** UX-014, FE-018
+
+As an author, I want a light and a dark theme, so that I can work comfortably in either.
+
+**Acceptance criteria**
+
+- [x] Given `theme="light"`, `"dark"` or `"auto"`, when the editor loads, then the matching built-in theme is used; `auto` follows the browser's preference and changes when the preference changes.
+- [ ] Given the dark theme, when the option to include the page canvas is on, then the page canvas is dark too; when it is off, the page stays light. In neither case do the document's authored colours change in the stored document or in exports.
+- [x] Given each theme, when contrast is checked on the text and control tokens, then they meet WCAG 2.2 level AA.
+- [x] Given the theme is changed at run time, when it switches, then the document is not reloaded and the selection is kept.
+- [x] Given a host overrides `--de-` properties, when a built-in theme is active, then the overrides apply on top of it.
+- [x] Given the page loads, when the first paint happens, then it uses the resolved theme.
+
+**Evidence (lane V-UX-061-075, 2026-11-14, criterion 2 in part, not ticked):** packages/ui/e2e/ux-061-canvas-document.spec.ts (Chromium, Firefox and WebKit, `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-061-canvas-document`, 3 passed, port 57290): switching to dark with `pageTheme: 'follow'` and back to `pageTheme: 'light'` at run time leaves the harness's document content, its revision and the list of core calls unchanged, and the canvas follows the setting. Not shown: authored colours (the fake core's document holds no coloured runs) and exports (no shell export reads the theme), so the criterion stays unticked.
+
+**Evidence:** packages/ui/test/theme-host-overrides.test.ts (criterion 5, source check of packages/ui/src/styles/shell.css, Node.js, run of 2026-11-13 with theme.test.ts: 16 tests passed; every token of the base rule and of each theme rule (dark, dark with the page canvas following, high-contrast) reads the public `--de-` property of the same name as its `var()` fallback, so a host value wins in every built-in theme). The check reads the stylesheet's text and renders nothing; the cascade is not run in a browser.
+
+**Evidence:** packages/ui/test/theme.test.ts (criterion 3: the text and control token pairs read from packages/ui/src/styles/shell.css for the light, dark, dark with the page canvas following, and high-contrast themes, at 4.5 to 1 for text and 3 to 1 for boundaries and focus indicators; avatar initials at 4.5 to 1; criterion 1, functions only: the setting values, the resolution of `auto` and the change of the colour-scheme preference). Run of 2026-11-13, Node.js only. Lane UX-053-065, round 2: packages/ui/test/theme-wiring.test.ts is a source check of packages/ui/src/App.svelte: the preference is read (`watchColourScheme`) before the state that holds it, `data-theme={theme}` is derived from `resolveTheme(mode.theme, prefersDark)` on the `.de-shell` root, and the watcher is stopped with `onDestroy` (4 tests passed, 2026-11-13). It supports criteria 1 and 6; it does not render the shell.
+
+**Evidence:** packages/ui/e2e/ux-061-themes.spec.ts (lane U-UX-061-075, criteria 1 and 4 and the shell side of 2; browser run with `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-061-themes`: Firefox 12 of 12 and, in a second run without retries, Chromium and WebKit 12 of 12 each, all on Windows 11). Criterion 1: `light`, `dark` and `auto` set `data-theme` and the shell's computed background (#ffffff, #16191d); `auto` takes the browser's `prefers-color-scheme` at load and follows a change of it on the same document. Criterion 4: a run-time change to `dark` keeps a marker set on the window (no reload) and the selection summary the core holds. Criterion 2, shell side: the page stays light in the dark theme and follows it (#1b1f24) only with `pageTheme: 'follow'`. The stored document and exports are not checked, so criterion 2 stays open.
+
+**Evidence (lane V-UX-061-075, criterion 6):** packages/ui/e2e/ux-061-first-paint.spec.ts (light and dark: the harness's `mount` is called in one synchronous page call, and the shell's `data-theme` and computed background are read in that same call, before any frame; Chromium, Firefox and WebKit, 6 of 6 passed, run with `DOCEDIT_UI_PORT=57293 DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm exec playwright test -c packages/ui/playwright.config.ts ux-061-first-paint --workers=1`). Scope: the shell's own mount. The host page's background before the element script runs is the host's, and is not claimed.
+
+**Notes:** Dark mode is phase 1b by 13 section 12. The mechanism of tokens and parts is FE's. Packet U (2026-11-13): criterion 3 ticked on the defaults the stylesheet ships; a host's own `--de-` values are not checked. Criterion 1 stays open: its functions are tested, but the binding of `data-theme` at load and the browser's own preference are not, and need the browser run (not run here). Criterion 4 (run-time switch without a reload) and criterion 2 (the canvas and the document's colours in exports) are not claimed. Lane UX-053-065, round 2: criteria 1 and 6 stay unticked. The wiring they need is in App.svelte (see Evidence), but the rendered first paint and the browser's own preference are not run. Lane ui-3, round 5 (2026-11-13): criterion 5 (the host override on top of a built-in theme) ticked on the source check in packages/ui/test/theme-host-overrides.test.ts (see its Evidence line); the cascade is read from the stylesheet's text, not rendered. Criteria 1, 2, 4 and 6 stay open as above: the canvas and export colours, the run-time switch without a reload, the selection and the first paint are not exercised. Lane U-UX-061-075 (2026-11-13): criteria 1 and 4 are ticked on the browser run named in the Evidence line above. Criterion 2 stays open (stored document and exports not checked) and criterion 6 stays open (the first paint is not observable in the harness, which mounts synchronously).
+
+### UX-062 High-contrast theme and forced-colours behaviour of the shell
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2, §8; 02 §3; PRODUCT (Accessibility) · **Requirements:** R11 · **Depends on:** UX-061, FE-019
+
+As an author with low vision, I want a high-contrast theme and sensible behaviour of the interface under forced colours, so that I can see and operate the toolbar, panes and dialogs.
+
+**Acceptance criteria**
+
+- [x] Given `forced-colors: active`, when the editor renders, then the interface uses system colours and its focus indicators are distinguishable using system colours.
+- [x] Given the high-contrast theme, when contrast is measured on the tokens, then each pair is higher than in the light and dark themes and at least WCAG 2.2 AA.
+- [ ] Given meaning carried by colour in the shell (presence in the header, suggestion kinds in the review pane, roles), when forced colours or the high-contrast theme is active, then a non-colour cue remains.
+- [x] Given Playwright with forced colours emulated in the browsers that support it, when the shell is exercised, then no text is unreadable and no control disappears.
+
+**Evidence:** packages/ui/test/theme.test.ts, "gives every pair a higher ratio in the high-contrast theme than in light and dark (UX-062, criterion 2)": the eleven text and control pairs of the theme, read from `packages/ui/src/styles/shell.css`, give a higher WCAG contrast ratio in the high-contrast theme than in the light and the dark theme (Node.js, 2026-11-13; the file's 12 tests pass). Criterion 1, source check only (Node.js, 2026-11-13): packages/ui/test/forced-colors.test.ts reads the `@media (forced-colors: active)` block of packages/ui/src/styles/shell.css and checks that it holds no hex, rgb() or hsl() value, that every colour declaration in it names a CSS system colour, and that `.de-shell :focus-visible` draws a solid outline of 3 px in `Highlight`. Run of 2026-11-13: `pnpm vitest run packages/ui/test/forced-colors.test.ts packages/ui/test/theme.test.ts` (17 tests passed). Criteria 3 and 4 are not claimed: the non-colour cues in the header, the review pane and the roles, and the emulated forced-colours run are not checked here.
+
+**Evidence:** packages/ui/e2e/ux-062-forced-colors.spec.ts (lane U-UX-061-075, criterion 4; browser run with `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-062-forced-colors`, `forced-colors: active` emulated by Playwright on the full toolbar). Chromium, Firefox and WebKit: the emulation is active; every control visible before is visible under forced colours, with the same names and none of zero size; every visible text run outside the document page has a contrast of at least 4.5 to 1 against the first opaque background above it (labels of disabled controls are not measured, WCAG 2.2 1.4.3); the focused control, after Tab from the editing surface, has `:focus-visible` and an outline of at least 1 px that is not `none`. Each browser passed all four tests in the final runs (Chromium and WebKit with no retries; Firefox earlier in the same lane, 4 of 4). Criteria 1 and 2 are not changed by this run.
+
+**Notes:** Phase inferred (1b): the spec lists a high-contrast theme as built in but places only dark mode; accessibility is a release criterion from the first usable release (UX-069). The text, caret and selection in the editing surface, including collaborators' carets and selections, are FE-019's. Lane ui-3, round 5 (2026-11-13): criterion 3 stays open. The presence cues are text (`presence.person.idle` reads "idle" in Presence.svelte, and avatars show initials) and the role names are text (`role.*` in PermissionsPane.svelte), but packages/ui has no review pane, so the suggestion kinds named in the criterion have no surface to check; that part needs the review pane (a later story) before the criterion can be ticked.
+
+### UX-063 Replace icons and strings
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Integrating developer |
+
+**Spec:** 13 §8; PRODUCT (White-label) · **Requirements:** R2, R14 · **Depends on:** UX-064, UX-003
+
+As an integrating developer, I want to replace the editor's icons and strings, so that it fits my product and my words.
+
+**Acceptance criteria**
+
+- [ ] Given the host supplies an icon set keyed by command icon names, when the toolbar and menus render, then the replacements appear, and a missing icon falls back to the built-in one without a broken glyph.
+- [x] Given the host overrides strings by key, when they are shown, then the overrides appear, a missing key falls back, and an unknown key is reported in development.
+- [ ] Given a replaced icon, when assistive technology reads the control, then the accessible name still comes from the label, not from the icon.
+- [x] Given a host string, when it is rendered, then it is rendered as text and never as markup.
+
+**Evidence:** packages/ui/test/strings.test.ts, "ignore values that are not messages, and keep markup as plain text": a host string `<b>Saved</b>` comes back from the catalogue as the plain string, unchanged, and a non-message value is ignored. The i18n module (packages/ui/src/i18n/strings.ts) returns plain strings only, and no `{@html}` appears in packages/ui/src (searched 2026-11-13). Run of 2026-11-13: `pnpm vitest run packages/ui/test/strings.test.ts` (passed, with the other two files of lane UX-053-065). Criterion 4 is claimed at the catalogue level; the shell's text binding of a host string is not exercised in a browser.
+
+**Evidence:** packages/ui/e2e/string-overrides.spec.ts (criterion 2, shell side, lane ui-3, round 6, 2026-11-13: the harness passes `overrides` to the string catalogue and collects `onUnknown` keys (`e2e/harness/main.ts`); the override `toolbar.label` shows as the toolbar's aria-label, the shell with and without it differs only in that text, an unknown key is reported and the shell still renders, and an override containing markup renders as text with no `<b>` element; 4 tests, passed in Chromium, Firefox and WebKit with `pnpm exec playwright test -c packages/ui/playwright.config.ts string-overrides`, 12 passed, 2026-11-13). Criterion 2 is not ticked: the element has no property that passes host overrides (05 section 8.1, the same gap as UX-064 criterion 3), so a host of `<doc-editor>` cannot reach this path.
+
+**Evidence:** packages/element/e2e/ux-064-strings.spec.ts (criterion 2, lane U-UX-061-075, 2026-11-13: the element's `strings` property reaches the shell; the override `toolbar.label` shows as the toolbar's name, a key the host omits keeps its source text, and the unknown key `no.such.key` is reported as a console warning while the editor still mounts; 5 tests, passed in Chromium, Firefox and WebKit, as for UX-064).
+
+**Notes:** Phase inferred (2). The token and parts mechanism is FE's (02 section 3). Lane U-UX-061-075 (2026-11-13): criterion 2 is ticked on the element's property and the shell's catalogue. Decision, for the owner to confirm (ADR 0329, decision 4): an unknown key is reported as a console warning in every build, because the product has no development-only build flag for the element; "in development" is read as "reported to the developer", and a development-only gate is not added. Criteria 1 and 3 stay open: no icon set exists to replace (see the earlier note). Lane UX-053-065, round 1: criteria 1 to 3 stay open. Criterion 1: no icon set exists (commands carry an `icon` name, commands/types.ts, but the toolbar shows labels only in phase 1a), so no replacement can appear. Criterion 2: the catalogue applies host overrides by key, falls back to the source table and reports unknown keys through `onUnknown` (strings.test.ts, "replace strings by key, fall back for the rest and report unknown keys"), but the element has no property that passes overrides (05 §8.1 gap, the same as UX-064 criterion 3), and nothing sets the development-only reporting. Criterion 3: no icon is replaced, so the accessible name from the label is not tested. Lane ui-3, round 6 (2026-11-13): criterion 2 has its shell-side browser evidence (see the Evidence line naming `string-overrides.spec.ts`); it stays unticked because the element still passes no overrides and no development-mode reporting is wired in the product. Criterion 1 stays open: no icon set is rendered (the toolbar shows labels only, and no icon name is drawn), so there is no replacement to see.
+
+### UX-064 Externalised strings, locale attribute and logical layout
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 13 §8; 02 §11; 05 §8.1 (`locale`); PRODUCT.md (localisation); README definition of done · **Requirements:** R2, R11, R14 · **Depends on:** FND-002, FND-004, FE-003, FE-018
+
+As a maintainer, I want every interface string external and the layout direction-neutral from the start, so that translation and right-to-left need no rework and the editor can be re-worded without code changes.
+
+**Acceptance criteria**
+
+- [x] Given the components, when CI runs, then it fails if a user-visible literal string (text node, `aria-label`, `title` or `placeholder`) appears in a component instead of a string key.
+- [x] Given `locale` is a BCP 47 tag, when the editor loads, then the best matching string table is loaded lazily, with a fallback to its base language and then to the default language, and missing keys are listed in a report (once, in development).
+- [x] Given a host supplies replacement strings, when the editor renders, then they take effect through the mechanism that UX-063 defines.
+- [x] Given a pseudo-locale with longer, accented strings, when the shell is exercised, then every visible string is transformed (none is hard-coded) and no text is truncated, clipped or overlapping in the toolbar, panes and status bar.
+- [x] Given dates, numbers and messages with counts, when they are shown, then they use the locale's formats and plural rules through `Intl`.
+- [x] Given component styles, when CI runs, then it fails on physical-direction properties (such as `left`, `right`, `margin-left`, `padding-right`, `border-right` and `text-align: left`) unless the exception is listed.
+- [x] Given a pseudo-right-to-left run, when a visual regression is compared, then no control overlaps, clips or keeps its left-to-right position by accident, and a document with left-to-right content keeps the direction that its `dir` setting gives and is not mirrored.
+- [x] Given the initial bundle, when it is measured, then only the base string table is in it (UX-070).
+
+**Evidence:** packages/ui/src/i18n/strings.ts, en-GB.ts, pseudo.ts; packages/ui/test/source-checks.test.ts (CI fails on literal text nodes and literal aria-label, title, placeholder and alt in components, and on physical-direction CSS, each check also proven on a failing sample); packages/ui/test/strings.test.ts (exact tag, language and script, language, default; lazy loaders called once; missing keys reported once per locale; plural rules and number and date formats through Intl); packages/ui/e2e/strings.spec.ts in Chromium, Firefox and WebKit (every visible string and accessible name transformed by en-XA, nothing clipped, outside or overlapping in toolbar, header, pane and status bar; the pseudo-locale chunk requested only when chosen).
+
+**Evidence:** packages/element/e2e/ux-064-strings.spec.ts (criterion 3, lane U-UX-061-075, 2026-11-13: the element's `strings` property passes host replacements by key to the shell's catalogue; an override shows as the toolbar's name, a key the host omits falls back, an unknown key is reported to the console and the editor still mounts, markup stays text, and a change after mount takes effect without a remount; 5 tests, passed in Chromium, Firefox and WebKit, run against `packages/element/demo/serve.ts` with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/ux-064-strings.spec.ts`).
+
+**Evidence (lane V-UX-061-075, 2026-11-13):** criterion 7 is ticked on packages/ui/e2e/ux-064-rtl-visual.spec.ts (Chromium, `DOCEDIT_UI_PORT=57290 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-064-rtl-visual --project=chromium`: 1 passed on the compare run; the baselines `ux-064-rtl-visual.spec.ts-snapshots/ux-064-ar-XB-{toolbar,status}-chromium-win32.png` were recorded on this machine with `--update-snapshots`, and the toolbar baseline shows the mirrored bar). The overlap, clipping and placement checks it sits beside are in packages/ui/e2e/strings.spec.ts (criterion 7) and packages/ui/e2e/page-direction.spec.ts (the document keeps its direction). The baselines hold for Windows 11 with Chromium only; Firefox and WebKit have no baselines yet. **Fixer, V3 group 3 round 4 (2026-11-14):** Firefox and WebKit win32 baselines now exist (written on this machine by the reviewer's run; inspected, both show the bar mirrored with Undo at the right). The spec now checks in the same run that the captured toolbar is mirrored, skips with a stated reason on any browser or platform without a stored baseline (so a Linux or macOS run skips rather than fails; record there with `--update-snapshots`), and discards only the `style-src-elem` report of `body {}` that Playwright's WebKit screenshotter causes itself (playwright-core 1.65, `inPagePrepareForScreenshots`). Run: `DOCEDIT_UI_PORT=57040 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-064-rtl-visual --retries=0 --repeat-each=2`, all three default projects, 6 passed. Criterion 8 is ticked on two measurements, both Chromium, 1 passed each, and both read every script requested at start in full, look for the base table's message `Bold` (present) and for the pseudo-locale characters U+1E7C, U+1E7D and U+202E, literal or escaped (absent), and take a positive control from the `en-XA` chunk (present): packages/ui/e2e/ux-064-initial-bundle.spec.ts (the shell harness build, `DOCEDIT_UI_PORT=57290`) and packages/element/e2e/ux-064-initial-bundle.spec.ts (the library build `/lib/doc-editor.js` and its chunks, loaded by `pages/lib.html` and mounted with the in-memory backend, `DOCEDIT_DEMO_PORT=57291`, through `pnpm exec playwright test -c packages/element/playwright.config.ts`). The check shows no pseudo-locale table at start; it does not measure bytes against the UX-070 chunk budget (FND-008).
+
+**Notes:** Which locales ship is not specified (Open questions). 05 §8.1 lists no property for a host to supply a string catalogue, although 13 §8 promises replaceable strings (Open questions). Mirroring the interface for right-to-left locales is UX-065; editing right-to-left content is FE-111. This story absorbed FE-109 and FE-110 during the cross-check. Built on 2026-11-06 (ADR 0041, section 6): British English source table, pseudo-locales `en-XA` and `ar-XB`; which real locales ship stays the owner's question. Criterion 3: the catalogue takes replacements by key (packages/ui/test/strings.test.ts). Lane U-UX-061-075 (2026-11-13) added the element's `strings` property, which passes them to the shell's catalogue (packages/element/src/doc-editor.ts, editor.ts), and ticked the criterion on packages/element/e2e/ux-064-strings.spec.ts; the 05 §8.1 gap is closed in the element, but the property is not yet in the published API document (05 §8.1), which is PRO's to update. Criterion 7: with `ar-XB` the shell mirrors, no control overlaps or is clipped and the document stays left to right (packages/ui/e2e/strings.spec.ts, geometric checks); a visual regression with stored screenshots did not exist before lane V-UX-061-075 added one (Evidence above; win32 and linux baselines for Chromium, Firefox and WebKit, no macOS baseline). Lane V-UX-061-075 (2026-11-14): the linux baselines were recorded in a `mcr.microsoft.com/playwright:v1.65.0-noble` container under Podman (`--update-snapshots`, then 6 of 6 passed in compare mode, twice), and the skip path ran on Linux with the linux baselines removed in a scratch copy (3 skipped, reason stated). The CI browser job does not run this Playwright suite; wiring it is a root `.github` change for the main session. Criterion 8: only the source table is imported statically and the pseudo-locales are a separate chunk (harness build), but the initial bundle is measured by the bundle gate (FND-008, UX-070).
+
+### UX-065 Mirror the interface for right-to-left locales
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | M | should | Author |
+
+**Spec:** 13 §8, §12; 02 §11 · **Requirements:** R14 · **Depends on:** UX-064, FE-111, FE-112
+
+As an author who reads right to left, I want the interface mirrored, so that it reads naturally.
+
+**Acceptance criteria**
+
+- [x] Given a right-to-left locale, when the editor loads, then the toolbar, panes, header and status bar are mirrored and no component was changed to make it so.
+- [ ] Given icons, when the interface mirrors, then direction-carrying icons mirror and the others do not, per metadata in the icon set.
+- [x] Given the toolbar, when arrow keys are used, then their direction follows the reading direction.
+- [x] Given a left-to-right document in a right-to-left interface and the reverse, when it is shown, then document direction follows the document (`settings.dir`) and not the interface.
+- [x] Given collaborators' flags and carets, when the interface is mirrored, then they stay attached to the right text.
+- [x] Given Playwright, when the shell is exercised in a right-to-left locale in the supported browsers, then the tests pass.
+
+**Review (round 2, group 2):** criterion 4 was unticked. `rtl-page-direction.test.ts` reads the text of `App.svelte` and `core-api.ts` with regular expressions; nothing is shown and no direction is computed, so neither the given (a left-to-right document in a right-to-left interface and the reverse) nor the then is exercised. The existing e2e `strings.spec.ts` covers only the left-to-right document in a right-to-left interface. Tick it when a browser test sets `settings.dir` to `rtl` in a left-to-right locale and to `ltr` in a right-to-left locale and reads the computed direction of the page.
+
+**Notes:** Lane UX-053-065, round 2 (2026-11-13): the lane unticked criterion 4 because it ran no browser. The Evidence line below does record a run, and the reviewer re-ran packages/ui/e2e/page-direction.spec.ts (the four pairings and the change of `settings.dir` at run time, read with `getComputedStyle`) in Chromium, Firefox and WebKit on 2026-11-13: 12 passed. The tick is restored on that run.
+
+**Evidence:** packages/ui/test/rtl-page-direction.test.ts (criterion 4, Node.js source check, 2026-11-13: the page element of `packages/ui/src/App.svelte` binds `dir` to the core's `direction` with `ltr` as the fallback and not to `tr.dir`; the shell binds `tr.dir`; `core-api.ts` declares `direction` as the document's base direction, `settings.dir`; 3 tests pass). The check reads the source and no browser run was made; a reverse-direction document in a right-to-left locale is not shown.
+
+**Evidence:** packages/ui/e2e/page-direction.spec.ts (criterion 4, fix of round 2, 2026-11-13; the harness gives the fake core a `direction` view, `settings.dir`, through packages/ui/e2e/harness/main.ts and packages/ui/test/support/fake-core.ts, whose surface now inherits the page's direction as the engine's does). Run with `pnpm exec playwright test -c packages/ui/playwright.config.ts page-direction` in Chromium, Firefox and WebKit on Windows 11, 12 tests pass: an `rtl` document in the `en-GB` interface computes `direction: rtl` on `.de-page` and the editing surface while `.de-shell` is `ltr`; an `ltr` document in `ar-XB` computes `ltr` on the page and `rtl` on the shell; an `rtl` document in `ar-XB` is `rtl` throughout; changing the document direction while mounted moves the page and not the shell. The core is the test stand-in, not the engine.
+
+**Evidence:** packages/ui/e2e/ux-065-rtl-layout.spec.ts (criteria 1, 3 and 6, lane U-UX-061-075, 2026-11-13: in `ar-XB` the header title, the first toolbar tab, the first status item and the styles pane sit on the other side of their containers from `en-GB` (centres compared, computed `direction` read as `rtl`), and ArrowLeft in `ar-XB` (ArrowRight in `en-GB`) selects the next tab. Run with `DOCEDIT_UI_PORT=56293 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-065-rtl-layout` in Chromium, Firefox and WebKit on Windows 11: 6 passed).
+
+**Evidence (lane V-UX-061-075, 2026-11-13):** packages/ui/e2e/ux-065-carets-rtl.spec.ts (criterion 5, Chromium, `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-065-carets-rtl --project=chromium`: 2 passed, `en-GB` and `ar-XB`). The fake core sets two carets at physical offsets from the editing surface's left edge (24 px and the surface width minus 40 px); in both locales each caret sits at the same offset from the surface (24 px and width minus 40 px), 40 px down, with its flag at the caret, and the shell's computed direction is `ltr` and `rtl` as expected, so the surface itself moved. This proves the caret layer does not mirror the core's physical coordinates; that the core maps a logical position in a right-to-left paragraph to the right physical point is the core's and is not tested here. The coordinate system is the core's: no decision was taken in the shell.
+
+**Notes:** Right-to-left content is phase 4 (13 section 12). Lane U-UX-061-075 (2026-11-13): criteria 1, 3 and 6 ticked on the browser run above; the layout check uses the existing logical-property stylesheet (UX-064), and no component was changed. Criterion 2 stays open: the icon set in packages/ui/src has no direction metadata, so no icon can be marked as mirroring (needs the icon set owner's metadata, UX-063). Criterion 5 is ticked on the caret-placement test in the Evidence line above (lane V-UX-061-075): the caret layer is `dir="ltr"` and places carets from the core's physical coordinates, and the test shows they keep their offsets from the text in `ar-XB`. The coordinate system of the core is still not decided here. Round 2 (lane ui-3, 2026-11-13): criterion 4 first ticked on the source check above, then on the browser run named in the second Evidence line. Criteria 1 to 3, 5 and 6 are not claimed: mirroring, icon metadata, arrow keys, collaborators' flags and the Playwright run need a browser run in a right-to-left locale.
+
+### UX-066 Accessibility checker: find issues
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 13 §2, §3, §8, §12; 02 §10; 09 §13; 03 §4 · **Requirements:** R11 · **Depends on:** UX-019
+
+As an author, I want the editor to find accessibility problems in my document, so that the PDF I produce can be accessible.
+
+**Acceptance criteria**
+
+- [x] Given a document, when the checker runs, then it lists issues of five kinds: missing alternative text on images and figures; heading order (a level skipped; headings are paragraphs whose style has an `outlineLevel`); tables without header rows; empty or non-descriptive link text; insufficient colour contrast of text.
+- [x] Given each issue, when it is listed, then it names its kind, its location by block identifier and a short explanation, and issues are grouped by kind.
+- [x] Given an image without alternative text, when the checker and the export job both inspect the document, then they agree on which images are missing it (09 section 13).
+- [x] Given contrast, when it is evaluated, then it uses the document's own text, highlight and shading colours against the page background as output, not the editor theme.
+- [ ] Given the document changes, when the checker pane is open, then results update incrementally and typing stays within the latency targets.
+- [x] Given the checker, when it runs, then the document is not changed.
+- [x] Given the pane, when it is opened for the first time, then its code is requested on demand.
+
+**Evidence (lane V-UX-061-075, round 3, 2026-11-13):** criteria 2 and 7 ticked. `packages/ui/e2e/ux-066-067-checker.spec.ts` (Chromium, Firefox and WebKit, `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-066-067-checker`, 6 tests per browser): the checker pane (`packages/ui/src/panes/CheckerPane.svelte`, registered in `src/shell/panes.ts`, opened by `view.checker` in `src/commands/builtin.ts` and `src/App.svelte`) lists six issues, one of each kind and a second figure without text in region `rLegal`, each with its kind heading, block identifier and explanation, in the checker's kind order (criterion 2); no pane chunk at start and one `CheckerPane` chunk on the first open (criterion 7, network trace). Criterion 5 stays unticked: the incremental update is tested with UX-067 criterion 4, but the typing latency with the pane open is not measured (UX-072, reference machine not named).
+
+**Review (round 2, group 2):** criteria 1, 4 and 6 were unticked. `shell/accessibility-check.ts` is imported by nothing except `accessibility-fix.ts` and its own test: no pane, no adapter from the core's document to `CheckBlock`, so no document can reach the checker. The tests show the rules of an unused module. The view has a `highlight` but no shading colour (criterion 4 names both). Tick them when a caller feeds the checker a real document view (or the pane is built) and a test drives that path.
+
+**Evidence:** packages/ui/src/shell/accessibility-check.ts (`checkDocument`, `CHECK_KINDS`, `contrastRatio`, `headingLevelOf`) and packages/ui/test/accessibility-check.test.ts (Node.js, 2026-11-13; with packages/ui/test/accessibility-fix.test.ts for UX-067 and packages/ui/test/rtl-page-direction.test.ts, 25 tests pass). Criterion 1: the five kinds, each property-tested against an independent oracle (alternative text, skipped heading levels, header rows, empty or generic link text, contrast below 4.5 to 1). Criterion 4: contrast uses the document's text, highlight and page-background colours only, with two known WCAG pairs. Criterion 6: the input is deep-frozen and unchanged, and a second run gives the same report. The rules are the checker's own function; no pane renders the report and no browser run was made, so the list on screen is not checked. Criteria 2, 3, 5 and 7 are not claimed: the explanation is a reason and facts for the shell to phrase, not text in the string tables; the export job's agreement (criterion 3) is not tested; incremental updates and on-demand loading (criteria 5 and 7) need the pane.
+
+**Evidence:** packages/ui/src/shell/accessibility-run.ts (`runAccessibilityCheck`, the caller: it reads the core's `getContent()`, `permissions` and `regions`) and packages/ui/src/shell/accessibility-content.ts (`checkViewOfContent`, from the CDM envelope to the checker's blocks); packages/ui/test/accessibility-run.test.ts (fix of round 2, Node.js, 2026-11-13; with the check and fix tests, 35 tests pass). The core is the test stand-in `FakeCore` with a CDM document in the shape of 03 section 12 (styles with `basedOn`, a character style, a table cell with shading, two regions). Criterion 1: the run lists all five kinds at their blocks (an inline image and a figure without `alt`, Heading 1 followed by Heading 3, a table with `headerRows: 0`, the link text `click here` across two runs, four failing contrasts), heading levels come through the `basedOn` chain, and a clean document gives none. Criterion 4: the text colour comes from the `color` mark or the character and paragraph style chains, the highlight from the `highlight` mark with Word's names turned into the colours of ECMA-376 `ST_HighlightColor`, and the shading from the paragraph, its style or its table cell (the view now has `shading`); the page is the output's white and the run takes no editor theme; white on dark shading and black on yellow pass, black on navy and white on white fail. Criterion 6: a deep-frozen document is unchanged after two runs, the reports are equal, the core gets no call and its revision does not move. No pane renders the list yet, so what is on screen is not checked.
+
+**Evidence (lane U-UX-061-075, round 4, 2026-11-13):** packages/ui/test/ux-066-export-agreement.test.ts (Node.js, `vitest run` on that file with the checker, fix and run tests: 4 files, 35 tests pass). Criterion 3: one CDM envelope with a body picture without alt text, a figure whose caption holds one, a table cell picture, a footnote picture, a header (a story) picture, a blank alt text and a figure with alt text is read by the LaTeX export job (`bundleAltTextReport` over the preflight, EXP-113) and by the checker (`checkViewOfContent`, `checkDocument`); both list the same seven blocks. The DOCX export job is not compared; the agreement is for the LaTeX job. Checker changes for this: footnote text and the stories (headers and footers) are now read, decision 6 of docs/adr/0329-lane-U-UX-061-075.md (proposed).
+
+**Notes:** The model has no way to mark an image as decorative, the contrast threshold and the link-text rules are not specified, and whether headers, footers and footnotes are checked is not stated (open questions). Covering them is inferred. Round 2 (lane ui-3, 2026-11-13): the choices made here (4.5 to 1 for every text run, outline level 0 to 8 as heading levels, the first heading unchecked, a generic link-text list, no decorative mark) are listed in docs/adr/0137-ui-3-backlog-batch.md, decisions 4 to 7, for the owner to confirm. Fix of round 2 (2026-11-13): heading levels now follow 03 section 4.1, where `outlineLevel` is 1 to 9 and is the heading level (`Heading1` has 1), not Word's 0 to 8; decision 5 of ADR 0137 still says 0 to 8 and needs the same correction. Contrast takes the shading behind a run without a highlight (paragraph, its style, or its table cell); the table style cascade (03 section 6, step 2) is not applied. Only the body, its regions, tables, figure captions, footnotes and the stories (headers and footers) are read; the checker takes them all (decision 6 of docs/adr/0329-lane-U-UX-061-075.md, proposed, for the owner to confirm).
+
+### UX-067 Accessibility checker: act on issues
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 13 §8; PRODUCT (Accessibility); ATAG 2.0 · **Requirements:** R11 · **Depends on:** UX-066, UX-004
+
+As an author, I want to go to each problem and fix it, so that I produce accessible documents without searching.
+
+**Acceptance criteria**
+
+- [ ] Given an issue, when the author chooses it, then the caret or selection moves to the element and the page scrolls to it.
+- [ ] Given an issue of each kind, when the author wants to fix it, then the issue offers the relevant command or field (alternative text, header row, link text, colour, heading level), subject to permissions.
+- [x] Given the element is in a scope the user cannot change, when the issue is listed, then it is marked as not fixable by this user, with who can fix it.
+- [x] Given a fix is made, when the checker re-evaluates, then the issue disappears, the count updates and the change is announced.
+- [ ] Given issues remain, when the author exports, then export is not blocked, and the export job still reports missing alternative text (09 section 13).
+
+**Evidence (lane V-UX-061-075, round 3, 2026-11-13):** criteria 3 and 4 ticked by `packages/ui/e2e/ux-066-067-checker.spec.ts` (Chromium, Firefox and WebKit, same run as UX-066). Criterion 3: the figure in region `rLegal`, which the test's access view gives view and comment only, is marked "You cannot fix this." with the region's who-can-edit sentence, and the body issues are marked "You can fix this here." Criterion 4: `editChecker` gives the figure its alternative text, the core's revision moves, the figure's issue leaves the list and the count reads five in the `role="status"` line (the announcement is that live region; no screen-reader run was made). Criterion 1 stays unticked: the pane asks the core to select the block (`selectBlock`, test "moves to the block"), but the caret and the scroll are the core's, and the harness's fake core does neither. Criterion 2 stays unticked: no command or field is offered per kind (the fix names are not registered). Criterion 5 stays unticked: no export command exists, so nothing can be blocked or not blocked.
+
+**Review (round 2, group 2):** criterion 3 was unticked. `shell/accessibility-fix.ts` is called by nothing except its own test, and `mayEdit` and `whoCanFix` are stubs that the test passes in, so the test shows that the function relays them. Tick it when the access view of UX-004 supplies them in a listed issue and a test drives that path.
+
+**Evidence:** packages/ui/src/shell/accessibility-fix.ts (`fixability`, `FIX_FOR`) and packages/ui/test/accessibility-fix.test.ts (criterion 3, Node.js, 2026-11-13: an issue in a block the caller says this user may not edit is marked not fixable, with the words the caller gives for who can fix it; a property over all five kinds; a block the user may edit is offered its fix). The access view that supplies the permission is the caller's, so the scope check itself is not run here; the list is not rendered and no browser run was made.
+
+**Evidence:** packages/ui/src/shell/accessibility-run.ts (`scopeFixAccess`, `runAccessibilityCheck`) and packages/ui/test/accessibility-run.test.ts (criterion 3, fix of round 2, Node.js, 2026-11-13). Each block carries the DEP scope it is in (`body` or `region:<id>`); fixability comes from the core's DEP access (`permissions`, 05 §5.5) for that scope and who can fix it from the derived region list (`regions`, PRM-032), in the words of the region lock indicator (`whoCanEdit`, PRM-026). With an editor whose access lists `region:rLegal` as view and comment only, the figure in that region is listed as not fixable with "It can be edited by Ada, and by document owners." while the other nine issues offer their fix; for a viewer every issue is not fixable, body issues naming document editors and owners; granting edit makes the body issue fixable on the next run; no access yet makes nothing fixable. The list is not rendered on screen yet.
+
+**Evidence (lane U-UX-061-075, round 4, 2026-11-13):** packages/ui/test/ux-066-export-agreement.test.ts, block "UX-067 criterion 5" (Node.js, same run as above). A document with a figure and an inline picture, both without alt text, has issues in the checker's list (`checkDocument`) and converts through the LaTeX export job with `ok` true and the two `image_without_alt` diagnostics, each a warning. The checker has no gate on export, so nothing in the shell blocks it. This proves the job level only: the export command and its button are not built, so the author's action is not run. Review (round 4, group 3): criterion 5 was unticked. The criterion is about the author exporting while issues remain; no export command exists, and the test does not connect the checker to the job (it runs both on the same envelope and the job never sees the checker's list), so it shows only that the job warns and returns `ok` true for pictures without alt text. Tick it when the export command is built and a test drives it with issues listed.
+
+**Notes:** ATAG 2.0 part B asks that the editor help authors produce accessible content; this and the previous story are its main support. Evidence audit (2026-11-13): criterion 3 was unticked again, because `runAccessibilityCheck` and `fixability` are imported only by their own tests (`FakeCore`), no issue list exists in the shell (the `checker` pane has no loader in `src/shell/panes.ts`), so no listed issue is ever marked; tick it when the checker pane lists issues through `runAccessibilityCheck` and a browser test shows the mark and who can fix it. Round 2 (lane ui-3, 2026-11-13): criterion 2 is not claimed. The fix names (`picture.altText`, `table.headerRow`, `link.text`, `style.headingLevel`, `format.colour`) are the shell's identifiers for commands and fields that are not registered yet, so no command is offered in the product. Criteria 1, 4 and 5 need the caret and scroll, the count and its announcement, and the export job, none of which is built here; decision 7 of docs/adr/0137-ui-3-backlog-batch.md covers the fix names.
+
+### UX-068 The shell meets WCAG 2.2 level AA
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 13 §8; PRODUCT (Accessibility); 02 §10 · **Requirements:** R11 · **Depends on:** UX-014, UX-019, UX-007
+
+As an author who uses assistive technology, I want the shell to be fully accessible, so that I can use every part of the editor.
+
+**Acceptance criteria**
+
+- [x] Given the header, toolbars, menus, panes, dialogs and status bar, when axe runs in each supported browser, then it reports no violations.
+- [ ] Given pointer targets in the shell, when they are measured, then they meet the target-size criterion.
+- [ ] Given a sticky header, toolbar or pane, when focus moves to an element, then the element is not hidden behind them.
+- [ ] Given any shell interaction that can be done by dragging, when it is needed, then a keyboard or dialog alternative exists.
+- [ ] Given roles, presence and suggestion kinds, when they are shown, then they use colour plus an icon or text, never colour alone.
+- [x] Given a labelled control, when the DOM is checked, then the control and its label are in the same root.
+- [x] Given a dialog, when it opens and closes, then focus is moved into it and returns to the previous element, Escape closes it, and it exposes the `dialog` part.
+- [ ] Given the defined flows, when a manual screen-reader pass is made before each release, then the results are logged and issues recorded.
+
+**Evidence:** `packages/ui/e2e/shell-wcag.spec.ts` (lane ui-3, round 4, 2026-11-13; run with `DOCEDIT_UI_PORT=4812 pnpm exec playwright test -c packages/ui/playwright.config.ts shell-wcag`: 6 tests in each of Chromium, Firefox and WebKit on Windows 11, 18 passed). Criterion 6: "every label and description reference resolves in the root of its control" reads every `aria-labelledby`, `aria-describedby` and `label[for]` in the shell's shadow root with the dialog open, the full toolbar and presence shown, and checks each id against the root of the element that names it (at least one reference found). Criterion 7: "the export dialog moves focus in, Escape closes it and focus returns to the editing surface" and "the close button also closes the dialog and returns focus" open the export dialog through `document.export`, check that the focused element is inside `dialog[part="dialog"]`, and check the focus after Escape or the close button. The same `Dialog.svelte` serves every dialog of the shell; only the export dialog is exercised here. Criterion 1 (partly): `axe` with the full toolbar, and with the export dialog open, finds no violation, in addition to the default shell, the presence list, the overflow menu and the pane states in `e2e/a11y.spec.ts`.
+
+**Evidence (lane V-UX-061-075, criterion 1):** packages/ui/e2e/ux-068-axe-states.spec.ts (axe with the WCAG 2.2 A and AA rule sets on every tab of the full toolbar, the context menu for a selection, the export dialog with the status bar, the command search with results, and the outline pane; Chromium, Firefox and WebKit on Windows 11, run with `DOCEDIT_UI_PORT=57291 DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm exec playwright test -c packages/ui/playwright.config.ts ux-068-axe-states --workers=1 --output <scratchpad>`: 18 of 18 passed in the last run; earlier runs failed only on trace files deleted by a concurrent Playwright run in the shared `packages/ui/test-results` folder, which `--output` avoids). Review (V3 group 3, round 1): the spec was rerun in all three browsers (24 of 24 with ux-061-first-paint, none retried) and passes, but criterion 1 was unticked. It names every pane and dialog of the shell, and axe has run on only one pane (Outline, `OutlinePane.svelte`) and one dialog (the export dialog). `StylesPane`, `PermissionsPane`, `RecoveredPane`, `ShortcutsPane`, `FillPane`, `LanguageDialog`, `RegionDialog` and the comment box have no axe run in any spec of `packages/ui/e2e`; the claim that one `Dialog.svelte` serves every dialog does not cover the content of each. Tick it when axe has run on each pane and dialog in each browser. The header comment of the spec says the command search is not checked, but a test in the file does check it.
+
+**Evidence (fix of V3 group 3, round 1, criterion 1, 2026-11-13):** packages/ui/e2e/ux-068-axe-panes-dialogs.spec.ts runs axe with the same WCAG 2.2 A and AA rule sets (`axe` in e2e/helpers.ts) on every pane with shell code in `src/shell/panes.ts`: styles (styles listed), permissions (region list, then a region expanded with a grant and the directory search's options listed), recovered (a `rebase` and a `permission_denied` item), shortcuts (the table with `kbd` keys) and fill (the filling-in bar, then the pane with two fields left). It also covers every dialog `App.svelte` mounts: language (valid, then with the invalid-tag error), region (open, then with the "Enter a title." error) and the comment box (empty, then with the mention list shown). The outline pane, the export dialog and the command search stay in ux-068-axe-states.spec.ts, whose header comment now names the command search. The comments, history and assistant panes are supplied by a port and have no shell code to check. Runs on Windows 11 under shared load, from the repository root with `DOCEDIT_UI_PORT=57041`, `--workers=1` and `--output` in the scratchpad. ux-068-axe-panes-dialogs and ux-068-axe-states in Chromium, Firefox and WebKit: 42 of 42 passed, none retried. The same two files with a11y.spec and shell-wcag under `DOCEDIT_BROWSERS=msedge`: 27 of 27 passed. a11y.spec and shell-wcag in Chromium, Firefox and WebKit: 36 passed and 3 flaky in WebKit, each a 30 s test timeout or a page that served "not found" while the shared `dist/harness` was rebuilt, all three passing on retry. A WebKit rerun of those two files with `--retries=0` had 11 passed and 2 failed: a 30 s timeout in the save-states loop and "browser has been closed". No run reported an axe violation. Safari is stood in for by Playwright's WebKit on Windows; no run on Safari itself is recorded.
+
+**Evidence (lane V-UX-061-075, round 5, criterion 3, not ticked):** packages/ui/e2e/ux-068-focus-not-obscured.spec.ts (each visible, enabled control of the shell is focused in turn, with the full toolbar and the outline pane or the styles pane open, and the element at its centre is read from the shell's shadow root; a control counts as obscured when another element is there. Chromium, Firefox and WebKit, `DOCEDIT_UI_PORT=57293 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-068-focus-not-obscured --workers=1`: 6 of 6 passed, none retried). No control is covered. The test is a guard: the shell has no sticky element, so the criterion's condition is not met yet, and it stays unticked (see Notes).
+
+**Notes:** The editing surface's accessibility is FE's (02 section 10). Lane ui-3, round 4 (2026-11-13): criteria 6 and 7 ticked on the browser run above. Not claimed: criterion 1 (no axe run on the context menu, the command search or the status bar in isolation, and a full run of each supported browser for each state is not recorded here); criterion 2 (the target-size test measures the controls visible in the default state with the full toolbar's first tab, the header and the status bar, 14 controls, none under 24 by 24 CSS pixels; the other tabs, menus, panes and dialogs are not measured); criterion 3 (sticky header and focus obscuring is not tested); criterion 4 (no pointer drag was checked against a keyboard or dialog alternative); criterion 5 (colour plus icon or text for roles, presence and suggestion kinds: the presence states are covered by UX-026 and the suggestion kinds have no review pane in `packages/ui/src` yet); criterion 8 (manual screen-reader pass, a release activity, not run). No open question decided here. Lane U-UX-061-075 (2026-11-13): criterion 2 is measured on every tab of the full toolbar in `packages/ui/e2e/ux-068-target-size.spec.ts` (Chromium, Firefox and WebKit, 3 of 3 passed; the tabs and their groups, the header and the status bar, none under 24 by 24 CSS pixels). The menus, panes and dialogs are still not measured, so criterion 2 stays open. Lane V-UX-061-075 (round 1, 2026-11-13): criterion 2 is measured also on the context menu's items and the export dialog's controls in packages/ui/e2e/ux-068-axe-states.spec.ts (Chromium, Firefox and WebKit: menu items at least 24 by 24; the dialog's buttons and selects too). A radio or checkbox inside its `label.de-check` is measured by the label, which takes the pointer; the 15 by 15 CSS pixel input on its own is not claimed to meet 24 by 24 (decision for the spec owner: whether the label counts, ADR 0329, decision 1). Criterion 2 stays open: the outline pane, the command search's results, the presence list and the ports' panes (comments, history, assistant) are not measured. Lane V-UX-061-075 (2026-11-14): the styles, permissions (with the directory search listed), recovered, shortcuts and fill panes, the filling-in bar, the language, region and comment dialogs (each in its states) are measured in `packages/ui/e2e/ux-068-target-size-panes.spec.ts` (Chromium, Firefox and WebKit on Windows 11, `DOCEDIT_UI_PORT=57292 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-068-target-size-panes --workers=1`: 24 of 24 passed, none retried); no control under 24 by 24 CSS pixels. A radio or checkbox is measured by its `label.de-check` (ADR 0329, decision 1, proposed). Criterion 3 stays open: packages/ui/src has no sticky, fixed or pinned header, toolbar or pane, so there is no obscured-focus case to test yet; whether that is to be built is not decided here.
+
+### UX-069 Accessibility conformance report for every release
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 13 §8; PRODUCT (Accessibility) · **Requirements:** R11 · **Depends on:** UX-068
+
+As a maintainer, I want a conformance report with each release, so that adopters can see what is supported.
+
+**Acceptance criteria**
+
+- [ ] Given a release, when it ships, then it includes a report stating, for each applicable WCAG 2.2 level A and AA and ATAG 2.0 criterion, whether it is supported, partly supported or not, with notes and test evidence.
+- [ ] Given the report, when it is generated, then it draws on the axe results, the manual screen-reader logs and the list of known issues.
+- [ ] Given a new axe violation, when CI runs, then it fails before release; a known issue is listed in the report with a tracking item.
+- [ ] Given ATAG 2.0 part B, when the report is written, then it covers the checker (UX-066, UX-067) and the prompts that help authors produce accessible content.
+- [ ] Given the report, when it is published, then it names the browsers and assistive technologies tested and is linked from the release notes and the integration guide.
+
+**Notes:** Phase inferred (1b): "per release" starts at the first usable release. Lane ui-3, round 7 (2026-11-13): not started. The report draws on a release's axe results and the manual screen-reader logs (criterion 2), and neither exists yet. Criterion 3 (CI fails on a new axe violation) is a CI setting under `.github/`, which the lane may not edit. The checker's rules (UX-066) are not a conformance report. See docs/adr/0137-ui-3-backlog-batch.md, round 7.
+
+## Performance and reliability budgets
+
+### UX-070 Load panes, proofing and the assistant on demand
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 13 §9; 02 §2 · **Requirements:** R14 · **Depends on:** UX-019, FND-007, FND-008
+
+As a maintainer, I want the panes, proofing and the assistant loaded only when they are used, so that the first interactive editor stays small.
+
+**Acceptance criteria**
+
+- [x] Given the editor starts, when a network trace is read, then it shows no request for the code of any pane, and each pane is a separate chunk requested only when it is first opened.
+- [ ] Given the editor starts, when a network trace is read, then it shows no request for proofing code, which is a separate chunk requested only when proofing is first used.
+- [ ] Given the editor starts, when a network trace is read, then it shows no request for the assistant's code, which is a separate chunk requested only when the assistant is first used.
+- [ ] Given locales and themes other than the default, when the editor starts, then they load on demand.
+
+**Evidence:** Criterion 1, network traces (fixer, round 3, 2026-11-13). `packages/ui/e2e/panes.spec.ts`, test "a network trace shows no pane code at start, and each pane as its own chunk on first open": Playwright records every request of the page from the first navigation of the built harness (`e2e/build.ts`, a Vite build of `App.svelte`); at start no `/assets/` script names any of the six panes, then opening the outline, styles, permissions, recovered, shortcuts and fill panes each requests exactly one new chunk, named for that pane, six distinct files, and a pane opened again requests nothing (passed in Chromium, Firefox and WebKit, `pnpm exec playwright test -c packages/ui/playwright.config.ts panes.spec.ts`). The element's library build (`packages/element/dist/lib`, built 2026-11-13 22:08 UTC per its `bundle-report.json`) was traced once the same way, served by `packages/element/demo/serve.ts` on `pages/lib.html` with a `<doc-editor>` on the in-memory backend: after `de-ready` the requests under `/lib/` are `doc-editor.js` and the `errors`, `status`, `strings`, `editor`, `engine`, `en-GB` and `hash` chunks, none a pane; the View tab's outline button then requests only `chunks/OutlinePane-*.js`, the shortcuts button only `chunks/ShortcutsPane-*.js`, and the outline again nothing (Chromium, Firefox and WebKit; a one-off script, not in the repository). Source checks as well: `packages/ui/test/on-demand-panes.test.ts` (every pane component is reached through a dynamic `import()` in `src/shell/panes.ts`, and no shell module imports a pane statically). The registry does not call a loader to answer the offer: `packages/ui/test/panes.test.ts`.
+
+**Notes:** The size gate, the 300 KB budget for the initial chunk and the report of its composition are FND-008; this story owns the shell's side, which parts load only on demand. The PDF viewer and the math editor load on demand under their own stories. Lane ui-3, round 3 (2026-11-13): criteria 2 and 3 stay unticked, because no proofing or assistant code exists in `packages/ui`, so there is no chunk to see or to keep out of the trace. Lane U-UX-061-075 (2026-11-13), correction: `src/proofing` and `src/assistant` exist, but no shell module imports them (checked by search), so no path requests a proofing or assistant chunk; criteria 2 and 3 stay unticked until a feature reaches that code. Criterion 4 stays unticked: locales load on demand and are tested in `packages/ui/test/strings.test.ts`, but the themes (`dark`, `high-contrast`) are rules in `src/styles/shell.css`, which the editor loads at start, so they are not on demand. Lane V-UX-061-075, round 4 (2026-11-14): criterion 4 stays open. Loading the dark and high-contrast rules on demand would give an unstyled first paint for `auto` with a dark system setting, which the spec does not decide; the owner's call (ADR 0329, decision 13).
+
+> UX-071 (Time to interactive) was merged into FE-119 during the cross-check of 2026-11-06.
+
+### UX-072 Typing latency with the shell active
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 13 §9; 00 §9; 02 §4 · **Requirements:** R14 · **Depends on:** UX-070, FND-007
+
+As a maintainer, I want the shell never to slow typing, so that the budget holds with real features switched on.
+
+**Acceptance criteria**
+
+- [ ] Given a 100-page document, the reference machine with CPU throttling, and the shell fully active (toolbar state, five peers' presence, comment highlights, panes open), when typing is measured with the Event Timing API, then keystroke to paint is within 16 ms at the median and 50 ms at the 95th percentile (targets).
+- [ ] Given a remote peer typing continuously, when the local author types, then latency does not exceed the same targets.
+- [ ] Given the checker, proofing or the assistant pane is open, when the author types, then the targets still hold.
+- [ ] Given the shell, when state changes, then at most one interface update is produced per animation frame.
+- [ ] Given a regression, when CI runs, then the gate fails.
+
+**Evidence (lane V-UX-061-075, 2026-11-13, figures only, no criterion ticked):** packages/ui/e2e/ux-072-typing-latency.spec.ts (Chromium, `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-072-typing-latency --project=chromium`: 1 passed). The harness shell with three panes open (outline, styles, permissions) and a short test document, CPU throttled four times through the DevTools Protocol, 120 keystrokes through `page.keyboard.type`, Event Timing `keydown` entries with `durationThreshold` 16 ms: 120 of 120 keydowns reported in each of two runs; median 24 ms in both, 95th percentile 64 ms and 40 ms (the API rounds to 8 ms, and the two runs differ, so the figures are noisy). These are on the test machine (Windows 11, this lane's shared workstation), not the reference machine, and on a short document with no peers or comment highlights, so they do not test criterion 1 and do not meet or fail it. Criteria 2 and 3 need a continuous remote peer and an open checker or assistant pane, which the harness does not drive.
+
+**Notes:** The reference machine is not yet named (open questions). Lane V-UX-061-075 (2026-11-13): the Event Timing script is in place, and the figures above are a stand-in only; the 100-page fixture, the five peers and the reference machine are still needed (needsFromOthers). Lane ui-3, round 6 (2026-11-13), criterion 4: `packages/ui/test/ux-072-frame-publication.test.ts` checks `frameScheduler` (`src/commands/schedule.ts`, the scheduler the command registry publishes through) on a simulated clock with fast-check: at most one publication per task phase between frame ticks, at most one per frame tick, and no requested publication left unrun. It does not tick the criterion: the test records a gap. A publication in a task phase followed by one in the next frame tick both land before the same paint, so "at most one interface update per animation frame" is not met as worded. Scheduler change or a decision on the wording is the owner's call (not decided here). Nothing rendered in a browser; the Svelte update per publication is not measured.
+
+> UX-073 (Long documents in the web view) was merged into FE-120 during the cross-check of 2026-11-06.
+
+### UX-074 Memory for a 100-page document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | S | should | Maintainer |
+
+**Spec:** 13 §9; 06 §16 · **Requirements:** R14 · **Depends on:** UX-072
+
+As a maintainer, I want the editor's memory use bounded, so that long sessions do not exhaust the browser.
+
+**Acceptance criteria**
+
+- [ ] Given a 100-page document after a long editing session with collaborators, when memory is measured by the method the harness names, then it is under 300 MB (target).
+- [ ] Given every pane is opened and closed repeatedly, when memory is measured again, then it returns to within the harness's noise of the baseline.
+- [x] Given the measurement, when it is reported, then it states which memory figure was measured and in which browsers it is measurable.
+
+**Evidence:** packages/ui/e2e/ux-074-memory.spec.ts (criterion 3, lane U-UX-061-075, 2026-11-13: the figure is `Runtime.getHeapUsage().usedSize` after two `HeapProfiler.collectGarbage` calls, read through the Chrome DevTools Protocol, and it is measurable in Chromium only; the test writes the figure, the noise and the browser into its annotations and console. Run with `DOCEDIT_UI_PORT=56292 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-074-memory --project=chromium`: 1 passed, 1.1 minutes, Chromium on Windows 11. The run recorded a baseline of 4,500,736 B after 21 warm-up passes, a noise of 12 B (spread of five readings with no action), and 4,763,812 B after 30 cycles of open and close of the five panes the harness opens, growth 263,076 B). Criterion 2 is not ticked: the growth is far above the noise, and it had not levelled off within the 30 cycles (see Notes).
+
+**Evidence (lane V-UX-061-075, round 5, criterion 2, not ticked):** packages/ui/e2e/ux-074-heap-diff.spec.ts (Chromium, `DOCEDIT_UI_PORT=57294 DOCEDIT_HEAP_DIR=<scratchpad> pnpm exec playwright test -c packages/ui/playwright.config.ts ux-074-heap-diff --project=chromium`: 1 passed, 25 seconds on Windows 11). Two `HeapProfiler.takeHeapSnapshot` snapshots after two full collections each, one after 5 warm-up passes over the five panes and one after 60 further cycles; the groups of objects (node type and name) are diffed by count and self size. Total self-size growth 609,252 B over 204 groups. Largest: V8 code (`InstructionStream` +265 objects, 329,152 B; `TrustedByteArray`, `Code`, `FeedbackVector`), browser-side performance entries (`LayoutShift` +114, `LayoutShiftAttribution` +228, `PerformanceEventTiming` +24), `DOMRectReadOnly` +456 objects (25,536 B), generic `Array` and array elements (+612 arrays, 9,792 B), and 60 `MediaQuery` and 60 `MediaQuerySet` objects, one per cycle. The snapshots are written to the scratchpad folder, not to the repository. The 60-per-cycle media query objects are not traced to a source line: `matchMedia` is called in the shell only by `watchColourScheme` in `packages/ui/src/shell/theme.ts`, once per mount, and the CSS side was not checked. Criterion 2 stays unticked: the diff shows no application-object retention identified, but the figures are not a plateau, and the cause is not isolated (see Notes).
+
+**Notes:** Lane V-UX-061-075 (round 5, 2026-11-14): the heap-object diff asked for in round 1 was run (ux-074-heap-diff.spec.ts, above). No group named after a shell component (App, pane host, panes) appears in the top 25 growth groups; the generic `Array` groups were not traced to an owner, so a retained shell array is not ruled out. The named groups point toward V8's code objects and the browser's own performance buffers (`LayoutShift`, `PerformanceEventTiming` and the `DOMRectReadOnly` objects, which the browser keeps until a page reads or drops them), plus one media query per cycle that the shell's source does not explain. Not decided here: whether the code and buffer growth levels off after a longer run; the run of 120 cycles in round 1 did not level off. The next step is a diff of retainers for the `MediaQuery` objects (heap snapshot retainer path) and a run of several hundred cycles. Lane V-UX-061-075 (round 1, 2026-11-13): packages/ui/e2e/ux-074-memory-levelling.spec.ts ran 120 open-and-close cycles of the five panes after the same warm-up (Chromium, 4.7 minutes, passed as a measurement only). Heap after each block of 10 cycles, growth per block in bytes: 81,196; 31,756; 115,508; 47,040; 22,240; 8,788; 34,852; 49,832; 64,428; 11,308; 29,448; 24,680; total 521,076 over a noise of 12 B. The growth does not level off within 120 cycles, so criterion 2 stays open and the cause is still not isolated: the next step is a heap snapshot diff of application objects (packages/ui/src/App.svelte, the pane host, and the five panes) between cycle 20 and cycle 120. Criterion 1 stays open: the 300 MB target was not measured with a 100-page fixture and collaborators, and no reference machine is named. What counts as memory is not specified. Phase inferred (2). Lane U-UX-061-075 (2026-11-13): the method is the story's own choice, for the owner to confirm (ADR 0329, decision 5): JavaScript heap used, Chromium only, after warm-up, with the noise taken from five back-to-back readings. The harness names no method, so criterion 1 (100-page document, 300 MB) stays open: no 100-page fixture with collaborators is run here, and no reference machine is named. Criterion 2 stays open. Growth of roughly 4 to 9 KB per open and close of a pane persisted through 30 cycles; the heap-object diff of an earlier run (10 cycles of one pane, not kept) showed the growth in V8's own code objects (instruction streams, feedback vectors), with application objects barely changing, so the cause is not yet isolated. The next step is a longer run and a heap snapshot diff of application objects after more cycles, to decide between a slow JIT plateau and a retained object in the pane host (packages/ui/src/App.svelte) or a pane.
+
+> UX-075 (Page view usable to 1,000 pages) was merged into FE-102 during the cross-check of 2026-11-06.
+
+## Governance and administration
+
+### UX-076 Define the administration API
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 2 | L | must | Operator |
+
+**Spec:** 13 §10, §12; 05 §6.2, §8; 06 §12 · **Requirements:** R10, R15 · **Depends on:** PRO-040, PRO-042, PRO-043, PRO-108
+
+As an operator, I want the administration API specified and versioned, so that tenants, keys, quotas and the other resources can be managed by any tool, including the later console.
+
+**Acceptance criteria**
+
+- [ ] Given the administration resources outlined in 13 section 10 (tenants, signing keys and allowed origins, quotas, fonts, retention, webhooks, usage figures), when the contract is published, then each has a machine-readable definition in `spec/` with methods, schemas and error codes from the registry of 05 section 5.8.
+- [ ] Given the conventions of the control plane, when the contract is written, then it uses the same lists (`{ items, nextCursor }`, `limit` at most 200), `ETag` and `If-Match`, `Idempotency-Key` and problem details.
+- [ ] Given the contract, when it is written, then it states who may call (operator, tenant administrator) and how they authenticate, and a user token never grants access.
+- [ ] Given every operation, when the conformance kit is extended, then each has a negative test for an unauthorised caller and for a caller from another tenant.
+- [ ] Given the versioning rules of 05 section 1, when the API changes, then only additive changes occur within a major version.
+
+**Evidence (criterion 4, partly; lane V-UX-076-090, round 6, 2026-11-14):** services/document-service/test/control-plane/ux-076-admin-negatives.test.ts (Node.js with PostgreSQL in Podman, 12 tests passed, none skipped, `pnpm vitest run services/document-service/test/control-plane/ux-076-admin-negatives.test.ts`): against the composed service, each administration read (`/v1/quotas`, `/v1/retention`, `/v1/origins`, `/v1/keys`, `/v1/audit`, `/v1/holds`, `/v1/webhooks`) and the quota write are refused with no credential and with a user token, and a second tenant's API key sees none of the first tenant's quotas, origin or keys and cannot change its quotas. Criterion 4 is not ticked: it asks for the conformance kit to be extended, and `packages/tck` has no such scenarios.
+
+**Notes:** 13 section 10 and 06 section 12 only outline these resources, and "signing keys" is ambiguous between token verification keys and PDF sealing keys (10 section 6 leaves tenant-owned sealing keys open). The credentials model is not defined (open questions).
+
+### UX-077 Register token keys and allowed origins
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Tenant administrator |
+
+**Spec:** 13 §10, §11.1; 05 §3.1, §4 · **Requirements:** R10, R15 · **Depends on:** UX-076, PRO-009, PRO-013, PRO-016, SEC-045
+
+As a tenant administrator, I want to register the keys that sign my host's tokens and the origins my pages use, so that my host can mint tokens and my pages can connect.
+
+**Acceptance criteria**
+
+- [x] Given a public key set, when it is registered for a tenant, then tokens signed by it are accepted for that tenant only, and only algorithms on the allow-list (ES256, EdDSA, RS256) are accepted; a symmetric or unsupported key is refused.
+- [x] Given a key is rotated, when the new key is added before the old is removed, then tokens from both verify during the overlap, and a removed key's tokens are refused at once.
+- [x] Given an allowed-origins list, when a `hello` arrives from another origin, then it is closed with 4403, and CORS answers only for listed origins.
+- [x] Given an administrator of one tenant, when they list keys or origins, then they never see another tenant's.
+- [ ] Given a change, when it is made, then it is audited.
+
+**Evidence (criterion 4, lane V-UX-076-090, round 5, 2026-11-14):** services/document-service/test/control-plane/ux-077-listing-composed.test.ts (6 tests passed under `pnpm vitest run` on that file, in memory and on PostgreSQL in Podman): `GET /origins` and `GET /keys` of the composed service list the harness tenant's origin and its user and service keys, public parts only, and a second tenant registered beside it appears in neither; a user token is refused with `forbidden`. The routes are `services/document-service/src/control-plane/registry-routes.ts`, offered by `createHandlers` through `tenantRegistry` (`server.ts`); operations `getTenantOrigins` and `getTenantKeys` in `packages/protocol/src/definition/resources.ts`.
+
+**Evidence:** services/document-service/test/control-plane/ux-077-keys-origins.test.ts (Node.js, 2026-11-13, 7 tests pass: criterion 1 by key selection per tenant, the allow-list at registration, symmetric and unsupported keys refused at registration and an HS256 token refused; criterion 2 by an overlap of an old and a new key, then the removed key's token refused at once; criterion 4 registry half by per-tenant keys and origins; criterion 3 origin half by canonical origins and refused forms). The tests drive `MemoryTenantRegistry` and `TokenService`, not the HTTP administration API (UX-076 is not built) and not PostgreSQL. Criterion 3's 4403 close on `hello` is tested by test/data-plane/session.test.ts, which this lane did not run. Criterion 3 (lane U-UX-076-090, round 1, 2026-11-13): ticked on `services/document-service/test/data-plane/session.test.ts` ('checks the Origin header against the tenant when hello arrives': a real WebSocket from another origin is closed with 4403 after a `forbidden` error) and `services/document-service/test/control-plane/routes.documents.test.ts` ('answers CORS for allowed origins only': an allowed origin gets its headers, an unlisted one none, a foreign tenant's origin none), run with `pnpm vitest run` on the two files (Node.js; the CORS test ran over HTTP with in-memory storage and with PostgreSQL in Podman; 64 tests passed).
+
+**Notes:** Before this API exists, the reference deployment seeds keys and origins from configuration (UX-091). Lane UX-066-078, round 1 (2026-11-13): criteria 1 and 2 ticked on the test above. Criterion 3 was unticked in round 1 and ticked in lane U-UX-076-090, round 1 (see Evidence). Criterion 4 stays unticked: no administration listing exists to answer a tenant administrator, so only the registry's scoping is tested. Criterion 5 stays unticked: no audit of key or origin changes exists (UX-081 is not built). Lane V-UX-076-090, round 5 (2026-11-14): criterion 4 ticked on the read-only listings `GET /origins` and `GET /keys` (see Evidence). Those listings are the only administration reads of keys and origins so far; there is no route that writes a key or an origin, so criterion 5 has no change to audit, and criteria 1 to 3 have no route either. The key listing carries the public JWK, and a private member is never registered. Two decisions are proposed in docs/adr/0330-lane-V-UX-076-090.md (section 6 covers the quota routes; the listing shape is proposed in docs/adr/0330-lane-V-UX-076-090.md, section 7). 13 section 12 places the administration API in phase 2, but a host needs registration from phase 1a (open questions). Lane V-UX-076-090, round 6: criterion 5 stays unticked. The audit of quota changes records the actor as `system`, not the caller (`ux-078-quotas-composed.test.ts` asserts it), so the actor the criterion needs is not recorded yet. Criterion 4 is partly evidenced (see Evidence); the conformance kit has no administration scenarios.
+
+### UX-078 Quotas and usage figures
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Operator |
+
+**Spec:** 13 §10; 06 §12; 05 §5.8 (`quota_exceeded`) · **Requirements:** R9, R15 · **Depends on:** UX-076, BE-011, BE-091
+
+As an operator, I want to set a tenant's quotas and read its usage, so that I can bill and protect the service.
+
+**Acceptance criteria**
+
+- [x] Given a tenant, when an operator sets quotas for connections, open documents, commit rate, room CPU budget, storage, export concurrency and export minutes, then the values are stored, validated as non-negative, and readable.
+- [ ] Given a tenant, when usage is read for a time window, then figures for the same dimensions are returned, and they contain no document content or personal data.
+- [ ] Given a caller exceeds a quota, when the service answers `quota_exceeded`, then the editor tells the user which kind of quota was reached.
+- [x] Given a change, when it is made, then it is audited.
+
+**Evidence (lane V-UX-076-090, round 5, 2026-11-14):** services/document-service/test/control-plane/ux-078-quotas-composed.test.ts (Node.js, the composed service over HTTP, in memory and on PostgreSQL in Podman; 10 tests, run with ux-078-quotas.test.ts and ux-078-quotas-pg.test.ts under `pnpm vitest run`: 19 tests passed). Criterion 1: `GET|PUT /quotas` reads unset dimensions as null, sets the dimensions a PUT names and keeps the others, reads them back with a new ETag, refuses a missing or stale `If-Match` (428, 412), refuses a non-integer, negative, null or unknown value with 400 and writes nothing, and refuses a user token with 403; on PostgreSQL the values are rows of `tenant_quotas` (migration 0069), read back through a second set of parts. Criterion 4: 'audits each change with its previous and new values, and no change not at all' (kind `quota.changed`, served by `GET /audit`). Code: `services/document-service/src/control-plane/quota-admin.ts`, `quota-admin-routes.ts`, the composition in `services/document-service/src/server.ts`, and `packages/protocol/src/definition/resources.ts` (`getTenantQuotas`, `setTenantQuotas`).
+
+**Evidence:** services/document-service/src/control-plane/quotas.ts (`MemoryQuotaStore`, `QUOTA_DIMENSIONS`, `checkQuotaValue`) and services/document-service/test/control-plane/ux-078-quotas.test.ts (Node.js, 2026-11-13, 4 tests pass: the seven dimensions, null when unset, values stored and read back, negative, non-finite and non-numeric values refused, unknown dimension and unknown tenant refused). Criterion 1 is not ticked: the store is in memory only, and no operator write path exists (the administration API, UX-076, is not built), so the criterion's "when an operator sets quotas" is not met.
+
+**Notes:** The quota list is from 06 section 12; the usage dimensions are not otherwise specified. Lane UX-066-078, round 1 (2026-11-13): the in-memory store is the first half of criterion 1. Still open: durable PostgreSQL storage, the operator write path (UX-076), criterion 2 (usage figures for a window, which needs the metrics read in services/document-service/src/control-plane/metrics.ts to be given a window), criterion 3 (the editor telling the user which quota was reached: the `quota_exceeded` problem carries no quota kind yet), and criterion 4 (audit, UX-081). No default quota values are set: 06 section 12 gives none here. Lane U-UX-076-090, round 2: the durable half of criterion 1 is built and tested on PostgreSQL in Podman: `services/document-service/src/control-plane/quotas-pg.ts` (`PgQuotaStore`, the DDL of table `tenant_quotas` with its CHECK clauses and grant, proposed for a migration in docs/adr/0330-lane-U-UX-076-090.md, section 5) and `services/document-service/test/control-plane/ux-078-quotas-pg.test.ts` (5 tests passed in the integration environment: values stored and read back by a second store, replaced without a second row, refused values and unknown tenant or dimension write nothing, CHECK clauses refuse a bad value written past the code, tenants kept apart). Criterion 1 stays open: the operator write path (UX-076) is not built, and the live quota gate reads synchronously, so it cannot yet read this store. Criterion 3 stays open: the `quota_exceeded` problem carries no quota kind, and the editor does not show one. Criteria 2 and 4 stay open as before. Lane V-UX-076-090, round 5 (2026-11-14): criteria 1 and 4 ticked on the operator write path `GET|PUT /quotas` (see Evidence). The route takes whole numbers only, 0 or more, though the store accepts any finite value; the route's shape, the `If-Match` entity tag (a hash of the settings, since the store has no version) and the audit kind are proposals, recorded in docs/adr/0330-lane-V-UX-076-090.md, section 6. The PUT writes its dimensions one at a time, so a database failure part way leaves some written; a body is checked whole first. Lane V-UX-076-090, round 4: migration 0069 (amended, as no release ships it yet) keys `tenant_quotas` by `tenant_id uuid` with a foreign key to `tenants` and calls `docedit_protect`, as 0065 does, and `PgQuotaStore.get` and `set` run inside `inTenant`, so the quota rows are under forced row-level security; `ux-078-quotas-pg.test.ts` shows that the service role, under one tenant's context, reads none of another tenant's rows (with or without a WHERE clause), none with no tenant set, and cannot insert or update another tenant's rows. Criterion 2 (usage figures) and criterion 3 (the editor naming the quota kind, which the live `quota_exceeded` problem does not yet carry on the wire) stay open.
+
+### UX-079 Manage fonts and webhooks through the administration API
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Tenant administrator |
+
+**Spec:** 13 §10; 02 §6; 05 §6.2, §7 · **Requirements:** R15 · **Depends on:** UX-076, PRO-069, PRO-070, BE-047
+
+As a tenant administrator, I want to manage my tenant's fonts and webhooks with the same API, so that my console and scripts have one interface.
+
+**Acceptance criteria**
+
+- [ ] Given a font the tenant is licensed to use, when it is added, then it appears in the font manifest with its licence information, and the editor and the LaTeX workers load the same file.
+- [ ] Given a webhook, when it is created, changed or deleted, then the secret can be rotated, a test ping sent, and recent deliveries replayed.
+- [ ] Given either resource, when a change is made, then it is audited and an unauthorised caller is refused.
+
+**Evidence:** Criterion 3, webhook half (lane V-UX-076-090, round 1, 2026-11-13): `services/document-service/src/control-plane/webhook-routes.ts` (`auditWebhookChange`) records `webhook.changed` after each successful create, update and delete, with the subscription identifier and the operation, and no secret. `services/document-service/test/control-plane/ux-079-webhook-audit.test.ts` (in memory, 2 tests, passed with `ux-079-webhook-admin.test.ts` under `pnpm vitest run`: 9 tests) checks the three operations on the trail, and that a refused change (412 stale, 404 missing) is not audited.
+**Notes:** The resources themselves are PRO's and BE's; this story exposes them in the administration API. Lane UX-079-091, round 4: the routes `GET` and `POST /webhooks` and `GET`, `PATCH` and `DELETE /webhooks/{id}` are routed over `WebhookSubscriptions` (`services/document-service/src/control-plane/webhook-routes.ts`, mounted when `ServiceParts.webhooks` is set, otherwise `not_found`). `services/document-service/test/control-plane/ux-079-webhook-admin.test.ts` (in memory, 7 tests passed): creation with the secret shown once, listing without secrets, If-Match (428 missing, 412 stale), rotation and retire (a second rotation is a 409), deletion, a user token refused with `forbidden`, another tenant's subscription not found. Criterion 1 stays open: no administration write path for fonts exists, and the manifest is built from the converter's `fonts.json`. Criterion 2 stays open: the test ping and the replay of deliveries have no protocol operation, so no route exists (the classes `WebhookDispatcher.ping` and `replay` exist, and are not routed). Criterion 3 stays open for fonts: no font write path exists. Its webhook half is audited (lane V-UX-076-090, round 1, see Evidence). Decisions recorded as proposed in docs/adr/0237-lane-UX-079-091.md, section 9. Lane U-UX-076-090, round 1: criterion 2 stays open. No route is named for the test ping or the replay of deliveries (05 section 6.2; spec/dep/dep-1.registry.json), so no route was added; the proposed paths are in docs/adr/0330-lane-U-UX-076-090.md, section 2, for a protocol decision.
+
+### UX-080 Retention policy and legal hold administration
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Tenant administrator |
+
+**Spec:** 13 §10; 08 §11 · **Requirements:** R4, R15 · **Depends on:** UX-076, HIS-029, HIS-030, HIS-031
+
+As a tenant administrator, I want to set retention per tenant and per document and to place and list legal holds through the administration API, so that records are kept or released as policy and law require.
+
+**Acceptance criteria**
+
+- [x] Given a tenant, when a retention policy is set, then it is stored and readable; a document may carry its own policy, and the effective policy is readable.
+- [x] Given the hold API, when a service credential places a hold on a document, then a reason is recorded with it.
+- [x] Given a hold, when an administrator lists holds, then every document under hold is listed.
+- [x] Given a retention policy is changed, when the change is made, then it is audited.
+
+**Evidence:** services/document-service/test/control-plane/ux-080-retention.test.ts (Node.js, in memory over HTTP through the pipeline and the router, 7 tests passed, lane U-UX-076-090, round 3, 2026-11-13): criterion 1 by `GET|PUT /retention` (keep_all at version 0, set with `If-Match`, read back with its ETag, a stale or missing `If-Match` refused with 412 or 428) and `GET|PUT /documents/{id}/retention` (the document policy overrides the tenant policy; the source is reported as `document`, `tenant` or `default`; another tenant's document is `not_found`); criterion 4 by 'audits each change with its scope, previous and new policy' (kind `retention.changed`, read from the audit store and served on `GET /audit`). Criterion 1 on PostgreSQL: services/document-service/test/control-plane/ux-080-retention-pg.test.ts (Node.js with PostgreSQL in Podman, 6 tests passed: a tenant and a document policy stored and read back by a second store, a stale write refused and nothing written, tenants kept apart, CHECK clauses refusing a bad row, the service audits a change with its previous value). Validation: invalid policies refused with `validation_failed` and nothing stored (in ux-080-retention.test.ts). The protocol definition of the four operations is in `packages/protocol/src/definition/resources.ts`. Reviewer, U4 group 1 round 3: criteria 1 and 4 unticked. The code and its tests are real, but the running service does not offer the feature: no migration creates `tenant_retention` (the PostgreSQL test applies the DDL itself), `ServiceParts.retention` is not set by `pgParts` or `memoryParts`, so `/retention` answers `not_found` in a composed service, and the HTTP test (memory store, `MemoryAudit`) never meets the PostgreSQL store or audit. The lane's protocol edit also broke `services/document-service/test/control-plane/matrix.test.ts` ("gives row 13 exactly", PRM-056 criterion 3): the four routes are service-only but row 13 is fixed by 07 §12. Tick both criteria again when the migration, the composition and that test are done. Fixed, U4 group 1 round 3 (fixer): migration `services/document-service/migrations/0065_ux_080_retention.sql` creates `tenant_retention` under row-level security (`docedit_protect`); `PgRetentionStore` (`src/control-plane/retention-pg.ts`) runs every query in the tenant's transaction (`inTenant`); `pgParts` and `memoryParts` in `src/server.ts` compose `RetentionService` over the parts' document store (a document is known when it exists, is not deleted and has a UUID) and audit trail. `services/document-service/test/control-plane/ux-080-retention-composed.test.ts` (6 tests passed, memory and PostgreSQL in Podman, 2026-11-13) starts the service with no retention part of its own and, over HTTP, sets a tenant and a document policy, reads both back with the effective policy, reads the two `retention.changed` events from `GET /audit` and from the composed audit store, and on PostgreSQL reads the `tenant_retention` and `audit_events` rows directly and the policies again through a second `pgParts` over the same database. `ux-080-retention-pg.test.ts` now runs on the migrated table (7 tests passed, including forced row-level security and the tenant isolation under the service role). 07 §12 row 13 and `packages/authority/src/permissions/matrix.ts` now name retention, so `services/document-service/test/control-plane/matrix.test.ts` and `packages/authority/test/matrix.test.ts` pass. Run with `pnpm vitest run services/document-service/test/control-plane/ux-080-retention-composed.test.ts services/document-service/test/control-plane/ux-080-retention-pg.test.ts services/document-service/test/control-plane/ux-080-retention.test.ts`. Criteria 2 and 3 (lane U-UX-076-090, round 4, 2026-11-13): `services/document-service/test/control-plane/ux-080-holds-composed.test.ts` (Node.js, the harness of the composed service on memory and on PostgreSQL in Podman, 23 tests passed, none skipped: `pnpm vitest run services/document-service/test/control-plane/ux-080-holds-composed.test.ts`). Criterion 2: `POST /documents/{id}/holds` with a service credential stores the trimmed reason with the hold, the actor (`placedBy`) and the time, returns 201, refuses a missing, empty, non-string or extra field and a reason over 500 characters with 400, and refuses an unknown or non-UUID document with 404; a user token is refused with 403; the placement is audited as `hold.placed`; on PostgreSQL the row is in `document_holds` (migration 0066, under row-level security) and read back by a second store. Criterion 3: `GET /holds` lists the tenant's holds in identifier order, a page at a time (`limit` 1 to 200, `nextCursor` signed by the kit), and a document with two holds appears with both; a forged cursor and a limit above 200 are refused with 400. Code: `services/document-service/src/control-plane/holds.ts`, `holds-pg.ts`, `hold-routes.ts`; protocol definition `packages/protocol/src/definition/resources.ts` (`placeHold`, `listHolds`, `Hold`, `HoldRequest`), generated `spec/dep/` and `packages/protocol/src/generated/types.ts`; `packages/authority/src/permissions/matrix.ts` row 13.
+
+**Notes:** The mechanics are HIS's: what a hold suspends, its release and the audit of holds are HIS-031, and the thinning that retention drives is HIS-030 and HIS-032. This story is the interface. Lane UX-079-091, round 1, not started: the hold rule (`applyHold`, `packages/history/src/hold.ts`) lives in `@docedit/history`, which `services/document-service` does not depend on, and adding that dependency is a `package.json` change for the main session. Retention policy storage has no store yet. Lane U-UX-076-090, round 3: the policy store (memory and PostgreSQL), the routes and the audit are built; criteria 1 and 4 are ticked (see Evidence). The policy shape and the precedence (document, else tenant, else keep_all) are proposals, recorded in docs/adr/0330-lane-U-UX-076-090.md, section 6, for the owner. Criteria 2 and 3 are ticked (lane U-UX-076-090, round 4) for the hold record only: placing, storing with its reason, and listing (`holds.ts`, `holds-pg.ts`, `hold-routes.ts`). The hold rule itself is still open: what a hold suspends, the thinning and purge it stops, and the release of a hold are HIS-031, and they need `@docedit/history` as a dependency of `services/document-service`, a `package.json` change for the main session. No release route exists. The shape (a `reason` of 1 to 500 characters, trimmed; several holds may name one document, and the list names each) is a proposal, recorded here for the owner. The hold tables are migration 0066 (`document_holds`, not listed in `migrations/releases.json`, as 0065), and `heldDocuments` in `holds.ts` is read by the asset sweep of another lane. Still open for the main session: the `tenant_retention` migration, and wiring `ServiceParts.retention` (with a document-existence check) into the production composition, which is not done; the routes are offered only where a server sets it. Done in U4 group 1 round 3 (see Evidence). Migration 0065 is not listed in `migrations/releases.json`: that file lists only shipped releases, and a migration not listed belongs to the next release, as 0031 to 0064 do. `test/postgres/schema.pg.test.ts` pins the table list and count; it already failed before 0065 (13 newer tables missing from its list) and now also lacks `tenant_retention`; it is not this lane's test. U4 group 1 round 4 (fixer): adding `placeHold` and `listHolds` to the protocol definition broke two tests that pin the route lists, so `POST /documents/{id}/holds` and `GET /holds` are now in `OTHER_ROUTES` and in the service-credential list of `packages/protocol/test/definition.test.ts` (they are routes of 08 §11 and 13 §10, not of 05 §6.2, and take a service credential only), and both are pending with a reason in `packages/tck/test/pending.ts` (a service-only administration route with no kit scenario yet). `pnpm vitest run packages/protocol packages/tck/test/sync.test.ts` passes (47 files, 512 tests, 2026-11-13).
+
+### UX-081 Audit query
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Tenant administrator |
+
+**Spec:** 13 §10; 07 §14; 05 §6.2 (`/audit`) · **Requirements:** R4, R10 · **Depends on:** UX-076, PRM-051
+
+As a tenant administrator, I want to query the audit trail, so that I can answer who did what to which document.
+
+**Acceptance criteria**
+
+- [ ] Given the events recorded by 07 section 14 (grant changes, region state changes, lease breaks, session revocations, restores, workflow transitions, `permission_denied` and `invalid_op` rejections), when `GET /audit` is called with filters, then matching events are returned with actor, document, scopes and server time.
+- [x] Given the filters, when they are applied, then at least document, actor, event kind and time range are supported, and results are paged with a cursor (limit at most 200).
+- [x] Given a user token, when `/audit` is called, then it is refused with `forbidden`; only a service credential can call it.
+- [x] Given another tenant, when a query is made, then its events are never returned.
+- [ ] Given administration actions (UX-076 to UX-080), when they happen, then they are in the audit trail.
+- [x] Given an event, when it is returned, then it contains no document content and no token.
+
+**Evidence:** Criteria 2, 3, 4 and 6 were unticked in review (group 1, round 1) because `GET /audit` was not routed, and ticked again in the H group 1 round 1 fix, which routes it: `getAudit` in `services/document-service/src/control-plane/audit-routes.ts` (merged into the handler map in `handlers.ts`; the audit store passed as `HandlerDeps.audit` in `kit.ts` and `server.ts`) calls `AuditQueryService.query` (renamed from `AuditQuery`, apart from the store's filter type) with the pipeline's caller and the URL's query (`auditParamsOf`, which refuses a repeated parameter). Over real HTTP through the pipeline and the router, `services/document-service/test/control-plane/routes.audit.test.ts` (in-memory storage): criterion 3, 'refuses a user token with forbidden, before anything is read' and 'answers an API key and a service JWT with a page'; criterion 2, 'filters by document, actor, event kind and a time range', 'pages with a cursor: every matching event once, in order, for each page size', 'refuses a limit above 200, an unknown or repeated parameter and a bad cursor'; criterion 4, 'returns each tenant only its own events, whatever the filters', "does not open another tenant's page with that tenant's cursor"; criterion 6, 'returns the fixed fields only, with the scopes of the data and nothing else'. Operation level: `services/document-service/src/control-plane/audit-query.ts` and `audit-query.test.ts` (fast-check paging with same-millisecond ties, more than one store read, the `unavailable` refusal). `test/control-plane/routes.documents.test.ts` now uses `GET /v1/search` as its example of a route the server does not offer. Criteria 1 and 5 are not claimed.
+
+**Notes:** 13 section 10 says "with filters" without listing them; the filter set above is derived from the fields 07 section 14 records (open questions). Lane UX-079-091, round 1: the defaults chosen are a page of 50 when `limit` is absent and ISO 8601 times with a zone (proposed, docs/adr/0237-lane-UX-079-091.md). The H group 1 round 1 fix adds two more, also proposed: a query parameter given twice is refused with `validation_failed`, and a page is sent with `Cache-Control: no-store`. Criterion 1 stays open: the audit trail records only `commit.rejected`, `grants.changed` and `incarnation.changed` today, so lease breaks, session revocations, restores, workflow transitions and region state changes cannot be returned. A page that needs more than one store read's events (1000) within one millisecond is refused with `unavailable` rather than read wrongly, because the store has no identifier cursor (BE-014). Criterion 5 waits for the administration API (UX-076 to UX-080). Lane V-UX-076-090, round 5 (2026-11-14): the administration writes that exist are audited (retention, holds and webhooks by UX-080 and UX-079; quotas by UX-078, `quota.changed`). Keys, origins and fonts have no write route, and tenants and usage have none either, so criterion 5 stays unticked.
+
+### UX-082 Audit streaming export
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Tenant administrator |
+
+**Spec:** 13 §10, §12 · **Requirements:** R10 · **Depends on:** UX-081
+
+As a tenant administrator, I want the audit trail streamed to my security tools, so that I can monitor it in real time.
+
+**Acceptance criteria**
+
+- [ ] Given a consumer with a service credential, when it connects to the stream, then new audit events arrive in near real time, in order per document.
+- [ ] Given a consumer disconnects, when it reconnects with its last cursor, then it resumes without a gap.
+- [ ] Given an event, when it is delivered, then it has a stable identifier so that a consumer can deduplicate.
+- [ ] Given a user token, when the stream is requested, then it is refused.
+
+**Notes:** The format and transport of the stream are not specified; they are a PRO decision (open questions). Lane UX-079-091, round 5: not started. `GET /audit` already pages in (time, identifier) order with a cursor that resumes after the last event (`services/document-service/src/control-plane/audit-query.ts`), but a stream needs a transport the spec does not choose: a poll route would invent one. All four criteria stay open until PRO decides the transport. Recorded in docs/adr/0237-lane-UX-079-091.md, section 11.
+
+> UX-083 (Spike: how cross-document search should work) was merged into BE-053 during the cross-check of 2026-11-06.
+
+### UX-084 Search documents for a host catalogue
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | M | could | Integrating developer |
+
+**Spec:** 13 §10; 06 §16; 08 §13 · **Requirements:** R15 · **Depends on:** BE-053, UX-076
+
+As an integrating developer, I want to search documents across my tenant, so that my catalogue can offer full-text search.
+
+**Acceptance criteria**
+
+- [ ] Given a service credential and a query, when `GET /search` is called, then matching documents are returned with identifiers and `externalId`, paged with a cursor, ranked as BE-053 recommends.
+- [ ] Given another tenant, when a query is made, then none of its documents are returned.
+- [ ] Given a document is saved, when the freshness bound recommended in BE-053 (target) passes, then its new content is searchable.
+- [ ] Given a document is erased, when it is purged, then its entries leave the index.
+- [ ] Given a user token, when `/search` is called, then it is refused.
+
+**Notes:** Phase inferred (4): search is only sketched and not placed in any phase. Lane UX-079-091, round 4, not started: the index exists (`services/document-service/src/control-plane/search-index.ts`, keyed by tenant and visibility class), but `GET /search` is not routed, no indexer feeds it from checkpoints, there is no cursor, and the `SearchResult` shape is a placeholder (gap G77), so the identifiers, `externalId` and cursor of criterion 1 cannot be met. Criteria 2 and 5 wait for the route; the tenant rule exists at the index level only. Recorded in docs/adr/0237-lane-UX-079-091.md, section 10. Second review (2026-11-06, SPK-027), SR-M5: under ADR 0019 the index holds hidden text, and a host cannot tell which results a user may read; the review proposes that `GET /search` takes the principal it searches for and returns only what that principal can read ([review](../review/2026-11-06-second-review.md)). Lane V-UX-076-090, round 2 (2026-11-13): `spec/dep/dep-1.openapi.json` already defines `GET /search` (operation `search`) as a search for service credentials for a host's catalogue, so this story's document search at the same path conflicts with the published contract. Which resource `/search` serves is a protocol decision; no route was added. Recorded in docs/adr/0330-lane-V-UX-076-090.md, section 4.
+
+### UX-085 Classification label
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | M | should | Tenant administrator |
+
+**Spec:** 13 §3, §10, §12; 05 §6.2 · **Requirements:** R15 · **Depends on:** UX-018, PRO-046, PRO-047
+
+As a tenant administrator, I want a classification label on a document, so that readers see it and the output carries it.
+
+**Acceptance criteria**
+
+- [x] Given the document resource, when a label is set, then it is stored and returned with the document.
+- [ ] Given a label, when the status bar renders, then it is shown as text, not by colour alone, and a change reaches open editors live (`document.updated`).
+- [ ] Given a document with a label, when it is exported, then the output carries the label as a marking (EXP-089).
+- [x] Given a label change, when it is made, then it is audited.
+
+**Evidence:** Criterion 4 (lane U-UX-076-090, round 1, 2026-11-13): `services/document-service/test/control-plane/ux-085-classification-audit.test.ts` (2 tests, in memory and on PostgreSQL in Podman, both passed under `pnpm vitest run` on that file): a PATCH that sets or clears the label adds one `classification.changed` event with the previous and the new label, a PATCH that leaves the label as it was adds none, and `GET /audit?kind=classification.changed&document=` serves the events to the service credential. The event is recorded after the update commits, not in the same transaction (`services/document-service/src/control-plane/handlers.ts`, `updateDocument`), so the audit is not atomic with the change yet. Criterion 1, PostgreSQL run (same lane, 2026-11-13): the PostgreSQL variant of `pro-048-classification.test.ts`, skipped in round 4, passed in Podman. Criterion 1 (lane UX-079-091, round 4, 2026-11-13): `services/document-service/test/control-plane/pro-048-classification.test.ts`, in memory over HTTP: a new document has no label, PATCH with If-Match sets it and GET returns it, a stale If-Match is refused with 412, and a PATCH with null clears it (1 test passed; the PostgreSQL variant was skipped, PostgreSQL not being available here). Criterion 2 is not ticked (review of round 3: the status bar was never rendered, the checks are regular expressions over the component source, and no core supplies `classification`, so the bar never shows a label). `packages/ui/test/classification.test.ts` (the name rule as property tests, the string `status.classification` in `en-GB.ts`, and the source checks that `StatusBar.svelte` reads `core.classification` through `live` and renders it as a text node). Browser run (fixer, round 3, 2026-11-13): `packages/ui/e2e/classification.spec.ts` renders the shell with a test core that offers the `classification` view (`packages/ui/test/support/fake-core.ts`, harness option `classification` and `setClassification` in `e2e/harness/main.ts`): the bar shows "Classification: Internal use only" as a text node with no child elements and no axe violation; a new label replaces it without a reload; a name holding markup is shown as text and runs nothing; a blank label or none shows nothing; a core without the view shows nothing (2 tests, passed in Chromium, Firefox and WebKit, `pnpm exec playwright test -c packages/ui/playwright.config.ts classification.spec.ts`). This proves the shell's side only; criterion 2 stays unticked because no product core supplies the view or reacts to `document.updated` (see Notes).
+
+**Notes:** Who may set a label, and whether labels come from a tenant-defined set, are not specified (open questions). Lane UX-079-091, round 4: criterion 1 ticked on the HTTP test named in Evidence. Criterion 4 was open in round 4 and is ticked in lane U-UX-076-090, round 1 (see Evidence); the kind name `classification.changed` is proposed in docs/adr/0330-lane-U-UX-076-090.md. Lane ui-3, round 3 (2026-11-13): criterion 2 was ticked on source-level evidence and unticked in review. The status bar now has a browser run against a test core. It stays unticked until the element's core offers the optional `classification` view (`packages/ui/src/core-api.ts`) from the document resource and refreshes it on `document.updated`: `packages/element` and `packages/engine` do neither yet (no reference to `classification` or `document.updated` in their source, 2026-11-13), so in the product the bar shows nothing. Criterion 1 (stored and returned by the document resource), criterion 3 (the export marking, EXP-089) and criterion 4 (the audit) are not in `packages/ui`, and stay unticked. Lane V-UX-076-090, round 2 (2026-11-13): criterion 2 is blocked by two open decisions. Its live refresh names `document.updated`, which is gap G49 (the event vocabularies disagree with `dep.document.changed`; PRO open question 17). And no code in `packages/element/src` mentions `classification`, so no core supplies the view from `GET /documents/{id}`. Criterion 3 waits for EXP-089 (`docs/stories/EXP-export.md`), which is not built.
+
+### UX-086 Policy hook for data-loss prevention
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | M | could | Integrating developer |
+
+**Spec:** 13 §10; 05 §7 · **Requirements:** R10, R15 · **Depends on:** UX-076, BE-055
+
+As an integrating developer, I want a synchronous hook before an export or a send, so that my data-loss prevention can approve or refuse it.
+
+**Acceptance criteria**
+
+- [ ] Given a tenant registered a hook, when an export or a send is requested, then the service calls the hook before starting, with the document, the acting user, the target and the classification label, and proceeds only on an allow answer.
+- [ ] Given a deny answer, when the request is refused, then the user sees the reason the hook gave, and the refusal is audited.
+- [ ] Given the hook does not answer in time or cannot be reached, when the request is made, then the outcome is deterministic, documented and audited, as the decision in the open questions records.
+- [x] Given the hook request, when it is sent, then it is signed in the same way as webhooks (05 section 7) so the host can verify it.
+
+**Evidence:** services/document-service/test/control-plane/ux-086-policy-hook.test.ts (Node.js, a real HTTP hook on 127.0.0.1 with an ephemeral port, in memory, 9 tests pass, lane U-UX-076-090, round 2, 2026-11-13). Criterion 4: the first test sends a request from `PolicyHookClient` (`services/document-service/src/control-plane/policy-hook-client.ts`) and the hook verifies it with `verifyDelivery` under the tenant secret; another secret and a changed body are refused. The decision of criterion 2 is shown by the deny test; the outcomes of criterion 3 by the timeout, bad-answer and unreachable tests. The export path (`export-routes.ts`) asks the hook before a job starts: a deny is 403 `forbidden` with the reason, an unanswered hook is 503 `unavailable`, and each refusal is audited (`policy_hook.refused`, `policy_hook.unanswered`).
+
+**Notes:** Phase inferred (4): it is unplaced; classification labels and discovery export are phase 4. "Pre-send" is ambiguous (workflow send, or sharing). The timeout, failure behaviour, what content the hook sees, and where it is registered are not specified (open questions). Signing the hook is inferred. Lane UX-079-091, round 1: `services/document-service/src/control-plane/policy-hook.ts` builds the hook request (document, acting user, action, target, classification label) signed with `signDelivery`, and reads the answer (`decisionOf`); `policy-hook.test.ts` verifies it with `verifyDelivery`. Nothing sends it yet, so criterion 4 ("when it is sent") stays unticked until the sender exists (BE-056, PRO-071). Criteria 1 to 3 stay open: the calls in the export and send paths, the timeout and the outcome when the hook does not answer (open question; no default chosen), and the audit of a refusal are not built. Lane U-UX-076-090, round 2: the sender and the export path are built (see Evidence), so criterion 4 is ticked. Criterion 2 is met for an export only; the send path is not built, so criteria 1 and 2 stay open. Lane V-UX-076-090, round 1 (2026-11-13): a search of `services/document-service/src` finds no send operation, so there is still no call site; what counts as a send (a workflow step, a share, or both) is open and is not decided here. Criterion 3 stays open: the fail-closed outcome (refused with `unavailable`, audited) is a proposed default in docs/adr/0330-lane-U-UX-076-090.md, section 4, and the owner has not confirmed it. Where a tenant registers its hook and secrets is still open; the server takes them through `ServiceParts.policyHook`.
+
+### UX-087 Discovery export
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | L | could | Tenant administrator |
+
+**Spec:** 13 §10, §12; 08 §12 · **Requirements:** R4, R15 · **Depends on:** UX-076, UX-080, HIS-033
+
+As a tenant administrator, I want a bundle of a document's or a tenant's content, history, comments and evidence, so that I can answer a legal request.
+
+**Acceptance criteria**
+
+- [ ] Given a document or a tenant, when a discovery export is requested, then an asynchronous job with progress produces a bundle with the content, the history with its hash chain, the comments with their ranges, and the workflow evidence, plus a manifest of hashes and the chain head.
+- [ ] Given legal holds and retention, when the bundle is built, then it states what is included and what has been thinned.
+- [ ] Given the bundle, when it is checked offline with the verification tool, then the hashes and the chain verify.
+- [ ] Given evidence is personal data, when the export is requested, then it needs an administrator and is audited.
+- [ ] Given a tenant-wide export, when it is large, then it is produced in parts.
+
+**Notes:** The bundle's format is not specified. Lane UX-079-091, round 5: not started. No discovery export exists in `services/document-service` (only the PRO-109 discovery document of `/.well-known/dep`, which is a different thing), and the bundle format, its manifest and the offline verifier are not designed. An L story with an open format is not built in one round; see docs/adr/0237-lane-UX-079-091.md, section 11.
+
+### UX-088 Tenant export
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | L | should | Tenant administrator |
+
+**Spec:** 13 §10 · **Requirements:** R15 · **Depends on:** UX-076, UX-077, UX-078, UX-079, UX-080
+
+As a tenant administrator, I want everything my tenant owns in documented formats, so that I can leave or archive without loss.
+
+**Acceptance criteria**
+
+- [ ] Given a tenant, when an export is requested, then an asynchronous job produces a bundle of its documents (CDM and assets), history, comments, versions, grants, settings, public keys, origins and webhook configuration.
+- [ ] Given the bundle, when it is read, then every file's format is documented and versioned, and a verifier validates a bundle against the documentation.
+- [ ] Given the manifest, when its counts are compared with the stored data, then they match.
+- [ ] Given secrets (private keys, webhook secrets), when the bundle is built, then they are excluded.
+- [ ] Given another tenant, when the bundle is built, then none of its data is included, and the request is audited.
+
+**Notes:** Phase inferred (4): unplaced in 13 section 12. Lane UX-079-091, round 5: not started. The tenant bundle's file formats are not specified (criterion 2 needs them documented and versioned), and its contents depend on the stories it depends on (UX-077 to UX-080), of which only UX-077, UX-078 and UX-079 have code. See docs/adr/0237-lane-UX-079-091.md, section 11.
+
+### UX-089 Administration console
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | L | could | Tenant administrator |
+
+**Spec:** 13 §10, §12 · **Requirements:** R15 · **Depends on:** UX-076, UX-077, UX-078, UX-079, UX-080, UX-081
+
+As a tenant administrator, I want a console for the administration API, so that I do not need scripts.
+
+**Acceptance criteria**
+
+- [ ] Given the console, when it runs against a mock that implements only the published API, then every function works, showing that it uses no private endpoint.
+- [ ] Given the console, when it is used, then it covers tenants, keys, origins, quotas, usage, fonts, retention and holds, webhooks and the audit viewer.
+- [ ] Given the console's screens, when axe and a keyboard pass run, then they meet WCAG 2.2 AA.
+- [ ] Given the console, when it is shipped, then it is separate from the component bundle.
+- [ ] Given a user without administration rights, when they open the console, then they are refused.
+
+**Notes:** "A console comes later and uses only this API" (13 section 10). Lane UX-079-091, round 5: still not started; criterion 1 waits for the published administration API (UX-076), which has no machine-readable definition in `spec/`, so no criterion can be met in this round. Lane ui-3, round 7 (2026-11-13): not started. Criterion 1 needs the published administration API (UX-076), which has no machine-readable definition in `spec/` yet, so there is nothing to build the console against; an invented API would not meet it. Lane V-UX-076-090, round 2 (2026-11-13): still not started. `spec/dep/dep-1.openapi.json` has `/fonts` and `/retention` paths but none for tenants, quotas or origins. Criteria 2 to 5 need the console itself, and criterion 4 (a separate bundle) needs its own entry point, a build change for the main session. See docs/adr/0137-ui-3-backlog-batch.md, round 7.
+
+## Host integration
+
+### UX-090 Integration guide
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Integrating developer |
+
+**Spec:** 13 §11.1, §12; 02 §3, §14; 05 §8; PRODUCT principle 5 · **Requirements:** R15 · **Depends on:** UX-091, UX-092, UX-093, UX-094, SPK-015
+
+As an integrating developer, I want a guide to what my application must build, so that I can embed the editor correctly.
+
+**Acceptance criteria**
+
+- [x] Given the guide, when it is read, then it covers the five obligations of 13 section 11.1: the token endpoint with key and origin registration; the page glue; a webhook receiver; the host's own catalogue; and notifications, each with a worked example.
+- [ ] Given a fresh checkout and the compose stack, when the quick start is followed, then the developer reaches an editor open on a new document using their own token endpoint, and the steps are run in CI so the guide cannot go stale.
+- [ ] Given the embedding contract, when the reference is generated, then it lists every attribute, property, method and event, the command identifiers and the configuration, versioned per release.
+- [x] Given a strict policy, when a host needs it, then the guide lists the policy names and directives the component needs per feature, and notes for React, Angular, Vue, SvelteKit and plain HTML.
+- [x] Given the guide, when it states who owns what, then identity, catalogue, sharing and notifications belong to the host, and editing, rights on parts, fields, history and output to the editor.
+- [x] Given restrictions, extension panels, the parity profile and the shortcut table, when the guide covers them, then it states the limits of output restrictions (UX-040), the accessibility bar for panels (UX-052) and links to the profile (UX-001).
+- [ ] Given a change to the embedding contract, DEP or the administration API, when it is made, then the guide is updated in the same change.
+
+**Evidence:** Criterion 1 and criterion 5 (lane UX-079-091, round 5, 2026-11-13): `apps/reference-host/docs/integration-guide.md` covers the five obligations of 13 section 11.1 (token endpoint, page glue, webhook receiver, the host's catalogue, notifications), each with a worked example taken from the reference host's code, and has a "Who owns what" section. `apps/reference-host/test/integration-guide.test.ts` (14 tests, passed under `pnpm vitest run apps/reference-host/test/integration-guide.test.ts`) checks the headings and their order, a code block per obligation, that every source path the guide names exists, and that each named function is exported from the file the guide gives. Criterion 6 (lane U-UX-076-090, round 1, 2026-11-13): `apps/reference-host/docs/integration-guide.md` section "Limits of the embedding" now states each limit in its own bullet, with the state as of 2026-11-13 (the restriction guards and the sample extension's axe run are not yet built, and the guide says so); `apps/reference-host/test/integration-guide.limits.test.ts` (4 tests, Node.js, `pnpm vitest run` on it and on integration-guide.test.ts: 18 tests passed) checks each bullet's facts, the profile file and its non-goal rows.
+
+**Evidence:** Criterion 4 (lane V-UX-076-090, round 1, 2026-11-13): `apps/reference-host/docs/integration-guide.md` section "Strict content security policy" lists, per feature, the directives and policy names measured in spike S2 (`docs/spikes/2026-11-06-s2-csp-trusted-types.md`, section 8; Chromium, Edge, Firefox and WebKit), and a note for each of plain HTML, React, Angular, Vue and SvelteKit. `apps/reference-host/test/integration-guide.policy.test.ts` (7 tests, Node.js, `pnpm vitest run` on it with the two other guide test files: 25 tests passed) checks the sections, the policy names against `packages/element/src/trusted-types.ts`, the option `config.styleNonce` and `useWasm`, and the cited spike section. The framework notes were not run in a framework project; the browser measurements cover the component only.
+**Notes:** Phase inferred (1b): the first usable release is the first one hosts can adopt. Lane ui-3, round 7 (2026-11-13): not started. The quick start (criterion 2) needs the compose stack (UX-091) and the host obligations (UX-092 to UX-094), and its CI run is outside packages/ui. Criterion 3 would be generated from packages/element and the command registry (UX-003); no such generator exists in packages/ui, and none is written here. See docs/adr/0137-ui-3-backlog-batch.md, round 7. Lane UX-079-091, round 5: criteria 1 and 5 ticked on the guide and its check test (see Evidence). Criterion 6 was open in round 5 and is ticked in lane U-UX-076-090, round 1 (see Evidence). Criterion 4 was open in round 5 and is ticked in lane V-UX-076-090, round 1 (see Evidence). Criterion 2 needs the compose stack and a CI run, and criterion 3 needs a generator for the embedding reference; neither is built.
+
+### UX-091 Reference host: compose stack and demo harness
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | L | must | Integrating developer |
+
+**Spec:** 13 §11.2, §12; 11 §3; 06 §13 · **Requirements:** R6, R15 · **Depends on:** BE-005, EXP-001
+
+As an integrating developer, I want to run the whole system from one compose file, so that I can see it work and have a starting point.
+
+**Acceptance criteria**
+
+- [ ] Given a fresh clone and a container runtime, when one compose command is run, then the document service, PostgreSQL, object storage, one export worker and the reference host start with a seeded tenant, users and documents, and health checks pass.
+- [ ] Given the export worker, when a process inside it tries to reach the network, then it cannot.
+- [x] Given the tenant, when the stack starts, then token-verification keys and allowed origins are seeded from configuration, as the administration API (UX-077) does not exist yet.
+- [x] Given demo secrets and keys, when the stack starts, then they are generated per start or marked demo-only, and the documentation says it is not a production deployment.
+- [ ] Given the stack, when the two-user scenario runs in CI (two users with different region grants editing at once, a visible rejection, a live grant change), then it passes.
+- [ ] Given the stack, when the property tests of S3 are pointed at its service address, then they run against the real service.
+- [x] Given `down` with volume removal, when the stack is restarted, then it returns to the seeded state.
+
+**Notes:** The 1a exit criterion is "the demo runs from a compose file; the property tests of S3 run against the real service" (11 section 3). The spec says the compose file covers the service, PostgreSQL, object storage and one export worker; whether it also runs the reference host and a mail sink (UX-098) is not stated (open questions).
+
+**Evidence:** `apps/reference-host/test/stack.test.ts`, "the demo secrets": `ensureSecrets` (`scripts/lib/stack.ts`) writes the host's signing key, the API key and the other secrets once per data directory, marked demo-only; a second read gives the same values and a new directory gives new ones (criterion 4). "the demo is marked as not production": `apps/reference-host/README.md` and `apps/reference-host/compose.json` both say it is not a production deployment (criterion 4). "the seeded allowed origins": `allowedOrigins` gives the host's port on 127.0.0.1 and localhost only (criterion 3, in part). Containers are not run here.
+
+**Evidence (lane U-UX-091-104, round 6; criteria 3 and 7):** the demo stack ran on the lane's ports (project `docedit-u-ux-091-104-demo`, PostgreSQL 56310, S3 56311, service 56312, host 56313) with `scripts/stack.ps1 up`, which started all five parts; the export worker started with its sandbox image. Criterion 3: the run's setup output shows the tenant registration applied from configuration at start, with the origins `127.0.0.1:56313` and `localhost:56313`; the browser test `apps/reference-host/e2e/u-ux-091-104-stack.spec.ts` then signed a seeded person in, and the running service accepted the token the host issued (the editor reached `de-ready`, `u-ux-091-104-flush.spec.ts` as well). Criterion 7: `stack.ps1 reset` (down with volumes, then up) on the same project: the catalogue held three test documents before the reset and none after it, and the seed document was present once. Chromium and Firefox passed the browser tests; WebKit's sign-in fails with a 404 page (see UX-095).
+
+**Notes (round 2, reference-host packet):** Criterion 3 stays open: the registration of the tenant's keys and origins is `scripts/setup.ts`, which needs PostgreSQL and was not run. Round 4: the file's content is built by `tenantRegistration` (`apps/reference-host/scripts/lib/stack.ts`), and `apps/reference-host/test/registration.test.ts` applies it through the service's `parseSeed` and `applySeed` to an in-memory registry (the host key, the hashed API key, the two origins). The running stack, which applies the same file at start, was not run, so the criterion is not ticked. Criterion 2 is not met as written: `compose.json` gives the `export-worker` service `network_mode: host`, so the worker process has the host's network; only the sandbox it starts (`export-sandbox`, `network_mode: none`, checked in `stack.test.ts`) has none. The choice between these is for the owner (see `docs/adr/0114-reference-host-backlog-batch.md`). Criteria 1, 5, 6 and 7 need the containers and stay unticked. Lane UX-079-091, round 4: `stack.test.ts` and `registration.test.ts` re-run (11 tests passed); still no container run, so no further criterion ticked. Decision on criterion 2 (worker network) recorded in docs/adr/0237-lane-UX-079-091.md, section 12, for the owner. Lane U-UX-091-104, round 5 (2026-11-13): `apps/reference-host/test/u-ux-091-104-registration.pg.test.ts` applies the same `parseSeed` and `applySeed` calls to a `PgTenantRegistry` in its own PostgreSQL database (the shared test PostgreSQL in Podman), reads the tenant, host key, origins and hashed API key back, checks that a second apply changes nothing, and drops the database. Criterion 3 still stays unticked: that proves the file is applied to PostgreSQL, not that the running stack applies it at start (`server.ts`), and the stack was not started. Criterion 5 (the S3 property tests) is not ticked: in 11 section 3, "S3" appears to name a roadmap stage (the property tests with the outcome check as the oracle, 11 section 3 and risk 4), not object storage, so the criterion's meaning needs the owner's answer (see docs/adr/0331-lane-U-UX-091-104.md).
+
+**Notes (lane U-UX-091-104, round 6):** Criterion 1 stays unticked. The start path is proven (all five parts start with `stack.ps1 up`, and the health checks and the seed pass), but the criterion names a fresh clone and one compose command; the runner is `scripts/stack.ps1` (it reads `compose.json`, because Compose cannot pass `--cgroups=disabled` on a WSL Podman machine), and no fresh clone was made. Criterion 2 is unchanged: the export worker still has the host's network (owner decision, `docs/adr/0331-lane-U-UX-091-104.md`). Criterion 5 (the two-user scenario with region grants and a live grant change, in CI) is not built; it needs a CI runner and a scripted second editor. Criterion 6 (S3 property tests against the service) is unchanged: the owner must say what "S3" means here. The criteria are numbered as in the list above; the round 4 and round 5 notes that call criterion 5 the S3 property tests used another numbering.
+
+### UX-092 Reference host: seeded users and token minting
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Integrating developer |
+
+**Spec:** 13 §11.1, §11.2; 05 §3.1, §3.3 · **Requirements:** R6, R10 · **Depends on:** UX-091, UX-025, PRO-009, PRO-011, PRO-012
+
+As an integrating developer, I want a working token endpoint and a set of seeded users, so that I can copy a correct host-signed token flow.
+
+**Acceptance criteria**
+
+- [x] Given the demo, when a visitor chooses a seeded user (no password is entered), then the page acts as that user, with the choice clearly marked as demo-only.
+- [x] Given the token endpoint, when it signs a token, then it sets `iss`, `aud` equal to the document service identifier, `iat`, `exp` at most 15 minutes after `iat`, `jti`, `tid`, an opaque `sub` that is not an e-mail address, `grp`, `docs` (at most 20 documents) and optionally `name`, `restrict` and `access_since`, with an algorithm from the allow-list.
+- [x] Given the private key, when the page loads, then it never reaches the browser, and the token is not placed in a URL, a log or local storage.
+- [x] Given a user's role is removed in the host, when the change is saved, then the host calls `POST /sessions/revoke` so that the user is cut off before the token expires.
+- [x] Given the token will expire, when the editor calls `getToken` again, then a new token is issued without the user doing anything.
+
+**Evidence:** `apps/reference-host/src/lib/server/tokens.ts` (both issuers) and `apps/reference-host/src/lib/server/catalogue.ts`, `documents.ts`; `apps/reference-host/test/host.test.ts`, "the token endpoint": for `service-minted` and `host-signed` tokens the claims of 05 section 3.1 are checked (`iss`, `aud` equal to the service identifier, `iat`, `exp` 300 seconds after `iat` and at most 900, `jti`, `tid`, opaque `sub` without `@`, `grp`, `docs` with one entry, `name`, `access_since`, the algorithm ES256 or EdDSA), and the in-memory document service accepts each token; a second `issue` gives a new `jti` and a valid token (criterion 5). "roles and region grants": a role taken away through `changeRole` makes the service refuse the user's token with `revoked` (criterion 4). Run on the in-memory service of `@docedit/document-service`, not in containers. Criterion 1 (round 6): `apps/reference-host/test/share-routes.test.ts`, "the demo sign-in": the sign-in action starts a session for the chosen seeded person only, with a cookie scoped to that person's path, and refuses any other choice with 400 (`src/routes/+page.server.ts`); the start page shows a visible "Demo only" notice and has no password field (`src/routes/+page.svelte`, read from source). Run in memory, not in a browser. Criterion 3 stays open: nothing in the tests shows that the private key stays on the server in a running stack; `apps/reference-host/test/glue.test.ts` checks the token request goes to `/token` with the document identifier in the body only, and the response is `cache: 'no-store'`.
+
+**Evidence (lane U-UX-091-104, round 6, criterion 3):** `apps/reference-host/e2e/u-ux-091-104-stack.spec.ts`, "the private key and the service credential never reach the browser": in Chromium and Firefox against the demo stack (`DOCEDIT_DEMO_REUSE=1`, lane ports), a browser signs in as a seeded person, creates a document and opens it. Every response body the browser received, every request URL, `localStorage`, `sessionStorage` and the stack's log files are searched for the issued token (it must be found in a response, so the check is not empty) and for the private parts of the stack's secrets (the host's and the service's signing keys, the host's API key, the view and cursor keys, from `secrets.json`). None is found. WebKit: the sign-in fails with a 404 page, so this test fails there (not diagnosed). This closes the criterion's check of the page; the earlier note that the browser was not run is superseded for criterion 3.
+
+**Notes:** The reference host uses the host-signed path (recommended in 05 section 3.1). The service-minted path (`POST /tokens`) is demonstrated by the conformance kit. Round 3: criterion 3 has a partial test in `apps/reference-host/test/server-only.test.ts` (no response of the layout load, the editor page load or the token endpoint names the signing key, and no client-side file does). It stays unticked: the criterion also says the token is not placed in a log or in browser storage, which is not asserted, and the page is not loaded in a browser.
+
+### UX-093 Reference host: page glue
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Integrating developer |
+
+**Spec:** 13 §11.1; 05 §8.1; 02 §2.2 · **Requirements:** R6, R15 · **Depends on:** UX-091, UX-092, UX-025, PRO-074, PRO-087
+
+As an integrating developer, I want a small module of correct page glue, so that I can copy it into my application.
+
+**Acceptance criteria**
+
+- [x] Given the page, when it loads, then `getToken`, `resolveUsers` and `searchPrincipals` are implemented against the seeded directory.
+- [x] Given `de-auth-required`, when it fires, then the page asks the host backend for a new session or shows its sign-in; given `de-error`, then the page shows the message and treats `fatal` appropriately.
+- [x] Given the author typed and then clicks a host link, when the host navigates, then it awaits `flush({ timeoutMs })` first, and if it rejects, the work stays in the journal and reappears on return.
+- [x] Given the page, when it shows an example host-built toolbar next to the built-in one, then the example uses only `queryCommand`, `exec` and `de-command-state` (UX-005).
+- [x] Given the module, when it is read, then each function carries a comment pointing to the section of the guide that explains it.
+- [x] Given `de-share-request`, when it fires, then the page opens the share dialog (UX-095).
+
+**Evidence:** `apps/reference-host/src/lib/glue/page-glue.ts` (`tokenSource`, `directoryResolver`, `principalSearch`, `attachEditor`, `flushBeforeNavigation`); `apps/reference-host/test/glue.test.ts`: a 401 from the token endpoint gives `onSignInNeeded`, a 403 or 404 gives `onAccessLost`, a first refused token makes the page load again, a second inside `AUTH_RETRY_WINDOW_MS` gives `onAccessLost` and a later one loads again (criterion 2, with `de-error` passing its message and `fatal` flag and `de-share-request` reaching the host's handler); the test reads `page-glue.ts` and checks that every exported function has a comment naming a guide section (criterion 5). `apps/reference-host/test/glue-wiring.test.ts` (criterion 1): `tokenSource`, `directoryResolver` and `principalSearch` are called against the host's own token route and directory route, with a real session and the seeded directory; the service accepts the token, `resolveUsers` returns the seeded names in order with null for an unknown identifier, and `searchPrincipals` finds `Bob Mensah` and `group:g-finance`. Criterion 4 (round 7): `apps/reference-host/test/host-toolbar.test.ts` and `host-toolbar-live.test.ts` (the element's real `de-command-state` entries, round 8) run `attachHostToolbar` (`src/lib/glue/host-toolbar.ts`) against a stand-in element that offers only `queryCommand`, `exec`, `focus` and the listeners, and a stand-in DOM: no toolbar without the API, four buttons in registry order, states from `queryCommand`, `exec` on click only when enabled, refresh from `de-command-state` (array or `{ commands }` detail), removal on detach, and a source check that the module touches no other element member. The page is not run in a browser, so the rendering is not shown.
+
+**Evidence (lane U-UX-091-104, round 1, criterion 6):** `apps/reference-host/e2e/u-ux-091-104-share.spec.ts`, "the element's share command opens the host's dialog": in a browser against the demo stack (see UX-095's Evidence for the run), a click on the element's own Share button, inside its shadow root, makes the element raise `de-share-request`, and the page's `openShare` shows the host's `dialog.share-dialog`. Passed in Chromium and Firefox; not run in WebKit (its demo sign-in fails, see UX-095).
+
+**Evidence (lane U-UX-091-104, round 6, criterion 3):** `apps/reference-host/e2e/u-ux-091-104-flush.spec.ts` in Chromium and Firefox against the demo stack (`DOCEDIT_DEMO_REUSE=1`, lane ports). The author creates a document from the list and opens it from the list, so Back is a client-side navigation that goes through the page's `beforeNavigate` guard; the author types a marker; every call to the document service is then refused (`page.route` aborts it). The test records the element's `flush` calls and the moment the editor leaves the page: the guard calls `flush` once, the page changes only after `flush` has settled, and once the service is back the typed text is in the document again. Four runs passed in Chromium and Firefox. WebKit: the demo sign-in returns a 404 page, so the test fails there before the guard is reached (not diagnosed; see UX-095). Not shown: with the service refused, `flush` settled as resolved (0 to 26 ms), not rejected, so the `kept` branch is not exercised; the text came back through the element's journal. The criterion names a host link; the test leaves by Back, which runs the same guard. Whether `flush` should settle while the service refuses the work is open for the element (`docs/adr/0331-lane-U-UX-091-104.md`). Reviewer correction (2026-11-14): criterion 3 is unticked. The spec's premise was false: the editing connection is a WebSocket (`packages/backend-dep/src/connection.ts`), which Playwright's `page.route` does not intercept (it needs `routeWebSocket`), so the service was not refused. A probe run showed `sync.submit` sent and `sync.ack` received after the abort route was set, and `flush` resolving in 17 ms because the work was confirmed. The test shows only that the guard awaits `flush` once; the rejection branch and the journal's return of unconfirmed work are not shown. Redo with `page.routeWebSocket` (or a stopped service) so `flush` rejects at its timeout.
+
+**Evidence (round 6 fixer, 2026-11-14, criterion 3):** `apps/reference-host/e2e/u-ux-091-104-flush.spec.ts`, reworked. The test routes the service's WebSocket with `context.routeWebSocket`, forwards every frame both ways, and drops the page's `sync.submit` frames while the work is to be refused, so the commit is neither stored nor acknowledged. It checks: at least one submit was dropped; the marker is in the element's IndexedDB journal (`docedit-journal`) before Back; the guard calls `flush` once, `flush` rejects ("unconfirmed commits remain") no earlier than 50 ms before the guard's 3000 ms timeout, the page shows "Last flush: kept", and the page changes only after the rejection; after leaving, the marker is still in the journal, and a second context with no journal and no routing opens the document without it (the service does not have it); with submits forwarded again, the author opens the document from the list, the marker reappears, the journalled work is submitted, and the second context then loads the document with the marker. Run against the demo stack (project `docedit-u-be-071-084-demo`, ports 56370 to 56373, `DOCEDIT_DEMO_REUSE=1`, `DOCEDIT_E2E_BROWSERS=chromium,firefox,webkit`, `--repeat-each 2`): Chromium 2 of 2 and Firefox 2 of 2 passed (plus one earlier Chromium run); the rejection came after 3000 to 3015 ms, measured with `performance.now` in the page and reported as a test annotation. WebKit 0 of 2: the demo sign-in shows the 404 page, as in UX-095 (not diagnosed). The test leaves by Back, which runs the same `beforeNavigate` guard as a host link.
+
+**Notes:** Phase 1a for `getToken` and the directory; the share handler arrives with UX-095. Criterion 1 is ticked at handler level: `glue-wiring.test.ts` calls the route handlers directly, not through a SvelteKit server, and the page is not loaded in a browser. Criterion 3 (the wait before navigation) is tested only for the glue's side: `flushBeforeNavigation` waits, and reports `kept` on rejection; the journal that brings the work back is the element's (PRO-083 `flush` is not built yet, so the `unsupported` branch is what runs today). Criterion 4 (the example toolbar, `apps/reference-host/src/lib/glue/host-toolbar.ts`) needs `de-command-state` and a DOM, and the element does not offer `queryCommand` and `exec` yet (PRO-085); not tested. The share dialog (criterion 6's target) is UX-095. Round 6: the dialog exists (`src/lib/share/ShareDialog.svelte`) and the editor page's `onShareRequest` opens it (`openShare` in `routes/as/[user]/docs/[id]/+page.svelte`), so the wiring is in place. The page is not run in a browser, so criterion 6 stays open. Lane UX-092-104, round 8 (2026-11-13): the element now offers `flush` (`packages/element/src/doc-editor.ts`), and the editor page awaits `flushBeforeNavigation` with 3000 ms before a host link (`+page.svelte`), so the `flushed` and `kept` branches run, not `unsupported`; the return of kept work to the journal is the element's and needs a browser run, so criterion 3 stays open. Criterion 6 is traced in source only: `de-share-request` reaches `openShare` (`attachEditor`, then `onShareRequest` in `+page.svelte`), which calls `showModal()` on the owner's `ShareDialog`; no test runs that call, so it stays open. Criterion 4 (ticked above), round 8 correction: the element does raise `de-command-state`, with `{ commands: [{ name, enabled, active }] }` (`packages/element/src/events.ts`, `session.ts`). The example read the entries as identifiers, so in a real page its buttons never refreshed after the first paint. `host-toolbar.ts` now reads `name` from each entry (identifiers still accepted), and `apps/reference-host/test/host-toolbar-live.test.ts` feeds the element's real shape (criterion 4, Node.js only).
+
+### UX-094 Reference host: document list and the host's catalogue
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Author |
+
+**Spec:** 13 §10, §11.1, §11.2, §12; 05 §6.2 (`/documents`); 11 §3 · **Requirements:** R6, R15 · **Depends on:** UX-091, UX-092, PRO-046
+
+As an author, I want a list of my documents, so that I can create, open and delete them from the demo.
+
+**Acceptance criteria**
+
+- [x] Given a seeded user, when the list renders, then it shows the documents the user has a role on, with titles that the host stores, keyed by document identifier or by the `externalId` the host set at creation.
+- [x] Given "new document", when it is chosen, then the host creates the document through the service with its `externalId`, and opens it in the editor with the title in the title slot.
+- [x] Given a title is renamed or a document deleted in the host, when the list updates, then the host's catalogue changes, the title slot shows the new title, and deletion is a soft delete.
+- [x] Given the host looks a document up by `externalId` with a service credential, when it calls the listing, then paging uses `{ items, nextCursor }` with a limit of at most 200; a user token is refused.
+- [x] Given the editor runs, when its network traffic is inspected, then it never calls the document listing or search; only the host does.
+- [x] Given a keyboard and a screen reader, when the list is used, then it is operable and axe reports no violations.
+
+**Evidence (lane V-UX-091-104, round 4, criteria 2, 3, 5 and 6, ticked):** against the demo stack on the lane's ports (PostgreSQL 57310, S3 57311, service 57312, host 57313; `scripts/stack.ps1 up` with `DOCEDIT_DEMO_PROJECT=docedit-v-ux-091-104-demo`, then `DOCEDIT_DEMO_REUSE=1`), in Chromium only: `apps/reference-host/e2e/v-ux-091-104-catalogue.spec.ts` passes: "new document" creates through the host and opens the editor with the title in `title-slot` and `data-external-id` on the row (criterion 2); a rename shows in the list and the slot (criterion 3); the page's requests include `/v1/documents/<id>` and no `/v1/documents` listing or `/v1/search` (criterion 5). `apps/reference-host/e2e/v-ux-091-104-delete.spec.ts` passes: a delete in the list keeps the catalogue row with `deletedAt`, and the service answers 404 for the document (criterion 3, soft delete). `apps/reference-host/e2e/host.spec.ts`, "the sign-in and the document list work with the keyboard and axe finds no violation" passes (criterion 6; Firefox and WebKit not run). Two URL expectations now accept an optional trailing slash, because SvelteKit serves `/as/<sub>` without one (`e2e/support.ts` `signIn`, `e2e/host.spec.ts`). The `de-error` expectation in the host spec's "a rename shows in the title slot" test (the open editor must report an error when its document is deleted in the list) still fails; it is not part of criterion 3 and was left as written.
+
+**Evidence:** `apps/reference-host/src/lib/server/catalogue.ts` (`listFor`, `byExternalId`, soft `remove`) and `documents.ts` (`createFromTemplate`, `renameDocument`, `deleteDocument`); `apps/reference-host/test/host.test.ts`, "the host's catalogue and the service": the list holds the documents a user has a role on and no others, titles and `externalId` come from the host (criterion 1); `findByExternalId`, `listDocuments({ limit })` with `{ items, nextCursor }`, a second page by cursor, a request for 5000 sent as `limit=200`, and a user token refused by `GET /documents` with 401 or 403 (criterion 4). The new-document dialog, the title slot, the keyboard and screen-reader checks and the editor's network traffic (criteria 2, 3 in the UI, 5, 6) are not tested here: they need the browser and the host page.
+
+**Notes:** Folders are named as part of the host's catalogue in 13 section 11.1 but not in the reference host's coverage (11.2); they are left out. Round 5: the server halves of criteria 2 and 3 are tested in `apps/reference-host/test/dialog-routes.test.ts` (create through the list's action with the host's `externalId` and a redirect to the editor page; rename and soft delete in the catalogue and the service, owner only). The title slot, the list's live update and the new-document dialog are UI, so criteria 2, 3, 5 and 6 stay unticked.
+
+### UX-095 Reference host: share dialog
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Owner |
+
+**Spec:** 13 §5, §11.2; 05 §3.1, §3.3 · **Requirements:** R3, R6, R15 · **Depends on:** UX-039, UX-092, UX-093
+
+As an owner, I want to share a document from the demo's own dialog, so that I can give people a document-level role.
+
+**Acceptance criteria**
+
+- [x] Given `de-share-request`, when the host handles it, then its own dialog lists people and groups from the seeded directory with their document-level role (viewer, commenter, suggester, editor, owner, filler), and changes are stored in the host.
+- [x] Given a role changes, when the dialog saves, then it says when the change takes effect (at the next token, at most 15 minutes), or immediately when the host revokes the user's sessions.
+- [x] Given a person is removed, when the dialog saves, then the host revokes their sessions (UX-092).
+- [x] Given region grants and workflow participants, when the dialog is shown, then it does not manage them and points to the editor's permissions pane.
+- [x] Given a person, when the owner sets output restrictions on them (`no-export`, `no-copy`, `no-print`), then the next token carries `restrict`, so that UX-040 can be exercised.
+- [x] Given the dialog, when a keyboard and a screen reader are used, then focus is trapped correctly and returns to the share button.
+
+**Evidence:** `apps/reference-host/src/lib/server/catalogue.ts` (`setRestrict`), `apps/reference-host/src/lib/server/documents.ts` (`setRestrictions`), `apps/reference-host/src/lib/server/tokens.ts` (`claimsOf`), `apps/reference-host/src/routes/as/[user]/api/token/+server.ts`; `apps/reference-host/test/host.test.ts`, "output restrictions in the next token": the issuers put a `restrict` grant into the token and the service reads it back; names outside the three are refused and an empty list clears them. Criterion 5 (fixer, round 1): the token route builds its grant with `grantFor` and `tokenFor` (`apps/reference-host/src/lib/server/tokens.ts`); the owner sets restrictions with the editor page's `restrict` action (`routes/as/[user]/docs/[id]/+page.server.ts` and `+page.svelte`, the "Output restrictions" column), which calls `setRestrictionsAs` (`documents.ts`, refuses a non-owner with `OwnerOnlyError`). `apps/reference-host/test/routes.test.ts` runs the route modules themselves (only `host()` is replaced): the owner's action sets `no-export` and `no-print`, the token endpoint's next token carries them and the service reads them back, clearing them removes the claim; a non-owner gets 403 and nothing changes; an unknown name gets 400. `host.test.ts` covers `grantFor`, `tokenFor` and `setRestrictionsAs` directly. Run of 2026-11-13 against the document service in memory, not in a browser. Lane UX-092-104, round 8 (criterion 3, ticked): the dialog's save posts to the `role` action (`src/lib/share/ShareDialog.svelte`, `?/role`), and `dialog-routes.test.ts` runs that action: taking the role away ends the person's sessions, and their old token is refused with `revoked` (the dialog's own save in a browser is not run).
+
+**Evidence (lane U-UX-091-104, round 1):** `apps/reference-host/e2e/u-ux-091-104-share.spec.ts` in a browser against the demo stack (Podman project `docedit-u-ux-091-104-demo`, ports 56310 to 56313, `scripts/stack.ps1 up -NoExport` after a rebuild; run with `DOCEDIT_DEMO_REUSE=1` and `DOCEDIT_E2E_BROWSERS=chromium,firefox`). Criterion 1: the dialog lists Ada, Bob and Vic with the role options (No access, Viewer, Commenter, Suggester, Editor, Owner, Filler), the Finance group with its member, and the owner's row has no form; the change made in it is still there after a reload. Criterion 2: making Vic a commenter says the change applies now, because his sessions on the document have ended (the "next token" sentence is tested in `apps/reference-host/test/share-model.test.ts`, not in a browser). Criterion 4: the dialog's text points to the editor's permissions pane and has no region or principal control. Criterion 6: Enter on the host's Share button opens the dialog; 40 Tab presses and 5 Shift+Tab presses keep focus inside it; Escape closes it and returns focus to the Share button. Passed in Chromium and Firefox. WebKit fails at the demo sign-in (a 404 page after it), so there is no WebKit result. The focus trap is `trapFocus` in `apps/reference-host/src/lib/share/ShareDialog.svelte`, added in this round: before it, the browser moved focus out of the dialog past its last control.
+
+**Notes (lane U-UX-091-104, round 1):** Criteria 1, 2, 4 and 6 ticked on the browser run above; the earlier note in this story (no browser run) is superseded for those criteria. The WebKit 404 after the demo sign-in was diagnosed in round 9 (a 308 after the sign-in's 303 made WebKit replay the POST; fixed in `src/routes/+page.server.ts`, ADR 0331 round 9), and `support.ts`'s `signIn` helper expects a trailing slash that the host does not send, so the lane's spec signs in by the person's name instead.
+
+**Notes:** Setting `restrict` in the demo is inferred, so that the restriction stories can be demonstrated. Until the share dialog exists (UX-039), the owner sets restrictions in the editor page's owner panel; the change applies from the person's next token and does not revoke their sessions (not asked by the criterion). Open, not ticked: criteria 1 to 4 and 6 need the share dialog's UI, which is not built (UX-039). Criterion 3 (removal revokes the sessions) has its server side in `changeRole` (tested under UX-092), but not the dialog's save. Criterion 2 (the message about when the change takes effect) is UI. Round 5: the owner's `role` action (the panel's save) now says whether the change ends sessions now or applies from the next token (`apps/reference-host/src/routes/as/[user]/docs/[id]/+page.server.ts`); `apps/reference-host/test/dialog-routes.test.ts` runs that action through the route module: taking a role away ends the person's sessions and the old token is refused with `revoked` (criterion 3, server side), a non-owner is refused with 403. The dialog itself is not built (UX-039), so criteria 1 to 3 stay unticked, and criterion 4 and 6 are UI. Round 6: a native modal dialog now exists (`apps/reference-host/src/lib/share/ShareDialog.svelte`, opened by the Share button and by `de-share-request`). It lists the seeded people with their role, including `filler`, and the groups with their members' roles (`share-model.ts`, `groupRows`). Its save posts to the existing `role` action, and the message comes from `roleSavedMessage`. Tested in `apps/reference-host/test/share-model.test.ts` and `share-routes.test.ts` (the filler role is stored; the groups load; the markup has no grant forms). The rendered dialog, its save message on screen and the focus trap and return (criterion 6) were not run in a browser, so criteria 1 to 4 and 6 stay unticked.
+
+### UX-096 Decision: semantics of the `DEP-Actor` header
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 1b | S | must | Maintainer |
+
+**Spec:** 13 §11.3; 05 §3.2, §6.1; 08 §2 · **Requirements:** R4, R10 · **Depends on:** none
+
+As a maintainer, I want the effect of `DEP-Actor` fixed, so that service calls on behalf of a user are attributed correctly and cannot be used to exceed anyone's rights. Time box: 2 days.
+
+**Acceptance criteria**
+
+- [x] Given the spec says a service call names the acting user "so history attributes server-side integrations correctly", when the decision is written, then it lists which operations accept the header.
+- [x] Given a named actor, when the decision is written, then it states whether the actor's capabilities bound the call, or the service credential's do.
+- [x] Given history records user, session and agent (08 section 2), when the decision is written, then it states what is recorded for a call that has a service credential and no session, including the credential's identity.
+- [x] Given the header on a call made with a user token, when the decision is written, then it states that it is ignored or refused and never makes the user another person.
+- [ ] Given the decision, when it is accepted, then 05 and 07 are amended and the negative tests are added to the conformance kit.
+
+**Evidence:** `docs/adr/0114-reference-host-backlog-batch.md`, "Decision: semantics of `DEP-Actor`" (proposed; criteria 1 to 4 are the content of that decision). The behaviour it describes is in `services/document-service/src/control-plane/pipeline.ts` (the caller resolution, BE-033) and tested in `services/document-service/test/control-plane/routes.documents.test.ts` (the `DEP-Actor` test; it asserts the status for a user token, not the attribution).
+
+**Notes:** Security review required. 05 section 3.2 says only that history attributes the change to the named user. Open, not ticked: criterion 5 (05 and 07 amended, conformance negative tests) waits for the owner's acceptance. The decision leaves a security gap open: a service credential's calls are bounded by the credential, not by the named actor's rights, and the audit trail does not record the credential. Both are in the ADR for the owner and a security review.
+
+### UX-097 Service calls on behalf of a user
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Integrating developer |
+
+**Spec:** 13 §11.3; 05 §3.2; 08 §2 · **Requirements:** R4, R6 · **Depends on:** UX-096, UX-092, PRO-009, PRO-013
+
+As an integrating developer, I want my server to act for a user, so that history and the audit trail name the person and not my service.
+
+**Acceptance criteria**
+
+- [ ] Given a service credential and `DEP-Actor` naming a user, when a content-changing call is made (for example a prefill), then the resulting commit and audit entry attribute the change to that user's surrogate identifier, with the commit's origin.
+- [x] Given no `DEP-Actor` on such a call, when it is made, then the change is attributed to a system identity, not to a person.
+- [x] Given a user token with a `DEP-Actor` header, when the call is made, then the header has no effect on who acts.
+- [ ] Given the rules recorded by UX-096, when an actor lacks the rights the rules require, then the call is refused with the corresponding code.
+- [ ] Given the reference host, when it performs a server-side action for the signed-in user, then the history panel shows that user as the author.
+
+**Evidence:** `apps/reference-host/test/host.test.ts`, "service calls and the attribution named by DEP-Actor": a service call of the host's client with no `DEP-Actor` creates a document whose `createdBy` is `system`, and one with `DEP-Actor` naming `u-olivia` records her surrogate, not her identifier (criterion 2, checked on creation only). Round 3, "a user token with DEP-Actor acts for the token holder only" in the same file (criterion 3): with Bob's editor token and `DEP-Actor` naming the owner, `PATCH /documents/{id}` is refused with 403 and the title is unchanged; the owner's token with `DEP-Actor` naming Bob is accepted (criterion 3).
+
+**Notes:** Phase inferred (1b): form-mode prefill (12 section 13, phase 1b) is the first server-side integration that needs attribution. Open, not ticked: criterion 1 needs the commit and the audit entry to name the surrogate; the test checks the document's creator only. Criterion 3 (a user token's `DEP-Actor` has no effect) is ticked in round 3 (see Evidence and `docs/adr/0114-reference-host-backlog-batch.md`, Round 3). Criterion 4 (refusal when the actor lacks rights) cannot hold under the current decision in UX-096: the named actor's rights do not bound a service call, so no refusal exists yet. Criterion 5 needs the reference host's history panel in a browser. Round 5: `apps/reference-host/test/attribution.test.ts` runs a prefill (`PATCH /documents/{id}/field-values`, origin `prefill`) through the service with `DEP-Actor` naming Olivia: the stored commit names her surrogate (not her sub, and not the service), and the wire names her sub; without `DEP-Actor` the commit names `system` (criterion 2, already ticked). Criterion 1 stays open: its audit entry is not written (the audit store records only rejections). Lane V-UX-091-104, round 1 (2026-11-14): `apps/reference-host/test/v-ux-097-attribution.stack.test.ts` runs the commit half of criterion 1 against the running demo stack (PostgreSQL and the document service in Podman, lane ports 57310 to 57312): a prefill with `DEP-Actor` naming Olivia is stored in `doc_commits` with her surrogate (not her sub, not `system`) and origin `prefill`; without it, `system`. The `audit_events` table has no entry for the accepted commit, so criterion 1 is not ticked; the question is recorded in `docs/adr/0331-lane-V-UX-091-104.md`, section 3. Criterion 5 is blocked: `packages/ui/src/shell/panes.ts` lists the `history` pane, but no element or ui code renders a history panel with authors, so there is no panel to check; this needs the history pane built first (owner or UI lane). Criterion 4 stays blocked by the UX-096 decision.
+
+### UX-098 Reference host: webhook receiver and e-mail notifications
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Integrating developer |
+
+**Spec:** 13 §11.1, §11.2; 05 §7; 12 §6.3 · **Requirements:** R6, R15 · **Depends on:** UX-091, UX-031, UX-032, PRO-069, PRO-070, BE-055
+
+As an integrating developer, I want a correct webhook receiver and e-mail notifications, so that I can copy a safe pattern for mentions and tasks.
+
+**Acceptance criteria**
+
+- [x] Given a webhook, when it arrives, then the receiver verifies the Standard Webhooks signature (`webhook-id`, `webhook-timestamp`, `webhook-signature`, HMAC-SHA256, a five-minute tolerance, two active secrets during rotation) and refuses invalid ones.
+- [x] Given at-least-once delivery, when the same `webhook-id` arrives twice, then only one notification is sent; order is not assumed.
+- [ ] Given `dep.comment.mentioned` or `dep.task.assigned`, when the receiver handles it, then an e-mail goes to the person, whose address comes from the host's directory and never from the document service, with a link to the document and comment.
+- [x] Given the receiver, when it responds, then it answers quickly and processes the work asynchronously so that the dispatcher does not retry needlessly.
+- [ ] Given the compose stack, when notifications are tested, then they go to a development mail sink.
+- [x] Given a signing secret is rotated, when deliveries continue, then none is rejected.
+
+**Evidence:** fixer, round 2, 2026-11-13 (criteria 1, 2, 4 and 6 re-ticked): the route `POST /webhooks/dep` (`apps/reference-host/src/routes/webhooks/dep/+server.ts`) reads the raw body, calls `WebhookReceiver.receive`, answers its status and schedules the queue's drain after the response; `apps/reference-host/src/lib/server/webhook-endpoint.ts` composes receiver, queue and notifier (secrets from `DOCEDIT_HOST_WEBHOOK_SECRETS`, read on every delivery); `apps/reference-host/src/lib/server/webhook-notifications.ts` turns `dep.comment.mentioned.v1` and `dep.task.assigned.v1` into one notification for a sink. `apps/reference-host/test/webhook-route.test.ts` (13 tests, run in Node.js on 2026-11-13 with `webhook-receiver.test.ts`, 27 passing) drives the service's own `WebhookDispatcher`, which signs with `signDelivery`, through a transport that posts to the route. Criterion 1: a dispatcher delivery is answered 202 and its row is delivered; an unknown secret, a tampered body, a changed `webhook-id` and missing headers are refused (401, 401, 401, 400); the tolerance holds at 300 s and fails at 301 s either way between the service and host clocks; the raw bytes are verified (a byte-order mark is kept); no secret set means 401; the dispatcher's test ping is answered 202. Criterion 2: two replays of a delivery (same `webhook-id`) after a later event, and a replay before the first was processed, give one notification each, in arrival order. Criterion 4: the dispatcher has its 202 and the row is delivered while the notification is still held; a failing sink does not change the answer and is recorded. Criterion 6: the service adds a second secret, the host adds it, the service retires the old one, the host drops it: all five deliveries are accepted; only a host that dropped the old secret before the service had the new one refuses (401).
+
+**Evidence (earlier; reviewer, round 2, 2026-11-13: criteria 1, 2, 4 and 6 unticked because `webhook-receiver.ts` is imported only by its own test, no route receives a webhook, no notification exists, and the tests sign with the module's own `signatureFor` rather than the service's `signDelivery`; the code is a sound start):** `apps/reference-host/src/lib/server/webhook-receiver.ts` (`verifyWebhook`, `WebhookReceiver.receive`, `MemorySeenStore`, `WorkQueue`); `apps/reference-host/test/webhook-receiver.test.ts`, run in Node.js on 2026-11-13 (14 tests passing). Criterion 1: signed, tampered, wrong-key and missing-header deliveries; the five-minute tolerance at 300 and 301 seconds in both directions; HTTP-style outcomes 401 and 400. Criterion 2: a repeated `webhook-id` is queued once, arrival order is not assumed, and an identifier is kept for 24 hours plus the tolerance. Criterion 4 (at receiver and queue level only): `receive` returns 202 before the queued handler runs, and a failing handler does not stop the queue. Criterion 6: two active secrets read on each delivery, a delivery signed by either is accepted, a retired secret is refused. Seeded loops stand in for fast-check (not a dependency of this package).
+
+**Notes:** Phase inferred (2): webhooks and mentions are phase 2. Workflow notifications are in UX-099. The mail sink is not mentioned in the spec's compose description. Lane V-UX-091-104, round 4: criterion 3 stays unticked (the event does not name the mentioned person or the comment, gap G83, and the host's directory has no e-mail address; both need a decision on the event and the directory). Criterion 5 stays unticked: no development mail sink is in the compose stack, and none is installed here; it needs a container image chosen by the owner (needsFromOthers). Lane UX-092-104, round 8 (2026-11-13): criteria 1, 2, 4 and 6 were ticked at receiver level only; the reviewer unticked them. Fixer, round 2: the route `POST /webhooks/dep` is built and tested against the service's dispatcher (see Evidence). The host keeps its own verifier (`verifyWebhook`) rather than importing the service's `verifyDelivery`: `@docedit/document-service` exports only its index, which does not export `webhook-signing.ts`, and that package is not this lane's; the route test shows the two agree. The seen identifiers and the queue are in memory (lost on restart); a durable store is not built. The dispatcher's test ping has no `subject`, so the receiver accepts a body without one only when it carries `test: true`. The route's own type-check needs `svelte-kit sync` (its `./$types`), which was not run; the route test loads it by path. Lane UX-092-104, round 4 (2026-11-13): the route's type-check is done: `pnpm exec svelte-kit sync` then `pnpm exec svelte-check --tsconfig ./tsconfig.json` in `apps/reference-host` gave 385 files, 0 errors, 0 warnings. `webhook-route.test.ts` and `webhook-receiver.test.ts` pass (27 tests). The leftover `verifyDelivery` reuse still needs the document-service index export (another package; see docs/adr/0238-lane-UX-092-104.md, item 1). Criterion 3 stays open: `dep.comment.mentioned.v1` (`spec/dep/webhooks/dep.comment.mentioned.v1.schema.json`) carries only `seq` in `data`, so the mentioned person and the comment identifier are not in the event (gap G83); the host's directory has no e-mail field (`src/lib/server/directory.ts`), so the address source is also missing, and no e-mail is sent. Criterion 5 needs the compose stack's mail sink, not built. The property-style cases use seeded loops; fast-check is not a dependency of `apps/reference-host`, and adding it needs `scripts/pnpm-locked.ps1` (main session to approve).
+
+### UX-099 Reference host: send for completion
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Owner |
+
+**Spec:** 13 §11.2; 12 §6, §7, §8.3; 11 §10 (decision 10) · **Requirements:** R6, R13, R15 · **Depends on:** UX-098, UX-092, FRW-025, FRW-026, FRW-040
+
+As an owner, I want to send a document out for completion from the demo, so that I can see the whole workflow from invitation to sealed PDF.
+
+**Acceptance criteria**
+
+- [ ] Given a document with roles, fields and rules, when the owner starts "send for completion", then the host binds participants to role placeholders with names and order, and calls the workflow resource's `send` with a service credential.
+- [ ] Given the workflow activates a participant, when `dep.workflow.participant_activated` arrives, then the host sends the invitation by e-mail with a link that carries no token; the document service sends no e-mail (12 section 6.3).
+- [ ] Given the participant follows the link, when the host authenticates them (an access code or a one-time passcode field that accepts paste), then it mints a filler token with `wfp`, and `amr` and `auth_time` as it asserted them.
+- [ ] Given `dep.workflow.reminder_due`, when it arrives, then the host sends a reminder.
+- [ ] Given `completed` and `finalised`, when they arrive, then the host retrieves the sealed PDF and the evidence bundle and makes them available to the owner.
+- [ ] Given the demo's text, when it describes signatures, then it says they are simple electronic signatures with evidence and a tamper-evident seal and never uses "qualified" or "legally binding everywhere" (12 section 8.3).
+- [ ] Given the participant pages, when a keyboard and a screen reader are used, then the ceremony is operable without a pointer and without drawing.
+
+**Notes:** Depends on owner decision 10 (who invites and authenticates participants; default: the host). If the hosted service must also send messages, this story changes. Lane V-UX-091-104, round 1 (2026-11-14): not started. The document service has no HTTP route for the workflow resource (no `workflows` path in `services/document-service/src`), so `send`, the workflow events and the sealed PDF retrieval cannot be called from the host yet; `services/document-service/src/workflow/workflow-resource-pg.ts` exists without a route. The host side (participant binding, the invitation and reminder mail, the participant pages) would be built on top of that route. Blocked on FRW-025 and FRW-026 (the service's workflow resource); no criterion is ticked.
+
+### UX-100 Reference host: template gallery
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | M | could | Author |
+
+**Spec:** 13 §11.2; 12 §9, §13 · **Requirements:** R13, R15 · **Depends on:** UX-094, FRW-061, FRW-062
+
+As an author, I want to start a document from a template, so that I do not rebuild a common form.
+
+**Acceptance criteria**
+
+- [ ] Given templates (documents with role placeholders, fields and rules, and no participants), when the gallery renders, then they are listed from the host's catalogue.
+- [ ] Given a template is chosen, when the author uses it, then the host instantiates it through the templates resource, which forks at a pinned `seq`, and the new document appears in the document list.
+- [ ] Given prefill values, when the author supplies them, then only kinds that may be prefilled are offered (signature, initials, date-signed and formula kinds are not).
+- [ ] Given a keyboard and a screen reader, when the gallery is used, then it is operable and axe reports no violations.
+
+**Notes:** Phase inferred (4): templates and bulk send are phase 4 (12 section 13). Lane V-UX-091-104, round 4: no criterion is ticked. The document service refuses a template source (`validation_failed`, "templates and imports are not offered yet (D62)", `services/document-service/src/control-plane/handlers.ts`), so the templates resource that forks at a pinned `seq` (FRW-062) does not exist, and the gallery and the prefill kinds (criterion 3) depend on it. Criterion 4 needs the gallery's keyboard and axe run, which is not built. Not started, because FRW-062 is a service change of size L.
+
+### UX-103 Manage the sources of a document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Author |
+
+**Spec:** 13 §3 (panes); 07 §4, §5.3 · **Requirements:** R1 · **Depends on:** CDM-052
+
+As an author, I want a pane for the sources I cite, so that I can add, correct and reuse references without leaving the document.
+
+**Acceptance criteria**
+
+- [ ] Given the sources pane, when an author adds, edits or deletes a source (its type, authors, title, date, container, and identifiers such as a DOI or URL), then the change is a commit to the source definition, through the log.
+- [ ] Given a source that is still cited, when someone tries to delete it, then deletion is refused, and the pane shows where the source is cited.
+- [ ] Given a BibTeX or CSL-JSON file, when it is imported into the pane, then sources are created with their grammars checked, and duplicate keys are reported.
+- [ ] Given a user who may edit only regions, when they open the pane, then they can cite existing sources but cannot change source definitions, because definitions need `structure` (07 §4).
+
+**Notes:** new on 2026-11-06: the owner decided that the first release serves all three candidate markets (SPK-006), so citations and a bibliography are a version 1 requirement (CDM-004). Whether citing a new source should be possible for region-only editors is open (07 §17, the question of granting part of `structure` per region). Second review (2026-11-06, SPK-027), SR-M20: an imported BibTeX file is a new input language that must pass grammars before it can reach the `.bib` file of an export, and the citation styles offered depend on the house class (A3) ([review](../review/2026-11-06-second-review.md)).
+
+Lane ui-3, round 1: `packages/ui/src/shell/source-import.ts` parses BibTeX and CSL-JSON text, checks the grammar, reports each problem with its place and reports duplicate keys (case-insensitive; ADR 0137). Tests: `packages/ui/test/source-import.test.ts` (fast-check round trip and fuzzing). Criterion 3 stays unticked: nothing creates sources yet, because the pane, the commit of a source definition and the citation index (CDM-052) are not built. Criteria 1, 2 and 4 depend on the same core commit path and on the citation index, so they stay unticked. Nothing was run in a browser.
+
+Lane V-UX-091-104, round 3: `packages/engine/src/source-delete.ts` (new) refuses to delete a `source_def` that a citation still names (`cited`, with the positions of the citing nodes from `citationsCiting`) and deletes an uncited one by transaction. Tests: `packages/engine/test/ux-103-source-delete.test.ts` (Node.js, 3 tests passing). Criterion 2 stays unticked: the pane does not exist, so nothing shows where the source is cited, and the deletion is not a commit through the log. Criterion 1 is unticked for the same reason (no pane, no commit path for a source definition). Criterion 3 stays unticked: the BibTeX and CSL-JSON parser is tested, but nothing creates `source_def` nodes from its entries, and the BibTeX fields do not map onto the node's attributes without an owner decision on the source schema. Criterion 4 (region-only editors may cite but not change definitions) needs the pane and the `structure` check, which are not built.
+
+## Read restrictions (ADR 0019)
+
+Added on 2026-11-06 from spike S12 (SPK-029; `docs/spikes/2026-11-06-s12-read-restrictions.md`), after the owner decided that version 1 can hide regions and field values from some readers (SPK-005). Every other story that serves content, steps, positions, history, search, exports, comments, presence or field values applies the requester's projection: README §2.2 rule 8.
+
+### UX-104 Explain hidden content to the reader
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Viewer |
+
+**Spec:** ADR 0019; 13 §3 · **Requirements:** R3, R14 · **Depends on:** FE-141
+
+As a reader, I want to understand why part of a document is hidden and how to ask for access, so that a placeholder is not a dead end.
+
+**Acceptance criteria**
+
+- [x] Given a placeholder, when I focus it, then the shell says in plain words that I do not have access, without naming who does.
+- [x] Given a host that handles access requests, when I ask for access, then the editor raises an event for the host and sends nothing itself.
+- [ ] Given collaborators working inside hidden content, then no caret or name flag is shown for them there.
+- [ ] Given the export dialog, when the export will be projected, then the dialog says that hidden parts are left out.
+
+**Evidence:** `packages/ui/test/export-diagnostics.test.ts` (the words of `dialog.export.hidden` in `en-GB.ts`, and the `{#if projected?.current}` statement in `src/components/ExportDialog.svelte` over the `projected` view declared in `src/core-api.ts`). Checked in the source, not in a browser run.
+
+**Evidence (lane V-UX-091-104, round 3, criteria 1 and 2, ticked):** `packages/element/e2e/ux-104-access-request.spec.ts`, "the element raises de-access-request for the host and sends nothing itself": in a mounted `<doc-editor>` over the embed page's regions document (the test projects the "Middle" region as a `hidden_region` placeholder, see the file's header), selecting the placeholder shows the status notice "You do not have access to this part of the document." in `[data-status="hidden"]` (criterion 1); "Ask for access" raises `de-access-request` with `{ docId, scope: "region:<id>" }` and the page records no request or WebSocket (criterion 2). Run with `DOCEDIT_DEMO_PORT=57312 DOCEDIT_BROWSERS=chromium,firefox pnpm exec playwright test -c packages/element/playwright.config.ts e2e/ux-104-access-request.spec.ts`: passed in Chromium and Firefox; not run in WebKit. The engine fix is in `packages/engine/src/core.ts` (`#accessSummary` reports limit `hidden` for a selected placeholder, ahead of the other limits) and `packages/engine/src/regions.ts` (`placeholderAt`); `packages/engine/src/core.test.ts`, `test/guard.test.ts`, `test/fe-141-copy-placeholder.test.ts` and `test/schema.test.ts` pass (48 tests, Node.js). Criteria 3 (no caret or name flag in hidden content) stays open.
+
+**Evidence (lane V-UX-091-104, round 1, criteria 1 and 2 in part):** `packages/ui/e2e/shell.spec.ts`, "hidden content (UX-104; ADR 0019)", first test: the status notice says "You do not have access to this part of the document." without naming a person, the "Ask for access" button passes `region:rH` to the host, and no command runs (Chromium, run 2026-11-13 with `DOCEDIT_UI_PORT=57310 DOCEDIT_BROWSERS=chromium`). Criterion 2, element side: `packages/element/test/access-request-events.test.ts` (Node.js, 3 tests passing) checks that `de-access-request` (`{ docId, scope }`, identifiers only) is registered and emitted, and that `doc-editor.ts` wires the shell's `onAccessRequest` to it through `editor.ts`. Decision recorded in `docs/adr/0331-lane-V-UX-091-104.md` (event name `de-access-request`, proposed). Criterion 1 stays unticked: the test moves the caret into hidden content; focusing the placeholder itself is drawn by the element's painter and is not tested. Criterion 2 was unticked by the reviewer (round 1): the element half is checked by `access-request-events.test.ts` reading `doc-editor.ts` and `editor.ts` as text and matching strings (the third test), and the browser test runs the shell's harness (`packages/ui/e2e/harness`), not a `<doc-editor>`. No test clicks "Ask for access" in a mounted `<doc-editor>` and sees `de-access-request` on the host, and nothing checks that no request leaves the page ("sends nothing itself"). Needed: a Playwright test in `packages/element/e2e` that mounts the element over a document with hidden content, clicks the control, expects the event with `{ docId, scope }`, and records no network request.
+
+**Notes (lane V-UX-091-104, fixer round 1, 2026-11-13):** criterion 2 stays unticked. `packages/element/e2e/ux-104-access-request.spec.ts` (new) mounts `<doc-editor>` over the embed page's regions document, with the backend's `loadContent` wrapped so that the "Middle" region arrives as a `hidden_region` placeholder (the mock service stores no placeholder and does not project per reader), listens for `de-access-request` on the element, selects the placeholder, records every request and WebSocket from then on, clicks "Ask for access" and expects `{ docId, scope: "region:<id>" }` and no request. It is marked `test.fixme` (run it with `DOCEDIT_UX104_UNBLOCKED=1`) because it is blocked outside this lane: run on Chromium (`DOCEDIT_DEMO_PORT=57371`), the placeholder renders ("Hidden region" note) and is selected, but the status bar shows the scope "Body" and no "Ask for access" control, since the engine never reports the `hidden` access limit at a placeholder (`#accessSummary` in `packages/engine/src/core.ts` yields role, region, lease, unlisted or locked; `#scopeAt` gives `body` beside a placeholder). Needed from the engine's owner: report `limit: 'hidden'` and the scope `region:<id>` when the selection is on a `hidden_region`. A projecting mock (or the real data plane) would replace the test's wrapper. The third test of `packages/element/test/access-request-events.test.ts` is kept as a source guard only and is named so.
+
+**Notes:** lane ui-3, round 1. Criteria 1 to 3 are partly in the shell already (the access notice in `StatusBar.svelte`, the access request in `App.svelte`, peer carets in `Carets.svelte`), but nothing here can focus a placeholder, check that the request sends nothing itself, or check that the core sends no peer inside hidden content. They stay unticked until a browser run and the core projection exist. Lane UX-092-104, round 8: criterion 2 is blocked outside this package. `App.svelte` calls the `onAccessRequest` prop with the scope, but `packages/element` does not pass that prop on, and `packages/element/src/events.ts` has no event for an access request (`de-permission-change` only), so `<doc-editor>` never raises an event for the host. A new `de-*` event needs a story in the element's package (PRO) and is not built here. Criterion 1 needs a browser run. Round 3 (lane V-UX-091-104): the engine now reports the `hidden` limit at a selected placeholder, and the browser run in Evidence (round 3) ticks criteria 1 and 2; criterion 3 stays open. Evidence audit (2026-11-13): criterion 4 was unticked because its cited test (`packages/ui/test/export-diagnostics.test.ts`) only matches the text of `ExportDialog.svelte` and `core-api.ts` with regular expressions, and nothing in the product supplies `ExportService.projected` (the engine's core has no `exports` port, so a mounted `<doc-editor>` never reaches the statement); the only browser run that shows it, `packages/ui/e2e/regions.spec.ts` ("shows the result and goes from a diagnostic to its block", passing in Chromium), uses the harness's fake core. It can be ticked again when the core or the element reports a projected export and a test shows the statement through it. Criteria 1 and 2 were checked and stand (the element test passes in Chromium; its "no request leaves the page" check is weak, since the backend is in memory, but the shell test "says in plain words..." shows that no command runs and the product code only raises the event). Lane U-UX-091-104, round 7 (criterion 3, stays unticked): `packages/engine/test/u-ux-104-hidden-peers.test.ts` (Node.js, 2 tests passing) shows that `PresenceClient` lists no peer whose scope is a hidden region, and lists it again once it leaves; the name flag and caret are drawn only by `Carets.svelte` from `core.carets`, and no core produces `carets` yet (`grep` of `packages/engine` and `packages/element` finds none), so no caret or flag can be shown there today and the criterion is not shown in a browser run. A caret view must reuse the same filter when it is built.
+
+## Coverage
+
+| Spec section | Stories |
+|---|---|
+| 13 §1 Benchmark and stance | UX-001, UX-002 |
+| 13 §2 Parity profile | UX-001, UX-002; features in the "built in" row are delivered by this epic's shell stories and by FE, CDM, EXP, FRW and HIS, and mapped in UX-001 |
+| 13 §3 Shell: header | UX-014, UX-015, UX-016, UX-026, UX-039 |
+| 13 §3 Shell: toolbar | UX-006, UX-007 |
+| 13 §3 Shell: panes | UX-019, UX-017, UX-020, UX-021, UX-022, UX-030, UX-037, UX-045, UX-066 (history, permissions, fields and PDF preview contents: none: owned by HIS, PRM, FRW and FE-071) |
+| 13 §3 Shell: export dialog and diagnostics (added in the cross-check) | UX-101 |
+| 13 §2 Rulers (added in the cross-check) | UX-102 |
+| 13 §3 Shell: status bar | UX-018, UX-085 |
+| 13 §3 Shell: modes and views | UX-015 (the views and the fill-mode interface: none: owned by FE and FRW) |
+| 13 §4 Command system | UX-003, UX-004, UX-005, UX-006, UX-007, UX-008, UX-009, UX-010, UX-011, UX-012, UX-013, UX-051 |
+| 13 §5 Presence | UX-025, UX-026, UX-027 |
+| 13 §5 Comments | UX-028, UX-029, UX-030, UX-031, UX-032, UX-033, UX-034 |
+| 13 §5 Review | UX-035, UX-036, UX-037, UX-038 |
+| 13 §5 Catch-up | none: owned by HIS (the header button is in UX-014) |
+| 13 §5 Sharing | UX-039, UX-095 |
+| 13 §5 Output restrictions | UX-040 |
+| 13 §6.1 Proofing port | UX-041, UX-042, UX-043 (autocorrect and automatic formatting table: none: owned by FE) |
+| 13 §6.2 Assistant port | UX-044, UX-045, UX-046, UX-047, UX-048 |
+| 13 §7.1 Contributions | UX-049, UX-050, UX-051, UX-052, UX-053, UX-055 |
+| 13 §7.2 Trust tiers | UX-050, UX-052, UX-054, UX-059, UX-060 |
+| 13 §7.3 Custom content | UX-056, UX-057, UX-058 |
+| 13 §8 Theming and white-label | UX-061, UX-062, UX-063 (the `--de-` mechanism: none: owned by FE) |
+| 13 §8 Localisation | UX-064, UX-065 |
+| 13 §8 Accessibility | UX-023, FE-107, UX-066, UX-067, UX-068, UX-069 (the editing surface: none: owned by FE; tagged PDF: none: owned by EXP) |
+| 13 §9 Budgets | UX-070, FE-119, UX-072, FE-120, UX-074, FE-102 (the harness and CI gates: none: owned by FND) |
+| 13 §9 Recovery journal | UX-016, UX-017 for the indicator and the pane (the journal itself: none: owned by FE) |
+| 13 §10 Governance and administration | UX-076 to UX-089: audit UX-081, UX-082; retention and hold UX-080; discovery export UX-087; classification label UX-085; policy hook UX-086; administration API UX-076 to UX-079; listing and search BE-053, UX-084, UX-094; tenant export UX-088; console UX-089 |
+| 13 §11.1 What a host must build | UX-090, UX-092, UX-093, UX-094, UX-098 |
+| 13 §11.2 Reference host | UX-091 to UX-095, UX-098, UX-099, UX-100 |
+| 13 §11.3 Service calls on behalf of a user | UX-096, UX-097 |
+| 13 §12 Roadmap placement | none: informative (used to set every phase) |
+| 13 §13 Open issues | UX-043, UX-049, UX-059; the rest in the open questions below |
+
+## Open questions
+
+| Question | Source | Stories |
+|---|---|---|
+| The owner has not confirmed the first market. Citations and bibliography are "through ports and extensions unless the first market is academic" (13 §2); no port or story exists for them, and 03 section 13 leaves it open | 13 §2, §13; 11 §10 (decision 6) | UX-001, UX-050 |
+| Page, word counts and the "no fake pages" principle: where does a page count in the web view come from? | 13 §3; 02 §7 | UX-018 |
+| The header can be hidden and replaced by the host, but the embedding API has no attribute for it, and no events for presence, comment or catch-up counts or for a mode change made in the switcher | 13 §3; 05 §8.1 | UX-014, UX-015, UX-005 |
+| Command registry sample: literal `label`, no `synonyms` field, `group` named `home.font`. The interface strings must be external, and command search needs synonyms | 13 §4, §8 | UX-003, UX-011 |
+| Access-key activation gesture is not specified, and browsers and assistive technology reserve many sequences | 13 §4 | UX-012, UX-013 |
+| What `exec` returns for a disabled or unknown command; the result shapes of `resolveUsers` and `searchPrincipals` | 05 §8.1 | UX-005, UX-025, UX-031 |
+| Context menu replaces the browser's, hiding native spelling suggestions. With no proofing port, does the menu yield to the browser's, or does a fallback checker exist? | 02 §15; 13 §13 | UX-008, UX-041, UX-043 |
+| Comment body format (plain text, formatting, mention nodes) is not defined; reactions have no resource, event or feature name; "links to a comment" have no method or address form; the error for the 5,000-thread limit is not named | 13 §5; 05 §6.2; 07 §6 | UX-028, UX-029, UX-031, UX-033, UX-034 |
+| Whether resolving a task thread completes the task, or a task has its own state | 13 §5; 05 §6.2 | UX-032 |
+| `settings.trackChanges` sits in `defs` (changes need `structure`) but only `manage` should switch it off, and no rule P1 to P9 says so | 13 §5; 07 §5.2; 03 §4 | UX-038 |
+| Markup views (all, simple, none, original) are named but not defined; the P4 rules for block-level suggestions and whether a suggester may withdraw their own suggestion are open | 13 §5; 07 §17 | UX-035, UX-036 |
+| Share button: the `detail` of `de-share-request`, who sees the button, and how a host without a handler hides it | 13 §5; 05 §8.1 | UX-039 |
+| Output restrictions versus the PDF preview, the read view and `print()`: the preview is an export job that `no-export` refuses, yet `no-print` exists separately | 13 §5; 05 §6.2 | UX-040, UX-018 |
+| Proofing: where custom dictionaries live; per-block or per-change checking; debounce | 13 §6.1 | UX-041, UX-042 |
+| How an assistant's agent identity is issued and capped (no agent claim in the token; `origin` is only a claim) | 13 §6.2; 04; 05 §3.1 | UX-044, UX-046 |
+| Parity profile lists translate, text prediction and read aloud under ports and extensions, but only a proofing and an assistant port exist | 13 §2, §6 | UX-001, UX-045 |
+| The document API offered to extensions, its versioning, and how client import and export filters relate to server jobs (owner issue in 13 §13) | 13 §7.1, §13 | UX-049 to UX-055 |
+| Whether sandboxed extensions are worth building before an ecosystem exists | 13 §13; ADR 0014 | UX-059, UX-060 |
+| Payload limit for `extension_inline` (03 gives 16 KiB only to the block) | 13 §7.3; 03 §4, §5 | UX-057 |
+| Accessibility checker: no way to mark an image as decorative; contrast threshold and link-text rules; whether stories are checked | 13 §8; 03 §4 | UX-066, UX-067 |
+| Which locales ship | 13 §8 | UX-064 |
+| The reference machine is not named; "interactive", "usable" (300 pages) and "memory" are not defined | 13 §9; 00 §9 | FE-119, UX-072, FE-120, UX-074 |
+| The administration API is only outlined; credentials for operators and tenant administrators are not defined; "signing keys" is ambiguous (token verification or PDF sealing) | 13 §10; 06 §12; 10 §6 | UX-076, UX-077 |
+| The administration API is placed in phase 2 (13 §12), but key and origin registration is needed from phase 1a | 13 §11.1, §12 | UX-077, UX-091 |
+| Audit filters and the format and transport of the streaming export are unspecified | 13 §10 | UX-081, UX-082 |
+| Search across documents is only sketched | 06 §16 | BE-053, UX-084 |
+| Classification label: who may set it, and whether it comes from a defined set | 13 §10 | UX-085 |
+| Policy hook: timeout and failure behaviour (fail open or closed), what "pre-send" means, what content the hook sees, where it is registered | 13 §10 | UX-086 |
+| Format of the discovery and tenant export bundles | 13 §10 | UX-087, UX-088 |
+| Compose file: does it include the reference host and a mail sink? | 13 §11.2 | UX-091, UX-098 |
+| Semantics of `DEP-Actor` (which operations, whose rights apply, what is recorded for the credential) | 13 §11.3; 05 §3.2 | UX-096, UX-097 |
+| Who invites and authenticates workflow participants (owner decision 10; default: the host) | 11 §10; 12 §15 | UX-099 |
+| Phases that 13 §12 and 11 do not give, inferred in these stories: mini toolbar, shortcut table, status bar, carets, mode switcher, share button, high-contrast theme, icon and string replacement, long-document and memory budgets, search, policy hook, tenant export, integration guide, the reference host's sharing, webhook, send-for-completion and template parts, `DEP-Actor` | 13 §12; 11 | UX-010, UX-013, UX-015, UX-018, UX-027, UX-039, UX-062, UX-063, FE-120, UX-074, UX-084, UX-086, UX-088, UX-090, UX-095, UX-097, UX-098, UX-099, UX-100 |
+| Visual and interaction design is not specified and needs a designer | 13 §13; 11 risk 16 | all UX stories with a visible interface |

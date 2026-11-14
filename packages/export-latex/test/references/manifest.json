@@ -1,0 +1,27 @@
+{
+  "instant": "2026-11-06T10:00:00.000Z",
+  "references": [
+    {
+      "file": "exp-114-sample-ua2-a4f.pdf",
+      "source": "inline sample (test/docs.ts, as EXP-111 criterion 1)",
+      "title": "exp-114-sample",
+      "options": {
+        "tagging": "on",
+        "pdfStandard": "ua-2+a-4f"
+      },
+      "flavours": ["ua2", "4f"],
+      "sha256": "738400d3e9faa36477ff84083c9b0ede44ee3ce89e32bd549098bee78dd95c4c"
+    },
+    {
+      "file": "exp-114-s4-01p-ua2-a4f.pdf",
+      "source": "services/export-worker/fixtures/s4-corpus/s4-01p.cdm.json",
+      "title": "exp-114-s4-01p",
+      "options": {
+        "tagging": "on",
+        "pdfStandard": "ua-2+a-4f"
+      },
+      "flavours": ["ua2", "4f"],
+      "sha256": "23c6729ef2c870c79e9f94ca321911f49c28b6c25daabe5ed33eb9ece343f24c"
+    }
+  ]
+}

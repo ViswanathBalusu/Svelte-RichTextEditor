@@ -1,0 +1,45 @@
+# The DEP conformance kit as a container (05 §11; PRO-108; ADR 0042). Build from the repository root
+# with Podman:
+#
+#   podman build -f packages/tck/Containerfile --ignorefile packages/tck/Containerfile.ignore -t docedit-tck .
+#
+# Run it against any server: a discovery URL, a service credential and the test-mode state are all it
+# needs. The credential comes from the environment, never from the command line.
+#
+#   podman run --rm -e DEP_TCK_CREDENTIAL="$CREDENTIAL" -v "$PWD/out:/out" docedit-tck \
+#     --discovery https://docs.example.com --json /out/report.json --text /out/report.txt
+#
+# Exit code 0 when the run passes, 1 when it fails, 2 on a usage error.
+FROM docker.io/library/node:22.18.0-bookworm-slim@sha256:752ea8a2f758c34002a0461bd9f1cee4f9a3c36d48494586f60ffce1fc708e0e
+
+ENV CI=true
+WORKDIR /kit
+# The pnpm of the workspace (package.json `packageManager`); corepack of Node.js 22.18 cannot run it.
+RUN npm install --global pnpm@12.18.0
+
+# The workspace manifests first, so that the dependency layer is cached.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages/tck/package.json packages/tck/
+COPY packages/protocol/package.json packages/protocol/
+COPY packages/model/package.json packages/model/
+COPY packages/authority/package.json packages/authority/
+COPY packages/corpus/package.json packages/corpus/
+COPY packages/rules/package.json packages/rules/
+RUN pnpm install --frozen-lockfile --prod --filter "@docedit/tck..."
+
+# The kit, the packages it reads its definitions and oracles from, and their fixtures.
+COPY packages/tck/src packages/tck/src
+COPY packages/tck/fixtures packages/tck/fixtures
+COPY packages/protocol/src packages/protocol/src
+COPY packages/model/src packages/model/src
+COPY packages/model/fixtures packages/model/fixtures
+COPY packages/authority/src packages/authority/src
+COPY packages/authority/fixtures packages/authority/fixtures
+COPY packages/corpus/src packages/corpus/src
+COPY packages/rules/src packages/rules/src
+# The published definitions the kit reads (the engine file names spec/cdm/cdm-1.prosemirror.json; SYN-002).
+COPY spec spec
+
+USER node
+ENTRYPOINT ["node", "packages/tck/src/cli.ts"]
+CMD ["--help"]

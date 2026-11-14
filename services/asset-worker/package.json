@@ -1,0 +1,27 @@
+{
+  "name": "@docedit/asset-worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The asset worker (06 §1, §4.4; 10 §3.5): checks, decodes and re-encodes uploads in a single-use Podman sandbox, stores them by content hash, and serves them from a separate origin by short-lived signed URL.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build:image": "node scripts/build-image.ts"
+  },
+  "dependencies": {
+    "@types/omggif": "1.0.5",
+    "@types/pngjs": "6.0.5",
+    "jpeg-js": "0.4.4",
+    "omggif": "1.0.10",
+    "pngjs": "7.0.0"
+  }
+}

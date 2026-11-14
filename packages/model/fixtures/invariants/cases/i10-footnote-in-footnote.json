@@ -1,0 +1,63 @@
+{
+  "name": "i10-footnote-in-footnote",
+  "doc": "replace: a footnote inside the paragraph of a footnote (CDM-001: the content expression no longer forbids it).",
+  "base": "kitchen-sink",
+  "steps": [
+    {
+      "stepType": "replace",
+      "from": 230,
+      "to": 230,
+      "slice": {
+        "content": [
+          {
+            "type": "footnote",
+            "attrs": { "id": "fnNested00000001", "preserved": null, "origin": null, "ext": {} },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pFnNested0000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "preserved": null,
+                  "ext": {}
+                },
+                "content": [{ "type": "text", "text": "x" }]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I10"]
+}

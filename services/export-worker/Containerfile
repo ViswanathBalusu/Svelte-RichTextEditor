@@ -1,0 +1,59 @@
+# Export worker image (09 §9.3; spike S4, SPK-017). Built with Podman:
+#   node services/export-worker/scripts/build-image.ts
+# which stages the build context in services/export-worker/out/image-context and runs
+#   podman build -f services/export-worker/Containerfile -t localhost/docedit-export-worker:s4 <context>
+#
+# Base: the official TeX Live image (Island of TeX), TeX Live 2026, pinned by digest. The tag
+# `latest` moves weekly; the digest does not. Recorded on 2026-11-06:
+#   docker.io/texlive/texlive:latest
+#   index    sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
+#   amd64    sha256:97bde4bd80e73a697bcccdd626966a484f528e3f60c773b5c74cd7b8104c42fe
+#   created  2026-11-01; LuaHBTeX 1.24.0; LaTeX 2026-11-01; tagpdf 1.0i; luaotfload 3.29
+# This is the full scheme (about 6 GB). A curated image with only the class's packages is EXP-073.
+FROM docker.io/texlive/texlive:latest@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
+
+# Engine hardening (09 §9.3 item 2). LuaTeX 1.24 is past the fixes for CVE-2023-32700 and
+# CVE-2023-32668. Shell escape fully off (the image's default is restricted, `p`), paranoid file
+# access, no home tree, no system font directories. `--safer` is not used: it disables OpenType
+# font loading.
+ENV shell_escape=f \
+    shell_escape_commands= \
+    openin_any=p \
+    openout_any=p \
+    TEXMFHOME=/nonexistent \
+    TEXMFVAR=/work/.texmf-var \
+    TEXMFCONFIG=/work/.texmf-config \
+    OSFONTDIR=/nonexistent \
+    DOCEDIT_FONT_PATH=/opt/docedit/fonts/ \
+    HOME=/work \
+    LANG=C.UTF-8
+
+RUN set -eu; \
+    luatex --version | head -1 | grep -E 'Version 1\.(1[7-9]|[2-9][0-9])'; \
+    groupadd --gid 10001 tex; \
+    useradd --uid 10001 --gid 10001 --no-create-home --home-dir /work --shell /usr/sbin/nologin tex
+
+# Fonts by path and hash (09 §5): copied out of the TeX tree, named by SHA-256, read-only.
+COPY fonts.lua /opt/docedit/fonts.lua
+RUN set -eu; \
+    TEXMFVAR=/usr/local/texlive/2026/texmf-var texlua /opt/docedit/fonts.lua /opt/docedit/fonts > /dev/null; \
+    chmod -R a+rX,go-w /opt/docedit
+
+# Pre-built font caches (09 §8): luaotfload writes them to TEXMFSYSVAR while building as root,
+# and jobs read them from the read-only image.
+COPY warmup.tex warmup.lua /opt/docedit/warmup/
+RUN set -eu; \
+    cd /opt/docedit/warmup; \
+    TEXMFVAR=/usr/local/texlive/2026/texmf-var HOME=/root luaotfload-tool --update > /dev/null; \
+    TEXMFVAR=/usr/local/texlive/2026/texmf-var HOME=/root lualatex --interaction=nonstopmode warmup.tex > /dev/null; \
+    grep -q 'warm-up: 11 font files' warmup.log; \
+    rm -f warmup.aux warmup.log warmup.pdf; \
+    cp -r /usr/local/texlive/2026/texmf-var/luatex-cache/generic/names /opt/docedit/luaotfload-names; \
+    chmod -R a+rX /usr/local/texlive/2026/texmf-var /opt/docedit/luaotfload-names
+
+COPY compile.sh /opt/docedit/compile.sh
+RUN chmod 0555 /opt/docedit/compile.sh
+
+USER 10001:10001
+WORKDIR /work
+ENTRYPOINT ["/opt/docedit/compile.sh"]

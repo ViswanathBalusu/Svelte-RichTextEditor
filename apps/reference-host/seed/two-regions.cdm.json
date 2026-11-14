@@ -1,0 +1,145 @@
+{
+  "cdm": 1,
+  "requires": [],
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "defs",
+        "content": [
+          {
+            "type": "settings",
+            "attrs": { "lang": "en-GB", "defaultTabStop": 720, "defaultParagraphStyle": "Normal" }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Normal",
+              "kind": "paragraph",
+              "name": "Normal",
+              "builtIn": true,
+              "fontSize": 220
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Title",
+              "kind": "paragraph",
+              "name": "Title",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "fontSize": 400,
+              "bold": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading1",
+              "kind": "paragraph",
+              "name": "Heading 1",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "outlineLevel": 1,
+              "fontSize": 300,
+              "bold": true
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "ps1",
+              "width": 11906,
+              "height": 16838,
+              "marginTop": 1440,
+              "marginRight": 1440,
+              "marginBottom": 1440,
+              "marginLeft": 1440
+            }
+          }
+        ]
+      },
+      {
+        "type": "body",
+        "attrs": { "pageSetup": "ps1" },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pTitle0000000001", "style": "Title" },
+            "content": [{ "type": "text", "text": "Supply agreement" }]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pIntro0000000001", "style": "Normal" },
+            "content": [
+              {
+                "type": "text",
+                "text": "This agreement has two sections. Each section has its own editor."
+              }
+            ]
+          },
+          {
+            "type": "region",
+            "attrs": {
+              "id": "rAdaSection00001",
+              "title": "Payment section",
+              "policy": "restricted"
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "id": "pAdaHeading00001", "style": "Heading1" },
+                "content": [{ "type": "text", "text": "Payment terms" }]
+              },
+              {
+                "type": "paragraph",
+                "attrs": { "id": "pAdaBody00000001", "style": "Normal" },
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Payment is due within thirty days of the invoice date."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pBetween00000001", "style": "Normal" },
+            "content": [{ "type": "text", "text": "The delivery terms follow." }]
+          },
+          {
+            "type": "region",
+            "attrs": {
+              "id": "rBobSection00001",
+              "title": "Delivery section",
+              "policy": "restricted"
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "id": "pBobHeading00001", "style": "Heading1" },
+                "content": [{ "type": "text", "text": "Delivery terms" }]
+              },
+              {
+                "type": "paragraph",
+                "attrs": { "id": "pBobBody00000001", "style": "Normal" },
+                "content": [
+                  { "type": "text", "text": "Goods are delivered to the buyer's warehouse." }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pClosing00000001", "style": "Normal" },
+            "content": [{ "type": "text", "text": "Signed for both parties." }]
+          }
+        ]
+      }
+    ]
+  }
+}

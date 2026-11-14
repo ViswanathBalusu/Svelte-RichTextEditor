@@ -1,0 +1,73 @@
+{
+  "name": "paragraphs-joined",
+  "description": "Two paragraphs of a region are joined into the first.",
+  "expected": ["modified:pTerms000000001A", "removed:pTerms000000002A"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "modified",
+        "blockId": "pTerms000000001A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "spans": [
+          {
+            "op": "insert",
+            "at": 20,
+            "text": "Deposit is one month.",
+            "user": "bob",
+            "seq": 1
+          }
+        ]
+      },
+      {
+        "kind": "removed",
+        "blockId": "pTerms000000002A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "user": "bob",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "modified",
+        "blockId": "pTerms000000001A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "spans": [
+          {
+            "op": "insert",
+            "at": 20,
+            "text": "Deposit is one month.",
+            "user": "owner",
+            "seq": 0
+          }
+        ]
+      },
+      {
+        "kind": "removed",
+        "blockId": "pTerms000000002A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A"
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

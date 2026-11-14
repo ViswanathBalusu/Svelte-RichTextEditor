@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docedit.invalid/element/config.schema.json",
+  "title": "DocEditorConfig",
+  "description": "The `config` property of <doc-editor> (05 section 8.1; PRO-081). The TypeScript type is DocEditorConfig in src/config.ts. Keys the component does not know are ignored (PRO-005), and a value of the wrong type leaves the default in place. The names are working placeholders.",
+  "type": "object",
+  "properties": {
+    "styleNonce": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Nonce for the <style> element the component creates when constructable stylesheets fail (02 section 3). Absent by default; an empty string counts as absent."
+    },
+    "graceMs": {
+      "type": "number",
+      "minimum": 0,
+      "default": 30000,
+      "description": "Grace period before a disconnected editor destroys itself, in milliseconds (02 section 2.1). Default 30,000. A negative or non-finite value is ignored."
+    },
+    "pdfViewerUrl": {
+      "type": "string",
+      "minLength": 1,
+      "description": "URL of the PDF viewer's page (FE-071). Default: viewer/pdf-viewer.html next to the module. Absent by default; an empty string counts as absent."
+    },
+    "selectionShim": {
+      "type": "string",
+      "enum": ["instance", "library"],
+      "default": "instance",
+      "description": "Where the shadow root's getSelection comes from (02 section 8; spike S1 section 4.7). instance defines it on the editor's own root; library lets ProseMirror patch ShadowRoot.prototype."
+    },
+    "footnoteModel": {
+      "type": "string",
+      "enum": ["inline", "paragraph"],
+      "default": "paragraph",
+      "description": "Experimental, for spike evidence only: the footnote content model (03 section 13; CDM-001). paragraph is the CDM's footnote content; inline is the spike's option A."
+    },
+    "deferRemoteWhileComposing": {
+      "type": "boolean",
+      "default": true,
+      "description": "Experimental, for spike evidence only: defer remote commits while the user composes text (input method)."
+    },
+    "forceStyleFallback": {
+      "type": "boolean",
+      "default": false,
+      "description": "Experimental, for spike evidence only: use the nonce <style> element even where constructable stylesheets work."
+    },
+    "pageGuides": {
+      "type": "boolean",
+      "default": false,
+      "description": "Draws page guides in the web view where the last completed export's layout.json started a page (02 section 7; FE-068). Off by default; a guide is exact only at block starts and drifts between compiles."
+    }
+  },
+  "additionalProperties": true
+}

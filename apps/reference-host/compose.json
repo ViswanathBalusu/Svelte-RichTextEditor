@@ -1,0 +1,192 @@
+{
+  "x-note": "The reference host's demo stack (BE-005, UX-091; 06 §13; 13 §11.2): PostgreSQL, an S3-compatible store, the document service, one export worker with its sandbox image, and the reference host, seeded with a tenant, users and documents. Demo only: not a production deployment; every port is bound to 127.0.0.1 and the credentials are the test values of stack/.env.example. JSON is valid YAML, so `podman compose -f apps/reference-host/compose.json --env-file apps/reference-host/stack/.env.example up --build` reads this file where Compose works; scripts/stack.ps1 starts the same definitions on a machine where it does not (a WSL Podman machine needs --cgroups=disabled, which Compose cannot pass), running the Node.js services as local processes with the same commands. Services use host networking: on the WSL machine published ports are invisible to Windows, and binding 127.0.0.1 keeps everything local.",
+  "name": "docedit-demo",
+  "services": {
+    "postgres": {
+      "x-note": "PostgreSQL 17.11 (PostgreSQL Licence), the image of infra/containers/compose.json, pinned by its multi-arch index digest. Data in a named volume, so documents and their history survive a restart (BE-005 criterion 5).",
+      "image": "docker.io/library/postgres:17.11-trixie@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3",
+      "network_mode": "host",
+      "environment": {
+        "POSTGRES_USER": "${DOCEDIT_DEMO_PG_ADMIN_USER}",
+        "POSTGRES_PASSWORD": "${DOCEDIT_DEMO_PG_ADMIN_PASSWORD}",
+        "POSTGRES_DB": "postgres",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"
+      },
+      "command": [
+        "postgres",
+        "-c",
+        "listen_addresses=127.0.0.1",
+        "-c",
+        "port=${DOCEDIT_DEMO_PG_PORT}",
+        "-c",
+        "max_connections=100",
+        "-c",
+        "track_commit_timestamp=on"
+      ],
+      "volumes": ["pg-data:/var/lib/postgresql/data"],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "pg_isready",
+          "-h",
+          "127.0.0.1",
+          "-p",
+          "${DOCEDIT_DEMO_PG_PORT}",
+          "-U",
+          "${DOCEDIT_DEMO_PG_ADMIN_USER}"
+        ],
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 90
+      },
+      "labels": { "org.docedit.env": "demo" }
+    },
+    "s3": {
+      "x-note": "Versity S3 Gateway v1.10.0 (Apache-2.0) over a POSIX directory, the image of infra/containers/compose.json, pinned by its multi-arch index digest. Exported PDFs live here (06 §4.2).",
+      "image": "docker.io/versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316",
+      "network_mode": "host",
+      "environment": {
+        "VGW_BACKEND": "posix",
+        "VGW_BACKEND_ARG": "/data",
+        "VGW_BACKEND_ARGS": "--versioning-dir /versions",
+        "VGW_PORT": "127.0.0.1:${DOCEDIT_DEMO_S3_PORT}",
+        "VGW_REGION": "${DOCEDIT_DEMO_S3_REGION}",
+        "VGW_HEALTH": "/health",
+        "VGW_QUIET": "true",
+        "ROOT_ACCESS_KEY": "${DOCEDIT_DEMO_S3_ACCESS_KEY}",
+        "ROOT_SECRET_KEY": "${DOCEDIT_DEMO_S3_SECRET_KEY}"
+      },
+      "volumes": ["s3-data:/data", "s3-versions:/versions"],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:${DOCEDIT_DEMO_S3_PORT}/health"
+        ],
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 60
+      },
+      "labels": { "org.docedit.env": "demo" }
+    },
+    "setup": {
+      "x-note": "One-shot: secrets (generated, demo-only), the bucket and its CORS rules, the database, the service role, the migrations and the tenant registration (scripts/setup.ts).",
+      "x-docedit-process": true,
+      "image": "localhost/docedit-demo-node:dev",
+      "build": {
+        "context": "../..",
+        "dockerfile": "apps/reference-host/containers/Containerfile"
+      },
+      "network_mode": "host",
+      "environment": { "DOCEDIT_DEMO_DATA": "/stack" },
+      "volumes": ["stack-data:/stack"],
+      "command": ["node", "apps/reference-host/scripts/setup.ts"],
+      "depends_on": {
+        "postgres": { "condition": "service_healthy" },
+        "s3": { "condition": "service_healthy" }
+      },
+      "labels": { "org.docedit.env": "demo" }
+    },
+    "document-service": {
+      "x-note": "The document service as one process (BE-001): control plane, DEP WebSocket and rooms, on PostgreSQL and the S3 store, with the tenant seeded from the set-up's registration (BE-012).",
+      "x-docedit-process": true,
+      "image": "localhost/docedit-demo-node:dev",
+      "network_mode": "host",
+      "environment": { "DOCEDIT_DEMO_DATA": "/stack" },
+      "volumes": ["stack-data:/stack:ro"],
+      "command": ["node", "apps/reference-host/scripts/run.ts", "service"],
+      "depends_on": { "setup": { "condition": "service_completed_successfully" } },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:${DOCEDIT_DEMO_SERVICE_PORT}/readyz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+        ],
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 60
+      },
+      "labels": { "org.docedit.env": "demo" }
+    },
+    "seed": {
+      "x-note": "One-shot: the demo documents, created through the service with the host's externalId, their region grants, and the host's catalogue (scripts/seed.ts).",
+      "x-docedit-process": true,
+      "image": "localhost/docedit-demo-node:dev",
+      "network_mode": "host",
+      "environment": { "DOCEDIT_DEMO_DATA": "/stack" },
+      "volumes": ["stack-data:/stack"],
+      "command": ["node", "apps/reference-host/scripts/seed.ts"],
+      "depends_on": { "document-service": { "condition": "service_healthy" } },
+      "labels": { "org.docedit.env": "demo" }
+    },
+    "reference-host": {
+      "x-note": "The reference host (SvelteKit build behind scripts/serve.ts): demo sign-in, token endpoint, catalogue and the editor page.",
+      "x-docedit-process": true,
+      "image": "localhost/docedit-demo-node:dev",
+      "network_mode": "host",
+      "environment": { "DOCEDIT_DEMO_DATA": "/stack" },
+      "volumes": ["stack-data:/stack"],
+      "command": ["node", "apps/reference-host/scripts/run.ts", "host"],
+      "depends_on": { "seed": { "condition": "service_completed_successfully" } },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:${DOCEDIT_DEMO_HOST_PORT}/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+        ],
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 60
+      },
+      "labels": { "org.docedit.env": "demo" }
+    },
+    "export-worker": {
+      "x-note": "The export worker (services/export-worker, src/main.ts): claims export jobs from the queue in PostgreSQL, converts, and compiles each job in a fresh sandbox container of the image below, through the Podman socket of the machine. The worker process needs the database and the store; LuaLaTeX runs only in the sandbox, which has no network (09 §9.3; BE-005 criterion 4).",
+      "x-docedit-process": true,
+      "image": "localhost/docedit-demo-node:dev",
+      "network_mode": "host",
+      "environment": {
+        "DOCEDIT_DEMO_DATA": "/stack",
+        "CONTAINER_HOST": "unix:///run/podman/podman.sock",
+        "DOCEDIT_CONTAINER_CLI": "podman"
+      },
+      "volumes": [
+        "stack-data:/stack:ro",
+        "${DOCEDIT_DEMO_PODMAN_SOCKET:-/run/podman/podman.sock}:/run/podman/podman.sock"
+      ],
+      "command": ["node", "apps/reference-host/scripts/run.ts", "worker"],
+      "depends_on": {
+        "document-service": { "condition": "service_healthy" },
+        "export-sandbox": { "condition": "service_completed_successfully" }
+      },
+      "labels": { "org.docedit.env": "demo" }
+    },
+    "export-sandbox": {
+      "x-note": "The compile sandbox of 09 §9.3, built from services/export-worker/Containerfile (owned by the export work; referenced, not copied). The worker runs one container of it per job with these settings and its own limits (services/export-worker, src/sandbox.ts): a tar of the bundle in, a tar of the outputs out, no network. Here it only builds the image and checks it starts without network.",
+      "image": "${DOCEDIT_EXPORT_IMAGE}",
+      "build": {
+        "context": "../../services/export-worker/image",
+        "dockerfile": "../Containerfile"
+      },
+      "network_mode": "none",
+      "read_only": true,
+      "tmpfs": ["/work:rw,size=256m,mode=1777,nosuid,nodev,noexec"],
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges"],
+      "user": "10001:10001",
+      "entrypoint": ["sh", "-c", "echo sandbox-ok"],
+      "labels": { "org.docedit.env": "demo" }
+    }
+  },
+  "volumes": {
+    "pg-data": {},
+    "s3-data": {},
+    "s3-versions": {},
+    "stack-data": {}
+  }
+}

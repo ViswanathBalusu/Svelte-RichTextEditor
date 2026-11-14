@@ -1,0 +1,26 @@
+{
+  "name": "@docedit/export-docx",
+  "version": "0.0.0",
+  "private": true,
+  "description": "DOCX import with the preservation layer and the package-patching DOCX writer (ADR 0017). Phase 0: spike S11 (SPK-028).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./corpus/*": "./corpus/*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "word-check": "node scripts/export-for-word.ts && powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/word-open-check.ps1 -Dir test-results/word-check -Result test-results/word-check-result.json"
+  },
+  "dependencies": {
+    "@docedit/model": "workspace:*",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@rgrove/parse-xml": "5.1.0"
+  }
+}

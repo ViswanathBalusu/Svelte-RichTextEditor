@@ -1,0 +1,13 @@
+{
+  "//": "The SvelteKit application (src/), checked by svelte-check. The workspace's strict options first, then SvelteKit's generated settings (bundler resolution, the DOM). Node.js scripts, tests and the scenario are tsconfig.node.json.",
+  "extends": ["../../tsconfig.base.json", "$app/tsconfig"],
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+    "types": ["$app/types", "node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte"],
+  "exclude": ["src/service-worker"]
+}

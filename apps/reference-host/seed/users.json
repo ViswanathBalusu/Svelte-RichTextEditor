@@ -1,0 +1,34 @@
+{
+  "x-note": "Demo only, test values. The host's own directory of seeded people and groups (UX-092). A visitor picks one of them without a password. `sub` is opaque and stable and never an e-mail address (05 §3.1); the document service stores a surrogate for it.",
+  "users": [
+    {
+      "sub": "u-olivia",
+      "name": "Olivia Okafor",
+      "groups": ["g-owners"],
+      "about": "Owner of the demo documents: can change region grants"
+    },
+    {
+      "sub": "u-ada",
+      "name": "Ada Lindqvist",
+      "groups": ["g-finance"],
+      "about": "Editor; may change the payment section"
+    },
+    {
+      "sub": "u-bob",
+      "name": "Bob Mensah",
+      "groups": ["g-logistics"],
+      "about": "Editor; may change the delivery section"
+    },
+    {
+      "sub": "u-vic",
+      "name": "Vic Moreau",
+      "groups": [],
+      "about": "Viewer; may read the demo documents"
+    }
+  ],
+  "groups": [
+    { "id": "g-owners", "name": "Document owners" },
+    { "id": "g-finance", "name": "Finance" },
+    { "id": "g-logistics", "name": "Logistics" }
+  ]
+}

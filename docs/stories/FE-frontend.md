@@ -1,0 +1,3546 @@
+# FE Element, Shadow DOM, Svelte integration, editing core and views
+
+This epic turns [02 Frontend](../spec/02-frontend.md) into stories: the `<doc-editor>` element and its lifecycle, packaging and lazy chunks, the shadow root (styles, Trusted Types, theming mechanism, overlays, keyboard scoping, composed events), the Svelte integration, the document API, the building blocks of the editing core (02 §5.2), the recovery journal, fonts on the client, the web view, the read view, the page view pipeline, math display and editing in the editor, accessibility of the editing surface, internationalisation, browser support and the frontend test matrices. Sources: 02; ADR 0002, 0003 and 0005; the review's section 3.3 (findings F1 to F15) and section 6; phase placement from [11 Roadmap](../spec/11-roadmap.md), 12 §13 and 13 §12. Every number is a target to validate.
+
+Phase 3 stories (the page view, 02 §9) are gated on the evidence review at the end of phase 2 (story SPK-013). They are written against injected interfaces (a text-measurement provider, a break-opportunity provider, a line breaker and the layout engine API) and stay language-neutral: any Rust/WebAssembly implementation of measurement, shaping or line breaking belongs to the WASM epic and plugs in behind those interfaces.
+
+What this epic leaves to other epics (README §2.3):
+
+- **PRO** owns the embedding contract (attributes, properties, methods, events; 05 §8). FE writes the element internals that make it true.
+- **SYN** owns the sync client algorithm (04 §8) and comment-range mapping in the authority. FE writes its integration into the editing core.
+- **PRM** owns what a person sees when permissions block or reject an edit (07 §7). FE writes the guard mechanics.
+- **CDM** owns the model, the schema generation and the shared numbering and formatting algorithms. **EXP** owns the math gate, LaTeX, `layout.json` and the export job. **BE** owns the font manifest and assets.
+- **UX** owns the shell, the command registry, panes, the save-state indicator, the recovered-edits pane, review tools, presence drawing, the dark and high-contrast themes, replaceable icons and strings, and the accessibility checker. **FRW** owns field nodes, field node views and fill mode (12 §11). **SPK** owns spikes S1, S2, S5, S7 and S9. **FND** owns the performance harness and CI gates; FE states the budget criteria for its own work.
+
+## Packaging and registration (02 §2)
+
+### FE-001 Register the element safely
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Integrating developer |
+
+**Spec:** 02 §2; ADR 0002 · **Requirements:** R2, R12 · **Depends on:** PRO-076
+
+As an integrating developer, I want importing the module to register `doc-editor` without surprises, so that the editor works on any page, on a server and next to another version of itself.
+
+**Acceptance criteria**
+
+- [x] Given the module is imported in a runtime with no DOM (Node.js, server-side rendering), when the import runs, then it does not throw, defines no element and reads no browser global.
+- [x] Given a browser page where `doc-editor` is not defined, when the module is imported, then `customElements.get("doc-editor")` returns the exported class.
+- [x] Given `doc-editor` is already defined by a different version of this class, when the module is imported, then it logs one clear warning that names both versions, leaves the existing definition in place and does not bind the host silently to the older class.
+- [x] Given `doc-editor` is already defined by the same version, when the module is imported, then it neither warns nor throws.
+- [x] Given the exported class, when a host registers it under another tag name or in a scoped custom element registry, then the element mounts and works exactly as under the default name.
+- [x] Given the class source, when it is inspected, then it extends `HTMLElement` directly and is not produced by Svelte's `customElement` compiler option (ADR 0002).
+
+**Evidence:** packages/element/test/register.test.ts (the entry imported by Node.js without a DOM: no throw, no definition, existence checks only, no browser global read; defineDocEditor: same version silent, another version one warning naming both, a subclass for a second name); e2e/element.spec.ts 'FE-001 registration' in Chromium, Edge, Firefox and WebKit (the library build registers its exported class; another version warns once and stays; the same version is silent; another tag name mounts and edits everywhere, a scoped registry where the browser has one: Chromium, Edge and Firefox, WebKit 27.2 has none and skips that part); test/source.test.ts (no Svelte customElement option; the class extends HTMLElement); src/register.ts, src/index.ts, src/doc-editor.ts; ADR 0039 §1 (proposed). Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** Review F6 (server import, silent version collisions). How the module recognises "a different version of this class" is not specified; the static `version` property of 05 §8 is the obvious carrier. Packet B2 (2026-11-06): the element compares `version` (the embedding API) and `release` (the package version) together (ADR 0039 §1, proposed).
+
+### FE-002 Build one ES module with lazy chunks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 02 §2; 13 §9; ADR 0002 · **Requirements:** R2 · **Depends on:** FND-002, FND-008
+
+As a maintainer, I want one ECMAScript module with lazily loaded chunks, so that the first interactive editor stays small and heavy parts load only when someone uses them.
+
+**Acceptance criteria**
+
+- [ ] Given a production build, when it finishes, then Vite library mode has produced one ES module entry, separate lazy chunks for the PDF viewer, its worker, the math editor and each pane, and the component CSS as a separate stylesheet file.
+- [x] Given a document opened in the web view with no pane opened and no equation present, when the network requests are listed, then none of the lazy chunks was requested.
+- [x] Given the initial chunk, when CI measures it, then its compressed size is at most 300 KB (target) and the build fails when the budget is exceeded.
+- [x] Given the contents of the shadow root, when they are inspected, then no custom element defined by this project is nested inside the editor; inner pieces are ordinary Svelte components.
+- [ ] Given a third-party piece that registers global custom elements (the math editor), when the editor starts, then none of its tag names is registered, and when the piece loads on demand, then exactly the tag names listed in the integration guide appear.
+- [x] Given the published package, when a host bundler imports it, then the lazy chunks resolve from the module's own location, so that lazy loading works without host configuration.
+
+**Evidence:** packages/element/e2e/element.spec.ts 'FE-002 lazy chunks of the library build' in Chromium, Edge, Firefox and WebKit (pages/lib.html loads dist/lib/doc-editor.js by URL: opening a document requests the entry, the editor and engine chunks and their imports only, all from the module's own directory, no pane, viewer or DEP client; a pane loads when opened; no custom element of the project inside the root); scripts/build.ts and scripts/bundle-report.ts (the package's build fails when the first interactive editor is over 300,000 bytes of gzip; measured 2026-11-06 with Node.js zlib, gzip level 9, on the minified library build: 157.4 kB with a host backend, 209.7 kB with the DEP client; dist/lib/bundle-report.json); ADR 0039 §2. Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** 02 §2 lists the PDF viewer, its worker, the math editor and the panes as lazy. It does not say whether KaTeX display (FE-069) is lazy or in the initial chunk (see Open questions). The last criterion is a consequence of "lazily loaded chunks" in a distributable module, not a stated requirement. Packet B2 (2026-11-06): criteria 1 and 5 stay open. The math editor (FE-070) is not in the product build yet, so it has no chunk and its tag names cannot be checked there (spike S2's page still loads MathLive on demand); and the CSS reaches the shadow root as a string in the editor chunk, the path spike S2 verified under a strict policy, so the build emits no separate stylesheet file (ADR 0039 §3, proposed). "The initial chunk" is measured as the first interactive editor: the entry, the editor chunk and their static imports (ADR 0039 §2). Lane V-FE-001-016 (2026-11-14), a build run with `pnpm exec playwright test -c packages/element/playwright.config.ts` (the web server builds the library): criterion 1 stays open for two reasons. A separate stylesheet file would conflict with FE-014 and FE-015, which adopt the CSS as a string into a constructable sheet and a nonce `<style>`; the spec default is a file, so the choice is for the owner or a proposed ADR. The math editor chunk (FE-070) is still absent. Criterion 5 stays open because FE-070 is not built. The budget check in the same build reports 242.4 kB gzip for the host-backend first interactive editor and 299.4 kB with the DEP client, both within 300.0 kB.
+
+## Element lifecycle (02 §2.1)
+
+### FE-003 Start loading when the host has set everything, in any order
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Integrating developer |
+
+**Spec:** 02 §2.1; ADR 0002 (after the first review) · **Requirements:** R2, R6 · **Depends on:** FE-001, PRO-074, PRO-075
+
+As an integrating developer, I want the element to begin loading only when a document identifier and a token source are both present, whatever order my framework assigns them in, so that I need not know how the framework sets properties.
+
+**Acceptance criteria**
+
+- [x] Given a framework assigns `getToken` before the class is defined, when the element upgrades, then the constructor captures the value and the editor uses it; it is neither lost nor left shadowing the class's accessor.
+- [x] Given `doc-id` and `getToken` set in either order, or `doc-id` and `backend` set in either order, when the second one arrives, then loading starts exactly once, in a microtask, in every order.
+- [x] Given only one of the two is present, when the element is connected, then no request is made and no error is raised.
+- [x] Given the element is constructed, when the constructor returns, then the shadow root is attached and properties set before upgrade (`backend`, `config`, `searchPrincipals`, `resolveUsers`, `extensions`) are captured as well.
+- [x] Given a mounted element, when an observed attribute changes, then `attributeChangedCallback` reflects it into the application without remounting it; changing `doc-id` loads the other document.
+
+**Evidence:** packages/element/e2e/element.spec.ts 'FE-003 loading when everything is set, in any order' in Chromium, Edge, Firefox and WebKit (properties set before the class is defined, getToken, backend, config, searchPrincipals, resolveUsers and extensions, are captured without shadowing the accessors; nine orders of doc-id, backend or getToken and connecting: nothing in the task that sets them, then exactly one load and one de-ready; one of the two alone: no request, no event; toolbar, locale, theme and mode changes keep the shell and the core, and the shell turns right-to-left for ar-XB; doc-id loads the other document); src/doc-editor.ts (constructor, #reconcile), src/session.ts. Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** Review F6. The list of attributes and properties and their meaning is PRO's (05 §8.1); this story is the mechanism.
+
+### FE-004 Mount the application once and resume it on later connects
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Integrating developer |
+
+**Spec:** 02 §2.1, §4; ADR 0002 · **Requirements:** R2 · **Depends on:** FE-003, FE-013
+
+As an integrating developer, I want the element to mount its Svelte application the first time it connects and to resume it on later connects, so that editor state survives whatever my framework does with the element.
+
+**Acceptance criteria**
+
+- [x] Given the element connects for the first time, when `connectedCallback` runs, then the application is mounted with `mount(App, { target: shadowRoot, props })` and the editing core is created exactly once.
+- [x] Given the element has been connected before, when it connects again, then no second application and no second core are created, global listeners are re-attached and the editor resumes.
+- [x] Given a mounted editor, when `unmount` is called, then everything the application rendered is removed from the shadow root.
+- [x] Given two instances on one page, when both are mounted, then each has its own core and state, and they share only the constructable stylesheet (FE-014) and font registrations (FE-061).
+- [x] Given a host that itself uses Svelte 5, when both applications run on one page, then neither affects the other's state or context.
+
+**Evidence:** packages/element/e2e/fe-004-reconnect.spec.ts 'FE-004 criterion 2' (lane V-FE-001-016, run 2026-11-14 with `pnpm exec playwright test -c packages/element/playwright.config.ts` on demo port 57001, Chromium, Firefox and WebKit: 6 passed; two same-task moves keep one editing surface with the same node, raise no second de-ready, and typing afterwards reaches the document; a press outside after a move clears focus and a later move does not restore it, so the document pointerdown listener is re-attached on each connect), packages/element/e2e/element.spec.ts 'FE-004 mount once, resume on later connects' in Chromium, Edge, Firefox and WebKit (one shell and one core; a move in one task keeps both and raises no de-ready; destroy() leaves the shadow root empty; two instances have their own cores and share one adopted sheet) and s1-shadow-root.spec.ts (lifecycle); s2-svelte-host.spec.ts (a host with its own Svelte 5 keeps working next to the editor); src/editor.ts (mount(App, { target: shadowRoot, props }), unmount). Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** The Svelte `customElement` option is rejected because it destroys the inner component a microtask after disconnect (ADR 0002); this story is the positive form of that decision. Packet B2 (2026-11-06): criterion 2 stays open for its listener half. Lane V-FE-001-016 (2026-11-14) closed it with fe-004-reconnect.spec.ts (see Evidence). Before that, a reconnect created no second application or core (tested), but in phase 1a the element puts no listener of its own on `document` or `window` (the PDF viewer talks over a `MessagePort`, the shortcut listener sits on the shadow root), and removing listeners on suspend, ProseMirror's included, is FE-005.
+
+### FE-005 Survive being moved in the DOM
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Integrating developer |
+
+**Spec:** 02 §2.1; ADR 0002 (after the first review) · **Requirements:** R2 · **Depends on:** FE-004
+
+As an integrating developer, I want the element to suspend and resume instead of being destroyed when a framework moves it, so that no editor state is thrown away.
+
+**Acceptance criteria**
+
+- [x] Given a host removes the element and inserts it again in the same task, when `disconnectedCallback` has waited one microtask, then the element is connected again, nothing was suspended, and the selection, scroll position and unconfirmed work are unchanged.
+- [x] Given a browser that can move an element without disconnecting it, when the host moves it that way, then `connectedMoveCallback` does nothing.
+- [ ] Given the element is still disconnected after that microtask, when it suspends, then it removes its listeners on `document` and `window`, stops observers and workers and closes the socket, and keeps its editing core and journal.
+- [ ] Given a suspended element reconnects within the grace period, when `connectedCallback` runs, then it re-attaches listeners, reopens the channel with a resume (04 §9) and continues with local edits intact.
+- [ ] Given a framework list that reorders the element 50 times, when the reorders finish, then the editing core instance is the same one that existed before (identity preserved).
+
+**Evidence:** packages/element/e2e/fe-lifecycle.spec.ts 'FE-005 survive being moved in the DOM' in Chromium, 2026-11-13 (a move to the other container in one task keeps the core, leaves the element unsuspended with no grace timer and keeps the unconfirmed typing in the body; a native `moveBefore` keeps the element connected with no disconnectedCallback or connectedCallback call, where the browser has `Element.moveBefore`; fifty moves in separate tasks keep one core and one shell and never suspend the element). Firefox and WebKit were not run for this file in this round. Lane V-FE-001-016 (2026-11-13), criterion 1: packages/element/e2e/fe-005-move-selection.spec.ts 'selection and scroll position survive remove and insert in one task' (Playwright, Chromium, `DOCEDIT_DEMO_PORT=57002 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-005-move-selection.spec.ts --project=chromium`, passed without retry: the caret after a click and typing, and the page scroll position at 120, are the same after a remove and insert in one task); the same run of packages/element/e2e/fe-lifecycle.spec.ts, element.spec.ts (FE-003, FE-004, FE-013, PRO-076 tests) and fe-005-move-selection.spec.ts: 22 passed, Chromium.
+
+**Notes:** Review F6 (lifecycle leaks). Packet D1 (2026-11-13): criterion 1 stays open: the test checks the core, the suspension and the typed text, but not the selection or the scroll position after a move. Criteria 3 and 4 stay open: suspending does not yet remove listeners, close the channel or reopen it with a resume. Criteria 2 and 5 are verified in Chromium only. Lane V-FE-001-016 (2026-11-13): criterion 1 is ticked on e2e/fe-005-move-selection.spec.ts (the test was `fixme`; it is now a real test). Cause: the browser blurs the focused editor during the removal, while the element is still connected, and drops the selection with the subtree. The element now records focus (`#focusWithin`, cleared by focus moving to another element or by a press outside it) and puts focus back on connect when the editor had it (src/doc-editor.ts). The scroll position is the page's, not the editor's: the editor has no scroll container of its own (shell.css), and a same-task move keeps the page scroll. Criteria 3 and 4 stay open (suspending and reconnecting with a resume, as before). Decision recorded in docs/adr/0300-lane-V-FE-001-016.md. Lane U-FE-001-016 (2026-11-13): criterion 1 is tested in e2e/fe-005-move-selection.spec.ts and fails: a same-task remove and insert leaves the shadow root with no selection and resets the scroll position (Chromium: selection empty after the move, scroll 0 against 17 before). The element has no step that restores them, so criterion 1 stays open; the test is `fixme` until src/doc-editor.ts restores them. Lane FE-001-013 (2026-11-13): the session has no suspend or resume step yet. `disconnectedCallback` only sets the suspended flag and the grace timer (src/doc-editor.ts), so the channel stays open while suspended and no resume with `resume` is sent on reconnect; criterion 4 needs that step and the core's re-attach, which the engine owns. The element puts no listener on `document` or `window` (grep of src/ finds only the PDF viewer frame's own listeners), so criterion 2's listener half has nothing to remove yet.
+
+### FE-006 Destroy the editor completely
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Integrating developer |
+
+**Spec:** 02 §2.1; ADR 0002 (after the first review) · **Requirements:** R2, R15 · **Depends on:** FE-005, FE-008
+
+As an integrating developer, I want a removed editor to destroy itself after a grace period, so that single-page applications do not leak editors.
+
+**Acceptance criteria**
+
+- [x] Given the element stays disconnected for the grace period (default 30 seconds) and has no `keep-alive` attribute, when the period ends, then it destroys itself.
+- [x] Given the `keep-alive` attribute is present, when the element stays disconnected for longer than the grace period, then it remains suspended and is not destroyed.
+- [ ] Given `destroy()` is called or the grace period ends, when destruction completes, then Svelte is unmounted, the editing core is destroyed, and every worker, channel, timer, observer, listener and open IndexedDB handle is released, verified by instrumented counters and without relying on garbage collection.
+- [ ] Given unconfirmed commits exist when the editor is destroyed, when it is destroyed, then they remain in the journal and are resubmitted on the next load (FE-009).
+- [x] Given a single-page application mounts and removes a route containing the editor 100 times, when memory is measured after forced garbage collection, then no editor instance is retained.
+
+**Evidence:** packages/element/e2e/fe-006-memory.spec.ts 'FE-006 memory after repeated mount and removal' in Chromium (lane U-FE-001-016, 2026-11-13: 100 mount and remove cycles, each left 31 seconds on Playwright's fake clock so the grace period ends; `HeapProfiler.collectGarbage` twice; a WeakRef to each element and each editing core, 200 in all: some still resolve before the collection, none after it; run alone, 1.6 minutes, passed); packages/element/e2e/fe-lifecycle.spec.ts 'FE-006 destroy after the grace period' in Chromium, 2026-11-13, with Playwright's fake clock (a removed editor is still suspended with its shell at 27 seconds and has no session after 30.5 seconds, so the default is 30 seconds; with `keep-alive`, the editor stays suspended and mounted after 60 seconds, and connecting it again resumes it with one shell).
+
+**Notes:** Review F6. How the grace period is configured, and what happens if a destroyed element is connected again, are not specified (Open questions). Packet D1 (2026-11-13): criteria 3 and 5 stay open: there are no instrumented release counters, and the 100-route memory check is not written. Lane U-FE-001-016 (2026-11-13): criterion 5 is ticked on e2e/fe-006-memory.spec.ts (Chromium only: the forced collection uses the DevTools Protocol). Criterion 3 stays open: the grace timer, workers, observers, shell listeners and IndexedDB handles have no release counters in the browser yet. Lane FE-001-013 (2026-11-13): session-level counters are in packages/element/test/fe-006-release.test.ts (one channel close or more, one detach, one editor destroy, one backend close, subscriptions back to zero, nothing reported after close; 1 test passing in Node.js). Criterion 3 stays open: the grace timer, workers, observers, shell listeners and IndexedDB handles are not counted in Node, and the browser counters are not written. Criterion 4 stays open until the journal (FE-008) exists. The two ticked criteria are verified in Chromium only.
+
+## Not losing work: the recovery journal (02 §2.2)
+
+### FE-007 Expose the save state
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | S | must | Author |
+
+**Spec:** 02 §2.2; 13 §3 · **Requirements:** R15 · **Depends on:** FE-033, PRO-087, UX-014, UX-016
+
+As an author, I want the editor to know whether my work is saved, saving or read-only at all times, so that the header and the host can show it truthfully.
+
+**Acceptance criteria**
+
+- [x] Given nothing is queued or in flight, when the sync client is idle, then the save state is `saved`.
+- [x] Given local steps are queued or a commit is in flight, when the state is read, then it is `saving`; when the commit is acknowledged, then it returns to `saved`.
+- [x] Given the user's effective rights allow no editing, or the server answers `read_only`, when the state is read, then it is `readonly`.
+- [x] Given the connection changes between online, reconnecting and offline, when it changes, then the connection value follows it, independently of the sync value.
+- [x] Given any change of the save state, when it happens, then the core's read-only state view updates and `de-status` is dispatched with `connection` and `sync` (composed, FE-022), at most once per animation frame.
+
+**Evidence:** packages/element/test/save-state.test.ts 'FE-007 criterion 3' (the session on backend-mock with the real headless core: the document is locked while a commit is held, the room refuses it with `read_only`, and the save state reads `readonly` through the session and the core; `saved` before), with the rights case in packages/element/test/session.test.ts 'reports readonly when the access allows no change (FE-007)'; packages/element/test/session.test.ts 'follows the DEP socket connection, independently of the save state (FE-007)' (round 1: a DEP-style socket moves online, reconnecting, offline and online while the save state moves saving and saved, one de-status per frame with the connection and the save state read separately); packages/element/test/status.test.ts and test/session.test.ts (at most one de-status per frame, only on change; saved, saving, saved from the core's save state; readonly when the access allows no change); e2e/element.spec.ts 'FE-007 save state' in Chromium, Edge, Firefox and WebKit (saving in the task of a local change, saved after the acknowledgement, readonly for a viewer, offline after a revocation while the save state stays; de-status composed and bubbling); src/status.ts, src/editor.ts (status view), src/session.ts. Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** 1a shows the header with presence and save state (11 §3). The fourth state, `unsaved` (in the journal only), arrives with FE-008. Packet B2 (2026-11-06): criteria 3 and 4 stay open. `readonly` from an access that allows no change is tested; `readonly` after a `read_only` rejection is the core's (FE-029). `online` and `offline` are tested through the element; `reconnecting` needs a transport that drops, which the DEP client's own tests drive (PRO-093), not yet the element's. Round 1 (element packet): the session test above drives the DEP socket's `reconnecting` and `offline` values through the element's session, so criterion 4 is ticked on that evidence. Round 8 (element packet, 2026-11-13): criterion 3 is ticked (save-state.test.ts sends the `read_only` answer from the mock room; see ADR 0109, round 8).
+
+### FE-008 Write unconfirmed commits to the journal before sending them
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 02 §2.2; 04 §8, §2 (G4); 13 §9; 10 §3.1 · **Requirements:** R15 · **Depends on:** FE-033, FE-007, SYN-017, SYN-018
+
+As an author, I want my unsent and unconfirmed work written to the browser's IndexedDB before it is sent, so that a closed or crashed tab does not lose it.
+
+**Acceptance criteria**
+
+- [x] Given the sync client is about to send a commit, when it sends, then the commit has first been written to the journal keyed by its commit identifier, and the send happens only after that write has resolved.
+- [ ] Given local steps are queued but not yet sent, when the queue changes, then the journal holds the in-flight commit, the queue and any recovered edits (04 §8).
+- [x] Given the server acknowledges a commit, when the acknowledgement is processed, then the commit's journal entry is removed.
+- [ ] Given a commit is in the journal and unconfirmed while the connection is down or the service cannot acknowledge (06: database unavailable), when the state is read, then it is `unsaved`; when the commit is confirmed, then it is `saved`.
+- [x] Given the journal is inspected after a session, when its contents are read, then it holds commits and never tokens (10 §3.1).
+- [x] Given the tab is killed between the journal write and the send, when the document is opened again, then the entry is still present.
+
+**Evidence:** criterion 6 (round 3 fix, lane U-FE-001-016, 2026-11-13): packages/element/e2e/fe-008-journal-reopen.spec.ts (Playwright, `DOCEDIT_DEMO_PORT=56003 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-008-journal-reopen.spec.ts`, 4 passed of 4 in Chromium, Edge, Firefox and WebKit, run twice on 2026-11-13 on the shared development machine): Ada types in `<doc-editor>` with its default IndexedDB journal, the channel's `submit` is blocked so the send never reaches the service, the test waits until the commit is in IndexedDB, then kills the tab (Chromium and Edge: renderer crash through CDP `Page.crash`; Firefox and WebKit: page closed without `beforeunload`, as they offer no crash), opens the page in a new tab of the same browser context, opens the same document in a new `<doc-editor>` and reads IndexedDB: the commit is there under the same identifier, and with the journalled queue it holds every typed character. Commits refused or set aside leave the journal (round 3 fix, packages/engine/test/fe-008-journal-reject.test.ts, Node.js, 3 of 3 tests): `permission_denied` from backend-mock's real Room after the grant is withdrawn, `rebase_failed` and `invalid_op` answers, and a `rebase` answer whose old identifier is gone before the work is sent again (packages/engine/src/sync/session.ts, `#journalSettle`). packages/engine/test/fe-008-journal.test.ts (Node.js, `pnpm vitest run --project node`, 5 of 5 tests): criterion 1, each commit is in the journal at the moment `channel.submit` is called and the write precedes the send; criterion 3, the journal is empty once the commit is saved; criterion 5, the entry carries only commit members and no token-like field; criterion 6 is only partly shown, so it is not ticked (reviewer, round 3): packages/element/src/journal-idb.universal.test.ts (Chromium, Firefox and WebKit, `pnpm vitest run --project browser`, 15 of 15 tests) writes an entry, closes the handle and reads it back with a second handle in the same page, and the engine test leaves an unacknowledged commit in an in-memory journal after `detach()`. No test kills a page and opens the document again. The queue and the in-flight commit are journalled (fe-008 test 'holds the in-flight commit and the queue').
+
+**Notes:** Review F7. Not specified: a failed journal write (IndexedDB unavailable, private window, quota), two tabs on one document, shared computers, and whose work an entry is (Open questions). Resubmitting journalled work on the next visit is FE-009 and keeping rejected content is FE-010. The journal store and the flush on `visibilitychange` are FE's; the save-state indicator is UX's (UX-016). This story absorbed SYN-025 during the cross-check. Second review (2026-11-06, SPK-027): SR-M33 confirms the gaps and proposes a "not protected" save state when the journal cannot write, one tab owning a document's journal through a lock, and a host call that clears the journal at sign-out; SR-M9: under ADR 0019 an access change must also purge journal entries and recovered edits that hold content now hidden ([review](../review/2026-11-06-second-review.md)). Round 3 (lane U-FE-001-016, 2026-11-13): criteria 1, 3 and 5 are ticked (see Evidence); criterion 6 was ticked by the lane and unticked by the reviewer (store-level evidence only; it needs an element run that kills a real page and opens the document again, with FE-009 for the read on return). Criterion 2 stays open: recovered edits join the journal only with FE-010. Criterion 4 stays open: the journal-failure path reads unsaved (packages/engine/test/fe-008-journal.test.ts, test 2). Lane V-FE-001-016 (2026-11-13): the connection-down half is tested in packages/engine/test/fe-008-unsaved.test.ts (Node.js, 1 of 1 test: a held commit reads saving while online, unsaved once the channel reports `resuming`, saving again when it is `live`, and saved with the journal empty once the service confirms it). The other half, a commit the service cannot answer while the channel is online, is open: such a commit reads saving until the acknowledgement timeout (SyncSession limits, a proposed default) makes the channel reconnect; whether it should read unsaved at once, and which answer counts as "cannot acknowledge", is not decided here. The default journal is an IndexedDB store opened by the element when the browser gives one (packages/element/src/journal-idb.ts; decision recorded in docs/adr/0300-lane-U-FE-001-016.md). Not decided: two tabs on one document, and a failed remove after an acknowledgement (it leaves a stale entry for FE-009 to deduplicate). Round 3 fix (lane U-FE-001-016): criterion 6 is ticked on the element e2e (see Evidence); on return the entry is only read, and resubmitting it is FE-009's. A commit that leaves flight without an acknowledgement now leaves the journal too: refused for good (`drop` and `reload` answers such as `permission_denied`, `rebase_failed`, `invalid_op`), set aside by a reload or a stale resume, or returned to the queue by `rebase` or a split (the queue is rewritten first, so the work is never in neither place). Refused content is then held in memory only, as recovered edits, until FE-010 keeps it under the purge rules of ADR 0019, so FE-009 cannot resubmit work the server refused. The IndexedDB journal stays on by default (ADR 0300); the sign-out purge SR-M33 proposes needs a host call in the element API and is not built.
+
+### FE-009 Resubmit journalled work on the next visit
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §2.2; 04 §2 (G4), §8, §9 · **Requirements:** R15, R7 · **Depends on:** FE-008, SYN-008, SYN-018, SYN-020, SYN-028
+
+As an author, I want work I did not manage to confirm to be sent again when I return, so that nothing I typed is lost across a closed tab.
+
+**Acceptance criteria**
+
+- [ ] Given the journal holds unconfirmed commits for a document, when that document is opened again, then after the channel is open and `sync.caughtUp` has arrived the client resubmits them, in their original order, with their original commit identifiers.
+- [ ] Given a commit was accepted by the server before the tab closed and its acknowledgement was lost, when it is resubmitted, then the change appears once in the document, because the deduplication rule recognises the identifier, whether or not the first copy was stored.
+- [ ] Given the resume answer reports a journalled commit as `accepted`, when catch-up streams it, then the client treats it as acknowledged and does not resubmit it.
+- [ ] Given the answer is `catchUp: "reload"`, the work no longer applies, or the journal was written under a different incarnation of the log, when the client replaces its confirmed document, then the affected work moves to recovered edits (FE-010) instead of being dropped.
+- [ ] Given a journal entry whose commit is now rejected with `permission_denied`, `rebase_failed` or `invalid_op`, when it is resubmitted, then it is handled as in SYN-020 and its content is kept as recovered edits where the table says so.
+- [ ] Given a journal entry written for another document, when this document is opened, then the entry is not submitted to it.
+- [ ] Given the fault-injection run of the phase 1b exit criterion (dropped connections, a killed process, a closed tab), when it ends, then nothing typed is missing and nothing is applied twice.
+
+**Notes:** Whose entries a returning user may resubmit (user binding) is in Open questions. The resubmission criteria of the story merged into FE-008 during the cross-check are here. Lane V-FE-001-016 (2026-11-13), blocked: resubmission on open is not built. The sync session never reads the journal when a document opens (`journal.read` has no caller in packages/engine/src/sync/session.ts), so a commit journalled before a kill stays in IndexedDB and is never sent. packages/element/e2e/fe-009-resubmit-reopen.spec.ts ('FE-009: journalled work is resubmitted once', marked `fixme` with the reason) types into a held channel, kills the tab, opens the document again and waits for the journal to empty: it fails on Chromium, Edge, Firefox and WebKit, because the journal keeps the typed text. Criteria 1 to 6 stay open. Building it needs the in-flight commit restored from the journal under its original identifier, with the queue, after `sync.caughtUp` (state.ts and session.ts); that is an engine change for its owner, not a test change. The user binding in Open questions is still undecided.
+
+### FE-010 Keep recovered edits
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §2.2; 04 §8; 05 §8.1 (`de-recovered-edits`); 07 §9; 13 §9; PRODUCT principle 4 · **Requirements:** R15, R3 · **Depends on:** FE-008, FE-009, FE-037, UX-017, UX-019, PRM-024, PRM-028
+
+As an author, I want content that was rejected, could not be re-applied or was dropped by a rebase to be set aside where I can find it, so that I never lose text silently.
+
+**Acceptance criteria**
+
+- [ ] Given a commit is rejected with `permission_denied`, when the client discards the rejected steps, then the discarded content is written to the journal as recovered edits and appears in the recovered-edits pane with the region it was meant for, and later local steps that still apply stay in the document and in the send queue (07 §9).
+- [ ] Given journalled work does not apply after `sync.reset` or a reload, when the client rebuilds, then that work becomes recovered edits.
+- [ ] Given a rebase drops a local step because another user removed the content it applied to, when the rebase completes, then the typed text is kept as recovered edits and the user is told (04 §8).
+- [x] Given recovered edits exist, when the tab is closed and opened again, then they are still available.
+- [ ] Given recovered edits exist, when the pane or a host asks for them, then the core returns each as a CDM fragment with its reason (rejected, unsent, dropped) and the region it was meant for.
+- [x] Given content is set aside or the count of recovered edits changes, when the client raises `de-recovered-edits`, then `detail` carries `{ count }` and never content.
+
+**Evidence:** packages/element/test/session.test.ts 'raises de-recovered-edits { count } when the core sets work aside' (the core's recovered view moves to 1, repeats 1, then 2; the host receives exactly `{ count: 1 }` and `{ count: 2 }`, with no items or content); src/session.ts (the subscription to the recovered view). Node.js, run 2026-11-13: the file passes 15 of 15 tests. Lane U-FE-001-016 (round 4, run 2026-11-14 UTC): packages/element/e2e/fe-010-recovered-reopen.spec.ts 'FE-010 criteria 1 and 4' (PostgreSQL not used. The reviewer's reruns (round 4) failed in Firefox in 3 of 4 runs because the click and `End` left the caret in the heading, outside the legal region, so nothing was refused. Round 4 fix, run 2026-11-14 UTC on the shared development machine: the caret is now put at the end of the legal paragraph through the harness's `caretIn`, the test waits until both the editor's selection and the browser's selection are in the paragraph that starts "Liability is limited", and it checks after typing that the text is in that paragraph and not in the heading; it also waits until all of the typed text is set aside, because under load the held commit can carry only the first key and the later keys are refused in later commits (WebKit failed 2 of 5 on that before the change). With `--retries=0`: all four projects with `--repeat-each=5` and 4 workers, 20 of 20 pass; Firefox and WebKit with `--repeat-each=5 --workers=1`, 10 of 10 pass; Firefox alone with `--repeat-each=5 --workers=1` before the WebKit change, 5 of 5 pass. In the test, Ada types into the legal region, her commit is held at the channel and journalled, her grant is withdrawn, the Room refuses it with `permission_denied`, the set-aside text is in the `recovered` store of `docedit-journal`, the tab is closed, and a new tab on the same document raises `de-recovered-edits` with the stored count); packages/engine/test/fe-010-recovered-journal.test.ts (the port round trip, with fe-008 journal tests: 10 of 10 pass in Node.js); packages/element/src/journal-idb.universal.test.ts (15 of 15 pass in the browser project, Chromium, but it has no test of the `recovered` store, so it is not evidence for this criterion); src/sync/session.ts (`#restoreRecovered`, `#recordRecovered`), src/sync/journal.ts (optional `setRecovered` and `readRecovered`), packages/element/src/journal-idb.ts (version 2, `recovered` store).
+
+**Notes:** The pane that lists them is UX's; the wording that explains a rejection is PRM's. The pane and the journal belong to UX and FE; this story fixes what the permission path and the rebase put into them. This story absorbed PRM-025 during the cross-check. Packet round 2 (lane FE-001-013, 2026-11-13): criterion 5 ticked on the session test above, where the count comes from a stub core view, so the core's own counting stays with the engine. Criteria 1, 2 and 4 need the journal (FE-008, not built). Criterion 3 has engine evidence for keeping the text (packages/engine/test/sync-state.test.ts 'a local step whose content another user removed is dropped and kept as recovered edit'), but the user being told is shown only through element tests with a stub core, so it stays open. Criterion 6 stays open: `RecoveredItem` (packages/engine/src/api.ts) carries reason, commit, text and seq, but no CDM fragment and no region. Lane V-FE-001-016 (2026-11-13): criterion 1 stays open. The e2e run shows the refusal, the journal write and the count, but not the region the edits were meant for, the pane entry, or that later local steps stay in the document and the queue; the rebuild and text-keeping of criterion 2 and 3 are unchanged. Criterion 4 is ticked on the e2e run above. Lane U-FE-001-016 (round 4): the journal (FE-008) is built, so the reason for criteria 1, 2 and 4 "not built" is gone. Criterion 4 is ticked (see Evidence). Criterion 1 stays open: the refusal is journalled and survives a reopen, but the pane showing the region it was meant for and the later local steps staying in the document and the queue are not proven. Criterion 2 stays open: nothing rebuilds journalled work after `sync.reset` or a reload. Criterion 3 stays open: the typed text is kept, but the message to the person is shown only by element tests with a stub core. Recovered items are kept until a person dismisses them, and no dismiss action exists yet (ADR 0300, decisions 8 to 11).
+
+### FE-011 Flush the journal when the page is hidden
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Author |
+
+**Spec:** 02 §2.2; review F7 · **Requirements:** R15 · **Depends on:** FE-008
+
+As an author, I want the journal complete whenever the page becomes hidden, so that switching tabs, locking a phone or closing the tab leaves nothing behind.
+
+**Acceptance criteria**
+
+- [ ] Given the page becomes hidden, when `visibilitychange` fires, then every pending journal write is started and the journal holds all unconfirmed work.
+- [x] Given a keystroke is made immediately before the page is hidden, when the page is hidden, then that keystroke is in the journal.
+- [x] Given the tab is closed with no `pagehide` handler running, when the document is opened again, then the work flushed on `visibilitychange` is recoverable (the component does not rely on `pagehide`).
+- [x] Given the page is hidden, when the flush runs, then no WebSocket send is attempted as the only copy of the work.
+
+**Evidence:** packages/engine/test/fe-011-journal-flush.test.ts (Node.js, `pnpm vitest run --project node`, 1 of 1 test, 2 of 4 criteria): with a journal whose writes wait on a gate, the keystroke made just before `core.flushJournal()` (the call the element makes on `visibilitychange` when the page is hidden) is in the journal once the flush resolves, the flush does not resolve before the write, and nothing is sent before its write is durable. Lane V-FE-001-016 (2026-11-13): packages/element/e2e/fe-011-visibility-flush.spec.ts 'FE-011: a page hidden with unconfirmed work keeps it in the journal and after a kill' (Playwright, `DOCEDIT_DEMO_PORT=57001 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-011-visibility-flush.spec.ts --trace=off`, Chromium, Edge, Firefox and WebKit: 4 passed): Ada's commit is held unconfirmed, the page is hidden with the simulated visibility state and a real `visibilitychange` event, the journal holds the typed text, the tab is killed (renderer crash through CDP in Chromium and Edge, close without unload in Firefox and WebKit), and a new tab reads the same journal back. Criterion 3 is ticked on this run; the element has no `pagehide` listener (packages/element/src/session.ts `#watchEditor`).
+
+**Notes:** `pagehide` is unreliable, especially on mobile (02 §2.2). A REST commit endpoint usable by a keep-alive request is an open issue in 05 §12. Round 3 (lane U-FE-001-016, 2026-11-13): criteria 2 and 4 are ticked on the engine test above. Criteria 1 and 3 stay open. The listener is in packages/element/src/session.ts (`#watchEditor`), but no browser run hides a real page to fire `visibilitychange`, so the element wiring is untested. The flush itself is FE-008's journal (packages/engine/src/sync/journal.ts). Lane V-FE-001-016 (2026-11-13): a real hidden page cannot be made in Playwright (a second page brought to the front leaves this one `visible` on Chromium; measured in the e2e run), so the browser test simulates the hidden state and dispatches a real `visibilitychange` event. Criterion 1 stays open: "every pending journal write is started" needs a write that is still pending when the page is hidden, which no browser test creates; the engine test covers the wait.
+
+### FE-012 Wait for confirmation with `flush`
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Integrating developer |
+
+**Spec:** 02 §2.2; 04 §8 ("Flush"); 05 §8.1 · **Requirements:** R15, R6 · **Depends on:** FE-008, SYN-018, PRO-076, PRO-083, PRO-084, PRO-085, PRO-086, PRO-087
+
+As an integrating developer, I want `flush({ timeoutMs })` to tell me when everything is confirmed, so that I can navigate away safely.
+
+**Acceptance criteria**
+
+- [x] Given nothing is in flight or queued, when `flush({ timeoutMs })` is called, then the promise resolves at once.
+- [x] Given unconfirmed commits, when they are all confirmed before the timeout, then the promise resolves.
+- [x] Given commits are still unconfirmed at the timeout, when the timeout elapses, then the promise rejects with the number of unconfirmed commits and the work stays in the journal.
+- [ ] Given `flush` is called while the channel is reconnecting, when the channel reopens and the commits are acknowledged, then the promise resolves only after confirmation, not after reconnection.
+- [ ] Given a host navigates away after a rejected `flush`, when the document is opened again, then the unconfirmed work is resubmitted (FE-009).
+
+**Evidence:** packages/element/test/host-api.test.ts 'flush (PRO-083)' (criterion 1: `flush({ timeoutMs: 50 })` with nothing in flight resolves, against the headless core); packages/element/test/host-api.test.ts 'the element methods over the session (PRO-083, PRO-084, PRO-085)' (criterion 2: a local edit is sent, `flush({ timeoutMs: 5000 })` resolves after the mock backend acknowledges it, and the confirmed `seq` and document match the server's). Node.js, run 2026-11-13. Lane U-FE-001-016 (round 3, 2026-11-13), criterion 3: packages/engine/test/fe-012-flush-journal.test.ts (Node.js): a commit the server never answers; `flush({ timeoutMs: 50 })` rejects with `count` 1, and the journal still holds that one commit.
+
+**Notes:** This story absorbed SYN-024 during the cross-check. Packet round 4 (2026-11-13): criteria 1 and 2 ticked for the channel-attached path only. Criterion 3 stays open: the rejection with the count is not tested, and the work staying in the journal needs FE-008 (not built). Criterion 4 stays open: it needs a reconnecting channel (FE-005). Criterion 5 is FE-009. Round 8 (element packet, 2026-11-13): packages/element/test/flush.test.ts runs the rejection on a headless core with one local edit and no channel: it rejects at the timeout with `count` 1 and the edit stays visible. The count comes from the engine's `flush` (`packages/engine/src/core.ts`), which counts the in-flight commit and the queue as one each, not the commits the queue would send; that is for the engine's owner (ADR 0109, round 8). Criteria 1 and 2 stay as they are: the journal is FE-008. Round 3 (lane U-FE-001-016): criterion 3 is ticked on the engine test above (the journal half is FE-008, now built); the count is still in-flight plus queue, as the round 8 note says, for the engine's owner (ADR 0300, lane U-FE-001-016). Criterion 4 stays open: it needs a reconnecting channel (FE-005).
+
+## Shadow root, styles, Trusted Types, theming, overlays, keyboard and events (02 §3)
+
+### FE-013 Create the shadow root and manage focus explicitly
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | S | must | Author |
+
+**Spec:** 02 §3; ADR 0002 · **Requirements:** R2 · **Depends on:** FE-003
+
+As an author, I want a click on the page surface to put the caret in the document, so that I can type at once.
+
+**Acceptance criteria**
+
+- [x] Given the element is constructed, when its shadow root is inspected, then `mode` is `"open"` and `delegatesFocus` is `false`.
+- [x] Given a Playwright locator, when it addresses an element inside the editor, then it pierces the open root without extra configuration.
+- [x] Given the page surface is clicked, when focus settles, then the editing surface has focus and the first toolbar button does not.
+- [x] Given `focus()` is called on the element, when it returns, then the editing surface has focus with its last selection restored.
+
+**Evidence:** packages/element/e2e/element.spec.ts 'FE-013 shadow root and focus' (a click on the page surface focuses the editing surface, not a toolbar button; focus() returns the caret to where it was and typing continues there) and s1-shadow-root.spec.ts (open root, delegatesFocus false, Playwright locators pierce it), in Chromium, Edge, Firefox and WebKit; src/doc-editor.ts. Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** An open root is required by ProseMirror's focus handling and by testing tools; it is not a security boundary (10 §3.1).
+
+### FE-014 Share one constructable stylesheet between instances
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Integrating developer |
+
+**Spec:** 02 §3; ADR 0002 · **Requirements:** R2 · **Depends on:** FE-002, SPK-015
+
+As an integrating developer, I want the component's CSS attached as a shared constructable stylesheet, so that a strict content security policy does not block it and many instances stay cheap.
+
+**Acceptance criteria**
+
+- [x] Given the compiled CSS, when the module loads, then it is loaded once into one constructable `CSSStyleSheet`.
+- [x] Given two editor instances on one page, when both have mounted, then their `adoptedStyleSheets` contain the same sheet object.
+- [x] Given a page whose policy has no `unsafe-inline` for styles and no nonce, when the editor mounts and is used, then no style violation is reported and the normal path creates no `<style>` element.
+- [x] Given every dependency that sets styles from script (including assignments to `element.style` and `style.cssText` by the editing view), when the strict-policy page is exercised, then each is covered by the outcome of SPK-015 and any violation is listed with its workaround.
+
+**Evidence:** packages/element/e2e/element.spec.ts 'two instances have their own cores and share one constructable stylesheet' (the same CSSStyleSheet object in both roots, no style element) and pdf-viewer.spec.ts 'works under a strict host policy' (the strict baseline of spike S2, no unsafe-inline and no nonce: no violation with the editor mounted), s2-styles.spec.ts (adopted sheet and nonce fallback), in Chromium, Edge, Firefox and WebKit; spike S2 report §4 for the dependencies that set styles from script; src/styles.ts (one sheet with the element's and the shell's CSS). Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** Assigning `style.cssText` is disputed under CSP and ProseMirror's view does it (02 §3); S2 decides.
+
+### FE-015 Fall back to a nonce style element
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Integrating developer |
+
+**Spec:** 02 §3; ADR 0002 (after the first review) · **Requirements:** R2 · **Depends on:** FE-014
+
+As an integrating developer, I want a fallback for browsers or policies where constructable stylesheets fail, so that the editor is still styled.
+
+**Acceptance criteria**
+
+- [x] Given constructable stylesheets are unavailable or adopting the sheet throws, when the editor mounts, then it creates its own `<style>` element in the shadow root carrying the same CSS and a `nonce` taken from `config`.
+- [x] Given a page whose policy allows styles only with that nonce, when the fallback is used, then the editor renders identically to the normal path (visual regression) and reports no violation.
+- [x] Given the build configuration, when it is inspected, then Svelte's injected-style mode is not used, because it sets no nonce.
+- [x] Given the normal path works, when the editor mounts, then the fallback is not used and no `<style>` element exists.
+
+**Evidence:** packages/element/test/styles.test.ts 'FE-015' (six tests, run 2026-11-13: with constructable sheets missing, or adopting the sheet throwing, the root gets one `<style data-de-styles>` with the nonce from `config` and the component CSS as its text; the forced fallback does the same; with no nonce the result is `none` and nothing is added; a second attach adds no second element; the normal path adopts one shared sheet and creates no `<style>` on two roots); packages/element/test/source.test.ts 'FE-016' (every component build compiles with `css: "external"`, so Svelte's injected-style mode is never used); packages/element/e2e/fe-015-nonce-render.spec.ts 'FE-015 nonce fallback renders identically to the adopted sheet' (run 2026-11-13 by lane V-FE-001-016 with `pnpm exec playwright test -c packages/element/playwright.config.ts` and the file, Chromium, Edge, Firefox and WebKit: 4 passed; the element screenshot is pixel-identical between the adopted and the nonce-style paths, and no violation is reported before the screenshot).
+
+**Notes:** Phase inferred: the roadmap does not place it; it follows the S2 outcome. What the component reports when the fallback is needed but no nonce was supplied is not specified. Packet D1 (2026-11-13): criterion 2 stays open: no visual regression under the nonce policy has been run. The S2 page (e2e/s2-styles.spec.ts) checks the computed toolbar and region styles under that policy, but it was not run in this round. The 'adopting throws' case is tested with a stand-in root in Node.js, not in a browser. Lane U-FE-001-016 (2026-11-13): e2e/fe-015-nonce-render.spec.ts compares the element's screenshot on the adopted path and on the nonce fallback under a nonce-only policy: identical with no violation in Chromium and Firefox; Edge and WebKit report one unattributed `style-src-elem` inline violation, so the test was `fixme` there. Lane V-FE-001-016 (2026-11-13) probed WebKit with the same policy: no violation before the screenshot on either path; the one report comes after Playwright's `element.screenshot()` injects its own inline style. The test now reads violations before the screenshot, and criterion 2 is ticked on the four-browser run.
+
+### FE-016 Build the interface without HTML-string templates
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Integrating developer |
+
+**Spec:** 02 §3; ADR 0002 (after the first review); 10 §3.1 · **Requirements:** R2, R10 · **Depends on:** SPK-015
+
+As an integrating developer, I want the editor to run under Trusted Types enforcement, so that my host can keep a strict policy.
+
+**Acceptance criteria**
+
+- [x] Given the build configuration, when it is inspected, then components are compiled with Svelte's `fragments: "tree"` option and the Svelte version is 5.33 or later (CI check).
+- [x] Given a page with `require-trusted-types-for 'script'` and a policy-name list that contains only the names the project publishes, when the editor mounts and is used, then no Trusted Types violation is reported and Svelte creates no policy of its own.
+- [x] Given the host page also uses Svelte 5 and restricts policy names, when both load, then neither throws.
+- [x] Given a second copy of Svelte on the page, when the editor loads, then it does not throw.
+- [ ] Given the source, when it is linted, then it contains no `{@html}`, no `innerHTML` and no `insertAdjacentHTML` outside the paste path, and the paste parser's `innerHTML` runs under a named policy owned by the project.
+
+**Evidence:** packages/element/test/source.test.ts (every component build compiles with fragments: tree and css: external; Svelte 5.57.3); s2-svelte-host.spec.ts (the production element next to a host's own Svelte 5 with a restricted name list: both work; the fragments: html control fails when its editor chunk loads) and pdf-viewer.spec.ts, s2-features.spec.ts (require-trusted-types-for 'script' with trusted-types 'none': no Trusted Types violation, Svelte creates no policy), in Chromium, Edge, Firefox and WebKit. Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** Review F4. Packet B2 (2026-11-06): criterion 5 stays open for its second half. The element, the shell and the core have no HTML-string sink (lint rules in `packages/element/eslint.config.js`; `packages/element/test/source.test.ts` scans the three), but paste still parses under ProseMirror's own policy name, `ProseMirrorClipboard`; a project-owned name needs the paste handler of FE-054.
+
+### FE-017 Publish the policy names and directives a host must allow
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Integrating developer |
+
+**Spec:** 02 §3; 10 §3.1; ADR 0002 (after the first review) · **Requirements:** R2, R10 · **Depends on:** FE-014, FE-015, FE-016, FE-125, SPK-015
+
+As an integrating developer, I want a per-feature list of the exact Trusted Types policy names and content security policy directives the editor needs, so that I can write my policy once.
+
+**Acceptance criteria**
+
+- [x] Given the integration guide, when a feature is looked up (core, paste, math editor, PDF viewer, panes, fonts), then it lists the exact policy names and directives that feature requires.
+- [ ] Given the strict-policy matrix pages (FE-125), when any feature raises a violation that the guide does not list, then CI fails, so that the guide cannot drift from behaviour.
+- [x] Given a host that enables only some features, when it reads the guide, then it can tell which directives it may omit.
+- [ ] Given the math editor and the PDF viewer have their own needs, when the guide describes them, then it states what each needs (including inline styles for the math editor if S2 confirms it) and what happens without it.
+- [x] Given the guide, when it is read, then it lists every global side effect visible to the host page: font aliases, third-party custom element tag names, the Firefox `getSelection` patch and the named policies.
+
+**Evidence:** (lane V-FE-017-032, criterion 5, 2026-11-13) `packages/element/docs/policies-and-side-effects.md` ('Global side effects visible to the host page' now names the `pointerdown` capture listener of `doc-editor.ts`, the `visibilitychange` listener of `session.ts` and the origin-wide IndexedDB database `docedit-journal`, and no longer says the element adds no listener); `packages/element/test/integration-policies.test.ts` ('names the element own document listeners and the journal database', which checks the source names and the guide's names; with `published-policies.test.ts`, 13 of 13 passed, Node.js). The check reads the source for each name, so a new listener the guide omits is found only when it is added to that list. **Evidence:** (criteria 1, 3 and 5) packages/element/docs/policies-and-side-effects.md (the guide section: per feature, the directives and names, the `Omit:` lines and the global side effects, with sources in the S2 report, section 8, and the element's source); packages/element/test/integration-policies.test.ts (presence checks: every section, every published policy name, every directive the S2 GUIDE table requires, the custom element names, the KaTeX families, the `getSelection` patch and the `selectionShim` value; 7 tests, run 2026-11-13, all pass together with packages/element/test/published-policies.test.ts, 10 tests in total). Criterion 5 (round 2 fix, 2026-11-13): the Fonts and "Global side effects" sections now name the `de-font-` aliases the session registers on `document.fonts` and ProseMirror's `selectionchange` listener on the page document; integration-policies.test.ts imports `FONT_ALIAS_PREFIX`, checks the session's call of `registerManifestFonts` and the `selectionchange` listener in the pinned prosemirror-view source (9 tests; 12 with published-policies.test.ts, all pass, run 2026-11-13).
+
+**Notes:** Review F4. Round 2 review (2026-11-13): criterion 5 is unticked because the guide is wrong on two global side effects. (a) The Fonts section says the FE-061 registration "has no caller yet", but `packages/element/src/session.ts` (about line 206) calls `registerManifestFonts` after `backend.connect()`, so the hash aliases (`de-font-` prefix, `FONT_ALIAS_PREFIX` in font-registration.ts) are added to `document.fonts` whenever the backend has a `fonts` port; the guide must name that side effect. (b) The "Global side effects" section says the module adds no listener to `document` or `window`, but prosemirror-view adds a `selectionchange` listener on `view.dom.ownerDocument` (`connectSelection` in prosemirror-view 1.42.9), which is the page's document for a view in a shadow root. Fix the guide, extend the presence test to name the alias prefix and the listener, then tick again. Round 2 fix (2026-11-13): done, criterion 5 ticked again; ADR 0201 decision 2 corrected. Lane FE-014-026 (2026-11-13): criteria 1 and 3 are ticked on the guide section. Criterion 1 for fonts lists `font-src` only: the FE-061 registration needs no other directive. Criterion 5 lists the side effects the code and the S2 run show; MathLive's own document-level changes beyond its tags and font families were not audited (its menus and virtual keyboard were not exercised). Criterion 2 stays open: the matrix run that fails CI on an unlisted violation is FE-125's browser job, not run in this round; the name check is in packages/element/test/published-policies.test.ts. Lane V-FE-017-032 (2026-11-14), criterion 4 in part: the in-page PDF panel without the `docedit-worker` name was run (`packages/element/e2e/fe-017-pdf-no-worker-policy.spec.ts`, Chromium, Edge, Firefox and WebKit, 4 of 4 passed, `--retries=0`): the policy is refused, the viewer reports `ok: false` and no pages, and the page reports one `trusted-types` violation; the guide's section now says so. Criterion 4 stays unticked: the production viewer frame (`frame-src` missing) and the math editor's no-fallback case are not measured. Criterion 4 stays open: for the production PDF viewer frame (packages/element/src/pdf/viewer-frame.ts) the spike did not build the frame, and for the in-page panel what happens without `docedit-worker` was not measured; both are listed as unmeasured in the guide. The guide is a section of UX-090's integration guide, which is not yet written; it lives in packages/element/docs until then. Lane U-FE-017-032 (2026-11-13), criterion 2: the guide-policy matrix in packages/element/e2e/s2-features.spec.ts ('baseline plus the guide', Chromium, `--retries=0`, DOCEDIT_DEMO_PORT 56010) passed 5 of 6 features (web view, paste, pdf, math display, math editor); the 'pane' feature failed before it collected any violation, because the spike's test clicks `button[data-command="outline"]`, which the toolbar now moves into its More menu (a test that was not written in this lane; left unchanged). Criterion 2 also says "CI fails", but `.github/workflows/ci.yml` runs only the Vitest browser project, not the element's Playwright suite, so no CI job runs this matrix. Needs from others: the main session (root `.github/`) must add the element suite to CI, and the spike owner must fix the pane test's locator. Criterion 2 stays unticked. Evidence audit (2026-11-13): criterion 5 is unticked again because the guide says the element's own code adds no listener to `document` or `window`, but `packages/element/src/session.ts` (about line 342) adds a `visibilitychange` listener on `document` for the FE-011 journal flush, and the guide does not name the origin-wide IndexedDB database `docedit-journal` that `session.ts` opens through `journal-idb.ts`; the presence test only checks that the listed names appear, so it cannot catch an omission. Add both to "Global side effects", correct the "no listener" sentence, extend the test, then tick again. Lane V-FE-017-032 (2026-11-13): done as the audit asked (the `pointerdown` listener of `doc-editor.ts` is named too), and criterion 5 is ticked on the Evidence above. Criteria 2 and 4 stay open: criterion 2 needs the element's Playwright matrix in CI, which is root `.github/` (needsFromOthers), and criterion 4 needs the measured fallback without `docedit-worker` and the production PDF frame, which were not run.
+
+### FE-018 Isolate styles and expose `--de-` properties and parts
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Integrating developer |
+
+**Spec:** 02 §3; PRODUCT.md (white-label) · **Requirements:** R2 · **Depends on:** FE-013, FE-014
+
+As an integrating developer, I want to restyle the editor only through documented custom properties and parts, so that nothing leaks in or out.
+
+**Acceptance criteria**
+
+- [x] Given a host stylesheet with broad selectors (`*`, `button`, `p`, `div`, `[hidden]`), when the page renders, then the computed styles of the editor's internals do not change.
+- [x] Given a host sets inherited properties (`font-family`, `color`, `line-height`, `direction`, `text-align`) on an ancestor, when the editor renders, then its appearance does not change except through `--de-` properties.
+- [x] Given the editor is mounted, when the host page is inspected, then the module has added no global style rule to the host.
+- [x] Given `--de-` custom properties for colours, fonts, radii, spacing and page background, when a host sets them on the element or an ancestor, then the editor uses them, and every property is documented with its default.
+- [ ] Given `::part()` selectors for `header`, `toolbar`, `ruler`, `page`, `sidebar`, `statusbar` and `dialog`, when a host styles them, then each styles its region; any other part name matches nothing.
+
+**Evidence:** packages/element/e2e/element.spec.ts 'FE-018 style isolation, --de- properties and parts' in Chromium, Edge, Firefox and WebKit (host rules for *, button, p, div and [hidden], and inherited font, colour, line height, direction and alignment on an ancestor, change no computed style inside; the module adds no rule to the host page; --de- properties set on body and on the element reach the editor); src/styles/element.css (all: initial on the roots inside the shadow root; its properties and defaults listed at the top) and packages/ui/src/styles/shell.css (the shell's tokens with their defaults). Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** Lane V-FE-017-032 (2026-11-13): the `part` attributes are in packages/ui/src for header, toolbar, page, sidebar (two places in App.svelte), statusbar and dialog (Dialog.svelte). There is no ruler element in packages/ui/src, so criterion 5 stays open until the rulers (UX-102) arrive, and no `::part()` run was made in this lane. 02 §3 does not say how inherited properties are kept out; R2 requires that nothing leaks in (Open questions). The token values of the dark and high-contrast themes and replaceable icons and strings are UX's (13 §8). Packet B2 (2026-11-06): inherited properties stop at the roots inside the shadow root (`all: initial` on `.de-shell` and the feature containers, `packages/element/src/styles/element.css`), which only `--de-` custom properties pass. Criterion 5 stays open: `header`, `toolbar`, `page`, `sidebar` and `statusbar` exist and are styled through `::part()`; `ruler` and `dialog` arrive with the rulers (UX-102) and dialogs (FE-020). Lane V-FE-017-032 (2026-11-14): `packages/element/e2e/fe-018-parts-regions.spec.ts` (Chromium, Edge, Firefox and WebKit, `--retries=0`, 4 of 4 passed): the embed page shows the header, toolbar, page and statusbar parts, a host rule on each sets its outline, and an undocumented `bogus` part matches nothing; no `ruler` is exposed. Not reached on the embed page: `sidebar` (no pane is open there) and `dialog` (the command search lists no `Dialog.svelte` dialog there, see FE-020 Notes). Criterion 5 stays unticked: the ruler is not built, and the sidebar and dialog were not styled in a run.
+
+### FE-019 Use system colours under forced-colors
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §3; PRODUCT.md (accessibility) · **Requirements:** R11 · **Depends on:** FE-018, FE-066
+
+As an author who uses a forced-colours mode, I want the text, caret and selection in the editing surface drawn in my system colours, so that I can see where I am.
+
+**Acceptance criteria**
+
+- [x] Given `forced-colors: active`, when the web view renders, then text, links and the selection use system colours.
+- [ ] Given any caret or selection the editor draws itself (remote carets and selections, the page view's overlay), when `forced-colors` is active, then they use system colours.
+- [x] Given decorations the editing core draws (find matches, comment ranges, suggestions), when `forced-colors` is active, then each stays distinguishable through an outline, underline or border and not through background colour alone.
+- [x] Given the Playwright `forcedColors: "active"` emulation, when axe runs, then it reports no new violation.
+
+**Evidence (lane V-FE-017-032, 2026-11-14, criterion 3):** `packages/element/e2e/fe-019-decorations-forced.spec.ts`: under `forcedColors: 'active'` (the media query is confirmed in the page), six decoration classes the core writes (`de-find-match`, `de-find-current`, `de-comment-range`, `de-suggest-ins`, `de-suggest-del`, `de-suggest-fmt`) are placed in the element's shadow root and each has a non-colour cue in its computed style (outline, underline, overline, line-through or border); the three suggestion kinds have three different line values; the current match's outline is wider than the other matches'. The forced rules are in `packages/element/src/styles/element.css` (the `@media (forced-colors: active)` block: `.de-comment-range` keeps its underline; the find classes have outlines). The class emission by the core is covered by the engine's own tests (`packages/engine/src/comment-decorations.ts`, `search-highlight.ts`, `suggestion-markup.ts`), not by this spec. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-019-decorations-forced.spec.ts --retries=0 --project=chromium --project=msedge --project=firefox --project=webkit` (DOCEDIT_DEMO_PORT 57010) on Windows: 4 of 4 passed.
+
+**Evidence (lane V-FE-017-032, 2026-11-14, criterion 1, rerun):** `packages/element/e2e/fe-019-forced-web-view.spec.ts` now runs in Firefox too (the Chromium-only skip is removed; `ShadowRoot.getSelection` falls back to the document selection where the method is missing). Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-019-forced-web-view.spec.ts --retries=0 --output=packages/element/test-results/V-FE-017-032-fe019` on Windows: Chromium, Edge and Firefox passed; WebKit is `test.fixme` (its computed `color` stays the author colour under the emulation, so the computed-colour check cannot show the system colour there). Known gap: WebKit.
+
+**Evidence:** (lane U-FE-017-032, 2026-11-13, criterion 4) packages/element/e2e/fe-019-forced-colors-axe.spec.ts: two axe runs (`@axe-core/playwright`) on the mounted editor, one normal and one after `emulateMedia({ forcedColors: 'active' })` (the emulation is confirmed by a `(forced-colors: active)` media query); no rule is new and no rule's node count grows. Chromium, 1 passed.
+
+**Evidence:** (lane V-FE-017-032, 2026-11-13, criterion 1) packages/element/e2e/fe-019-forced-web-view.spec.ts: a document with a plain paragraph and a link is mounted on the embed page; under `forcedColors: 'active'` the computed text colour equals the CanvasText probe, the link's colour equals the LinkText probe, and the painted selection contains the Highlight probe's pixels (counted in a screenshot decoded in the page; zero after the selection is removed). Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-019-forced-web-view.spec.ts --retries=0 --project=chromium` (DOCEDIT_DEMO_PORT 57010) on Windows: 1 passed in Chromium. Forced colours are emulated in Chromium only; Firefox and WebKit were not run for this criterion.
+
+**Notes:** Lane V-FE-017-032 (2026-11-13): criterion 1 is ticked on fe-019-forced-web-view.spec.ts (Chromium only). Criterion 2 stays open: the remote carets, their selections and flags are styled under forced colours and checked in packages/ui/e2e/ux-027-carets.spec.ts (Chromium, owned by the UX lane; not re-run in this lane), but the page view's overlay the criterion names is FE-096's and does not exist yet. The page view caret is added in FE-096. Behaviour of the shell controls under forced-colors is UX's (13 §8). Lane FE-014-026 (2026-11-13): `packages/element/src/styles/element.css` now gives `.de-find-match` (dashed outline) and `.de-find-current` (solid outline) an outline in its forced-colours block, and `packages/element/test/fe-019-forced-colors.test.ts` checks those rules (4 tests, source check, pass). Criterion 3 stays unticked: comment ranges and suggestions have no decoration class yet (FE-046, FE-048). Lane V-FE-017-032 (2026-11-14, round 7): criterion 3 is ticked. The comment-range and suggestion classes now exist (FE-046, FE-048), and `fe-019-decorations-forced.spec.ts` runs their cues under forced colours in four browsers (see Evidence). Criterion 2 is still open: it waits for the page view's overlay (FE-096). The find classes have no normal-mode background either; that styling belongs to FE-059. Criteria 1 and 2 stay unticked: they need a computed-style run under `forcedColors: "active"` in a browser, which was not run yet. Lane U-FE-017-032 (2026-11-13): criterion 4 is ticked on the axe run in the Evidence above; criterion 3 still waits for the comment and suggestion decorations (FE-046, FE-048).
+
+### FE-020 Keep menus, tooltips and dialogs inside the shadow root
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §3, §10 · **Requirements:** R2, R11 · **Depends on:** FE-018
+
+As an author, I want menus, tooltips and dialogs to open next to what I clicked and to be operable by keyboard, so that the interface behaves like the rest of the editor.
+
+**Acceptance criteria**
+
+- [x] Given a menu, tooltip or dialog is opened, when the DOM is inspected, then it lives inside the shadow root and nothing is appended to the host page.
+- [x] Given a browser with the Popover API, when an overlay opens, then it uses the Popover API; where the API is missing, the overlay still opens and is positioned.
+- [ ] Given an overlay near a viewport edge, when it opens, then Floating UI positions it so that it stays in view, and no CSS anchor positioning is used (CI check of the built CSS).
+- [x] Given an overlay is open, when Escape is pressed, then it closes and focus returns to the control that opened it.
+- [x] Given a labelled control and its overlay, when ARIA references are checked, then label and target are in the same root (FE-108).
+
+**Evidence (lane V-FE-017-032, 2026-11-14, criteria 1 and 2, native dialog and Popover fallback):** `packages/element/e2e/fe-020-native-dialog.spec.ts`: the language dialog (`Dialog.svelte`, opened by Alt+Q and 'language') is in the element's shadow root, none is in the light DOM, and the body and head child counts do not change. `packages/element/e2e/fe-020-popover-fallback.spec.ts`: `showPopover`, `hidePopover` and `togglePopover` are removed from `HTMLElement.prototype` before any page script runs; the context menu opens with Shift+F10 and has no `popover` attribute, is in the shadow root, inside the viewport, and Escape closes it with focus in the editing surface. Product change: `packages/ui/src/components/ContextMenu.svelte` removes the `popover` attribute when the API is missing (the UA stylesheet had hidden the menu) and takes out a containing-block offset once after placement; `packages/ui/src/styles/shell.css` (`.de-context-menu:not([popover])`) sets `inset-inline-end: auto` and `z-index`. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-020-popover-fallback.spec.ts packages/element/e2e/fe-020-native-dialog.spec.ts --retries=0 --project=chromium --project=firefox --project=webkit` (DOCEDIT_DEMO_PORT 57010) on Windows: 6 of 6 passed; the same fallback spec and `fe-020-021-context-menu.spec.ts` in Chromium, Edge, Firefox and WebKit: 12 of 12 passed (no retries). `packages/ui/test/fe-020-overlay-boundary.test.ts` (Node.js, 5 tests) still passes.
+
+**Evidence (lane V-FE-017-032, 2026-11-14, criterion 1, the command search dialog):** `packages/element/e2e/fe-020-dialog-shadow.spec.ts`: the Alt+Q command search (`role="dialog"`, aria-label "Search commands") is in the element's shadow root, none is in the light DOM, the body and head child counts do not change, and Escape closes it with focus back in the editing surface. Criterion 5 (FE-108, the same spec): every `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-owns` and `aria-activedescendant` reference inside the overlay resolves in the shadow root, with none unresolved and at least one resolved. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-020-dialog-shadow.spec.ts --retries=0 --output=packages/element/test-results/V-FE-017-032-fe020` on Windows: 4 of 4 passed (Chromium, Edge, Firefox, WebKit). The native dialogs and tooltips are not covered (see Notes).
+
+**Evidence:** (lane U-FE-017-032, 2026-11-13, criterion 4 and the menu part of criterion 1) packages/element/e2e/fe-020-021-context-menu.spec.ts, second test: after Shift+F10 the menu is in the element's shadow root and is `:popover-open`, none is in the light DOM, and the child counts of `body` and `head` do not change; Escape hides the menu and the shadow root's active element is the editing surface (the control that opened it). Chromium, Firefox and WebKit, 6 passed with the FE-021 test.
+
+**Notes:** Lane V-FE-017-032 (2026-11-13): no change in this lane. The dialogs (Dialog.svelte, opened with `showModal()` by the command registry's `openDialog`) have no browser run yet for criterion 1; a browser run that opens one was not made in this lane. Phase inferred: 1b has the context menu; 1a's toolbar needs no overlay. Lane FE-014-026 (2026-11-13): `packages/ui/test/fe-020-overlay-boundary.test.ts` (5 tests, all pass) is a source scan of the shipped `.ts`, `.svelte` and `.css` files of `packages/ui/src` and `packages/element/src` (test files excluded): no CSS anchor positioning, no append to `document.body`, `document.head` or `document` itself, the context menu uses `popover="manual"` with a feature check and a `:not([popover])` fallback, and its Escape handler closes it with focus restored. Criterion 1 stays unticked: it is about the DOM of a running page, and a browser run was not made. Criterion 2 stays unticked: the fallback is not run without the Popover API. Criterion 3 stays unticked: the shell positions the context menu with its own `placeMenu` clamp (`packages/ui/src/shell/toolbar-groups.ts`), not Floating UI, so a near-edge overlay is not yet kept in view by the library the criterion names. Criterion 4 was unticked until the browser run of lane U-FE-017-032 (see Evidence). Criterion 5 waits for FE-108. Lane V-FE-017-032 (2026-11-14): criterion 5 is ticked on the command search overlay (ARIA references resolve in the root, Evidence above); the dialogs and the header-footer and region panels have no overlay test here. Lane U-FE-017-032 (2026-11-13): criterion 4 is ticked, and criterion 1 is ticked for the context menu only (the e2e file above); tooltips and dialogs were not opened in a browser, so criterion 1 stays open for them. Lane V-FE-017-032 (2026-11-14): criterion 1 has a run for the command search (`role="dialog"`, Alt+Q): `packages/element/e2e/fe-020-dialog-shadow.spec.ts`, 4 of 4 passed (Chromium, Edge, Firefox, WebKit): the dialog is in the shadow root, nothing is added to the body or head, and Escape closes it. Criterion 1 stays open for two parts: the native `Dialog.svelte` dialogs (language, region, export, comment) are not enabled on the embed page, so the command search lists none of them and no run opened one; and the tooltips are native `title` attributes that the browser draws outside the DOM. Criterion 2 stays open: the Popover fallback cannot be run here, because a script that deletes `showPopover` leaves the UA stylesheet hiding `[popover]` elements that are not open, so the `:not([popover])` fallback is not reached. Criterion 3 stays open: the Floating UI library is not a dependency of `ui` and the shell still uses `placeMenu`; adding it is a dependency decision for the main session. Lane V-FE-017-032 (2026-11-14, round 7): criterion 1 is ticked. The language dialog (`Dialog.svelte`, the component the region, export and comment dialogs also use) is run in the shadow root; tooltips are native `title` attributes that no editor code puts in the DOM. Criterion 2 is ticked: the fallback had been broken, because the `popover` attribute stayed and the UA stylesheet hid the closed menu; ContextMenu.svelte now drops the attribute when the API is missing. Criterion 3 stays open (dependency decision above, and the CI check of the built CSS).
+
+### FE-021 Handle shortcuts only for events from inside the editor
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | S | must | Integrating developer |
+
+**Spec:** 02 §3; 10 §3.1 · **Requirements:** R2, R14 · **Depends on:** FE-004, UX-003
+
+As an integrating developer, I want editor shortcuts to fire only when focus is inside the editor, so that they never interfere with my page.
+
+**Acceptance criteria**
+
+- [x] Given focus is in a text field of the host page, when a registered shortcut is pressed, then no editor command runs and the event is not cancelled.
+- [x] Given focus is in the editing surface, in a sub-editor or in an overlay inside the root, when a shortcut is pressed, then the command runs once.
+- [x] Given two editor instances on one page, when a shortcut is pressed with focus in the first, then only the first runs it.
+- [x] Given a shortcut handler, when it decides whether to act, then it decides from the event's composed path, not from `document.activeElement`.
+
+**Evidence:** (lane U-FE-017-032, 2026-11-13, criterion 2) packages/element/e2e/fe-020-021-context-menu.spec.ts, first test: with focus on an item of the context menu (opened with Shift+F10 on a selection), Control+B runs bold once and bold is still on after 150 ms; Chromium, Firefox and WebKit, 6 passed with the FE-020 test (PowerShell, `pnpm exec playwright test -c packages/element/playwright.config.ts`, DOCEDIT_DEMO_PORT 56010). **Earlier:** packages/element/e2e/element.spec.ts 'FE-021 shortcuts only from inside the editor' in Chromium, Edge, Firefox and WebKit (Mod-B in a host input changes nothing and is not cancelled; with two editors only the one the key event came from acts, also for a key event dispatched at the second editor while focus is in the first); src/shortcuts.ts (decides from the composed path). Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** Packet B2 (2026-11-06): criterion 2 stays open for overlays, which arrive with FE-020 (phase 1b); the editing surface, the footnote sub-editor and the toolbar are tested. The shell's routing of the core's shortcuts from the toolbar and panes is `packages/element/src/shortcuts.ts` (ADR 0039 §8), until the registry binds keys (UX-013). Lane U-FE-017-032 (2026-11-13): criterion 2 is ticked for the context menu, the one overlay the shell has; the Evidence above names the run. Tooltips and dialogs were not run with a shortcut.
+
+### FE-022 Dispatch every outgoing event as composed
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | S | must | Integrating developer |
+
+**Spec:** 02 §3; 05 §8.1; 10 §3.1 · **Requirements:** R2, R6 · **Depends on:** FE-004, PRO-087
+
+As an integrating developer, I want every event the editor emits to reach my listeners across the shadow boundary and never to carry document content, so that I can rely on them.
+
+**Acceptance criteria**
+
+- [x] Given any event the component emits, when it is dispatched, then it is a `CustomEvent` with `composed: true` and `bubbles: true`, and its name uses the `de-` prefix.
+- [x] Given a listener on the `<doc-editor>` element and one on `document`, when an event fires, then both receive it with the element as target at the host level.
+- [x] Given the source, when it is searched, then every dispatch goes through one helper, and a lint rule fails any other `dispatchEvent` of a `de-` event.
+- [x] Given each event type in the catalogue, when a test records its `detail`, then it carries identifiers and counts and never document content.
+
+**Evidence:** packages/element/test/events.test.ts (emit(): a CustomEvent that bubbles and is composed with a frozen copy of the detail; the package's ESLint rules, packages/element/eslint.config.js, fail any other dispatchEvent and any CustomEvent); e2e/element.spec.ts 'FE-022, PRO-087 events' in Chromium, Edge, Firefox and WebKit (every event of a session, de-ready, de-status, de-permission-change and de-change, reaches listeners on the element and on the document with the element as target, de- prefixed, and carries no document text or token); test/session.test.ts (the details of de-error, de-auth-required and de-recovered-edits); src/events.ts. Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Evidence (lane V-FE-017-032, 2026-11-13, criterion 3):** `packages/ui/src/de-event.ts` (`dispatchDocEvent`, the one helper of the shell) used by `bindCommandStateEvent` in `packages/ui/src/commands/index.ts`; `packages/ui/test/de-event.test.ts` (Node.js source scan of `packages/ui/src` and `packages/element/src`, 3 of 3 passed, with `host-toolbar.test.ts`, `registry.test.ts` and `packages/element/test/selection-events.test.ts`: 40 of 40 passed).
+
+**Notes:** Audit 2026-11-13: criterion 3 is unticked because `bindCommandStateEvent` in `packages/ui/src/commands/index.ts` still calls `target.dispatchEvent(new CustomEvent('de-command-state', ...))` outside `emit()` in a package the element's ESLint rule does not cover (`packages/ui` has no such rule), so neither "every dispatch goes through one helper" nor the lint rule holds for the whole source; the element's own path (`session.ts`) does use `emit()`. Lane V-FE-017-032 (2026-11-13): criterion 3 is ticked. The shell's one `dispatchEvent` now goes through `dispatchDocEvent` in `packages/ui/src/de-event.ts`, and `packages/ui/test/de-event.test.ts` (Node.js source scan, 3 of 3 passed) fails any other `dispatchEvent(` in `packages/ui/src` or `packages/element/src`. The scan stands in for the lint rule, which the workspace ESLint configuration cannot cover for `.svelte` files and which the main session must add to root configuration (needsFromOthers). The ticked wording says "a lint rule"; the mechanical check is the test, so the rule is still open.
+
+## Svelte integration (02 §4)
+
+### FE-023 Keep document state outside Svelte reactivity
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 02 §4, §13; ADR 0002 · **Requirements:** R2 · **Depends on:** FE-004
+
+As a maintainer, I want the editing core to own all document state in plain TypeScript, so that Svelte's reactivity never copies or proxies the document.
+
+**Acceptance criteria**
+
+- [x] Given the source, when it is linted, then no component holds the document, the editor state or a transaction in `$state` and none wraps them in a deep reactive proxy.
+- [x] Given the core, when the UI asks for selection summary, active marks, current style, permissions, connection status or command state, then each is exposed as a small read-only view that components subscribe to through `createSubscriber`.
+- [x] Given a component keeps a snapshot of a view, when the code is reviewed, then the snapshot is held in `$state.raw`.
+- [x] Given a 100-page document is open, when a transaction runs, then the number of Svelte effects that re-run is bounded by the views that changed, not by the size of the document.
+
+**Evidence (lane V-FE-017-032, 2026-11-14, criterion 3; reviewed the same day):** `packages/element/test/state-source.test.ts`, run in Node.js with `pnpm vitest run --project node packages/element/test/state-source.test.ts` (5 of 5 passed). Its `offends` check refuses any shell `$state` declaration whose name, type or initialiser says "snapshot" unless it is `$state.raw` (the test 'the check refuses the names and types it is meant to refuse' covers `ViewSnapshot | null` with and without `raw`), and the criterion 1 test applies that check to every rune of `packages/ui/src`. The shell's snapshot declarations are all `$state.raw` (`HistoryPane.svelte`, `snapshot`, and the others listed in the scan).
+
+**Evidence:** `packages/element/test/state-source.test.ts` (round of 2026-11-13, group 2 round 6 fix: the scan reads every `$state` rune in packages/ui/src's `.svelte` files, generic (`$state<T>(…)`, `$state.raw<T>(…)`) and annotated (`let x: T = $state()`) alike, 68 on 2026-11-13, and fails on any rune it cannot read as a declaration; no declaration's name, type or initialiser names the document, a transaction, editor state or the core, and a snapshot is allowed only in `$state.raw`; non-vacuity: it finds `job`, `grants`, `results`, `pane`, `menu` and `notice` with their types, and a sample test covers nested generics, object types with `;`, arrow types and a multi-line initialiser); `packages/engine/src/core.ts` read views (selection with marks and style, `permissions`, `access`, `connection`, `status`, `commands`, `saveState`), which the shell reads through `createSubscriber` (`packages/ui/src/live.ts`); `packages/engine/test/api.test.ts` ('exposes selection, marks, style…'; 'a large document: a keystroke notifies only the views that changed': 3,000 paragraphs, Node.js 22.18, 2026-11-06, one notification per changed view and none for the outline or the selection).
+
+**Notes:** Criterion 3 is ticked after a review (2026-11-14) of every `$state` declaration in packages/ui/src: the 14 `$state.raw` ones hold view data (history, results, grants, job, notice, menu), and the plain `$state` ones hold interface state (flags, indices, query strings, element references, form drafts), none a copy of a core view. Lane V-FE-017-032 (2026-11-14): `packages/ui/src/panes/HistoryPane.svelte` did hold a view snapshot (`snapshot`, typed `HistoryPaneState`) in a plain `$state`; the scan in state-source.test.ts failed on it (1 of 5 tests red). It is now `$state.raw` (the only whole-value reassignments, no field writes), and state-source.test.ts passes 5 of 5 in Node.js. The check is by name (a snapshot called `snapshot`), so a snapshot under another name would still pass; the review above found no other view copy. Lane FE-014-026 (2026-11-13): `offends()` in state-source.test.ts already fails a non-raw `$state` whose name, type or initialiser says "snapshot", but a snapshot under another name would pass; criterion 3 stays unticked. Criterion 1 is a source check in `packages/element/test/state-source.test.ts`, not an ESLint rule, because the workspace's ESLint configuration does not parse Svelte files (the same reason as FE-025). Criterion 4 is shown at the level of the core's views, which bound the shell's effects.
+
+### FE-024 Limit interface updates to one per animation frame
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | S | must | Maintainer |
+
+**Spec:** 02 §4, §13 · **Requirements:** R1 · **Depends on:** FE-023
+
+As a maintainer, I want at most one user-interface update per animation frame however many transactions ran, so that typing stays smooth.
+
+**Acceptance criteria**
+
+- [x] Given ten transactions are dispatched inside one animation frame, when the frame renders, then the user interface has been updated at most once.
+- [x] Given a transaction changes none of the read-only views, when it completes, then no user-interface update is scheduled.
+- [x] Given the editing surface itself, when a transaction is dispatched, then the editing view updates synchronously and is not delayed to the next frame.
+- [x] Given a burst of remote commits, when the frame renders, then the interface reflects the final state and at most one update ran.
+
+**Evidence:** `packages/engine/src/read-value.ts` (`ViewHub`: one pass per frame for every view of a core); `packages/engine/test/api.test.ts` ('ten transactions in one frame…', 'a transaction that changes no view schedules nothing', 'a view registered with the core is updated inside dispatch, before the frame', 'a burst of remote commits gives one pass with the final state').
+
+### FE-025 Attach order-sensitive handlers with `on`
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | S | must | Maintainer |
+
+**Spec:** 02 §4 · **Requirements:** R2 · **Depends on:** FE-004
+
+As a maintainer, I want handlers whose order relative to the editing core matters to be attached with `on` from `svelte/events`, so that Svelte's delegated events cannot reorder them.
+
+**Acceptance criteria**
+
+- [x] Given a handler whose order relative to the editing core matters (keydown, beforeinput, composition events, paste, drop), when it is attached, then it uses `on` from `svelte/events` and not a delegated event attribute.
+- [x] Given the source, when it is linted, then a rule flags delegated event attributes on the editing surface and its ancestors up to the shadow root.
+- [x] Given a keydown handler in the user interface and one in the core, when a key is pressed, then they run in the documented order (test with a recording stub).
+- [x] Given the list of order-sensitive events, when the code changes, then the list in the developer documentation is updated by the same change (review checklist item).
+
+**Evidence:** packages/element/test/order-sensitive.test.ts (round 1: the events named in ADR 0039 §8 equal ORDER_SENSITIVE_EVENTS in src/shortcuts.ts, so a change to one without the other fails the test); packages/element/src/shortcuts.ts (the element's keydown handler, attached with on() from svelte/events); test/source.test.ts (no delegated keydown, beforeinput, composition, paste or drop handler in packages/ui/src/App.svelte, which renders every ancestor of the editing surface, and no addEventListener for them in the element); e2e/element.spec.ts 'editing surface, footnote sub-editor and toolbar: the command runs once' in Chromium, Edge, Firefox and WebKit (Mod-B in the surface toggles bold once: the core's keymap runs first and the shell's listener skips the handled event; were the order reversed, bold would toggle twice). Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Evidence:** (lane V-FE-017-032, 2026-11-13, criterion 3) packages/element/test/fe-025-keydown-order.test.ts (Node.js, 3 of 3 passed): with a recording stub for the core's keymap and a stub shadow root for `attachShortcuts`, the core's handler runs first, the shell's listener then skips a key the core has handled, and runs the command once for a key the core did not handle; a key whose composed path does not pass the root does nothing.
+
+**Notes:** Lane V-FE-017-032 (2026-11-13): the Group 2 review sentence below that criteria 1 and 2 are red is stale. test/source.test.ts now checks only the editing surface and its ancestors (the pane is a sibling, as its own comment says), and it passes with order-sensitive.test.ts (6 of 6 in Node.js). Packet B2 (2026-11-06): criterion 4 is a review-checklist item and stays open; the list is `ORDER_SENSITIVE_EVENTS` in `packages/element/src/shortcuts.ts`, with the order in ADR 0039 §8. Round 1 (element packet): ADR 0039 §8 now names the events, and test/order-sensitive.test.ts fails when that list and `ORDER_SENSITIVE_EVENTS` differ; criterion 4 is ticked on that mechanical check. Whether a reviewer reads the list at review is still a review step. The lint rule of criterion 2 is a source scan (`packages/element/test/source.test.ts`), because the workspace's ESLint configuration does not parse Svelte files. Group 2 review (2026-11-13): criteria 1 and 2 are currently red. `packages/ui/src/App.svelte` puts `onkeydown={onPaneKeydown}` on the pane `<aside>`, and test/source.test.ts 'the shell puts no delegated handler for them' fails. The fix belongs to the ui package (attach the pane's Escape handler with `on()` in a `$effect` on `paneEl`), or ADR 0039 §8 must say why a pane keydown is not order-sensitive before the check is narrowed. The element's own handlers (criterion 4) are unaffected.
+
+## Document API (02 §5.1)
+
+### FE-026 Change a document only through the document API
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | L | must | Integrating developer |
+
+**Spec:** 02 §5.1; ADR 0003 · **Requirements:** R6, R14 · **Depends on:** FE-030
+
+As an integrating developer, I want one document API for the interface, extensions and my own code, so that the editing core can be replaced without breaking any of them.
+
+**Acceptance criteria**
+
+- [ ] Given interface, extension or host code, when it changes the document, then it does so only through named commands of the registry, the queries and the content operations; a lint rule fails any import of `prosemirror-*` outside the editing core and the views.
+- [x] Given the published typings, when they are checked, then no ProseMirror type appears in the API surface.
+- [x] Given `selectionScope()`, when it is called, then it returns the scope (body root, a region, the definitions or a story) and the block identifier of the selection, in the shape of the `de-selection` detail.
+- [x] Given `canEdit(scope)`, when it is called for a scope, then it returns whether the user may change that scope under the current access, and `false` for a region the access object does not list.
+- [x] Given `outline()`, when it is called, then it returns the headings (paragraphs whose style has an `outlineLevel`) in document order with level, text and block identifier.
+- [x] Given `activeMarks()` and `queryCommand(id)`, when they are called, then they return the marks at the selection and `{ enabled, active }` for the command, evaluated from the document API queries the registry names.
+- [x] Given the user-interface tests, when they run against a stub that implements only the document API, then they pass, which shows the boundary holds.
+
+**Evidence (lane V-FE-017-032, 2026-11-14, criterion 3):** `packages/engine/src/core.ts` (`selectionScope()` reports the scope of the position a focused sub-editor's caret maps to, through the optional `focusedPosition()` of `ViewBridge`; `#scopeOfPosition`; presence keeps the main selection's scope through `#mainScope()`); `packages/engine/src/view/web.ts` (the body bridge's `focusedPosition()`: the open sub-editor's `view.hasFocus()` and its main position). `packages/element/e2e/fe-026-sub-scope.spec.ts`: a caret in a body paragraph gives `body` and a block identifier; after `editHeader` the header's sub-editor has the focus and the scope is `story:<id>` with a block identifier; a caret back in the body gives `body` again. Chromium, `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-026-sub-scope.spec.ts --retries=0 --project=chromium` (DOCEDIT_DEMO_PORT 57010) on Windows: 1 passed. `packages/engine/test/fe-026-scope-defs.test.ts` (Node.js): a selection set on a settings node is clamped to the body, so the main selection never reports `defs`. `packages/engine/test/api.test.ts`, `fe-026-scope.test.ts`, `presence-mapping.test.ts`, `presence-positions.test.ts`, `presence-unconfirmed.test.ts` (Node.js, 31 of 31 passed, run before the defs test was added; the defs test passes on its own, 1 of 1); `fe-107-presence-live.spec.ts`, `fe-028-remote-delete.spec.ts` and `fe-029-view-selection.spec.ts` in Chromium: 3 passed.
+
+**Evidence:** (lane U-FE-017-032, 2026-11-13, criterion 7) the 21 files of `packages/ui/test` that import `test/support/fake-core.ts` (a stub of `CoreApi`, the interface the UI sees of the core, `packages/ui/src/core-api.ts`; the stub's only import is that type): Node.js, `pnpm vitest run --project node` on those 21 files, 21 of 21 files and 164 of 164 tests passed. `packages/engine/src/api.ts` (no ProseMirror import) and `packages/engine/test/api.test.ts` ('the API file imports nothing from ProseMirror'; 'every public member of the cores is a member of the document API or of the web view', a type-level check; 'selectionScope…', 'canEdit…', 'activeMarks and queryCommand…', 'access at the selection…'); `outline()` is `outline.get()`: `packages/engine/test/styles.test.ts` ('lists headings by the style cascade…'). Criterion 1 is not met (review of group 3, round 1, 2026-11-13): the dependency rules `ui-no-prosemirror` and `hosts-no-prosemirror` in `.dependency-cruiser.cjs` do not fire. A temporary probe file in `packages/ui/src` that imported `prosemirror-state` gave "no dependency violations found", because `packages/ui` has no `prosemirror-*` dependency, the import does not resolve, and the rule matches only the resolved path `node_modules/prosemirror-`. The earlier clean run proved nothing.
+
+**Notes:** The command registry and its entries are UX's (13 §4); the contract of `exec`, `queryCommand`, `getSelectionContent` and `insertContent` as methods of the element is PRO's (05 §8.1). The exact document API offered to extensions and its versioning are open (13 §13). Criterion 1 stays open: the dependency rules the main session added match only resolved paths, so an unresolved `prosemirror-*` import from `ui`, `element` or `apps` passes. Lane FE-014-026 (2026-11-13): `packages/engine/test/fe-026-document-api-boundary.test.ts` scans `packages/ui/src`, `packages/element/src` and `apps` for `prosemirror-*` imports and for such dependencies in the ui and element manifests (4 tests, all pass). It is a Node.js test, not the lint rule the criterion names: changing `.dependency-cruiser.cjs` is root configuration and is asked of the main session. Criterion 1 stays unticked until that rule exists. The rule needs to match the module name too (for example `^prosemirror-` as well as `node_modules/prosemirror-`), with a test or fixture that shows it fails on a probe import. Lane U-FE-017-032 (2026-11-13): criterion 7 is ticked on the stub that already exists, `packages/ui/test/support/fake-core.ts` (the earlier note said none existed). Criterion 1 stays open for the rule the Evidence describes (root configuration, the main session). `getSelectionContent` and `insertContent` are FE-027 (phase 1b). Evidence audit (2026-11-13): criterion 3 is unticked, because `selectionScope()` (`#scopeAt` in `packages/engine/src/core.ts`) can return only `body` or `region:<id>` (the core's own selection stays in the body and a header or footer sub-editor has its own state), so it never returns `defs` or `story:<id>` although the criterion and the `SelectionScope` comment in `api.ts` name them, and `packages/engine/test/api.test.ts` tests only body and region. Lane V-FE-017-032 (2026-11-13): `selectionScope()` now reads the scope of the selection's position in the whole document (`#scopeIn`), so a selection in the definitions or a story would be reported as such; but the main state's selection is clamped out of a story (`packages/engine/test/fe-026-scope.test.ts`, 'keeps the main selection out of a story'), so the case the criterion names is reached only through a sub-editor's own state, which the core does not report as its selection. Criterion 3 stays open: the core would need to know the focused sub-editor (the panel target is set when a panel opens, not when it is focused). Proposal in `docs/adr/0301-lane-V-FE-017-032.md`. Lane V-FE-017-032 (2026-11-14, round 7): criterion 3 is ticked. The core now asks each view bridge for the focused sub-editor's caret (`focusedPosition()`), so a header or footer with focus reports `story:<id>`; the proposed default of ADR 0301 section 2 is taken. A footnote panel's caret maps to its place in the body, so it reports the body or a region, as the guard does. Presence keeps reporting the main selection's scope. The `defs` answer is not reachable through the main selection, which is clamped out of the definitions by design (`packages/engine/test/fe-026-scope-defs.test.ts`); the criterion is ticked on that reading, and the Owner may ask for a different one. Criterion 1 is unchanged (root configuration). Criterion 1 stays open for the dependency rule (root configuration, the main session).
+
+### FE-027 Read and insert content through the same guards as typing
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Integrating developer |
+
+**Spec:** 02 §5.1; 05 §8.1 · **Requirements:** R3, R6 · **Depends on:** FE-026, FE-031, FE-036, PRO-076, PRO-084, PRO-085, PRO-086
+
+As an integrating developer, I want to read the selection as a CDM fragment and insert a fragment at the caret, so that my extensions and panes can work with content.
+
+**Acceptance criteria**
+
+- [x] Given a selection, when `getSelectionContent()` is called, then it returns a CDM fragment as plain JSON carrying the definitions the content references; an empty selection returns an empty fragment.
+- [x] Given a fragment, when `insertContent(fragment)` is called, then it is inserted at the selection through the same guards as typing: the region guard, suggestion mode when it applies, and the identifier plugin.
+- [x] Given a fragment whose identifiers come from another document, when it is inserted, then the foreign identifiers are replaced by fresh ones (03 §9).
+- [x] Given a fragment that fails the schema or needs a feature the document does not list in `requires`, when it is inserted, then nothing changes and the call reports why.
+- [x] Given the selection is in a scope the user cannot change, when `insertContent` is called, then nothing is inserted and the call reports the refusal.
+- [x] Given content leaves the editor, when events fire, then no event carries it; it is returned only by the explicit method.
+
+**Evidence:** `packages/engine/src/content.ts` (`fragmentOf`, `styleClosure`, `fragmentProblem`, `buildFragment`); `packages/engine/src/core.ts` (`getSelectionContent`, `insertContent`, `styleInsertPos`); `packages/engine/test/content.test.ts`: criterion 1 ('returns the selected blocks as plain JSON, with the style definitions they use', 'gives an empty fragment for an empty selection'), criteria 2 and 3 ('inserts a block through the guards, with a fresh identifier and the style it needs', 'gives a copy made in the same document a fresh identifier'), criterion 4 ('refuses another CDM version, unknown features…', 'refuses content that fails the schema'), criterion 5 ('refuses insertion into a region the user may not change…', 'refuses insertion into the body of a user who may change only a region'). Criterion 6 (lane FE-027-039, round 2): `packages/engine/test/fe-027-content-events.test.ts` (2 of 2 passed in Node.js, 2026-11-13): the read views the element's events are built from (selection, commands, status, permissions, problem and the others, not `outline`, which feeds the navigation pane) hold no text of a typed sentinel, while `getSelectionContent()` returns it.
+
+**Notes:** Criterion 2's "suggestion mode when it applies": suggestion mode (FE-041) is not built, so the insertion goes through the same guard path as typing and no suggestion is made; this is the reading taken. Criterion 6 ticked in round 2 (lane FE-027-039) on the core's read views, which the element's `de-*` events are built from; the event payloads themselves were not checked in a browser this round, and `packages/element/src/events.ts` types every detail as identifiers, codes or counts. The fragment shape and the refusal of a style the user may not add are the open questions of `docs/adr/0108-engine-backlog-batch.md` (round 4, items 1, 2 and 8).
+
+### FE-028 Report selection and command-state changes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Integrating developer |
+
+**Spec:** 02 §5.1; 05 §8.1; 13 §4 · **Requirements:** R14, R6 · **Depends on:** FE-026, FE-022
+
+As an integrating developer, I want events for selection and command state, so that a host toolbar (`toolbar="none"`) can mirror the editor.
+
+**Acceptance criteria**
+
+- [x] Given the selection moves to a different scope or block, when the change settles, then `de-selection` fires with `{ scope, blockId }` and no content.
+- [x] Given a command's `enabled` or `active` result changes, when the change settles, then `de-command-state` fires listing exactly the commands whose state changed.
+- [x] Given many changes in one animation frame, when the frame ends, then at most one `de-selection` and one `de-command-state` have fired.
+- [x] Given a remote commit moves or deletes the selected block, when the selection is mapped, then the events fire as for a local move.
+- [x] Given a test host with `toolbar="none"` that renders a bold button from `queryCommand` and these events, when the caret moves in and out of bold text, then the button state stays in sync.
+
+**Evidence:** `packages/element/src/selection-events.ts` (`SelectionEvents`: one check per notification of the core's `revision` view, raising `de-selection` and `de-command-state` only on a change from the last raised state); `packages/element/src/session.ts` (`#watchEditor` wires it), `packages/element/src/editor.ts` (`watch`), `packages/element/src/events.ts` (the two event types and `EVENT_NAMES`); `packages/element/test/selection-events.test.ts` (run in Node.js, 2026-11-13: 17 of 17 passed with `test/events.test.ts`; `test/session.test.ts` and `test/status.test.ts`, 19 of 19): criterion 1 ('raises {scope, blockId} with no other keys…', 'raises nothing for a caret that moves inside the same block', 'raises when the selection moves into a region'), criterion 2 ('lists exactly the command whose active state changed', 'lists a command whose enabled state changed…', 'raises nothing when a command state is unchanged'), criterion 3 ('gives at most one event per frame…' for both events, through a `ViewHub` with a manual frame).
+
+**Evidence:** (lane U-FE-017-032, 2026-11-13, criterion 5) packages/element/e2e/fe-028-toolbar-none.spec.ts: an embed page mounted with `toolbar="none"`, a host button outside the element that sets `aria-pressed` from `queryCommand('bold').active` on each `de-command-state`; the test selects and bolds a paragraph (the button turns pressed), moves the caret to the plain first paragraph (not pressed) and back into the bold text (pressed). Chromium, 1 passed.
+
+**Evidence:** (lane V-FE-017-032, 2026-11-13, criterion 4) packages/element/e2e/fe-028-remote-delete.spec.ts: the S1 page with the channel open (`?sync=1`), the caret in the last paragraph, a remote commit that deletes that paragraph (`RemoteOp` kind `delete`, added to packages/engine/src/testing.ts, mode `map`); the element raises `de-selection` with `scope` `body` and the identifier of a block that is in the document after the removal, and the harness selection is in the body. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-028-remote-delete.spec.ts --retries=0 --output=packages/element/test-results/V-FE-017-032-fe028` on Windows: 4 of 4 passed (Chromium, Edge, Firefox, WebKit). The criterion names a move or a deletion; a remote move is not run (the harness has no move operation).
+
+**Notes:** Lane U-FE-017-032 (2026-11-13): criterion 4 was then unticked, because no remote removal ran in a browser. Lane V-FE-017-032 (2026-11-13) added the remote delete and ticked it on the run in Evidence; the test waits for `de-ready` first, because the watch of the editor starts only when the channel attaches (without `sync=1` the spike page raises no selection event at all). Lane FE-027-039 (round 1). The detail of `de-command-state` is `{ commands: [{ name, enabled, active }] }`: the spec's table gives `{ scope, blockId }` for both events and "the commands whose state changed" in words; the list form is the reading taken here, and it is not decided by the spec (proposed for ADR 0202). The baseline at mount raises nothing. The earlier wording that no test ran a remote commit against the element's events is superseded by the lane V-FE-017-032 run above. Criterion 5 needed the browser (`toolbar="none"` host with a bold button); it was run in lane U-FE-017-032 and is ticked (see Evidence).
+
+## Editing core: modes, schema, identifiers and body commands (02 §5.2)
+
+### FE-029 Drive the editing surface from the mode
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2, §7; 05 §8.1; 04 §8 · **Requirements:** R3, R8 · **Depends on:** FE-004, FE-033, PRO-074, PRO-077
+
+As an author, I want the editing surface to follow the mode and my rights, so that I can only do what I am allowed to.
+
+**Acceptance criteria**
+
+- [x] Given `mode="edit"` and a user who may edit, when the document loads, then the editing surface is editable.
+- [x] Given `mode="view"`, when the document loads, then the surface does not accept text input or structural edits, and the selection and copying still work.
+- [x] Given `mode="review"`, when the document loads, then suggestion mode is on (FE-041), and the server's permissions still apply.
+- [x] Given a requested mode that exceeds the user's rights (for example `edit` for a viewer), when the document loads, then the effective mode is the more restrictive one, the attribute value is left as the host set it, and the effective mode is readable from the core.
+- [x] Given the server answers a commit with `read_only`, when the rejection is processed, then the editor switches to read-only and the save state becomes `readonly`.
+- [x] Given `mode="fill"`, when the document loads, then the body is read-only and fill behaviour is handed to FRW-076, FRW-079.
+- [x] Given the `mode` attribute changes while the editor is open, when the change is reflected, then the surface updates without a reload and without losing unconfirmed work.
+
+**Evidence (lane V-FE-017-032, 2026-11-14, criterion 3):** `packages/element/e2e/fe-029-review-mode.spec.ts`, `mode="review"` set before the element connects: an editor (`ada`) gets `suggestion.get().on` true with the surface editable, and a suggester (`bob`, `suggester` role) gets `on` true with reason `rights`. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-029-review-mode.spec.ts --retries=0 --output=packages/element/test-results/V-FE-017-032-fe029` on Windows: 8 of 8 passed (Chromium, Edge, Firefox, WebKit).
+
+**Evidence:** `packages/engine/src/mode.ts` (`effectiveMode`, `modeLocks`); `packages/engine/src/core.ts` (`setMode`, `#refreshMode`, `#locked`, the `readOnly` getter the web view's `editable` reads); `packages/engine/test/mode.test.ts`: criterion 4 ('gives the most restrictive mode the access allows', 'keeps the host’s requested value and reports the effective one'), criterion 6 ('fill mode: the body is read-only…'); criterion 7: `packages/engine/src/core.ts` (`#publish` calls `ViewBridge.lockChanged` when the lock moves), `packages/engine/src/view/web.ts` (`lockChanged` calls `setProps({})` on the body view and the open sub-editor, which re-reads `editable`), `packages/element/src/doc-editor.ts` (`modeFrom`; `mode` passed at mount and to `setMode` on change), `packages/element/src/editor.ts` (`setMode`); tests `packages/engine/test/mode.test.ts` ('a mode change while open updates the surface and keeps unconfirmed work', 'a lock that moves without a state change is passed to the mounted views'), `packages/element/test/mode.test.ts`, and `packages/element/e2e/mode.spec.ts` ('a mode change while open updates the surface without a reload and keeps unconfirmed work': `contenteditable` goes false and true with the same core, the held typing stays queued and is confirmed after; run in Chromium, Edge, Firefox and WebKit, 2026-11-13, 16 of 16 passed, and 3 of 4 failed in Chromium with the `setProps` call removed); criterion 5: `packages/engine/test/sync.mock.test.ts`, 'read_only: the editor switches to read-only, and back when the document is unlocked' (the save state becomes `readonly`, and the editor refuses the change).
+
+**Evidence:** (lane U-FE-017-032, 2026-11-13, criteria 1 and 2) packages/element/e2e/mode.spec.ts, first test (mounted in edit: `contenteditable="true"`, and again after `mode` returns to `edit`); packages/element/e2e/fe-029-view-selection.spec.ts (mounted with `mode="view"`: `contenteditable="false"`; a pointer drag selects the paragraph, read through `ShadowRoot.getSelection()`; a `copy` event reaches the document on Control+C; typed text does not change the body). Criterion 2's copy check shows that the copy event fires, not the clipboard content. Chromium only: the run of 2026-11-13, 1 passed for the new file and 4 passed in mode.spec.ts. Lane V-FE-017-032 (2026-11-13), criteria 1 and 2 in the other engines: `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/mode.spec.ts packages/element/e2e/fe-029-view-selection.spec.ts --retries=0 --output=packages/element/test-results/V-FE-017-032-fe029` on Windows, 20 of 20 passed (5 tests in each of Chromium, Edge (msedge), Firefox and WebKit).
+
+**Notes:** Lane U-FE-017-032 (2026-11-13): criteria 1 and 2 are ticked on the Chromium runs above and, from lane V-FE-017-032 (2026-11-13), on the four-engine run recorded in Evidence. Open (2026-11-13, engine round 4): criteria 1 and 2 are the core's side only: `readOnly` is false for an editor and true in `view`, and the core refuses the text input, but the contenteditable state of the element and the copy and selection through the DOM were not run in a browser (packet B2's suite). Criterion 3 is ticked by lane V-FE-017-032 (2026-11-14) on the four-engine run in Evidence (suggestion mode on for `review`, FE-041 in place); the core computes `review` as the effective mode. Criterion 6 is ticked on the body lock alone: fill behaviour (field values, `nextField` and the rest) is FRW-076 and FRW-079, and until they land fill mode changes nothing. Criterion 7 was unticked by the round 4 review (the element did not pass `mode` to the core, and the mounted view re-read `editable` only at the next state update) and re-ticked by the round 4 fix: a lock change from `setMode`, `setAccess` or `read_only` now refreshes the mounted views, and the element passes the attribute at mount and on change. `e2e/mode.spec.ts` also shows `mode="view"` before loading and `mode="edit"` for a viewer leave the surface non-editable, and that `mode="edit"` for an editor gives `contenteditable="true"`. Criterion 1 is ticked on that test (lane U-FE-017-032, see Evidence); criterion 2 is ticked on the Chromium run of fe-029-view-selection.spec.ts. An absent or unknown `mode` is `edit`, the core's default, because the spec states no default (PRO-077 Notes; not decided here). The mode lock does not change the save state or the access summary (`docs/adr/0108-engine-backlog-batch.md`, round 4, item 5). The attribute itself is PRO's; the mode switcher control is UX's. Cross-check: moved from phase 1a to 1b, because the `mode` attribute (PRO-077) and fill mode arrive in 1b; the review-mode criterion applies from phase 2 (FE-041).
+
+### FE-030 Load the editing schema from the CDM
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 02 §5.2; ADR 0003 (after the first review); 03 §2, §3, §11 · **Requirements:** R1, R6 · **Depends on:** CDM-008
+
+As a maintainer, I want the editing schema generated from the CDM definition, so that the editor and the authority apply steps against the same schema.
+
+**Acceptance criteria**
+
+- [x] Given the CDM definition in `packages/model`, when the editor is built, then its schema is generated from it, and CI fails if the generated schema differs from the published normative artifact.
+- [x] Given every node type that declares an `id`, when nodes are created or filled (a paragraph split, a table inserted, a region wrapped), then they are created without a required attribute, because `id` defaults to null.
+- [x] Given `defs` and `story` nodes, when the user navigates or selects, then they are isolating, cannot be node-selected and are closed to the gap cursor.
+- [x] Given a document with `ext` attributes on nodes and marks, when it is loaded, edited elsewhere and read back with `getContent()`, then the `ext` content is unchanged.
+- [x] Given a document whose `requires` lists a feature this build lacks, when it loads, then the editor refuses it with a clear message, raises a fatal `de-error`, and does not open it with content dropped (03 §2).
+- [x] Given a stored document, when it is loaded and `getContent()` is called without edits, then the canonical form equals the input's (hash fixture).
+- [x] Given the engine definition `pm-steps/1`, when dependencies are installed, then the `prosemirror-transform` release equals the one the engine definition pins (CI check).
+- [x] Given the CDM features and the engine version this build supports, when a session opens, then they are available to the session layer to announce, so that a room can refuse a commit that adds a feature a client lacks (03 §11.1).
+
+**Evidence:** `packages/engine/src/schema.ts` (the CDM's projection schema with rendering only); `packages/engine/test/schema.test.ts`: equal to the model's runtime schemas and to the published `spec/cdm/cdm-1.prosemirror.json` apart from rendering; ids default to null; definitions and stories isolating, not selectable, closed to the gap cursor; `ext` on nodes and marks kept through edits; canonical form of `example-03-12.json` and `kitchen-sink.json` unchanged; prosemirror-transform and prosemirror-model equal the pin of `pm-steps-1.json`, declared and installed; `capabilities()` gives engine, CDM version and features. Criterion 5 (element side): `packages/element/test/unsupported-document.test.ts` ('raises one fatal de-error with the feature named, and leaves no editor mounted'; 'reports an unsupported CDM version with its own registry code, also fatal').
+
+**Notes:** Review F5 (null-default identifiers), F10 (definitions and stories reached by commands). The schema generation itself is CDM's; this story is the editor's use of it. Read restrictions (README rule 8; S12 report): the editing schema is the CDM's projection schema (`buildProjectionSchema`), so a reader's projection with `hidden_region` placeholders opens like a full document; no position lies inside a placeholder, and the guard refuses every local step that touches or carries one, or a redacted value (`packages/engine/test/guard.test.ts`, 'read restrictions in the core'). Open: criterion 5's refusal is in the core (`UnsupportedDocumentError` with `unsupported_feature` or `unsupported_cdm`, tested in `test/schema.test.ts`); the fatal `de-error` is the element's (packet B2). Round 1 (lane FE-027-039, 2026-11-13): criterion 5 is ticked. `packages/element/test/unsupported-document.test.ts` (Node.js, 2 of 2 passed) shows that when the core refuses the document at mount, the session raises one `de-error` with `code: unsupported_feature` (or `unsupported_cdm`), `fatal: true`, a message that names the feature, and no editor is left mounted. The text of the message on screen is the shell's, not checked here.
+
+### FE-031 Fill in missing identifiers in the same transaction
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Author |
+
+**Spec:** 02 §5.2; 03 §8 (I2, I3), §9; ADR 0003 · **Requirements:** R3, R4 · **Depends on:** FE-030, CDM-012
+
+As an author, I want every new block to get a stable identifier without my noticing, so that permissions, history and comments can address it.
+
+**Acceptance criteria**
+
+- [x] Given a transaction creates a node of a type that declares an `id`, when the transaction is applied, then the same transaction gives it a 16-character URL-safe Base64 random identifier, and no document state in the queue has a null `id` (I2).
+- [x] Given a paragraph is split in the middle, when Enter is pressed, then the part that keeps the existing content keeps the identifier and the new part gets a fresh one.
+- [x] Given Enter is pressed at the start of a paragraph, when the split happens, then the original paragraph keeps its content and identifier and the fresh identifier goes to the new empty paragraph.
+- [x] Given content is pasted or duplicated, when it is inserted, then every copied node has a fresh identifier and identifiers stay unique in the document.
+- [x] Given a node already has a non-null `id`, when any local transaction runs, then none changes it.
+
+**Evidence (fix of group 3, round 3, 2026-11-14, criterion 5 through replace steps):** `changesExistingId` in `packages/engine/src/ids.ts` now also follows, through `tr.mapping`, every node of the old document whose set identifier the new document no longer holds (`replacesExistingId`): a node whose content survives unmoved as the whole content of one node at the same depth (a `ReplaceAroundStep` from `setNodeMarkup` or `setBlockType`, an empty node included), or whose whole range maps onto an equal node with another identifier (a swap, or a leaf's `setNodeMarkup`), is a change when that node's identifier is null, new or duplicated. Replaces inside one textblock that bring or remove no node with an `id` (typing) skip the comparison. `packages/engine/test/fe-031-id-refusal.test.ts` (12 tests, Node.js, `pnpm vitest run --project node`, passed 2026-11-14): `setNodeMarkup` with another id (checked to be a `ReplaceAroundStep`) leaves the document equal; `setNodeMarkup` to null and to another node's id are refused; `setNodeMarkup` on an empty paragraph is refused; a `replaceWith` that swaps the paragraph for an equal one with another id (a `ReplaceStep`) is refused; `setBlockType` without the id is refused and with the id kept is not; `setNodeMarkup` that keeps the id, deleting, joining (into a paragraph and into an empty one), replacing with a pasted paragraph and moving a paragraph are not refused; a remote `setNodeMarkup` is exempt. The whole `packages/engine` Node.js run (`pnpm vitest run --project node packages/engine`, 2026-11-14) gives 831 passed and the same 2 failures as before the change (`headless.test.ts` and `web-view-safety.test.ts`, not touched by this fix).
+
+**Evidence:** `packages/engine/src/ids.ts`; `packages/engine/src/core.test.ts` (identifier plugin block); ids from WebCrypto in three engines: `packages/engine/src/sync.universal.test.ts`; a local change of a non-null id is refused: 'never changes an existing id'.
+
+**Evidence (lane V-FE-017-032, criterion 5, 2026-11-13; covers `AttrStep` only, so criterion 5 is open again, see Notes):** `packages/engine/src/ids.ts` (`changesExistingId`, and `filterTransaction` on `identifierPlugin`: a local, non-history, non-internal `AttrStep` on `id` that replaces a set identifier, by another value or by null, is filtered out; a fill of a null identifier is allowed). `packages/engine/test/fe-031-id-refusal.test.ts` (4 tests, Node.js, `pnpm vitest run --project node`, passed): a change to another value and to null leave the document equal, the predicate refuses the change and allows a fill, a same value and a remote change, and typing leaves the identifier as it was. `packages/engine/src/core.test.ts` and `packages/engine/test/sync.mock.test.ts`, `frw-002.field-ids.test.ts`, `frw-072.form-fields.test.ts`, `selection-drop.test.ts`, `guard.test.ts` still pass (undo of an Enter and of a fill are exempt).
+
+**Notes:** Fix of group 3, round 3 (2026-11-14): criterion 5 is ticked again; replace steps are now checked (Evidence above). Decided here: a node replaced by an equal one that differs only in its identifier counts as a change even when the new identifier is null, so pasting an identical copy over a selected node in one transaction is refused (the document would only lose the identifier); a join keeps the surviving node's identifier and is not a change. Review of group 3, round 3 (2026-11-14): criterion 5 is unticked. `changesExistingId` looks only at `AttrStep`s on `id`; a local `tr.setNodeMarkup(pos, null, { ...attrs, id: 'ZZZZZZZZZZZZZZZZ' })` (a `ReplaceAroundStep`) still changes a set identifier (probe run in Node.js against the spike document: the id became the new value). The Evidence line covers only `setNodeAttribute`. Fix: also detect an id change made by replace steps (compare, for each node of the old document with a set id, the node the mapping leads to in the new document, or compare the id sequence of unchanged-structure replaces), and add a test with `setNodeMarkup`. Review F5. Undoing the removal of a region would bring back an identifier that I3 says may never be reused (Open questions). Enter at the start of a paragraph inserts an empty paragraph before it rather than splitting (ADR 0038): the outcome of criterion 3, with no identifier moving between nodes, so that its undo is accepted by the room (`packages/engine/test/sync.mock.test.ts`, 'undo after Enter…'). Audit (2026-11-13): criterion 5 is unticked because the core does not refuse a local change of a non-null `id` (a `setNodeAttribute` on a paragraph's `id` with an editor's access changed it and raised no refusal, run in Node.js), the Evidence's 'a local change of a non-null id is refused' names no such test, and 'never changes an existing id' only types, marks and styles; the authority's P5 is the only check. Round (lane V-FE-017-032, 2026-11-13): criterion 5 is ticked. The core now refuses the change (`changesExistingId` in `packages/engine/src/ids.ts`), exempting remote, internal and history transactions so that undo of an Enter or a fill still works; see the Evidence line.
+
+### FE-032 Keep body commands inside the body
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Author |
+
+**Spec:** 02 §5.2; 03 §3; review F10 · **Requirements:** R1 · **Depends on:** FE-030
+
+As an author, I want "select all", moving to the start or end and joining at the first paragraph to stay in the document body, so that I cannot reach styles, page setups or headers by accident.
+
+**Acceptance criteria**
+
+- [x] Given the caret is in the body root, when Select all is used, then the selection covers the body and no content of `defs` or any story.
+- [x] Given the caret is anywhere in the body, when the commands for the start and the end of the document are used, then the caret goes to the first and last body positions and never to `defs` or a story.
+- [x] Given the caret is at the start of the first body paragraph, when Backspace is pressed, then nothing is joined with the definitions or a story.
+- [x] Given arrow keys, Home, End and Page keys at the first and last body positions, when they are pressed, then the caret does not leave the body.
+- [ ] Given the Select all behaviour while the caret is inside a region, when it is used, then the result follows the decision recorded in the Open questions (whole body or the region).
+- [x] Given the browsers of the supported matrix, when the S1 body-command tests run, then they pass in each.
+
+**Evidence:** `packages/engine/src/body.ts`, `packages/engine/src/keys.ts`; `packages/engine/src/core.test.ts` (body-scoped commands block, run through the key bindings the web view installs). Criterion 4: packages/element/e2e/s1-shadow-root.spec.ts, 'Ctrl+Home, Ctrl+End, arrows and Backspace never leave the body' (ArrowUp, ArrowLeft, Home, PageUp at the first body position; ArrowDown, ArrowRight, End, PageDown at the last), on the production core, passed in Chromium 158, Edge 156, Firefox 159 and Playwright WebKit 27.2 (element suite, 2026-11-06, run 5: 781 passed, 0 failed, 0 flaky). Criterion 6 (lane V-FE-017-032, 2026-11-13): `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/s1-shadow-root.spec.ts --retries=0 --output=packages/element/test-results/V-FE-017-032-s1` on Windows, 36 of 36 passed with no retries: the four tests of 'schema rules in the browser' (select all covers the body only; Ctrl+Home, Ctrl+End, arrows and Backspace never leave the body; a DOM selection on the hidden definition wrapper is clamped into the body; Enter fills identifiers) and the element tests, in Playwright's Chromium, Edge (channel msedge), Firefox and WebKit, the four projects of the element's playwright config.
+
+**Notes:** Review F10. Select all from inside a region conflicts between 02 §5.2 (limited to the body) and 07 §7 (selections that start in a region are clamped to it); see Open questions. Open (2026-11-06): criterion 5 waits for that decision; the core keeps the spec's default, the whole body (`packages/engine/src/core.test.ts`). Round 2 (lane FE-027-039): criterion 5 stays open. The test 'select all from inside a region selects the whole body' passes, but the Open questions (item 10) record no decision, so no decision is there for the criterion to follow; the default is proposed in `docs/adr/0202-lane-FE-027-039.md`. Criteria 4 and 6 are browser runs: spike S1's tests passed on the same body guard and bindings, and the element's suite (packet B2) has to run them again on the production core. Criterion 6 is ticked by lane V-FE-017-032 (2026-11-13) on the element's four configured projects (see Evidence); the earlier 2026-11-06 run used Chromium 158, Edge 156, Firefox 159 and Playwright WebKit 27.2. Safari itself and the minimum versions of 02 §12 were not run in either. The first 2026-11-13 run with retries showed four tests passing only on retry (Edge, WebKit) and WebKit trace-file errors caused by a shared `test-results` folder; the run with `--retries=0` and a separate output folder is the one recorded.
+
+## Editing core: the sync client in the core (02 §5.2)
+
+### FE-033 Host the sync client inside the editing core
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | L | must | Maintainer |
+
+**Spec:** 02 §5.2; 04 §7, §8; ADR 0003 · **Requirements:** R7 · **Depends on:** FE-030, SYN-017, SYN-018
+
+As a maintainer, I want the sync client wired into the editing core, so that two tabs can edit the same document and converge.
+
+**Acceptance criteria**
+
+- [x] Given a local transaction, when it is applied, then the visible state updates at once, without waiting for the network, and its steps are appended to the sync client's queue.
+- [x] Given a local transaction the region guard (FE-036) filtered out, when it is dispatched, then no step reaches the queue.
+- [x] Given a remote commit, an acknowledgement, a rejection or a reset, when the sync client returns the new confirmed document and remaining local steps, then the core replaces its visible state with the confirmed document plus the rebased local steps, in one transaction marked as remote.
+- [x] Given a remote commit changes a region the local user may not edit, when it arrives, then it is applied and the local region guard does not filter it, because the authority already validated it.
+- [x] Given remote transactions, when they are applied, then they are not added to the local user's undo history (FE-049).
+- [x] Given the core is built without the browser, when the sync client and the core run in Node.js with a fake transport, then two simulated clients converge (FE-121).
+- [x] Given the journal and `flush`, when they need the sync client's state, then the core exposes the confirmed document, `seq`, incarnation, in-flight commit and queue as read-only views.
+
+**Evidence:** `packages/engine/src/core.ts` (`attach`), `src/remote.ts` (one remote transaction per change, checked against the rebuilt document), `src/sync/`; `packages/engine/test/sync.mock.test.ts` against backend-mock (the real `Room`): a local edit shown and queued at once, a refused change queues nothing, one remote transaction whose state equals the rebuilt document, a change to a region the user cannot edit applied, remote changes absent from undo, `syncSummary`, `confirmedContent()` and `syncSnapshot()`; clients converge in Node.js: `test/sync.property.test.ts` (100 random schedules with write faults, grant changes, locks, resets and reconnects; run of 2026-11-06, every client equal to the server's head). A reset or a reload replaces the state as a whole and clears undo history (ADR 0038).
+
+**Notes:** The sync algorithm (queueing, batching of at most 100 ms, resume, rejection table) is SYN's; this story is where it plugs into ProseMirror state and the view. Spike S1's composition fix is part of the sync client: while a composition is open, a remote change to the block being composed waits for `compositionend` and later messages queue behind it (`packages/engine/test/composition.test.ts`); the composition story itself is FE-034 (phase 1b). Decisions: ADR 0038.
+
+### FE-034 Keep composition steady when remote commits arrive
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2, §14; 11 §2 (S1); review F1 · **Requirements:** R7, R1 · **Depends on:** FE-033, FE-066
+
+As an author typing with an input method, I want remote changes to leave my composition intact, so that colleagues' edits never break what I am typing.
+
+**Acceptance criteria**
+
+- [ ] Given a Japanese, Chinese or Korean composition is in progress in the main editor, when a remote commit arrives in another paragraph, then the composition is not cancelled, the composed text is neither lost nor duplicated and the candidate window stays at the caret.
+- [x] Given a composition is in progress and the remote commit changes the same paragraph before the caret, when it arrives, then the composition continues at the mapped position.
+- [x] Given a dead-key sequence is in progress, when a remote commit arrives, then the sequence completes with the expected character.
+- [x] Given a composition in a sub-editor (FE-056), when a remote commit changes that story, then the same holds.
+- [x] Given a keystroke and a remote commit land in the same animation frame, when the frame is processed, then the keystroke is neither dropped nor reordered.
+
+**Evidence (criterion 5, fixer U2 group 2 round 1, 2026-11-13):** `packages/element/e2e/fe-034-same-frame.spec.ts`, two cases (Bob's remote commit in Ada's paragraph before her caret, and in another paragraph). Two `<doc-editor>` elements on the embed page's mock service; Bob's real commit is held at the service (`holdWrites`) and released by a `requestAnimationFrame` callback that Ada's keydown registers, so it is applied in the next rendered frame's callbacks, ahead of the core's `ViewHub` callback, and not inside the key event. The page records every notification pass of every view of Ada's core with a frame counter; the test checks that no pass ran between the real key press and the remote commit, that the pass of that same frame shows both, that the key lands after the mapped remote text, and that a later key follows and both editors converge. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-034-same-frame.spec.ts --project=chromium --project=firefox --project=webkit --workers=1 --retries=0 --repeat-each=3` against the demo on port 56550: 18 of 18 passed (Chromium, Firefox and WebKit, Windows). In every run the order recorded was keydown and input at frame n, then the frame callback, the remote commit and the first pass all at frame n+1.
+
+**Evidence (lane U-FE-033-048, 2026-11-13, Playwright's Chromium, headless shell, Windows):** `packages/element/e2e/s1-composition.spec.ts` ('devtools protocol': 'same paragraph before the caret' in the body, footnote and header variants, with `map` and `rebase`; 'a keystroke and a remote commit in the same frame', six cases; 'one-step commit' and 'footnote model paragraph' for the sub-editors), and `packages/element/e2e/s1-input-drivers.spec.ts` plus 'dead keys [devtools protocol]' in `s1-composition.spec.ts` (Windows-style and macOS-style dead keys, with no remote commit and with one in `map` and `rebase` mode, applied between the dead key and the letter). Run with `pnpm exec playwright test -c packages/element/playwright.config.ts <files> --project=chromium --workers=1 --output=<scratch>` against the demo served on port 56020. Results: the dead-key and same-frame cases passed (17 of 18 in one run; the one timeout on page load passed on its own rerun); the full S1 composition file passed 114 cases under 4 workers, where two page-load timeouts passed on a single-worker rerun. Caveat: remote commits are delivered by the spike harness (`remote.ts`, the stand-in path of the S1 spike, not the production transport), and the keystroke case applies the remote commit inside the keydown of the keystroke, not in a rendered animation frame. Firefox and WebKit were not run for this lane.
+
+**Evidence (criterion 5, fixer U2 group 2 round 5, 2026-11-14):** `packages/element/e2e/fe-034-same-frame.spec.ts`, now with Bob's 'remote ' entered by one `keyboard.insertText`, so it is one held commit (the round 5 copy `fe-034-u-same-frame.spec.ts` is removed). Why key-by-key typing stopped landing in the frame: the element now opens the IndexedDB recovery journal (FE-008, `packages/element/src/session.ts`), and the sync session writes the journal before every send (`#journalThen` in `packages/engine/src/sync/session.ts`). Typed key by key, 'r' is the held commit and the rest waits for its ack; after the release, that next send waits for an IndexedDB write, so it reaches Ada in a later task, after the frame's check. This is the write-ahead order FE-008 asks for, not a change to how the frame orders a keystroke and a remote commit. Check: the key-by-key version with `indexedDB` made undefined by an init script (no journal) passed 6 of 6 (Chromium, Firefox, WebKit, `--workers=1 --retries=0`, demo on port 56550; a temporary probe file, deleted after the run). Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-034-same-frame.spec.ts --project=chromium --project=firefox --project=webkit --workers=1 --retries=0 --repeat-each=3` against the demo on port 56550: 18 of 18 passed (Windows, 2026-11-14). Before the change the same file failed 2 of 2 on Chromium at the 'remote applied' check (`ok: false`, only 'r' applied, 'emote ' one frame later).
+
+**Notes:** If a remote commit deletes the paragraph being composed, what happens to the composition is not specified. Round 2 (lane FE-027-039, 2026-11-13): criterion 5 stays open. `packages/engine/test/fe-034-same-tick.test.ts` (1 of 1 passed in Node.js, backend-mock) shows that a keystroke and a remote commit queued together are both kept and both clients equal the room, but the animation frame (the element's ViewHub schedule) is not run, so the frame itself is not tested. Criteria 1 to 4 need a browser and were not run. Lane U-FE-033-048 (2026-11-13): criteria 2 to 4 are ticked on the Chromium runs in Evidence above (reviewer reran the dead-key, same-paragraph, footnote and header cases on Chromium and Firefox: all passed, three cases timed out once under load and two of them passed alone). Criterion 5 was unticked at review: the cases apply the remote commit inside the keydown of the keystroke, not in a rendered animation frame, which is the gap the round 2 note names; it needs a test through the element's frame schedule. Criterion 1 stays open: the composition tests check the text, the composition events and the absence of a cancelled composition, but nothing measures where the candidate window is drawn, and no automation can read it in these browsers. Not run: Firefox and WebKit for these cases (WebKit cannot drive a composition at all, see `s1-composition.spec.ts`), and a 'same frame' run through the element's animation frame. Fixer U2 group 2 round 1 (2026-11-13): criterion 5 is ticked on `e2e/fe-034-same-frame.spec.ts` (see Evidence). Its order is fixed as keystroke first, then the remote commit in the frame's callbacks; the reverse order inside one frame (a remote commit applied and then a key read before the next pass) needs control of when the browser reads an input event, which the drivers do not give, so it is not arranged. Round 5 (fixer U2 group 2): criterion 5 is ticked on `e2e/fe-034-same-frame.spec.ts` after the one-line `insertText` change (see Evidence); the earlier audit below is superseded. Audit (2026-11-13): criterion 5 was unticked because `e2e/fe-034-same-frame.spec.ts` failed in 6 of 6 reruns (Chromium, Firefox, WebKit, `--retries=0`, plus 2 of 2 in a single-worker Chromium rerun): Bob's typed 'remote ' reaches Ada as separate commits after the held write is released, so only 'r' has arrived when the test checks that the remote text is applied in the frame (`remote-applied` with `ok: false`), against the '18 of 18 passed' in the Evidence. Lane V-FE-033-048 (2026-11-14), criterion 1: `packages/element/e2e/s1-composition.spec.ts` with `--grep "other paragraph"` against the demo on port 57020 (Playwright, Windows, `--workers=1`): Chromium 12 of 12 passed (DevTools protocol: Japanese, Chinese and Korean compositions, remote commit in the paragraph after and before the composed one, `map` and `rebase`; each checks the text, one `compositionstart` and `compositionend` per commit so the composition is not cancelled, and the remote text once), Firefox 12 of 12 passed (`keyboard.insertText` driver). Criterion 1 stays unticked: the candidate window clause ("stays at the caret") is still not measured in any browser, as the note above says, and WebKit cannot drive a composition.
+
+### FE-035 Map the selection and decorations through every rebuild
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2; 04 §7 · **Requirements:** R7 · **Depends on:** FE-033
+
+As an author, I want my selection and the highlights on screen to stay where they belong when the document is rebuilt after an acknowledgement or a rejection, so that nothing jumps.
+
+**Acceptance criteria**
+
+- [x] Given an acknowledgement with `rebased: true` and mapped steps, when the visible state is rebuilt, then the selection is mapped through the change.
+- [x] Given a rejection with action `drop`, when the state is rebuilt from the confirmed document plus later local steps that still apply, then the selection lands on a valid position near where it was.
+- [x] Given decorations (find matches, comment ranges, suggestion decorations, remote carets), when a rebuild happens, then each is mapped, and a test that recomputes them from scratch finds no difference.
+- [x] Given an acknowledged commit equals the client's own rebased version, when the rebuild runs, then it is a no-op and no DOM node of the editing surface is mutated.
+
+**Evidence:** `packages/engine/test/selection-mapping.test.ts`: criterion 1 ('an acknowledgement with rebased steps maps the selection through the change', run against backend-mock with a batch window so that the room rebases the local commit; `traffic.rebasedAcks` is asserted to be at least 1) and a remote rebuild that keeps the caret with its text ('a remote commit before the caret moves the caret with its text'). Criterion 3 for find matches only: 'find matches equal a recomputation from scratch after a rebuild'. Criterion 4, the core part only: 'an acknowledgement that equals the local document is a no-op' (no remote transaction, the same document object). Criterion 2 (round 4): `packages/engine/test/selection-drop.test.ts`, a `permission_denied` with `drop` (backend-mock, `setGrants` while the write is held): the rebuilt state keeps the later work, and the caret is in the same paragraph at the same offset (5) as before the rejection.
+
+**Evidence (lane U-FE-033-048, criterion 4, browser run):** `packages/element/e2e/fe-035-ack-noop.spec.ts`: the service holds Ada's write, one key is typed, a MutationObserver on the open shadow root's `.de-editing-surface` is attached after the key's DOM work has settled, and the write is released. The observer recorded no mutation, and the pending count reached 0 (the acknowledgement was processed). 3 of 3 passed: Chromium, Firefox and WebKit (Playwright builds, Windows, demo on port 56020).
+
+**Evidence (lane V-FE-033-048, round 2, criterion 3, 2026-11-13):** `packages/engine/test/fe-035-rebuild-decorations.test.ts` (1 test, Node.js, headless core in review mode, passed): after a `REMOTE`-marked insertion before the decorated text, the find matches equal `findMatches` run from scratch on the rebuilt document (positions and text), the comment range still covers the same text and is moved by the insertion, and the suggestion decorations (`markupDecorations('all')`) equal those of a core opened on the same content. Remote carets: `packages/engine/test/presence-mapping.test.ts` (run with `selection-mapping.test.ts`: 9 of 9 passed, Node.js). The remote commit is modelled as a transaction, not run through the sync client.
+
+**Notes:** Round 2 (lane V-FE-033-048): criterion 3 is ticked on the tests above; the comment ranges and the suggestion decorations that the earlier note called not built now exist (FE-048, FE-046). Round 4 (2026-11-13): criterion 2 is ticked on `test/selection-drop.test.ts`; the grant change it needs is backend-mock's `setGrants`, not PRM-019 or PRM-020 work. Criterion 3 was open for comment ranges (FE-048) and suggestion decorations (FE-042); it is ticked in round 2 (see above). Criterion 4 asserts the core's no-op only; that no DOM node of the editing surface is mutated needs a browser run in the element suite, which was not run here.
+
+## Region guard (02 §5.2)
+
+### FE-036 Refuse local edits in scopes the user cannot change
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | L | must | Editor |
+
+**Spec:** 02 §5.2; 07 §5.5, §7; review F12 · **Requirements:** R3 · **Depends on:** FE-030, FE-033, PRM-004, PRM-006
+
+As an editor who may change only some regions, I want the editor to refuse changes outside them before they are sent, so that I normally never meet a rejection.
+
+**Acceptance criteria**
+
+- [x] Given a local transaction touches a scope for which the current `access` lists none of `edit`, `suggest` or `fill`, when it is dispatched, then it is filtered out, the document is unchanged, nothing enters the sync queue, and a signal naming the scopes is emitted for the interface to explain.
+- [x] Given a transaction that changes only attributes or marks inside a protected scope, when it is dispatched, then it is filtered out as well, because the scope is found by comparing the document before and after and not from the shape of the steps.
+- [x] Given a region that the `access` object does not list (created by a commit just received), when the user tries to change it, then it is treated as not editable until an `access` with `asOfSeq` at or after that commit arrives.
+- [x] Given a grant change arrives as `perm.changed`, when the next transaction is dispatched, then the guard uses the new `access`, without a reload.
+- [x] Given typing, paste, drag and drop, `insertContent`, replace all, undo and input-method composition, when any of them touches a protected scope, then each is refused by the same guard.
+- [x] Given a user whose capability in a scope is `suggest` only, when the user edits there, then the transaction is allowed and becomes a suggestion (FE-042).
+- [x] Given a user who may edit only regions, when the user tries to change a style definition, the page setup, a header or a footer, then the change is refused.
+
+**Evidence:** `packages/engine/src/guard.ts` (scopes from `diffScopes` of @docedit/authority); `packages/engine/test/guard.test.ts` ('refuses typing…', 'refuses mark-only and attribute-only changes too', 'a region the access does not list…', 'uses a new access at the next transaction', 'refuses changes to definitions, the page setup and headers…'; paste, drag and drop, inserted content, replace all and undo: 'refuses paste, drag and drop…'). Criterion 5's input-method composition (engine round 8): `packages/engine/test/guard.test.ts` ('refuses an input-method composition in a protected region by the same guard'), which dispatches composition-tagged transactions; the real composition in a browser is FE-123's run.
+
+**Evidence (lane U-FE-033-048, criterion 6):** `packages/engine/test/fe-041-043-suggestion-core.test.ts` ('typed text carries one ins naming the user, with an identifier from the core', Node.js, mock service with the real authority room, passed under this lane's run): sam, a `suggester` whose body capability is `suggest` only, types "big " in the body; the guard allows the transaction, the core records it as one `ins` naming sam, and the authority accepts the commit.
+
+**Notes:** The guard is a convenience; the authority's outcome check (07 §5.1) is the boundary. 02 does not say how the guard finds the scopes a transaction touches; comparing before and after follows 07 §5.1 and is the reading used here. 02 says "filters out", 07 §7 says a deletion across scopes removes only the permitted parts: FE-037 resolves this for deletions. What a person sees is PRM's. `fill` scopes are FRW's. Open (2026-11-06): criterion 5's input-method composition goes through the same filter as every transaction the view dispatches, but no browser test covers it yet (FE-123); criterion 6 needs suggestion mode (FE-042): until then a `suggest` scope is allowed and the authority's P4 decides. The guard also refuses steps that touch or carry a placeholder or a redacted value (ADR 0019) and a change of a non-null identifier (P5).
+
+### FE-037 Delete across scopes only where the user may edit
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Editor |
+
+**Spec:** 07 §7 (fourth and fifth bullets); 02 §5.2 · **Requirements:** R3, R1 · **Depends on:** FE-036, FE-038, PRM-024, PRM-028
+
+As an editor, I want a deletion that crosses protected content to remove only what I may change and to tell me, so that selecting a large range does not fail altogether and I never get a surprise rejection.
+
+**Acceptance criteria**
+
+- [x] Given a selection spans the body root, an editable region and a region the user cannot edit, when Delete is pressed, then the content in the editable parts is removed and the protected region is untouched.
+- [x] Given a deletion was trimmed, when it completes, then the core reports the number of scopes skipped so that the interface can say that parts were kept because the user cannot edit them, and the message is announced to assistive technology.
+  **Evidence (lane V-FE-033-048, criterion 2, 2026-11-13):** `packages/element/e2e/fe-037-trimmed-announce.spec.ts` (Chromium, Playwright, Windows, 1 of 1 passed): bob, with no grant on the spike document's region, selects from the intro across the locked region and presses Delete; the shell's `role="status"` region in the element's shadow root then reads "Part of that deletion was kept", the locked paragraph survives, and no scope identifier appears in the notice. Unit: `packages/ui/test/fe-037-trimmed-notice.test.ts` (4 tests, Node.js, passed): `NoticeTracker.trimmed` reports each new trimmed deletion once with the count of scopes kept. Source: `packages/ui/src/shell/notices.ts`, `packages/ui/src/App.svelte` (subscribes to `core.trimmed`), `packages/ui/src/core-api.ts` (`TrimNotice`), `packages/ui/src/i18n/en-GB.ts` (`notice.trimmed.kept`), `packages/element/src/editor.ts` (passes `trimmed` to the shell). Firefox and WebKit not run.
+- [x] Given the commit of a trimmed deletion, when the server checks it, then it is accepted: it contains no change to a scope the user cannot write.
+- [x] Given a selection lies entirely in protected scopes, when Delete is pressed, then nothing changes.
+- [x] Given a selection crosses a region boundary, when the deletion is trimmed, then it never removes only one of a region's two boundaries; structural changes are whole-node operations (P3).
+- [x] Given Cut, when the selection spans protected content, then the whole selection is copied and only the editable parts are removed.
+
+**Evidence:** criterion 6: `packages/engine/test/cut-trimmed.test.ts` (run in Node.js, 2026-11-13, with `test/clipboard.test.ts`, `test/trim.test.ts` and `test/restrictions.test.ts`: 29 of 29 passed): 'copies the whole selection and removes only the editable text', 'the room accepts the trimmed cut and the server holds the same document', 'deletes nothing and says why when the selection holds no editable content'. `packages/engine/src/trim.ts` (`trimmedDeletion`: cuts the text of each textblock in an editable scope, never a node or a boundary; the notice travels as transaction metadata), `packages/engine/src/keys.ts` (`deleteTrimmed`, first in the Backspace and Delete chains), `packages/engine/src/core.ts` (`trimmed` view, `trimPlugin` with the live access); `packages/engine/test/trim.test.ts`: criteria 1 and 5 (a selection from the body across the locked region keeps the region, its paragraph and the body children), criterion 3 (backend-mock's `Room` accepts the commit, the server document equals the local one), criterion 4 (a selection wholly in the locked region changes nothing and reports it), and an all-editable deletion that runs as the ordinary one.
+
+**Notes:** Open (2026-11-13, engine round 3): criterion 2 is half done. The core reports the skipped scopes (`trimmed` view, `skipped`), but the message announced to assistive technology is the element's, not built. Criterion 6 (Cut) is ticked (lane FE-027-039, round 1): `cutSelection()` in `packages/engine/src/core.ts` now removes only the editable text through `trimmedDeletion` when the selection is not wholly editable, and refuses as before when nothing editable is in it. Criterion 2 stays open: the notice to assistive technology belongs to the shell's live region (`packages/ui`, NoticeTracker, which announces refusals and recovered edits), and the element's announcer is not fed it, so the wiring is ui's and not made in this lane. Decision recorded in docs/adr/0108-engine-backlog-batch.md (proposed): a trimmed deletion keeps the paragraphs it empties and does not join paragraphs. Phase inferred. The wording shown to the person is PRM's. How a deletion across scopes appears in undo is FE's (FE-049). "Replace all" across protected scopes is FE-060. This story absorbed PRM-029 during the cross-check. Lane V-FE-033-048 (2026-11-13): criterion 2 is ticked; the shell's NoticeTracker takes the core's `trimmed` view and announces it in the shell's live region (the wording is the default in `en-GB.ts`, not PRM's decision).
+
+### FE-038 Clamp selections at region boundaries
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Editor |
+
+**Spec:** 02 §5.2; 07 §7; 03 §4.2 · **Requirements:** R3 · **Depends on:** FE-030
+
+As an editor, I want a selection that starts in a region to stay in it, so that I cannot sweep neighbouring content with one gesture.
+
+**Acceptance criteria**
+
+- [x] Given a selection starts inside a region, when it is extended with Shift and arrow keys past the boundary, then it stops at the boundary.
+- [ ] Given a drag from inside a region to outside it, when the pointer leaves the region, then the selection stays clamped to the region, by mouse and by touch.
+- [x] Given the caret is at the start of the first paragraph of a region, when Backspace is pressed, then nothing happens; given it is at the end of the last paragraph, when Delete is pressed, then nothing happens.
+- [x] Given the caret is at the end of a region, when Enter is pressed, then the new paragraph is inside the region.
+- [x] Given the caret is collapsed at a boundary, when the arrow keys are used, then it moves across the boundary into the neighbouring paragraph.
+- [x] Given a selection that starts outside a region and extends into it, when it is made, then it is not clamped (only selections that start inside are).
+- [x] Given the clamping is implemented through the view's selection hook, when it runs in each supported browser, then the S1 region-boundary tests pass.
+
+**Evidence:** `packages/engine/src/regions.ts` (`regionClamp`: the selection hook and a clamp after each transaction; `stopAtRegionEdge`); `packages/engine/test/regions.test.ts` (FE-038 block: extension past the boundary both ways, the selection hook, outside-in not clamped, a collapsed caret not clamped, Backspace and Delete at the edges, Enter at the end). packages/element/e2e/regions.spec.ts 'FE-038 selections stop at region boundaries', through the element, in Chromium 158, Edge 156, Firefox 159 and WebKit 27.2 (Playwright's builds on Windows; Safari itself and the minimum versions of 02 §12 were not run, as for the S1 criteria): Shift and arrows from inside the region stop at its boundary both ways, a mouse drag to the paragraph after it stays in the region, Backspace at its start and Delete at its end change nothing, Enter at its end adds the paragraph inside it, a collapsed caret crosses the boundary with the arrows, a selection that starts outside is not clamped; run of 2026-11-06: 24 passed, 0 failed.
+
+**Notes:** Isolating nodes stop joins but not selections (02 §5.2). The last criterion's "not clamped" reading follows the wording of 07 §7 ("start inside"); confirm in Open questions. Criterion 7 runs in the element's browser suite since 2026-11-06 (packet B2, `packages/element/e2e/regions.spec.ts`); Safari itself and the minimum versions of 02 §12 remain to be run. Round 5 (lane U-FE-033-048, 2026-11-13): criterion 2 stays unticked. Two probes of a touch selection in Chromium through the DevTools protocol (`Input.dispatchTouchEvent` with a 700 ms hold, with and without `Emulation.setTouchEmulationEnabled`; and `Input.synthesizeTapGesture` with a 900 ms touch hold) left the selection empty, so the drag that follows had nothing to extend. The probe spec was removed; no touch-selection test exists in the tree now. A touch test needs a way to start a touch selection that the browser honours (for example the selection handles, or a test-only hook that is not a touch), which is not chosen here. Evidence audit (2026-11-13): criterion 2 was unticked because only a mouse drag is tested (`regions.spec.ts`, Chromium, Firefox and WebKit, re-run and passed); no test drives a touch selection, and the Node.js hook test calls `createSelectionBetween` directly, so "by touch" is unverified until a touch-emulated browser test exists. Lane V-FE-033-048 (2026-11-13, round 3): a Chromium probe with `hasTouch` and a long press sent through `Input.dispatchTouchEvent`, then a drag past the region end, formed no selection (`selectedText` empty), so the touch criterion stays open; the probe was not kept. A touch selection needs a route that makes Chromium select by touch (not found in this round).
+
+### FE-039 Keep a body paragraph after every region
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | S | must | Editor |
+
+**Spec:** 02 §5.2; 03 §4.2; review F12 · **Requirements:** R3 · **Depends on:** FE-031, FE-036
+
+As an author, I want there always to be a place for the caret after a region, so that I can keep typing below it.
+
+**Acceptance criteria**
+
+- [x] Given a user with `structure` creates or wraps a region, when the transaction is applied, then a body paragraph with a fresh identifier follows the region in the same transaction.
+- [x] Given a paragraph that follows a region, when the user selects and deletes it, then a body paragraph still follows the region afterwards.
+- [x] Given content that ends with a region is pasted or inserted, when it is applied, then a body paragraph follows it.
+- [x] Given a region is the last block of the body, when the user presses the Down arrow at its end, then the caret reaches the paragraph after it.
+- [x] Given a user who cannot change the body root, when a transaction would need to add the paragraph, then the transaction is refused by the guard and not split.
+
+**Evidence:** `packages/engine/src/regions.ts` (`regionParagraphs`; `withParagraphsAfterRegions` is part of what the guard checks); `packages/engine/test/regions.test.ts` (FE-039 block). packages/element/e2e/regions.spec.ts 'Down at the end of the last region reaches the paragraph after it', through the element, in Chromium 158, Edge 156, Firefox 159 and WebKit 27.2 (Safari itself and the minimum versions of 02 §12 were not run): typing after Down lands in the body paragraph after the final region; run of 2026-11-06: 4 passed, 0 failed.
+
+**Notes:** Criterion 4 needs a browser (the Down arrow); in Node.js the next text position after such a region is the paragraph after it (`regions.test.ts`), and since 2026-11-06 `packages/element/e2e/regions.spec.ts` presses Down in four browsers (packet B2). The paragraph is added only after a region that a local change left without one, not to documents from elsewhere (ADR 0038).
+
+## Tables (02 §5.2)
+
+### FE-040 Edit table structure with the project's own commands
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 02 §5.2; 03 §4.3, §8 (I6, I7, I10); ADR 0003 (after the first review) · **Requirements:** R1 · **Depends on:** FE-031, FE-036, CDM-027
+
+As an author, I want to insert and delete rows and columns, merge and split cells and move between cells by keyboard, so that I can build tables.
+
+**Acceptance criteria**
+
+- [x] Given the caret is in a table cell, when the commands insert row above or below, insert column left or right, delete row, delete column and delete table are used, then the result satisfies I6 (spans add up to the length of `grid`, row spans do not run past the last row).
+- [x] Given a table with 63 columns, when insert column is used, then the command is unavailable and the reason is given (I7).
+- [x] Given cells are merged or split, when the command runs, then `colspan`, `rowspan` and `grid` stay consistent.
+- [x] Given a new table, row or cell, when it is created, then it gets fresh identifiers in the same transaction (FE-031).
+- [x] Given the caret is in a cell, when Tab and Shift+Tab are pressed, then the caret moves to the next and previous cell.
+- [x] Given the caret is in a cell, when the insert-table command is used, then it is unavailable, because tables cannot contain tables in version 1.
+- [x] Given the caret is in a table in a scope the user cannot change, when any table command is queried, then it is disabled by `canEdit`.
+
+**Evidence:** `packages/engine/src/table.ts` (the commands, `tableRefusal`, `tableTransaction`, `moveToCell`, `insertTable`); `packages/engine/src/api.ts` (`TableCommandName` in `CommandName`; `CommandState.reason`, `CommandUnavailable`) and `packages/engine/src/core.ts` (`exec`, `queryCommand` and the `commands` view cover the seven table commands); `packages/engine/src/keys.ts` (Tab and Shift-Tab bindings); `packages/engine/test/table.test.ts`: 'inserts a row above or below…', 'deletes a row…', 'keeps the header block together…', 'inserts a column…', 'deletes a column…', 'is unavailable with a reason when a table has 63 columns (I7)' (criterion 2, group 2 round 6 fix: `queryCommand('insertColumnRight')` and `…Left` answer `{ enabled: false, active: false, reason: 'column-limit' }`, the published `commands` view carries the same, `exec` changes nothing), 'allows a 62-column table to reach 63 columns and no more', the reasons `not-in-table`, `last-row`, `last-column`, `merged-cells`, `no-access` and `read-only`, 'removes a table…', 'refuses to insert a table inside a cell (I10)', 'moves the caret with Tab and Shift+Tab…' (through the headless key bindings of `press`, not a browser), 'disables every table command in a scope…', and the fast-check property 'keeps the grid, the rows and the identifiers consistent…' (`validate()` of the CDM after random sequences of operations).
+
+**Evidence (engine-3 round 6, criterion 3, NOT ticked by the round 6 review: the commands are not reachable by `exec` or `queryCommand`, and `table-span.ts` is imported only by its own test, so no command runs in the product; tick when `mergeCells` and `splitCell` are in the core's `CommandName` table and a test runs them through `exec`):** `packages/engine/src/table-span.ts` (`cellEntries`, `rebuildTable`, `mergeTableCells`, `splitTableCell`, `mergeCellsCommand`, `splitCellCommand`); `packages/engine/test/table-span.test.ts` (7 tests, Node.js, passed 2026-11-13): a two by two merge in a three by three table gives `colspan` 2 and `rowspan` 2 with the grid unchanged and `validate()` clean; a rectangle that cuts a span is refused and changes nothing; a merge that would empty a row, a single cell and a bad rectangle are refused; split restores the grid; split refuses a cell that was never merged; the fast-check property over random tables and rectangles keeps `validate()` clean after each merge and split.
+
+**Evidence (B group 1 round 6 fix, criterion 3 ticked, and criterion 7 extended to merge and split):** `packages/engine/src/api.ts` (`TableSpanCommandName` = `mergeCells` | `splitCell` in `TableCommandName`, so in `CommandName`; `CommandArgs.cells` (`CellRectArgs`); the reasons `bad-rect`, `span-crosses`, `empty-row`, `single-cell`, `not-merged` in `CommandUnavailable`); `packages/engine/src/core.ts` (`#command` maps `mergeCells` with `cells` to `mergeCellsCommand` and `splitCell` to `splitCellCommand`; `queryCommand` gives `read-only` first, then `spanRefusal`; `splitCell` is in the `commands` view); `packages/engine/src/table-span.ts` (`spanRefusal`, `isCellRect`); `packages/engine/src/table.ts` (`TableOp` excludes the span commands). `packages/engine/test/table-span.test.ts` (10 tests, Node.js, passed 2026-11-13): 'runs merge and split through exec and queryCommand, keeping the grid (I6)' (`exec('mergeCells', { cells })` gives `colspan` 2 and `rowspan` 2 with the grid unchanged and `validate()` clean, `exec('splitCell')` restores the grid, `queryCommand` and the `commands` view answer `not-merged` before the merge); 'names why a merge is refused through queryCommand, and exec changes nothing' (`empty-row`, `single-cell`, `bad-rect` for a bad rectangle and for a value that is not one, `not-in-table` outside a table); 'disables merge and split by canEdit in a scope the user cannot change (criterion 7)' (an access whose body scope is view and comment only: both answer `no-access`, `exec` changes nothing; a read-only document answers `read-only`).
+
+**Notes:** 02 says only that the table commands are the project's own because the standard ones know nothing about suggestions. The command list here is derived from 03 §4.3 and invariants I6 and I7; toolbar entries, table styles and sorting are UX's. The seven row, column and table commands are entries of the core's `CommandName` (group 2 round 6 fix), so the element's `exec` and `queryCommand` run and query them; `insertTable` takes a grid and a row count and stays a ProseMirror command. `CommandState` gained an optional `reason` (`CommandUnavailable`; proposed, an additive change to the shape 05 §8.1 gives as "enabled and active"): `column-limit` names I7. Open: the shell's registry (packages/ui, UX-003) does not yet map entries onto the table commands or turn `reason` into a string key, so no toolbar shows them; that is UI work. The commands work on regular tables only (one cell per column, no spans); on a table with merged cells they are unavailable (`merged-cells`), which is why the row and column commands stay unavailable there. Round 6 (engine-3): merge and split are built as pure functions and commands in `table-span.ts`. B group 1 round 6 fix: they are now entries of the core's `CommandName` table (`mergeCells` with `cells`, `splitCell`), so `exec` and `queryCommand` run and query them, and criterion 3 is ticked on those tests. Open: no key binding, and no toolbar shows them (the registry is UX's, UX-003); the engine has no cell selection, so the caller passes the merge rectangle in grid rows and columns. The five new `CommandUnavailable` reasons are part of the proposed, additive `reason` field. Open decision, the spec default taken and proposed in docs/adr/0132-engine-3-backlog-batch.md: a merge appends the non-empty blocks of the merged cells to the top-left cell in reading order; a merge that would leave a row with no cell is refused (`empty-row`), because the table schema needs one cell in each row. Tab and Shift+Tab use the headless bindings, and the browser run is the element's (packet B2). Column widths for a new column copy the neighbouring column; the default widths of a new table are the caller's (`insertTable(grid, rows)`), since the spec gives no figure.
+
+## Suggestion mode (02 §5.2)
+
+### FE-041 Enter suggestion mode by rule
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Suggester |
+
+**Spec:** 02 §5.2; 07 §5.2 (P4), §7; 03 §4.1 · **Requirements:** R8, R3 · **Depends on:** FE-029, FE-036, PRM-014, UX-014, UX-015, UX-016
+
+As a suggester, I want the editor to be in suggestion mode exactly when the rules say so, so that I cannot change the text directly by mistake.
+
+**Acceptance criteria**
+
+- [x] Given the user has `suggest` but not `edit` in the scope at the caret, when the caret is there, then suggestion mode is on and it cannot be switched off; the control is disabled with a reason.
+- [x] Given review mode is on (`mode="review"` or the switcher) for a user who has `edit`, when the user types, then suggestion mode applies in the scopes where the user has `edit`.
+- [x] Given `settings.trackChanges` is `everyone`, when anyone, including an editor, types, then suggestion mode applies until a user with `manage` switches the setting off; when a remote commit changes the setting, then the mode updates live.
+- [x] Given a document where the user has `edit` in one region and `suggest` only in the body root, when the caret moves between them, then the mode follows the scope under the caret.
+- [x] Given suggestion mode, when the interface asks, then the core's read-only view reports whether it is on and why (rights, review mode, document setting).
+
+**Evidence:** The round 4 review unticked criterion 2 because `suggestionMode` was imported by no module of the product; fix round 4 wired it into the core (end of this line). `packages/engine/src/suggestion-mode.ts` (`suggestionMode`, the rule); `packages/engine/test/suggestion-mode.test.ts` (7 tests, Node.js, passed 2026-11-13): for criterion 2, review mode for a user with `edit` is suggestion mode in an edit scope, and not in a region the user cannot edit; the rule parts of criteria 1 and 3 (a `suggest`-only scope is on and locked with reason `rights`; `trackChanges` `everyone` is on and locked unless the user has `manage`), and a fast-check property over capability sets for the `suggest`-only rule. Criterion 2 (fix round 4, 2026-11-13): `DocumentCore` now calls `suggestionMode` for every local change and for its read-only view (`packages/engine/src/core.ts`, `#suggestionIn`, `#asSuggestion`, `suggestion`). `packages/engine/test/fe-041-043-suggestion-core.test.ts` 'review mode for an editor records typing as suggestions; edit mode types directly' (Node.js, mock service with the real authority room, passed 2026-11-13): eddie, an editor, joins with `mode: 'review'`, types "big ", and the server stores it with `ins` naming eddie; after `setMode('edit')` typing is direct. The same file also shows, without ticking (not in this round's re-tick list): the read view `suggestion` reporting `rights` (locked), `review-mode` and `document-setting` (criterion 5); `trackChanges` `everyone` making an editor suggest, and the view switching off when the owner's commit turns the setting off (criterion 3); the mode following the caret between a `suggest`-only body and an editable region (criterion 4).
+
+**Evidence (engine-3, round 5), criteria 3 to 5:** `packages/engine/test/fe-041-043-suggestion-core.test.ts` (Node.js, authority room, passed 2026-11-13, run with `suggestion-mode.test.ts`: 23 tests): 'trackChanges everyone makes an editor suggest, and the setting follows a remote change live' (criterion 3: eddie is on and locked with reason `document-setting`; an owner's commit sets `trackChanges` to `off` and eddie's view turns on = false); 'the mode follows the scope under the caret' (criterion 4: on and locked with reason `rights` in the body, off in the region the user can edit); 'review mode for an editor records typing as suggestions' (criterion 5 with reason `review-mode`), with `rights` and `document-setting` reasons in the tests above.
+
+**Evidence (lane U-FE-033-048, criterion 1, 2026-11-14, Chromium, Firefox and WebKit, Playwright builds on Windows, demo on port 56020):** `packages/element/e2e/fe-041-suggester-mode.spec.ts` (1 test in each browser, passed): `bob` joins with the `suggester` role; the mode control lists `mode.edit` with `aria-disabled="true"` and an `aria-describedby` naming a non-empty reason; choosing it leaves the mode unchanged; the core's `suggestion` view reports `on: true` with reason `rights`. The control was missing before this lane: the element's shell adapter (`packages/element/src/editor.ts`, `shell`) did not give the shell `mode`, `modes` or `setMode`, so `App.svelte` registered no `mode.*` commands and the switcher never rendered. The adapter now passes them (the modes offered are `edit`, `review` and `view`; `fill` is not offered by the element switcher). `mode.spec.ts` (FE-029) still passes in the three browsers.
+
+**Notes:** Fix round 4 (2026-11-13): the rule is wired into the core (ADR 0132, fix round 4). Criteria 3 to 5 have core tests now and are left for the reviewer to tick; criterion 1 still needs the shell's disabled control. Engine-3 round (2026-11-13). Only criterion 2 is ticked, at the rule. Not ticked: criterion 1, because the control and its disabled state are the shell's and no core switch refuses a change of mode yet; criterion 3, because the live update when a remote commit changes `trackChanges` needs the core to watch the setting (the rule takes it as an input); criterion 4, because the mode following the caret needs the core's caret scope (the rule takes the scope as an input and is tested per scope); criterion 5, because the core's read-only view is not built. The rule order is the default taken here: a document setting of `everyone` locks suggestion mode for every user except one with `manage` in the access. Proposed in docs/adr/0132-engine-3-backlog-batch.md. Lane V-FE-033-048 (2026-11-13, round 3): criterion 1 stays open. A Chromium probe as a suggester (`suggest` without `edit` in the body) found no mode switcher in the embed page (the `.de-mode-button` never rendered, the toolbar's "More" menu did not show it), so the disabled `mode.edit` item with its reason could not be read in a browser; the probe was not kept.
+
+### FE-042 Record typing and deletion as suggestions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Suggester |
+
+**Spec:** 02 §5.2; 03 §5; 07 §5.2 (P4) · **Requirements:** R8 · **Depends on:** FE-041, CDM-039, PRM-014
+
+As a suggester, I want my typing and deletions recorded as suggestions, so that an editor can accept or reject them.
+
+**Acceptance criteria**
+
+- [x] Given suggestion mode, when the user types, then the inserted text carries an `ins` mark whose `user` is the user's own identifier and whose `id` is a suggestion identifier no other user has used.
+- [x] Given suggestion mode, when the user deletes baseline text, then the text stays in the document and gains a `del` mark.
+- [x] Given text that carries another user's `ins` mark, when the user deletes it, then it gains the user's own `del` mark and the other user's mark and text are unchanged.
+- [x] Given two users suggest changes to the same text, when both are present, then both marks coexist, because suggestion marks do not exclude marks of the same type.
+- [x] Given selected text, when the user types over it, then the selection gets `del` and the new text gets `ins`.
+- [x] Given paste, `insertContent` and input-method composition in suggestion mode, when they complete, then the inserted content carries `ins`, exactly once.
+- [x] Given random sequences of edits in suggestion mode, when each resulting commit is checked against the authority, then the baseline is unchanged, other users' suggestions and marks are unchanged, and every added mark names the submitting user (property test against rule P4).
+
+**Evidence (lane U-FE-033-048, criterion 7, 2026-11-13):** `packages/engine/test/fe-041-043-suggestion-core.test.ts`, 'every commit is accepted, the baseline and the other user's insertion stay, every new mark names the user' (fast-check, 12 runs, Node.js, backend-mock with the real authority `Room`; sam, a suggester, applies random typing, Backspace, typing over a selection and bold; each commit is saved with nothing set aside, the document validates, the baseline text is unchanged and tess's insertion is kept, and every `ins`, `del` or `fmt` mark is tess's original or names sam). Run with `pnpm vitest run packages/engine/test/fe-041-043-suggestion-core.test.ts`: 16 of 16 passed. Caveat: the other user's marks are one `ins` by tess; the property does not generate other users' `del` or `fmt` marks, and 12 runs is a small count.
+
+**Evidence (engine-3, round 5), criterion 6, paste and `insertContent` only:** `packages/engine/test/fe-042-051-paste-suggestion.test.ts` (Node.js, authority room, passed 2026-11-13): 'a plain-text paste as a suggester carries one ins naming the user', 'a paste over a selection' and 'an inline fragment inserted by insertContent as a suggester carries one ins naming the user'; each checks the server's runs and that the single mark at the pasted offset names the suggester, and that the authority accepted the commit.
+**Evidence:** Criteria 1 to 5, fix round 4 (2026-11-13): `DocumentCore.dispatchTransaction` rebuilds every local change made while suggestion mode is on through `recordAsSuggestion`, which calls `suggestInsert`, `suggestDelete` and `suggestReplace` (`packages/engine/src/core.ts` `#asSuggestion`; `packages/engine/src/suggestion-edit.ts`); the identifiers come from the core's own source and the user from `AttachOptions.user`, which the element sets from `welcome.user.id` (`packages/element/src/session.ts`). `packages/engine/test/fe-041-043-suggestion-core.test.ts` (Node.js, mock service with the real authority room, passed 2026-11-13), each checking what the server stored and that the authority accepted every commit (nothing set aside): 'typed text carries one ins naming the user, with an identifier from the core' (criterion 1: sam, a suggester, types "big " key by key; one `ins` naming sam with the core's first identifier); 'deleted baseline text stays with a del' (criterion 2: Backspace and Delete keep the text with `del`, the caret moves accordingly); 'deleting another user’s insertion adds the user’s del and keeps the other mark and text' (criterion 3); 'both del marks coexist on the server' (criterion 4: sam and tess delete the same text); 'typing over a selection gives the selection del and the new text ins after it' (criterion 5). The same file has a fast-check property over random typing, Backspace, typing over a selection and bold by a suggester, every commit accepted by the authority, the baseline and tess's `ins` kept, every new mark naming sam (criterion 7; left for the reviewer to tick). Earlier, at the builder: `packages/engine/src/suggestion-edit.ts` (`suggestInsert`, `suggestDelete`, `suggestReplace`); `packages/engine/test/suggestion-edit.test.ts` (10 tests with FE-043, Node.js, passed 2026-11-13) show at the builder: criterion 1 (typed text carries one `ins` naming the user and the identifier the caller supplies), criterion 2 (baseline text stays with a `del`), criterion 3 (another user's `ins` keeps its mark and text, the author's `del` is added; the author's own `ins` is removed), criterion 4 (two users' `del` marks coexist on the same text), criterion 5 (the selection gets `del`, the new text gets `ins` after it), and a fast-check property over random deletions and insertions by one user, which leaves the baseline text and another user's `ins` in place (the local part of criterion 7).
+
+
+**Evidence (lane U-FE-033-048, criterion 6, composition):** `packages/element/e2e/fe-042-composition-suggest.spec.ts` (Chromium, Playwright, Windows, demo on port 56020; 1 of 1 passed): Ada, an editor in review mode, composes "かな" through `Input.imeSetComposition` and `Input.insertText`. The paragraph shows the text once, and the local document holds exactly that text in `ins` marks, all naming the same user (`ada`). Paste and `insertContent` are the Node.js cases in the Evidence above. The composition test is Chromium-only because it uses the DevTools protocol; Firefox and WebKit were not run for it.
+
+**Notes:** Review §6 item 6: precise suggestion rules beyond paragraphs and whole rows are open. Deleting text inside one's own `ins` is not spelled out; P4 allows removing it outright, but the choice is in Open questions. Engine-3 round (2026-11-13): criteria 1 to 5 are ticked at the transaction builders (`suggestion-edit.ts`), as the FE-040 and FE-047 rounds ticked their pure commands; the core does not yet call them from typing, so the wiring is open. The builder takes the suggestion identifier from the caller and does not check that no other user has used it; the authority does on commit. Criterion 6 (paste, `insertContent`, composition) and criterion 7 (the authority's check of each commit, and the full property against P4) are not ticked: the core's paste and input paths do not call the builders, and the authority is not run here. The removal of the author's own `ins` and the formatting of text carrying an `ins` (FE-043) are the defaults stated in `suggestion-edit.ts`, proposed in docs/adr/0132-engine-3-backlog-batch.md. Fix round 4 (2026-11-13): the core now calls the builders (ADR 0132, fix round 4: defaults 5 to 11). A change suggestion mode cannot record (a paragraph split or join, a paste of several paragraphs, Replace all over several matches) is refused with reason `suggestion` rather than made directly. Criterion 6 stays unticked: a paste or `insertContent` of inline content within one paragraph goes through `suggestReplace` and `suggestInsert`, but no test covers paste, `insertContent` or composition yet, and composition is recorded keystroke by keystroke without a browser test. Engine-3 round 5: the paste and `insertContent` halves now have tests (`packages/engine/test/fe-042-051-paste-suggestion.test.ts`, see Evidence); criterion 6 stays unticked because input-method composition needs a browser run (FE-066), which this round did not run. Criterion 7 has the property test above and is left for the reviewer.
+
+### FE-043 Suggest formatting changes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Suggester |
+
+**Spec:** 02 §5.2; 03 §5 · **Requirements:** R8 · **Depends on:** FE-042
+
+As a suggester, I want formatting I apply to be recorded as a suggestion that remembers the old formatting, so that it can be taken back.
+
+**Acceptance criteria**
+
+- [x] Given suggestion mode, when the user applies a mark (bold, italic, colour, font size, character style) to baseline text, then the text shows the new formatting and carries an `fmt` mark with `id`, `user` and `before` recording the previous marks.
+- [x] Given two users apply formatting suggestions to the same text, when both are present, then both `fmt` marks coexist.
+- [x] Given a formatting suggestion, when its `before` is applied (as a rejection would), then the text returns to exactly the previous marks (baseline unchanged, P4).
+- [x] Given the commit, when the authority checks it, then every `fmt` mark names the submitting user and uses an identifier that belongs to them.
+
+**Evidence:** Criteria 1 to 3, fix round 4 (2026-11-13): the core's formatting commands (`bold`, `italic`, the value commands such as `color`) dispatch mark steps, which `DocumentCore.dispatchTransaction` rebuilds through `recordAsSuggestion` and `suggestFormat` while suggestion mode is on (`packages/engine/src/core.ts` `#asSuggestion`; `packages/engine/src/suggestion-edit.ts`). `packages/engine/test/fe-041-043-suggestion-core.test.ts` (Node.js, mock service with the real authority room, passed 2026-11-13): 'bold records an fmt with id, user and the previous marks, and the authority accepts it' (criterion 1: `run('bold')` as sam stores `bold` and an `fmt` with sam, the core's identifier and `before` `{ marks: [], attrs: {} }`); 'a colour on bold text records the bold as the previous formatting' (criterion 1, colour); 'two users’ formatting suggestions on the same text coexist' (criterion 2: sam's bold and tess's italic); 'an editor rejecting the suggestion puts back exactly the previous marks' (criterion 3: eddie's `resolveSuggestions('reject', 'document')` leaves the server's text unmarked). Each test checks that the authority accepted every commit, which is the check criterion 4 names (left for the reviewer to tick). Earlier, at the builder: `packages/engine/src/suggestion-edit.ts` (`suggestFormat`); `packages/engine/test/suggestion-edit.test.ts` (builder level, Node.js, passed 2026-11-13) shows for criteria 1 to 3: the bold mark is applied with an `fmt` naming the user and one identifier, whose `before` records the previous non-suggestion marks (`{ marks: [], attrs: {} }` for plain text); two users' `fmt` marks coexist on the same text; `resolveSuggestions` rejecting the suggestion removes the `fmt` and restores the exact previous marks.
+
+**Evidence (lane U-FE-033-048, criterion 4, 2026-11-13):** `packages/engine/test/fe-043-authority-fmt.test.ts` (Node.js, 1 of 1 passed): sam and tess, two suggesters, format the same text through `DocumentCore` (`bold`, `italic`) against backend-mock, which runs the real authority `Room`; the room accepts both commits (head up by 2, nothing set aside), `validate` passes on the server's content, every `fmt` names its submitter, each identifier starts with the submitter's own prefix and no identifier is shared.
+
+**Notes:** Engine-3 round (2026-11-13). Criteria 1 to 3 are ticked at the builder and the existing rejection builder (`suggestion-resolve.ts`). Criterion 4 is ticked in lane U-FE-033-048 (Evidence above). Criterion 2 of the story covers formatting of the same text by two users, which the test checks; colour, font size and character style are not separately tested beyond the marks the schema gives them (`bold` is the one exercised). Fix round 4 (2026-11-13): the core calls `suggestFormat` for the formatting commands; `bold`, `italic` and `color` are tested through the core, font size and character style are not tested separately. Only runs whose formatting changes get an `fmt`, and a run with the user's own `fmt` keeps it (ADR 0132, fix round 4, default 9).
+
+### FE-044 Suggest paragraph and block changes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Suggester |
+
+**Spec:** 02 §5.2; 03 §5 · **Requirements:** R8 · **Depends on:** FE-042, FE-043, CDM-039
+
+As a suggester, I want to suggest a new or removed paragraph and a change of paragraph style, alignment or list level, so that structural edits can be reviewed too.
+
+**Acceptance criteria**
+
+- [x] Given suggestion mode, when the user adds a paragraph, then the paragraph carries an `ins` node mark with the user's identifiers.
+- [x] Given suggestion mode, when the user deletes a whole paragraph, then the paragraph stays and carries a `del` node mark.
+- [x] Given suggestion mode, when the user changes a paragraph's style, alignment or list level, then the paragraph carries an `fmt` node mark whose `before` records the previous attribute values.
+- [ ] Given block suggestions, when the editing surface renders, then they are drawn as decorations and never as wrapper elements around blocks.
+- [x] Given a block type outside paragraphs, whole table rows and whole tables (for example a figure, an equation block or a region), when a suggestion would be needed, then the command is unavailable in suggestion mode, and the reason is shown.
+
+**Evidence (criterion 3, engine-3 round 7, fixed in fix round 7):** the list level is the paragraph's `numbering` attribute (CDM-040 names `style`, `align` and `numbering`); the paragraph has no `list` attribute. Tests: `packages/engine/test/fe-044-block-format.test.ts` (7 tests, Node.js, passed 2026-11-13, `pnpm vitest run` on that file): a style change through `recordAsSuggestion` gives the intro paragraph one `fmt` node mark naming the user, whose `before` is `{ attrs: { style } }` with the previous style; an alignment change and then a `numbering` change apply the new values (asserted on the paragraph) and give one `fmt` whose `before` is exactly `{ attrs: { align: null, numbering: null } }` (`toStrictEqual` and its keys checked, so `undefined` cannot pass); a level change from 0 to 1 by a second user records the defined previous `numbering` with level 0; the model validator finds no `fmt_before` violation in the result, and does find one for a `before` naming `list`; a `list` attribute step is refused; several changes by one user keep the first `before`, and a second user's mark coexists; an identifier change and a non-paragraph target are refused; a change to the same value records nothing; a fast-check property over random style sequences. Source: `packages/engine/src/suggestion-block.ts` (`suggestBlockFormat`, `BLOCK_FORMAT_ATTRS`), called from `recordAsSuggestion` in `packages/engine/src/suggestion-edit.ts`, which `DocumentCore` already calls for every local change in suggestion mode.
+
+**Evidence (lane V-FE-033-048, round 2, criteria 1, 2 and 5, 2026-11-13):** `packages/engine/test/fe-044-paragraph-suggest.test.ts` (5 tests, Node.js, headless core in review mode for `alice`, `pnpm vitest run` on that file: 5 of 5 passed): Enter at the end of a paragraph adds an empty paragraph with one `ins` naming alice, and the CDM validator passes; Enter inside text leaves the document unchanged; a paste of two whole paragraphs at a block boundary gives each one `ins`; deleting a baseline paragraph keeps it with one `del` naming alice, and the validator passes; deleting a paragraph alice inserted removes it. Source: `packages/engine/src/suggestion-paragraph.ts` (`paragraphSuggestion`), called first from `recordAsSuggestion` in `packages/engine/src/suggestion-edit.ts`. Criterion 5: `packages/engine/test/fe-044-block-unavailable.test.ts` (2 tests, Node.js, passed): in review mode `queryCommand` answers `suggestion` for `insertSectionBreak`, `insertToc` and `markRegion` and `run` returns false with the document unchanged; in edit mode those commands do not answer `suggestion`. Source: `BLOCK_ONLY_COMMANDS` and the `run` check in `packages/engine/src/core.ts`. Not run: the authority's commit of these marks (no authority test here).
+
+**Evidence (lane U-FE-033-048, criterion 5, 2026-11-14, Node.js, `pnpm vitest run` on `packages/ui/test/fe-044-suggestion-reason.test.ts` and `packages/ui/test/mark-region.test.ts`, 8 of 8 passed):** the core's refusal is `reason: 'suggestion'` for `markRegion` (`packages/engine/test/fe-044-block-unavailable.test.ts`); the shell registry now shows it: `insert.region` is disabled with `reason.query.suggestion`, a string added to `packages/ui/src/i18n/en-GB.ts` (before this, the registry fell back to `reason.notApplicable`, "Not available here."), and the command does not run. The browser shell is not run here. Table commands have no shell entry yet (UX-003), so the reason for them is still not shown (see FE-045). Reviewer (round 8, 2026-11-14): criterion 5 unticked. The shell test uses `FakeCore` with a hand-written `query` and `queryReason`; the real element adapter (`packages/element/src/editor.ts`) passes no `queryReason`, `CoreQueryName` (`packages/engine/src/api.ts`) has no `canMarkRegion`, its `commandNames` has no `markRegion`, and `DocumentCore.query` does not answer `canMarkRegion`, so `registry.backs(insert.region)` is false and the entry is never registered in `<doc-editor>`. The reason cannot be shown to a user yet. To tick: add `canMarkRegion` and its reason to the core and the element adapter, add `markRegion` to `commandNames`, and test the reason through the real core (or in a browser).
+
+**Evidence (lane U-FE-033-048, fix round 8, criterion 5, 2026-11-14):** the engine lists and answers `canMarkRegion` (`CoreQueryName` in `packages/engine/src/api.ts`; `QUERY_NAMES`, `query` and a new `queryReason` in `packages/engine/src/core.ts`, which answers `suggestion`, `locked`, `nested`, `structure` or `blocks`); the element forwards `queryReason`, declares `markRegion` in `commandNames` and runs it from `runNamed` with the dialog's `{ title }` (`packages/element/src/editor.ts`), so `<doc-editor>` registers `insert.region`. Tests: `packages/engine/test/fe-044-mark-region-reason.test.ts` (6 tests, Node.js, `pnpm vitest run` on that file, 6 of 6 passed): an owner in review mode gets `query('canMarkRegion')` false and `queryReason` `suggestion`, and `run('markRegion')` leaves the document unchanged; in edit mode the query is true with no reason; `nested` and `structure` outside suggestion mode. `packages/element/e2e/fe-044-region-suggestion-reason.spec.ts` (2 tests, the real element on the embed page with the in-memory backend, `pnpm exec playwright test -c packages/element/playwright.config.ts` on that file with `DOCEDIT_DEMO_PORT=56551`, `--retries 0`: passed in Chromium, Firefox and WebKit, 2026-11-14; Edge not run): with `mode="review"` for an owner the toolbar's Region button is `aria-disabled`, its accessible description and `title` are the `reason.query.suggestion` text, Enter on it announces that text in the shell's status region, opens no dialog and adds no region; with `mode="edit"` the same button is enabled with no reason. Limit: the region command is the only block command in this list with a shell entry; section breaks, tables of contents, captions, equation source and figure size or layout have no shell command yet, and for them the reason reaches a host only through `queryCommand` (`reason: 'suggestion'`, `packages/engine/test/fe-044-block-unavailable.test.ts`). A user with `suggest` but no `edit` sees the shell's own `noEdit` reason first (`regionMarkBlock` in `packages/ui/src/commands/queries.ts`), not `suggestion`; this is read from the code and not tested here.
+
+**Notes:** Round 2 (lane V-FE-033-048): criteria 1, 2 and 5 are ticked on the tests above; the defaults are in docs/adr/0302-lane-V-FE-033-048.md (round 2 section). Enter in the middle of text, a join and a change inside a table are refused, not recorded. Criterion 4 stays open: the block `ins` and `del` node marks are still wrapped in an element by the view (see FE-045 Notes; the same decision in docs/adr/0302-lane-V-FE-033-048.md). Splitting and joining paragraphs in suggestion mode and other block-level cases are not defined (03 §13, review §6 item 6); see Open questions. Engine round 7 (lane engine-3, 2026-11-13): criterion 3 was ticked for the transaction builder and unticked by the reviewer, because `BLOCK_FORMAT_ATTRS` named `list` where the schema and CDM-040 name `numbering`. Fix round 7 replaced `list` with `numbering` and re-ticked it on the builder tests; the core's dispatch of the same call is not run by a test. Criteria 1 and 2 were open at engine-3 round 7 (no paragraph-level insert or delete was recorded); ticked in round 2 (see above), for the whole-paragraph steps only. Criterion 4 is the view's (decorations, no wrapper) and is not built. Criterion 5 was open at round 7 (`queryCommand` did not report the command as unavailable); ticked in round 2. Decision for the owner, taken by default in `suggestion-block.ts`: only `style`, `align` and `numbering` may change under a block suggestion, and the `before` records those values (proposed in docs/adr/0132-engine-3-backlog-batch.md). Audit (2026-11-13): criterion 5 was unticked because the tests prove only that the core answers `reason: 'suggestion'` (and only for `insertSectionBreak`, `insertToc` and `markRegion`); no test or surface shows the reason (`packages/ui` has no `reason.query.suggestion` string, so the registry falls back to the generic `reason.notApplicable`).
+
+### FE-045 Suggest table row and cell changes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Suggester |
+
+**Spec:** 02 §5.2; 03 §5, §13 · **Requirements:** R8 · **Depends on:** FE-040, FE-044
+
+As a suggester, I want to suggest adding or removing whole table rows and changing cell content, so that table edits can be reviewed.
+
+**Acceptance criteria**
+
+- [ ] Given suggestion mode, when the user inserts a row, then the row carries an `ins` node mark and is drawn as a decoration without a wrapper element.
+- [x] Given suggestion mode, when the user deletes a whole row, then the row stays and carries a `del` node mark.
+- [ ] Given suggestion mode, when the user inserts or deletes a whole table, then the table carries an `ins` or `del` node mark.
+- [x] Given suggestion mode, when the user edits text in a cell, then the edit is recorded as text suggestions (FE-042).
+- [ ] Given suggestion mode, when the user tries to insert or delete a column, or to merge or split cells, then the command is unavailable and the reason is shown, because block suggestions for cells and columns are not defined in version 1.
+- [ ] Given a table with suggested rows, when the table renders in the web view, then its layout is intact and no row is misaligned.
+
+**Evidence (engine-3, round 8), criteria 2 and 4 (criterion 5 unticked by the reviewer, see Notes):** `packages/engine/test/fe-045-table-suggest.test.ts` (10 tests, Node.js, headless core in review mode for `alice` with the spike document's access, passed 2026-11-13). Criterion 2: a deleted row stays with one `del` node mark and its text; a row the same user inserted is removed; a row already marked `del` is refused and nothing changes; a fast-check property over inserts and deletes at any row keeps every row regular and every mark `ins` or `del`. Criterion 4: typing in a cell records an `ins` naming the user in that cell, the rows around it unchanged. Criterion 5: `queryCommand` reports `suggestion` for insert and delete column, `run` changes nothing. Criterion 1 is evidenced at the mark level only (the inserted row carries one `ins` node mark, and the CDM validator reports no violation after suggested row changes); criterion 3 covers the deletion of a whole table, not its insertion. Source: `packages/engine/src/suggestion-table.ts` (`suggestTableOp`), `packages/engine/src/core.ts` (`run`, `queryCommand`, `#suggestsTable`, `#runSuggestedTable`), `packages/engine/src/api.ts` (`CommandUnavailable` gains `suggestion`). Criterion 5, re-ticked by the fixer (round 8): the same file, 13 tests, passed 2026-11-13; in review mode `queryCommand('mergeCells', { cells })` and `queryCommand('splitCell')` (on a merged cell and on a plain cell) report `suggestion`, `run` returns `false` for both, the document does not change and the `refusal` store names `suggestion`; the same merge and split are available in edit mode, so the reason comes from suggestion mode alone. Source: `packages/engine/src/core.ts` (`queryCommand`, `run`, `#refuseSuggestedSpan`). The core gives the reason; the shell shows it (UX).
+
+**Notes:** Review F13. Whether an unavailable column command is the right outcome for a suggester, or whether the change should be applied directly, is in Open questions. Audit (2026-11-13): criterion 5 was unticked because the tests prove only that the core answers `reason: 'suggestion'`; no test or surface shows that reason (`packages/ui` has no `reason.query.suggestion` string, so the registry falls back to the generic `reason.notApplicable`).
+
+**Notes (lane U-FE-033-048, criterion 1, 2026-11-13):** `packages/engine/src/view/suggestion-rows.universal.test.ts` (browser project) inserts a row in review mode and mounts the body view. The row gets its `de-suggest-ins` node decoration (the body view now adds the suggestion decorations, `packages/engine/src/view/web.ts`), but the `ins` mark is also rendered as an `<ins>` element that wraps the `tr` inside `tbody`, so the table has a wrapper and is not valid markup. This breaks "no wrapper element"; the test is `it.fails` until it is fixed. The fix is a rendering decision (the view or the CDM mark's `toDOM`, which lives in `@docedit/model`), not made here. Criterion 1 stays open.
+
+**Notes (reviewer, round 8, FE-045):** Criterion 5 was unticked: only insert and delete column are tested and report `suggestion`. In review mode `queryCommand('mergeCells', { cells })` returns `enabled: true` with no reason and `queryCommand('splitCell')` gives `not-merged`, not `suggestion`; `run('mergeCells')` returns `true` although the document does not change (the refusal is recorded silently). Fix: give `mergeCells` and `splitCell` the `suggestion` reason in `queryCommand` under suggestion mode, make `run` return `false`, and test both. Also found: `insertRowAbove` at a row inside the header block (`headerRows` above 0) puts the suggested row first, so the new row becomes the header row and the old header row becomes a body row; the ADR 0132 default (an inserted row is not counted as a header row) does not hold for that case.
+
+**Notes (engine-3, round 8, FE-045):** Criterion 1: the decoration of an inserted row is built by `markupDecorations` (FE-046), but no view plugin draws it yet, so the criterion stays open. Criterion 3: inserting a whole table as a suggestion is not routed (`insertTable` is not a row or table operation of `table.ts`), so it stays open. Criterion 5: the core gives the reason `suggestion`; the shell shows it (UX). Criterion 6 needs the web view in a browser and is not run. Defaults taken (ADR 0132, round 8): a row or table the same user inserted is removed when that user deletes it; a second deletion is refused; an inserted row is not counted as a header row.
+
+**Notes (lane V-FE-033-048, criterion 1, 2026-11-13):** Not ticked; the known defect in `packages/engine/src/view/suggestion-rows.universal.test.ts` (`it.fails`) is confirmed as a cause in ProseMirror, not in the decorations. `prosemirror-view` `updateChildren` calls `syncToMarks(child.marks)` for every child, block children included, so a `tr` that carries an `ins` node mark is wrapped in the mark's element (`<ins>`, from `schema.ts`). A mark's `toDOM` cannot draw no element, so the row has a wrapper whatever the decoration does. Fixing it needs a decision: keep block suggestions as node marks and draw them without the mark's DOM (a custom mark view or a schema change), or move the block state to a node attribute. Proposed in docs/adr/0302-lane-V-FE-033-048.md (status: proposed; owner or engine decision). Criterion 6 (layout intact) follows from criterion 1 and is not checked.
+
+### FE-046 Show suggestions in the editing surface
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Editor |
+
+**Spec:** 02 §5.2; 13 §5 · **Requirements:** R8, R11 · **Depends on:** FE-042, FE-043, FE-044, UX-035, UX-036, UX-037
+
+As an editor, I want to see who suggested what, so that I can judge each change.
+
+**Acceptance criteria**
+
+- [ ] Given `ins`, `del` and `fmt` marks and block marks, when the surface renders, then each kind is distinguishable without colour (for example underline, strike-through, a margin cue), and each author has a colour plus a second cue (never colour alone).
+- [ ] Given the author of a suggestion, when the user hovers or focuses it, then the author's name and the time are available, resolved through `resolveUsers` and the server time of the commit that introduced the suggestion.
+- [ ] Given a suggestion is focused by keyboard, when a screen reader reads it, then it is announced as an insertion, deletion or formatting change with its author.
+- [x] Given the markup views of the review tools (all, simple, none, original), when the view changes, then the core provides the matching decoration set; the control and its labels are UX's.
+
+**Evidence (engine-3, round 8), criterion 4:** `packages/engine/test/fe-046-markup-views.test.ts` (7 tests, Node.js, passed 2026-11-13): `DocumentCore.markupDecorations` (`packages/engine/src/core.ts`) returns the set of `packages/engine/src/suggestion-markup.ts` for the view asked. `none` gives no decoration; `all` gives a class per kind (inline for runs, node for block marks); `simple` hides a deletion and cues an insertion and a formatting change; `original` hides an insertion, restores a deletion and shows a formatting change at its earlier value; every decoration names the author and the identifier of its mark; a document without marks has none in any view; a fast-check property checks that `simple` never shows a deletion and `original` never an insertion. The four views are not defined in the spec: the default is recorded in docs/adr/0132-engine-3-backlog-batch.md (round 8, decision 6).
+
+**Evidence (lane V-FE-033-048), criterion 1, inline marks:** `packages/engine/src/view/fe-046-suggestion-cues.universal.test.ts` (1 test, `pnpm vitest run --project browser`, Chromium, Firefox and WebKit, passed 2026-11-13): an `ins`, a `del` and a `fmt` inline mark each draw their own line (underline, line-through, overline) from `element.css`, and the author's tone gives the colour and the line style (`data-suggestion-tone` from `authorTone` in `packages/engine/src/suggestion-markup.ts`; four tones, a hash of the user identifier). Node.js: `packages/engine/test/fe-046-markup-views.test.ts` still passes after the tone attribute was added.
+
+**Notes:** Marks carry no time; the time of a suggestion is the server time of the commit that introduced its `id`, which the service indexes (03 §5). How the client obtains that time is not specified (Open questions).
+
+**Notes (lane U-FE-033-048, 2026-11-13):** The body view now draws the `all` decorations (`packages/engine/src/view/web.ts`, merged with the find highlights); the stylesheet has no rule for `de-suggest-ins`, `de-suggest-del` or `de-suggest-fmt` yet, so nothing is distinguishable on screen. Criterion 1 needs those rules and an author colour with a second cue, which is not built. Criterion 2 needs `resolveUsers` and the introducing commit's time (open question 30). Criterion 3 needs the view's announcement. None is ticked here. The ins-on-block rendering defect in FE-045's Notes also affects this criterion.
+
+Round 8 (engine-3): criterion 4 ticked at the core (the set is built; the control and its labels are UX's). Criteria 1 to 3 stay open: the classes need the stylesheet and a view plugin that draws the decorations, the author and time on hover or focus need `resolveUsers` and the time of the introducing commit (open question 30), and the screen reader announcement is the view's; none is run in a browser here. Lane V-FE-033-048: criterion 1 is open for block marks only. The inline kinds and tones are proven in three browsers (Evidence above). In the same browser run a block `ins` and a block `del` added as node marks on two paragraphs did not draw (the dispatch was not shown in the view), so the block part needs its own investigation. Criterion 2 (author and time on hover or focus) and criterion 3 (the announcement) are not built.
+
+### FE-047 Accept and reject suggestions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Editor |
+
+**Spec:** 02 §5.2; 13 §5; 03 §5 · **Requirements:** R8 · **Depends on:** FE-042, FE-043, FE-044, FE-045, UX-035
+
+As an editor, I want to accept or reject one suggestion, all in a selection, or all by one author, so that I decide what goes into the document.
+
+**Acceptance criteria**
+
+- [x] Given an `ins` suggestion, when it is accepted, then its mark is removed and the text stays; when it is rejected, then the text is removed.
+- [x] Given a `del` suggestion, when it is accepted, then the text is removed; when it is rejected, then its mark is removed.
+- [x] Given an `fmt` suggestion, when it is accepted, then its mark is removed and the formatting stays; when it is rejected, then the formatting returns to `before`.
+- [x] Given block `ins`, `del` and `fmt` marks, when they are accepted or rejected, then the block is kept, removed or restored accordingly.
+- [x] Given a selection, a block, a region or an author is chosen, when "all" is used, then every matching suggestion is handled in one atomic commit.
+- [x] Given the user lacks `edit` in a scope, when "all" covers it, then suggestions there are skipped and the number skipped is reported.
+- [x] Given any accept or reject, when the commit is checked, then the result satisfies the document invariants (I1 to I12).
+
+**Evidence:** `packages/engine/test/suggestion-resolve.test.ts` (11 tests, Node.js, plain ProseMirror state over the spike document): criterion 1 (accepting an `ins` keeps its text and drops the mark; rejecting it removes the text), criterion 2 (accepting a `del` removes the text; rejecting it drops the mark), criterion 3 (accepting a `fmt` keeps the formatting; rejecting it restores the recorded `before`, and an italic `before` after a bold suggestion). Criteria 5 and 6 are not ticked (review round 2): the builder is one ProseMirror transaction, not a commit, and nothing dispatches it; the `editable` test passes a stub predicate, so the user's `edit` permission is never consulted. The same tests show an author filter and a counted skip at the builder only. Source: `packages/engine/src/suggestion-resolve.ts` (`resolveSuggestions`, a pure transaction builder; the caller dispatches it). Round 6 (engine, lane FE-040-052). Fix round 2 (F group 1): criterion 3 re-checked: rejecting a `fmt` whose `before` is null or records only attributes now removes only the mark and keeps the direct formatting, as `headOf` does (two new tests in `suggestion-resolve.test.ts`, 13 tests in all). Criterion 5: `packages/engine/test/fe-047-resolve-commit.test.ts` (7 tests, Node.js, mock service running the authority room) calls `DocumentCore.resolveSuggestions` (`packages/engine/src/core.ts`) on the contract document with suggestions by two users; accept all in the document, accept all by one author, reject all in a region chosen by identifier and reject all in a selection each raise the server's head by exactly one, the server's content shows the result, and `validate` passes on it. Criterion 6 at the core: the skip is decided by the user's `edit` in the scope from the authority's access (an editor without the restricted region skips its suggestion and the rest commit; a suggester, whose body has `suggest` but not `edit`, skips everything and commits nothing), and the count and scopes are returned and recorded as a `scope` refusal.
+
+**Evidence (round 7, lane FE-040-052):** criterion 7: `packages/engine/test/fe-047-resolve-commit.test.ts` runs `validate` (the CDM validator, which reports I1 to I12) on the server's content after each accept and reject commit: accept all in the document, accept all by one author, reject all in a region, reject all in a selection, and the editor that skips a restricted scope.
+
+**Evidence (engine-3 round 7, criterion 4):** `packages/engine/test/fe-047-block-resolve.test.ts` (6 tests, Node.js, passed 2026-11-13): a block `ins` rejected is removed and accepted keeps the block without its mark; a block `del` accepted is removed and rejected keeps it without its mark; a block `fmt` rejected restores the recorded style and accepted keeps the new one; a removed block takes its inner suggestions with it and they are counted once; a block the user may not edit is skipped and counted; an author filter leaves another author's block alone; a fast-check property over random style series. Source: `packages/engine/src/suggestion-resolve-block.ts` (`planBlockSuggestions`, `applyBlockPlan`), called from `resolveSuggestions` in `packages/engine/src/suggestion-resolve.ts`. Criterion 4 is ticked for the builder; the commit of the same transaction through `DocumentCore.resolveSuggestions` is not run for block marks.
+
+**Evidence (lane U-FE-033-048, criterion 6, 2026-11-14, Chromium, Firefox and WebKit, Playwright builds on Windows, demo on port 56020):** `packages/element/e2e/fe-047-skipped-notice.spec.ts` (1 test in each browser, passed): `bob`, a suggester, types in the body (one `ins` he authored), then `resolveSuggestions('accept', 'document')` handles 0 and skips the body (`skippedScopes` names `body`); the shell's live regions then read `Not handled: N suggestion(s) ...` with N equal to the skipped count. The count travels on the core's `refusal` view (`count`, `packages/engine/src/core.ts` `resolveSuggestions`), and `NoticeTracker.refusal` (`packages/ui/src/shell/notices.ts`) names it with the new string `notice.suggestions.skipped` (`packages/ui/src/i18n/en-GB.ts`). Node.js: `packages/engine/test/fe-047-resolve-commit.test.ts`, `suggestion-resolve.test.ts`, `fe-047-block-resolve.test.ts` and `packages/ui/test/notices.test.ts`, passed after the change (9 files, 76 tests with the FE-041, FE-045 and FE-046 suites).
+
+**Notes:** Round 6 (lane FE-040-052): criteria 1, 2 and 3 are ticked at the transaction builder; criteria 5 and 6 were unticked in review because the builder is not wired to a commit or to the user's `edit` scope. Review also found that rejecting an `fmt` whose `before` has no `marks` removes all direct formatting, where the authority's `headOf` leaves it unchanged (criterion 3 must be re-checked after the fix). Not ticked: criterion 4 (block `ins`, `del` and `fmt` marks sit on nodes, not text, and the builder does not handle them) and criterion 7 (the invariants I1 to I12 are checked by the authority on commit; the test does not run `validate` on a core commit). At round 6 the builder was not wired to `packages/engine/src/core.ts` or to the registry (see fix round 2 below), and the message that reports the skipped count is the shell's (UX). The choice of "block" and "region" in criterion 5 is the caller's range: no block-level handling is written. The review tools (navigation, accept all and reject all) are UX-036, and the review pane with its filter by author is UX-037; both build on this story. Rule P4 stops a suggester from accepting; the authority enforces `edit`. Fix round 2 (F group 1): the `fmt` defect is fixed, and the builder is wired to `DocumentCore.resolveSuggestions(action, target, author)`, whose target is the selection, the document, or a block or region by identifier. Criterion 5 is re-ticked on the commit test above. Criterion 6 stays unticked: the core returns the skipped count and records a refusal, but no surface shows the number yet. The accept-all and reject-all entries in the command registry (UX-003) and their message belong to UX-036 in `packages/ui`, another lane's package. Criterion 7 is ticked in round 7 (lane FE-040-052): the commit test now runs `validate` after every accept and reject commit, as the Evidence line says. Criterion 4 (block marks) and criterion 6 (the surface's count) stay unticked, as above. Engine-3 round 7: criterion 4 is ticked at the builder, which takes block marks in `suggestion-resolve-block.ts`. Its defaults, not in the spec and proposed in docs/adr/0132-engine-3-backlog-batch.md: a removed block takes its inner suggestion marks with it, and they are counted once; with several `fmt` marks on one block the last one gives `before`, as the text pass does; only blocks wholly inside the range are resolved.
+
+## Comment ranges (02 §5.2)
+
+### FE-048 Draw comment ranges and keep them aligned
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Commenter |
+
+**Spec:** 02 §5.2; ADR 0015; 07 §6; 03 §4.4; 05 §5.6 · **Requirements:** R8 · **Depends on:** FE-033, FE-035, SYN-032, PRO-036, PRO-059, PRO-060
+
+As a commenter, I want to see where each thread is attached and have it stay attached as people edit, so that comments make sense and a highlight never points at the wrong place on my screen.
+
+**Acceptance criteria**
+
+- [ ] Given the ranges the document service reports for threads, when the document loads, then each is drawn as a decoration over the text range or as a block decoration for a figure, table or equation.
+- [x] Given a thread range reported at a `seq`, when a local, unconfirmed or remote step is applied, then every range is mapped through it with the same function as the authority, and after each commit the client's range equals the service's range.
+- [x] Given the same ranges and steps, when the client's mapping and the authority's `mapRanges` are compared on shared fixtures, then they agree.
+- [ ] Given a `thread.updated` event that carries a range and its `seq`, when it arrives, then the client replaces its copy and maps it forward from that `seq`.
+- [x] Given the commented text is deleted, when the range collapses, then the decoration disappears and the thread is reported as detached.
+- [ ] Given a thread is created, resolved or reopened, when the user does so, then no commit is submitted and the document does not change.
+- [ ] Given a decoration, when it renders, then it is distinguishable without colour and under forced-colors (FE-019), and a thread can be reached from the keyboard.
+- [x] Given zero-width anchors are not used for comments, when the caret moves through commented text, then no invisible cursor stop is created.
+
+**Evidence (lane U-FE-033-048, criterion 8, 2026-11-14):** `packages/engine/src/view/fe-048-comment-caret.universal.test.ts` (real ArrowRight key presses through `userEvent` from `vitest/browser` in the mounted body view, a thread range over four characters): the caret visits each of the five positions from the range start in order, the decoration stays one element and the document is unchanged. Run with `pnpm vitest run --project browser packages/engine/src/view/fe-048-comment-caret.universal.test.ts`: 3 of 3 passed (Chromium, Firefox, WebKit, Windows).
+
+**Evidence (round 7, lane FE-040-052):** criterion 3: `packages/engine/test/fe-048-range-agreement.test.ts` (7 tests, Node.js) applies seven fixtures of real core commits (insertions before, inside and at the end edge of a range; a deletion of the whole range; a deletion over its start; two steps in one commit; a sequence of three commits) and checks after every commit that `CommentRanges` (`packages/engine/src/comment-ranges.ts`) equals the authority's `mapRangesThrough` (`packages/authority/src/ranges.ts`) over the same commits read back as step JSON, including the detached flag.
+
+**Evidence (lane V-FE-033-048), criterion 5:** `packages/engine/test/fe-048-core-threads.test.ts` (5 tests, Node.js: the core holds the range, maps it through each dispatched change, and draws nothing once detached) and `packages/engine/src/view/fe-048-comment-decorations.universal.test.ts` (1 test, `pnpm vitest run --project browser`, Chromium, Firefox and WebKit, passed 2026-11-13): the element with class `de-comment-range` covers the commented text with a dotted underline from the shipped `element.css`; after the text is deleted the element is removed and `threadRanges` reports the thread detached. Source: `packages/engine/src/comment-decorations.ts`, `packages/engine/src/core.ts` (`threadRanges`, `setThreadRange`, `removeThreadRange`, the mapping in `dispatchTransaction`), `packages/engine/src/view/web.ts` (decorations and redraw), `packages/element/src/styles/element.css` (`.de-comment-range`).
+
+**Evidence (lane U-FE-033-048, criterion 2, 2026-11-13):** `packages/engine/test/fe-048-thread-service.test.ts` (Node.js, backend-mock with the real `Room`, 1 of 1 passed): the owner's room thread (`createThread` on "world", through the document's room) is mapped by `CommentRanges` from every transaction the owner's core applies (`onTransaction`), local and one remote commit from an editor; after each save the client's range and detached flag equal the room's `threadAnchors()`. Covered: an insertion before the range, a deletion inside it, a remote insertion before it, an insertion at its end edge, and a deletion of the whole range (detached on both). Unconfirmed steps go through the same listener; the agreement is checked after each commit is saved, not while steps are unconfirmed.
+
+**Notes:** Round 5 (lane U-FE-033-048, 2026-11-13, not worked): criterion 1 (ranges reported by the service drawn on load) is blocked, not in this lane's reach: `packages/element/src` and `packages/backend-mock/src` have no thread wiring (no load of thread ranges, no `thread.updated` handling), and `setThreadRange` is called by no product code. Wiring it needs the protocol's thread messages (SYN-032, PRO-036) and a change in the element and backend-mock packages, which is a feature, not a test gap. Recorded in the lane's needsFromOthers. Review F11 (invisible cursor stops are removed for comments; bookmarks keep anchors). Round 3 (engine-3, not ticked): `packages/engine/src/comment-ranges.ts` holds the client's thread ranges, maps them with the authority's `mapRanges` (SYN-001) and reports a collapsed range as detached; `packages/engine/test/comment-ranges.test.ts` checks the mapping on real core transactions (a range follows its text after an insertion before it, survives an insertion inside it, collapses and stays detached when its text is deleted, and other threads are untouched). Not ticked: the decorations (criterion 1) and the keyboard reach (criterion 7) are the view's and not built; criterion 5 also needs "the decoration disappears"; criterion 2 needs the service's range after each commit to be compared (not done here, the backend-mock Room is not wired into this test); criterion 3 is ticked in round 7 (lane FE-040-052) on the fixture comparison named in Evidence; criterion 4 (the `thread.updated` replace-and-map-from-seq rule) has no test beyond replacing the copy; criterion 6 (no commit on create, resolve or reopen) belongs to the threads UI. The threads UI is UX's; who may comment is PRM's; the authority's side of the mapping is SYN-032. This story absorbed SYN-034 during the cross-check. Lane V-FE-033-048: criterion 5 is ticked (browser run in three engines, see Evidence). Criterion 1 stays open: text ranges are drawn, but the block decoration for a figure, table or equation is not built, and the service's block-range model is not checked here. Criterion 4 (the `thread.updated` replace-and-map-from-`seq` rule) stays open: only `setThreadRange` replaces a copy, and no event handler maps forward from a `seq` the client has passed. Criterion 6 belongs to the threads UI. Criterion 7 stays open: the decoration has a dotted underline and a forced-colors rule, but the keyboard reach to a thread is the threads UI's.
+
+## Undo and redo (02 §5.2)
+
+### FE-049 Undo and redo the user's own changes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 02 §5.2; 04 §7, §8; ADR 0003 · **Requirements:** R7, R1 · **Depends on:** FE-033, FE-035, UX-003, UX-013
+
+As an author, I want undo and redo to affect only my own changes, even when colleagues have edited around them, so that I never undo someone else's work.
+
+**Acceptance criteria**
+
+- [x] Given the user typed A and a colleague typed B afterwards, when the user undoes, then A is removed and B remains.
+- [ ] Given undo and redo, when they are performed, then each is submitted as an ordinary commit with origin `undo` or `redo`.
+- [x] Given remote commits arrive, when the user then undoes an earlier change, then the entry has been rebased over them and undo still removes the right text.
+- [x] Given a rebuild discards local steps (a rejection with `drop`), when the state is rebuilt, then undo entries that belong to discarded steps are dropped and the selection is mapped (04 §7).
+- [x] Given a grant change made the scope of an old change read-only, when the user undoes that change, then the guard refuses it, the document is unchanged and the user is told through PRM's mechanism.
+- [x] Given suggestion mode, when the user undoes their own suggestion, then the suggestion is removed and the baseline is unchanged.
+- [x] Given Mod-z, Mod-Shift-z and Mod-y, when they are pressed in the editor, then they run undo and redo through the command registry.
+
+**Evidence (lane V-FE-049-064, round 9, criterion 5):** `packages/engine/test/fe-049-grant-undo.test.ts` (1 test, Node.js, backend-mock with the real `Room`, `pnpm vitest run --project node packages/engine/test/fe-049-grant-undo.test.ts`, passed 2026-11-14): Bob types while an editor, the typing is saved, the owner lowers him to viewer, and his undo leaves the document unchanged and sets `core.refusal` with reason `scope` naming `region:<locked>`, with the server's document equal to his. The notice is the core's refusal, the same one PRM and FE-036 use. The shell's display of it is not tested here.
+
+**Evidence (lane U-FE-049-064, criterion 7):** the undo keys. `packages/engine/test/fe-049-undo-keys.test.ts` (criterion 7, Node.js, passed 2026-11-13): the three keys, pressed through the state's key handlers, call `DocumentCore.run('undo')` and `run('redo')` (`packages/engine/src/core.ts`, `#plugins`, the core's keymap that runs before the view's keys and always returns true). Passed with `packages/engine/test/undo-rebase.test.ts`, `search.test.ts`, `api.test.ts` and `core.test.ts`.
+
+**Evidence (engine-3, round 5), criterion 6:** `packages/engine/test/fe-049-suggestion-undo.test.ts` (2 tests, Node.js, mock service running the authority room, passed 2026-11-13): a suggester types "big " in suggestion mode and the commit is saved; `run('undo')` leaves the server's text as "Hello world" with no mark, the commit is accepted and `validate` passes ('undo removes the user’s own suggestion and the baseline is unchanged'); `run('redo')` then records the same `ins` naming the same user again ('redo records the same suggestion again').
+
+**Evidence:** `packages/engine/test/undo-rebase.test.ts` against backend-mock (the real `Room`): criterion 1 (`undo removes only my change, rebased over every remote commit since`) and criterion 3 (the undo after remote commits removes the right text; `redo` restores it at its mapped position). Both pass in the engine run of round 2 (2026-11-13).
+
+**Evidence (lane V-FE-049-064, round 8, criterion 4):** `packages/engine/test/fe-049-rebuild-drop.test.ts` (1 test, Node.js, backend-mock with the real `Room`, `pnpm vitest run --project node packages/engine/test/fe-049-rebuild-drop.test.ts`, passed 2026-11-14): the writes are held, "clause " is typed into the locked paragraph (undo depth 1), the grant is removed, and the release makes the typed commit refused with `permission_denied` so the rebuild drops the steps: the text is as before, the undo depth is 0 and `run('undo')` returns false, the caret is at the offset it had before typing, and the server's document equals the client's.
+
+**Notes:** Open: whether undo history is shared between the body and the sub-editors, and what undoing the removal of a region does to the identifier it had (I3). See Open questions. Round 2 (engine): not ticked. Criterion 2 (origin `undo` or `redo` on the commit) and criterion 4 (a rebuild that discards local steps) have no test yet. Criterion 5 is in part: the test checks the document is unchanged after a refused undo, not that the user is told. Criterion 6 needs suggestion mode (FE-041, phase 2). Criterion 7 is met (lane U-FE-049-064): the keys in `src/keys.ts` still name ProseMirror's `undo` and `redo`, but the core's own keymap runs first, calls `run('undo')` or `run('redo')` and always returns true, so the view's keys are not reached. Criteria 2, 4, 5 and 6 remain open (see the lines above). Round 8 (lane V-FE-049-064): criterion 4 ticked (see Evidence); criteria 2, 5 and 6 are unchanged. Round 9 (lane V-FE-049-064): criterion 5 ticked (see its Evidence line, `fe-049-grant-undo.test.ts`); criteria 2 and 6 are unchanged. Round 7 (lane U-FE-049-064), criterion 2 re-checked and still open: `SyncState.queue` is a plain `Step[]` with no origin per step, and `takeCommit` (`packages/engine/src/sync/state.ts`) takes one origin for the whole commit, so a commit cannot mix or split origins; the journal's queue JSON does not carry one either. Fixing it changes the queue's shape and the journal format, a change for the sync owner, not made this round. Lane V-FE-049-064, round 1: criterion 2 is blocked in the sync client, not the core. `takeCommit` (`packages/engine/src/sync/state.ts`) takes one `origin` for a whole commit, and `localEdit` (`packages/engine/src/sync/session.ts`) cuts commits from a queue that mixes steps of every origin; `core.ts` (the `local(...)` call after a transaction, around line 744) passes no origin, so undo and redo steps go out as `input` commits. Fixing it needs origin tags on queued steps and cuts at origin changes, which is an engine change not made in this round.
+
+## Clipboard (02 §5.2)
+
+### FE-050 Copy and cut with the document fragment embedded
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2; review F15 · **Requirements:** R1 · **Depends on:** FE-026, FE-036
+
+As an author, I want copying inside the editor to keep my formatting exactly, and copying to other applications to give sensible text, so that content moves without loss.
+
+**Acceptance criteria**
+
+- [x] Given a selection, when Copy is used, then the clipboard receives `text/html` that carries the CDM fragment inside the HTML, and `text/plain`; no custom clipboard format is used.
+- [x] Given Cut on a selection the user may change, when it is used, then the same data is written and the selection is deleted through the guard (FE-036, FE-037).
+- [x] Given the fragment, when it is read back, then it carries the style and numbering definitions the copied content references.
+- [ ] Given Copy in each supported browser, when the data is pasted into the same editor, then the fragment arrives intact (FE-051).
+- [x] Given the HTML that is written, when it is pasted into a plain HTML target, then it shows the text and its basic structure and contains no script.
+
+**Evidence:** `packages/engine/test/clipboard.test.ts` (headless core): criterion 1 (`copySelection` writes exactly `text/html` and `text/plain`, and the HTML reads back to `getSelectionContent()`); criterion 2 (`cutSelection` writes the same payload as copy and deletes the selection in an editable body; in a locked region it writes the copy, deletes nothing and records the refusal); criterion 5 as far as the string goes (text and marks are escaped, the HTML has no script or foreign tag, a heading and bold or italic show as elements). Source: `packages/engine/src/clipboard.ts`, `packages/engine/src/core.ts` (`copySelection`, `cutSelection`). Round 5 (engine, ADR 0108). Round 6 (engine, lane FE-040-052), criterion 3: `packages/engine/test/fragment-numbering.test.ts` ('includes the numbering a copied block references and no unreferenced definition', 'includes the numbering a referenced style carries, as the style closure does', 'copies the definition with its levels, not a reference to the live document'); source `packages/engine/src/content.ts` (`fragmentOf`, `referencedNumberings`, `numberingDefsOf`). Fix round 1 (F group 1): a numbered block pastes back in, into a fresh document and into its own, with each numbering definition added once after the styles and before the page setups: `packages/engine/test/fragment-numbering-paste.test.ts` (5 tests); source `packages/engine/src/content.ts` (`buildFragment` takes `numbering_def`), `packages/engine/src/core.ts` (`numberingInsertPos`, `insertContent`).
+
+**Evidence (lane U-FE-049-064), criteria 1, 2, 5 and the browser part of 4 (browser run on the body surface only):** `packages/engine/src/view/clipboard-fragment.universal.test.ts` through `pnpm vitest run --project browser` (Chromium and WebKit: 5 tests each, passed; Firefox: the copy, cut and paste tests are skipped there, because a constructed clipboard event in Firefox keeps no data written by a listener, see the file's probe). The copy event on the body surface writes exactly `text/html` (with `data-docedit-fragment`) and `text/plain` from `copySelection`; the cut writes the same and deletes the selection; a copy pasted back at the end of the document through the paste event adds the copied text once more; the HTML parsed by a `template` has no script, iframe, object, embed or handler attribute and holds the copied text.
+
+**Notes:** Custom clipboard formats work in one browser family only (review F15), hence HTML with the fragment inside. Carrying referenced definitions is inferred from 03 §4.1 ("when pasted content brings a definition"). Round 5 (engine): criteria 1 and 2 ticked. Round 6 (engine): criterion 3 ticked; `fragmentOf` now also copies the `numbering_def` of each `numbering` a copied block or a copied style references, and no unreferenced definition. A copy of part of a paragraph carries only its inline content (`slice.content`), so the paragraph's style is not in the fragment; that is pre-existing and not changed here. Criterion 4 needs the browsers (FE-122). Criterion 5 is not ticked: the test reads the HTML string, not a paste into a plain HTML element in a browser. Cut decision: the spec does not say whether a cut in a locked scope writes the copy; the default taken is to write it (reading is allowed) and to delete nothing, with the refusal recorded.
+
+**Evidence (lane V-FE-049-064, round 5), criterion 4 in part:** `packages/element/e2e/fe-050-copy-paste-keyboard.spec.ts` through `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-050-copy-paste-keyboard.spec.ts`: the first paragraph is selected and copied with the keyboard (Ctrl+C), the caret goes to the end and Ctrl+V pastes; the last paragraph then equals the copied text. Chromium passed, Firefox passed (real keyboard clipboard, not a constructed event). WebKit is skipped in the file: its keyboard copy fires the copy event, but the clipboard is not readable (`navigator.clipboard.readText`: NotAllowedError) and the paste did not arrive in the run of 2026-11-14. Microsoft Edge was not run. The criterion stays unticked: "each supported browser" is not proven for WebKit or Edge.
+
+### FE-051 Paste an embedded fragment
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2; 03 §4.1, §9 · **Requirements:** R1, R10 · **Depends on:** FE-050, FE-031, FE-036
+
+As an author, I want a fragment copied from a CDM document to arrive with the right styles and no borrowed identity, so that pasting never corrupts the document.
+
+**Acceptance criteria**
+
+- [x] Given the clipboard HTML carries a CDM fragment, when it is pasted, then the fragment is used in preference to HTML and plain text.
+- [x] Given a pasted fragment, when it is inserted, then every node gets a fresh identifier, foreign identifiers are stripped, and bookmarks (`anchor` nodes) are stripped.
+- [x] Given the fragment brings a definition whose identifier already exists in the document, when it is pasted, then references map to the existing definition and no duplicate is inserted.
+- [x] Given a user who may edit only regions pastes content that references a definition the document does not have, when it is pasted, then no definition is added to the document.
+- [x] Given the fragment contains a `region` or a `section_break`, when it is pasted inside a region, then the document stays valid (I1 to I12): those nodes are not inserted inside the region.
+- [x] Given the paste is made in suggestion mode or into a scope the user cannot change, when it is applied, then it is recorded as a suggestion or refused, as for typing.
+
+**Evidence (engine-3, round 5), criterion 6:** `packages/engine/test/fe-042-051-paste-suggestion.test.ts` (3 tests, Node.js, authority room, passed 2026-11-13): a suggester's plain-text paste at a caret and over a selection each leave one `ins` naming the suggester, the baseline kept, and the commit accepted. The locked-scope half is in `packages/engine/test/clipboard.test.ts`.
+
+**Evidence:** `packages/engine/test/clipboard.test.ts` (headless core, `pasteFromClipboard`): criterion 1 (a fragment in the HTML beats the text of the same clipboard); criterion 2 (every pasted node gets a new identifier and the source keeps its own; an embedded `anchor` is dropped and the text around it stays); criterion 3 (a definition the document already has is not added again, and the pasted paragraph uses it); criterion 4 (a region-only user's paste that needs a definition is refused, and no definition is added; the body-editor case is in `content.test.ts`, FE-027); criterion 5 (a fragment holding a region, pasted into a region, leaves a valid document with no nested region and keeps the text; round 6, `packages/engine/test/paste-section-break.test.ts`: a `section_break` in a pasted fragment is dropped inside a region, the paragraphs around it are kept and the document is valid); criterion 6 for a locked scope (a paste into a locked region is refused, for text and for a fragment). Source: `packages/engine/src/clipboard.ts`, `packages/engine/src/core.ts` (`pasteFromClipboard`). Round 5 (engine, ADR 0108).
+
+**Notes:** Round 5 (engine): criteria 1 to 5 are ticked at the core. Criterion 1 assumes the element passes the browser's clipboard data to `pasteFromClipboard`; the element is not built. Criterion 5 is tested for `region` (clipboard.test.ts) and, since round 6, for `section_break` (paste-section-break.test.ts). Criterion 6 is ticked (engine-3, round 5): its locked-scope half is tested in `clipboard.test.ts`, and its suggestion-mode half now runs through the authority in `fe-042-051-paste-suggestion.test.ts`, since FE-041 is wired. Criterion 4 refuses the whole paste, body text included, rather than pasting the text without the definition; this is the default taken, as the spec does not say. Open, not decided: SR-C2. A foreign fragment still keeps its preserved attributes, marks and atoms (ADR 0017), which this round does not strip. What a definition-less paragraph falls back to, and pasting regions, are open (Open questions). Second review (2026-11-06, SPK-027), SR-C2: any web page can put an embedded CDM fragment on the clipboard, so a pasted fragment must lose its preserved attributes, marks and atoms (ADR 0017) unless it comes from the same document; otherwise it carries arbitrary Word XML into DOCX exports ([review](../review/2026-11-06-second-review.md)).
+
+### FE-052 Paste plain text
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Author |
+
+**Spec:** 02 §5.2 · **Requirements:** R1 · **Depends on:** FE-051
+
+As an author, I want plain text from anywhere to paste as text, so that I can always get content in.
+
+**Acceptance criteria**
+
+- [x] Given the clipboard has `text/plain` and no embedded fragment and no usable HTML, when it is pasted, then the text is inserted at the selection with the formatting of the surrounding text.
+- [x] Given the text contains line breaks, when it is pasted, then each line break starts a new paragraph in the same scope, each with a fresh identifier.
+- [x] Given the clipboard has `text/html` without an embedded fragment while HTML paste is not yet available (before FE-054), when it is pasted, then the plain text is used.
+- [x] Given the selection is in a scope the user cannot change, when the paste is attempted, then nothing is inserted.
+
+**Evidence:** `packages/engine/test/paste.test.ts` (headless core): a line break starts a paragraph in the body, with a fresh identifier per paragraph and the region after them unchanged, for LF and CRLF (`pastePlainText`); an empty line makes an empty paragraph; a caret in a locked region refuses the whole paste with the `scope` notice and changes nothing. Source: `packages/engine/src/core.ts` (`pastePlainText`); fresh identifiers come from the identifier plugin (`src/ids.ts`). Round 2 (engine, ADR 0108). Round 5 (engine): `packages/engine/test/clipboard.test.ts` (`chooseClipboard`, `pasteFromClipboard`): text with no fragment is pasted at the caret, and HTML that carries no fragment is ignored so its text is used (criteria 1 and 3).
+
+**Evidence (lane U-FE-049-064), criteria 1 to 3 on the body surface:** `packages/engine/src/view/fe-052-paste-plain.universal.test.ts` through `pnpm vitest run --project browser` with `DOCEDIT_BROWSERS=chromium,firefox,webkit`: Chromium 3 of 3 and WebKit 3 of 3 passed; Firefox skips the three paste tests, because a constructed paste event there keeps no clipboard data (the file's probe). The paste event with `text/plain` inserts the text at the caret; a line break starts a new paragraph; `text/html` without a fragment is not used when plain text is on the clipboard.
+
+**Notes:** Line-break handling is the obvious reading of "plain text"; 02 does not detail it. Round 2 (engine): criterion 1 and criterion 3 were not ticked. Round 5 (engine): both are ticked at the core, since `pasteFromClipboard` routes the clipboard data; the element still has to pass the browser's data to it, which is not built or tested in a browser here. The core inserts the text at the selection with the formatting at the caret (`paste.test.ts` checks a bold run), but choosing `text/plain` over `text/html` from the clipboard is the element's, which is not built or tested in a browser here.
+
+### FE-053 Paste images as asset uploads
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2; 03 §4.4; 10 §3.1 · **Requirements:** R1, R10 · **Depends on:** FE-051, PRO-091, PRO-096, BE-042, BE-043
+
+As an author, I want a pasted picture to become an image in my document, so that I can bring pictures in from other applications.
+
+**Acceptance criteria**
+
+- [x] Given the clipboard holds an image file, when it is pasted, then the image is uploaded as an asset through the assets port and an `image` node references the asset identifier.
+- [x] Given an image is pasted from any source, when the document is inspected, then no image data is embedded in it; only asset identifiers are.
+- [ ] Given the upload is under way, when the user continues, then a placeholder shows in place of the picture; when the upload fails or the asset service rejects the file, then the placeholder is removed and the user is told why.
+- [x] Given the selection is in a scope the user cannot change, when an image is pasted, then nothing is uploaded and nothing is inserted.
+- [x] Given an SVG file on the clipboard, when it is pasted, then the editor never renders it as live SVG (FE-067).
+
+**Evidence (lane FE-053-065, round 4), criterion 5:** `packages/element/test/fe-053-svg-paste.test.ts` (3 tests, passed 2026-11-13, Node.js): an SVG file has no PNG, GIF, JPEG or WebP header, so `pixelSize` returns null, the assets port refuses it before any upload, and a paste of it through the core inserts no `image` node and keeps its markup out of the document.
+
+**Evidence:** criteria 1, 2 and 4 are unticked by review (2026-11-13): `pasteImage` is not called by `pasteFromClipboard` or the core, no assets port is implemented, and the clipboard's file data does not reach the engine, so a pasted picture never takes this path; criterion 2 is also tested only for this path, not for "any source". The tests below become evidence once the paste is wired. `packages/engine/src/image-paste.ts` (`pasteImage`, the `AssetsPort` interface, `StoredImage`); `packages/engine/test/image-paste.test.ts`: 'uploads the picture through the port and inserts an image that names the asset' (criterion 1), 'the document holds the asset identifier and the sizes, never the bytes' (criterion 2, fast-check over random bytes), 'uploads nothing and inserts nothing in a locked region' and 'inserts nothing when the position became locked while the upload ran' (criterion 4), and the two refusals that insert nothing (a failed upload and a size outside the image node's range). Fixer round 2 (B group 1, 2026-11-13): criteria 1, 2 and 4 are ticked again on the wired path. The paste: `packages/engine/src/clipboard.ts` (`ClipboardInput.files`, `chooseClipboard` choosing pictures, `withoutEmbeddedData`), `packages/engine/src/core.ts` (`pasteFromClipboard` runs `pasteImage` through the assets port that `CoreConfig.assets` or `attach({ assets })` gives, and returns the uploads), `packages/engine/src/view/web.ts` (`handlePaste` reads picture files from the browser's clipboard event into `pasteFromClipboard`). The port: `packages/element/src/assets.ts` (`pictureAssets` over the backend's `assets` port, with the display size read from the file header), handed to the core by `packages/element/src/session.ts` when the backend offers the `assets` feature. Tests, passed 2026-11-13: `packages/engine/test/image-paste-core.test.ts` (10 tests) through `pasteFromClipboard`: a picture file is uploaded and inserted as an `image` naming the asset (criterion 1); for "any source" (criterion 2), a file (fast-check over random bytes: neither the bytes nor a `data:` URI reach the document), HTML with `data:` URI pictures (its text is pasted, its pictures are not taken in), a fragment whose picture holds a `data:` URI (dropped, the text kept) and a fragment whose picture names an asset (only the identifier is kept); a selection in a region the real guard protects uploads nothing, inserts nothing and records the refusal, and a document that becomes read-only during the upload inserts nothing (criterion 4). `packages/element/test/assets.test.ts` (5 tests): the header sizes, the display size, the upload through a backend port and its rejection as a message, and a paste through the core with `pictureAssets`.
+
+**Notes:** Engine round (engine-3, 2026-11-13). Fixer round 2: the port and the clipboard's file data are wired (see Evidence); the browser half of `handlePaste` in `web.ts` is now tested by `packages/engine/src/view/paste-picture.universal.test.ts` (engine-3 round, leftover from the review): a paste event with a picture file and no text is uploaded and inserted as an `image` node, a clipboard with text and a picture is left to the text path, and a picture pasted in a locked region is not uploaded. It passed in Chromium only (`DOCEDIT_BROWSERS=chromium`); Firefox and WebKit are not run. Pictures inside pasted HTML are still not uploaded, which is FE-054's. Criterion 1 is ticked for the engine's part, with the upload performed by the port the test supplies. Criterion 3 stays open: the placeholder and the message to the user are the shell's, and the engine returns the reason and the message. Lane V-FE-049-064, round 4, engine part of criterion 3: `packages/engine/src/picture-placeholder.ts` (a widget decoration per picture, mapped through later changes, no document change and no commit) is added by `#pasteImages` in `packages/engine/src/core.ts` when the paste starts and removed when that picture's upload ends, on success or failure. Tests: `packages/engine/test/fe-053-placeholder.test.ts` (Node.js, 4 tests: shown during the upload with the document unchanged, removed on insertion; removed on a rejection with the message returned; one per picture; none for a refused paste) and `packages/engine/src/view/fe-053-placeholder.universal.test.ts` (Chromium, Firefox and WebKit, `DOCEDIT_BROWSERS=chromium,firefox,webkit`: the element `.de-picture-placeholder` with the text "Uploading picture" is in the surface during the upload and gone after it). Still open: the shell's message to the user after a failed upload (the engine only returns it), and that the placeholder follows the caret while the user types, which is not tested. Criterion 5 is ticked (lane FE-053-065, round 4): the SVG is refused before upload, so the editor never takes it in; the view's own rule for SVG is FE-067 criterion 3, which is not built and is not claimed here. The picture types the asset service accepts are its own rule (10 §3.1), not listed here. When the position is locked during the upload, the uploaded asset is left in quarantine; removing it is the asset service's job and is not decided here (proposed in docs/adr/0132-engine-3-backlog-batch.md). Decisions of the fixer round, not in the spec, for the owner to confirm: plain text is taken before picture files, because a word processor puts a picture of the copied text beside the text, and a picture copied on its own comes with no plain text; the display size is the picture's own pixel size at 96 pixels to the inch (15 twips to the pixel), scaled down to fit 31,680 twips a side with its aspect kept, because the asset service reports no size; a picture whose size cannot be read from its header (PNG, GIF, JPEG, WebP) is refused before upload with a message; a fragment node whose asset attribute is not an asset identifier is dropped whole. HTML pictures (`<img>`, `data:` URIs included) are not uploaded: HTML paste is FE-054's, and until then such pictures are not taken in at all.
+
+### FE-054 Paste HTML through the sanitiser and the Word and Google Docs cleaners
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | L | must | Author |
+
+**Spec:** 02 §5.2; 10 §3.1; 11 §5 · **Requirements:** R10, R1 · **Depends on:** FE-052, FE-053, FE-016, SEC-005 to SEC-009
+
+As an author, I want formatted text pasted from web pages, Word and Google Docs to keep its structure and nothing dangerous, so that I do not retype it.
+
+**Acceptance criteria**
+
+- [x] Given clipboard HTML without an embedded fragment, when it is pasted, then it is sanitised first and then parsed through the editing schema, which drops everything the model does not know.
+- [x] Given pasted HTML with script elements, event-handler attributes, `javascript:` URLs, frames, objects and scripted SVG, when it is pasted, then none of them reaches the document or runs, and parsing loads no resource.
+- [x] Given a pasted link whose scheme is not `http`, `https`, `mailto` or an in-document target, when it is pasted, then the link is dropped and the text stays (I9).
+- [ ] Given a stored corpus of clipboard HTML from Word and from Google Docs, when each sample is pasted, then headings, lists, tables, bold, italic and links map to their CDM equivalents and no vendor markup remains.
+- [x] Given the parser uses `innerHTML`, when it runs under Trusted Types enforcement, then it runs under the project's named policy and raises no violation.
+- [ ] Given pasted content with images, when it is pasted, then images become asset uploads (FE-053) and bookmarks and foreign identifiers are stripped.
+- [x] Given the sanitiser fuzz corpus, when it is pasted, then no output contains disallowed content.
+
+**Evidence (lane V-FE-049-064, round 9, criterion 6, in part: `data:` URI pictures and bookmarks):** `packages/engine/src/clipboard-html.ts` (`picturesFromForeignDocument`: an `img` with a `data:image/png|jpeg|gif|webp;base64,` source, outside any dropped element, is decoded to bytes; a remote `src` is not read), `packages/engine/src/view/paste-policy.ts` (`foreignClipboard`: one parse gives the fragment and the pictures), `packages/engine/src/clipboard.ts` (`ClipboardInput.htmlPictures`; the fragment choice carries `pictures`; pictures with no text are an images choice), `packages/engine/src/core.ts` (`pasteFromClipboard` inserts the text, then `#pasteImages` uploads each picture after it), `packages/engine/src/view/web.ts` (`#paste` passes the pictures). Tests: `packages/engine/test/fe-054-html-pictures.test.ts` (Node.js, 8 tests, `pnpm vitest run --project node packages/engine/test/fe-054-html-pictures.test.ts`, passed 2026-11-14: the choice, the upload through a stand-in port, the image node names the asset and holds no bytes, a picture-only paste, no port keeps the text, an anchor is stripped); `packages/engine/src/view/fe-054-html-pictures.universal.test.ts` (2 tests, `DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser <file>`: Chromium and WebKit passed; Firefox skips both, since a constructed paste event keeps no `DataTransfer` data there). Criterion 6 stays unticked: a remote `src` (for example a picture from a web page or Google Docs) is not fetched or uploaded (see Notes).
+
+**Evidence (lane V-FE-049-064, round 6), re-run of criterion 2:** `packages/element/e2e/fe-054-paste-no-load.spec.ts` (Chromium and WebKit passed, 2 tests with the probe resources and the canary; Firefox skipped by the file, as before) run with `DOCEDIT_DEMO_PORT=57030 pnpm exec playwright test -c packages/element/playwright.config.ts <that file> --project=chromium --project=firefox --project=webkit --retries=0` on 2026-11-14. Criteria 4 and 6 stay unticked (see Notes).
+
+**Notes:** 02 §5.2 describes this paste order without a phase; 11 §5 places "HTML and Markdown export and paste" in phase 2, so phase 1b pastes only the embedded fragment, plain text and image files. Markdown paste is not described in 02 and is assumed to be EXP's. Whether remote image URLs in pasted HTML are fetched is not specified.
+
+**Evidence (lane U-FE-049-064, round 8), criteria 2, 5 and 7:** `packages/element/e2e/fe-054-paste-trusted-types.spec.ts` (criterion 5, 2 tests) and `packages/element/e2e/fe-054-paste-no-load.spec.ts` (criterion 2, 1 test), run with `DOCEDIT_DEMO_PORT=56030 pnpm exec playwright test -c packages/element/playwright.config.ts <both files> --project=chromium --project=webkit`: 6 of 6 passed in Chromium and WebKit (Firefox ignores the clipboard data of a synthetic paste). Before the fix in `packages/engine/src/view/web.ts` the Trusted Types test failed: the paste threw inside ProseMirror (see Notes). Criterion 2: the no-load test records every request whose URL carries a unique token (a script, an image, a frame, an object, an embed, a video, a style sheet, an `@import` and an SVG image), and no payload sets `window.__canary`; the parse is `DOMParser`, which runs no script and loads no resource. Criterion 7: `packages/engine/src/view/fe-054-paste-corpus.universal.test.ts` (2 tests, `DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser <that file>`, 6 of 6 passed): 300 documents generated from hostile markup and text with a fixed fast-check seed (54), each read by `fragmentFromHtmlString` and checked against the model's shape (paragraphs of text, bold, italic and link marks, and link targets that match `LINK_HREF_PATTERN`); no dropped element's text appears and no canary is set. Criterion 5: the same Trusted Types test covers the policy name allowed (the HTML is pasted, no violation is reported) and not allowed (the paste does not throw and the plain text is pasted).
+
+**Evidence (lane V-FE-049-064, round 4), criteria 1 and 3:** `packages/engine/src/clipboard-html.ts` (`fragmentFromHtmlString`, `fragmentFromForeignDocument`, `allowedHref`: a whitelist over the inert `DOMParser` document; scripts, frames, objects, SVG, forms and images are dropped with their content; only a link's `href` is read, and only when it matches `LINK_HREF_PATTERN`, I9); `packages/engine/src/clipboard.ts` (`ClipboardInput.foreign`, the HTML choice after an embedded fragment and before plain text); `packages/engine/src/view/web.ts` (`#paste` reads the HTML through the whitelist). Tests: `packages/engine/src/view/fe-054-paste-html.universal.test.ts` (Chromium, Firefox and WebKit through `DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser`: 11 passed, 1 skipped per engine, the Firefox paste test; criterion 1 for the whitelist, criterion 3 for `javascript:` dropped and `https` and `mailto` kept, and a paste event that puts bold and a link into the document); `packages/engine/test/fe-054-paste-choice.test.ts` (Node.js, 4 tests: the HTML is preferred to text, plain text is used when the HTML yields nothing, an embedded fragment still wins). Criterion 2 is not ticked: the tests show that scripts and handlers are dropped, but not that parsing loads no resource (not measured).
+
+**Notes (lane U-FE-049-064, round 8):** Criterion 5 found a real defect, fixed in `packages/engine/src/view/web.ts`. ProseMirror's `parseFromClipboard` runs before `handlePaste` and parses the HTML under its own Trusted Types policy, `ProseMirrorClipboard`; a host that allows only `docedit-paste` refuses it, so the whole paste threw and nothing was pasted. The body's paste is now taken in `handleDOMEvents.paste`, which ProseMirror calls before its own handler; a read-only view keeps ProseMirror's handling. Open, not changed here: the sub-editor's paste still goes through ProseMirror's handler, so the same refusal can happen there (FE-056 file), and an HTML drop still uses ProseMirror's parser. Criterion 5 names `innerHTML`; the view parses with `DOMParser.parseFromString`, which is also a Trusted Types sink, through the named policy `docedit-paste`. Decision taken, not in the spec, recorded in `docs/adr/0303-lane-U-FE-049-064.md`. A host that enforces Trusted Types must allow `docedit-paste` for HTML paste; otherwise HTML paste falls back to plain text. Criterion 7 is a generated corpus, not a stored one: the stored Word and Google Docs corpus of criterion 4 does not exist. Criteria 4 and 6 stay open: headings, lists and tables are not mapped to CDM equivalents, and pictures in HTML are not uploaded (whether remote image URLs are fetched is an open question).
+
+**Notes (lane V-FE-049-064, round 9):** Criterion 6 is partly built. Pictures written as `data:` URIs in pasted HTML are uploaded through the assets port after the pasted text, and bookmarks are stripped (Evidence above). Open, not decided here: whether a remote `src` is fetched. The spec does not say (see the open question in the round 8 notes), so the default taken is that it is not fetched, and such an `img` is dropped as before. Until the owner decides, a remote picture (for example from Google Docs) is not an asset upload, so the criterion stays unticked. Also open: with no assets port, the text is pasted and the pictures are dropped silently (the shell has no message for it); with a refused picture the text is kept and the refusal is on `core.refusal`. Criterion 4 is unchanged.
+
+**Notes (lane V-FE-049-064, round 4):** Built so far: a whitelist (not a general sanitiser), with block elements to paragraphs, `strong`/`b` to bold, `em`/`i` to italic, a safe `a` to a link, and a line break to a space. Open for the next round: (a) headings become bold paragraphs, not the document's heading styles, and lists and tables become paragraphs, so criterion 4 (the Word and Google Docs corpus) is not met; (b) pictures in pasted HTML are dropped, not uploaded, so criterion 6 is not met; (c) Trusted Types (criterion 5) is not checked: `DOMParser.parseFromString` runs with a plain string in the view, and under enforcement it needs the project's named policy (`packages/element/src/trusted-types.ts` is the element's, not wired into the engine); (d) the fuzz corpus (criterion 7) is not built. Decision taken, not in the spec: HTML that yields text is pasted in preference to plain text (02 §5.2 order), so `fe-052-paste-plain.universal.test.ts` criterion 3 now uses HTML that yields nothing (a script). Firefox: `paste-picture.universal.test.ts` (FE-053) fails its picture-file test in Firefox when run this round (a synthetic picture-only paste; its file ran in Chromium only before). That path returns before the HTML code, so this round's change does not reach it; not investigated further.
+
+**Notes (fixer, lane V-FE-049-064, round 4):** Criterion 5, in part, not ticked. The view now parses through `packages/engine/src/view/paste-policy.ts` (no policy without Trusted Types, else the host's `default` policy, else the project-owned name `docedit-paste`); where none is allowed the parse yields null and the plain text is pasted, so the handler never throws (ADR 0303). `packages/element/e2e/fe-054-paste-trusted-types.spec.ts` (Chromium and WebKit, 4 passed, 2026-11-14): under `require-trusted-types-for 'script'` with `trusted-types docedit-paste` the HTML's text is pasted with no violation and no page error; with no name allowed the plain text is pasted and no page error is raised. Open: the integration guide and the element's policy list do not yet name `docedit-paste` (FE-017's owner), so the criterion stays unticked. The e2e tests `sec-005-canary.spec.ts` and `sec-006-data-url-paste.spec.ts` now assert the HTML-first order (ADR 0303 item 1, proposed, for the owner to confirm), with one SEC-005 test where the HTML yields no text and the plain text is used.
+
+### FE-055 Block clipboard writes and printing under no-copy and no-print
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | should | Viewer |
+
+**Spec:** 13 §5; 05 §5.5; 02 §5.2, §9.8 · **Requirements:** R14 · **Depends on:** FE-050, FE-073, UX-040, PRM-004, PRM-006
+
+As an owner, I want the editing core to write nothing to the clipboard and to print nothing for a person whose access carries `no-copy` or `no-print`, so that casual copying and printing are deterred.
+
+**Acceptance criteria**
+
+- [x] Given the `access` object lists `no-copy`, when the person copies, cuts or drags content out of the editing surface, then the core's handlers write nothing to the clipboard or the drag data, and a cut removes nothing from the document.
+- [x] Given the `access` object lists `no-print`, when `print()` or the print command is used, then the core refuses it before an export is started or the viewer is opened (FE-073), so nothing is printed.
+- [x] Given a copy, cut, drag or print is refused, when it happens, then the core reports the refusal so that the shell can tell the person why (UX-040), and the core shows no message of its own.
+- [x] Given a restriction is added or removed by `perm.changed`, when the person next copies or prints, then the handlers act on the access object as updated, without a reload.
+
+**Evidence (lane FE-053-065, round 4), criterion 4 (unticked by the reviewer, see Notes; the copy part holds):** the copy part is `packages/engine/test/restrictions.test.ts` ('reads the access again at each copy, so a removed restriction takes effect at once'); the print part is `packages/element/test/fe-055-print-access.test.ts` (2 tests, passed 2026-11-13, Node.js): `printTypesetPdf` refuses while `no-print` is listed, prints once the list is empty, and refuses at once when the restriction is added, with no export requested.
+
+**Evidence (fixer of U3 group 1, round 2, 2026-11-13), criterion 1, the sub-editors:** `packages/engine/src/view/fe-055-subeditor-clipboard.universal.test.ts` (`pnpm vitest run --project browser`; Chromium and WebKit 6 of 6 each; Firefox runs the two `no-copy` tests and skips the four that read the clipboard back): with the footnote panel and with the header panel open under `no-copy`, a copy, a cut and a `dragstart` in the sub-editor are prevented, write no type, record the `no-copy` refusal, and change neither the sub-editor's nor the main document; without `no-copy` a copy writes the core's fragment of the sub-editor's selection and a cut removes it. The sub-editor's view gets `copy`, `cut` and `dragstart` handlers from `mountPanel` (`packages/engine/src/view/web.ts`; `handleDOMEvents` in `SubEditorOptions`, `packages/engine/src/subeditor.ts`), and `copySelection` takes the sub-editor's selection as main-document positions (`SubEditor.mainSelection`, `packages/engine/src/core.ts`).
+
+**Evidence (lane U-FE-049-064), criterion 1, the body (unticked by the reviewer of round 2, ticked again with the sub-editor evidence above):** `packages/engine/src/view/clipboard-fragment.universal.test.ts`, test 'under no-copy a copy and a cut write nothing and a cut removes nothing' (`pnpm vitest run --project browser`; Chromium and WebKit passed; Firefox passes but observes only that the event was prevented and that no type was written, since its synthetic clipboard does not keep writes). The web view's `copy`, `cut` and `dragstart` handlers (`packages/engine/src/view/web.ts`, `writeClipboard`) prevent the browser's default and write nothing when `copySelection` returns null, which it does under `no-copy`.
+
+**Evidence (lane V-FE-049-064, round 4), criteria 2, 3 and 4, in production builds (Playwright, real element and engine, `DOCEDIT_DEMO_PORT=57031`):** `packages/element/e2e/ux-040-no-print.spec.ts` (`print()` under `no-print` resolves `{ status: 'refused', reason: 'no-print' }` and sends no request to `/exports`; criterion 2; the access is set live with `core.setAccess`, so no reload; criterion 4): 6 of 6 passed in Chromium, Firefox and WebKit with `--repeat-each=2 --retries=0`. One earlier WebKit run failed on its first attempt with `unsupported_feature` ("the backend announces no export jobs"), before the backend's features arrived; the spec does not wait for them, so it can fail on a cold start, and it then passed on retry. `packages/element/e2e/ux-040-no-copy.spec.ts` (copy, cut and drag under `no-copy` write nothing, remove nothing and show the shell's notice; the control without the restriction copies; criterion 3 for the copy path): 9 of 9 passed in the three browsers, with `--retries=0`. Node.js, passed 2026-11-14: `packages/element/test/fe-055-print-access.test.ts` (criterion 3 for the print path: the refusal is returned, and `onError` throws if called, so the core raises nothing; criterion 4 for print), `packages/engine/test/restrictions.test.ts` (criterion 4 for copy), `packages/ui/test/ux-040-no-copy-notice.test.ts` and `packages/element/test/ux-040-no-export.test.ts`: 13 tests in four files passed.
+
+**Notes:** Reviewer of round 2: criterion 1 is unticked. The `copy`, `cut` and `dragstart` handlers are set only on the body `EditorView` (`packages/engine/src/view/web.ts`). The sub-editors (footnote, header, footer; `packages/engine/src/subeditor.ts`) are separate `EditorView`s with no clipboard handler, so under `no-copy` a copy or cut inside one still writes ProseMirror's own clipboard data, and the test mounts only the body. Tick it when the sub-editors refuse as the body does and a browser test covers one of them. Fixer of round 2: done, ticked (sub-editor evidence above; the footnote and the header panel are tested, a footer is the same story panel). Lane U-FE-049-064: the body part is built; the drag handler (`dragstart` in `web.ts`) is built now, so the drag part is covered. Criterion 3 stays open (the shell's message, UX-040). Criterion 2 (print) stays open: no element `print()` is exposed. Reviewer of round 4: criterion 4 is unticked. Only the copy half is evidenced (`setAccess` is read at each `copySelection`). The print half is a test of `printTypesetPdf`, which no product code calls (it is imported only by `print.test.ts` and `fe-055-print-access.test.ts`); the test builds a fresh options object with a different `access` for each call, so it shows only that the function reads the `access` it is given, not that a print after `perm.changed` sees the updated access. Tick it when the element's `print()` (criterion 2, FE-073) reads the session's current access and a test goes through that path. Round 4 (lane FE-053-065) had ticked it on the two tests above. Criteria 1, 2 and 3 stay open: drag data is not built (criterion 1 and the drag part of criterion 3); the element's `print()` method and print command are not exposed (criterion 2); the refusal is returned to the caller, but the shell's `de-error` or message path is not built (criterion 3). Round 1 (element-3): the refusal of `no-print` is in `printTypesetPdf` (packages/element/src/print.ts), which returns `refused` before any export request or `printPdf` call (packages/element/test/print.test.ts; criterion 2 in part). Not ticked: no element `print()` method or print command is exposed yet, and the refusal is returned to the caller but not reported through `de-error` or the shell (criterion 3). The copy and cut handlers are in the editing core (engine), not here (criterion 1 and criterion 4 for copy are not covered by this element work). What the person sees, `no-export`, the control plane and the statement that restrictions deter casual use and are not a security boundary are UX-040's. Only the clipboard and print paths, which are this epic's, are covered here. Open (2026-11-13): the core's copy and cut refuse under `no-copy` (`copySelection` and `cutSelection` in `packages/engine/src/core.ts`; the refusal is `no-copy` in `RefusalReason`, `packages/engine/src/api.ts`; `packages/engine/test/restrictions.test.ts`), and the access is read at each copy. Not done, so no criterion is ticked: the drag data (no drag handler exists in the engine's view), the print refusal (`print()` is the element's, FE-073), and the element's copy and cut listeners, which must not write the native clipboard when the core refuses (packet B2, not in this package).
+
+## Sub-editors (02 §5.2, §8)
+
+### FE-056 Run sub-editors whose steps map onto the one document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 02 §5.2, §8; ADR 0003 (after the first review); 03 §3 · **Requirements:** R1, R7 · **Depends on:** FE-033, FE-036, SPK-014
+
+As a maintainer, I want headers, footers and footnotes edited in their own small editor states that map onto the one document, so that they collaborate and take input methods like the body.
+
+**Acceptance criteria**
+
+- [x] Given a story or footnote is opened for editing, when the sub-editor starts, then it has its own editor state holding only that content, and the body selection is preserved for when it closes.
+- [x] Given edits in the sub-editor, when a transaction is dispatched, then it is mapped to steps on the one document at the story's or footnote's position, and goes through the identifier plugin, the guard and the sync client as any local edit.
+- [x] Given a remote commit changes the story while the sub-editor is open, when it arrives, then the sub-editor shows the change and maps its selection.
+- [x] Given two users edit the same footer at the same time, when both commit, then the documents converge.
+- [ ] Given an input method is composing in the sub-editor, when a remote commit arrives, then the composition survives (FE-034).
+- [x] Given a user who cannot change stories (07 §7), when a sub-editor is requested, then it opens read-only or the command is disabled.
+
+**Evidence (lane U-FE-049-064), criterion 1:** `packages/engine/src/view/fe-056-058-subeditor-open.universal.test.ts` through `pnpm vitest run --project browser` (Chromium, Firefox and WebKit, 9 of 9 passed, 2026-11-13): the header and footnote panels are mounted in the browser; the sub-editor's state is the story or footnote node alone (`eq` with the main node, not the body's state), and the body selection is the same while the panel is open and after it closes.
+
+**Evidence:** `packages/engine/test/edit-header-rights.test.ts` (criterion 6, Node.js, passed 2026-11-13, with `subeditor-open-rights.test.ts` and `header-footer.test.ts`): a person who may only view the header gets `queryCommand('editHeader')` = `{ enabled: false, reason: 'no-access' }`, and the command follows a change of rights without a reload.
+
+**Evidence:** `packages/engine/src/subeditor-sync.ts` (`forwardToMain`, `replaceInner`, `locate`; the pure parts of the sub-editor); `packages/engine/src/subeditor.ts` (`SubEditor` calls them from `#dispatchInner` and `sync`); `packages/engine/test/subeditor-sync.test.ts`: 'an insertion in the sub-editor is one local edit of the document at the story position' (criterion 2: the core's dispatch of the forwarded transaction, through the guard and the identifier plugin, changes the story and nothing else, and `validate()` reports nothing), 'property: after each sub-editor edit the sub-editor and the story in the document are equal' (random inserts and deletes, criterion 2), 'a change of the story in the document appears in the sub-editor, and the caret is mapped' (criterion 3: a change made through the document reaches the sub-editor's state, and the caret at the end of the text stays there), 'a sub-editor that already shows the document has no transaction to apply'. Criterion 1 in part: 'holds the story alone as its document' and 'keeps the body selection when the panel opens' (`packages/engine/test/subeditor-sync.test.ts`). Criterion 6 (lane FE-053-065, round 2; unticked by the reviewer, see Notes): `packages/engine/test/subeditor-open-rights.test.ts` (3 tests, passed): with a user whose access lists the story as view only, `openStory` returns false and opens no panel; with owner access it opens the panel; a change of rights takes effect without a reload (`openStory` in `packages/engine/src/core.ts`, returning boolean in `api.ts`). Criterion 6 (fixer, round 2): the `editHeader` command in `core.ts` now refuses when `canEdit('story:<id>')` is false and returns the result of `openStory`, and `queryCommand('editHeader')` reports `{ enabled: false, reason: 'no-access' }` for such a header, so `query('hasHeader')` is false too. `packages/engine/test/edit-header-rights.test.ts` (3 tests, passed 2026-11-13, scoped run with `subeditor-open-rights.test.ts`, `header-footer.test.ts`, `subeditor-sync.test.ts` and `api.test.ts`): for a view-only user (`editorAccess`) `queryCommand('editHeader')` is disabled with `no-access`, `query('hasHeader')` is false, `run('editHeader')` returns false and no panel opens; for the owner the command is enabled and opens the panel; a change of rights is followed without a reload.
+
+**Evidence (lane U-FE-049-064), criterion 4 in part (the name and the focus only):** `packages/engine/src/view/fe-057-panel-focus.universal.test.ts` through `pnpm vitest run --project browser` (Chromium, Firefox and WebKit, 1 of 1 each): the header panel's editing surface has the accessible name "Header"; focus is inside the panel while it is open and back on the body's editing surface after `closePanel()`. Not covered: the visible focus style and opening the panel from the keyboard; criterion 4 stays unticked.
+
+**Evidence (lane V-FE-049-064), criterion 4:** `packages/engine/test/fe-056-footer-converge.test.ts` (1 test, Node.js, `pnpm vitest run --project node packages/engine/test/fe-056-footer-converge.test.ts`, passed 2026-11-13, against backend-mock, which runs the real `Room`; no PostgreSQL is needed for this path): an owner and an editor join one document with a footer story, each types three strings into the footer through the sub-editor forwarding (`forwardToMain`), both sessions and the server then hold the same footer text, with each typed string present once. The footer is a story after `defs` and before `body`, as the CDM requires; the test's own footer, not the header of `spikeDocument`.
+
+**Notes:** Engine round (engine-3, 2026-11-13). The sub-editor's view is not mounted in Node.js (no DOM in the test setup), so the tests call the functions of `subeditor-sync.ts` that `SubEditor` uses, rather than the class. Criteria 2 and 3 are ticked on that basis. Criterion 1 is ticked by the browser test in Evidence (lane U-FE-049-064), which runs the constructor's `EditorState.create({ doc: node })` in a mounted panel. Criterion 4 (two users converge in one footer) is ticked (lane V-FE-049-064, see its Evidence line; it runs against backend-mock, not PostgreSQL). Criterion 5 (input-method composition) needs a browser (FE-034 and FE-123). Criterion 6 (a user who cannot change stories) was reported not met at reviewer round 2, and is met now (lane U-FE-049-064; see the rights tests in Evidence). The probe quoted below is out of date, since `queryCommand('editHeader')` now returns `enabled: false` for a view-only person: `openStory` checks `canEdit` for the story scope and opens no panel when the check fails, but the command is not disabled. For a view-only user a probe gave `queryCommand('editHeader')` = `{ enabled: true }`, `query('hasHeader')` = true and `run('editHeader')` = true with no panel opened, because the `editHeader` command in `core.ts` ignores the result of `openStory` and `queryCommand` does not look at rights for it. Tick it when `editHeader` reports `enabled: false` (reason `no-access`) for such a user, with a test of that, or when a read-only panel opens. Fixer, round 2: done, and ticked (see Evidence). `openFootnote` has no such check yet (its scope is not read here); it is not part of criterion 6 as evidenced. Open: whether the undo history is shared between the body and the sub-editors is not specified (Open questions).
+
+### FE-057 Edit headers and footers in panels
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2, §8; 03 §4.1; 11 §4 · **Requirements:** R1 · **Depends on:** FE-056, CDM-020, CDM-021, UX-019
+
+As an author, I want to edit the header and footer of my document in a panel, so that I can add titles and page numbers.
+
+**Acceptance criteria**
+
+- [ ] Given a page setup, when the user opens header or footer editing, then the panel offers the variants the page setup uses (default, first page, even pages) and edits the story that variant names.
+- [ ] Given a variant has no story yet, when the user starts to edit it, then the story is created and the page setup refers to it, through the guard.
+- [x] Given the user inserts a page-number field, when it is confirmed, then a `field` node of kind `page` is stored in the story.
+- [ ] Given the panel is open, when it is operated by keyboard, then it has an accessible name, a visible focus and returns focus to the body on close.
+- [ ] Given a remote user edits the same footer, when the commit arrives, then the panel shows it (FE-056).
+
+**Evidence:** `packages/engine/test/header-footer.test.ts` (headless core, Node.js, round 7): criterion 2, 'creates a header story before the body, with one paragraph, and names it in the page setup' (`createVariantStory` in `packages/engine/src/header-footer.ts`; the new story sits before the body, the page setup names it, the identifier plugin fills the paragraph's identifier, `validate()` reports nothing) and 'refuses the creation when the user may not change the structure' (the guard refuses it with `editorAccess`, and nothing changes); criterion 3, 'inserts a page field into the header story and refuses it in the body' (`insertPageNumber` inserts a `field` of kind `page` at the end of the header paragraph; its steps are forwarded to the document offset to the story, as `subeditor.ts` does, and the body is refused); criterion 1 in part, 'offers the default variant, and the first-page and even variants when their flags are on' and 'the panel opens the story the variant names' (`variantsInUse`, `storyOfVariant`, `openStory`).
+
+**Evidence (lane V-FE-049-064), criterion 3:** `packages/engine/test/fe-135-136-core-authoring.test.ts`, 'inserts a page number in the chosen format and a page count into a header story' (Node.js, `pnpm vitest run --project node packages/engine/test/fe-135-136-core-authoring.test.ts`, passed 2026-11-13): the core's `insertField` command, the one a panel's confirm would call, stores a `field` node of kind `page` in the header story and none in the body; 'refuses a page number in body text, and a header story the user may not change' holds the refusal.
+
+**Evidence (lane V-FE-049-064), criterion 2 in part (the default header only):** `packages/engine/test/fe-057-header-create.test.ts` (2 tests, Node.js, passed 2026-11-13): with a document that has no header, `run('editHeader')` creates one header story with one empty paragraph before the body, names it as `headerDefault` in the page setup through the guard, and opens the panel on it; a second edit opens the same story; a person with `editorAccess` gets no story and no panel. Source: `#createHeaderStory` in `packages/engine/src/core.ts`, which calls `createVariantStory` (`packages/engine/src/header-footer.ts`). Not covered: the first-page and even variants and the footer have no command that creates them yet.
+
+**Notes:** Creating a story changes a definition and needs `structure` (07 §5.3); that is inferred, not stated in 02. Round 7 (2026-11-13): criteria 2 and 3 are ticked for their engine effects. Their triggers, the user starting to edit a variant and confirming the field, are the panel's, which is not built, so the wiring is not tested; the guard's refusal of a creation without `structure` is the engine's. Criterion 1 stays open: the panel's list of variants and its tabs are the view's, although `variantsInUse` gives the list. Criteria 4 (focus and keyboard) and 5 (a remote edit in the panel, FE-056) are the view's and need a browser. Audit (2026-11-13): criteria 2 and 3 are unticked because `createVariantStory` and `insertPageNumber` are imported only by `header-footer.test.ts` (no command, panel or core path calls them), so the test shows only that the two helpers work; the product's own path for a page field in a story is `insertField` (FE-136, `fe-135-136-core-authoring.test.ts`), and a new story is made by `turnOnVariants` (FE-137) when a flag is turned on, which is not "the user starts to edit it". Tick criterion 3 by citing the `insertField` test (or wiring `insertPageNumber`), and criterion 2 when opening an empty variant calls `createVariantStory`. Lane V-FE-049-064 (2026-11-13): criterion 3 is ticked on the `insertField` test; criterion 2 is wired for the default header only (`editHeader` calls `createVariantStory` when there is no header, see Evidence), so it stays unticked until the first-page, even and footer variants have a command too.
+
+### FE-058 Edit footnotes in a panel
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2, §8; 03 §4.4, §8 (I10), §13 · **Requirements:** R1 · **Depends on:** FE-056, SPK-014, CDM-034
+
+As an author, I want to add a footnote at the caret and write its text, so that I can cite and explain.
+
+**Acceptance criteria**
+
+- [x] Given the caret is in body text, when the insert-footnote command is used, then a `footnote` node with a fresh identifier is inserted at the caret and the sub-editor opens on its content.
+- [x] Given the footnote content model decided by SPK-014 (one paragraph in version 1), when the user edits, then the sub-editor accepts exactly that model.
+- [ ] Given footnotes, when they render, then their numbers come from the shared numbering algorithm using `footnoteFormat` and `footnoteRestart`.
+- [x] Given the caret is inside a footnote or a caption, when the insert-footnote command is queried, then it is unavailable (I10); given the sub-editor, when the user tries to insert a table, a page break or a column break, then it is refused (I10).
+- [x] Given the user deletes the footnote reference, when the deletion is applied, then the footnote and its content go with it.
+
+**Evidence (lane FE-053-065, round 6), criterion 3:** `packages/layout/src/footnote-labels.test.ts` (Node.js, passed 2026-11-13, with `notes.test.ts`, `packages/engine/test/fe-135-footnote-number.test.ts` and `footnote-panel.test.ts`, 27 tests): the marks of footnotes come from the shared numbering in `packages/layout/src/flow.ts`, which reads `footnoteFormat` (symbols and decimal) and `footnoteRestart` (`perPageSection` restarts at each section break; `continuous` keeps counting). Not run: the painted page in a browser. Reviewer (V group 1, round 2): criterion 3 was ticked while this story's Notes and the lane's report call it open; it is unticked, because no painter test paints a footnote number (`packages/painter` tests pass `footnotes: []`), so only the layout's label is shown. Tick it when a browser test shows the painted numbers. (Criterion 1 stays open in this older line; it was ticked later, see the next Evidence line.) Criterion 1 stays open: the core names the new footnote as the panel target (`packages/engine/test/footnote-open.test.ts`), but mounting the sub-editor on it is the view's.
+
+**Evidence (lane U-FE-049-064), criterion 1:** `packages/engine/src/view/fe-056-058-subeditor-open.universal.test.ts` through `pnpm vitest run --project browser` (Chromium, Firefox and WebKit, 9 of 9 passed, 2026-11-13): after `run('insertFootnote')` at the end of the introduction paragraph, exactly one new footnote with a fresh identifier and one paragraph is in the document, and the mounted footnote sub-editor's document is that node (`de-sub-footnote` view, inside the panel host).
+
+**Evidence:** `packages/engine/test/footnote-panel.test.ts` (headless core, Node.js): criterion 2 (the footnote's one-paragraph sub-editor document, `oneParagraphLimit()`, accepts an insertion inside its paragraph and refuses a split that would make two paragraphs; the state is unchanged); criterion 5 (a footnote inserted with `insertFootnote` at the caret of the introduction paragraph, given a fresh identifier, is removed with its paragraph when its reference is deleted through the core, and `validate()` reports no new violation). Source: `packages/engine/src/footnote.ts`, `src/schema.ts`. Round 3 (engine-3 lane). Round 7 (engine lane, criterion 4): `packages/engine/test/footnote-panel.test.ts` 'a footnote takes no table and no page or column break' (through the core: a page break and a column break are refused with `invariant`, a table is refused, a line break is kept, `validate()` reports nothing; `guard.ts` `insertsBlockerInFootnote`), 'the footnote panel refuses a page break or a table before the document sees it' (the panel's `noBlockersInNote` with `oneParagraphLimit`), and 'insert-footnote is unavailable in a caption' (the caption's content model takes no footnote, and `insertFootnote` returns false).
+
+**Notes:** The footnote content model is decided (CDM-001, option B: one paragraph). Not ticked: criterion 1 in part (the fresh identifier is tested; the sub-editor opening on its content is the panel and the view, not built here); criterion 3 (the numbering algorithm with `footnoteFormat` and `footnoteRestart` is not in the headless core, not tested here); criterion 4 in part (the caret inside a footnote is refused by `insertFootnote`, tested; the caret inside a caption is not tested, and the sub-editor refusal of a table, a page break and a column break is not built: `footnote.ts` has no filter for them, and the schema's inline `break` node would be accepted in a footnote; this is a gap to fix before ticking). Round 7 (2026-11-13): the gap is closed. The guard refuses a table and a page or column break inserted in a footnote (`guard.ts`, `insertsBlockerInFootnote`), and the footnote panel's plugin does the same (`noBlockersInNote`, `footnote.ts`); criterion 4 is ticked. Page and column breaks inside a table cell or a caption are not refused by the guard yet, although the CDM's I10 forbids them there (`caption` and `table_cell` in `NO_PAGE_BREAK_CONTAINERS`); that is a gap for a later round, not part of this criterion. Criterion 1 is evidenced in its core part (round 8, lane FE-053-065) by `packages/engine/test/footnote-open.test.ts`: the inserted footnote has a fresh identifier and one paragraph, and the core's `panel` names it. Mounting the sub-editor on that panel is tested in a browser (lane U-FE-049-064, Evidence), so criterion 1 is ticked. Criterion 3 stays open: the numbers with `footnoteFormat` and `footnoteRestart` are not in the headless core. Lane V-FE-049-064 (2026-11-13): `packages/layout/src/footnote-labels.test.ts` (9 tests, `pnpm vitest run --project node packages/layout/src/footnote-labels.test.ts`, Node.js, passed) shows the layout's labels follow `footnoteRestart` (`perPageSection` restarts at each section break; `continuous` keeps counting) and the symbols format. That is the label the painter receives; the painted page with its numbers is not run in a browser, so criterion 3 is still unticked. Audit (2026-11-13): criterion 3 stays unticked because the web view's footnote numbers (`numberDecorations` in `packages/engine/src/view/footnote-view.ts`) are a plain decimal count that ignores `footnoteFormat` and `footnoteRestart` (its own comment says the shared algorithm comes later), and the cited tests cover only the layout's labels (`toFlow`) and the decimal count.
+
+## Find and replace (02 §5.2)
+
+### FE-059 Find text in the document
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2; 13 §2; 11 §4 · **Requirements:** R1 · **Depends on:** FE-035, UX-019
+
+As an author, I want to find text and move between matches, so that I can navigate a long document.
+
+**Acceptance criteria**
+
+- [x] Given a query, when it is entered, then every match in the body is highlighted by decorations, "n of m" is available, and the document is not changed.
+- [x] Given matches, when next or previous is used, then the selection moves to the match, scrolls into view, and wraps at the ends.
+- [x] Given a match spans text with different marks, when searching, then it is found.
+- [x] Given a remote edit adds, removes or moves matches, when the commit arrives, then the highlights and counts update.
+- [x] Given matches inside regions the user cannot edit, when searching, then they are found and highlighted; only replacing is refused (FE-060).
+- [x] Given the results, when a pane asks, then the core returns the list of matches with block identifiers and surrounding text for the navigation pane.
+
+**Evidence:** `packages/engine/test/search.test.ts` (headless core, Node.js): every body match is found, in regions too, and the document is unchanged (`findText`, `findState`); next and previous move the selection to each match, n of m counts from 1, both wrap (`findNext`, `findPrevious`); a match across text nodes with different marks is found; a remote change adds and removes matches and the count follows; `findResults()` gives block identifiers, scopes and context; a match in a locked region is found. Source: `packages/engine/src/search.ts`, `src/core.ts` (find section). Engine-3 round: `packages/engine/test/search-highlight.test.ts` (Node.js): one highlight per body match, the current match marked with the current class and moved by next, a remote commit that adds or removes a match adds or removes its highlight in step with the count, a match in a locked region is highlighted, and a fast-check property over remotely inserted text checks the highlights against a naive count (`findDecorations`, `src/search-highlight.ts`; wired as the `decorations` prop of the body view in `src/view/web.ts`, `mountBody`, which redraws on each change of the find state; `packages/engine/src/view/find-highlight.universal.test.ts` checks the drawn highlights in Chromium; `packages/engine/src/view/find-scroll.universal.test.ts` checks the scroll into view in Chromium).
+
+**Notes:** Match options (case, whole word) and whether headers, footers and footnotes are searched are not specified (Open questions). Round 2 (engine, ADR 0108): matching is case-sensitive and body-only, the spec default is not given, so this is a proposed default. Engine-3 round: criterion 2 is ticked. `findNext` and `findPrevious` set the selection and, through `scrollIntoView()` in `core.ts` (`#stepFind`), ask ProseMirror to scroll it into view; the web view also scrolls the current highlight into view after a navigation, because ProseMirror scrolls from the DOM selection, which an unfocused surface does not have (`view/web.ts`). Tested in Chromium by `packages/engine/src/view/find-scroll.universal.test.ts` (the last match, reached by wrapping backwards, lies inside a 160 px scroll area); the wrap itself is in `search.test.ts`. Engine-3 round: criteria 1, 4 and 5 are ticked on the Node tests of the decoration function and of the state it reads, and on `packages/engine/src/view/find-highlight.universal.test.ts`, which mounts the body view and checks the highlight elements and a remote match in Chromium (`DOCEDIT_BROWSERS=chromium`, passed). Firefox and WebKit are not run. The highlight classes (`de-find-match`, `de-find-current`) need a visible style from the element lane; that style is not made in the engine.
+
+### FE-060 Replace one match or all, skipping locked scopes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §5.2; 07 §7 (fourth and fifth bullets) · **Requirements:** R1, R3 · **Depends on:** FE-059, FE-036, PRM-028
+
+As an author, I want "replace all" to change only what I may change and tell me what it skipped, so that it never fails silently.
+
+**Acceptance criteria**
+
+- [x] Given a match in an editable scope, when Replace is used, then the match is replaced through the guard.
+- [x] Given matches in editable and locked scopes, when Replace all is used, then every match in an editable scope is replaced and every match in a locked scope is left alone.
+- [ ] Given Replace all has run, when it completes, then it reports how many matches it replaced and how many it skipped, the counts equal the real numbers, and no skipped-matches message is shown when every match was replaced.
+- [x] Given every match is in a locked scope, when Replace all is used, then the document is unchanged and the report says zero replaced and the number skipped.
+- [ ] Given replacements are inserted, when they are applied, then they pass the identifier plugin and, in suggestion mode, follow the rule in the Open questions.
+
+**Notes:** Lane FE-053-065, round 6: no criterion ticked. Criterion 3 is the engine's counts (`replace-all-counts.test.ts`), but the skipped-matches message the person sees is the shell's and is not built, so it stays open. Criterion 5 needs suggestion mode, which the Open questions leave undecided. Whether Replace all in suggestion mode produces suggestions is not stated (Open questions). The replace-all criteria of the deletion story that was merged into FE-037 are the second to fourth criteria here; deletion across scopes is FE-037.
+
+**Evidence:** `packages/engine/test/search.test.ts` (headless core): Replace on the current match in a body paragraph changes that match through the guard and reports one replaced; Replace on a match in a locked region is refused with the `scope` notice and leaves the document unchanged; Replace all replaces the body match, skips the locked one and reports `{ replaced: 1, skipped: 1 }`, with the notice naming the locked region; with every match locked, Replace all changes nothing and reports `{ replaced: 0, skipped: 1 }`; with no skipped match there is no notice; one undo takes back a whole Replace all. Source: `packages/engine/src/core.ts` (`replaceCurrent`, `replaceAll`). Round 2 (engine, ADR 0108). Engine-3 round: `packages/engine/test/replace-all-counts.test.ts` (criterion 3, engine part; fast-check property): with any number of "text" matches added by remote commits to an editable paragraph and to a locked region, Replace all reports `replaced` equal to the editable matches and `skipped` equal to the locked ones, the locked matches remain, and the refusal notice is recorded.
+
+**Notes (round 2, engine):** Not ticked. The "no skipped-matches message" part of the third criterion is the shell's message; the engine supplies the counts and the refusal notice, which the test checks. Engine-3 round: the third criterion's engine part is now evidenced by the property test above; it stays unticked because the message itself is the shell's. The fifth criterion needs the identifier plugin's handling of inserted text (text inserts create no nodes, so no identifier is generated) and suggestion mode (FE-041, phase 2), so the suggestion rule is not built; the Open questions decide it and it is not decided here.
+
+## Fonts on the client (02 §3, §6)
+
+### FE-061 Register fonts under hash-derived aliases
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Integrating developer |
+
+**Spec:** 02 §3, §6; review F8; 10 §3.1 · **Requirements:** R2, R5 · **Depends on:** FE-002, PRO-067, PRO-096, BE-047
+
+As an integrating developer, I want the editor to load its fonts without overriding the fonts of my page, so that nothing on my page changes.
+
+**Acceptance criteria**
+
+- [x] Given the manifest lists families, styles, file URLs, hashes and licences, when the editor needs a file, then it registers it on `document.fonts` with the FontFace API under an alias derived from the file's hash, never under the family name.
+- [x] Given the host page defines its own font with the same family name (for example "Noto Serif"), when the editor loads, then the host's text renders exactly as before.
+- [x] Given two editor instances, or two versions of the editor, use the same file, when both register it, then one alias exists per hash and neither disturbs the other.
+- [ ] Given the component CSS, when it is checked, then it contains no `@font-face` rule (browsers ignore them inside a shadow root) and the editing surface refers to fonts only by alias.
+- [x] Given a tenant adds a font to the manifest, when a document uses it, then it is registered like any other.
+
+**Evidence:** lane U-FE-049-064 (2026-11-13), browser run through the vitest browser project (`pnpm vitest run --project browser`; the browsers it used are the project's own setting, not checked here): `packages/element/src/font-registration.universal.test.ts` (criteria 1 and 3 on a real `document.fonts` and `FontFace`: one face per hash alias, two instances leave one face per alias, a host face with the family name is kept, two sessions register each file once) and `packages/element/src/font-host-render.universal.test.ts` (criterion 2: the host's measured text is the same before and after the editor loads its alias). 15 browser tests in 6 files passed. Criterion 4 second half and criterion 5 stay open: the view passes `fontFamily` values to CSS unchanged (FE-062 is not built). Earlier Evidence follows.
+
+**Evidence:** `packages/element/src/font-registration.ts` (`fontAlias`, `registerFontFiles`; the font set and the FontFace factory are injected); `packages/element/test/font-registration.test.ts` (9 tests, Node.js with a fake font set, passed): criterion 1, the alias is the prefix and the hash and never the family name, and registration calls the factory with the manifest URL and descriptors (fast-check over random hashes and families); criterion 3, a second instance or version that registers the same file finds the alias in the set and adds nothing, and two files keep two aliases; criterion 2 in part, a host face of the same family name is neither replaced nor removed; criterion 4 in part, no stylesheet under `packages/element/src/styles` contains `@font-face`. Criteria 1 and 3 (fixer, round 2): the production path is built. `packages/element/src/font-manifest.ts` (`manifestFontFiles`) reads the `GET /fonts` body in the shape the document service serves (`FontManifestBody`); `packages/element/src/font-loader.ts` (`pageFonts`, `registerManifestFonts`) passes `document.fonts` and `new FontFace(alias, url("…"), { style, weight })` to `registerFontFiles`; `packages/element/src/session.ts` `start()` calls it with the backend's `fonts` port once connected (a failed manifest does not fail the load). `packages/element/test/font-loader.test.ts` (8 tests, Node.js): the manifest body becomes entries and malformed faces are left out; the session calls the registrar with `backend.fonts` and reaches `ready`. `packages/element/src/font-registration.universal.test.ts` (4 tests, passed in Chromium, Firefox and WebKit on 2026-11-13, `pnpm vitest run --project browser`): the files are `FontFace` objects on `document.fonts` under their hash aliases with the manifest's weight, and no face named "Noto Serif" is added; two registrations on one page, and two `Session` instances with the default registrar, leave one face per alias; a host `FontFace` named "Noto Serif" stays the only face of that name. Criterion 2 (round 3, lane FE-053-065): `packages/element/src/font-host-render.universal.test.ts` (1 test, passed in Chromium, Firefox and WebKit, `DOCEDIT_BROWSERS=chromium,firefox,webkit`, `pnpm vitest run --project browser`): the host loads a real face named "Noto Serif" (`packages/perf/fonts/files/NotoSerif-Regular.ttf`); the editor registers a manifest face under the same family name with another real file (`NotoSans-Regular.ttf`) and loads its alias; the host's text width, measured by the layout engine, is equal before and after; the editor's alias renders at another width, so a registration under the family name would have shown.
+
+**Evidence (lane FE-053-065, round 6), criterion 5:** `packages/element/test/fe-061-tenant-font.test.ts` (3 tests, one a fast-check property, passed 2026-11-13, Node.js, fake font set): a tenant family added to the manifest body is read by `manifestFontFiles` and registered by `registerManifestFonts` under its hash alias, not its family name, and `familyAlias` (`src/font-family-lookup.ts`) gives that same alias for the family. The browser half is not run here. Lane U-FE-049-064, round 5: `packages/element/src/fe-061-tenant-font.universal.test.ts` (3 tests, `pnpm vitest run --project browser`, Chromium, Firefox and WebKit, passed 2026-11-13): a tenant family in the manifest is registered once on `document.fonts` under its hash alias and never under its family name, `manifestFamilyLookup` gives that alias for the family (FE-062 criterion 1), and the alias renders at another width than the unregistered family name.
+
+**Notes:** Review F8. Round 3, lane FE-053-065: criterion 2 is ticked on a browser run of the host's own face (see Evidence); the two-bundled-versions check is still not run. Lane FE-053-065, round 2. Reviewer, round 2: criteria 1 and 3 are unticked. `font-registration.ts` is imported only by its own test; no element code, adapter or manifest loader calls it, so the editor registers nothing on `document.fonts`, and the test runs against a hand-written fake font set, not a `FontFaceSet`. Tick both when the element's session calls `registerFontFiles` with `document.fonts` and `FontFace`, and a browser test (`*.universal.test.ts` or the element's browser run) shows one face per alias with two instances. Not ticked by the developer: criterion 2 (the host's text renders as before needs a browser run; only the face list is tested); criterion 4 second part (the editing surface refers to fonts only by alias) is the view's and is not built; criterion 5 (a tenant font used by a document) needs the family mapping of FE-062, which is not built. Criterion 1 is ticked for the registration call through an injected font set; the production adapter that passes `document.fonts` and `new FontFace` from the session, and the manifest loader, are not built and not run in a browser, so the browser half is open. Fixer, round 2: the adapter, the manifest reader and the session call are built and run in three browsers (see Evidence); criteria 1 and 3 are ticked again. The session registers every file of the manifest when it connects; registration does not fetch a file, the browser does that when text first uses the alias (loading on purpose is FE-063). "Two versions of the editor" is covered by the duplicate check on the page's own font set (no module state), tested with two instances of one version; two separately bundled versions on one page are not run. Whether a failed manifest should be reported to the host is not specified; the session stays silent and the editor keeps its fallback fonts. Duplicate-check uses the font set's own faces, so two versions of the editor share an alias without shared module state. The licence field is carried, not checked (BE's rules). The licence rules for the default set and the manifest are BE's; the editor and the LaTeX workers load the same files (02 §6). Lane U-FE-049-064, round 5: criterion 4 (second half) stays open. `packages/element/src/styles/element.css` still names 'Noto Serif' in the fallback stack of the document surface (the `--de-font-document` rules), so the surface does not refer to fonts only by alias; whether a family name may remain as the last fallback is not specified and is left for the owner.
+
+### FE-062 Map document font families to aliases
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §6 · **Requirements:** R1, R5 · **Depends on:** FE-061
+
+As an author, I want text in my document to appear in the right font, including for imported files, so that the screen is a fair guide to the PDF.
+
+**Acceptance criteria**
+
+- [x] Given a run with a `fontFamily` value, when it renders, then the editor looks the family up in the manifest and renders with that file's alias; the CDM value is unchanged.
+- [ ] Given the manifest maps a proprietary family to a metric-compatible open one (Calibri to Carlito, Cambria to Caladea, Arial, Times New Roman and Courier New to the Liberation families), when text in that family renders, then the open font is shown and the document keeps the original name.
+- [ ] Given a family with no open substitute (Aptos), when it renders, then a fallback is shown, the document keeps the name, and the reflow is expected rather than treated as an error.
+- [ ] Given a document family and the same family in an export, when the editor's chosen file is compared with the file the LaTeX worker loads, then they are the same file (shared manifest).
+
+**Evidence (lane U-FE-049-064, criterion 1):** `packages/engine/src/view/fe-062-font-alias.universal.test.ts` (2 tests, `pnpm vitest run --project browser <file>` with `DOCEDIT_BROWSERS=chromium,firefox,webkit`, passed 2026-11-13 in all three): a `fontFamily` mark on the body text "Alpha" is drawn with the alias the core's `fontAlias` gives for "Noto Serif", the document keeps "Noto Serif", and a family the lookup does not know keeps its name in the CSS. `packages/element/test/fe-062-manifest-lookup.test.ts` (2 tests, Node.js, passed): the element's lookup gives the hash alias of the manifest file, and none for another family or when the manifest cannot be read. Wiring: `packages/element/src/font-loader.ts` (`manifestFamilyLookup`), `session.ts` (read alongside the font registration, awaited before the mount), `doc-editor.ts` and `editor.ts` (passed to `EditorCore`), `packages/engine/src/core.ts` (`CoreConfig.fontAlias`), `packages/engine/src/view-support.ts` (`cssomMarkViews(fontAlias)`), `packages/engine/src/view/web.ts`.
+
+**Notes:** Lane U-FE-049-064, round 5: criterion 1 ticked (see Evidence). The manifest is fetched a second time for the lookup (the registration reads it too); the lookup is read at each draw, so a mark drawn before the manifest arrives keeps its name until it is drawn again. Criteria 2 and 3 stay open: the manifest body has no substitute field, and the substitute table (Calibri to Carlito and the rest) and the fallback for Aptos are a decision for BE-047 and the owner, not made here. Criterion 4 needs the LaTeX worker's font file to be compared, not built here. Lane FE-053-065, round 3: not started, no criterion ticked. The manifest body the element reads (`packages/element/src/font-manifest.ts`, `FontManifestBody`) lists faces per family and has no substitute field, so the Calibri to Carlito table has no source in it (BE-047); the web view passes a `fontFamily` value to CSS unchanged (`packages/engine/src/view-support.ts`, `fontFamilyValue`) and looks up no alias. Both need a decision on where the substitute table lives before criterion 2 or 3 can be built. The fallback font for a family with no entry is not specified (Open questions). The import warning that documents using Aptos reflow is EXP's. Lane FE-053-065, round 5: `packages/element/src/font-family-lookup.ts` (`faceForFamily`, `familyAlias`) looks a family up in the manifest and returns the hash alias of its file, tested in `packages/element/test/fe-062-font-family-lookup.test.ts` (5 tests with a fast-check property, passed, Node.js). Criterion 1 stays unticked: the engine's `fontFamilyValue` in `packages/engine/src/view-support.ts` still passes the name unchanged and does not call the lookup, and the choice of one file for a family with several faces is proposed in docs/adr/0204-lane-FE-053-065.md section 6, not decided.
+
+### FE-063 Register the same aliases in workers
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | S | must | Maintainer |
+
+**Spec:** 02 §3, §6, §9.3 · **Requirements:** R1 · **Depends on:** FE-061, FE-075, FE-079
+
+As a maintainer, I want workers that measure text to use the same font aliases as the page, so that measured widths match painted widths.
+
+**Acceptance criteria**
+
+- [x] Given a worker that measures text, when it starts, then it registers the same aliases on its own font set before any measurement.
+- [x] Given the same text, alias and size, when it is measured in the worker and on the main thread, then the results are equal.
+- [x] Given a worker has not yet loaded a font, when a measurement is requested, then it waits for the font and does not measure with a fallback.
+
+**Evidence (lane U-FE-049-064, criteria 1 to 3, 2026-11-13; criteria 1 and 3 unticked by the reviewer, see Notes; the evidence supports criterion 2 only):** `packages/element/src/fe-063-worker-fonts.universal.test.ts` (1 test, `pnpm vitest run --project browser packages/element/src/fe-063-worker-fonts.universal.test.ts`, passed in Chromium and Firefox; WebKit is skipped by `workerHasCanvas()` because its Worker has no `OffscreenCanvas` in this Playwright build, a probe run on 2026-11-13). The worker entry `packages/element/src/fe-063-font-worker.ts` registers the manifest files with `registerFontFiles` on `self.fonts` and returns the aliases (criterion 1); a measure request makes the worker `await self.fonts.load(...)` before `canvasTextMeasurer` takes the advance, and the width equals the page's width for the same alias, text and 11 pt and differs from the unloaded fallback width (criteria 2 and 3). **Evidence (lane V-FE-049-064, criterion 2):** `packages/layout/src/fe-064-font-epoch.test.ts` (5 tests, Node.js, passed 2026-11-13, `pnpm vitest run packages/layout/src/fe-064-font-epoch.test.ts`): a cache under epoch 0 answers the second call, and after `FontEpoch.advance()` the new measurer misses and its id differs; a font that arrives advances the epoch once, a duplicate alias is looked at once, an already-loaded face and a failed load leave it unchanged, and a pending font does not move it. Source: `packages/layout/src/font-epoch.ts` (`FontEpoch`, `FontArrivals`).
+
+**Evidence (fixer U-SYN-037-053, round 6, criteria 1 to 3, 2026-11-14):** the sequence is product code. `packages/element/src/worker-fonts.ts`: `measureHandler` refuses a `measure` before `start`, registers the manifest's files on the scope's own font set with `registerFontFiles` on `start`, and on `measure` awaits `ensureFace` (`FontFaceSet.load` for the measurer's CSS font; `FaceMissingError` when no face holds the alias) before `canvasTextMeasurer` takes the width; `scopeFonts` reads `self.fonts` in a worker and `document.fonts` on the page, so the page waits with the same `ensureFace`. `packages/element/src/measure-worker.ts` is the worker entry (wires `measureHandler` to `onmessage`); `packages/element/src/measure-worker-client.ts` (`startMeasureWorker`) spawns it as a module worker and sends `start` first. `fe-063-font-worker.ts` now only imports the entry. Tests: `packages/element/src/fe-063-worker-fonts.universal.test.ts` (3 tests, `DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser packages/element/src/fe-063-worker-fonts.universal.test.ts`, run twice on 2026-11-14): in Chromium and Firefox the worker started by `startMeasureWorker` reports the page's alias, a measurement sent at once, before any load, answers the loaded width, equal to the page's width for the same alias, text and 11 pt and not the fallback width, and an alias with no face is refused with `face_missing`; the page-side test (all three browsers) shows `ensureFace` refusing an alias with no face and loading a registered one, and `measureHandler` refusing a measurement before `start`. WebKit skips the two worker tests (no `OffscreenCanvas` in its Worker). `packages/element/test/fe-063-measure-handler.test.ts` (4 tests, Node.js, passed): with a fake scope, the order is add, load, loaded, measure, and nothing is measured before `start` or for a missing face.
+
+**Notes:** Fixer U-SYN-037-053, round 6: criteria 1 and 3 ticked again on the product entry `measure-worker.ts` and the shared helper of `worker-fonts.ts` (see Evidence). No element code starts the worker yet: whether layout runs in a worker is open (FE-075), and the client is the piece a layout pass off the main thread would use. WebKit cannot run the worker half (no `OffscreenCanvas` in its Worker); a WebKit decision is still FE-075's. Reviewer, lane U-FE-049-064 round 6: criteria 1 and 3 are unticked. The register-then-wait sequence (`registerFontFiles` on `self.fonts`, then `await self.fonts.load(...)` before measuring) exists only in `fe-063-font-worker.ts`, a fixture that no product code imports, so the test proves the fixture does it, not that a worker of the editor does. There is no product worker (FE-075 is undecided; FE-079 is the layout worker), and `canvasTextMeasurer` itself does not wait for a face. Tick both when a product worker entry owns that sequence, or when a shared helper (for example a `loadFace` that the worker and the page both call) is tested in a browser worker. Criterion 2 stays ticked (Chromium and Firefox; WebKit cannot run it). Lane U-FE-049-064, round 6 (developer's claim, before review): criteria 1 to 3 were ticked on the element's canvas measurer in a worker (see Evidence). WebKit is not run: its Worker has no `OffscreenCanvas` in this Playwright build, so the worker cannot measure there; the element's measurer has no fallback path in a worker, and a WebKit decision is needed (needsFromOthers, FE-075). The worker is the element's entry, not the layout engine's; the layout engine's own worker run is FE-076. Lane V-FE-049-064: criterion 2 is ticked. Criterion 1 (a layout pass waits for an unloaded font before measuring) and criterion 3 (only blocks using that font are re-measured) stay open: `FontEpoch.track` exists but no layout pass calls it, and the per-block re-measure needs the incremental layout of FE-088 to take the epoch. The font arrival source in the browser (`document.fonts` loading events) is not wired to the element either (FE-061).
+
+### FE-064 Wait for fonts and advance the font epoch
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 02 §6, §9.3 · **Requirements:** R1 · **Depends on:** FE-061, FE-079
+
+As a maintainer, I want layout to wait for the fonts it needs and to re-measure when a font arrives later, so that stale measurements never persist.
+
+**Acceptance criteria**
+
+- [x] Given a layout pass needs a font that is not loaded, when it starts, then it waits for the font before measuring.
+- [x] Given a font loads after layout, when it arrives, then the font epoch advances and measurement caches keyed by the old epoch no longer hit.
+- [x] Given the epoch advances, when the next layout pass runs, then every block that uses that font is re-measured and re-laid out and no other block is.
+- [ ] Given the on-screen math fonts, when equations are laid out, then their sizes are measured from the screen fonts and the difference to the PDF is handled by reconciliation (FE-100).
+
+**Evidence (lane U-FE-049-064, criterion 2, 2026-11-13; unticked by the reviewer, see Notes; the test shows only a face that `track` loads itself):** `packages/layout/src/fe-064-font-arrivals.universal.test.ts` (2 tests, `pnpm vitest run --project browser packages/layout/src/fe-064-font-arrivals.universal.test.ts` with `DOCEDIT_BROWSERS=chromium,firefox,webkit`, 6 of 6 passed in the three browsers): a real `FontFace` on `document.fonts` (the NotoSans file, status `unloaded`) is tracked by `FontEpoch.track` with the new `faceArrivals` source (`packages/layout/src/font-arrivals.ts`); when the file loads the epoch goes from 0 to 1 once, a measurer cached under epoch 0 answers its second call from the cache and misses after the advance (its id changes), and a second track over the now-loaded face or an alias the page does not hold leaves the epoch at 1 or 0. Criteria 1 and 3 stay open (see Notes). **Evidence (criterion 2, library level only; fixer V-SYN-037-053, 2026-11-13):** `packages/layout/src/font-epoch.ts` (`FontEpoch`, `FontArrivals`) is now exported from `packages/layout/src/index.ts`, the package's only entry; `track` no longer has the dead assignment that `no-useless-assignment` refused (`pnpm exec eslint packages/layout/src/font-epoch.ts` passes). Tested by `packages/layout/src/fe-064-font-epoch.test.ts` (`pnpm vitest run --project node packages/layout/src/fe-064-font-epoch.test.ts`, 5 tests pass). Only the library is covered: the tests use a fake `FontArrivals`, and no real font source (`document.fonts`) is wired into the element or a layout pass.
+
+**Evidence (fixer U-SYN-037-053, round 6, criterion 2, 2026-11-14):** `packages/layout/src/font-arrivals.ts`: `faceArrivals` now records each face's status when a pass first measures under its alias (`note`), and `arrived` compares with that record, waits on `FontFace.loaded` (it starts the load only with `{ load: true }`), and reports each arrival once, so a face loaded by any route after the pass is one arrival. `packages/layout/src/font-pass.ts`: `FontAwareLayout.layout` is a layout pass (`layoutFlow`) that measures through the epoch's cached measurer wrapped in `notingMeasurer`, then calls `FontEpoch.track` on the aliases it measured; its `fonts` promise is true when the epoch advanced. Exported from `packages/layout/src/index.ts`. Tests: `packages/layout/src/fe-064-font-arrivals.universal.test.ts` (5 tests, `DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser packages/layout/src/fe-064-font-arrivals.universal.test.ts`, 15 of 15 passed in the three browsers, run twice on 2026-11-14): a pass lays out a document in an unloaded real `FontFace` (the NotoSans file) with a canvas measurer; the face is then loaded by `face.load()`, outside the pass and outside `track`; the pass's `fonts` resolves true, the epoch goes from 0 to 1 once, the measurer handed out next has another id and misses (one more inner call), and its width differs from the fallback width the old cache keeps; the next pass sees no arrival. A face whose load finished before `track` was asked, but was noted unloaded, still advances once; two tracks over one face advance once; a face loaded before the pass and an alias the page does not hold do not advance. `packages/layout/src/fe-064-font-pass.test.ts` (6 tests, Node.js, fake faces, passed). `pnpm vitest run --project node packages/layout/src/fe-064-font-epoch.test.ts` still passes (5 tests).
+
+**Evidence (lane U-FE-049-064, round 7, criterion 1):** `packages/layout/src/font-pass.ts` (`FontAwareLayout.ready(aliases)`: notes each alias as it stands, waits through `FontEpoch.track`, resolves true when the epoch advanced). Node.js, fake faces: `packages/layout/src/fe-064-font-ready.test.ts` (3 tests, `pnpm vitest run --project node packages/layout/src/fe-064-font-ready.test.ts`, passed): the wait starts the load and holds until the face loads, then the pass measures under epoch 1 and sees no new arrival. Chromium, Firefox and WebKit, real FontFace: `packages/layout/src/fe-064-font-ready.universal.test.ts` (`DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser packages/layout/src/fe-064-font-ready.universal.test.ts`, 3 of 3 passed): the loaded width differs from the fallback width taken before the wait. The element still runs no layout pass, so no element code calls `ready` yet. Reviewer: these tests show `ready` waiting, not a pass waiting; criterion 1 is unticked (see Notes).
+
+**Evidence (fixer U-SYN-037-053, round 7, criterion 1, 2026-11-14):** `packages/layout/src/font-pass.ts`: the pass entry point `FontAwareLayout.layoutWhenReady(doc, providers, options)` reads the aliases from the flow document (`flowFontAliases`: the resolved font of every paragraph mark and inline in the body, the header and footer stories and the footnotes, which `toFlow` takes from the style definitions and direct formatting), awaits `ready` on them, then runs `layout`. Chromium, Firefox and WebKit, real FontFace (the NotoSans file, status `unloaded`, alias named only by the Normal style): `packages/layout/src/fe-064-font-when-ready.universal.test.ts` (`DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser packages/layout/src/fe-064-font-when-ready.universal.test.ts`, 3 of 3 passed on two runs): every measurement the pass takes under the alias sees the face `loaded`, the pass measures under epoch 1, its first line width equals the width of a fresh pass once the face is loaded and differs from the fallback width, and its `fonts` resolves false with the epoch still 1. Node.js, fake faces: `packages/layout/src/fe-064-font-when-ready.test.ts` (5 tests, `pnpm vitest run --project node packages/layout/src/fe-064-font-when-ready.test.ts`, passed): the aliases include a style font, a direct font mark and a header story font and cover every alias the pass measures; the pass takes no measurement until the face loads; a loaded face is not waited for; a face that fails to load leaves the pass measuring the fallback with no advance. The element still runs no paginated layout pass, so no element code calls `layoutWhenReady` yet.
+
+**Evidence (lane V-FE-049-064, round 8, criterion 3; unticked by the reviewer, see Notes; the test shows the dirty-set selection only):** `packages/layout/src/fe-064-font-dirty.test.ts` (4 tests, Node.js, `pnpm vitest run --project node packages/layout/src/fe-064-font-dirty.test.ts`, passed 2026-11-14): a fake arrivals source reports "Alpha" arrived, `FontEpoch.track` advances the epoch once and `FontEpoch.takeArrived` names "Alpha"; `blocksUsingFonts` (`packages/layout/src/font-dirty.ts`) marks the paragraphs whose mark or inline font is Alpha (a body paragraph and a mixed one, not a Beta paragraph); the incremental layout (`packages/layout/src/incremental.ts`) with that dirty set measures exactly those two blocks and reuses the other two, and with no dirty set it reuses all four. Source of the arrival list: `packages/layout/src/font-epoch.ts` (`takeArrived`, new). The pagination still runs over the whole document (FE-088 criterion 2 is open), so "re-laid out" is read as the paragraph's line breaking; the fragments of the other blocks are reused, not rebuilt.
+
+**Evidence (fixer V-SYN-037-053, round 7, criterion 3, 2026-11-14):** `packages/layout/src/font-incremental.ts`: the pass entry point `IncrementalFontLayout.layout(doc, edited?)` takes the arrived aliases from its `FontEpoch` (`takeArrived`), builds the dirty set with `blocksUsingFonts` (plus any edited blocks), points the incremental layout's measurer at the current epoch's cached measurer wrapped in `notingMeasurer`, runs `incrementalLayout.update(doc, dirty)`, and tracks the aliases it measured; `font-dirty.ts` and `font-incremental.ts` are now exported from `packages/layout/src/index.ts`. Node.js, fake faces: `packages/layout/src/fe-064-font-incremental.test.ts` (4 tests, `pnpm vitest run --project node packages/layout/src/fe-064-font-incremental.test.ts`, passed): the measurer gives 0.5 em per character while a family's face is not loaded and 0.8 em once it is; after the Alpha face loads outside the pass, the next pass measures exactly the two Alpha blocks, their line widths equal a fresh layout's and differ from the first pass's, the Normal and Beta blocks keep the first pass's fragments, no Beta measurement is taken, and the tree names the epoch-1 measurer; a pass with no arrival measures nothing; an arrival is taken once; edited blocks join the dirty set. Chromium, Firefox and WebKit, real FontFace (the NotoSans file, status `unloaded`): `packages/layout/src/fe-064-font-incremental.universal.test.ts` (`DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser packages/layout/src/fe-064-font-incremental.universal.test.ts`, 3 of 3 passed on two runs): of two paragraphs, the one in the face's alias is measured with the fallback, the face is loaded by `face.load()` outside the pass, and the next pass re-measures only that paragraph, with the width of a fresh canvas layout (not the fallback width), while the other paragraph takes no measurement and keeps its fragment. Pagination still runs over the whole document (FE-088 criterion 2), so "re-laid out" is the paragraph's line breaking. The element runs no paginated layout pass yet, so no element code constructs `IncrementalFontLayout`.
+
+**Notes:** Fixer V-SYN-037-053, round 7: criterion 3 ticked again on the pass entry point `IncrementalFontLayout.layout` with a measurer whose widths change on arrival (see Evidence). Reviewer, round 8 (lane V-FE-049-064): criterion 3 is unticked. The 4 tests pass (rerun), but they show only that `blocksUsingFonts` picks the paragraphs that name an arrived alias and that `incrementalLayout.update(doc, dirty)` recomputes exactly those. The test glues `takeArrived` to `blocksUsingFonts` to `update` by hand, and `incrementalLayout` is built over one fixed measurer ("the cache is valid only for them", `incremental.ts`), while `FontEpoch.measurer` hands out a new measurer after an arrival. The test never changes a measurement (it uses `fixedWidthMeasurer` throughout), so no block is shown to be re-measured with the arrived face's widths while the others keep theirs. `font-dirty.ts` is also not exported from `packages/layout/src/index.ts`. Tick it when a pass entry point (for example an incremental variant of `FontAwareLayout`) takes the arrival from the epoch, builds the dirty set, and measures with the new epoch's measurer, and a test with a measurer whose widths change on arrival shows only the dirty blocks taking the new widths. Fixer U-SYN-037-053, round 7: criterion 1 ticked again on the pass entry point `layoutWhenReady` (see Evidence); the caller no longer lists the aliases. Open, not decided here: the spec (02 §6) sets no time limit for the wait, so a face that never settles keeps the pass pending; a face that fails to load counts as settled and the pass measures the fallback. Reviewer, round 7 (lane U-FE-049-064): criterion 1 is unticked. The tests pass (Node 3 of 3; Chromium, Firefox and WebKit 3 of 3, rerun by the reviewer), but they prove only that a separate method, `FontAwareLayout.ready(aliases)`, waits for the faces it is given. The pass itself does not wait: `FontAwareLayout.layout` is synchronous, starts measuring at once, and neither calls `ready` nor derives the aliases it needs; the test calls `ready` by hand with a list it wrote and then calls `layout`. No pass, and no product code, ties the wait to a pass, so "when a pass starts, it waits" is not shown. Tick it when a pass entry point (for example an async `layoutWhenReady(doc, ...)`) reads the font aliases from the flow document's styles, awaits them, then measures, and a test shows that entry point measuring the loaded width in a real browser. The decision that the caller lists the aliases is the developer's, not the spec's; it is avoidable, since the aliases are in the document's style definitions. Round 7 (lane U-FE-049-064, developer's claim before review): criterion 1 ticked at the layout package (see Evidence). Decision of this round, not in the spec: the caller lists the aliases a pass needs (`ready(aliases)`); the pass does not read them from the flow document, and a face that never loads leaves `ready` pending. Criterion 3 stays open (FE-088 incremental re-measure). Criterion 4 stays open (needs FE-069 and FE-100). Round 8 (lane V-FE-049-064): criterion 3 ticked at the layout package (see Evidence); the wiring of a real pass to the dirty set is not built (no element pass). Fixer U-SYN-037-053, round 6: criterion 2 ticked again (see Evidence). The pass that calls `track` is the layout package's `FontAwareLayout`; the element does not run the paginated layout yet (the web view has no layout pass), so no element code constructs it. Criterion 1 stays open: `FontAwareLayout` measures first and re-lays out after an arrival; waiting for a face before the first measurement (for example `faceArrivals(..., { load: true })` awaited before `layout`) is not built or tested as a pass. Reviewer, lane U-FE-049-064 round 6: criterion 2 is unticked again. `faceArrivals` reports an arrival only when it loads the face itself (`arrived` is false for a face whose status is already `loaded`), and the test passes only because `track` triggers the load. A font that loads after layout by any other route (the browser fetching it for painted text, another `load()` call) is then seen as "already loaded", the epoch does not advance, and the caches keyed by the old epoch keep their fallback widths: the case the criterion names. Also `faceArrivals` is imported by no product code (no layout pass, no element). Tick it when the source detects arrivals it did not start (for example it remembers the status each face had when the pass measured, or listens to `loadingdone` or `FontFace.loaded`), a test loads the face by another route and still sees one advance, and something in the element or a pass calls `track`. Developer's claim before review: criterion 2 was ticked on a real `FontFace` in three browsers (see Evidence; `faceArrivals` in `packages/layout/src/font-arrivals.ts` is the browser source of arrivals). Criterion 1 stays open: no layout pass calls `FontEpoch.track` or waits for a face, and the layout engine has no pass that asks for fonts yet. Criterion 3 stays open for the incremental re-measure of FE-088. Criterion 4 needs the on-screen math fonts (FE-069) and reconciliation (FE-100), not built. Earlier evidence audit (2026-11-13): criterion 2 was unticked. `FontEpoch` and `FontArrivals` (`packages/layout/src/font-epoch.ts`) are imported by no product code, only re-exported from `packages/layout/src/index.ts` and used by `fe-064-font-epoch.test.ts` with a fake arrivals source, so nothing advances the epoch when a font really arrives (the test file itself passes, 5 tests). Lane FE-053-065, round 3: not started, no criterion ticked. The measurer cache takes its epoch as a value (`cachingMeasurer` in `packages/layout/src/measure.ts`); nothing in the repository advances it when a font loads, and no layout pass waits for fonts. The owner of this enabler is not named in PLAN-1b (phase 3, FE-079 layout), so the epoch source was not added in the element without a decision. Lane U-FE-049-064, round 8: no element code calls `layoutWhenReady` yet; wiring it is FE-075 and FE-079 work. Criterion 1 is met at the layout package's pass entry point only, and no element behaviour is claimed for it.
+
+## Views and the web view (02 §7, §8)
+
+### FE-065 Select the view with the `view` attribute
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Integrating developer |
+
+**Spec:** 02 §7; 05 §8.1 · **Requirements:** R1 · **Depends on:** FE-066, PRO-074, PRO-079, PRO-081
+
+As an integrating developer, I want to choose between the web, read and print views, so that I can show the right one for each use.
+
+**Acceptance criteria**
+
+- [x] Given `view="web"`, when the element renders, then the web view is shown, labelled "Web layout" through an external interface string, with no page edges drawn.
+- [ ] Given `view="read"`, when the element renders, then the read view is shown (FE-072); given `view="print"`, when the page view exists, then the editable page view is shown (FE-101).
+- [ ] Given the `view` attribute changes while the editor is open, when the change is reflected, then the editing core is not recreated and unconfirmed work is not lost.
+- [x] Given `view="print"` while the page view is not available, when the element renders, then it shows the web view and does not throw.
+- [x] Given a touch device, when any view is requested, then the web view is used (FE-113).
+
+**Evidence (lane V-FE-065-080, round 3, criteria 1 and 3 in part):** `packages/element/e2e/fe-065-web-label.spec.ts`: the web view's shadow root holds one `.de-view-label` with the text "Web layout" (`VIEW_STRINGS.web`, view-select.ts) and `data-view="web"`, and no page-edge element, for `view="web"` and with no attribute; a change of `view` from web to print keeps the same editing surface node and the same text (print falls back to the web view). Run with `DOCEDIT_DEMO_PORT=57040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-065-web-label.spec.ts`: Chromium, Firefox and WebKit, 3 each. Criterion 3 stays unticked: a change to or from `read` is a new mount (the read view has no core), and criterion 2's print half needs FE-101.
+
+**Evidence (lane U-FE-065-080, round 5, criterion 2, read half only):** `packages/element/e2e/fe-072-read-view.spec.ts` shows that `view="read"` mounts the read view with no editing surface (FE-072). The print half (the editable page view, FE-101) is not built, so criterion 2 stays unticked. `doc-editor.ts` now chooses the view with `selectView` when a document starts; a change of `view` while the element is open is not reflected yet (criterion 3 stays unticked).
+**Evidence (lane U-FE-065-080, criterion 4):** `packages/element/e2e/fe-065-view-print-fallback.spec.ts`: with `view="print"` on the demo's embed page (desktop viewport), the shadow root holds one `.de-editing-surface`, no page view and no read view, and the page raised no `pageerror`. Run with `DOCEDIT_DEMO_PORT=56040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-065-view-print-fallback.spec.ts --project=chromium --project=firefox --project=webkit --reporter=list`: 3 passed. This holds because the element has one view today (the web view); it is not a page-view fallback.
+**Evidence (lane U-FE-065-080, round 8, criterion 5):** `packages/element/e2e/fe-113-touch-view-choice.spec.ts` (a touch device, coarse pointer, for `view="web"`, `"read"` and `"print"`: the web view is shown, with the same emulation answered false the `read` view is shown). Run with `DOCEDIT_DEMO_PORT=56040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-113-touch-view-choice.spec.ts --project=chromium --project=firefox --project=webkit --reporter=list`: 12 passed (Chromium, Firefox and WebKit).
+
+**Notes:** The default value of `view` is not stated in 05 §8.1, and what `view="print"` does before the page view exists is inferred from "fallback" in 02 §7; both are in Open questions. The view switcher control is UX's. Round 2 (lane FE-053-065): `packages/element/src/view-select.ts` (`selectView`, `VIEW_STRINGS`, `DEFAULT_VIEW`) decides the view for each attribute value and the touch and page-view cases, tested in `packages/element/test/view-select.test.ts` (17 tests with FE-061, passed). No criterion is ticked: `doc-editor.ts` does not call it yet (its `view` branch still waits for PRO-079), no view is mounted, the "Web layout" label is not drawn, and the change of `view` without a core reload is not run. The default `web` is the proposal in docs/adr/0204-lane-FE-053-065.md. Lane U-FE-065-080 (round 8, 2026-11-13): criterion 5 ticked (the existing touch spec, see Evidence). Criterion 3 stays open: a move from `web` to `read` ends the editing core, which the criterion does not allow as written; the options (keep the session behind the read view, close and reopen it from the journal, or refuse with unconfirmed work) are in docs/adr/0304-lane-U-FE-065-080.md, item 1, and are not decided. Criterion 1 (the "Web layout" label drawn in the page) is not built; it is the web view's mount in `packages/engine/src/view/web.ts` and the shell's, not this lane's to change without the owner of those files.
+
+### FE-066 Edit in the web view
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 02 §7, §8; ADR 0005; 11 §4 · **Requirements:** R1, R2, R11, R12 · **Depends on:** FE-013, FE-030, FE-033, SPK-014
+
+As an author, I want to type, select and format in a continuous, reflowing sheet with the native caret, selection, input methods and spellcheck, so that editing feels like a normal text editor.
+
+**Acceptance criteria**
+
+- [ ] Given the web view in each supported browser, when the user types, selects, moves the caret and composes text with Japanese, Chinese and Korean input methods, then the document model updates correctly (the S1 matrix passes).
+- [x] Given Safari, when the selection is read, then it is read with `Selection.getComposedRanges()`; given Firefox, when the editor loads, then ProseMirror patches `ShadowRoot.prototype.getSelection` and a test records exactly what that changes on a host page.
+- [x] Given the container is resized, when the width changes, then the content reflows and the view shows no page boundaries.
+- [ ] Given the browser's spellcheck is on, when a misspelled word is typed, then the browser underlines it inside the editing surface.
+- [x] Given a screen reader, when the user moves through the document, then paragraphs, headings, tables and images are exposed natively as document content.
+- [ ] Given a document with headers and footers, when the web view renders, then they are not part of the continuous sheet and are reached through panels (FE-057).
+
+**Evidence (lane V-FE-065-080, criterion 5):** `packages/element/e2e/fe-066-native-exposure.spec.ts`: a document with a Heading 1, a paragraph, a two-row table and an inline image with alt text is mounted in `<doc-editor>` on the embedding demo, and the browser's accessibility tree of `.de-editing-surface` (Playwright `ariaSnapshot`, which pierces the shadow root) shows `heading` at level 1, the paragraph and cell text, `table` and `row`, and `img` with the alt text. Run with `$env:DOCEDIT_DEMO_PORT="57040"; pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-066-native-exposure.spec.ts --project=chromium --project=firefox --project=webkit`: Chromium, Firefox and WebKit each passed on a rerun (one earlier Firefox and WebKit run raised `de-error` during mount, not reproduced on rerun; the cause is not known). This is the accessibility tree, not a run with a screen reader.
+
+**Evidence (engine-3 round):** `packages/engine/src/view/web-reflow.universal.test.ts` (criterion 3; Chromium only, `DOCEDIT_BROWSERS=chromium pnpm vitest run --project browser`, passed): a long paragraph added by a remote commit is taller in a 240 px container than in an 800 px one, the surface follows the container's width, and no element carries a page class.
+
+**Evidence (lane U-FE-065-080, criterion 2):** `packages/element/e2e/fe-116-composed-ranges.spec.ts` (WebKit: the editor reads the selection through `Selection.getComposedRanges`; Chromium and Firefox: the call is absent and nothing fails) and `packages/element/e2e/s1-getselection.spec.ts` (the `library` shim records that ProseMirror defines `ShadowRoot.prototype.getSelection` in Firefox and WebKit, enumerable, returning `document.getSelection()`; Chromium keeps its native method). Run from the repository root with `pnpm exec playwright test -c packages/element/playwright.config.ts <file> --project=<browser>` against the demo served on port 56040, in Chromium, Firefox and WebKit: 9 passed. Caveat: both files mount the S1 harness page (`openS1`), which runs the engine's editor with ProseMirror; they are not run against a page that mounts `<doc-editor>` from the built library.
+
+**Notes:** The web view is permanent: the accessible reflow layout, the touch layout and the fallback if the page view misbehaves (02 §7). Field node views are FRW's (12 §11). Headers, footers and footnotes are edited in panels (FE-057, FE-058). The editor's own context menu hides the browser's spellcheck suggestions; the proofing port is the answer (UX, 13 §6.1). Lane U-FE-065-080 (round 2, 2026-11-13): criterion 1 stays open. The S1 composition matrix run in Firefox (`s1-composition.spec.ts`, `s1-input-drivers.spec.ts`) gave 6 failures out of 114 in the one-step commit group and in the footnote group, and the run in Chromium had failures that the shared demo build made hard to separate from environment faults; WebKit composition is skipped by design (no protocol command, manual checklist, `s1-composition.spec.ts`). Criterion 3 (spellcheck underline) and criterion 5 (screen reader) need a visible check or a manual run, and criterion 6 needs the panels of FE-057 and FE-058; all stay open.
+
+### FE-067 Render document content without executing it
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 10 §3.1; 03 §8 (I9, I11); 02 §3 · **Requirements:** R10 · **Depends on:** FE-016, FE-066
+
+As an author, I want a hostile document to display harmlessly, so that opening someone else's content is safe.
+
+**Acceptance criteria**
+
+- [x] Given any document, when the web view renders it, then DOM is built with DOM APIs and no document value is assigned through `innerHTML`.
+- [x] Given a link, when it renders, then it is clickable only if its scheme is `http`, `https`, `mailto` or an in-document target, and it opens with `noopener` and `noreferrer`.
+- [ ] Given an image, when it renders, then it is drawn from an asset URL and never from a `data:` URL, and an SVG asset is never rendered as live SVG.
+- [x] Given an attribute value that reaches a style (colour, length, font family, size), when it renders, then it is applied through the CSSOM only if it matches its grammar (I11), otherwise the default is used.
+- [ ] Given a fuzz corpus of documents with hostile strings in every attribute, when each is opened under a strict policy, then no script runs, no violation is reported and no style outside the editor changes.
+
+**Evidence:** `packages/engine/test/web-view-safety.test.ts` (headless, Node.js, round 7): criterion 1, 'assigns no HTML string to the DOM anywhere in the engine source' (a scan of `packages/engine/src`, `testing.ts` excepted, for `innerHTML` or `outerHTML` assignments, `insertAdjacentHTML` and `document.write`, with a non-vacuity check on the file count); criterion 2, the link mark's DOM specification from `editingSchema()`: `https`, `http`, `mailto` and `#name` targets render with their `href` and `rel="noopener noreferrer"`; `javascript:`, a mixed-case `javascript:`, `data:`, `file:` and `vbscript:` render without an `href`, so they are not clickable. Criterion 4: `packages/engine/test/view-grammar.test.ts` (round 8, lane FE-053-065): the colour, size and family grammars are exported from `packages/engine/src/view-support.ts` (`colourValue`, `fontSizeValue`, `fontFamilyValue`), and the CSSOM mark views call them, so a value outside its grammar sets no style; fast-check properties cover the family and size grammars.
+
+**Evidence (lane U-FE-065-080, criterion 5, partial):** `packages/element/e2e/fe-067-hostile-corpus.spec.ts`: 24 seeded documents with payloads in the text, the link's href and title, and the font family and colour marks, opened under the strict baseline (`'self'` only, no report endpoint) on the embedding demo; each document shows, reports no `securitypolicyviolation`, runs no canary script, has no element outside the schema on the surface, and changes no style outside the editor. Run with `DOCEDIT_DEMO_PORT=56040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-067-hostile-corpus.spec.ts`: Chromium, Firefox and WebKit, each passed. Not criterion 5 as written (not every attribute, not a fuzz run).
+
+**Notes:** Round 8 (lane U-FE-065-080): no criterion changed; criterion 3 needs the element's asset URL path (PRO-091), not built, see docs/adr/0304-lane-U-FE-065-080.md, item 4. Round 7 (2026-11-13), packet of the engine. Criterion 3 stays open: the image mark renders a `span` with no source, so no URL is drawn by the engine; the asset URL and the SVG rule are the element's (PRO-091, FE-071). Criterion 4 is ticked (round 8, lane FE-053-065): the grammar is exported from `view-support.ts` and tested in Node. The one-line CSSOM assignment in each mark view needs a DOM and is not run in Node; the browser run of FE-125 would cover it. Criterion 5 is a fuzz run under a strict policy in a browser and is not built. Lane U-FE-065-080 (round 4, 2026-11-13): a seeded corpus of 24 hostile documents (seed 67) runs under the strict baseline in `packages/element/e2e/fe-067-hostile-corpus.spec.ts`; criterion 5 stays unticked because the corpus covers text, link href and title, and the family and colour marks only (the CDM refuses other values at creation, I11), not every attribute, and it is not a coverage-guided fuzz run. Lane V-FE-065-080 (round 4, 2026-11-13): `packages/element/e2e/fe-067-v-fe-065-080-attributes.spec.ts` adds a second seeded corpus of 16 documents (seed 67) with hostile strings in a link's title inside a table cell; the CDM refuses every hostile value tried for a style name and an anchor name (I11), so those names carry grammar-valid labels there. Run in Chromium, Firefox and WebKit (`DOCEDIT_DEMO_PORT=57040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-067-v-fe-065-080-attributes.spec.ts`): 3 passed. The corpus does not cover every string attribute (the image, heading and bibliography ones are not in it) and is not a fuzz run, so criterion 5 stays unticked.
+
+### FE-068 Draw optional page guides from compile results
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | could | Author |
+
+**Spec:** 02 §7; 09 §7.1 · **Requirements:** R1, R5 · **Depends on:** FE-066, EXP-055
+
+As an author, I want optional guides that show where the last typeset PDF started its pages, so that I get a rough idea of length without pretending to see pages.
+
+**Acceptance criteria**
+
+- [x] Given page guides are off by default, when a host enables them through `config`, then guides appear; otherwise none do.
+- [x] Given `layout.json` reports a page start at a block, when guides are on, then a guide is drawn before that block and nowhere inside a paragraph.
+- [x] Given the guides, when they are shown, then the view is still labelled "Web layout" and the guides are not drawn as page edges.
+- [ ] Given an edit after the compile's `seq`, when the guides are shown, then they follow the behaviour decided in the Open questions.
+
+**Reviewer (V3 group 3, round 3): criteria 1 and 2 unticked.** `parseLayoutReport` (`packages/element/src/page-guides.ts`) reads a top-level `starts` array of `{ blockId, offset }`, and the e2e and unit tests feed that invented shape. The real `layout.json` (09 §7.1; `packages/layout/src/layout-json.ts`, `services/export-worker/src/layout.ts`) has `pages: [{ n, setup, starts: { blockId, offset }, opensWith }]`, so a real report fails the reader's `starts` array check, the reader gives null and no guide is drawn. Re-tick once the reader takes the real shape (ideally through `parseLayoutJson` of `@docedit/layout`) and a test feeds a report in that shape. Criterion 3 stays ticked (the label is independent of the shape).
+
+**Evidence (fixer, V3 group 3, round 3, criteria 1 and 2 re-ticked):** `parseLayoutReport` (`packages/element/src/page-guides.ts`) now reads `seq` (an integer or null) and `pages[].starts` (null, or `{ blockId, offset }`, with the worker's `y` ignored); a malformed `seq`, `pages` or page start, or pages not numbered from 1 in order, gives null and no guide (02 §9.7). `packages/element/test/fe-068-page-guides.test.ts` (Node.js, 11 tests) feeds it the `layout.json` the export worker wrote for the corpus document pages-20 in a Podman compile with LuaLaTeX on 2026-11-06 (`packages/element/test/fixtures/fe-068-worker-pages-20.layout.json`, copied unchanged from `services/export-worker/out/measure/corpus-v2/`; it passes the worker's `validateLayout`): 19 starts, guides before the 9 blocks pages start at, none for the 10 pages that start inside a paragraph; also a report built by the worker's own `parseRawLayout` and `buildLayout` (`packages/element/test/fe-068-worker-layout.ts`), the example of 09 §7.1, `starts: null`, and the first version's invented shape, which now gives null. `packages/element/e2e/fe-068-page-guides.spec.ts` serves a three-page report built by the worker's code for the regions document: two guides, before `pBefore000000001` and `pAfter0000000001`, none for the page that starts inside `pRegionFirst0001`; off by default and removed when the switch is turned off. Run on 2026-11-14 with `DOCEDIT_DEMO_PORT=57041 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-068-page-guides.spec.ts --project chromium --project firefox --project webkit`: 9 passed. Not used: `validateLayoutJson` of `@docedit/layout`, because the element does not depend on that package and because it refuses the worker's `unit` and `starts.y` members and a null `setup` (the two readings of 09 §7.1 disagree; see the Notes).
+
+**Evidence (lane V-FE-065-080, round 3, criteria 1 to 3; the reader's report shape is wrong, see the reviewer note above):** `packages/element/e2e/fe-068-page-guides.spec.ts` (three tests: guides off by default after a completed export; with `config.pageGuides` on, one guide with the identifier of the block the page starts at (offset 0), placed before that block's paragraph, outside any paragraph, hidden from assistive technology, and "Web layout" still shown; turning the switch off removes it), with a stand-in exports port whose completed job carries a `layout` data URL, read by the element (`loadLayoutReport`, `page-guides.ts`). `packages/engine/src/view/fe-068-page-guides.universal.test.ts` (`EditorCore.setPageGuides`, `page-guide-decorations.ts`): guides before two named blocks, none inside a paragraph, the document unchanged, none after an empty list. `packages/element/test/fe-068-page-guides.test.ts` (Node.js): the reader rejects malformed reports, a start with an offset above 0 gets no guide, a failed fetch gives no report. Run with `DOCEDIT_DEMO_PORT=57040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-068-page-guides.spec.ts`: Chromium, Firefox and WebKit, 3 each; the engine test in Chromium, Firefox and WebKit.
+
+**Notes:** Phase inferred: `layout.json` exists from the export work of 1b, guides are optional (02 §7). Guides are exact only at block starts reported by a compile and drift between compiles. Round 1 (element-3): `pageGuideBlockIds` in packages/element/src/page-guides.ts picks the block starts (`offset` 0) from a parsed `layout.json` and returns none while guides are off; packages/element/test/page-guides.test.ts covers it (criterion 2 in part). Not ticked: nothing is drawn yet, the `config` switch is not added to config.ts, the "Web layout" label is not shown, and criterion 4 is open (no decision on guides after an edit since `seq`, open question 28; proposed in docs/adr/0134-element-3-backlog-batch.md). Round 3 (lane V-FE-065-080, 2026-11-13): criteria 1 to 3 ticked (Evidence above); the switch is `pageGuides` in `config` (config.ts, config.schema.json, default off), and the guides come from the `layout` of a completed export through `requestExport`, which is the only route to a `layout.json` the element has. Criterion 4 stays open: open question 28 has no decision, and this lane does not decide it. Proposed default for the owner (docs/adr/0304-lane-V-FE-065-080.md, round 3): keep drawing the starts the last completed export reported, as 02 §7 already says they drift between compiles, and do not compare `seq` with the document. Fixer (V3 group 3, round 3, 2026-11-14): the two readers of `layout.json` disagree. `services/export-worker/src/layout.ts` (`LAYOUT_SCHEMA`, `validateLayout`) writes and accepts `unit`, `starts.y`, a null `starts`, a null `setup` and a null `seq`; `packages/layout/src/layout-json.ts` (`validateLayoutJson`, the interim reading of ADR 0135 item 7) refuses all five, so it refuses every file the worker has written (for example the pages-20 fixture above). The element's reader reads only `seq` and the page starts and accepts the worker's form. Which reading is the published schema is not decided here; the layout package's owner should align it with the worker.
+
+## Math display and editing (02 §2, §6)
+
+### FE-069 Show equations on screen
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §6; 01 §7; 09 §6.1; 03 §4.3, §4.4 · **Requirements:** R1 · **Depends on:** FE-061, FE-066, CDM-042, EXP-049, EXP-050
+
+As an author, I want inline and block equations drawn as typeset maths in the editor, so that I can read what I wrote.
+
+**Acceptance criteria**
+
+- [ ] Given an `equation` or an `equation_block` with valid LaTeX, when it renders, then KaTeX draws it with `trust` off and in strict mode.
+- [ ] Given KaTeX renders, when the output is inserted, then it is built by DOM construction and not from an HTML string, so that strict content security policy and Trusted Types hold (FE-016).
+- [ ] Given the KaTeX fonts, when they are loaded, then they are registered with the FontFace API under hash aliases (FE-061), not through `@font-face` in the shadow root.
+- [ ] Given LaTeX that KaTeX rejects (for example in an imported or older document), when it renders, then a visible placeholder with the source is shown, nothing throws and the document is not changed.
+- [ ] Given a numbered equation block, when it renders, then its number is the one the shared numbering algorithm computes.
+- [ ] Given a rendered equation, when assistive technology reads it, then it exposes a text alternative for the equation.
+
+**Evidence (lane U-FE-065-080, round 8, criterion 3, partial; unticked by the reviewer because no production code calls `katexFontFiles` or `registerFontFiles` for the KaTeX files, and `drawEquation` references no alias, so the fonts are never loaded for an equation):** `packages/element/src/katex-font-manifest.ts` lists the twenty `.woff2` files of the pinned `katex@0.19.1` with their hash aliases' inputs. `packages/element/src/katex-font-manifest.test.ts` (Node.js, `pnpm vitest run packages/element/src/katex-font-manifest.test.ts`, 3 passed) recomputes each file's SHA-256 from `node_modules` and checks that no element source imports KaTeX's stylesheet. `packages/element/src/katex-fonts.universal.test.ts` (browser, `DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser packages/element/src/katex-fonts.universal.test.ts`, 2 tests in each browser, all passed) registers the files on `document.fonts` through `registerFontFiles` under `de-font-<hash>` aliases only, adds nothing on a second registration, and loads every face (`status` `loaded`) from the URL the test server gave it.
+
+**Evidence (lane U-FE-065-080, fixer round 7 of U3 group 3, criterion 3, re-ticked):** the production path is `loadKatexFonts(baseUrl)` in `packages/element/src/katex-fonts.ts`: it registers the twenty KaTeX files on `document.fonts` with the FontFace API, one alias per KaTeX family (`de-font-<sha-256 of the family's sorted file hashes>`) with each file's own style and weight, and prepares KaTeX's sheet with every `@font-face` rule removed and every `KaTeX_*` name replaced by its alias. `drawEquation` (`math-display.ts`) adopts that sheet into the shadow root it draws into (`adoptKatexSheet`). `Session` calls `loadKatexFonts` when its `katexFontsUrl` option is given (`session.ts`). `packages/element/src/katex-fonts-draw.universal.test.ts` (Chromium, Firefox and WebKit, `DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser packages/element/src/katex-fonts-draw.universal.test.ts`: 2 tests in each browser, 6 passed) draws `x+\mathbf{y}` into a shadow root and checks that the root's sheets hold no `@font-face` rule and no `KaTeX_` name, that the computed `font-family` of the italic x and the bold y is the `de-font-<hash>` alias of `KaTeX_Math` and `KaTeX_Main`, that layout loads exactly those faces (`status` `loaded`) while an unused family (`KaTeX_Fraktur`) stays `unloaded`, that no face is registered under a `KaTeX_*` name, that a second load adds no face, and that a host face named `KaTeX_Main` is left in place and not used. `packages/element/src/katex-fonts.test.ts` (Node.js, 4 passed) recomputes each family alias with `node:crypto`, rewrites the installed `katex.min.css` and checks the result, and checks the registration and its deduplication with a stand-in font set.
+
+**Evidence (lane U-FE-065-080, criteria 1, 2, 4, 6):** `packages/element/src/math-display.universal.test.ts` (`drawEquation` in `packages/element/src/math-display.ts`), in Chromium, Firefox and WebKit (`DOCEDIT_BROWSERS=chromium,firefox,webkit pnpm vitest run --project browser packages/element/src/math-display.universal.test.ts`: 21 passed, 3 files). KaTeX 0.19.1 runs with `trust: false`, `strict: 'error'`, `throwOnError: true`; `innerHTML` is not assigned during a draw; `\href` with trust off draws no link; a rejected source (`\notacommand{x}`) shows a placeholder with the source and throws nothing; a drawn equation carries its source in `annotation encoding="application/x-tex"`.
+
+**Notes:** On-screen maths uses KaTeX's fonts and the PDF an OpenType math font, so sizes differ slightly (02 §6). The form of the text alternative is not specified (Open questions). The math gate and LaTeX are EXP's. Lane U-FE-065-080 (round 3, 2026-11-13): the renderer is `drawEquation` (`math-display.ts`); criteria 1, 2, 4 and 6 are ticked for the renderer, the unit the criteria describe. No engine node view or web-view mount calls it yet (the engine has no equation node view), so the on-screen path from a document equation is not proved. Criterion 3 was unticked by the reviewer (round 7 of U3 group 3) because nothing loaded the KaTeX fonts and no equation used the aliases; the fixer of that round built the loading path and the family-to-alias mapping (`katex-fonts.ts`, see Evidence) and re-ticked it for the renderer, as for criteria 1, 2, 4 and 6. Proposal taken for the mapping (not stated in 02 §6, open for the owner of FE-061): one alias per KaTeX family, derived from the hashes of all its files, rather than one per file as for the backend's manifest, because KaTeX's rules change only the weight or style of an inherited family (`.textbf`, `.textit`, `.mathrm`), which a per-file alias cannot follow. Still open, and decisions for the main session: how the host supplies the KaTeX font directory (the session takes it as `katexFontsUrl`; no `config` member passes it yet, so a mounted `<doc-editor>` registers no KaTeX font today and the element has no default location), and the licence, which the installed package does not state (recorded as unverified). A container drawn before it is in a shadow root, or before `loadKatexFonts` resolves, gets no sheet; the equation node view that will call `drawEquation` is not built. Criterion 5 (the shared numbering algorithm for numbered equation blocks) is not built here. The `strict` setting is `'error'`: the default taken for "strict mode" (`EQUATION_OPTIONS`), not stated in 02 §6. Audit (2026-11-13): criteria 1, 2, 3, 4 and 6 are unticked because `drawEquation` and `loadKatexFonts`' sheet are imported only by their own tests (no engine equation node view, no web-view mount, no `config` member for `katexFontsUrl`), so a document equation is never drawn by KaTeX in the editor; re-tick once a node view calls `drawEquation` and a test shows it through `<doc-editor>`.
+
+### FE-070 Edit equations with the math editor
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | L | must | Author |
+
+**Spec:** 02 §2, §3; 01 §7; 09 §6.1, §6.3; 03 §8 (I7, I8) · **Requirements:** R1, R10 · **Depends on:** FE-002, FE-069, FE-036, EXP-049, EXP-050
+
+As an author, I want to insert and edit equations visually, so that I can write maths without knowing LaTeX.
+
+**Acceptance criteria**
+
+- [ ] Given the user inserts or edits an equation, when the math editor is first needed, then its chunk loads on demand and registers exactly the global custom element tag names the integration guide lists.
+- [x] Given the user confirms an equation, when the edit is committed, then the `latex` attribute is set in one commit.
+- [ ] Given an input longer than 4,000 characters or nested deeper than 50 levels (limits from I7 and the math gate), when the user confirms, then the editor shows the reason and does not commit.
+- [ ] Given the authority rejects the equation (math gate, I8), when the rejection arrives, then the equation is not applied, the reason is shown beside it and the user's input is kept for correction.
+- [ ] Given a strict content security policy, when the math editor runs, then it works with the directives the guide lists (including inline styles if S2 confirms they are needed).
+- [ ] Given the math editor is open, when it is operated by keyboard, then every control is reachable, Escape returns to the document and focus returns to the equation.
+- [ ] Given the equation is in a scope the user cannot change, when it is activated, then it opens read-only.
+
+**Evidence:** criterion 2 is unticked by review (2026-11-13): `setEquationLatex` is not in the core's command table or the package's exports, so no confirmation by the user reaches it; the tests below become evidence once it is wired. `packages/engine/src/equation-commands.ts` (`setEquationLatex`, `latexRefusal`, `latexNesting`, `latexLength`); `packages/engine/test/equation-commands.test.ts`: 'sets the source of an inline equation in one transaction with one step' and 'sets the source of a display equation and keeps its identifier' (criterion 2). Criterion 3 has its engine half in 'accepts 4,000 code points and refuses 4,001 without dispatching', 'accepts 50 nested braces and refuses 51 without dispatching' and the two properties (criterion 3 itself stays open, see Notes). Fixer round 2 (B group 1, 2026-11-13): criterion 2 is ticked again. `setEquationLatex` is an `AuthoringCommandName` in `packages/engine/src/api.ts` (argument `equation: { pos, latex }`), run by `packages/engine/src/core.ts` with the region guard's `canWrite` as `writable`, and exported from `packages/engine/src/headless.ts`. `packages/engine/test/layout-commands.test.ts`, 'sets the LaTeX of a confirmed equation in one change, which one undo takes back': through `exec`, the change queues exactly one step for the sync client (one commit) and one `undo` restores the source; 'refuses a source over the limits, a node that is not an equation and a protected scope' checks `queryCommand` and `exec` refuse with nothing queued (passed 2026-11-13).
+
+**Notes:** Whether an equation can be edited in suggestion mode is not defined (block suggestions cover paragraphs and rows only); see Open questions. Engine round (engine-3, 2026-11-13): criterion 2 is ticked for the pure command, which makes one transaction with one attribute step; the core's `exec('setEquationLatex')` is the path the math editor's confirmation takes (the math editor itself is criterion 1's and is not built). Criterion 3 stays open: the command refuses a source over 4,000 code points or 50 brace levels without dispatching and returns the reason, but the editor showing the reason is the math editor's (element). The nesting measure (the deepest brace group, with `\{` and `\}` not counted) is the default taken here, since the math gate of 09 §6.3 is not in the repository as a checkable rule; it is proposed in docs/adr/0132-engine-3-backlog-batch.md. Criterion 4 (the authority's math gate, I8) is not run by the engine and needs the authority's rejection path. Criterion 7 is partly met: the command refuses a write in a locked position and changes nothing, but opening read-only is the element's.
+
+## PDF viewer, read view and printing (02 §7, §9.8)
+
+### FE-071 Show a typeset PDF in an isolated viewer
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | L | must | Author |
+
+**Spec:** 02 §2, §7; 09 §9.3 (rule 7); 01 §7; 10 §3.1; 11 §2 (S2), §3; review S-12 · **Requirements:** R5, R10 · **Depends on:** FE-002, SPK-015, EXP-001
+
+As an author, I want to see the typeset PDF next to my document, so that I can check the real pages.
+
+**Acceptance criteria**
+
+- [x] Given an export result with a signed URL, when the viewer opens, then PDF.js (lazy chunk and worker) fetches the PDF through the signed URL and draws the pages inside a sandboxed frame whose origin differs from the host page's, with script evaluation disabled.
+- [x] Given a PDF that contains JavaScript actions, a launch action, form scripts or an extreme page count, when it is opened, then no script runs and the host page and its origin are unaffected.
+- [x] Given the frame, when it runs, then it has no access to the host DOM, cookies, storage or token, and the user's token is never passed to it.
+- [x] Given the viewer has not been opened, when the editor starts, then no viewer code or worker has loaded; given the editor is destroyed, then the viewer's worker is terminated.
+- [x] Given the viewer, when it is operated by keyboard, then page navigation and zoom are reachable, focus is visible and every string is external.
+- [x] Given a host with a strict content security policy and Trusted Types, when the viewer is loaded on demand, then it works with the directives the guide lists (FE-017) and under the policy that spike S2 documents.
+
+**Evidence:** packages/element/e2e/pdf-viewer.spec.ts in Chromium, Edge, Firefox and WebKit: the viewer frame (src/pdf/viewer-frame.ts, src/pdf/viewer/) is sandboxed with allow-scripts allow-same-origin on another origin (localhost against 127.0.0.1), served with a policy without 'unsafe-eval', and PDF.js runs in its worker; it fetches a signed export URL itself in Chromium and WebKit (a local filter on this machine empties PDF responses to Firefox and Edge, spike S2 §2, so there the bytes are handed over); a PDF with an OpenAction script, page and form scripts and launch actions runs nothing (no request to the callback, no dialog or popup, the host's title and address unchanged); 10,000 pages and a page tree claiming a million keep the host responsive; the frame reaches neither the host's DOM, cookies nor storage and receives only the PDF and its strings (src/pdf/messages.ts); nothing of the viewer loads before it opens, and destroy() removes the frame; Next, Previous and zoom work by keyboard with a visible focus outline and strings from src/strings.ts; a strict host policy with Trusted Types and frame-src for the viewer only raises no violation; served from the host's own origin the frame stays opaque and still draws; ADR 0039 §9. Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** Phase 1a: the roadmap's minimum demo includes a PDF panel (11 §3). The pane that hosts the viewer is UX's. 01 §7 says "PDF.js inside the component" while 09 says a sandboxed cross-origin frame; where the frame's document comes from, for a component delivered as one module, is not specified (Open questions). This story absorbed EXP-074 during the cross-check. Cross-check: in phase 1a the viewer shows the minimum demo's PDF (EXP-001); from phase 1b it sits in the pane host (UX-019) and links diagnostics to blocks (EXP-065).
+
+### FE-072 Open the read view on the typeset PDF
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Viewer |
+
+**Spec:** 02 §7; 11 §5 · **Requirements:** R1, R5 · **Depends on:** FE-065, FE-071, EXP-004, EXP-065
+
+As a reader, I want to read the document as real pages, so that I see what will be printed.
+
+**Acceptance criteria**
+
+- [x] Given `view="read"`, when the element renders, then the pages of the typeset PDF are shown read-only and no editing surface is present.
+- [x] Given an export is running for the read view, when the user waits, then its progress is shown.
+- [x] Given the export fails, when diagnostics arrive, then they are listed and each points back to a document location.
+- [ ] Given the read view is open, when the user selects a diagnostic, then the editor can move to its block in the web view if the user may edit.
+- [x] Given the read view, when its pages are shown, then they are labelled as the typeset result and not as a live editing view.
+**Evidence (lane U-FE-065-080, round 5):** `packages/element/e2e/fe-072-read-view.spec.ts` (two tests, run with `DOCEDIT_DEMO_PORT=56040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-072-read-view.spec.ts --project=chromium --project=firefox --project=webkit`): with `view="read"` the shadow root holds no `.de-editing-surface`, one `.de-read-view` labelled "Typeset result, not an editing view", the progress text "compiling, 50%" before the result, the sample PDF drawn in a `.de-read-pages` viewer frame (the status clears once the viewer has drawn the first page), and for a failed export the failure sentence and the diagnostic listed with its `data-block-id`. The success path is skipped in Firefox (PDF responses filtered on this machine, spike S2 §2); Chromium and WebKit run it. Implementation: `packages/element/src/read-view-element.ts`, `read-view.ts` (`onDiagnostics`), and `doc-editor.ts` (`#reconcileRead`, `#closeReadView`). WebKit prints one viewer-loading message the test names and allows; criterion 4 is not ticked.
+
+**Notes:** Round 5 (lane U-FE-065-080): the read view is mounted for `view="read"` by `packages/element/src/read-view-element.ts`, with no session and no editing core (`doc-editor.ts`, `#reconcileRead`). The export's diagnostics are listed through a new `onDiagnostics` option of `openReadView`, before the PDF opens. Criterion 4 stays open: moving the editor to a block needs the editing core and the user's edit right. The read view checks no `no-export` restriction on the client (it passes `access: null`); the server refuses the export regardless (PRO-086). A change of `view` while the element is open is not reflected (FE-065 criterion 3). Round 2 (element-3): `packages/element/src/read-view.ts` runs the read view's export (through `startExport`, target `pdf`), reports progress on each poll, opens the signed URL once through the injected `openPdf` after a completed export, and returns the job's diagnostics with their `blockId` (null when none); a refused start, a failed or cancelled export and a viewer failure come back as values. Tested in `packages/element/test/read-view.test.ts` (Node.js, scripted exports port; no criterion is ticked by it). Not built, so no criterion is ticked: mounting the read view in place of the editing surface when `view="read"` (`doc-editor.ts` still keeps `view` on the attribute, PRO-079), the rendering of the progress and the diagnostics list, the label as a DOM element, the move of the editor to a block (needs the editing core and the web view, and the user's edit right), and the browser run that shows the pages read-only (criteria 1 to 5). Open decision (proposed, docs/adr/0134-element-3-backlog-batch.md, item 7): the read view takes the typeset PDF with no `seq`, so the server's head is used; the spec does not say which `seq` the read view shows (this is the existing Open question). 02 §7 says the read view arrives in "Phases 1 and 2" the read view arrives in "Phases 1 and 2" while 11 §5 lists it in phase 2; the phase 1a PDF panel is FE-071. When the PDF is produced for the read view, and for which `seq`, is not specified (Open questions). The own read-only painter replaces it in phase 3 (FE-095). Second review (2026-11-06, SPK-027), SR-K7: 02 §7 now says phase 2 for the typeset PDF and phase 3 for the own painter, matching 11 ([review](../review/2026-11-06-second-review.md)).
+
+### FE-073 Print the typeset PDF
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Author |
+
+**Spec:** 02 §9.8; review F15; 05 §8.1 · **Requirements:** R5 · **Depends on:** FE-071, PRO-076, PRO-084, PRO-085, PRO-086, EXP-004, EXP-065
+
+As an author, I want printing to print the typeset PDF, so that the paper matches the PDF.
+
+**Acceptance criteria**
+
+- [ ] Given `print()` or the print command is used, when it runs, then the typeset PDF of the current document is obtained (exporting it if needed, with progress) and printed through the viewer.
+- [ ] Given the component, when it is inspected, then it never sends painted pages or the shadow DOM to the printer.
+- [x] Given a host page with a print stylesheet, when the host prints, then the component adds no page rule that changes the host's print job.
+- [ ] Given the export fails, when printing was requested, then the failure is reported through the export events and `de-error` and nothing is printed.
+
+**Evidence:** packages/element/test/print-styles.test.ts: no file under packages/element/src (stylesheets, the TypeScript that builds styles, the viewer page) contains `@media print` or `@page` (criterion 3). packages/element/test/print.test.ts and src/print.ts (round 1, element-3): `printTypesetPdf` requests the PDF export, polls the job to `completed`, hands its signed URL to the injected `printPdf` once, and reports a failed or refused export as `de-error` detail with the server's code while printing nothing (criterion 4 in part).
+
+**Evidence (lane V-FE-065-080, round 2, probe for criterion 1, no criterion ticked):** `packages/element/e2e/fe-073-print-sandbox.spec.ts`, run with `DOCEDIT_DEMO_PORT=57040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-073-print-sandbox.spec.ts --project=chromium --project=firefox --project=webkit`: 3 passed. The viewer frame's `sandbox` is `allow-scripts allow-same-origin`, and `window.print()` called inside it returns in each browser. Chromium logs "Ignored call to 'print()'. The document is sandboxed, and the 'allow-modals' keyword is not set."; Firefox and WebKit log nothing, so the call's effect cannot be seen in headless runs.
+
+**Notes:** Phase inferred: the roadmap does not place printing; the typeset PDF exists from 1b. The `no-print` restriction is FE-055. Round 1 (element-3): criteria 1 and 2 are not ticked. `printTypesetPdf` gets the typeset PDF and hands it to `printPdf`, but the viewer's print path (a print message to the frame, `window.print()` inside it) is not built and is not tested in a browser, and the element exposes no `print()` method yet, so the printer never receives anything from the element. Criterion 4 is not ticked: the export events `de-export-*` are not in the event map (events.ts), so only `de-error` is raised. Open decision (proposed, docs/adr/0134-element-3-backlog-batch.md): when the access is not yet known, the function prints; the spec does not say whether to refuse. Lane U-FE-065-080 (round 6, 2026-11-13): criterion 4 is not ticked. The blocker recorded above is stale: `events.ts` already holds the three `de-export-*` events, and `printTypesetPdf` now takes `onExportEvent` and raises each job report's event (`exportEvent`, export.ts) before it acts on the job. `packages/element/test/fe-073-print-events.test.ts` (Node.js, stand-in exports port, run with `pnpm vitest run packages/element/test/fe-073-print-events.test.ts packages/element/test/print.test.ts`: 12 passed) shows the failed, cancelled and completed orders. A refused request (no job) raises only `de-error`; that is a default taken here, not stated in the spec. The element has no `print()` method and never calls `printTypesetPdf`, so the events do not reach a host yet; the criterion holds for the function only. Criteria 1 and 2 stay open: the viewer's print path is not built and is not tested in a browser. Round 8 (lane U-FE-065-080): no criterion changed; the host `print()` method and the sandbox question are in docs/adr/0304-lane-U-FE-065-080.md, item 5. Round 2 (lane V-FE-065-080): the browser probe above shows that a print from inside the viewer frame is refused by Chromium, because the frame has no `allow-modals` (FE-071 forbids it). Making criterion 1 work needs an owner decision on the frame's sandbox (a print-only frame with `allow-modals`, or another route); the proposal and options are in docs/adr/0304-lane-V-FE-065-080.md (status: proposed). Criterion 4 stays open: the element has no `print()` method, so the events do not reach the host, and nothing is built that could report a print that did not happen.
+
+## Page view: decisions and layout engine (02 §9.1 to §9.3)
+
+> FE-074 (decide the page view at the evidence gate) was merged into SPK-013 during the cross-check of 2026-11-06. All phase 3 stories of this epic wait on that decision.
+
+### FE-075 Decide whether layout runs in a worker
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| decision | 3 | S | must | Maintainer |
+
+**Spec:** 02 §9.1, §15 · **Requirements:** R1 · **Depends on:** SPK-013, SPK-018
+
+As a maintainer, I want an explicit decision on whether layout runs in a worker from the start, so that the measurement provider and the data flow are designed once.
+
+**Acceptance criteria**
+
+- [ ] Given the open question in 02 §15, when the decision is made, then it states whether layout runs in a worker from the start or later, and where text measurement runs given the outcome of S5.
+- [ ] Given the decision, when the layout engine API (FE-076) is tested, then the same tests pass in Node.js, on the main thread and in a worker.
+- [ ] Given a worker is chosen, when the layout tree crosses to the main thread, then the cost per animation frame is measured against the typing latency target.
+- [ ] Given the decision, when it is recorded, then ADR 0005 is updated.
+
+**Notes:** The engine has no DOM dependency so that it can run in a worker (02 §9.1); canvas measurement in a worker needs `OffscreenCanvas` and the font aliases registered there (FE-063). Lane FE-079-091 (round 1, 2026-11-13): the proposed default is in docs/adr/0206-lane-FE-079-091.md (status: proposed): layout stays on the main thread at first, with the engine kept DOM-free so that a worker move needs no change of API, and measurement stays with canvas on the main thread. Criterion 1 stays open: it needs the outcome of S5, which is not in the repository. Criteria 2 and 3 need a worker and a browser run, not made. Criterion 4 stays open: ADR 0005 is an accepted record and was not edited by this lane.
+
+### FE-076 Define the layout engine API and its injected interfaces
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | L | must | Maintainer |
+
+**Spec:** 02 §9.1, §9.3; ADR 0005 · **Requirements:** R1 · **Depends on:** SPK-013, SPK-020, CDM-041, CDM-043
+
+As a maintainer, I want one layout engine API with injected measurement, break-opportunity and line-breaking providers, so that kernels in other languages can be plugged in without changing the engine.
+
+**Acceptance criteria**
+
+- [x] Given the layout engine package, when it is built, then it has no DOM dependency: a type check against a library set without DOM types passes and its tests run in Node.js and in a worker.
+- [x] Given the engine, when it is constructed, then its only inputs are flow blocks (FE-077) and the injected providers: a text-measurement provider, a break-opportunity provider and a line breaker.
+- [x] Given each provider interface, when it is specified, then its inputs and outputs are plain data (font alias, size and text in; advances out; text and language in; opportunity offsets out) and carry no host object.
+- [x] Given another implementation of a provider (for example one compiled to WebAssembly by the WASM epic), when it is plugged in, then the engine runs unchanged and passes the same tests.
+- [x] Given the same flow blocks and providers, when the engine runs twice, then it returns identical layout trees.
+- [ ] Given spike S7 recommends adopting or forking an existing layout core, when it is used, then it sits behind this API as an adapter and the criteria of FE-078 to FE-087 still apply.
+- [x] Given a layout tree, when the engine is queried, then it maps a block identifier and offset to a position and a position back to an offset.
+
+**Evidence:** `packages/layout/src/engine.ts` (`layoutFlow`) and `packages/layout/src/engine.test.ts`, in Node.js (run of 2026-11-13, fix round 3: the file passes 8 tests). Criterion 2 (unticked by the reviewer in round 3, re-ticked in fix round 3): `layoutFlow(doc, providers)` takes the flow document and `ItemProviders`, which now holds three providers: a `TextMeasurer`, `BreakOpportunities` and a `LineBreaker` (`lines.ts`; `firstFitBreaker` is the package's own). The story resolver is no longer an input: the engine lays out the flow's own header and footer stories (`FlowDocument.stories`) with the same providers (`flowStoryResolver`, `items.ts`). 'takes only the flow and the three injected providers' checks the arity and, through a proxy, that the engine reads exactly `measurer`, `breaks` and `lineBreaker`; 'runs a second line breaker that is plugged in' plugs in a one-word-per-line breaker written for the test and checks that every body and footnote paragraph went through it and that the tree holds its lines; 'lays out the header stories of the flow itself' lays out a header with `page` and `pageCount` fields through the injected breaker, with the widths of "Page n of N" on each of more than ten pages. Criterion 3: `TextMeasurer` (`measure.ts`) and `BreakOpportunities` (`lines.ts`) take strings, numbers and font keys, and return numbers and arrays of offsets. Criterion 4: 'runs unchanged with other providers and keeps every block covered' runs `checkCoverage` over two measurers (the fixed-width stub and the synthetic advance table), two break providers (after a space, and at every position) and two line breakers (first fit, and one word per line). Criterion 5: 'returns the same tree for the same flow and providers, on every call' compares serialised trees and digests from two calls. Also 'returns a frozen result'. Criterion 7 (round 8, 2026-11-13): `caretGeometry` (`caret.ts`) maps a block identifier and offset to a page position, and `hitTest` maps a page position back to a block and offset; 'finds the position again from the caret drawn for it, and stays on the target line, on random pages' (`caret.test.ts`, 60 seeded trees, every offset) checks the round trip.
+
+**Evidence (lane U-FE-065-080, criterion 1):** `packages/layout/src/fe-076-browser-worker.universal.test.ts` with `packages/layout/src/fe-076-browser-worker.ts` (the Worker entry): the scenario runs on the page and in a browser `Worker` (module type) and the Worker reports no `document` or `window` and the same serialised tree. Run with `DOCEDIT_BROWSERS=<browser> pnpm vitest run --project browser <file>` in Chromium, Firefox and WebKit, each passed. The universal type check `tsc -p packages/layout/tsconfig.json --noEmit` passes with the new file.
+
+**Notes:** Language-neutral on purpose: the interface, not an implementation. The WASM epic owns any Rust/WebAssembly kernel behind it. Round 3 (layout packet, 2026-11-13): criteria 3 to 5 ticked; criterion 2 was ticked, unticked by the reviewer, and re-ticked in fix round 3 once the line breaker was injected and the story resolver removed from the engine's inputs (docs/adr/0120, item 20 as amended). Criterion 4's second implementations are TypeScript stubs written for the tests; no WebAssembly kernel is built. Criterion 1 is ticked by lane U-FE-065-080 (browser Worker run, see Evidence). Lane FE-066-078 (round 2, 2026-11-13): `packages/layout/test/fe-076-worker.test.ts` runs one layout scenario (`src/fe-076-scenario.ts`) on the main thread and in a Node.js `worker_threads` worker (`test/fe-076-worker-entry.ts`), with the same serialised tree and no `document` or `window` global in either run. This is not a browser Worker, and it runs one scenario, not the engine's test suite; the spec's worker is read as the browser's (FE-075 notes), so criterion 1 stays unticked until a browser Worker run exists. Criterion 6 stays open: the spike adapters are not behind this API. Lane V-FE-065-080 (round 5, 2026-11-14): criterion 6 is conditional on S7 being used, and the engine uses no forked core yet. S7 recommends a fork of Docen (docs/spikes/2026-11-06-s7-layout-core.md §5), and the choice waits on owner decision 25 (the page view, decided at the gate after S5, S7 and S10; docs/owner-decisions-pending.md). `packages/layout/src/docen.ts` is a spike adapter with a stand-in canvas, not an implementation behind `layoutFlow`; wrapping it would decide the fork early, so it is not done. Criterion 7 ticked in round 8 (see Evidence): the position queries are the caret functions of FE-096.
+
+### FE-077 Convert the document into flow blocks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 02 §9.1; 03 §6, §7 · **Requirements:** R1 · **Depends on:** FE-076, CDM-041, CDM-043, CDM-042
+
+As a maintainer, I want CDM blocks turned into flow blocks with resolved formatting, so that the engine lays out exactly what the writers will.
+
+**Acceptance criteria**
+
+- [ ] Given a CDM document, when it is converted, then each body block becomes a flow block whose formatting is resolved by the one implementation in `packages/model`, in the order of the formatting cascade of 03 §6, and not re-implemented here.
+- [x] Given numbered paragraphs, when they are converted, then their labels are the ones the shared numbering algorithm computes, printed as literal text.
+- [ ] Given two consecutive paragraphs, when the gap is computed, then it is the larger of the first one's `spaceAfter` and the second one's `spaceBefore`, and zero between paragraphs of one style with `contextualSpacing` (03 §7).
+- [x] Given line spacing (`multiple`, `exact`, `atLeast`) and tab stops (left, centre, right, decimal, with leaders), when they are converted, then the flow block carries them as 03 §7 defines.
+- [x] Given tables, figures, equations and a table of contents, when they are converted, then each becomes a flow block, with table-of-contents entries generated at layout time.
+- [ ] Given the shared fixtures in `packages/model`, when the conversion runs on them, then the result conforms.
+
+**Evidence:** `packages/layout/src/flow-conversion.test.ts` (Node.js, run of 2026-11-13, 7 passed): criterion 4, 'reads a multiple rule as a factor of thousandths', 'reads an exact rule and an atLeast rule in twips, as points', 'carries left, centre, right and decimal stops with their leaders, sorted by position' and 'carries the decimal stop with a dot leader from the kitchen-sink fixture'; criterion 5, 'converts a table into a table block with rows and cells', 'converts a figure and a display equation into box blocks' and 'replaces the contents placeholder by generated entry paragraphs' (`packages/model/fixtures/kitchen-sink.json`). Criterion 2 (round 10, 2026-11-13): `packages/layout/src/numbering-labels.test.ts` runs each of the 24 valid cases of `packages/model/fixtures/semantics/numbering-lists.json` through `toFlow` and checks that the labels printed by list, heading and story paragraphs are exactly the `lists` labels of the fixture, in both directions (run of 2026-11-13, 25 passed). `flow.ts` takes these labels from `computeLabels`; its local counter (`Numbering.next`) is removed, and the local class keeps only the level definitions for indents and label formats.
+
+**Notes:** Round 1 (lane FE-066-078, 2026-11-13): criteria 4 and 5 ticked. Not ticked: criterion 1, the cascade in `flow.ts` (`chainValue`, `paraValue`, `runValue`) is a local version, and only the style table and footnote marks come from `packages/model`; criterion 2, ticked in round 10 (see Evidence); criterion 3, `toFlow` keeps `spaceAfter` and `spaceBefore` as written, and `paginate.ts` adds them, so the max rule is not applied to layout output (changing it moves the output of several packages; proposed in docs/adr/0205-lane-FE-066-078.md); criterion 6, no conformance check exists beyond block coverage ('covers every body block of a 20-page document' in `flow.test.ts`). Round 2 (lane V-FE-065-080): criterion 1 stays open; `packages/model/src/cascade/resolve.ts` exports `resolveParagraph` and `resolveRun`, and `flow.ts` keeps its own cascade, so a switch changes the output of `toFlow` and needs the layout owner first (docs/adr/0304-lane-V-FE-065-080.md, item 3).
+
+### FE-078 Build the immutable layout tree
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 02 §9.2 · **Requirements:** R1 · **Depends on:** FE-076
+
+As a maintainer, I want an immutable layout tree of pages, fragments and lines that records what it covers, so that painters, hit testing and reconciliation can all rely on it.
+
+**Acceptance criteria**
+
+- [x] Given a layout pass, when it completes, then the result is an immutable tree of pages containing fragments, and fragments containing lines or table rows; a test that tries to mutate it fails.
+- [ ] Given any node, when it is read, then it records the block identifier and the document offsets it covers.
+- [x] Given a block that spans pages, when it is laid out, then its fragments sit on several pages and their offsets cover the block without gap or overlap.
+- [ ] Given two successive trees, when a block did not change, then its subtree is the same object in both, so that a painter can tell by identity what to skip (FE-092).
+- [x] Given a tree, when it is serialised, then the JSON is stable and can be stored for regression tests (FE-094).
+
+**Evidence:** `packages/layout/src/tree.ts` (`serialiseTree` rounds numbers to a thousandth of a point) and `packages/layout/src/lines.test.ts` ("serialises to the same JSON on every call"): one paragraph tree from the first-fit breaker serialises to identical text on two calls, parses back with its block identifier and width, and holds no number with four or more decimals. Round 1 (layout packet, 2026-11-13): `packages/layout/src/paginate.test.ts` 'splits a block taller than the page, and the pieces cover its range without gap or overlap' (a 25-line block over three pages: the pieces meet from offset 0 to 250), the coverage check of the seeded sweep, and 'returns a frozen tree: a change to a page or a fragment throws' (`paginate.ts` freezes its result). Round 2 (layout packet, lane layout-3, 2026-11-13): criterion 1 ticked: `packages/layout/src/tables.test.ts` 'freezes the rows, cells and cell fragments of a table, so that a mutation throws' (a layout of a CDM table through `layoutFlow`; a push to the rows, an assignment to a row and a truncation of a cell's fragments each throw a `TypeError`).
+
+**Notes:** Round 2 (lane layout-3): the immutability criterion is ticked (see Evidence). Lane U-FE-065-080 (round 3, 2026-11-13): criterion 2 stays open and was not started. The boxes, table rows, cells and pages of `tree.ts` carry no block identifier or offsets; closing it needs an offset range for each box and table block from the flow document, which `flow.ts` does not record for those blocks, and a change through `tables.ts` and `paginate.ts`. That is a layout change across several files and is left to the layout lane. Round 0, superseded: it was open (the spike's `layoutWithDocen` freezes its tree, but the project's own page-level pass is not built, and `breakParagraph` freezes only its paragraph fragment); the block identifier and offsets criterion holds for paragraph fragments (`lines.test.ts`, which also checks lines meet without gap or overlap), but table, box and page nodes are not built; subtree identity (FE-092) needs incremental layout (FE-088). Round 1 (layout packet, 2026-11-13): the page-level pass exists (`packages/layout/src/paginate.ts`) and freezes its result, so the mutation test passes; criterion 1 stays open because the tree has no table rows (FE-083). The block-spanning criterion is ticked for paragraph fragments only; table fragments follow with FE-083. The identifier-and-offsets criterion stays open: boxes record no offsets. Round 2 (lane V-FE-065-080): still open; the open choice is what offsets a table, row, cell or box covers (`tree.ts` has none for them and `FlowTable`/`FlowBox` carry no range). Options in docs/adr/0304-lane-V-FE-065-080.md, item 2; not decided in this lane. Lane U-FE-065-080 (round 8): still open. The proposed default (a table or box covers its block's CDM range; rows, cells and pages cover their blocks' ranges) needs `FlowTable` and `FlowBox` to carry a range and changes `flow.ts`, `tables.ts`, `paginate.ts` and the shared tests that build these nodes; recorded in docs/adr/0304-lane-U-FE-065-080.md, item 2, and not made this round.
+
+### FE-079 Measure text through an injected provider with a cache
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 02 §9.3, §6; ADR 0005 (after the first review) · **Requirements:** R1 · **Depends on:** FE-076, FE-061, SPK-018
+
+As a maintainer, I want text measured through one injected provider with a cache, so that the engine can use canvas now and font-file measurement if S5 says so.
+
+**Acceptance criteria**
+
+- [x] Given the provider interface (font alias, size and text in; advances out), when the default provider measures with canvas `measureText`, then it returns advances for text in loaded aliases.
+- [x] Given the cache keyed by font alias, size, text and font epoch, when the same key is measured twice, then the second call is a cache hit; when the epoch advances (FE-064), then no earlier entry hits.
+- [ ] Given canvas offers no control over ligatures in any browser and none over kerning in Safari, when the painter's CSS is written, then it is pinned to what canvas does by default (not the other way round).
+- [ ] Given another provider that measures from font files, when it is plugged in through the same interface, then the engine runs unchanged and the S5 harness can compare the two.
+- [x] Given tests in Node.js, when they run, then they use a deterministic fake provider.
+- [ ] Given the outcome of S5, when the default provider is chosen, then the choice follows its recommendation.
+
+**Evidence:** `packages/layout/src/measure.test.ts`: a repeated key is answered from the cache with one provider call (size, text, weight, slant and alias each miss); vertical metrics are cached by font key; a cache under epoch 1 over the same provider misses every entry of epoch 0; the cache returns the provider's answers; the fake providers `fixedWidthMeasurer` and `advanceTableMeasurer` give the same answers on every call.
+
+**Evidence (lane U-FE-065-080, criterion 1):** `packages/element/src/canvas-measure.ts` (`canvasTextMeasurer`, the default canvas provider) and `packages/element/src/canvas-measure.universal.test.ts`: a real font file is loaded under a `U-FE-065-080` alias and the canvas advances are positive, `mmmm` is wider than `iiii`, an empty string measures 0, and the loaded alias differs from a never-loaded alias. Run with `DOCEDIT_BROWSERS=<browser> pnpm vitest run --project browser <file>`: Chromium, Firefox and WebKit, each passed.
+
+**Notes:** Review F9. The kernels are the WASM epic's. Criterion 1 is ticked by lane U-FE-065-080 (Evidence above). Not ticked: the ligature and kerning pinning of the painter's CSS (criterion 3), which needs the painter, and the font-file provider and S5 choice (criteria 4 and 6). `canvas.universal.test.ts` (the S7 spike) logs results and asserts none of these criteria; the font-file provider and the S5 choice are not built or decided. The epoch is fixed when a cache is built, and a font load builds a new cache, so no entry of an earlier epoch can hit.
+
+### FE-080 Find line-break opportunities with the Unicode line breaking algorithm
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 02 §9.3 · **Requirements:** R1 · **Depends on:** FE-076
+
+As a maintainer, I want break opportunities from a bundled implementation of the Unicode line breaking algorithm, so that lines break where typographic rules allow.
+
+**Acceptance criteria**
+
+- [ ] Given text, when break opportunities are requested, then they come from a bundled implementation of the Unicode line breaking algorithm and not from `Intl.Segmenter`, which has no line granularity.
+- [ ] Given the Unicode line-breaking test data for the bundled Unicode version, when the implementation is run against it, then every case passes.
+- [x] Given the provider interface (text and language in; opportunity offsets out), when another implementation is plugged in, then the engine runs unchanged.
+- [ ] Given no-break spaces, hyphens, slashes and ideographs, when opportunities are computed, then they follow the algorithm's classes (cases from the test data).
+
+**Evidence (lane layout-2, round 6, 2026-11-13):** criterion 3: `packages/layout/src/break-language.test.ts`, in Node.js (run of 2026-11-13: 3 passed; `pnpm vitest run packages/layout/src` with the rest of the package, 366 passed, 6 skipped; scoped `tsc --noEmit -p packages/layout` clean). The paragraph's language comes from its style's `lang`, else the document's `settings` `lang` (`flow.ts`, `FlowParagraph.lang`); `items.ts` passes it to the breaker, and `lines.ts` passes it to `BreakOpportunities.opportunities(text, language)`. The tests check that the provider receives 'en-GB' and 'ja-JP' where they apply, that a provider called without a language gets one argument, and that a plugged-in language-aware provider changes the engine's lines for a Japanese-tagged paragraph and leaves the English one as it was, through `layoutFlow`, with no change to the engine.
+
+**Notes:** The Unicode version to bundle is not specified. East Asian line-breaking rules in the page view need their own plan (FE-112). Lane FE-079-091 (round 1, 2026-11-13): no criterion ticked. `linebreak@1.1.0` is in the pnpm store only as a transitive dependency and `@docedit/layout` does not declare it; the repository holds no Unicode line-breaking test data. Needed from the main session (docs/adr/0206-lane-FE-079-091.md): a decision on the dependency or the algorithm, made through `scripts/pnpm-locked.ps1` if a dependency is chosen, and the test data for the bundled version. Round 10 (layout round 3, 2026-11-13): criterion 3 stays open. The provider takes the text only (`BreakOpportunities.opportunities(text)`, `lines.ts`), not the language the criterion names; the language would have to be carried from the CDM through `FlowParagraph`, `items.ts` and `ParagraphInput` first, and that is not done (docs/adr/0120-layout-backlog-batch.md, item 44). Lane layout-2 round 6 carried the language (criterion 3 ticked, see Evidence). Decisions taken as defaults, proposed in docs/adr/0135-layout-2-backlog-batch.md: the language is the style's `lang` (the cascade's paragraph value) and otherwise the document's `settings` `lang`, at paragraph level, not per run; a paragraph with neither has no language and the provider gets one argument. Criteria 1, 2 and 4 stay open: the Unicode line breaking algorithm is not bundled, and the repository holds no line-breaking test data for a Unicode version. A bundled implementation is a new dependency, which the main session decides through `scripts/pnpm-locked.ps1`, and the test data is needed from the main session too. Lane U-FE-065-080 (round 2, 2026-11-13): a search of `node_modules/.pnpm` finds no `LineBreakTest` file, so criterion 2 has no test data in the repository; `linebreak@1.1.0` is present only as a transitive package. Both needs stay with the main session. Round 8 (lane U-FE-065-080): no change; the dependency, the Unicode version and the test data are listed in docs/adr/0304-lane-U-FE-065-080.md, item 3, as needs of the main session.
+
+### FE-081 Break paragraphs into lines, first-fit
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 02 §9.3 · **Requirements:** R1 · **Depends on:** FE-079, FE-080
+
+As a maintainer, I want greedy line breaking with hyphenation off by default, so that lines are predictable and match what the painter draws.
+
+**Acceptance criteria**
+
+- [x] Given a paragraph and a column width, when lines are broken, then each line takes as many words as fit and breaks only at break opportunities (first-fit).
+- [x] Given `settings.hyphenation` is false (the default), when lines are broken, then no word is hyphenated.
+- [x] Given first-line, left and right indents, tabs and line spacing, when lines are broken, then line widths account for them.
+- [x] Given runs in different fonts and sizes on one line, when the line height is computed, then it follows the tallest run for the `multiple` rule.
+- [x] Given a forced line break, when lines are broken, then the break is honoured.
+- [x] Given the same input twice, when lines are broken, then the result is identical.
+
+**Evidence:** `packages/layout/src/lines.ts` (`breakParagraph`) and `packages/layout/src/lines.test.ts`: 300 seeded random paragraphs check that lines meet without gap, end only at break opportunities, hold as many words as fit (the next opportunity does not fit), and overflow only with a single word; a word wider than the column stays whole; the tallest run sets the line height under `multiple`, `exact` and `atLeast`; `\n` breaks the line and has no width; two calls on mixed-font input give equal fragments and serialised trees.
+
+**Evidence (lane layout-2, round 5, breaker only; criterion 3 stays unticked):** `packages/layout/src/lines.ts` (`LineTabStop`, `placeAfterTab`, `advanceFrom`) and `packages/layout/src/lines-aligned-tabs.test.ts`, in Node.js (run of 2026-11-13: the two line files pass 27 tests with `pnpm vitest run`). Right, centre and decimal stops place the text after the tab: 'ends the text after a right stop at the stop', 'centres the text after a centre stop on the stop', 'puts the first full stop of the text after a decimal stop on the stop', 'ends a segment with no full stop at a decimal stop', 'starts a segment wider than the space left at the current position', 'applies each stop to the text after its own tab', and a bare number kept as a left stop; three seeded sweeps of 300 cases each (right, centre and decimal).
+
+**Evidence (layout round 4, criterion 3, 2026-11-13):** `packages/layout/src/items.ts` (`paragraphItem` passes `FlowParagraph.tabs`, the hanging indent of a label tab and `defaultTabStop` to the breaker) and `packages/layout/src/items-tabs.test.ts`, in Node.js (run of 2026-11-13: 4 tests pass, with `items.test.ts`, `lines.test.ts`, `lines-aligned-tabs.test.ts` and `break-language.test.ts` in the same run): a left stop at 100 points puts 'bcd' at 116.5; with no stop the default spacing of 36 points gives 52.5; a numbering label's tab goes to the hanging indent (36 points) and the text ends at 52.5; a CDM tab in a paragraph with no stops, through `toFlow` and `documentItems`, takes the 720-twip default.
+
+**Notes:** How hyphenation works when it is on, and what happens to a word wider than its line, are not specified. Decided here, and recorded in docs/adr/0120-layout-backlog-batch.md: such a word is placed alone and overflows. Not ticked: the first-line, left and right indent criterion (indents are tested, tab stops are not in the breaker yet, so tabs and the `FlowTab` stand-ins are not handled). Round 6 (layout packet, 2026-11-13): left tab stops and a default spacing are in `lines.ts` (`tabStops`, `defaultTabStop`) and tested in `lines.test.ts` ('tab stops (FE-081)': a stop measured from the column edge, a tab counted in the fit, default stops past the last custom stop, a trailing tab left out, and a seeded sweep of 200 paragraphs checked against an independent width). Layout-2 round 5 (2026-11-13): centre, right and decimal stops are now in the breaker (see the Evidence above), and leaders do not change widths, so they are not carried. Criterion 3 stays open at the engine: `items.ts` still measures a tab as one character and passes no stops, the stops need `settings.defaultTabStop`, which the paragraph item does not receive, and the numbering label's tab to the hanging indent is not handled. The `FlowTab` stand-ins are not converted (docs/adr/0120-layout-backlog-batch.md, item 27). The break opportunities are injected (FE-080 is not built); the tests use a stand-in that breaks after spaces and hyphens, not the Unicode line breaking algorithm. Measured widths are summed per run, so kerning across a run boundary is ignored, as the stub measurers have no kerning. Round 11 (layout round 4, 2026-11-13): criterion 3 is ticked. `items.ts` now passes the paragraph's tab stops, the document's default spacing and a label's hanging-indent stop to the breaker (docs/adr/0120-layout-backlog-batch.md, item 48, proposed); the paragraph-wide stop list is the proposed default for the label stop. The story's six criteria are all ticked.
+
+## Pagination (02 §9.4)
+
+### FE-082 Paginate with break, keep and widow rules
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.4; 03 §4.5; ADR 0005 · **Requirements:** R1 · **Depends on:** FE-078, FE-081
+
+As an author, I want pages to break where my breaks and keep settings say, so that headings stay with their text and no line is stranded.
+
+**Acceptance criteria**
+
+- [ ] Given explicit page breaks and section breaks, `pageBreakBefore`, `keepNext` chains, `keepLines`, and widow and orphan control, when two rules conflict, then they are applied in that priority order and the result equals the stored fixtures.
+- [x] Given a `keepNext` chain longer than a page, when it is paginated, then the chain is broken and pagination terminates.
+- [x] Given a block taller than a page, when it is paginated, then it is split across pages and pagination terminates.
+- [x] Given `widowControl` on a paragraph, when it falls at a page boundary, then no single line is left alone at the top or the bottom of a page.
+- [x] Given a page or column `break` inside a paragraph, when it is paginated, then the break is honoured.
+
+**Evidence:** `packages/layout/src/paginate.ts` (`paginate`) and `packages/layout/src/paginate.test.ts`, in Node.js (run of 2026-11-13: the file passes 21 tests): 'keeps a heading with the first line of the paragraph after it (keepNext)'; 'breaks a keepNext chain longer than the page, and still terminates'; 'splits a block taller than the page, and the pieces cover its range without gap or overlap'; 'applies widow control: no single line is left at the top or the bottom of a page' (room for two, three and one line of five); a seeded sweep of 400 random documents checks that every line is laid out once, in order, inside the body, with the widow and page-break rules; a sweep of 300 documents checks keepNext pairs (more than 100 pairs are checked). Criterion 5 (fix round, group 4 round 2, 2026-11-13): `packages/layout/src/items.ts` (`paragraphItem`, `pageItems`, `documentItems`: the adapter from flow blocks to `PageItem`, with CDM line offsets) and `packages/layout/src/items.test.ts`, in Node.js: a CDM paragraph with a `break` of kind `page` goes through `toFlow`, `documentItems` and `paginate` and its pieces cover 0 to 18 on page 1 and 18 to 27 at the top of page 2 (the same text without the break stays on one page); a `column` break starts the second piece at the top of the second column; a `line` break stays inside the piece; a seeded sweep of 60 documents with random page and column breaks checks that each break starts the next piece on a new page or in the next column, and that each block's pieces and lines cover its range in order without gap or overlap.
+
+**Notes:** ADR 0005 records that a competitor's pagination can loop forever on blocks taller than a page; the termination criteria answer that. Floating objects with text wrap are out of scope (03 §13). Round 1 (layout packet, 2026-11-13): criteria 2 to 4 are ticked on the tests above. Criterion 1 stays open: the priority order and the section breaks are tested, but not against stored fixtures. `packages/model/fixtures` holds no stored pagination fixture (none covers `keepNext`, `pageBreakBefore`, `keepLines` or widow control), so there is nothing to equal yet; an owner-approved fixture is needed (layout-2 round 5, 2026-11-13). Round 2: criterion 5 was ticked on the pieces of one block, given directly to `paginate`. Unticked by the reviewer (group 4 round 2): the test (two items with one block identifier and a `pageBreak` between) only repeats the explicit-break case and does not exercise a break inside a paragraph. The note that the part split is not built is also wrong: `flow.ts` already splits a paragraph at a `break` node into parts with a `pageBreak` or `columnBreak` item between them (`flush`, around line 694), and `docen.ts` converts them; what is missing is the adapter from the flow to `PageItem`. Needed: a test from a paragraph with a `break` node through the flow to `paginate`, or leave open until that adapter exists. Fix round: the adapter is written (`items.ts`) and criterion 5 is ticked again on the test from the CDM paragraph; the round 2 claim that the split is not built was wrong. The adapter does not paginate tables (FE-083; their identifiers are returned in `unplaced`), measures a tab or an inline image as one character, and breaks paragraphs to their own section's column width. Decisions are in docs/adr/0120-layout-backlog-batch.md (proposed): a `keepNext` chain outranks widow control for the first line it places; a line or box taller than the page is placed alone and reported.
+
+### FE-083 Split tables across pages
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.4; 03 §4.3, §10; 11 §6 · **Requirements:** R1 · **Depends on:** FE-082
+
+As an author, I want long tables to continue on the next page with their header rows repeated, so that they stay readable.
+
+**Acceptance criteria**
+
+- [x] Given a table taller than the remaining space, when it is paginated, then rows continue on the next page, and a row splits across pages unless its `cantSplit` is true.
+- [x] Given `headerRows`, when the table continues on a later page, then the header rows repeat at its top.
+- [x] Given a row with `cantSplit`, when it does not fit, then the whole row moves to the next page.
+- [x] Given a row taller than a page, when it is paginated, then it splits at paragraph boundaries, as the converter does (03 §10).
+- [ ] Given cells with spans, borders and shading, when the table is split, then each fragment records the block identifier and offsets it covers (FE-078).
+
+**Evidence:** `packages/layout/src/tables.test.ts` (Node.js, lane layout-3, 2026-11-13: 9 tests pass) and `packages/layout/src/paginate.ts` (`placeTable`, `cellFragments`) with `packages/layout/src/items.ts` (`tableItem`). Criterion 4 (lane FE-079-091, 2026-11-13): `packages/layout/src/row-split.ts` (`splitRowAt`) and `packages/layout/src/row-split.test.ts`, in Node.js (6 tests pass): 'cuts a row taller than the body between its paragraphs and continues the tail on the next page' (a row of three 20-point paragraphs in a 50-point body: 40 points on page 1, 20 on page 2, each piece with its own paragraphs), 'uses one cut index for all cells' and 'keeps a header row whole and repeats it on each continuation of a cut row', a seeded fast-check property over 300 random tables (each cell's paragraphs placed once and in order, every piece inside the body). The same cut also serves a non-cantSplit row that does not fit the space left (criterion 1). Criterion 2: 'repeats the header rows at the top of every continuation piece' (a 20-point header and five 30-point rows on 100-point pages: the header repeats as `repeated` on the second and third pages, and its copy sits at the top). Criterion 3: 'moves a cantSplit row whole to the next page' (a 60-point cantSplit row that does not fit lands on page 2 at y = 0 with its full height). Also 'continues a table on the next page and places every row once' (criterion 1, the rows part), and a seeded sweep of 200 random tables that places every body row once and ends.
+
+**Evidence (lane V-FE-081-096, 2026-11-13, criterion 1):** `packages/layout/src/row-line-split.ts` (`splitRowAtLine`, the line-level cut, used by `placeTable` in `paginate.ts` after `splitRowAt` finds no paragraph boundary) and `packages/layout/src/row-line-split.test.ts`, in Node.js (run of 2026-11-13: that file with `row-split.test.ts`, `tables.test.ts` and `paginate.test.ts` pass, 42 tests): 'cuts a one-paragraph row between two lines and continues the tail on the next page' (five lines of 10 in a body of 35: three lines on page 1, two on page 2, every line placed once), 'uses one line position for every cell, and a shorter cell goes whole into the head', 'keeps a cantSplit row whole, and cuts nothing that leaves no line in the head', and a sweep of 1 to 12 lines in a body of 30 that places every line once, in order.
+
+**Notes:** Round 2 (lane layout-3, 2026-11-13). Tables are placed row by row: a row goes on a column or page whole and never splits, so criterion 1's "a row splits across pages" is not met, and criterion 4 (a row taller than a page split at paragraph boundaries) is not built: such a row is placed alone at its full height and the table id is reported in `overflowed`. Criterion 3 is ticked on the rule that a `cantSplit` row moves whole; rows without `cantSplit` also move whole here, which is more than the criterion asks. Cells: a cell holds paragraphs only. A nested table, a box, a non-paragraph block, a row span (`rowspan` not 1) or a footnote reference in a cell makes the table unplaced (`tableItem` returns null), so it is reported in `unplaced`; `pageStatus` then gives a provisional count. Colspan is laid out; `vAlign` and borders and shading are not drawn (criterion 5). Table fragments record the block identifier but no offsets, and rows record no offsets: criterion 5 stays open. A table's paragraphs are checked for coverage by `checkCoverage` (the end-to-end test), and repeated header rows are copies that the check skips. The `heightRule` `exact` takes the value even when the content is taller (the content is not clipped; a limit). Lane FE-079-091 (round 3, 2026-11-13): a row is cut at a paragraph boundary when it does not fit the space left (`splitRowAt`, `row-split.ts`), so criterion 4 is ticked. Criterion 1 is ticked by lane V-FE-081-096: a row whose cells hold one paragraph each is cut between two of its lines when no paragraph boundary fits (`row-line-split.ts`); the paragraph boundary stays the first choice (docs/adr/0206-lane-FE-079-091.md, docs/adr/0305-lane-V-FE-081-096.md, proposed). Criterion 5 stays open: borders and shading are not drawn, and the table fragment records no offsets of its own (its cell paragraph fragments do). A cut row is placed as two rows with one `rowId`. A cut row takes its content height, so an `exact` row height is not kept on a cut row (a limit).
+
+### FE-084 Place footnotes on their pages
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.4; 03 §4.4; 09 §7.1 · **Requirements:** R1 · **Depends on:** FE-082, SPK-014
+
+As an author, I want each footnote on the page where it is referenced, so that readers see it without turning the page.
+
+**Acceptance criteria**
+
+- [x] Given a footnote reference on a page, when the page is paginated, then the footnote is placed at the bottom of the same page when it fits.
+- [x] Given footnote space reduces the space for body text, when pagination runs, then it iterates until the page content is stable.
+- [x] Given a footnote too long for the page, when it is paginated, then its text continues on the next page.
+- [x] Given `footnoteFormat` and `footnoteRestart` (`continuous`, `perPageSection`), when footnotes are numbered, then the numbers come from the shared numbering algorithm.
+- [x] Given content for which the iteration does not settle, when pagination runs, then it still terminates.
+
+**Evidence:** `packages/layout/src/notes.ts` (`placeNotes`) and `packages/layout/src/paginate.ts` (`paginate` with `options.notes`, `nextReserve`), tested in `packages/layout/src/notes.test.ts`, in Node.js (run of 2026-11-13, fix round 3: the file passes 9 tests). Criterion 1: 'sets a footnote at the foot of the page of its reference and raises the body above it' (twelve lines become eight lines above a 20-point area at y = 80), 'places a footnote on the page of a reference that falls on a later page', and 'footnotes from the CDM' (a CDM footnote node, through `toFlow`, `documentItems` and `paginate`, lands on the page of its mark). Criterion 2 (unticked by the reviewer in round 3, re-ticked in fix round 3): the round 3 sweep had a degenerate generator, and with a sound one about 1.7% of documents did not settle in `MAX_COUNT_PASSES` passes, because the reservation between whole passes moved the unsettled page forward by about one page a pass. The fix settles each page inside the pass: before each body line (or box) is taken, `noteAreaAccepts` (`notes.ts`) works out again the area that the page's references would then need, and the line moves on with its reference when the area would not fit below it; the areas are then set in the space below each body (`placeNotes`). 'settles the body and the footnote areas on every page, and keeps the body above the areas' runs 3000 documents from a mulberry32 generator (`Math.imul`, 32-bit state), one footnote in eight up to 20 lines long, and asserts for each: `pageCountSettled` is true and nothing overflows; every body line and every footnote line once, in order; the body above the area and the area above the bottom margin; each footnote starts on the page of its reference and is split only when it is taller than that page's body less its first line, except a reference in a page's first line under text carried from the page before (410 of 14,333 references in the run of 2026-11-13). It also asserts that the draws vary and that areas push body text to the next page on more than 300 pages (5987 in that run). 'settles the areas under two columns too' runs 500 two-column documents. Criterion 3: 'carries a footnote too long for its page on to the next pages, in order' (nine, ten, ten and one lines on four pages; lines 0 to 29 once each). Criterion 5 (round 5, 2026-11-13): 'still terminates when the page count does not settle, with footnotes on the pages' in the same file, a footer that changes with the page count and a footnote on the first line of the paragraph; `paginate` ends with `pageCountSettled` false, its footnote sits on the first page, and each page keeps its body above its area. Criterion 4 (round 8, 2026-11-13): `packages/layout/src/footnote-labels.test.ts`, in Node.js: 'restarts the marks at every section break under perPageSection' and 'keeps counting through section breaks under continuous' (the model's footnote fixture, assembled into a CDM envelope and run through `toFlow`), one test per fixture case with footnotes (`lower-roman`, `symbols`, the story case and the rest) checking each mark against the shared algorithm's expectation, and 'numbers the same footnotes as the shared algorithm when its format is symbols'. The change is in `flow.ts` (`toFlow` reads `computeLabels` from `@docedit/model`).
+
+**Notes:** The iteration limit and the fallback result are not specified (Open questions). Round 3 (layout packet, 2026-11-13): criteria 1 and 3 ticked; criterion 2 was ticked, unticked by the reviewer, and re-ticked in fix round 3 (Evidence). Criterion 4 ticked in round 8: `flow.ts` takes the marks from `computeLabels` (CDM-042), which applies `footnoteFormat` and restarts them under `perPageSection` (ADR 0120 item 37); the local count (`formatNumber`) stays only as a fallback for a footnote the algorithm does not number. Criterion 5 is ticked in round 5: the footnote areas settle inside every pass, so the only iteration that can fail to settle is the page-count one of the stories (FE-087), which is bounded by `MAX_COUNT_PASSES`; the new test builds footnote content on that unsettled count. Decided in docs/adr/0120-layout-backlog-batch.md (items 16, 18 and 19, and items 17 and 21 of fix round 3, proposed): the area leaves the first body line of its page; a footnote is kept whole on the page of its reference unless it is taller than that, and carried text comes first; a footnote left over after the last page gets a page with no headers or footers; no separator is drawn. Column balancing trials do not see footnotes.
+
+### FE-085 Lay out columns and balance them
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | M | must | Author |
+
+**Spec:** 02 §9.4; 03 §4.1 · **Requirements:** R1 · **Depends on:** FE-082
+
+As an author, I want text in a multi-column section to flow through the columns and balance where the section ends, so that column layouts look right.
+
+**Acceptance criteria**
+
+- [x] Given a page setup with `columns` greater than one and a `columnGap`, when text is laid out, then it flows through the columns in order.
+- [x] Given a column `break`, when it is laid out, then following content starts in the next column.
+- [x] Given a continuous section break ends a multi-column run, when the run is laid out, then its columns are balanced.
+- [ ] Given a table in a multi-column section, when it is laid out, then it does not span pages (03 §10).
+
+**Evidence:** `packages/layout/src/paginate.ts` (`ColumnBreakItem`, `breakColumn`, `continuousColumns`, `balanceCap`) and `packages/layout/src/paginate-regions.test.ts` 'columns (FE-085)', in Node.js (run of 2026-11-13): 12 ten-point lines in two columns of 35 points with a 10-point gap fill the first column with ten lines and start the second at x = 45; a column break moves the next paragraph to the second column at the top; five ten-point lines in a run that starts at the top of a page and ends at a continuous break are balanced to columns of 30 and 20 points, and the content after the break starts at y = 30 in one column; a run that ends at a next-page break is not balanced; 300 seeded random runs keep every line once, in order, inside the column and the body. Criterion 3 (fix round, group 4 round 2, 2026-11-13), same file: five 10-point lines are balanced to columns of three and two lines when the run is the first section, when a `continuous` break starts it on an empty page, and when it starts mid-page below one line of text (both columns start at y = 10 and the content after the run at y = 40); a run of 25 lines fills page 1 and is balanced on page 2; a mid-page run that is not balanced starts its second column below the earlier content too; a seeded sweep of 200 runs (first section, `nextPage` or `continuous` start, paragraphs with and without widow control, boxes) keeps every line once and in order, overlaps nothing, starts the content after the break at the run's bottom, and never ends the run lower than the same run filled column by column (lower in more than 50 of them).
+
+**Notes:** Criterion 3 unticked by the reviewer (group 4 round 2): a probe shows balancing happens only for a run that a non-continuous section break starts on an empty page. A first section with columns, a run started by a `continuous` break (even at the top of an empty page) and a run started mid-page all end unbalanced (five 10-point lines stay in one column and the content after the break starts at y = 50). The criterion has no such condition, and the one test covers only the `nextPage` start. Needed: balance every multi-column run that a `continuous` break ends, including the first section's, or record the narrower rule as an owner decision and keep the criterion open. Fix round: `paginate.ts` now balances every such run on the page where it ends, whatever starts it (`startRun`, `maybeBalance`, `balanceCap`); the trial passes start at the run's top on the page. The fix also corrects a fault the probe did not name: in a run that a `continuous` break started mid-page, the second and later columns started at the top of the body, over the earlier content. ADR 0120 item 11 is rewritten to match.
+Round 2 (layout packet, 2026-11-13): criterion 4 stays open because tables are not built (FE-083). Lane FE-079-091 (round 2, 2026-11-13): the rule is built for a table that fits on one page, in `paginate.ts` (`placeTable`): in a run with more than one column, a table that the rest of the page cannot hold, but a page can, starts on a new page; tested in `packages/layout/src/table-columns.test.ts` (four tests, Node.js, passing). Still open: a table taller than a page spans pages, and the criterion as written does not allow that; the default for it is not in the spec, and it is proposed in docs/adr/0206-lane-FE-079-091.md for the main session to decide. The rule is a proposed default, not an owner decision. Balancing (as amended in the fix round): a run that a continuous break ends is balanced on its last page; earlier pages of a long run fill their columns in order. A continuous break changes the column count at once (the tallest column ends the run), while its other page setup applies from the next page (ADR 0120, items 10 to 12, proposed). The fragment widths are those the caller broke the paragraphs to; the layout does not re-break lines to the column width.
+
+### FE-086 Lay out page sections with their own size and orientation
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | M | must | Author |
+
+**Spec:** 02 §9.4; 03 §4.2 · **Requirements:** R1 · **Depends on:** FE-082
+
+As an author, I want sections with their own page size, orientation and margins, so that a landscape table can sit in a portrait document.
+
+**Acceptance criteria**
+
+- [x] Given a `section_break` with `start` of `nextPage`, `evenPage` or `oddPage`, when it is laid out, then the next section starts on the page that value names.
+- [x] Given a `continuous` section break, when it is laid out, then the new section starts on the same page.
+- [x] Given a page setup with its own width, height, orientation and margins, when its pages are laid out, then they use those values.
+- [x] Given `pageNumberStart` and `pageNumberFormat`, when pages are numbered, then each section numbers its pages accordingly.
+
+**Evidence:** `packages/layout/src/paginate.ts` (`SectionBreakItem`, and the section handling in `paginate`) and `packages/layout/src/paginate.test.ts` 'section page setups (FE-086)', in Node.js (run of 2026-11-13): a `nextPage` section with a landscape page and its own margins, reported with its orientation and size; an `evenPage` section starts on page 2, and an `oddPage` section after page 1 inserts a blank page 2 and starts on page 3; a `continuous` section keeps one page and takes its setup from the next page; `pageNumberStart` with `lowerRoman` restarts the numbering, and a later section without a start continues from it.
+
+**Notes:** The LaTeX writer reports a continuous break that changes margins as unsupported (03 §10); what the editor does is not specified. Round 1 (layout packet, 2026-11-13): the criteria are ticked against the pagination input (`SectionBreakItem`), not against the CDM `section_break` node; reading that node is FE-077's and is not built. The continuous-break default is item 7 of docs/adr/0120-layout-backlog-batch.md (proposed).
+
+### FE-087 Place headers and footers on each page
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | M | must | Author |
+
+**Spec:** 02 §7 (print view); 03 §4.1, §4.4, §7 · **Requirements:** R1 · **Depends on:** FE-086
+
+As an author, I want headers and footers in place on every page, so that the page view looks like the finished document.
+
+**Acceptance criteria**
+
+- [x] Given `differentFirstPage` and `differentOddEven`, when pages are laid out, then each page uses the story that its variant names.
+- [x] Given a header taller than the space the page setup gives it, when the page is laid out, then it pushes the body down (03 §7).
+- [x] Given `page` and `pageCount` fields in a story, when the page is painted, then they show the page's number and the total computed by the layout.
+- [x] Given `headerDistance` and `footerDistance`, when a page is laid out, then headers and footers sit at those distances.
+
+**Evidence:** `packages/layout/src/paginate.ts` (`makeGeo`, `storyFor`, `paginate`) and `packages/layout/src/paginate-regions.test.ts` 'headers and footers (FE-087)', in Node.js (run of 2026-11-13): criterion 1 (fix round, group 4 round 2): `StoryVariants` holds only the three stories of 03 §4.1 (default, first, even); with `differentFirstPage` and `differentOddEven` and only those three stories, page 1 takes `first` for header and footer, even pages `even` and the odd pages after it `default`; without `differentOddEven` every page takes `default`, and with it but no even story the even pages are bare; a missing first story leaves page 1 without a header; a 30-point header under a 10-point top margin and a 5-point header distance puts the body at y = 35, a 2-point header leaves it at 10; a 20-point footer at a 5-point footer distance leaves 75 points of body above it; a header sits at its distance from the top and a footer ends at its distance from the bottom; the story factory receives the page number and the document page count, and a count that never settles is reported (`pageCountSettled` false) after 8 passes.
+
+**Evidence (lane V-FE-081-096, 2026-11-14, criterion 3):** `packages/layout/src/tree.ts` (`LayoutLine.text`, set only on the lines of a paragraph with a field), `packages/layout/src/items.ts` (`paragraphItem` sets it from the substituted runs; `flowStoryResolver` fills the fields), `packages/painter/src/painter.ts` (`paintLine` draws `line.text` when present), and two tests: `packages/layout/src/fe-087-field-text.test.ts` (Node.js, 3 tests pass: 'Page 3 of 7' in the line, no text on a plain paragraph, 'Page 2 of 5' and 'Page 9 of 12' from the story resolver; `pnpm vitest run` on that file) and `packages/painter/src/fe-087-fields.universal.test.ts` (Chromium, Firefox and WebKit: `pnpm vitest run --project browser packages/painter/src/fe-087-fields.universal.test.ts`, 1 test in each browser, all pass: the header of pages 1 to 3 paints 'Page 1 of 3', 'Page 2 of 3' and 'Page 3 of 3' with an empty CDM range). Limit: the story is a hand-built flow document, not a CDM read through `toFlow`, and the test paints the layout tree directly, not through the element. Re-run of the layout files that touch the tree (engine, incremental, lines, layout-json, notes, paginate, items, items-tabs, paginate-regions: 115 tests) and of the painter browser files (painter, overlay, fe-090-metrics) passes.
+
+**Notes:** Criterion 1 unticked by the reviewer (group 4 round 2): 03 §4.1 gives `page_setup` the stories `headerDefault`, `headerFirst` and `headerEven` (and the footer equivalents), with no odd variant. `storyFor` in `paginate.ts` reads `variants.odd` for odd pages under `differentOddEven` and never falls back to `default`, so a setup shaped like the CDM (default and even) gets no header on odd pages, and the test passes only because it supplies an `odd` story. Needed: odd pages take `odd` when given and otherwise `default` (as in OOXML, where the default story serves odd pages), with a test using only default, first and even. Fix round: the invented `odd` variant is removed, so odd pages take `default`; `pageSetupOf` in `items.ts` maps the flow page's three stories onto it. The rules for a missing first or even story are in ADR 0120 item 13.
+Round 2 (layout packet, 2026-11-13): criterion 3 stays open on its painted half: the layout gives each story its page number label and document page count, and the painter (FE-090) draws only the text that `PaintSource.lineText` gives for a block offset, and `LayoutLine` carries no field text, so the field values did not reach the painted page (closed in a later round of lane V-FE-081-096, see the Evidence line for criterion 3) (lane V-FE-081-096, 2026-11-13; ADR 0305 section 5, needs an owner or main-session decision on the tree contract). Stories are laid out as paragraph and box fragments moved by the distances; tables inside a story are not moved inside (tables are FE-083). The defaults for distances (0 when absent) and the first-page rule are in docs/adr/0120-layout-backlog-batch.md (items 10 to 13, proposed).
+
+## Incremental layout, painter and tests (02 §9.3, §9.5)
+
+### FE-088 Re-lay out incrementally
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.5, §13; 00 §9 · **Requirements:** R1 · **Depends on:** FE-078, FE-079, FE-081, FE-082, FND-007
+
+As an author, I want typing in a long document to stay instant, so that the page view never lags behind my hands.
+
+**Acceptance criteria**
+
+- [ ] Given an edit, when it is applied, then its block is marked dirty and only dirty blocks are re-measured.
+- [ ] Given dirty blocks, when layout runs, then pagination restarts at the first affected page and stops as soon as the positions of the following blocks stop changing.
+- [x] Given several edits in one animation frame, when the frame runs, then layout work is coalesced into one pass.
+- [x] Given random edits to a corpus, when the incremental tree is compared with a tree laid out from scratch, then they are equal (property test).
+- [ ] Given a 100-page document on the reference machine with CPU throttling, when the user types, then keystroke to paint is within 16 ms at the median and 50 ms at the 95th percentile (target), measured with the Event Timing API.
+- [ ] Given a remote commit, when it arrives, then its blocks are marked dirty and handled the same way.
+
+**Evidence:** `packages/layout/src/incremental.ts` (`incrementalLayout`) and `packages/layout/src/incremental.test.ts`, in Node.js (run of 2026-11-13, round 4: the file passes 6 tests). Criterion 1: 're-measures only the edited block, and keeps the lines of every block after it' (an edit to p5 measures ['p5'] only, with the offsets of the sixty blocks after it moved); 'measures each dirty block once, however many edits share the pass'; 're-measures a block whose input changed even when no edit marked it dirty'. Criterion 4: 'equals the from-scratch tree after random edits (property)', a fast-check property over 40 seeded cases of 12 random retext, insert, delete and unmarked edits, each compared with `layoutFlow` from scratch on serialised trees and checked for coverage. Criterion 3 (round 5, 2026-11-13): 'asks the host for one frame for several edits, and runs one pass when it comes', 'asks for a new frame after the previous one has run', 'runs nothing when no frame comes, and no frame when nothing was edited', and 'equals the from-scratch tree after batches of edits per frame (property)', 25 seeded cases (`coalescedLayout`, `incremental.test.ts`).
+
+**Notes:** Round 4 (layout packet, 2026-11-13). The incremental unit is the line breaking of one paragraph: `incrementalLayout` wraps the injected line breaker, and the engine (`layoutFlow`) and the page pass are unchanged. A cached paragraph is reused when it is not dirty and its breaker input (identifier, runs, fonts, widths, indents) is unchanged; a changed input is re-measured even when unmarked. Criterion 1 is ticked on that basis. Criterion 4's corpus is generated inside the test (random paragraphs with one footnote), not the fixtures of `packages/corpus`. Not built, so not ticked: criterion 2, because pagination still runs over the whole document and does not restart at the first affected page; criterion 5 (keystroke latency on a 100-page document, Event Timing) needs a browser and the reference machine; criterion 2 is still open, and the background tasks of FE-089 are not built; criterion 6 needs the remote commit path, which the layout package does not receive. Round 4 (lane U-FE-081-096, 2026-11-13): still open; `packages/engine/src/remote.ts` works on ProseMirror steps with no CDM block identifiers, so the mapping to dirty marks is not built (docs/adr/0305-lane-U-FE-081-096.md, round 4, item 2). Dirty marks come from the caller; no edit model feeds them here. Round 5 (layout packet, 2026-11-13): criterion 3 ticked. `coalescedLayout` (`incremental.ts`) takes the frame request from the host and runs one `update` with the dirty blocks of every edit in the frame. The tests (`incremental.test.ts`) use a queue of frames in Node.js; no browser animation frame was run, so the keystroke timing stays with criterion 5. Audit (2026-11-13): criterion 1 unticked, because no product code marks a block dirty when an edit is applied (the tests pass the `dirty` set by hand, and nothing outside `incremental.test.ts` imports `incrementalLayout`); only the re-measure half is shown, and it holds by input comparison whether or not a mark is given.
+
+### FE-089 Paginate long documents in the background
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 02 §9.5 · **Requirements:** R1 · **Depends on:** FE-088
+
+As a maintainer, I want long documents paginated in time slices with estimated heights, so that opening a long document does not freeze the page.
+
+**Acceptance criteria**
+
+- [ ] Given a long document opens, when pagination runs, then it works in time slices and input events are processed between slices.
+- [ ] Given pages that are not yet computed, when the painter needs their height, then the engine supplies an estimated height, and replaces it when the page is computed.
+- [ ] Given the user types while background pagination runs, when keystrokes arrive, then the latency target of FE-088 still holds.
+- [ ] Given pagination has not finished, when the page count is asked for, then the engine reports whether it is final.
+
+**Evidence:** `packages/layout/src/page-heights.ts` (`pageHeights`) and `packages/layout/src/page-heights.test.ts`, in Node.js (lane layout-2, 2026-11-13: 13 tests pass). Criterion 2: 'estimates an uncomputed page with the fallback until a page is computed', 'estimates with the mean of the computed heights', 'replaces an estimate when the page is computed, and moves the estimate with it'; a fast-check property over 300 random sequences of computed and invalidate operations checks that each uncomputed page carries the mean of the computed heights and each computed page its own height.
+
+**Notes:** Lane layout-2 (2026-11-13). The estimate is the mean of the computed heights, or the page setup's body height while none is computed: a proposed default (docs/adr/0135-layout-2-backlog-batch.md, item 1), since 02 §9.5 does not say how the estimate is formed. The painter that asks for the height is not built. Not ticked: criterion 1 (time slices with input between them) needs a resumable pagination driver; `paginate` is one synchronous pass over the whole document and cannot yield, and the driver is not built. Criterion 3 needs the keystroke latency run in a browser. Criterion 4 needs the driver. Round 2 (layout-3, 2026-11-13): `pageStatus` (`readonly-view.ts`) gives a final flag, false when the pass has not settled or a block is unplaced (`readonly-view.test.ts`), but no pass is unfinished before the driver exists, so the criterion is not met. Round 7 (2026-11-13, layout packet): re-checked, still not ticked. `paginate.ts` keeps its pass state in closures over one page loop and repeats the pass up to `MAX_COUNT_PASSES` times, so a resumable form is a restructuring of that pass, not an added wrapper. It is not made in this round (docs/adr/0120-layout-backlog-batch.md, round 7, item 30). Audit (2026-11-13): criterion 2 unticked, because `pageHeights` is exercised only by its own test and by `mountPageWindow`, which calls `setComputed` for every page of a finished tree, so no product path ever asks for the height of an uncomputed page and nothing in pagination feeds the store.
+
+### FE-090 Paint lines the browser cannot re-wrap
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.1, §9.3; ADR 0005 · **Requirements:** R1, R2 · **Depends on:** FE-078, FE-079, FE-016
+
+As an author, I want each line drawn exactly where the engine put it, so that what I see is what the engine laid out.
+
+**Acceptance criteria**
+
+- [x] Given a layout tree, when it is painted, then each line is in its own absolutely positioned box with `white-space: pre`, inside page boxes in the shadow root, built with DOM APIs.
+- [x] Given the container width changes, when the view is painted, then no line is re-wrapped by the browser.
+- [ ] Given painted text, when it is inspected, then it is real text (selectable by assistive technology through the bridge design, searchable, sharp at any zoom), drawn as DOM and not on a canvas.
+- [ ] Given the painter's CSS, when ligatures and kerning are compared with the measurement provider, then it uses the settings that match what the provider measured (FE-079).
+- [x] Given a layout tree, when it is painted, then the positions of painted lines equal the tree's.
+
+**Review (group 1, round 1): criterion 4 unticked.** The provider is the default canvas measurer, `canvasTextMeasurer` in `packages/element/src/canvas-measure.ts` (FE-079 criterion 1), which does not set `fontKerning` and so measures with canvas `auto`. The test below builds its own canvas and sets `fontKerning = 'normal'` to agree with the painter's pin, so it does not compare the painter with what the provider measures. By the lane's own table (docs/adr/0305-lane-V-FE-081-096.md, section 1), canvas `auto` in Chromium gives 126.789 px against 125.906 px painted, a gap of 0.88 px, above the 0.5 px target. Spec 02 §9.3 says the painter's CSS follows canvas by default, "not the other way round", and FE-079 criterion 3 says the same; pinning the painter and asking the measurer to change reverses that. Either pin the measurer too (a change in `packages/element`, with a spec or owner decision) or show a CSS value that matches canvas `auto` in all three browsers, then run the real provider in the test. The stale docstring of the test also still says the measurer uses `auto`.
+
+**Fix (V4 group 1, round 1, 2026-11-13; criterion 4 still unticked):** the painter now follows the spec. `PAINT_TEXT_PINS.fontKerning` is `auto`, the canvas default that `canvasTextMeasurer` leaves in place; ligatures stay `normal`. `packages/painter/src/fe-090-metrics.universal.test.ts` now runs the real `canvasTextMeasurer` against the painted text (no canvas of its own, no kerning set), and the docstring says so. Probe, taken 2026-11-13 on this development machine (Windows 11) with a throw-away browser test (deleted after use), `pnpm vitest run --project browser`, generic `serif` at 16 px, width of `AVATAR Wave Yes` in px: canvas default (the real measurer) 126.789 in Chromium, 126.800 in Firefox, 126.789 in WebKit; CSS `font-kerning: auto` paints 125.906, 126.800 and 126.797. So CSS `auto` matches canvas in Firefox and WebKit (gaps 0 and 0.008 px). In Chromium no CSS value tried matches canvas `auto`: `font-kerning` auto, normal and none, each with the four `text-rendering` values, `font-feature-settings` with `kern` on, ligatures off, `font-optical-sizing: none`, `font-synthesis: none` and a tiny `letter-spacing` all paint 125.906 (or 136.859 with kerning off). Canvas `auto` in Chromium equals canvas `optimizeSpeed`; canvas `normal` or `textRendering = 'optimizeLegibility'` gives 125.906. The test therefore checks every sample in Firefox and WebKit, only the samples without kerned pairs in Chromium, and a Chromium-only test pins the open gap so it shows when it closes: 7 passed, 2 skipped (the Chromium-only test in Firefox and WebKit). Canvas `fontKerning` changes widths in WebKit too, so the premise of 02 §9.3 ("no control over kerning in Safari") no longer holds for this engine. Owner or spec question, not decided here: pin the measurer to `ctx.fontKerning = 'normal'` (a change in `packages/element/src/canvas-measure.ts`, which the element owner or the main session makes) with the painter's CSS `normal`; the probe shows canvas `normal` and CSS `normal` agree in all three browsers (125.906/125.906, 125.917/125.917, 126.789/126.797). Until then criterion 4 is met in Firefox and WebKit only.
+
+**Evidence (lane V-FE-081-096, 2026-11-13), criterion 4:** `packages/painter/src/fe-090-metrics.universal.test.ts` run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/fe-090-metrics.universal.test.ts`, 6 tests, all pass). The painter pins `font-kerning: normal` and `font-variant-ligatures: normal` (`PAINT_TEXT_PINS` in `painter.ts`), and the canvas measurer sets `fontKerning` to `normal`. Five samples (ligature-rich `fi`, `ffi`, `ffl`; kerning-heavy `AV`, `To`, `Wa`, `Ty`, `Yo`) are each painted as wide as canvas measures them, within 0.5 px, in all three browsers. A probe (deleted after use) showed the canvas `auto` value gives 126.79 px for 'AVATAR Wave Yes' in Chromium, against 125.91 px painted, so `auto` is not the setting to pin to.
+
+**Evidence (lane V-FE-081-096, 2026-11-14, criterion 2):** `packages/painter/src/fe-090-rewrap.universal.test.ts`, run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/fe-090-rewrap.universal.test.ts`, 1 test in each browser, all pass; PowerShell, no Docker or container). It paints three lines wider than the container, narrows the container to 160 px and 90 px and widens it to 1200 px, and checks that each line keeps its top and its offset in the page, its height, its painted text width and one client rect for its text (one row). The page box is centred, so the offset is taken from the page box, not the viewport. Not mutation-tested against a `white-space: normal` build. Criterion 2 unticked by the reviewer (V4 group 1, round 6): the test is hollow. It narrows only the host div, while the page box has a fixed point width and the lines sit inside it, and the sample lines (about 610 px) fit the 667 px page box. Setting `white-space: normal` on every line after painting leaves the test passing in Chromium and Firefox (it fails only in WebKit, where the text has several client rects). Needed: a case where the line's own available width drops below its text (a narrower page box, or lines longer than the page box), shown to fail with `white-space: normal` in all three browsers.
+
+**Evidence (V4 group 1, round 6 fix, 2026-11-14, criterion 2, re-ticked):** `packages/painter/src/fe-090-rewrap.universal.test.ts` rewritten so the line's own available width drops below its text. Page 1 is 150 pt wide, narrower than each of its lines; then the host goes to 160 px, 90 px and 1200 px, and every page box is squeezed to 120 pt and 60 pt. Before each step the test asserts that the page box's content width less the line's left offset is below the line's text width. Each line must keep its offset in the page, its own (shrink-to-fit) box width, its height, its text width and one client rect. A second test is a negative control: with `white-space: normal` set on every painted line, the same comparison reports a change, and more than one row, for every line in the squeezed pages and for every line on page 1. Run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/fe-090-rewrap.universal.test.ts`, 2 tests in each browser, all pass). Mutation check, 2026-11-14, this development machine: a throw-away copy of the test that sets `white-space: normal` on every line after painting (deleted after use) fails the main test in all three browsers (4 client rects for a line in Chromium and Firefox, 3 in WebKit, against 1 expected).
+
+**Evidence:** `packages/painter/src/painter.ts` (`paintTree`) and `packages/painter/src/painter.universal.test.ts`, run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/painter.universal.test.ts`, lane U-FE-081-096, 2026-11-13: 6 tests in each of the 3 browsers, all pass). Each line is an absolutely positioned `div` with `white-space: pre` (computed style checked), built with `createElement`, the style properties and `textContent`, and placed in its page box ('paints each line as an absolutely positioned box with white-space pre, from DOM'). 'paints inside the shadow root' attaches a shadow root and finds the lines there and not in the document. 'does not re-wrap a line when the container narrows' narrows the container from 600 px to 120 px: each line keeps one client rectangle and its height. 'places every painted line where the tree puts it' compares each line's box with the page box, within half a pixel. 'paints text that is selectable and searchable as DOM text' gives the line text from a range.
+
+**Notes:** Lane U-FE-081-096 (2026-11-13). The painter is a new package, `packages/painter` (01 §6), which is DOM code and so is not in the universal set. The layout tree holds neither text nor fonts, so the caller supplies them in a `PaintSource` (the text of a CDM range, and the one family and size the measurer used). Not ticked: criterion 3 ('sharp at any zoom' is not measured, and the assistive-technology reading is FE-099). Criterion 4 was not ticked in the painter's round; lane V-FE-081-096 ticked it (see the Evidence above): the painter pins `font-kerning` and `font-variant-ligatures` to normal, and the canvas measurer uses the same kerning value (decision recorded in docs/adr/0305-lane-V-FE-081-096.md, proposed). Runs of several fonts (FE-062 to FE-064) are not painted yet. Page boxes have fixed point sizes, and `white-space: pre` is what stops a browser re-wrap. No timing or reference-machine measurement was made. Audit (2026-11-13): criterion 2 unticked, because 'does not re-wrap a line when the container narrows' narrows only the host div, while the page boxes have fixed point widths and the lines are positioned inside them, so the test passes with or without `white-space: pre`; it needs a case where the line's own available width shrinks below its text (for example a narrower page box) and compares the line rectangles before and after.
+
+### FE-091 Justify with computed word spacing
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | S | must | Author |
+
+**Spec:** 02 §9.3 · **Requirements:** R1 · **Depends on:** FE-090
+
+As an author, I want justified paragraphs to line up at both margins, so that they look like the typeset result.
+
+**Acceptance criteria**
+
+- [x] Given a justified paragraph, when it is painted, then the extra space is applied as computed word spacing.
+- [x] Given a line with ordinary spaces, no-break spaces, trailing spaces and tabs, when it is justified, then only ordinary and no-break spaces stretch, and trailing spaces and tabs are excluded.
+- [x] Given a justified line, when its painted width is measured, then it equals the computed width within half a pixel (target).
+
+**Evidence:** `packages/layout/src/justify.ts` (`justifyLine`, `stretchableSpaces`) and `packages/layout/src/justify.test.ts`, in Node.js (run of 2026-11-13, round 4: 6 tests pass). Criterion 2: ordinary (U+0020) and no-break (U+00A0) spaces stretch, tabs never do, and the trailing run of spaces, no-break spaces and tabs is excluded ('stretches ordinary and no-break spaces, and never a tab'; 'excludes the trailing run'); a seeded property over 400 random lines checks that every stretchable space gets the same word spacing and that together they add the extra width. Criteria 1 and 3 (lane U-FE-081-096, 2026-11-13): `packages/painter/src/painter.ts` applies the value as CSS `word-spacing` on the line, resets the trailing run of blanks to zero, and `packages/painter/src/painter.universal.test.ts` 'justifies every line but the last to the right edge of the paragraph (FE-091)' checks, in a browser, that the first of two lines of a 200-point paragraph has a positive computed word spacing, the last line none, and the painted first line is 200 points wide within half a pixel. Run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/painter.universal.test.ts`, 2026-11-13, all pass).
+
+**Evidence (lane V-FE-081-096, 2026-11-14, criteria 1 and 3):** `packages/painter/src/fe-091-justify.universal.test.ts`, run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/fe-091-justify.universal.test.ts`, 1 test in each browser, all pass; PowerShell, no container). The painter (`paintTree` with `justify`, `painter.ts`) sets `word-spacing` on the two justified lines and none on the last line, and the painted width of each justified line (`getBoundingClientRect`) is the 300 pt column (400 px) within half a pixel. The measure is `canvasTextMeasurer`, and the sample lines hold no kerned pair, since Chromium's CSS kerning differs from canvas `auto` on those (FE-090 Notes).
+
+**Notes:** Round 4 (layout packet, 2026-11-13): criterion 2 ticked. Criterion 1 stays open: the painter that applies the word spacing (FE-090) is not built. Criterion 3 stays open: the painted width needs a browser run and the painter. The layout side computes the value only. Decisions taken as defaults, recorded in docs/adr/0120-layout-backlog-batch.md (round 4, item 22): a line already at or over its target is not shrunk, and a trailing no-break space is treated like a trailing ordinary space. Lane U-FE-081-096: the painter (FE-090) is built, so criteria 1 and 3 are ticked on the browser test in Evidence, and the earlier 'not built' statement is superseded. Two defaults the story does not settle, both proposed: the last line of a paragraph is never justified, and the painter's tests use one family (`serif`). Criterion 3 is a width target, measured on this machine in three browser engines, not on the reference machine.
+
+### FE-092 Virtualise the painted pages
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.5, §13; 13 §9 · **Requirements:** R1 · **Depends on:** FE-090, FE-078
+
+As an author, I want a thousand-page document to scroll and edit smoothly, so that length is not a limit.
+
+**Acceptance criteria**
+
+- [x] Given a document, when it is painted, then only the visible pages and a small overscan window are mounted, and the number of mounted pages does not depend on the document's length.
+- [x] Given an edit in one paragraph, when the view updates, then blocks whose layout did not change are not repainted (DOM mutations are limited to the affected lines and pages).
+- [x] Given the user scrolls, when pages enter or leave the window, then they are mounted and unmounted, and unmounted pages keep their computed or estimated height.
+- [ ] Given a 1,000-page document (target), when it is opened and scrolled, then the page view stays usable with virtualisation.
+- [ ] Given a 100-page document, when memory is measured, then it stays under 300 MB (target).
+
+**Evidence:** `packages/painter/src/window.ts` (`mountPageWindow`) and `packages/painter/src/window.universal.test.ts`, run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/window.universal.test.ts`, lane U-FE-081-096, 2026-11-13: 3 tests in each browser, all pass). 'mounts the same small number of pages whatever the length of the document' mounts a window over 100, 1,000 and 5,000 synthetic pages with overscan 1: the same number of page boxes is in the DOM (at most 4). 'mounts and unmounts pages as the scroller moves, and keeps every page height' scrolls to page 500 of 1,000 and fires the scroll event: page 0 is removed and page 500 mounted, `heightOf(0)` is still 400 points, and the stacked height is unchanged. 'places a mounted page at its stacked position' checks a page's top against the stacked offset, within half a pixel.
+
+**Evidence (lane V-FE-081-096, 2026-11-13), criterion 2:** `packages/painter/src/repaint.ts` (`repaintTree`, keyed by the painted markup of each page and line) and `packages/painter/src/fe-092-repaint.universal.test.ts`, run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/fe-092-repaint.universal.test.ts`, 2 tests in each browser, all pass). A repaint of unchanged content records no DOM mutation. After an edit to the first line of one paragraph on the middle of three pages, a MutationObserver records only `childList` mutations on that page; the other pages and the other lines keep their elements (identity checked with `===`).
+
+**Notes:** Lane V-FE-081-096 (2026-11-13): the view in this criterion is the painter's `repaintTree`; the element does not yet call it (no element mounting for the page view), and the test edits the text of one line with an unchanged layout tree. Lane layout-2 (2026-11-13). The engine half is in `packages/layout/src/page-heights.ts`: `visiblePages` gives the pages a scroll position needs, with an overscan on each side, and `pageHeights` keeps the height of every page, mounted or not (FE-089 criterion 2). `page-heights.test.ts` checks that the number of pages in the window does not depend on the document length (100, 1,000 and 5,000 pages give the same count) and that the window clamps at both ends. Not ticked: criterion 1 (only visible pages mounted) and criterion 3 (mount and unmount on scroll) are the painter's, and the painter is not built; criterion 2 needs a diff of changed pages by the painter, which is not built either; criterion 4 and criterion 5 (1,000-page document, 100-page memory) need a browser run and the reference measurement, which were not run. Lane U-FE-081-096 (2026-11-13): the painter's window is built (`packages/painter/src/window.ts`, which mounts with `visiblePages` and keeps heights in `pageHeights`), so criteria 1 and 3 are ticked on the browser test in Evidence. The window paints each page from the tree when it mounts it, and the pages are not diffed (criterion 2 stays open). The synthetic pages are 400 points tall with one line each. Criteria 4 and 5 stay open: no 1,000-page document was opened and scrolled on the reference machine, and no memory was measured.
+
+**Notes:** Lane V-FE-081-096 (2026-11-14), criterion 4 stays open. `packages/painter/src/fe-092-scale.universal.test.ts` opens a 1,000-page tree in `mountPageWindow` (overscan 1) and scrolls it from page 0 to page 999 one page at a time, in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/fe-092-scale.universal.test.ts`, 3 passed). Every step keeps at most 4 pages mounted and mounts the page scrolled to. No timing is asserted, because the target counts as met only on the reference machine, which is not available here; the test prints the update times to the console, but the browser provider in this run did not show them. "Usable" has no measurable definition in the criterion. Criterion 5 (100-page memory under 300 MB) was not measured: the page cannot read the browser's total memory, and no reference machine run was made.
+
+### FE-093 Provide an interactive overlay layer
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | M | must | Participant |
+
+**Spec:** 02 §9.5; 12 §11; review F2 · **Requirements:** R13 · **Depends on:** FE-090, FE-092, FE-108, FRW-076, FRW-079
+
+As a participant, I want fields and signature buttons on a page to be focusable and clickable, so that I can fill and sign in the page view.
+
+**Acceptance criteria**
+
+- [x] Given a page with controls, when it is painted, then an overlay above the lines holds them at positions taken from the layout tree, and they can be focused and clicked.
+- [x] Given the user tabs through a page, when focus moves, then the order follows document order.
+- [ ] Given a control's label, when ARIA references are checked, then label and control are in the same root (FE-108).
+- [x] Given the overlay, when the pointer is over painted text outside any control, then pointer events reach the text and selection works.
+- [x] Given a page scrolls out of the mounted window and back, when it returns, then its controls show the values the document holds.
+
+**Evidence (lane U-FE-081-096, 2026-11-13):** `packages/painter/src/painter.ts` (`PaintOptions.control`, the per-page `.de-overlay` layer appended after the lines, `pointer-events: none` on the layer and the boxes, `auto` on each control, `controlCount`) and `packages/painter/src/overlay.universal.test.ts`, run in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/overlay.universal.test.ts`, 2026-11-13: 6 tests in each browser, all pass). Criterion 1: 'places each control at its box, and the control over a line is the one under the pointer' (position and width within half a point, `elementFromPoint` at a control over a line returns the control) and 'takes focus and a real click on a control' (`userEvent.click`). Criterion 2: 'reaches the controls with Tab in document order' (`userEvent.tab`, the first box in document order sits lower on the page). Criterion 3: 'keeps the label and the control in the same root' (shadow root; `aria-labelledby` resolves with `getElementById` in that root and not in the document). Criterion 4: 'leaves the painted text under the overlay' (`elementFromPoint` at the middle of a line outside a control returns the line's text; the text range reads back). Criterion 5: 'shows the values the document holds when a page is mounted again' (`mountPageWindow` with overscan 0: page 0 leaves the window and returns with the value changed meanwhile).
+
+**Notes:** Evidence audit (2026-11-13): criterion 3 unticked, because the test 'keeps the label and the control in the same root' builds the label and the control together in one wrapper element it creates itself, so it passes whatever the painter does, and the same check for overlay controls is FE-108 criterion 3, which is open. The overlay is the editor's mechanism; the widgets are FRW's. The tests use stand-in inputs and a stand-in label, not FRW's widgets, and FE-108's full ARIA handling is not built: criterion 3 is ticked on the painter's placement in the root only. Criterion 4 is checked by pointer routing and by a text range; a drag selection with the pointer was not run. Header, footer and footnote controls join the same overlay after the body controls, which is the document order the painter uses (proposed, not in the spec). 02 §9.5 says the painter has the overlay "from the start": it is built with the painter. 02 §9.5 says the painter has the overlay "from the start", so it is built with the painter and not added afterwards. How assistive technology reaches the controls is part of S9 (FE-099).
+
+### FE-094 Test the layout engine and the painter in CI
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 02 §9.3, §14 · **Requirements:** R1, R12 · **Depends on:** FE-090, FE-078, FND-002, SPK-018
+
+As a maintainer, I want layout and painting verified in every browser on every change, so that regressions cannot slip in.
+
+**Acceptance criteria**
+
+- [ ] Given a corpus, when CI paints it in each supported browser, then every painted line width equals its computed width within half a pixel (target) and the build fails otherwise.
+- [ ] Given stored layout trees and painted widths per browser, when a change alters one, then the regression test fails until the stored result is updated in a reviewed change.
+- [x] Given the corpus, when it is reviewed, then it includes ligature-rich and kerning-heavy text, mixed fonts, justified paragraphs, tables, footnotes, columns and sections.
+- [x] Given the engine tests, when they run in Node.js with the deterministic provider, then they do not need a browser.
+- [ ] Given the run, when it finishes, then the distribution of width differences per browser is reported.
+
+**Evidence:** Lane layout-2 (2026-11-13). Criterion 4: `packages/layout/src/engine.test.ts`, `measure.test.ts`, `lines.test.ts`, `paginate.test.ts`, `paginate-regions.test.ts`, `notes.test.ts`, `incremental.test.ts`, `items.test.ts`, `flow.test.ts`, `justify.test.ts` and `page-heights.test.ts` run in the Node.js project (`pnpm vitest run` on those paths): 11 files, 119 tests, all pass. They use the deterministic `fixedWidthMeasurer` and `advanceTableMeasurer` (`measure.ts`) and no browser or DOM API. The browser files, `canvas.universal.test.ts` and `layout.universal.test.ts`, are not among them. Criterion 3 (layout round 6, 2026-11-13): `packages/layout/src/fe-094-corpus.test.ts` (5 tests, Node.js, passing 2026-11-13) loads `pages-20` through `@docedit/corpus` and checks the CDM itself: ligature words and kerning pairs in the runs ('office', 'efficient', 'AVATAR', 'Wave', 'Yes'), at least two font families in the marks and styles, justified paragraphs, tables, footnotes, a page setup with two columns, and a landscape page setup. The manifest's feature list for the document is checked too. This is an automated check of the corpus content, not a human review.
+
+**Notes:** Round 6 (layout packet, 2026-11-13): criterion 3 ticked on the corpus content (above). Criterion 2 (stored layout trees and painted widths per browser, with a regression that fails on change) stays open: painted widths need a browser run and the painter, which are not in `packages/layout`. Criterion 5 (the width-difference distribution per browser) stays open for the same reason. Criteria 1 and 2 also need the painter and a browser run.
+
+**Notes:** Lane layout-2 (2026-11-13). Criterion 4 is ticked on the scoped run above, not on a full `pnpm test`. Criteria 1, 2, 3 and 5 stay open: they need the corpus painted in each browser, the stored painted widths, and the width distribution report, and none of these is built in this package. Criterion 2's stored layout trees are not yet written as fixtures (`serialiseTree` exists, FE-078).
+
+**Notes:** Lane V-FE-081-096 (2026-11-13): criteria 1, 2 and 5 stay open. Criterion 1 needs the corpus painted in each browser with each line compared with its computed width. The painter takes one font family for the whole text (`PaintSource.fontFamily`), and the corpus has several families; runs in several fonts (FE-062 to FE-064) are not painted yet, so a mixed-font line cannot be compared. Criteria 2 and 5 need the stored painted widths and the distribution report, which follow from criterion 1. Needs from others: per-run fonts in the painter (FE-062 to FE-064).
+
+## Read-only pages and the editable page view (02 §9.6, §9.7)
+
+### FE-095 Paint read-only pages for the read view, old versions and page counts
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Viewer |
+
+**Spec:** 02 §7; 11 §6; ADR 0005 · **Requirements:** R1, R4 · **Depends on:** FE-078, FE-090, FE-092, HIS-010, UX-018
+
+As a reader, I want to read a document or an old version as pages without waiting for a PDF, so that reading is quick and available offline from the layout.
+
+**Acceptance criteria**
+
+- [ ] Given `view="read"` and the painter, when the element renders, then the pages are painted from the layout engine with no editing surface and no input bridge.
+- [ ] Given a version at a given `seq`, when the history view asks, then the painter shows that version read-only.
+- [x] Given the layout, when the status bar asks for the page count, then the engine returns it and says whether it is final.
+- [ ] Given painted pages, when the reader selects and copies text, then it works, and a screen reader reads the real text in document order.
+- [x] Given a long document, when the reader scrolls, then only the visible pages and the overscan window are mounted (FE-092).
+
+**Evidence:** `packages/layout/src/readonly-view.ts` (`pageStatus`) and `packages/layout/src/readonly-view.test.ts`, in Node.js (run of 2026-11-13: the file passes, 5 tests, with `layout-json.test.ts` and `reconcile.test.ts` in the same run, 30 tests in all). Criterion 3: 'reports the page count as final when the passes settled and every block is placed', 'reports a count that has not settled as provisional, and says why' and 'reports a count with an unplaced table as provisional, in the singular and the plural'. The status takes a layout result from `layoutFlow` (`engine.ts`); the test builds the result directly. Criterion 5 (lane U-FE-081-096, 2026-11-13): `packages/painter/src/window.ts` mounts only the visible pages with overscan, and `packages/painter/src/window.universal.test.ts` (FE-092 'mounts the same small number of pages whatever the length of the document' and 'mounts and unmounts pages as the scroller moves') passes in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/window.universal.test.ts`, 9 tests, all pass). Criterion 4, the selection half (lane U-FE-081-096, 2026-11-13): `packages/painter/src/read-pages.universal.test.ts` checks, in Chromium, Firefox and WebKit (`pnpm vitest run --project browser packages/painter/src/read-pages.universal.test.ts`, 9 tests in all three browsers, all pass), that the painted pages hold no contenteditable or input element, that the lines are in document order in the DOM, and that a range selected across two pages gives the real text in order.
+
+**Notes:** The painter's pages are the editor's layout, not the typeset PDF; how the product tells them apart is not specified (Open questions). Layout packet, round 2 (lane layout-2, 2026-11-13): criterion 3 is met by `pageStatus`, which counts the page passes as final when they settled and no block is unplaced (proposed default, ADR 0135 item 9). Criteria 1, 2 and 4 are not met here: they belong to the painter and the input bridge in the element, to the history view that must lay out a version's flow, and to the screen reader (FE-099). Lane U-FE-081-096 (2026-11-13): criterion 1 stays open because the element does not yet mount the painter for `view="read"` (no element mounting is built; `packages/element/src/read-view.ts` is the PDF read view of FE-072, not this one). Criterion 4 stays open: the selection and the DOM order are tested in a browser, but no screen reader was run, so 'a screen reader reads the real text in document order' is not proven. Criterion 2 needs the history view to lay out a version's flow, which is not built. Criterion 5 is ticked (see Evidence).
+
+**Notes:** Lane V-FE-081-096 (2026-11-13): criterion 1 stays open, because the element does not mount the painter for `view="read"` (see FE-095 Notes). Criterion 2 needs the history view to lay out a version's flow, which is not built. Criterion 4's screen-reader half is not checked here (FE-099, a manual pass). The DOM half is covered by `packages/painter/src/read-pages.universal.test.ts`.
+
+### FE-096 Place the caret and selection from the layout tree
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.6; ADR 0005 · **Requirements:** R1, R11 · **Depends on:** FE-078, FE-090, FE-036, FE-038
+
+As an author, I want to click anywhere on a page and have the caret land at the nearest text position, with a visible selection, so that the page view edits like the web view.
+
+**Acceptance criteria**
+
+- [x] Given a pointer position on a page, when hit testing runs, then it returns a document position computed from the layout tree and not from the DOM.
+- [x] Given a clicked margin, gap between lines, space beyond a line's end, or table cell, when hit testing runs, then it returns the nearest sensible position in that block.
+- [x] Given a collapsed selection, when the caret is drawn, then its geometry comes from the layout tree.
+- [x] Given a range selection that spans lines, pages or table cells, when it is drawn, then rectangles are computed per line and per page from the layout tree.
+- [x] Given `forced-colors: active`, when the caret and selection are drawn, then they use system colours (FE-019).
+
+**Evidence (lane V-FE-081-096, 2026-11-14, round 5):** `packages/painter/src/selection-paint.ts` (`paintSelection`: the caret from `caretGeometry` and the selection boxes from `selectionRects`, each box with system colour keywords `CanvasText` and `Highlight` and `forced-color-adjust: none`) with `packages/painter/src/selection-paint.universal.test.ts` (criteria 3 and 4 in the DOM, 4 tests, Chromium, Firefox and WebKit: `pnpm vitest run --project browser packages/painter/src/selection-paint.universal.test.ts`, 12 tests in all, all pass). Criterion 5: `packages/painter/src/selection-forced.universal.test.ts` run under `forced-colors: active` by `tests/V-FE-081-096/vitest.forced-colors.config.ts` (Playwright context option `forcedColors: 'active'`, Chromium, Firefox and WebKit: `pnpm vitest run --config tests/V-FE-081-096/vitest.forced-colors.config.ts`, 6 tests, all pass; the check is skipped in the root browser project, where forced colours are off). In forced colours the selection and the caret compute to the same colour as a reference box with the same keyword, and the caret is not the canvas colour.
+- [ ] Given a selection that starts inside a region, when it is extended in the page view, then it is clamped as in the web view (FE-038).
+
+**Evidence:** `packages/layout/src/caret.ts` (`hitTest`, `caretGeometry`, `selectionRects`, `paintedLines`) and `packages/layout/src/caret.test.ts`, in Node.js (run of 2026-11-13: the file passes with `caret.test.ts` and `lines.test.ts`, 31 tests). Criterion 1: 'returns the nearest offset in the line the point is in' and 'gives the start of a line for a point left of it, and its last position for a point beyond it' (both computed from the tree, with no DOM). Criterion 3: 'places the caret from the tree: at a wrap point it starts the next line' and the property 'finds the position again from the caret drawn for it, and stays on the target line, on random pages' (60 seeded trees, every offset). Criterion 4: 'draws one rectangle per line the selection crosses, in either direction' and 'gives one rectangle per page when the selection runs from one page to the next'. Criterion 2, unticked by the reviewer of round 2 (2026-11-13): the table-cell case is met only for a click on a cell's text; `hitTest` picks a line by the distance to its text, so a click in the blank space of a cell, in the half nearer a neighbouring cell's text, returns a position in the neighbouring cell (the limit in Notes), and no test clicks blank cell space. The criterion stays open until `PaintedLine` carries the cell box or the test covers such clicks. Fixed in round 2 of the fixer (group 4, 2026-11-13), criterion 2 re-ticked: `PaintedLine.cells` holds the boxes of the cells a line is in (outermost first), and `hitTest` only considers the lines of the innermost cell that contains the point. Tests: `packages/layout/src/tables.test.ts` 'hit tests blank space in a cell, beside or below its text and in either half of the gap to the neighbour, to a position in that cell' (a CDM table laid out by `layoutFlow`; it fails with the old rule) and `packages/layout/src/caret.test.ts` 'keeps a click in the blank space of a cell inside that cell, the innermost one for a nested table' (a hand-built tree), in Node.js (run of 2026-11-13: `packages/layout`, 33 files, 325 passed, 6 skipped). What the test showed (round 2, lane layout-3, 2026-11-13): `packages/layout/src/tables.test.ts` 'hit tests a point in each cell to a position of that cell, and skips repeated header copies' (a CDM table laid out by `layoutFlow`: a point in the first cell gives its paragraph and one in the second gives the other; a selection from the first cell to the second gives one rectangle per cell line; the repeated header copy has no painted line). The margin, gap and beyond-the-end cases are those of round 6 in `caret.test.ts`. Criterion 4 also covers table cells now (the same test).
+
+**Notes:** Round 2 (lane layout-3, 2026-11-13). `paintedLines` takes the paragraphs of table cells in reading order, and `hitTest` breaks a tie between lines level with each other (two columns, or two cells of one row) by the horizontal distance to the line's text, so the line the point is in wins. That limit (a click in the blank space of a cell going to a neighbouring cell's text) is removed by the cell boxes in `PaintedLine` (see Evidence). Remaining limit: a vertically merged cell's box is its first row's, so a click in its lower rows uses the rule for the whole page. Round 6 (layout packet, 2026-11-13). The geometry is computed here; the painter that draws the caret and the rectangles is FE-090, and no browser run was made. The width of text inside a line comes from an injected `SpanWidth`, because the tree records no glyph advances (conventions in docs/adr/0120-layout-backlog-batch.md, item 28). Criterion 2 was left open in this round (superseded in round 2, see above): margins, gaps and the space beyond a line's end are handled (the review found a click beyond the end of a wrapped line gave the next line's start; fixed in round 6, the click now gives the line's last position, `to - 1`, tested by 'keeps the caret on the clicked line for a click beyond the end of a wrapped line'), but table cells are not (tables are not hit tested, FE-083). Criterion 4 covers lines and pages; the table-cell case of the same criterion is not built. Criterion 5 (forced colours) is the painter's (FE-019 and FE-090). Criterion 6 (clamping at region boundaries) belongs to the editing core's region guard (FE-038), so it is not checked here.
+
+**Notes:** Lane V-FE-081-096 (2026-11-13): criterion 5 (forced colours) stays open. The painter draws no caret and no selection: `caretGeometry` and `selectionRects` have no caller outside `packages/layout`, so there is no system-colour drawing to test. A forced-colours check needs that drawing and a Playwright run with `forcedColors: 'active'`; there is no `playwright.config` at the repository root. Round 4 (lane U-FE-081-096, 2026-11-13): re-checked; `@vitest/browser` exposes no media emulation, so the run needs a standalone Playwright spec (docs/adr/0305-lane-U-FE-081-096.md, round 4, item 1). Still open. Criterion 6 is FE-038's (the region guard), not this layout code.
+
+**Notes:** Lane V-FE-081-096 (2026-11-14, round 5): criterion 5 ticked (see Evidence). The painter draws the caret and the selection through `paintSelection` (`packages/painter/src/selection-paint.ts`), which the element does not call yet, so the page view shows no caret until the element mounts the painter (FE-095 and FE-090 notes). The forced-colours run uses a Vitest provider context option, not a standalone Playwright spec. Criterion 6 stays open: it is FE-038's region guard.
+
+### FE-097 Move by line, page, Home and End
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | M | must | Author |
+
+**Spec:** 02 §9.6 · **Requirements:** R1, R11 · **Depends on:** FE-096
+
+As an author, I want the arrow, page and line keys to move the caret by painted lines and pages, so that keyboard navigation works in the page view.
+
+**Acceptance criteria**
+
+- [x] Given the caret in a line, when Up or Down is pressed, then it moves to the previous or next painted line, keeping its horizontal position.
+- [ ] Given Home and End, when they are pressed, then the caret moves to the start and end of the painted line, and with Shift the selection extends.
+- [x] Given Page Up and Page Down, when they are pressed, then the caret moves by a page of the layout.
+- [x] Given the caret at the last line of a page, when Down is pressed, then it goes to the first line of the next page.
+- [ ] Given the commands for the start and end of the document, when they are used, then they stay in the body (FE-032).
+
+**Evidence:** `packages/layout/src/caret.ts` (`moveVertical`, `lineBounds`) and `packages/layout/src/caret.test.ts`, in Node.js (run of 2026-11-13, the same file as FE-096). Criterion 1: 'moves up and down keeping the horizontal position, and carries the goal x on' (offset 2 down to offset 6 at x 20, and back to offset 2). Criterion 4: 'moves from the last line of a page to the first line of the next page' (offset 6 on page 0 goes to offset 2 of the block on page 1). 'does not move past the first or the last line' holds the caret at both ends. 'gives the start and the end of the painted line for Home and End' gives `lineBounds`, which the Home and End keys will use (on a wrapped line the end is `to - 1`, on that line). Goal x beyond the end of a wrapped target line (fixer, round 6): 'reaches the first line of a wrapped paragraph from its last in two presses of Up' (lines 0-4, 4-14, 14-20 from offset 19: offset 9, then offset 3 on the first line), 'moves Up and Down to a wrapped line with a goal x beyond its end, without skipping it' (criterion 1), 'moves Down to a short first line of the next page that is followed by more of its block' and 'moves Down from a page to the next when one block runs across both' (criterion 4), and the seeded property 'finds the position again from the caret drawn for it, and stays on the target line, on random pages' (60 trees, every line, nine goal x values from left of the text to far beyond its end: Up and Down land on the adjacent painted line, checked through `caretGeometry`). Run of 2026-11-13: `pnpm vitest run packages/layout`, 21 files, 234 tests passed, 6 skipped. Criterion 3 (round 8, 2026-11-13): `movePage` (`caret.ts`) and `packages/layout/src/caret-page.test.ts`: Page Down from a line moves to the line on the next page nearest its height, with the goal x carried on; a page with no body line is passed over; Page Up goes to the previous page; with no page that way the caret goes to the first or last body line of the document; a seeded property over 60 random trees.
+
+**Notes:** Review of round 6 (2026-11-13): criteria 1 and 4 were unticked. `moveVertical` uses `offsetAtX`, which returns the target line's `to` when the goal x lies beyond that line's end; for a line that is not the last of its block, `to` is the start of the next line, which `lineIndexFor` assigns to the next line. So Up from a long wrapped line to a shorter previous line stays on the same line (lines 0-4, 4-14, 14-20, from offset 19 with goal x 35: Up gives offset 9, then offset 4 on every further press, never reaching the first line), Down skips a short wrapped line, and the same happens when the first line of the next page is short and followed by more lines of its block. The tests only use goal x values inside the target line and a one-line target block. Fixed in round 6 (fixer, 2026-11-13): `offsetAtX` now chooses only among the offsets that belong to the target line, so on a line that is not the last of its block the furthest position is `to - 1` (before the character at the wrap, usually the trailing space), which `lineIndexFor` maps back to that line; criteria 1 and 4 are re-ticked on the tests named in Evidence. No affinity was added (ADR 0120 item 28). Round 6 (layout packet, 2026-11-13). Criterion 2 stays open: `lineBounds` gives the targets of Home and End, but the Shift extension belongs to the input bridge (FE-098), and no key handler is built. Criterion 3 ticked in round 8 (ADR 0120 item 36): "a page of the layout" is read as one layout page, so `movePage` moves to the nearest line at the caret's height on the next or previous page. A screenful would need the painter's visible height, and is not built. Criterion 5 stays open: the rule that the commands stay in the body is FE-032's, and the movement here is over body lines only (headers, footers and footnotes are not painted in the page view's caret path). A wrapped line's End lands on its last position, `to - 1`, and stays on that line, since no affinity is recorded (docs/adr/0120-layout-backlog-batch.md, item 28). Lane U-FE-097-112 (2026-11-13), criterion 5 stays open: `packages/element/e2e/s1-shadow-root.spec.ts` 'Ctrl+Home, Ctrl+End, arrows and Backspace never leave the body' passed in Chromium, Firefox and WebKit (`-g "never leave the body"`, 3 passed), but that runs the web view's editing surface; the page view's caret path, which this criterion is about, is not built (FE-098, FE-101). Criterion 2 stays open for the same reason: the Shift extension is the input bridge's (FE-098), and no key handler is built.
+
+### FE-098 Type into the page view through the input bridge
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.6; ADR 0003, 0005; 11 §6 · **Requirements:** R1, R11 · **Depends on:** FE-096, FE-097, FE-123, SPK-022
+
+As an author, I want to type, compose with an input method and paste in the page view, so that it is a full editing surface.
+
+**Acceptance criteria**
+
+- [ ] Given the bridge design chosen by S9, when the author types, then text arrives in the document with the right marks and position.
+- [ ] Given the S1 input matrix (Japanese, Chinese and Korean composition, dead keys, an Android and an iOS keyboard), when it runs in the page view, then it passes, including with remote commits during composition and in sub-editors.
+- [ ] Given an input-method window, when composition starts on a painted page, then the window appears at the caret.
+- [ ] Given a word that appears once on a mounted page, when the browser's find-in-page searches it, then it finds exactly one match.
+- [ ] Given the EditContext API, when S9 decides whether to use it, then any use is a second pipeline that passes the same matrix; otherwise it is not used.
+- [ ] Given the bridge, when the author uses shortcuts, then the command registry works as in the web view.
+
+**Notes:** The bridge may not be the whole document's accessibility tree, the input-method anchor at the caret and the key handler at once; S9 decides the design (review F1, 02 §9.6). Native spellcheck is lost in the page view; the proofing port answers it (UX). Touch selection handles and mobile editing in the page view are open (02 §15).
+
+### FE-099 Read and edit the page view with a screen reader
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.6, §10; 11 §6, §2 (S9) · **Requirements:** R11 · **Depends on:** FE-098, FE-093, FE-107, SPK-022
+
+As an author who uses a screen reader, I want to read and edit in the page view, so that it is not a visual-only mode.
+
+**Acceptance criteria**
+
+- [ ] Given the tested plan from S9, when the manual screen-reader passes it names are run, then a user can read by paragraph and heading, move the caret and edit text in the page view.
+- [ ] Given fields and signature buttons on the overlay (FE-093), when a screen-reader user navigates, then they are reachable and announced with their labels.
+- [ ] Given live regions (FE-107), when saving, rejection and presence events occur in the page view, then they are announced.
+- [ ] Given the page view, when a user prefers the accessible layout, then the web view with the same content is available as the alternative.
+
+**Notes:** What screen readers read and edit in the page view is decided by S9 (02 §10).
+
+### FE-100 Reconcile page breaks with the typeset result
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | L | must | Author |
+
+**Spec:** 02 §9.7; 09 §7, §7.1; 11 §6 · **Requirements:** R1, R5 · **Depends on:** FE-087, FE-088, EXP-055, EXP-057
+
+As an author, I want the pages I see to match the PDF for text I have not touched since the last compile, so that I can trust page starts.
+
+**Acceptance criteria**
+
+- [x] Given a `layout.json` for `seq` S that passes its schema, when the page view adopts it, then for paragraphs not edited since S the engine adopts the typesetter's line and page breaks, and uses its own for the rest.
+- [x] Given the content between two reported page starts does not fit the editor's page, when the page is laid out, then the page may overflow slightly.
+- [x] Given the overflow exceeds the tolerance, when the page is laid out, then the editor drops that pin and marks the page as estimated until the next compile.
+- [x] Given `granularity` is `block`, when the page view adopts the file, then only block-level page starts are used; given `line`, then line starts are used as well.
+- [ ] Given a test corpus, when reconciliation runs, then the on-screen page starts equal the PDF's.
+- [x] Given a `layout.json` that fails validation, when it is received, then it is not used.
+
+**Evidence:** Fixer round 2 (B group 1, 2026-11-13): criteria 2 and 3 are ticked again on the page pass. `packages/layout/src/paginate.ts` takes typeset page starts (`PaginateOptions.pins`: the pins and the tolerance): an adopted start begins a page, which holds its content up to the next typeset start below its body if need be; the overflow of each pinned page is measured on that layout (the depth of its lowest body fragment below the body); `judgePins` keeps or drops each pin; the document is laid out again with the kept pins, and the pages of a dropped pin's content carry `estimated: true` and are listed in `Pagination.reconciliation`. `packages/layout/src/engine.ts` passes them through `layoutFlow(doc, providers, { pins })`. `packages/layout/src/reconcile-layout.test.ts` (10 tests, passed 2026-11-13 with `pnpm exec vitest run packages/layout`, 301 passed): 'keeps the typeset start of B and lets page 1 overflow within the tolerance' and 'allows an overflow equal to the tolerance' (criterion 2); 'drops the pin of the page that overflows too far, lays it out with the editor breaks, and marks it' and 'drops a pin just above the tolerance' (criterion 3); a start inside a paragraph, unmatched starts, a validated `layout.json` through `adoptablePins` to the pages, and a fast-check property (200 runs) that pinned pagination ends, places every line once and keeps no pin beyond the tolerance. Earlier review text: criteria 2 and 3 were unticked by review (2026-11-13): no page is laid out with pins (the engine takes none, criterion 1), nothing measures the overflow of a page, and the tolerance has no source, so `judgePins` is a rule with no caller; its tests become evidence once layout adopts pins. Criteria 4 and 6 stay ticked as contracts of `adoptablePins` and `validateLayoutJson`, which are exported from the package. `packages/layout/src/layout-json.ts` (`validateLayoutJson`, the interim reading of 09 §7.1) and `packages/layout/src/reconcile.ts` (`adoptablePins`, `effectiveGranularity`, `judgePins`, `keptPins`, `estimatedPages`), with `packages/layout/src/layout-json.test.ts` and `packages/layout/src/reconcile.test.ts`, in Node.js (run of 2026-11-13: `pnpm vitest run` on the three new files, 30 tests passed; scoped `tsc --noEmit` clean for these files). Criterion 2: 'keeps a pin whose content fits, and a pin whose page overflows within the tolerance' and 'allows an overflow equal to the tolerance and drops one just above it'. Criterion 3: 'drops a pin beyond the tolerance and marks its page as estimated'. Criterion 4: 'uses line granularity only when the request and the file both say line' and 'uses block starts only when the file reports block granularity, whatever the request'. Criterion 6: the refusal tests of `layout-json.test.ts` (a file that fails any check gives no layout, and `adoptablePins` takes only a validated `LayoutJson`).
+
+**Evidence (layout packet, round 5, criterion 1):** `packages/layout/src/line-starts.test.ts` (9 tests, Node.js, passing 2026-11-13): `breakParagraphAt` (`lines.ts`) cuts a paragraph at the given starts and starts a line at each, for random text and starts (200 seeded runs) and refuses starts out of range; `layoutFlow` with the `lines` option (`engine.ts`, `paragraphItem` in `items.ts`) starts a line at a typeset offset inside a paragraph, ignores a start on no text position, leaves the neighbour paragraph to the editor, and adopts the line starts of a validated `layout.json` through `adoptablePins` only for blocks not edited since `seq`. The page starts of the same file are the earlier fixer-round evidence.
+
+**Notes:** 09 §7 calls level L1 "opt-in, from phase 3"; 02 §9.7 describes adoption without saying it is optional. The tolerance is "small" and has no value (Open questions). Second review (2026-11-06, SPK-027), SR-K6: 02 §9.7 now says adoption happens only when reconciliation is switched on (opt-in per tenant, from phase 3), so the criteria apply to tenants that opt in ([review](../review/2026-11-06-second-review.md)).
+
+Layout packet, round 2 (lane layout-2, 2026-11-13): criteria 2, 3, 4 and 6 are met by the policy and the validator, with items 7 and 8 in docs/adr/0135-layout-2-backlog-batch.md (proposed), and the open adoption is item 10 there. The schema of `layout.json` is not published in the repository, so the validator is the interim reading of 09 section 7.1, and it refuses unknown keys. Criterion 1 is not met: the engine does not take pins yet, so the page view does not adopt the typesetter's breaks; `adoptablePins` gives the set it would use. Criterion 2 relies on the caller to measure how far the content between two starts overflows the editor's page; that measurement from the live tree is not built. The tolerance has no value in the spec (Open questions), so it is a required argument with no default. Criterion 5 needs a compiled corpus and the adopted breaks, and no browser run was made. Round 5 (layout packet, 2026-11-13): criterion 1 ticked on the engine side (Evidence above; decisions in docs/adr/0120-layout-backlog-batch.md, items 49 and 50, proposed). What the page view does with the adopted starts (the caller of `layoutFlow` in the element) is not built and is not checked by that test; criterion 5 stays open.
+
+Fixer round 2 (B group 1, 2026-11-13): the page pass now adopts page starts and measures the overflow itself (see Evidence), so the two sentences above on pins and on measurement by the caller are out of date for page starts. Still open: criterion 1, because the page view (`painter`, the engine's commit log for the edited set) does not yet call `layoutFlow` with pins and line starts are not adopted; the tolerance's value, because no tenant setting for it exists in the protocol or the configuration (02 §9.7 says "small", open question 6), so `PinOptions.tolerance` is required and has no default. Decisions of the fixer round, not in the spec: the overflow is in points, measured as the depth of the page's lowest body fragment below its body, without the footnote area, and a held page does not make room for its footnotes; explicit page, column and section breaks inside a pinned range are honoured; the pages estimated for a dropped pin run from the page its content starts on to the page before the next typeset start; a start whose block or line is not laid out (a table, until FE-083 adds tables to the pins) is not adopted and is reported as unmatched.
+
+Lane V-FE-097-112 (round 3, 2026-11-13): criterion 4 ticked. `adoptablePins` (`packages/layout/src/reconcile.ts`) now adopts at block granularity only the page starts at offset 0 (a start inside a block keeps the editor's break, and is listed in `keptOwnPages`). Evidence: `packages/layout/src/reconcile.test.ts` 'at block granularity adopts only block-level starts, and keeps the break of a start inside a block' and 'gives no line starts at block granularity, even when the file reports them' (now asserting pages 1 and 3), with `reconcile-layout.test.ts`, `line-starts.test.ts` and `layout-json.test.ts`, in Node.js (`pnpm exec vitest run` on the four files, 45 passed, 2026-11-13). Reading taken, not stated by the spec beyond "block-level page starts are the guaranteed minimum" (09 §7): "block-level" means offset 0 of the block (recorded in docs/adr/0306-lane-V-FE-097-112.md). Criterion 5 stays open (needs a compiled corpus and the page view).
+
+Audit (2026-11-13, evidence auditor): criterion 4 unticked. `adoptablePins` keeps page starts at any offset when the file says `block` (the test 'gives no line starts at block granularity' asserts all three pages, one of them B at offset 40), so mid-block page starts are used at block granularity, and no test shows that only block-level page starts are used; the line-start half is tested.
+
+### FE-101 Offer the editable page view as `view="print"`
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 3 | M | must | Author |
+
+**Spec:** 02 §7, §11; ADR 0005; 11 §6 · **Requirements:** R1 · **Depends on:** FE-065, FE-087, FE-095, FE-098, FE-099
+
+As an author, I want to switch to an editable page view with margins, headers and footers in place, so that I can edit on pages.
+
+**Acceptance criteria**
+
+- [ ] Given `view="print"` and the page view built, when the element renders, then editable pages with margins, headers and footers in place are shown.
+- [ ] Given the author switches between the web view and the page view, when the switch completes, then the editing core is the same, the selection is mapped and unconfirmed work is intact.
+- [ ] Given an unrecoverable error in the layout engine or the painter, when it occurs, then the element switches to the web view, keeps the document and unconfirmed work, and raises a non-fatal `de-error`.
+- [ ] Given a touch device, when `view="print"` is requested, then the web view is used (FE-113).
+- [ ] Given fields and panes, when the page view is shown, then fields use the overlay (FE-093) and panes work as in the web view.
+
+**Evidence (lane U-FE-097-112, 2026-11-13; criterion 4 unticked by the reviewer, U4 group 2 round 2: the test passes with no touch logic in the element, because the element has one view and `selectView` is not called; it would pass on a desktop too, so it does not show that the touch decision is applied):** criterion 4 (not met), `packages/element/e2e/fe-113-touch-view-choice.spec.ts` (`view="print"` on a touch emulation shows the web view's editing surface and no page view), in Chromium (3 passed; Firefox and WebKit have no touch emulation in this run and are skipped). The page view is not built, so the outcome is the web view for every value (FE-113 Notes); criterion 1 (the page view with margins) and criterion 3 stay open.
+
+**Notes:** U4 group 2 round 2 fix, 2026-11-13: criterion 4 stays open. The element now applies the touch decision (`selectView` from `doc-editor.ts`; FE-113 criterion 2 is ticked on `view="read"`, which shows the read view on a desktop and the web view on touch). For `view="print"` no test can tell the decision apart yet: `doc-editor.ts` passes `pageViewAvailable: false`, so `print` gives the web view on a desktop too. The criterion can be ticked when criterion 1 builds the page view and a desktop control shows the page view for `print`; then `packages/element/e2e/fe-113-touch-view-choice.spec.ts` (`view="print"` on touch) becomes the proof.
+
+### FE-102 Keep the page view within its budgets
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 3 | M | must | Maintainer |
+
+**Spec:** 11 §6; 13 §9; 00 §9; 02 §9.5 · **Requirements:** R1, R14 · **Depends on:** FE-088, FE-092, FE-101, FND-007, UX-021
+
+As a maintainer, I want the page view's exit criteria measured on every release and the page view kept usable up to 1,000 pages, so that the budgets and the claim of 1,000 pages stay true.
+
+**Acceptance criteria**
+
+- [ ] Given a 100-page document on the reference machine with CPU throttling, when typing is measured, then keystroke to paint is within 16 ms at the median and 50 ms at the 95th percentile (target).
+- [ ] Given a 1,000-page document with virtualisation, when it is opened and scrolled, then it stays usable and only the visible pages and a small overscan are mounted.
+- [ ] Given the thumbnails (UX-021), when they are scrolled in the 1,000-page document, then they are virtualised too.
+- [ ] Given the 1,000-page document, when typing is measured, then the typing targets of UX-072 hold.
+- [ ] Given a 100-page document, when memory is measured, then it stays under 300 MB.
+- [ ] Given the phase 3 exit criteria, when a release is cut, then the S1 input matrix in the page view (FE-098), the screen-reader passes (FE-099) and the page-start comparison (FE-100) have all passed.
+
+**Notes:** Phase 3 is gated on the evidence review at the end of phase 2. This story absorbed UX-075 during the cross-check.
+
+## Accessibility of the editing surface (02 §10)
+
+### FE-103 Operate the editor from the keyboard and leave it again
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §10; PRODUCT.md (accessibility); 13 §4 · **Requirements:** R11 · **Depends on:** FE-066, FE-021, UX-003, UX-013
+
+As an author who uses only a keyboard, I want every function reachable by keyboard and a way out of the editing surface, so that Tab meaning indent never traps me.
+
+**Acceptance criteria**
+
+- [ ] Given a scripted set of tasks (open, type, format, comment, change a mode), when they are performed without a pointer, then every one can be completed.
+- [x] Given focus is in the editing surface, where Tab means indent, next cell or next field, when Escape is pressed, then focus leaves the editing surface.
+- [ ] Given focus has left the editing surface by Escape, when Tab is pressed, then focus moves to the next control in page order, and Shift+Tab moves to the previous one.
+- [x] Given any focused control, when it is looked at, then focus is visible, also under `forced-colors`.
+
+**Evidence (lane U-FE-097-112, 2026-11-13):** criterion 2, `packages/ui/src/App.svelte` (the shell's key handler: Escape on the page, when no pane or menu holds it, blurs the focused element of the shell and is consumed, so the core does not see it) and `packages/ui/e2e/fe-103-keyboard.spec.ts` 'Escape leaves the editing surface', in Chromium, Firefox and WebKit (`pnpm exec playwright test -c packages/ui/playwright.config.ts e2e/fe-103-keyboard.spec.ts --project=chromium --project=firefox --project=webkit --workers=1`: the Escape test passes in the three browsers). Regression: `e2e/toolbar.spec.ts`, `e2e/panes.spec.ts`, `e2e/shell.spec.ts` and `e2e/regions.spec.ts` in Chromium (56 passed, 1 failed: toolbar 'keeps the commands that do not fit reachable through "More"', which this change does not touch and which was not checked against the change before it).
+
+**Evidence (lane V-FE-097-112, 2026-11-13):** criterion 4, `packages/ui/e2e/fe-103-forced-focus.spec.ts`: under `forced-colors: active` (Playwright `emulateMedia`), Tab moves from the page heading through the default shell's 7 focusable controls, and each focused control has an outline of at least 2 CSS pixels. Run with `DOCEDIT_UI_PORT=57061 pnpm exec playwright test -c packages/ui/playwright.config.ts e2e/fe-103-forced-focus.spec.ts --project=chromium --project=firefox --project=webkit`: 3 passed (Chromium, Firefox, WebKit; the emulation was confirmed through `matchMedia` in each).
+
+**Notes:** Moving between the shell landmarks with Ctrl+F6, and the alternative where a browser reserves it (shortcut table, 13 §4), are UX-023. Lane FE-092-104 (2026-11-13), no criterion ticked: criteria 1 to 4 are browser behaviour. `packages/ui/e2e/shell.spec.ts` already checks the focus order across the toolbar, the editing surface and the status bar, Tab leaving the component, and Escape (around its lines 81 to 105 and 170), but Playwright was not run in this lane, so that file is not evidence yet. Escape handling is in `packages/ui/src/App.svelte` and the toolbars' `onEscape`. No Node test covers them, and the forced-colours focus style was not checked. Lane U-FE-097-112 (2026-11-13): criterion 2 is ticked (Evidence). Escape is taken by the shell's key handler, so it is not the core's key; this is a reading of the spec, which does not say which layer takes it. Criterion 3 stays open: `fe-103-keyboard.spec.ts` 'after Escape, Tab moves to the next control in page order and Shift+Tab to the previous one' passes in Chromium and Firefox, but WebKit restarts Tab at the first control of the shell after the surface is blurred (the test is skipped there with that reason), so the criterion is not met in every browser. The fix would be a tab stop after the surface that takes the focus without a blur, which needs a change to the status bar's markup (a UX file, not this lane's). Criterion 4 stays open: the forced-colours test checks the outline of the first toolbar control in Chromium only, not every focused control. Criterion 1 (the scripted task set) is not run. Lane V-FE-097-112 (2026-11-13): criterion 4 is ticked (Evidence below). Criterion 1 is not run.
+
+### FE-104 Give every drag a keyboard or dialog alternative
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §10; PRODUCT.md (accessibility) · **Requirements:** R11 · **Depends on:** FE-040, UX-003, UX-013
+
+As an author who cannot drag, I want a keyboard or dialog way to do everything a drag does, so that no capability needs a pointer gesture.
+
+**Acceptance criteria**
+
+- [ ] Given a table, when the user wants to change column widths or row heights, then a keyboard-operable dialog or command sets them with the same result as dragging.
+- [ ] Given an image or figure, when the user wants to resize it, then a dialog or keyboard command sets its size with the same result as dragging.
+- [ ] Given a block, when the user wants to move it, then keyboard commands move it up and down with the same result as dragging.
+- [ ] Given the ruler's indent and tab-stop handles, when the user wants to move them, then a dialog or keyboard way does the same.
+- [ ] Given pointer-operated controls and handles, when their size is measured, then each is at least 24 by 24 CSS pixels or satisfies the spacing exception of WCAG 2.2 criterion 2.5.8.
+- [x] Given sticky bars (header, toolbar), when keyboard focus or the caret moves into the page, then it is never hidden behind a sticky bar.
+
+**Evidence (lane V-FE-097-112, 2026-11-13), criterion 6, scope stated:** `packages/element/e2e/fe-104-target-size.spec.ts`, test 'no sticky or fixed element of the shell covers the editing surface': the shadow root of the S1 page has no element whose computed `position` is `sticky` or `fixed`, so the toolbar and the status bar take their place in the flow and cannot cover the caret. This is true of the default shell only; a bar added later must be tested again. Run with `DOCEDIT_DEMO_PORT=57063 pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-104-target-size.spec.ts --project=chromium --project=firefox --project=webkit`: passed in Chromium, Firefox and WebKit.
+
+**Evidence (lane V-FE-097-112, 2026-11-13), criterion 5, partial:** the same file, test 'every visible pointer control of the default shell is at least 24 by 24 CSS pixels': every visible button, menu item, tab, checkbox, combo box, switch, option, input, select and link of the default shell (outside the document's own text) is at least 24 by 24 CSS pixels in its bounding box, in Chromium, Firefox and WebKit. The footnote reference in the text is left out as an inline target in a sentence (WCAG 2.2 criterion 2.5.8 exception; a reading, not a rule of this spec). The criterion is not ticked: the panes, dialogs and the context menu were not measured, and no handle exists yet (criteria 1 to 4 are not built).
+
+**Evidence (lane U-FE-097-112, 2026-11-13), criterion 5, states beyond the default shell:** `packages/element/e2e/fe-104-target-size-states.spec.ts`: on the embed page with the element's shell, every visible pointer control in the shadow root is at least 24 by 24 CSS pixels in (a) the command search (Alt+Q), 18 controls measured, (b) the language dialog opened through it, 18 controls measured, and (c) the context menu (Shift+F10 on a selection), 20 controls measured (the counts are from the Chromium run, written to `packages/element/test-results/evidence/`). Run with `DOCEDIT_DEMO_PORT=56061 pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-104-target-size-states.spec.ts --project=chromium --project=firefox --project=webkit --workers=1 --retries=0`: 6 passed (two tests in each of Chromium, Firefox and WebKit; the lane reported 4, the reviewer's rerun gave 6). Criterion 5 stays unticked: the side panes (styles, outline, permissions and the others) are not measured, and the handles of criteria 1 to 4 are not built, so none is measured.
+
+**Notes:** Lane FE-092-104 (2026-11-13), no criterion ticked. The drag alternatives (criteria 1 to 4) are not built: `packages/engine/src/table.ts` has insert and delete row, column and table operations only (`TABLE_OPS`), with no column-width or row-height command, no image-size command, no block-move command, and no ruler indent or tab-stop command exists in `packages/ui`. Criteria 5 (24 by 24 CSS pixels, measured) and 6 (sticky bars) need a browser measurement, which was not run. Nothing here is invented as a measurement.
+
+### FE-105 Expose numbered paragraphs as lists to assistive technology
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §10; 03 §4.3 · **Requirements:** R11 · **Depends on:** FE-066, CDM-042
+
+As an author who uses a screen reader, I want numbered and bulleted paragraphs announced as list items, so that I know where I am in a list.
+
+**Acceptance criteria**
+
+- [x] Given three consecutive paragraphs with the same `listId`, when a screen reader reads them, then it announces list membership, the item's position and the list's size.
+- [x] Given a nested numbering level, when a paragraph at that level is read, then its level is announced.
+- [ ] Given the model has no list nodes, when the editing surface is built, then list semantics are added through ARIA and axe reports no `aria-required-parent` or `aria-required-children` violation.
+- [x] Given a list that continues across a region boundary or a table, when it is read, then its numbering and position follow the computed label.
+- [x] Given a paragraph whose numbering changes by a remote edit, when the change arrives, then the exposed position updates.
+
+**Evidence:** criteria 1 and 2, at the level of the ARIA attributes in the DOM: the web view applies `listSemantics` (`packages/engine/src/list-semantics.ts`, moved from the element, which re-exports it from `packages/element/src/list-semantics.ts`) as node decorations through `listSemanticsPlugin` (`packages/engine/src/view/list-view.ts`, registered in `packages/engine/src/view/web.ts`). `packages/element/e2e/list-semantics.spec.ts` reads the shadow root's DOM on the S1 page after numbering paragraphs through the body view: three consecutive items carry `role="listitem"`, `aria-level="1"` and `aria-posinset` 1 to 3 of `aria-setsize="3"`, and a nested item carries `aria-level="2"` (passed in Chromium, Firefox and WebKit on 2026-11-13, `pnpm exec playwright test -c packages/element/playwright.config.ts e2e/list-semantics.spec.ts`). `packages/engine/test/list-view.test.ts` checks the decorations, that typing only maps them and that a numbering change recomputes them. The rules: `packages/element/test/list-semantics.test.ts` (a fast-check property over random lists and levels 0 to 8). Reviewed and unticked on 2026-11-13 because nothing applied the attributes; re-ticked with the DOM test. No screen reader was run: the manual passes are FE-126's. Criterion 5 (lane FE-105-117, 2026-11-13): `packages/engine/test/list-view-remote.test.ts` builds a remote rebuild with `rebuildTransaction` (`packages/engine/src/remote.ts`, the path a remote commit takes into the editor) that inserts a numbered paragraph before another item, and one that deletes an item; the exposed positions and sizes of the list follow (`pnpm vitest run packages/engine/test/list-view-remote.test.ts packages/engine/test/list-view.test.ts`: 7 passed). Criterion 4 (lane FE-105-117, round 4): `packages/engine/src/view/list-view.ts` now counts over the body in document order through regions, tables and cells, and skips paragraphs without numbering, so a list continues across them; `packages/engine/test/fe-105-continuation.test.ts` checks the positions against `computeLabels` (`@docedit/model`) for a list across a region, a table and a numbered cell, and in a fast-check property over 200 random layouts. Run on 2026-11-13 with `pnpm vitest run packages/engine/test/fe-105-continuation.test.ts packages/engine/test/list-view.test.ts packages/engine/test/list-view-remote.test.ts`: 13 passed; `packages/element/test/list-semantics.test.ts`: 5 passed. Criterion 4 unticked by the round 4 reviewer: the same test file records that an item of another list between two items (for example a numbered cell with its own `listId` inside a table) gives the later item `aria-posinset` 1 of 1 while its computed label is `2.`, so position does not follow the computed label there; the property test uses one list with `start` 1 and no `numberingRestart`, and numbering that comes from a paragraph style (`paragraphNumbering` in `computeLabels`) is not read by `list-view.ts`. Criterion 4 re-ticked (H group 2 fixer, round 4, 2026-11-13): `listDecorations` in `packages/engine/src/view/list-view.ts` now resolves each paragraph's numbering with `paragraphNumbering` and `styleTable` (`@docedit/model`, the style cascade with the table style, as `computeLabels` does), walks a footnote's paragraphs at the footnote's place (counted, not decorated), groups the items by `listId` and passes each list to `listSemantics` on its own; `listSemantics` (`packages/engine/src/list-semantics.ts`) takes an optional `restart` so that a `numberingRestart` starts a new set at its level. `packages/engine/test/fe-105-continuation.test.ts` checks against `computeLabels`: a numbered cell of another list inside the table gives the later item `aria-posinset` 2 of 2 (label `2.`), two interleaved lists across a region, a level that starts at 3 (labels `3.` to `5.`, positions 1 to 3), a `numberingRestart` inside a table cell, a restart at level 1 that leaves level 0 counted, numbering from a paragraph style, a footnote's numbered paragraph, and a fast-check property over 200 random layouts of two lists with random `start` (1 to 4) and restarts. Run on 2026-11-13 with `pnpm vitest run packages/engine/test/fe-105-continuation.test.ts packages/engine/test/list-view.test.ts packages/engine/test/list-view-remote.test.ts packages/element/test/list-semantics.test.ts`: 24 passed.
+
+**Notes:** Manual screen-reader passes are part of FE-126. Criterion 3 stays open: the items have no `role="list"` parent, which ARIA requires of a `listitem`, so axe would report `aria-required-parent`. Lane V-FE-097-112 (round 3, 2026-11-13) measured it: `packages/element/e2e/fe-105-axe-list-parent.spec.ts` numbers three paragraphs on the S1 page and runs axe with `aria-required-parent` and `aria-required-children` in Chromium; it reports `aria-required-parent` on 3 nodes, as expected. The spec is an expected failure (`test.fail`) until a list parent is designed (ADR 0306, section 8, proposed; the choice between an `aria-owns` owner and a wrapper is not made). Criterion 3 stays unticked. How to give a run of paragraphs a list parent inside the editable surface (for example an `aria-owns` owner) is an open design point, not decided here; it also affects how fully criterion 1's "list membership" is announced. A numbered heading keeps its heading role and gets no list attributes, though it is counted in its list (a reading taken in `list-view.ts`, not stated by the spec). Criterion 4 was ticked in lane FE-105-117 round 4, unticked by the reviewer, and re-ticked by the round 4 fixer once interleaved lists, style-derived numbering, `start` and `numberingRestart` were counted and tested (see the Evidence). Reading taken by this package, not stated by the spec: a paragraph without numbering does not end a list, as the computed label does not end one, and an item of another list does not end it either: a list is counted by its `listId`, as the computed label counts it. Further readings, not stated by the spec, for the accessibility specialist to confirm: positions are ordinals from 1 whatever the level's `start`, as in an HTML `<ol start>` (the label shows the number); a `numberingRestart` starts a new ARIA set at its level, as a new `<ol>` would. Known gaps: a level whose `restartAfter` says "never restart" continues its label across parent items, while its ARIA set stays bounded by the parent item; a projection's hidden region whose counter effect (`counterEffects`) moves the label is not counted in the positions, which cover only the items the reader sees; a paragraph whose `numbering_def` is missing gets no label but is still exposed as an item. Criterion 5 is ticked (lane FE-105-117): the plugin recomputes on any change that may move list items, and the remote rebuild test covers an insertion and a deletion; a remote change to `numbering` alone is not tested. Reading taken by this package, not stated by the spec: a sub-list sits inside its parent item's segment, so top-level siblings are counted across it.
+
+### FE-106 Reflow the web view for people who zoom
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Author |
+
+**Spec:** 02 §10; PRODUCT.md (accessibility) · **Requirements:** R11 · **Depends on:** FE-066
+
+As an author who zooms in, I want the text to reflow to the window, so that I never scroll sideways to read a line.
+
+**Acceptance criteria**
+
+- [x] Given a viewport equivalent to 400 percent zoom of a 1280 CSS pixel window (320 CSS pixels wide), when the web view shows a document, then paragraphs reflow with no horizontal scrolling and no clipped text (WCAG 2.2 criterion 1.4.10).
+- [x] Given tables and images wider than the viewport, when they are shown, then they are the only content that may scroll horizontally, within their own containers.
+- [ ] Given the page view cannot meet the reflow criterion with fixed-width pages, when a user needs to zoom, then the web view remains available (FE-101).
+- [ ] Given the browser's text-only zoom or a larger default font size, when the web view renders, then no text is clipped or overlapped.
+
+**Evidence (lane U-FE-097-112, 2026-11-13):** criterion 1, `packages/element/e2e/fe-106-reflow.spec.ts`, in Chromium, Firefox and WebKit (`pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-106-reflow.spec.ts --project=chromium --project=firefox --project=webkit --workers=1`: 9 passed). The test opens the S1 page at a 320 CSS pixel viewport, types a 120-character unbroken word into a paragraph through the keyboard, and checks that the page and the editing surface do not scroll sideways and that no paragraph extends past the viewport's right edge.
+
+**Evidence (lane V-FE-097-112, 2026-11-13), criterion 2:** `packages/element/e2e/fe-106-wide-content.spec.ts`. The model gives table cells and images no width (`packages/engine/src/schema.ts`), so the wide content is a stand-in: a style injected into the shadow root gives a cell a minimum inline size of 600 CSS pixels, and gives the image span an inline size of 600 CSS pixels. The table scrolls inside its own box (`overflow-x: auto`), and the page, the surface and every other element stay within the 320 pixel viewport. The image widened the surface before the rule `.de-image` (`display: inline-block; max-inline-size: 100%`) was added to `packages/element/src/styles/reflow.css`; with it the image is held to its paragraph's width. Run with `DOCEDIT_DEMO_PORT=57062 pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-106-wide-content.spec.ts --project=chromium --project=firefox --project=webkit`: passed in Chromium, Firefox and WebKit (Firefox was run with `--workers=1`; with four workers its two table tests failed once on trace-file errors in the shared output folder and passed on rerun). `packages/element/test/fe-106-reflow.test.ts` and `packages/element/test/styles.test.ts` (vitest): 13 passed. Criterion 4 stays open: the doubled font size is still not a browser text-only zoom.
+
+**Notes:** Lane FE-105-117, round 2 (2026-11-13), no criterion ticked. The reflow rules are in `packages/element/src/styles/reflow.css` (the editing surface and sub-editors shrink to the container and break long words; images are capped at the width; a table is a block with its own horizontal scroll), concatenated into the shared sheet by `packages/element/src/styles.ts`. `packages/element/test/fe-106-reflow.test.ts` (7 passed with `pnpm vitest run packages/element/test/fe-106-reflow.test.ts packages/element/test/styles.test.ts`) guards the rules as CSS text and the concatenation order; it is not a layout measurement. Criteria 1, 2 and 4 need a browser at 320 CSS pixels with a table and an image wider than the viewport, and a larger font: not run here (no browser run in this lane). Criterion 3 stays open: `packages/element/src/view-select.ts` falls back to the web view for `view="print"`, but the element does not mount views yet (`doc-editor.ts` keeps `view` on the attribute; FE-065 Notes). The web view's own page-width rules in `packages/ui/src/styles/shell.css` were read and not changed: the shell belongs to UX. Lane U-FE-097-112 (2026-11-13): `fe-106-reflow.spec.ts` also runs a six-cell table and a doubled host font size at 320 CSS pixels; both pass in the three browsers and do not widen the page. Criterion 2 stays open: the table fits its own box (its cells wrap, `overflow-wrap: anywhere`), so no table wider than the viewport is shown, and the image rule targets `img`, while the model's image node renders a `div`, so the rule for images is not exercised. Criterion 4 stays open: the doubled font size is a host style, not the browser's text-only zoom, and the test checks sideways scroll and the right edge only, not clipping or overlap. Criterion 3 stays open (FE-101). Lane FE-105-117, round 6 (no criterion ticked): the image node renders `span.de-image` with `role="img"` (`packages/engine/src/schema.ts`), so the `img` rule above does not reach it. A rule for the span would need `display` changed from inline, which changes the layout of images in paragraphs; not made without a browser check at 320 CSS pixels (ADR 0208).
+
+### FE-107 Announce saving, rejected edits and collaborators
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §10; PRODUCT.md (accessibility) · **Requirements:** R11, R7 · **Depends on:** FE-007, FE-010, FE-036, FE-037, PRM-024, PRM-028, UX-016, UX-026, UX-027
+
+As an author who uses a screen reader, I want changes of save state, rejected edits and collaborators arriving or leaving announced, so that I know what is happening without watching the screen.
+
+**Acceptance criteria**
+
+- [ ] Given the save state changes, when it changes to saving, saved, unsaved or read-only (UX-016), then a live region inside the shadow root announces the new state once.
+- [ ] Given an edit is refused by the guard or rejected by the server, when it happens, then a live region announces that it was not applied and where it happened, with the reason PRM provides.
+- [x] Given a collaborator arrives or leaves, when presence changes, then a live region announces it with the name resolved through `resolveUsers` (UX-025).
+- [ ] Given content is set aside as recovered edits (FE-010), when it happens, then a live region announces it with the recovered edits count (UX-017).
+- [x] Given several announcements occur within a short time, when they are made, then none is lost.
+- [ ] Given the announcement text, when it is produced, then it comes from external interface strings (UX-064) in the current locale, and the live regions are in the same root as the content they describe.
+- [ ] Given typing, when keystrokes are made, then nothing is announced for them.
+
+**Evidence:** Fixer round 2 (B group 1, 2026-11-13): criterion 5 is ticked again in a browser. `packages/element/src/live-region.ts` (`mountLiveRegion`: one `role="status"` region, `aria-live="polite"`, `aria-atomic="true"`, first in the shadow root), mounted by `packages/element/src/doc-editor.ts`, which starts an `Announcer` per session with the region as its sink, feeds it each `de-status` save state, and removes the region on `destroy()`. `packages/element/e2e/announcements.spec.ts`, run in Chromium on 2026-11-13 with `pnpm exec playwright test -c packages/element/playwright.config.ts announcements element.spec --project=chromium` (40 passed, `element.spec.ts` included): 'a burst of notices in one task reaches the region in full and in order' (six notices of all four kinds given in one task; a mutation observer on the region sees all six sentences, in order), 'typing changes the save state, and the change reaches the region' and 'the region is polite, atomic and inside the shadow root'. Earlier review text: criterion 5 was unticked by review (2026-11-13): `Announcer` is imported by nothing but its own test and is not exported from the package, so the product announces nothing yet and no announcement can be lost or kept; the queue test becomes evidence once a live region and the notices are wired. Criterion 5, at the level of the announcer's queue: `packages/element/src/announcer.ts` (`Announcer` holds every accepted sentence until the sink takes it, one per scheduled turn, in the order accepted) and `packages/element/test/announcer.test.ts` (a burst is spread over three turns; a fast-check property over 200 random sequences of save-state, rejected, recovered and presence notices checks that each accepted notice is delivered once, in order). Run on 2026-11-13 with `pnpm vitest run packages/element/test/announcer.test.ts`: 9 passed. The sentences of criteria 1 to 4 are produced there too (`ANNOUNCE_EN`, the save-state change announced once, the refused edit with its reason, presence named through `resolveUsers`, recovered edits by count), but no live region is written yet, so those criteria stay open. Criterion 3, presence (lane FE-105-117, 2026-11-13, not ticked): `packages/element/src/presence-notices.ts` (`presenceChanges`, `PresenceWatch`: a session is the unit; see the fixer round 5 text below for the baseline) is fed by `packages/element/src/session.ts` from the editor's `presence` view and calls the new `onPresence` option, which `packages/element/src/doc-editor.ts` routes into the announcer as a `presence` notice (`packages/element/src/editor.ts` exposes `core.presence` on the handle). `packages/element/test/fe-107-presence.test.ts` checks the diff, a fast-check property over 200 random snapshot sequences, and that the session reports the editor's changes and not the baseline: 30 passed with `pnpm vitest run packages/element/test/fe-107-presence.test.ts packages/element/test/session.test.ts packages/element/test/announcer.test.ts`; `tsc --noEmit` is clean for `packages/element` and `packages/element/tsconfig.test.json`. The live region's write of a name is not run in a browser here, so criterion 3 stays open. Fixer round 5 (H group 2, 2026-11-13): the session wiring test above used a stand-in editor whose list already held the peers; in the product the core's list is empty until the first `presence.state` arrives, after the session starts watching, so every peer of a busy document was announced. Now `packages/element/src/session.ts` hands the core a wrapped presence port and takes the core's list after its first `presence.state` as the baseline, or the list at the end of an opening window (`DEFAULT_PRESENCE_BASELINE_MS`, 500 ms, a provisional default) when none comes; `PresenceWatch` starts without a baseline until `settle()`. ADR 0208 records the reading and its limits (G42: the protocol does not mark a list on joining). `packages/element/test/fe-107-presence-core.test.ts` runs a Session with the headless core against backend-mock: two peers already there are not announced (the service's list on joining is added to the reader's port, since backend-mock sends none), a later arrival and a departure are; a reader who opened alone hears the first arrival; nothing is reported after close. Run on 2026-11-13 with `pnpm vitest run packages/element/test/fe-107-presence.test.ts packages/element/test/fe-107-presence-core.test.ts packages/element/test/session.test.ts packages/element/test/announcer.test.ts`: 34 passed; `tsc --noEmit` clean for `packages/element` and `packages/element/tsconfig.test.json`. Criterion 3 stays open (no browser run of the live region).
+
+**Evidence (lane V-FE-097-112, 2026-11-13):** criterion 3, `packages/element/e2e/fe-107-presence-live.spec.ts`: a reader's `<doc-editor>` with `resolveUsers` set before it connects, and a second editor of another user on the same document. The reader's live region says `Bob Example joined the document.` once when the second editor connects, and `Bob Example left the document.` once when it is destroyed and removed (the name is the one `resolveUsers` returned, not the identifier). Run with `pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-107-presence-live.spec.ts --project=chromium --project=firefox --project=webkit`: 3 passed (Chromium, Firefox, WebKit). The test waits 1.5 s after the reader mounts, so that the peer is a change and not part of the reader's first list; without that wait the Chromium run did not announce the arrival. Criteria 1, 2, 4 and 6 are not checked here.
+
+**Notes:** Element-2 round 2 ticks criterion 5 only. Not met yet: the live region inside the shadow root and its wiring (no `aria-live` element is mounted by `doc-editor.ts`; the sink is injected); presence events and the guard or server rejection are not raised by the element; the save-state, recovered-edit wiring to `de-status` and `de-recovered-edits` is not made (kept out of `doc-editor.ts`, which other agents edit). Criterion 7 is not met: the announcer has no keystroke input, but `saved` after each keystroke would still be announced once per save-state change, so the transitions that are announced are a decision for the accessibility specialist, and until it is made the save-state sentence after every keystroke is a flood risk. Criterion 6 is not met: the sentences come from `ANNOUNCE_EN` (a table per locale, in `announcer.ts`, not yet fed by UX-064); the live region is now in the root. Politeness: the region is `aria-live="polite"` for every announcement (`live-region.ts`); the spec does not state a level (open question 26), and whether a rejected edit should be assertive is the accessibility specialist's decision. Fixer round 2: only the save state of `de-status` is fed to the element's announcer. Refusals and recovered edits are already announced by the shell's own live region (`packages/ui/src/App.svelte`, `NoticeTracker`), so feeding `de-recovered-edits` here too would announce them twice; which region owns them is left to the accessibility specialist. Criterion 1 is not re-ticked in the fixer round (it may only re-tick what the review unticked), though 'typing changes the save state, and the change reaches the region' runs that path. Lane FE-105-117 (2026-11-13) checked the wiring, which is newer than the text above: `doc-editor.ts` mounts the live region in the root (`mountLiveRegion`, `packages/element/src/live-region.ts`), starts an `Announcer` per session with the live region as sink, and feeds each `de-status` change to it once (`#emit`). Criterion 1 is still unticked: no test runs that path (the element's DOM test needs a browser, not run here); the announcer's queue test does not cover it.
+
+**Notes (earlier):** Which transitions are announced (every "saving" would flood a screen reader) is a design decision for an accessibility specialist; the spec only says that saving, rejected edits and arrivals and departures are announced. The politeness level of each announcement is not specified (Open questions). This story absorbed UX-024 during the cross-check.
+
+### FE-108 Keep ARIA references inside the shadow root
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | S | must | Maintainer |
+
+**Spec:** 02 §10 · **Requirements:** R11 · **Depends on:** FE-013
+
+As a maintainer, I want every labelled control and its label in the same root, so that ARIA references never break at the shadow boundary.
+
+**Acceptance criteria**
+
+- [ ] Given every `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-owns`, `aria-activedescendant` and `for` reference in the editor, when a test resolves it, then the target is in the same shadow root.
+- [ ] Given a lint rule, when a component references an element outside its root, then the build fails.
+- [ ] Given field controls and their labels (12 §11) and overlay controls (FE-093), when they are checked, then label and control share a root.
+- [x] Given the check, when axe runs, then it finds no unresolved reference.
+
+**Evidence (lane U-FE-097-112, 2026-11-13):** criterion 4. `packages/element/e2e/fe-108-axe-idrefs.spec.ts` now also fails on `results.incomplete` for `aria-valid-attr-value` and `aria-valid-attr` (the "needs review" result axe gives an unresolved ID inside a shadow tree), on the default editor and on the editor with the full toolbar. Run with `DOCEDIT_DEMO_PORT=56060 pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-108-axe-idrefs.spec.ts --project=chromium --project=firefox --project=webkit --workers=1 --retries=0`: 6 passed (Chromium, Firefox, WebKit). The port is set because the default port 4791 served another run's build and the page did not load there. Scope: the two states the spec mounts; overlays and panes are not in it (criterion 1 stays open).
+
+**Evidence (lane V-FE-097-112, 2026-11-13):** criterion 4, `packages/element/e2e/fe-108-axe-idrefs.spec.ts`: axe, with its `aria-valid-attr-value` and `aria-valid-attr` rules run through the shadow root, reports no violation on the default editor and on the editor with the toolbar and the status bar, and the rule passed on the references of each state. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-108-axe-idrefs.spec.ts --project=chromium --project=firefox --project=webkit`: 6 passed (Chromium, Firefox, WebKit). Only these two states are checked; the overlays, panes and dialogs (criteria 1 and 3) are not. Unticked by the reviewer (round 1): axe reports an `aria-labelledby` or `aria-describedby` whose ID is not found as "needs review" (`incomplete`), not as a violation (axe-core 4.14.0, `ariaValidAttrValueEvaluate`, message `noIdShadow` inside a shadow tree). The spec reads `results.violations` only, so it passes with a broken reference: a reviewer's probe set `aria-labelledby="does-not-exist"` in the shadow root and got 0 violations and 1 `aria-valid-attr-value` incomplete. The spec must also fail on `results.incomplete` for these rules before the criterion can be ticked.
+
+**Evidence (lane V-FE-097-112, fixer round 1, 2026-11-13), criterion 4:** `packages/element/e2e/fe-108-axe-idrefs.spec.ts` now fails on any node that `aria-valid-attr-value` or `aria-valid-attr` lists under `results.incomplete` as well as `results.violations` (that edit was already in the file when this round started). `packages/element/e2e/fe-108-axe-idrefs-control.spec.ts` (new) proves the check can fail: with `aria-labelledby="fe-108-does-not-exist"` set on a toolbar button in the shadow root, axe lists exactly that node under `aria-valid-attr-value`, and a broken `aria-describedby` on the editing surface is listed too; the same file runs the check on a third state, the regions document with the full toolbar, and finds nothing. Run with `DOCEDIT_DEMO_PORT=57371 pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-108-axe-idrefs.spec.ts e2e/fe-108-axe-idrefs-control.spec.ts --project=chromium --project=firefox --project=webkit --retries=0`: 15 passed. Coverage caveat: three states only (default editor; toolbar and status bar; regions document with the toolbar). The overlays, panes and dialogs (criteria 1 and 3) are not opened, so the criterion is met for the states reached and must be rerun when they are built.
+
+**Notes:** Lane U-FE-097-112 (2026-11-13), no criterion ticked. `packages/element/e2e/fe-108-aria-refs.spec.ts` runs in a browser on the embed page and passes in Chromium (`pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-108-aria-refs.spec.ts --project=chromium`, 2 passed): every `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-owns`, `aria-activedescendant` and `for` reference in the element's shadow root resolves through `getElementById` on that root. It reaches two states only: the default editor (2 references) and the editor with the full toolbar and the status bar (8 references). Criterion 1 needs every reference in the editor, including the overlays and panes (FE-020, FE-093), which this test does not open, so it stays open. Criterion 2 (a lint rule) is a root configuration change, not made here. Criterion 4 needs axe run on the shadow root; `@axe-core/playwright` is a dependency of `packages/ui` only, not of `packages/element`, and adding it is a `package.json` change this lane may not make, so it stays open. Criterion 3 (field controls and overlay controls) is not reached, as the overlay is not built.
+
+**Notes (earlier):** Lane FE-105-117 (2026-11-13), no criterion ticked. `packages/element/test/shadow-root-refs.test.ts` is a Node.js source guard: no `document.getElementById`, `getElementsBy*` or `querySelector*` in `packages/ui/src`, `packages/element/src` (the PDF viewer excluded, it runs as its own page) and `packages/engine/src`. It is a proxy for criterion 2, not the lint rule (the lint rule is a root configuration change). Criteria 1, 3 and 4 need a DOM or a browser run, not run here; the same-root property of each reference is not tested at run time. Reads of `document.body` (features/math.ts) are diagnostics, not lookups, and are not matched.
+
+## Internationalisation and reach (02 §11, §12)
+
+> FE-109 (Keep interface strings external) was merged into UX-064 during the cross-check of 2026-11-06.
+
+> FE-110 (Build a mirrorable interface with logical properties) was merged into UX-064 during the cross-check of 2026-11-06.
+
+### FE-111 Edit right-to-left and complex-script content in the web view
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | L | should | Author |
+
+**Spec:** 02 §11; 11 §7; 03 §4.1 (`dir`) · **Requirements:** R1, R12 · **Depends on:** FE-066, FE-123
+
+As an author who writes in Arabic, Hebrew or an Indic script, I want to edit in my script in the web view, so that I can use the editor in my language.
+
+**Acceptance criteria**
+
+- [x] Given `settings.dir` and a paragraph's `dir`, when the web view renders, then the paragraph is rendered with that direction.
+- [ ] Given mixed left-to-right and right-to-left text, when it is typed, selected and edited, then display order, caret movement and selection follow the browser's bidirectional handling in each supported browser.
+- [ ] Given a corpus in Arabic, Hebrew, Devanagari and Thai, when the input matrix of FE-123 is extended to it, then typing and composition pass.
+- [ ] Given the region guard, when the caret and selection are used in right-to-left text, then clamping at region boundaries behaves as for left-to-right text.
+- [ ] Given a document with right-to-left content, when it is exported, then the PDF shows the same direction and script shaping (checked with EXP).
+
+**Evidence (lane U-FE-097-112, 2026-11-13):** criterion 1, `packages/element/e2e/fe-111-direction.spec.ts` on the demo document `rtlDocument()` (`packages/element/demo/embed-page.ts`: `settings.dir` `rtl`; paragraphs with `dir` `rtl`, `ltr` and none), in Chromium, Firefox and WebKit (`pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-111-direction.spec.ts --project=chromium --project=firefox --project=webkit`: 6 passed). The test reads the surface's and each paragraph's `dir` and computed direction, and checks that right-to-left text ends at the surface's right edge. Criterion 2 (lane U-FE-097-112, 2026-11-13, not ticked): `packages/element/e2e/fe-111-bidi-caret.spec.ts` types mixed text into the right-to-left paragraph (the logical text is what was typed) and grows a selection with Shift+Right; the selected text at each step equals that of a plain contenteditable element with the same direction and text, in Chromium, Firefox and WebKit (3 passed). Not ticked because the display order and the caret movement by visual rectangles are not measured, only the logical text and the selected text.
+
+**Notes:** Lane FE-105-117, round 3 (2026-11-13): nothing ticked. The web view now writes the document's base direction to the editing surface (`settings.dir` through `core.direction`, set in `packages/engine/src/view/web.ts` and re-applied when it changes), and a paragraph's own `dir` was already written (`packages/engine/src/schema.ts`). `packages/engine/test/fe-111-direction.test.ts` covers the paragraph part in Node. Criterion 1 needs a browser render, which was not run. Criterion 2 needs a browser run in each supported browser. Lane V-FE-097-112 (2026-11-13), not ticked: `packages/element/e2e/fe-111-visual-caret.spec.ts` measures where the collapsed caret is drawn after each ArrowRight, against a plain contenteditable reference of the same width, font, direction and text; it passes in Chromium and Firefox (`--project=chromium --project=firefox`, run with `--output` outside the shared test-results folder). In WebKit the selection of a shadow root is retargeted to the document (its anchor is the host's parent at offset 0), so the collapsed caret has an empty rect; the test is skipped there with that reason, and the criterion stays open in WebKit. Criterion 3 needs the FE-123 matrix extended to the corpus (FE-123's file is another story's; not edited). Criterion 4: the region clamp in `packages/engine/src/regions.ts` works on positions, not on the script, but the caret in right-to-left text was not run in a browser, so it stays unticked. Criterion 5 needs EXP, which is not built in this lane. Content support starts with left-to-right scripts; the web view inherits the browser's handling and LuaLaTeX handles the PDF (02 §11). The page view needs its own plan (FE-112).
+
+### FE-112 Plan bidirectional, complex-script and East Asian layout for the page view
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | cond | M | could | Maintainer |
+
+**Spec:** 02 §11, §9.3 · **Requirements:** R1 · **Depends on:** SPK-013, FE-076, FE-080
+
+As a maintainer, I want a written plan for bidirectional text, complex-script shaping checks and East Asian line breaking in the page view, so that the engine's interfaces can carry them.
+
+**Acceptance criteria**
+
+- [x] Given the page view goes ahead, when the spike ends, then a written plan covers bidirectional reordering, caret movement and selection rectangles in the layout tree.
+- [x] Given complex scripts, when the plan is written, then it states how the measurement provider returns clusters and how shaping is checked against the typeset result.
+- [x] Given East Asian text, when the plan is written, then it states which line-breaking rules and tailoring are needed beyond FE-080.
+- [ ] Given the plan, when it is reviewed, then it names what each provider interface (FE-076) must carry and what the WASM epic must provide, and gives a size estimate.
+
+**Evidence:** `docs/adr/0208-lane-FE-105-117.md`, section "Plan for FE-112" (criteria 1 to 3: sections 1 to 3; criterion 4: section 4, which names the interfaces, the WASM needs and a size class per item, but is not reviewed).
+
+**Notes:** Only if the page view goes ahead (SPK-013); phase `cond` because it also depends on the right-to-left content work of phase 4. Lane FE-105-117, round 3 (2026-11-13): the plan is written ahead of SPK-013 and is proposed, not decided. Criteria 1 to 3 are ticked on the plan's content; criterion 4 stays unticked until a maintainer reviews the plan. The plan reads the current `measure.ts`, `lines.ts` and `caret.ts`, and nothing in them does bidi reordering or cluster measurement, so the plan's new interface members are not built.
+
+### FE-113 View documents on a mobile browser
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Viewer |
+
+**Spec:** 02 §11, §12; 11 §4 · **Requirements:** R12 · **Depends on:** FE-066, FE-065
+
+As a reader on a phone, I want to read a document in the web view, so that I can use it away from a desk.
+
+**Acceptance criteria**
+
+- [x] Given a phone-width viewport in a supported mobile browser, when a document opens, then text reflows with no horizontal scrolling, scrolls by touch and can be pinch-zoomed.
+- [x] Given a touch device, when any `view` value is requested, then the web view is used.
+- [ ] Given the viewing experience, when it is tested in iOS Safari and Chrome on Android (device or emulation as the matrix defines), then reading, scrolling, comments and read-only mode work.
+- [x] Given touch controls, when their size is measured, then they meet the target-size criterion (FE-104).
+
+**Evidence (criterion 4, lane V-FE-113-128, round 6, 2026-11-14):** `packages/element/e2e/fe-113-mobile-target-size.spec.ts`: on the embed page's default shell with the editor mounted, every visible pointer control in the shadow root (buttons, menu items, tabs, checkboxes, combo boxes, switches, options, inputs, selects and links, the same selector as FE-104) is at least 24 by 24 CSS pixels, on Playwright's "Pixel 7" profile (Chromium) and "iPhone 13" profile (WebKit): touch, mobile flag, emulated. Scope: the default shell only; side panes, dialogs and the context menu are not measured on a phone here (as FE-104 criterion 5 notes), and Firefox has no mobile profile. Run with `DOCEDIT_DEMO_PORT=57077 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-113-mobile-target-size.spec.ts --project=chromium --project=webkit --retries=0`: 2 passed. Emulation on the desktop machine, not a phone.
+
+**Evidence (criterion 2 unticked by the reviewer, U4 group 2 round 2: the outcome test below passes without any touch decision being applied, because the element has one view and does not call `selectView`; criterion 2 stays open until the element applies the decision and a test fails without it):** lane U-FE-113-128, 2026-11-13, `packages/element/e2e/fe-113-mobile-view.spec.ts`, run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-113-mobile-view.spec.ts --project=chromium --project=webkit --project=firefox` on demo port 56070, at 390 by 844 CSS pixels with touch and the mobile flag. Criterion 1: reflow passed in all three (a 120-character word and a wrapping line; the page and the surface do not scroll sideways). Touch scrolling (`Input.synthesizeScrollGesture`) and pinch-zoom (`Input.synthesizePinchGesture`, `visualViewport.scale` above 1.2) passed in Chromium only; WebKit has no such gesture input in Playwright. This is Chromium's and WebKit's mobile emulation on the desktop machine, not a phone or a device. Criterion 2 (lane U-FE-097-112, 2026-11-13): `packages/element/e2e/fe-113-touch-view-choice.spec.ts` mounts the element with `view` `print`, `read` and `web` on a touch emulation (390 by 844 CSS pixels, `hasTouch`, `isMobile`) and checks that the web view's editing surface is the only view shown: 3 passed in Chromium; Firefox and WebKit report no touch points in this emulation and are skipped. Only the outcome is checked: the element has one view, so the web view is shown for every value, and `selectView` (`packages/element/src/view-select.ts`) is still not called by the element (the Notes above).
+
+**Evidence (criterion 2, re-ticked in the U4 group 2 round 2 fix, 2026-11-13):** the element now applies the decision: `#viewChoice` in `packages/element/src/doc-editor.ts` passes `view` and `(any-pointer: coarse)` to `selectView`, and `view="read"` mounts the read view (FE-072). `packages/element/e2e/fe-113-desktop-view-choice.spec.ts` is the control: on a desktop `view="read"` shows the read view and no editing surface. `packages/element/e2e/fe-113-touch-view-choice.spec.ts`: on a touch emulation `view` `read`, `print` and `web` each show only the web view's editing surface, and in the same emulation with the coarse-pointer query answered false `view="read"` shows the read view again, so the web view comes from the touch decision. Helper: `packages/element/e2e/fe-113-view-choice-helpers.ts`. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-113-touch-view-choice.spec.ts e2e/fe-113-desktop-view-choice.spec.ts --project=chromium --project=firefox --project=webkit --retries=0` on demo port 56372: 18 passed, none skipped. Touch emulation: Chromium and WebKit use Playwright's `hasTouch` and `isMobile` at 390 by 844 CSS pixels; Firefox, which has no mobile emulation in Playwright, uses its own preferences (`ui.primaryPointerCapabilities`, `ui.allPointerCapabilities`, `dom.maxtouchpoints.testing.value`). For `print` the outcome is the same on a desktop while the page view is not built, so `read` is the value that tells the decision apart. This is browser emulation on the desktop machine, not a phone.
+
+**Notes:** Mobile browsers get viewing in phase 1 and light editing in phase 4 (02 §12). Whether the surface is forced read-only on mobile before FE-114 is not stated (Open questions). Lane FE-105-117, round 2 (2026-11-13), no criterion ticked: the touch decision exists (`packages/element/src/view-select.ts`, `selectView` gives the web view for a touch device whatever `view` asks; `packages/element/test/view-select.test.ts` covers it over random attribute values), but nothing in the element reads touch input or calls `selectView` yet (`doc-editor.ts` keeps `view` on the attribute, FE-065 Notes), so criterion 2 is not met in the product. Lane U-FE-113-128 ticked criterion 1 (see Evidence). Criteria 3 and 4 need iOS Safari and Chrome on Android (device or emulation, with reading, scrolling, comments and read-only mode exercised, and the touch target sizes measured against FE-104): not run here. Lane V-FE-113-128, 2026-11-13, criterion 3 stays open: `packages/element/e2e/fe-113-mobile-browsers.spec.ts` (Chromium with the Pixel 7 emulation profile, WebKit with the iPhone 13 profile, both run in this lane: reading and read-only `mode="view"` passed, 4 passed) covers reading and read-only only. Scrolling was not proven: the embed document is shorter than the phone viewport, and mouse wheel is not available in mobile WebKit. Comments: the embed page's shell offers no `view.comments` entry (not in the header nor in the More menu), so the comments pane cannot be opened there; a page with the comments feature enabled is needed (needsFromOthers). Criterion 2 is ticked on the outcome only (lane U-FE-097-112, see Evidence): `selectView` is still not called by the element, and `view` has no behaviour yet (PRO-079), so the touch decision is not yet the reason the web view is shown. U4 group 2 round 2 fix: `doc-editor.ts` now calls `selectView` (wired with the read view of FE-072 by another lane, not by this fix), and criterion 2 is ticked on a test that fails without the decision (see the second Evidence line). The element reads touch input as `(any-pointer: coarse)`; whether a device with both a mouse and a touch screen counts as a touch device is not stated in 02 §11 (left as the element has it).
+
+### FE-114 Edit lightly on a mobile browser
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | L | should | Author |
+
+**Spec:** 02 §11, §12; 11 §7 · **Requirements:** R12 · **Depends on:** FE-113, FE-115, FE-123
+
+As an author on a phone or tablet, I want to make light edits in the web view, so that I can fix a sentence anywhere.
+
+**Acceptance criteria**
+
+- [ ] Given a mobile browser and the on-screen keyboard, when the caret is in the document, then the visual viewport API keeps the caret above the keyboard.
+- [ ] Given typing, selection by the browser's own handles, and basic formatting, when they are used, then the document updates and syncs as on the desktop.
+- [ ] Given the iOS and Android keyboards of the input matrix, when it runs on mobile in the web view, then it passes.
+- [ ] Given a touch selection that starts inside a region, when it is extended, then it is clamped (FE-038).
+- [ ] Given the guard, suggestion mode and the journal, when the user edits on mobile, then they behave as on the desktop, including when the page is hidden (FE-011).
+
+**Notes:** Lane FE-105-117, round 3 (2026-11-13): not started; nothing ticked. No code under `packages/*/src` uses `window.visualViewport` (searched), so criterion 1 has no implementation to test. Criteria 2 to 5 depend on FE-113 (the touch decision in `packages/element/src/view-select.ts` is not yet wired into the element), FE-115 (the iOS input-method spike, which needs a device) and FE-123 (the matrix's mobile keyboard cases, which are manual). Criterion 4 (touch selection clamped inside a region) relies on FE-038's clamp, which is input-agnostic, but a touch selection needs a device to show it. Each criterion needs a phone-width browser run that this lane does not have.
+
+### FE-115 Make input methods work on iOS Safari inside shadow roots
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| spike | 4 | M | should | Maintainer |
+
+**Spec:** 02 §12 · **Requirements:** R12 · **Depends on:** FE-123, SPK-014
+
+As a maintainer, I want the iOS Safari input-method problems inside shadow roots understood, so that mobile editing can be planned.
+
+**Acceptance criteria**
+
+- [ ] Given the failures that S1 listed for an iOS keyboard, when the spike runs, then each is reproduced on a named device and iOS version.
+- [ ] Given each failure, when the spike ends, then it has a workaround or a stated reason why there is none.
+- [ ] Given the findings, when the spike ends, then a written recommendation says whether light editing on iOS is feasible in the web view, and what it costs.
+
+**Notes:** Lane FE-105-117, round 3 (2026-11-13): not started; nothing ticked. Every criterion needs an iOS device and iOS version to reproduce the failures that S1 listed (SPK-014), and the lane has no device. The spike's input is S1's list, which is not in this package. The recommendation (criterion 3) follows the reproduction and so waits for it.
+
+## Browser support and performance (02 §12, §13)
+
+### FE-116 Support the declared browser versions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 02 §12, §3, §8; review F15 · **Requirements:** R12 · **Depends on:** FE-122, FND-002
+
+As a maintainer, I want the supported browser versions to be a tested contract, so that the minimum versions are real.
+
+**Acceptance criteria**
+
+- [x] Given the build configuration, when it is inspected, then it targets Chrome and Edge 137, Firefox 142 and Safari 17 as minimums.
+- [ ] Given the CI matrix, when a change is tested, then the suite runs on those minimum versions and on the current stable versions.
+- [x] Given the integration guide, when it is read, then it lists the minimum versions with their reason (`Selection.getComposedRanges()` for Chrome, Edge and Safari; the shadow-tree selection APIs for Firefox) and states that browsers below them are unsupported.
+- [x] Given Safari, when the selection is read, then the editor uses `Selection.getComposedRanges()`; given Firefox, then the integration guide records the `ShadowRoot.prototype.getSelection` patch as a side effect (FE-066).
+
+**Evidence:** `packages/element/scripts/vite-configs.ts` (`BROWSER_MINIMUMS` is `chrome137`, `edge137`, `firefox142`, `safari17`; every component build sets `build.target` to it in place of `es2022`) and `packages/element/test/browser-support.test.ts` (the four minimums, and the target of the library, viewer, demo and Svelte-host builds). The build was not run in this round. Criterion 3 (lane FE-105-117, round 6, 2026-11-13): `packages/element/docs/policies-and-side-effects.md` has a section `## Browser minimums` with one row per browser (versions and reasons taken from 02 §12) and the sentence that browsers below them are unsupported; `packages/element/test/fe-116-minimums.test.ts` checks the rows against `BROWSER_MINIMUMS` and the reasons. Run with `pnpm vitest run packages/element/test/fe-116-minimums.test.ts packages/element/test/browser-support.test.ts packages/element/test/integration-policies.test.ts`: 15 passed (the three files). Criterion 4 (lane U-FE-113-128, 2026-11-13): `packages/element/e2e/fe-116-composed-ranges.spec.ts` wraps `Selection.prototype.getComposedRanges` before the page runs and types in the S1 page; run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-116-composed-ranges.spec.ts --project=webkit --project=chromium --project=firefox` on demo port 56070: 3 passed. WebKit made 32 calls; Chromium and Firefox made none (`test-results/evidence/fe-116-composed-ranges.<project>.json`). The Firefox `getSelection` patch is recorded in `packages/element/docs/policies-and-side-effects.md` (line 138).
+
+**Notes:** The first draft attributed the Chrome floor wrongly (review F15). What the module does in a browser below the minimum is not specified (Open questions). Element-2 round 1 ticks criterion 1 only. Criterion 2 is CI configuration (root, not in this package). Criterion 3 needs the integration guide, which is not in this package. Criterion 4 needs the `Selection.getComposedRanges()` call and the `getSelection` patch in the editing code (FE-066), which is not built yet. Lane FE-105-117, round 2 (2026-11-13), no criterion ticked: `getComposedRanges` is called nowhere in `packages/element/src`, `packages/engine/src` or `packages/ui/src` (checked by search), and the only `getSelection` code is the shim in `packages/engine/src/view-support.ts`, which is for browsers without a shadow-root `getSelection`; no integration guide file exists under `docs/` (the name appears only in other documents). Lane FE-105-117, round 6: criterion 3 ticked (the guide is `packages/element/docs/policies-and-side-effects.md`, section `Browser minimums`, see Evidence). Criterion 4 is ticked (lane U-FE-113-128, see Evidence): prosemirror-view 1.42.9 (`dist/index.js`, the selection read) calls `selection.getComposedRanges` when it exists, which is the Safari path, as the WebKit run showed; the Firefox patch is recorded in the guide's global side effects. Criterion 2 is CI configuration (root).
+
+### FE-117 Publish a compatibility list for browser extensions
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | S | could | Integrating developer |
+
+**Spec:** 02 §15 · **Requirements:** R12 · **Depends on:** FE-122
+
+As an integrating developer, I want to know how grammar checkers and password managers behave with the editor, so that I can answer my users.
+
+**Acceptance criteria**
+
+- [ ] Given a set of grammar-checking and password-manager browser extensions chosen by the maintainers, when the editor is tested with each in the supported browsers, then the observed behaviour (works, partly works, breaks) is recorded.
+- [ ] Given the results, when they are published, then each entry names the extension, its version, the browser and the behaviour, with a workaround where one exists.
+- [ ] Given a release, when it is cut, then the list is reviewed and the date of the last check is shown.
+
+**Notes:** 02 §15: this needs a compatibility list, not a design change. Phase inferred. Lane FE-105-117, round 2 (2026-11-13): not started. Every criterion needs the chosen extensions installed in each supported browser and a person's observation of them; no list of the extensions the maintainers chose exists in `docs/` or the packages, and this lane has no browser session in which to run them. It stays open until that list is chosen.
+
+### FE-118 Keep typing latency within budget in the web view
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 02 §13; 00 §9; 13 §9 · **Requirements:** R1 · **Depends on:** FE-024, FE-066, FND-007
+
+As an author, I want each key press to appear at once, so that typing never feels slow.
+
+**Acceptance criteria**
+
+- [ ] Given a 100-page document in the web view on the reference machine with CPU throttling, when text is typed, then keystroke to paint is within 16 ms at the median and 50 ms at the 95th percentile (target), measured with the Event Timing API.
+- [ ] Given the measurement runs in CI, when the 95th percentile exceeds the budget, then the build fails.
+- [ ] Given a user-interface update per animation frame (FE-024), when typing is measured, then the interface adds no keystroke latency beyond the budget.
+- [ ] Given a table-heavy document and a document with many comment decorations, when typing is measured, then the same budget holds.
+
+**Notes:** 02 §13 names table layout as a known pressure point.
+
+Lane FE-118-130, round 5 (2026-11-13, review only, nothing ticked). The harness exists in `packages/perf` (FND-007): `e2e/harness.spec.ts` measures typing on `pages-100` with the Event Timing API, and `scripts/profile-typing.ts` splits a keystroke's time by part. Its recorded baseline, `packages/perf/baseline/reference-1.json` (median of three runs on 2026-11-06, on a shared machine that ADR 0037 calls provisional), gives `typing.p50@pages-100` at 40 ms against the 16 ms target and `typing.p95@pages-100` at 40 ms against 50 ms. Criterion 1 needs the median within 16 ms, so it is not met. Criterion 2 needs a CI gate: `.github/workflows/perf.yml` runs on the `docedit-reference` runner, which is not registered yet, so no build fails on a budget today. Criterion 3 has frame figures in the same baseline but no check that the interface adds nothing beyond the budget; open. Criterion 4 (table-heavy and comment-heavy documents) is not in the baseline; open. No browser run was made in this round, so nothing is ticked. Typing latency work is recorded in `docs/stories/PLAN-1a.md` under ADR 0055. Lane V-FE-113-128, round 3 (2026-11-13): the reference project records a trace (`use.trace: 'retain-on-failure'`), and the trace's DOM snapshotter ran inside the measured page in a profile of `pages-300` (see FE-120 Notes and `docs/adr/0307-lane-V-FE-113-128.md`, item 6). Whether the recorded `harness.spec.ts` figures had tracing on is open for the FND-007 owner; nothing here is ticked and no new typing figure is recorded.
+
+### FE-119 Open a 20-page document within the time budget
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §9; 00 §9; 02 §2 · **Requirements:** R1, R14 · **Depends on:** FE-002, FND-007, UX-070
+
+As an author, I want a document to be ready to edit quickly, so that opening is not a wait.
+
+**Acceptance criteria**
+
+- [ ] Given a 20-page document on the reference machine, when the element connects, then the editor is interactive in under 2 seconds (target).
+- [x] Given the load, when the network is listed, then the PDF viewer, math editor and panes are not on the critical path.
+- [ ] Given the measurement runs in CI, when the time exceeds the budget, then the build fails.
+- [ ] Given a cold and a warm cache, when the time is measured, then both are reported, and the report states the cache state and the network profile used.
+- [ ] Given the shell, when start-up is measured, then the time spent in the shell's own initialisation (registry, header, toolbar) is recorded separately.
+
+**Evidence (criterion 2, partly, lane U-FE-113-128, 2026-11-13):** `packages/element/e2e/fe-119-critical-path.spec.ts` loads `pages/lib.html` (the library build), mounts the element and records every `.js` and `.css` request made before `de-ready`: none names a viewer, PDF, math, pane, outline, read-view or print chunk, and the editor's `chunks/` files are among them. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-119-critical-path.spec.ts --project=chromium` on demo port 56070: 1 passed. This is the spike document of that page, not the 20-page document, so criterion 2 stays unticked until the same listing runs on a 20-page document; Chromium only.
+
+**Evidence (criterion 2, lane V-FE-113-128, 2026-11-13):** `packages/perf/e2e/fe-119-network-pages-20.harness.spec.ts` loads `/pages/editor.html?doc=pages-20` on the perf harness (the reference project, Chromium, no throttling) and lists the scripts and styles whose resource timing starts before `de-ready`; none path matches the pane, viewer, PDF, math, print, read-view or outline names, and the editor's own chunk is in the list. The list is written to `packages/perf/test-results/fe-119-network-pages-20.json`. Run with `pnpm exec playwright test -c packages/perf/playwright.config.ts fe-119-network-pages-20 --project=reference` (`DOCEDIT_PERF_PORT=57071`): 1 passed. Chunk names are matched by pattern, so a renamed lazy chunk would need the pattern updated; criteria 1, 3 and 4 (timings, CI gate, cache states) are not run here. This closes the 20-page listing that the lane U line above left open.
+
+**Notes:** "Interactive", the cache state and the network conditions are not defined in the spec (Open questions). This story absorbed UX-071 during the cross-check. Element-2 round 3, criterion 2 (not ticked): `packages/element/test/critical-path.test.ts` walks the value imports from the package entry and finds that the PDF viewer, math editor, print and read view are not statically reached; the editor chunk is loaded by `import()` in `doc-editor.ts`. That is a source-level proxy only; the network listing in a browser and criteria 1, 3, 4 and 5 (timings, cache states, CI gate) are not run and stay open.
+
+Lane FE-118-130, round 5 (2026-11-13, nothing ticked). `packages/perf/e2e/harness.spec.ts` measures `tti@pages-20` as the median of five cold loads in new contexts without an HTTP cache, and its definition ends at the last long task before a quiet window. The recorded value is 278 ms in `packages/perf/baseline/reference-1.json` (2026-11-06, shared machine, provisional under ADR 0037). That is a recorded figure, not a run in this round, and not a run on the named reference machine, so criterion 1 stays open. Criterion 3 (the CI gate) needs the `docedit-reference` runner in `.github/workflows/perf.yml`, which is not registered. Criterion 4 is open: the harness reports cold loads only, so no warm figure and no cache state are recorded beside it. Round 4 (lane V-FE-113-128, 2026-11-14): `packages/perf/e2e/fe-119-cache-states.harness.spec.ts` loads `pages-20` cold (a new context) and then reloads it in the same context, and writes both loads with their cache state, the resources served from cache and the network profile to `packages/perf/test-results/fe-119-cache-states.json` (run with `DOCEDIT_PERF_PORT=57071 pnpm exec playwright test -c packages/perf/playwright.config.ts fe-119-cache-states --project=reference`: 1 passed). Criterion 4 stays unticked because the reference server sends `Cache-Control: no-store` on every response (`packages/perf/scripts/serve.ts`), so the warm reload had no cache hit (0 resources from cache, recorded as such): a warm HTTP cache state does not exist on this server. Whether the warm state should use a cache-enabled server, or another definition, is an owner or FND-007 decision (listed for the owner). Criterion 5 is open: no split of the shell's own start-up (registry, header, toolbar) is recorded. Open questions, with proposed defaults for the owner in `docs/adr/0209-lane-FE-118-130.md`: what "interactive" means, the cache states, and the network profile. No number is invented here.
+
+### FE-120 Keep long documents usable in the web view
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | should | Author |
+
+**Spec:** 13 §9; 02 §13 · **Requirements:** R1, R14 · **Depends on:** FE-066, FND-007, UX-072
+
+As an author with a long document, I want the web view to stay usable up to 300 pages, so that long reports are possible and the claim of 300 pages is backed.
+
+**Acceptance criteria**
+
+- [ ] Given a 300-page document in the web view, when it is opened, scrolled and edited, then it meets the thresholds that FND sets for "usable" (target 300 pages), and the navigation pane and the comments pane open on it.
+- [ ] Given the same document, when typing, scrolling and navigating are measured, then the figures are recorded in the budget report.
+- [ ] Given a 100-page document, when memory is measured in the web view, then it stays under 300 MB (target).
+- [ ] Given the web view mounts the whole document, when the 300-page document is profiled, then hot spots in table layout and node views are listed with their share of time.
+- [x] Given the result, when it falls short, then the shortfall is recorded with the dominant cause.
+- [ ] Given a regression, when CI runs, then the gate fails.
+
+**Evidence (criterion 5, re-ticked by the group 3 round 3 fixer, 2026-11-14):** `packages/perf/e2e/fe-120-shortfall-300.harness.spec.ts` takes the shortfall and its cause in one configuration: the reference project, Playwright tracing off, `backend=hold`, one page per document, opened as `harness.spec.ts` opens it. On the same page it runs three typing passes in the middle paragraph: (1) 150 keystrokes with no instrumentation, measured by the Event Timing method of `harness.spec.ts` (the shortfall); (2) 60 keystrokes under a Chromium performance trace (devtools.timeline, toplevel, v8 and gc categories) with the CPU profiler running over the same keystrokes, so that main-thread self time is split by trace event, including the native work a CPU profile shows only as `(program)`; (3) 60 keystrokes under the CPU profiler alone. It does this for `pages-100` and `pages-300`, and a third test asserts the cause. Measured 2026-11-14 on AuroraR11 (Intel Core i9-10900KF, the reference machine of ADR 0037), Chromium 158.0.8127.18, with the machine about 94 per cent busy with other agents' work (`machineBusy` in the output), so the absolute figures are inflated and provisional; the split is the finding. Shortfall on `pages-300`: typing p50 56 ms (target 16), p95 64 ms (target 50); on `pages-100` p50 24 ms, p95 32 ms. Dominant cause on `pages-300`: per-keystroke work that grows with the document, 35.0 of 65.2 ms of main-thread time per keystroke (54 per cent) in the recorded run, and 51 to 54 per cent in five runs. It has two parts of about equal size: (a) the referenced-targets guard (`packages/engine/src/referenced-targets.ts`, `referenceGuardPlugin`), whose `filterTransaction` walks the whole document up to three times per local transaction (`namedTargets` of the result, `resolvable` of both documents, through `descendants`/`nodesBetween`), 17.8 ms per keystroke; it was named from the built bundle, where the plugin's filter calls the minified `Ol` (`removedReferencedTargets`); (b) Blink's selection sync to the browser process (`Editor::SyncSelection`, `GetSelectionOffsets`), which counts offsets from the start of the single editable root, 17.2 ms per keystroke. Each grows about threefold from `pages-100` (ratios 3.18 and 2.97); other JavaScript (11.2 ms), paint and compositing (9.1 ms) and style and layout (5.0 ms) grow about twofold or less. This corrects the earlier record, which named the `scopes` module. Output: `packages/perf/test-results/fe-120-shortfall-300.json`. Run: `pnpm exec playwright test -c packages/perf/playwright.config.ts fe-120-shortfall-300 --project=reference` with `DOCEDIT_PERF_PORT=57381`: 3 passed. The FND-007 owner still has to settle the trace setting of the reference project; `harness.spec.ts` keeps `retain-on-failure`, so the baseline of 2026-11-06 is not re-taken here.
+
+**Earlier evidence (criterion 5, lane V-FE-113-128, 2026-11-13; UNTICKED by review, group 3 round 3, superseded by the evidence above: the filter path is the largest JavaScript cost, but the profile does not show it is the dominant cause of the shortfall: in the reviewer's re-run `(program)` time, native work that includes layout and style, was 1.8 s against 1.3 s for the filter path, and `(program)` was left out of the causes; and the shortfall figures come from a baseline that may have been taken with the Playwright trace on and a different backend mode, so the cause and the shortfall are not from the same configuration. Re-run the typing baseline with tracing off and attribute `(program)` time, for example with a performance trace of layout and style, before ticking):** `packages/perf/e2e/fe-120-profile-300.harness.spec.ts` opens `pages-300` with `backend=hold` on the perf harness (Chromium, the reference project, tracing off), types 60 keys in the middle of the document and then scrolls it with 60 wheel steps, under Chromium's CPU profiler. The shortfall is the one recorded in the baseline (typing p50 64 ms against 16 ms, p95 104 ms against 50 ms, `usable300.typing.*@pages-300` in `packages/perf/baseline/reference-1.json`, not re-run here). The dominant cause in this run's typing profile is the transaction filter path: `applyTransaction`, then `filterTransaction`, then a `nodesBetween` walk over the document (`scopes` module), about 1.3 s of the 9.9 s sampled (idle and program time excluded from the causes). The profile is of this machine, not the reference machine, so the share is a cause, not a target figure. Output: `packages/perf/test-results/fe-120-profile-300.json`. Run: `pnpm exec playwright test -c packages/perf/playwright.config.ts fe-120-profile-300 --project=reference` with `DOCEDIT_PERF_PORT=57071`: 1 passed.
+
+**Notes (lane V-FE-113-128, 2026-11-13):** the profile found two things about the harness itself. (1) The reference project records a trace (`use.trace: 'retain-on-failure'` in `packages/perf/playwright.config.ts`), and the trace's DOM snapshotter runs inside the page during the measured work: in a first run it was about 60 per cent of the scrolling samples (`captureSnapshot`, `visitNode`). This file turns tracing off with `test.use`. Whether the recorded baseline of 2026-11-06 was taken with the same trace setting is not known here; the owner of FND-007 should check it, and `harness.spec.ts` (which uses the same config) may be affected. (2) The mock backend's commit path (`submit`, `process`, `checkResult`) runs on the page's main thread in `deferred` mode, which is why `backend=hold` is used for the profile. Criterion 4 stays unticked: the typed paragraph is not in a table, so table layout is about 0 per cent of the typing samples and no table-heavy profile exists; node views are named only by ProseMirror's own update functions (`updateChildren`, `update`), with no separate attribution. Criterion 2 stays unticked: scrolling is measured (5 s sampled, mostly idle), but navigation and the comments pane are not. Criterion 1 (the usable threshold is not defined) and criterion 3 (memory at 100 pages on the reference machine) are not run here.
+
+**Notes:** Phase inferred. "Usable" has no threshold in 13 §9; the owner-accepted threshold is recorded in the harness configuration when decided (Open questions). This story absorbed UX-073 during the cross-check.
+
+Lane FE-118-130, round 5 (2026-11-13, nothing ticked). FND-007 defines the metric for "usable to 300 pages" as the typing measurement on `pages-300`, judged against the typing targets of 00 §9. The recorded baseline in `packages/perf/baseline/reference-1.json` (2026-11-06, shared machine, provisional under ADR 0037) gives `usable300.typing.p50@pages-300` at 64 ms (target 16 ms) and `usable300.typing.p95@pages-300` at 104 ms (target 50 ms). So criterion 1 is not met on typing; the dominant cause is not recorded in the baseline. The same file records `memory@pages-100` at 98.7 MB, under the 300 MB target, and `usable300.memory@pages-300` at 159.1 MB, but these are recorded figures, not runs in this round, so criterion 3 stays open. Criterion 1 also needs the navigation and comments panes to open on the document, and the baseline records no pane figure. Criterion 2 needs scrolling and navigation measured: the baseline's keys cover time to interactive, ready time, typing, frame cost and memory, and nothing for scrolling or navigation. Criteria 4 to 6 are open: no profile of table layout or node views is recorded, and no regression gate runs (see FE-119 for the CI runner). Defaults for the owner, including the threshold, are recorded in `docs/adr/0209-lane-FE-118-130.md`.
+
+## Frontend tests (02 §14)
+
+### FE-121 Run the editing core in Node.js without a browser
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 02 §14, §4 · **Requirements:** R6, R7 · **Depends on:** FE-033
+
+As a maintainer, I want the editing core, the sync client and the layout engine to run in Node.js, so that most tests are fast and need no browser.
+
+**Acceptance criteria**
+
+- [ ] Given the editing core package, when it is imported in Node.js, then it loads with no DOM and the view layer is a separate package.
+- [x] Given a fake transport, when two simulated clients edit concurrently, then both converge to the same document.
+- [x] Given the core tests for identifiers, the guard, suggestion mode, undo and the journal's logic, when they run, then they run in Node.js.
+- [ ] Given CI, when a change touches the core, then these tests run on every change before any browser test.
+- [x] Given the layout engine (phase 3), when its tests run, then they also run in Node.js with the deterministic provider (FE-094).
+
+**Evidence:** Cores in Node.js without a DOM against backend-mock converge with the room: `packages/engine/test/sync.mock.test.ts`, `test/sync.property.test.ts`; the headless entry `@docedit/engine/headless` reaches no `prosemirror-view` and edits without a DOM: `test/headless.test.ts`. Criterion 3 (lane V-FE-113-128, 2026-11-13): these files are the `*.test.ts` of `packages/engine/test` (the Node.js project, not `*.universal.test.ts`): `guard.test.ts`, `undo-rebase.test.ts`, `fe-049-undo-keys.test.ts`, `fe-049-suggestion-undo.test.ts` (undo), `suggestion-mode.test.ts` (FE-041), `fe-008-journal.test.ts`, `fe-008-journal-reject.test.ts`, `fe-011-journal-flush.test.ts`, `fe-012-flush-journal.test.ts` (the journal), and `fe-041-043-suggestion-core.test.ts` (the suggestion identifiers, with the core's identifier source). Run with `pnpm vitest run` on those files: 9 files, 38 tests passed, plus the suggestion core file, 16 passed (no browser, no container).
+
+**Evidence (criterion 5, lane U-FE-113-128, 2026-11-13):** `packages/layout/src/measure.test.ts`, `packages/layout/src/lines.test.ts` and `packages/layout/src/break-language.test.ts` (the `*.test.ts` files of the layout package, run in Node.js by `pnpm vitest run` with no browser): these three files use the deterministic fake providers (`fixedWidthMeasurer` or `advanceTableMeasurer`, the same fakes as FE-079); these three files do not reference `src/docen.ts`, the module that falls back to `OffscreenCanvas` when a caller gives no measurer (checked by search of the three files). Run: `pnpm vitest run packages/layout/src/fe-094-corpus.test.ts packages/layout/src/measure.test.ts packages/layout/src/lines.test.ts`: 3 files, 28 tests passed.
+
+**Notes:** Open (2026-11-06): criterion 1 asks for the view layer as a separate package; it is a separate entry point of `packages/engine` (`@docedit/engine/headless` without it, the main entry with it), and splitting packages is the main session's call. Criterion 3: identifiers, the guard and undo run in Node.js; suggestion mode (FE-041) and the journal (FE-009) are built and tested in Node.js too (lane V-FE-113-128, see Evidence; the earlier "not built" note is out of date). Criterion 4 is CI configuration (root). Criterion 5 is phase 3.
+
+### FE-122 Drive the element with Playwright in every supported browser
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1a | M | must | Maintainer |
+
+**Spec:** 02 §14, §12 · **Requirements:** R12 · **Depends on:** FE-013, FND-002
+
+As a maintainer, I want end-to-end tests that drive the element in Chrome, Edge, Firefox and Safari, so that user-visible behaviour is verified where users are.
+
+**Acceptance criteria**
+
+- [x] Given the Playwright projects, when the suite runs, then it covers Chromium (Chrome and Edge), Firefox and WebKit.
+- [x] Given a locator, when it addresses an element inside the editor, then it pierces the open shadow root without workarounds.
+- [ ] Given the demo page, when the smoke suite runs, then it types, selects, undoes, and edits from two tabs with different grants.
+- [x] Given a failure, when it is reported, then the trace and a screenshot are attached.
+
+**Evidence:** packages/element/playwright.config.ts (projects chromium, msedge, firefox, webkit; trace kept and screenshot taken on failure); every suite addresses the editor with plain locators through the open root (e2e/element.spec.ts, e2e/s1-*.spec.ts). Run of 2026-11-06, 17:39 UTC, the whole element suite in four browsers: 780 passed, 0 failed, 1 flaky (passed on retry), 455 skipped by design.
+
+**Notes:** Packet B2 (2026-11-06): criterion 3 stays open. The smoke test types, selects, undoes and edits from two sessions with different grants on one page (two elements, two backends of one in-memory service); two browser tabs need a service shared between tabs, which the reference host's compose file gives (UX-091). Lane U-FE-113-128, 2026-11-13: criterion 3 stays open. The demo's `backend-mock` keeps state in memory per page (no BroadcastChannel or storage sharing, searched), so two tabs cannot share it. `services/document-service` is an HTTP and WebSocket server over PostgreSQL, but the element's demo does not connect to it, and no reference-host service was found under `services/`. Needs a demo that connects two tabs to one real service (needsFromOthers). Lane V-FE-113-128, round 5 (2026-11-14): not attempted in this round. The service exists (`services/document-service`, `startService`, `/v1` and `/dep`, PostgreSQL in `docedit-test-postgres`), but no element page connects to it; the element's e2e specs mock `https://dep.example.test`. Details and the owner's question in `docs/adr/0307-lane-V-FE-113-128.md`, item 8.
+
+**Evidence (criterion 3, lane V-FE-113-128, round 7, 2026-11-14):** `tests/V-FE-113-128/fe-122-two-tabs.spec.ts` with `tests/V-FE-113-128/playwright.config.ts`. The spec starts `services/document-service` (`startService`) on a PostgreSQL database it creates in `docedit-test-postgres` (`createTestDatabase`, dropped at the end), creates a tenant named "V-FE-113-128 two tabs", allows the demo origin and mints a token for each of two users (`ada`, `grace`, both `editor` on one document). The demo page `packages/element/demo/pages/fe-122-two-tabs.html` mounts the library build with `endpoint` and `getToken`, so the element's own DEP client talks to the real service over `/v1` and `/dep`. Both tabs type, select, undo and edit one document, and each sees the other's change. Run: `pnpm exec playwright test -c tests/V-FE-113-128/playwright.config.ts --project=<chromium|firefox|webkit>`, one run each, no retry: Chromium 1 passed, Firefox 1 passed, WebKit 1 passed. Reviewer (round 7): reran in all three, passed. Criterion 3 unticked: both tabs hold the same `editor` grant, so "different grants" is not shown; the earlier in-page smoke (`element.spec.ts` FE-122 smoke) used one grant and one refusal. Needs a second run with unequal grants (for example editor and viewer or suggester, or a region grant one user lacks) against the real service.
+
+**Notes (lane V-FE-113-128, round 7, 2026-11-14):** the two tabs are two users with the same `editor` role, each with its own token. Whether "different grants" means different roles (for example `editor` and `suggester`) is not stated in the criterion; the test reads it as two grants (two tokens). An editor-and-suggester pair is not run. Question recorded in `docs/adr/0307-lane-V-FE-113-128.md`.
+
+### FE-123 Run the input-method matrix
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 02 §14; 11 §2 (S1) · **Requirements:** R1, R12 · **Depends on:** FE-066, FE-056, FE-034, SPK-014
+
+As a maintainer, I want a repeatable matrix of input methods, so that composition bugs are caught before users meet them.
+
+**Acceptance criteria**
+
+- [x] Given the matrix, when it is defined, then it covers Japanese, Chinese and Korean composition, dead keys, and at least one Android and one iOS keyboard.
+- [ ] Given each case, when it runs, then it runs in the main editor and in the sub-editors, with and without remote commits arriving during composition.
+- [ ] Given automated drivers are limited, when a case cannot be automated in a browser, then a scripted manual pass exists and its result is recorded per browser and version.
+- [ ] Given a failure, when it is found, then it is listed with its workaround or its issue.
+- [ ] Given a release, when it is cut, then the matrix has passed in the web view (and in the page view if it exists, FE-098).
+
+**Evidence:** `packages/element/test/input-method-matrix.ts` (seven cases: Japanese, Chinese and Korean compositions; French and US International dead keys; an Android Gboard and an iOS keyboard case, each with a driver per browser family) and `packages/element/test/input-method-matrix.test.ts` (the required inputs are covered; `matrixRuns()` expands each case to the main, footnote and header editors, with and without remote commits). Each case's driver is derived from `DRIVER_FACTS` in the matrix file, which `packages/element/e2e/s1-input-drivers.spec.ts` checks against each browser: dead keys are manual in every browser (no browser lets the keyboard API press one), and the stepwise CJK compositions are manual in Firefox, which only commits in one step; the matrix test fails if a driver disagrees with the facts.
+
+**Evidence:** lane U-FE-113-128, 2026-11-13, `packages/element/e2e/s1-composition.spec.ts` (the automated cells of the matrix: the three CJK compositions in the body, the footnote and the header, with the remote commit none, map and rebase, and the footnote paragraph model), run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/s1-composition.spec.ts --project=chromium --project=firefox` on demo port 56070: 224 passed, 4 flaky (Chromium, passed on retry), 174 skipped by design (the browser cannot drive that case). Chromium and Firefox only; WebKit has no composition driver. Dead keys and the mobile keyboards are not automated and are not covered here.
+
+**Notes:** Element-2 round 1 ticks criterion 1 only. Lane U-FE-113-128, 2026-11-13: criterion 2 stays open. The automated cells above pass in every editor and with remote commits, but "each case" includes the dead-key and mobile-keyboard cases and the WebKit cases, which only a scripted manual pass (criterion 3, not written) can cover. Review (2026-11-13) found dead keys marked automated in Chromium and the CJK compositions automated in Firefox, against the spike's own driver facts; both were corrected to manual. The definition is data; no browser run uses it yet. `e2e/s1-composition.spec.ts` drives the three CJK compositions only, so criterion 2 is not met. Criterion 3 needs a scripted manual pass per browser and version, which is not written. Criteria 4 and 5 need runs.
+
+### FE-124 Run the host matrix
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | L | must | Maintainer |
+
+**Spec:** 02 §14; ADR 0002 · **Requirements:** R2, R12 · **Depends on:** FE-003, FE-005, FE-006
+
+As a maintainer, I want the element tested inside React, Angular, Vue, SvelteKit and a plain page, so that it works wherever hosts use it.
+
+**Acceptance criteria**
+
+- [ ] Given a demo host in each of React, Angular, Vue, SvelteKit and plain HTML, when the suite runs, then each hosts the element and the editor loads and edits.
+- [x] Given lazy loading of the bundle, when a host imports it on demand, then the element upgrades and works.
+- [ ] Given server-side rendering, when the host renders on a server and then hydrates, then nothing throws on the server and the element works after hydration.
+- [x] Given route changes that remove and re-add the element, when they happen repeatedly, then state survives within the grace period and no editor leaks after it (FE-005, FE-006).
+- [x] Given two instances on one page and a host that itself uses Svelte 5, when both are used, then they do not interfere.
+- [x] Given each framework's way of setting properties, when `getToken` and `doc-id` are set in different orders, then loading starts once (FE-003).
+
+**Evidence (criterion 4, lane V-FE-113-128, round 4, 2026-11-14):** `packages/element/e2e/fe-124-remove-readd.spec.ts`. Test 1: the host removes the element and re-adds it to the same container five times, each after two seconds (inside the 30-second grace period); after each re-add the editor is the same core, is resumed (not suspended), has one shell, and the text typed before the first removal (the unconfirmed "Route one") is still in the body; after the cycles one more typing pass lands in the same editor. Test 2 (mocked clock): four remove and re-add cycles of ten seconds, then a last removal; at 27 seconds the editor is still suspended and mounted, and at 30.5 seconds its session is null, its grace timer is cleared, it has no shell and it is disconnected. Run with `DOCEDIT_DEMO_PORT=57072 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-124-remove-readd.spec.ts --project=chromium --project=firefox --project=webkit --retries=0`: 6 passed (Chromium, Firefox and WebKit, two tests each, no flake; the lane's report said 4, the reviewer's rerun on 2026-11-14 gave 6). Desktop browser runs only, not a phone.
+
+**Evidence (criterion 6, lane U-FE-113-128, 2026-11-13):** `packages/element/e2e/element.spec.ts`, the 'FE-003' describe (nine orders of `doc-id`, `backend`, `connect` and `getToken`, each expecting one start and one `de-ready`). The order tests failed in Firefox and WebKit because the test read `ready` after a fixed 400 ms wait; the test now waits up to 15 seconds for `de-ready` and then keeps the 400 ms quiet period (the element was not changed). Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/element.spec.ts -g "FE-00[123]" --project=chromium --project=firefox --project=webkit --retries=0` on demo port 56070: the FE-003 tests all passed in the three browsers (50 passed in the run, including FE-001); the three FE-002 tests fail on the outline-toolbar click in every browser, which is FE-002's own problem and is not ticked here. The run also needed `packages/element/playwright.config.ts` to give each run its own `outputDir`, because parallel runs deleted each other's traces.
+
+**Evidence:** criterion 2 (lane V-FE-113-128, 2026-11-13): `packages/element/e2e/fe-124-upgrade.spec.ts` (an element mounted before the on-demand `load()` of `/lib/doc-editor.js` is upgraded, reaches `de-ready` and takes a typed character). Criterion 5 (lane V-FE-113-128, 2026-11-13): `packages/element/e2e/fe-124-two-instances.spec.ts` (two instances with two documents beside the Svelte 5 host of `pages/svelte-host.html`: typing in one leaves the other's text unchanged, the host's own button still works, both shadow roots are open and no page error is raised); the test reads `window.__hostFixtures`, added to `packages/element/demo/host-loader.ts`. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-124-upgrade.spec.ts packages/element/e2e/fe-124-two-instances.spec.ts --project=chromium --project=firefox --project=webkit` on demo port 57071: each file passed in Chromium, Firefox and WebKit (3 and 3). The two-instance spec focuses each editor's heading before typing, because a click on the body did not focus the editor in WebKit in an earlier run.
+
+**Evidence:** criterion 4 (lane U-FE-113-128, 2026-11-13, on the plain page and the single-page test host, not on the four framework hosts): `packages/element/e2e/fe-lifecycle.spec.ts` (a move keeps the unconfirmed typing and the same core; fifty reorders in separate tasks keep one editing core; a removed editor is destroyed after the 30-second grace period and not before) and `packages/element/e2e/fe-006-memory.spec.ts` (100 mount and remove cycles retain no editor after forced garbage collection). Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-lifecycle.spec.ts packages/element/e2e/fe-006-memory.spec.ts --project=chromium --project=firefox --project=webkit` on demo port 56070: 13 passed, 2 flaky (Firefox, passed on retry), 3 skipped by design.
+
+**Notes (lane V-FE-113-128, 2026-11-13):** criterion 1 stays open: the four framework hosts (React, Angular, Vue, SvelteKit) are not in the repository's element package (no such packages under `packages/element/node_modules`), and adding them needs `pnpm-locked.ps1` installs, which this lane did not run (needsFromOthers). Criterion 3 (server-side rendering) is not built or tested. Criterion 6: `packages/element/e2e/element.spec.ts`, the 'FE-003' order tests (run with `-g "FE-00[123]"`), passed in Chromium but failed in Firefox and WebKit in this lane's run (the 'connect → backend → doc-id' and 'doc-id → connect → backend' orders, expected one start); the same run showed the FE-002 test timing out on its outline-toolbar click in all three browsers. Those are not this lane's files and were left alone; criterion 6 stays open until they pass in every browser. Criterion 2 and criterion 5 are ticked (see Evidence). Evidence audit (2026-11-13): criterion 4 was unticked, because `fe-lifecycle.spec.ts` and `fe-005-move-selection.spec.ts` only move or re-append the element in one task, and no test removes it in one task and re-adds it in a later task inside the 30-second grace period to check that its state survives (the remove tests never re-add, and the keep-alive re-add after 60 seconds checks no state); the 100-cycle leak test (`fe-006-memory.spec.ts`, Chromium only) is sound. Round 4 (lane V-FE-113-128, 2026-11-14): criterion 4 is now ticked on `e2e/fe-124-remove-readd.spec.ts`, which re-adds the element after each removal (see Evidence). Criterion 6 is unchanged here (the FE-003 order tests are another lane's, and the framework hosts of criterion 1 are not in the repository). Lane V-FE-113-128, round 5 (2026-11-14): the 36 FE-003 tests of `packages/element/e2e/element.spec.ts` (`-g "FE-003"`, nine orders plus the others, Chromium, Firefox and WebKit, demo port 57072, `--retries=0`) all pass: 36 passed, so criterion 6 holds in every browser on this run. Criterion 3, server half: `packages/element/test/fe-124-server-render.test.ts` (Node.js, no DOM: the entry point imports, defines nothing, throws nothing; 1 passed). The hydration half (SSR markup, then the script, then `de-ready`) is not run as a framework SSR page: the four framework hosts are still not in the repository, so criterion 3 stays unticked.
+
+### FE-125 Run strict content security policy and Trusted Types pages
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 02 §14, §3; ADR 0002; 10 §3.1 (strict host policies) · **Requirements:** R2, R10 · **Depends on:** FE-014, FE-016, SPK-015
+
+As a maintainer, I want pages with a strict policy in the test matrix, so that a violation fails the build and an integrating developer can adopt the component without weakening their policy.
+
+**Acceptance criteria**
+
+- [ ] Given a page with a strict content security policy (no `unsafe-inline` or `unsafe-eval`) and a page that requires Trusted Types for scripts, when the suite runs on them, then every dependency is loaded and exercised (typing, paste, lazy panes, the math editor, the PDF viewer, fonts, and the proofing and assistant ports) and no violation report is produced.
+- [x] Given a violation event of either kind, when one is raised, then the test fails.
+- [x] Given a host that itself uses Svelte 5 with a restricted policy list, a second copy of Svelte on the page, or a host policy that does not name the component's policies, when the component loads, then it passes and does not throw.
+- [x] Given the policy names and directives each feature needs, when the published list (FE-017) is compared with what the test required, then they match, and a difference fails the build; given features are added, then their policy needs are compared with the integration guide.
+- [ ] Given a dependency update, when CI runs, then the policy test runs again.
+
+**Evidence:** lane U-FE-113-128, 2026-11-13, Chromium only, run in this lane with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/s2-features.spec.ts --project=chromium` and the same for `s2-svelte-host.spec.ts`, demo on port 56070: s2-features 12 passed and 4 flaky (passed on retry), s2-svelte-host 3 passed on a clean run. Criterion 2 ticked: `packages/element/e2e/s2-features.spec.ts` lines 134 to 135 fail on any recorded violation or error. Criterion 3 ticked: `packages/element/e2e/s2-svelte-host.spec.ts`. Criterion 1 stays open: those specs do not exercise typing, paste, lazy panes, fonts, proofing or the assistant port. Criterion 5 is CI configuration (root).
+
+**Evidence:** criterion 4 (lane element-2, round 3, 2026-11-13): `packages/element/test/published-policies.test.ts` (run with `pnpm vitest run packages/element/test/published-policies.test.ts`: 3 passed). It reads the published table of `docs/spikes/2026-11-06-s2-csp-trusted-types.md` (section 8, FE-017), compares it with `POLICY_NAMES` in `packages/element/src/trusted-types.ts` and with the `trusted-types` and `style-src-attr` values that `packages/element/e2e/s2-features.spec.ts` requires per feature (its GUIDE table). The browser runs of that spec (criteria 1 to 3 and 5) are not run in this lane.
+
+**Notes:** S2 (SPK-015) is a phase 0 spike; this is the permanent regression check from 1b. This story absorbed SEC-008 during the cross-check. Element-2 round 3 ticks criterion 4 only, at the level of the names and of the math-editor directive: the test does not compare the `font-src` origins or the worker's own response policy, which the spike lists, and "a difference fails the build" holds where the package's test run is part of CI (root configuration, not checked here).
+
+**Notes (lane U-FE-113-128, round 5, 2026-11-13):** criterion 1 stays open. Code reading only, not run in this round: the `guide` variants of `packages/element/e2e/s2-features.spec.ts` already load each feature under the strict baseline with the guide's names and check for no violation, and the `web view` case types, undoes and edits the footnote and header; the `paste` and `pdf` cases and the `pane` case (the outline) are in the same file, so the earlier statement that these are not exercised is out of date. Not covered: the fonts (the KaTeX and document font faces), the proofing port and the assistant port. The element demo does not wire the proofing or the assistant port into a page, and no strict-policy run of those ports exists (needsFromOthers).
+
+### FE-126 Run accessibility checks with axe and screen-reader passes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 1b | M | must | Maintainer |
+
+**Spec:** 02 §14, §10 · **Requirements:** R11 · **Depends on:** FE-122, FE-103, FE-105
+
+As a maintainer, I want automated and manual accessibility checks on every release, so that conformance is evidence, not intent.
+
+**Acceptance criteria**
+
+- [ ] Given each named page state (editing, dialogs, panels, forced-colors, dark theme, pseudo-right-to-left), when axe runs through the shadow roots, then it reports no new violation and the build fails otherwise.
+- [ ] Given a list of screen-reader and browser combinations kept in the test plan, when a release is cut, then a manual pass over the checklist has been recorded for each.
+- [ ] Given the checklist, when it is reviewed, then it covers list semantics, live regions, Escape and Ctrl+F6, dialogs, and the guided flows.
+- [ ] Given the results, when a release is cut, then they are handed to the accessibility conformance report that UX produces.
+
+**Evidence:** criterion 1 unticked by the reviewer (V4 group 3 round 2): "the build fails otherwise" is not met, because no CI job runs the element's Playwright specs (`.github/workflows/ci.yml` runs only `vitest run --project browser`; the CI wiring is FE-125 criterion 5, root configuration), and the dialog state is one dialog (language) in Chromium only; panels, dark theme and right-to-left are checked on the S1 spike page, not the production shell. The spec itself passes (reviewer rerun, Chromium, 1 passed). Lane V-FE-113-128 evidence (2026-11-13, Chromium): `packages/element/e2e/fe-126-dialogs-axe.spec.ts` (the language dialog, opened through the command search, Alt+Q, on the embed page: axe finds no rule in the editing state or with the dialog open, and the dialog adds no rule and grows none; record in `test-results/evidence/fe-126-dialog-language.chromium.json`; run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-126-dialogs-axe.spec.ts --project=chromium`, 1 passed). The other states are in `packages/element/e2e/fe-126-axe-states.spec.ts` on the S1 page (editing, footnote panel, dark theme, forced colours, right-to-left), and the forced-colours check on the embed page is `packages/element/e2e/fe-019-forced-colors-axe.spec.ts`.
+
+**Notes (lane U-FE-113-128, 2026-11-13):** criterion 1 stays open. `packages/element/e2e/fe-126-axe-states.spec.ts` runs axe on the S1 page (a spike page, not the production shell) in five states: editing, a footnote side panel, dark theme, forced colours and `dir="rtl"`. It passed once in Chromium with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-126-axe-states.spec.ts --project=chromium` on demo port 56070: axe reported no violation in any state, and the spec checks that axe pierced a shadow root (the record is in test-results/evidence/fe-126-axe-states.chromium.json). Dialogs are not covered: the S1 page has no toolbar, so the shell's language dialog cannot be opened there. Criteria 2 to 4 (manual screen-reader passes, the checklist, the hand-over to UX) are not run. Lane V-FE-113-128, 2026-11-13: the dialog state the note above lacks is now run on the embed page (`e2e/fe-126-dialogs-axe.spec.ts`), so criterion 1 is ticked; the S1 states above are unchanged. Criterion 2 needs a scripted manual pass per screen reader, which an automated lane cannot produce (needsFromOthers).
+
+## Authoring commands (13 §2, §4; 03 §4, §5)
+
+Added during the cross-check of 2026-11-06. CDM defines these constructs and UX draws the controls that invoke them, but no epic owned the commands themselves. They live in the editing core (`packages/engine`), run through the document API (FE-026) and the command registry (UX-003), and respect the region guard (FE-036) and suggestion mode (FE-041).
+
+### FE-127 Apply paragraph styles
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1a | M | must | Author |
+
+**Spec:** 13 §2, §4; 03 §4.1 (`style_def`), §4.3, §6; 11 §3 · **Requirements:** R1, R14 · **Depends on:** FE-026, FE-036, CDM-016, UX-003, UX-004
+
+As an author, I want to apply a named paragraph style to the paragraphs I select, so that headings and body text look consistent and carry their meaning into the PDF.
+
+**Acceptance criteria**
+
+- [x] Given the caret or a selection in paragraphs I may edit, when I apply a paragraph style through the command registry, then every selected paragraph gets that style's identifier and no direct formatting is added.
+- [x] Given a style with `next`, when I press Enter at the end of a paragraph in that style, then the new paragraph gets the `next` style.
+- [x] Given phase 1a, then the command works with the three paragraph styles of the minimum demo; from phase 1b, with every paragraph style the document defines (11 §3, §4).
+- [x] Given a selection that reaches into a scope I cannot change, when I apply a style, then only the paragraphs I may edit change, consistently with the region guard (FE-036).
+- [x] Given a heading style with an outline level, when it is applied, then `outline()` reflects it in the same frame.
+- [x] Given `queryCommand`, then it reports the selection's current style and whether the command is enabled.
+
+**Evidence:** `packages/engine/src/styles.ts` (the core command `paragraphStyle` with `{ style }`, which the registry entry of UX-003 runs); `packages/engine/test/styles.test.ts`.
+
+**Notes:** the styles gallery and pane are UX-022. Changing a style definition needs `structure` and is limited by 07 §5.3 (PRM-012).
+
+### FE-128 Format characters
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2; 03 §4.5 (run properties), §5, §6; 01 §8 · **Requirements:** R1, R14 · **Depends on:** FE-026, FE-036, CDM-017, CDM-025, CDM-037, UX-003
+
+As an author, I want to change fonts, sizes, emphasis, colour and highlight and mark the language of a passage, so that I can format text as in any word processor.
+
+**Acceptance criteria**
+
+- [x] Given a selection, when I toggle bold, italic, underline, strikethrough, small capitals, all capitals, superscript or subscript, then the matching marks are added or removed and adjacent identical marks merge (03 §5).
+- [x] Given a selection, when I choose a font family from the manifest, a size, a colour or a highlight, then the value is stored in the CDM's units: sizes in twentieths of a point, colours as `#RRGGBB` (01 §8).
+- [ ] Given a selection, when I set its language, then a `lang` mark with a BCP 47 tag is applied, and proofing uses it (13 §6.1).
+- [x] Given a collapsed caret, when I toggle a mark, then the next typed text carries it.
+- [x] Given a character style, when I apply it, then the `charStyle` mark is set and direct formatting is left alone.
+- [x] Given "clear formatting" on a selection, then direct formatting marks are removed and the paragraph keeps its style.
+- [ ] Given I have `suggest` but not `edit`, when a formatting command runs, then it produces `fmt` suggestions (FE-043) instead of marks.
+
+**Evidence:** criterion 1 (the eight toggles): `packages/engine/src/core.ts` (`COMMANDS`, the command switch, `verticalAlignCommand`, `WHOLE_SELECTION`) and `packages/engine/test/formatting.test.ts` ('character formatting commands', one case per toggle that adds and then removes the mark; 'superscript and subscript', a subscript replacing a superscript; 'the spaces at the edges of a selection take the mark too'; 'property: any sequence of toggles keeps the document valid and never leaves two adjacent runs with the same marks'; 'adjacent runs with the same marks are merged into one text node'). Criterion 4: `packages/engine/test/formatting.test.ts` ('a toggle at a collapsed caret'). Criteria 2, 5 and 6: `packages/engine/src/formatting-values.ts` (the value commands `fontFamily`, `fontSize`, `color`, `highlight`, `lang`, `charStyle` and `clearFormatting`, routed from `packages/engine/src/core.ts`) and `packages/engine/test/formatting-values.test.ts` ('stores a size in twentieths of a point', 'stores a colour as #RRGGBB', 'stores a highlight', 'stores a font family', refusals of out-of-grammar values; 'sets the charStyle mark ... leaves direct formatting alone'; 'removes the direct formatting and keeps the paragraph style'; the property that value commands add no violation). Criterion 3 is partly built: the `lang` mark with a BCP 47 shape check is applied (test 'applies a BCP 47 language tag'), but proofing does not read it yet, so it stays open. Criterion 7 is not built: suggestions (FE-043) are not in the core.
+
+**Notes:** Engine round 8 (2026-11-13). Toggles now use ProseMirror's `toggleMark` with `includeWhitespace`, so the spaces at the edges of a selection take the mark too (the default drops them). Keeping ProseMirror's rule, a selection with the mark anywhere in it loses the mark on the next toggle; this applies to bold and italic too. Superscript and subscript share one `vertAlign` mark, so a subscript replaces a superscript and a second press of the same position clears it. The `CommandName` union gained `underline`, `strike`, `smallCaps`, `allCaps`, `superscript` and `subscript`; the element and the shell's registry (UX-003) must map them to menu entries (additive, not a breaking change).
+
+**Notes (lane FE-118-130, 2026-11-13):** the value commands take their value as an argument (`CommandArgs.fontFamily`, `fontSize` in twentieths of a point, `color`, `highlight`, `lang`, `charStyle`); `null` removes the value. `CommandName` gained the seven names (additive). The styled fixture reports two reserved-identifier violations (I11) on its own, so the property test compares against that baseline. Font families are checked against the web view's grammar, not the manifest (FE-062), which the core does not read yet.
+
+Lane V-FE-113-128, 2026-11-13: criterion 7 is not ticked, and the reason is a reading of the wording, not a missing feature. The suggestion core exists (`packages/engine/src/suggestion-edit.ts`, `suggestFormat`, and `core.ts`): a bold command from a user with `suggest` but not `edit` writes a `fmt` mark naming that user, whose `before` has no `bold`, and the `bold` mark also stays on the text, as 03 §5 and the module's header describe (the change is shown and can be rejected). The story says the command produces `fmt` suggestions "instead of marks", which the current design does not do; the owner or the spec must say which is meant (open question; default kept: the design as built). Test: `packages/engine/test/fe-128-format-suggest.test.ts` (Node.js, backend-mock with the real authority; the suggester case and an `edit` control; 2 passed). Criterion 3 stays open: the proofing request builder (`packages/ui/src/proofing/request.ts`) takes a block's `lang` mark as the tag it sends, so the link exists at that level, but nothing here shows the engine's mark reaching that builder in the element, and no test runs proofing end to end.
+
+Lane V-FE-113-128, round 6 (2026-11-14), criterion 3 stays unticked: `packages/engine/test/fe-128-proofing-lang.test.ts` (Node.js, 2 passed) sets a `lang` mark on the whole paragraph through `c.run('lang', ...)`, reads the block's tag from the document and passes it to `proofingRequest` (`packages/ui/src/proofing/request.ts`, by relative import). The request sends `fr-FR`, and a paragraph without the mark sends the document default. That is the module chain only: nothing in the element or the shell calls `proofingRequest` or sends a request to a proofing port (UX-041 criteria 1 and 2 are open), so proofing does not use the mark end to end.
+
+### FE-129 Format paragraphs
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2; 03 §4.5 (paragraph properties), §7 (spacing, tabs); 02 §7, §10 · **Requirements:** R1, R11, R14 · **Depends on:** FE-026, FE-036, CDM-025, CDM-043, CDM-044
+
+As an author, I want to set alignment, indents, spacing, line spacing, tab stops and keep rules, so that paragraphs are laid out as I intend on screen and in the PDF.
+
+**Acceptance criteria**
+
+- [ ] Given paragraphs I may edit, when I set alignment, left, right or first-line indent, space before or after, line spacing and its rule, then the values are stored as integer properties (03 §4.5) and the web view shows them.
+- [ ] Given the paragraph dialog, when I set tab stops with alignment and leader, then they are stored in `tabs`, and tabs in the text advance to them (03 §7).
+- [ ] Given keep with next, keep lines together, page break before and widow control, when I set them, then they are stored, and the web view says they take effect in the PDF and the read view (02 §7).
+- [x] Given the increase and decrease indent commands, when they run, then the left indent changes by the document's `defaultTabStop`.
+- [ ] Given borders and shading on a paragraph, when I set them, then they are stored and drawn.
+- [ ] Given any of these options, then the dialog reaches it from the keyboard and is the alternative to dragging on the ruler (02 §10; UX-102).
+
+**Evidence:** criterion 4: `packages/engine/src/paragraph-indent.ts` (`changeIndent`, `steppedIndent`, `defaultTabStopOf`) and `packages/engine/test/paragraph-indent.test.ts` ('moves the left indent by the default tab stop of the document', 'uses the tab stop the document sets, not a fixed one', 'stops a decrease at zero and leaves the indent at zero', 'refuses a step that would pass the CDM length range', and the property 'any sequence of steps leaves the indent at the clamped sum of the steps'). The commands `increaseIndent` and `decreaseIndent` are registered in `packages/engine/src/core.ts`.
+
+**Notes:** Engine lane 2 (round 3, 2026-11-13): criteria 1, 2, 3, 5 and 6 stay open. Criterion 1 stores the paragraph attributes already (`indentLeft`, `spaceBefore`, `lineSpacing` and the rest, from `paragraphProps` in `packages/model/src/definition/cdm1.ts`), but no command sets them yet, and the web view does not show them. Criterion 2 (tab stops) and criterion 3 (keep rules, which the PDF and the read view must honour) have no command and no check. Criterion 5 (borders and shading) is stored by the CDM but no command sets it. Criterion 6 is the dialog's (UX). Decisions not in the spec, recorded in `docs/adr/0131-engine-2-backlog-batch.md`: the indent commands apply to list items as well, though Word moves a list item by its level, which is not decided here; a decrease never goes below zero; a step past the CDM's 31680-twip limit makes the command unavailable.
+
+**Notes (lane V-FE-129-141, 2026-11-13):** criterion 1, the storage half: `setParagraphFormat` (`packages/engine/src/paragraph-format.ts`) writes alignment, indents, spacing, line rule and the keep and widow flags on the selected editable paragraphs, with the CDM's ranges; tested in `packages/engine/test/v-fe-129-141-paragraph-format.test.ts` (7 tests, passed in Node.js with `pnpm vitest run`). The command is not registered in `core.ts` or `api.ts` (shared files, not edited this round), and the web view does not show the values, so criterion 1 stays unticked. Criterion 2 (tab stops) and criterion 5 (borders and shading) are not started. Criterion 3 needs the layout and the PDF path, and no PDF exporter exists. Criterion 6 is the dialog's, not built. Decisions in `docs/adr/0308-lane-V-FE-129-141.md`, items 5 and 7.
+
+### FE-130 Create multilevel lists
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2; 03 §4.1 (`numbering_def`), §4.3, §7 (numbering) · **Requirements:** R1, R14 · **Depends on:** FE-026, FE-105, CDM-019, CDM-026, CDM-042
+
+As an author, I want bulleted and numbered lists whose levels and numbering I control, so that structured content numbers itself correctly.
+
+**Acceptance criteria**
+
+- [x] Given paragraphs, when I apply a bulleted or numbered list, then they join a list instance that references a numbering definition (03 §4.3).
+- [x] Given a list paragraph, when I press Tab or Shift+Tab at its start, or use the level commands, then its level changes within the nine levels a definition allows.
+- [ ] Given a list, when I restart numbering at a paragraph or continue the previous list, then labels follow the shared numbering computation (CDM-042) and match the PDF.
+- [x] Given Enter in an empty list item, then the item leaves the list.
+- [x] Given a selected list, when I choose another numbering definition, then its labels update in the same frame.
+- [ ] Given assistive technology, then the list is exposed with list semantics (FE-105).
+
+**Evidence:** `packages/engine/src/list-commands.ts` (`applyList`, `removeList`, `listLevelUp`, `listLevelDown`, `restartNumbering`, `continueNumbering`, `listIndentAtStart`, `exitEmptyListItem`), wired in `packages/engine/src/core.ts` and `packages/engine/src/keys.ts` (Enter, Tab, Shift+Tab); `packages/engine/test/list-commands.test.ts` ('puts the selected paragraphs in one list instance', 'choosing another definition keeps the list instance and re-labels it', 'moves a list item one level in and out, within the definition', 'a list with nine levels goes to level 8', 'Tab at the start of a list item', 'Enter in an empty item', restart and continue with labels from `computeLabels`, and a property that list commands keep the document valid).
+
+**Evidence (lane U-FE-129-141, 2026-11-13, criterion 6; unticked by the reviewer, U4 group 3 round 2):** the test below passes in the three browsers (re-run by the reviewer), but it is FE-105's existing test, and it shows the attributes only. FE-105 criterion 3 is open: the items have no `role="list"` parent, so a `listitem` is not a valid list to assistive technology and axe would report `aria-required-parent`. The criterion points at FE-105 as a whole, so it stays open until FE-105 criterion 3 is met. `packages/element/e2e/list-semantics.spec.ts` ('three consecutive numbered paragraphs expose their position and the list size'; 'a paragraph at a nested numbering level exposes its level'), which reads `role="listitem"`, `aria-level`, `aria-posinset` and `aria-setsize` in the shadow root. Run with `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/list-semantics.spec.ts --project=<browser>` on port 56080: 2 of 2 passed in Chromium, Firefox and WebKit.
+
+**Notes:** Tab inside a list competes with Tab for indent and next cell; the keyboard model is UX-013. Tab is tried first for a table cell, then the list level applies only with the caret at the start of a list item. Criterion 3 is open: the labels come from the model's `computeLabels` and the restart and continue commands are tested, but nothing compares them with the PDF output. Criterion 6 was ticked by lane U-FE-129-141 and unticked by the reviewer (see Evidence): FE-105 criterion 3 (a `role="list"` parent) is open. The restart and continue commands and the `applyList` `numberingId` argument are additive to `CommandName` and `CommandArgs`.
+
+**Notes (lane V-FE-129-141, 2026-11-13):** criterion 6 is blocked by ProseMirror, not by a test. The list view (`packages/engine/src/view/list-view.ts`) gives each item `role="listitem"` as a node decoration, and a decoration cannot wrap sibling paragraphs in a `role="list"` element; a body node view cannot either, because ProseMirror maps a node view's children one to one. The fix is a rendering change to the body, which needs a decision (ADR 0308, item 6). Criterion 3 is blocked by the missing PDF output: no package writes a PDF, so the labels cannot be compared with one (ADR 0308, item 7). Both stay unticked.
+
+### FE-131 Apply table styles and sort rows
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Author |
+
+**Spec:** 13 §2 (tables with styles and sorting); 03 §4.3, §4.5 (table properties) · **Requirements:** R1, R14 · **Depends on:** FE-040, CDM-017, CDM-028
+
+As an author, I want to give a table a style and sort its rows, so that tables look consistent and are easy to scan.
+
+**Acceptance criteria**
+
+- [ ] Given a table I may edit, when I apply a table style, then the table references it and its borders and shading follow the style unless overridden.
+- [x] Given a column, when I sort ascending or descending, then the body rows are reordered by that column's text and repeated header rows stay at the top.
+- [x] Given merged cells that cross the rows being sorted, then sorting is unavailable and the reason is given.
+- [ ] From phase 2, given I may only suggest, when I sort, then the reordering is proposed as whole-row suggestions (FE-045) or the command is unavailable, as PRM-062 settles.
+- [x] Given a sort, when it is undone, then the original order returns in one step.
+
+**Evidence:** criterion 2 and criterion 5: `packages/engine/src/table-style-sort.ts` (`sortTableRows`, `sortedOrder`, `sortRefusal`) and `packages/engine/test/table-style-sort.test.ts` ('sorts the body rows ascending by the caret column, with numbers in numeric order', 'sorts descending', 'keeps the header rows at the top', 'is one undo step: undo returns the original order', 'keeps the same row nodes and identifiers', and the property 'sortedOrder (property)'). Criterion 3 (stricter than the story): 'refuses a table with merged cells, with the reason, and changes nothing' and, through `queryCommand`, 'sorts through exec, and reports merged cells through queryCommand'. Criterion 1 is not ticked: `setTableStyle` stores the table's `style` reference (test 'stores the table style on the table at the caret and clears it with null'; 'refuses a style the document does not define as a table style'), but the borders and shading that follow it are the model's cascade and the web view's, which are not checked here.
+
+**Notes:** phase inferred: 11 §4 places tables in phase 1b but names neither table styles nor sorting; sorting could move to phase 2. Engine lane 2 (round 3, 2026-11-13): the commands `setTableStyle` and `sortTableRows` are registered in `packages/engine/src/core.ts` (`exec`, `queryCommand`) with `CommandArgs.tableStyle`, `sortDirection` and `sortColumn`, and `CommandUnavailable` gained `unknown-style` and `no-column` (additive). Decisions not in the spec, recorded in `docs/adr/0131-engine-2-backlog-batch.md`: empty cells sort last in both directions; equal keys keep their order; text compares with a numeric-aware `en-GB` collator; a table with any merged cell refuses the sort, which is stricter than criterion 3. Criterion 4 is open: suggest mode (FE-045, PRM-062) is not in the core. Criterion 1 is open, see Evidence. Round 4, lane FE-131-141 (2026-11-13): the model's table cascade (`packages/model/src/cascade/table-format.ts`, tests in `table-format.test.ts`) gives a table its style's borders and cell margins, and a direct value overrides them; it has no shading, so the criterion stays unticked for shading and for the web view. Rows move as the same nodes inside one `replaceWith`; how the authority checks identifiers of moved rows is not tested here.
+
+**Notes (lane V-FE-129-141, 2026-11-13):** the shading half of criterion 1 is made in the cascade. `resolveTableFormat` in `packages/model/src/cascade/table-format.ts` returns `headerRowShading` from the table style chain, with the most specific style winning (`packages/model/src/cascade/v-fe-129-141-table-shading.test.ts`, 3 tests passed in Node.js). Criterion 1 stays unticked: the web view does not draw the shading yet, and a table has no direct shading to override it. Decisions recorded in `docs/adr/0308-lane-V-FE-129-141.md`.
+
+**Notes (lane FE-131-141, round 5, 2026-11-13):** criterion 1 stays unticked. The table takes its style through the `style` attribute (`setTableStyle`), and `resolveTableFormat` in `packages/model/src/cascade/table-format.ts` resolves the borders and the cell margins of that style, with a direct value winning. It does not resolve shading, so shading does not follow the style yet. The fix belongs in the model package, which this lane does not own, so it is recorded here and not made. Criterion 4 (phase 2, suggested row moves) is still open for PRM-062.
+
+### FE-132 Insert pictures and figures with captions and alternative text
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2 (pictures); 03 §4.3 (`figure`, `caption`), §4.4 (`image`), §8 (I10); 10 §3.5 · **Requirements:** R1, R11, R14 · **Depends on:** FE-053, CDM-029, BE-042, BE-044, PRO-061
+
+As an author, I want to insert a picture inline or as a captioned figure with alternative text, so that documents carry images that are accessible and typeset well.
+
+**Acceptance criteria**
+
+- [x] Given a picture file from my device, when I insert it, then it is uploaded through quarantine as an asset (BE-042) and the document references the asset identifier, never embedded data (03 §4.4).
+- [ ] Given an inline image or a figure, when I resize it with a handle or the size dialog, then `width` and `height` are stored in twentieths of a point and the aspect ratio is kept unless I unlock it.
+- [x] Given a figure, when I set its placement (`here`, `float`) and alignment, then they are stored; a floating figure inside a table cell is refused (I10).
+- [x] Given a figure, when I add a caption, then the caption holds a `seq` field so it numbers itself (CDM-036).
+- [ ] Given an image without alternative text, when I insert it, then I am prompted for it, and the accessibility checker reports it later (UX-066).
+- [x] Given the upload fails validation, then nothing is inserted and the reason is shown.
+
+**Evidence:** criteria 1, 3, 4 and 6 (criteria 1, 4 and 6 added in lane FE-131-141, round 3, 2026-11-13). Criterion 1, the upload: `packages/engine/src/image-paste.ts` (`pasteImage`) hands the picture to the assets port, which quarantines and validates it, and inserts an image that names the asset; `packages/engine/test/image-paste.test.ts` ('uploads the picture through the port and inserts an image that names the asset', 'the document holds the asset identifier and the sizes, never the bytes') and `packages/engine/test/image-paste-core.test.ts` ('uploads through the assets port and inserts an image that names the asset'). The file chooser that calls it is UX's and is not built. Criterion 4, the caption's `seq` field: `packages/engine/test/captions-refs.test.ts` ('adds a caption to a figure that has none, numbered in the Figure sequence') and `packages/engine/test/layout-commands.test.ts` ('numbers a new figure caption and refers to it', through `DocumentCore`). Criterion 6, a failed upload: `packages/engine/test/image-paste.test.ts` ('returns the message of a rejected picture and leaves the document as it was'). Criterion 3 as before: `packages/engine/src/figure-layout.ts` (`setFigureLayout`, `figureRefusal`) and `packages/engine/test/figure-layout.test.ts` ('stores a floating placement and an alignment in the body'; 'refuses a floating figure inside a table cell (I10) and stores nothing'; 'refuses a placement the CDM does not allow'; 'reports a figure in a table cell as floating-refused through queryCommand'). The command is registered in `packages/engine/src/core.ts` (`setFigureLayout`, `exec` and `queryCommand`). Criterion 2 is not ticked: `resizeFigure` and `sizeFor` store the twip size with the aspect ratio kept or unlocked (test 'keeps the aspect ratio when the width is set, and stores twips', and a property over locked widths), but the story's handles and size dialog are the view's.
+
+**Notes:** 13 §2 lists cropping as built in, but the CDM has no crop attributes (03 §4.3, §4.4). Recorded in the findings note of 2026-11-06; not decided here. Engine lane 2 (round 3, 2026-11-13): criterion 2 stays open for the handles and the size dialog (UX), though the engine stores the size. Criterion 4 (a caption with a `seq` field) is met at module level by `insertCaption` in `packages/engine/src/captions-refs.ts` (FE-134's module, `captions-refs.test.ts`); it is not ticked here, because that command is not in the core's command table yet and FE-134 owns it. Round 3 (lane FE-131-141): criteria 1, 4 and 6 are ticked, see Evidence. Criterion 5 needs the accessibility prompt (UX) and is not built. Decisions not in the spec, recorded in `docs/adr/0131-engine-2-backlog-batch.md`: a size is refused outside 1 to 31680 twips rather than clamped, and with the aspect ratio locked and both values given the width is used.
+
+### FE-133 Insert links and bookmarks
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | must | Author |
+
+**Spec:** 13 §2; 03 §4.4 (`anchor`), §5 (`link`), §8 (I4, I9) · **Requirements:** R1, R14 · **Depends on:** CDM-036, CDM-038, FE-067
+
+As an author, I want links to web pages and to places in the document, and bookmarks to link to, so that readers can navigate.
+
+**Acceptance criteria**
+
+- [x] Given a selection, when I add a link, then the URL is checked against the safe schemes of I9 before it is stored, and an unsafe one is refused with a reason.
+- [x] Given a bookmark name, when I insert a bookmark, then an anchor with that name is created, and a duplicate name is refused.
+- [ ] Given a link to a bookmark or a heading, when I follow it in the editor, then the caret moves there.
+- [x] Given a link to a web page, when I open it from the editor, then it opens in a new browsing context without an opener (FE-067).
+- [ ] Given a bookmark that a cross-reference targets, when I delete it, then the editor explains that it is still referenced (I4) and offers to show the references.
+
+**Evidence (lane U-FE-129-141, 2026-11-13, criterion 4):** `packages/engine/src/fe-133-link-open.universal.test.ts` ('opens an https link in a new browsing context without an opener'; 'keeps an in-document bookmark link in the current context'), run with `pnpm vitest run --project browser packages/engine/src/fe-133-link-open.universal.test.ts` (the browser project). The rendering is `MARK_RENDERING.link` in `packages/engine/src/schema.ts`, which now sets `target="_blank"` on an external link and leaves an in-document `#` link without a target. `packages/engine/src/sec-006-link-render.universal.test.ts` and `packages/engine/test/web-view-safety.test.ts` still pass.
+
+**Evidence:** criteria 1 and 2: `packages/engine/src/core.ts` registers `addLink`, `insertBookmark` and `followInternalLink` as document API commands (`run`, `exec`, `queryCommand` with `href`, `title`, `name`; `AuthoringCommandName` in `api.ts`), with the region guard's `canWrite` for the scope of the position as the writable test; `queryCommand` gives the reason of a refusal (`scheme-not-allowed`, `malformed-link`, `duplicate-bookmark`, `bad-bookmark-name`, `no-access`). `packages/engine/test/authoring-commands.test.ts` goes through `DocumentCore`: a safe link is stored on the selection, `javascript:`, `data:` and `file:` targets are refused with `scheme-not-allowed` and nothing is changed or queued, a bookmark is created with its name and an identifier, a duplicate name is refused, and both commands are unavailable (`no-access`) in a region the real guard protects. The module's own rules: `packages/engine/src/links-bookmarks.ts` and `packages/engine/test/links-bookmarks.test.ts` (fast-check properties over schemes and bookmark names). Reviewed and unticked on 2026-11-13 because nothing reached the core; re-ticked after the commands were registered.
+
+**Lane U-FE-129-141 (2026-11-13), criterion 4:** the core now refuses the deletion of a bookmark that a `ref` names (`referenced-targets.ts`, see FE-134 criterion 4). The explanation that it is still referenced and the offer to show the references need the view, so criterion 4 stays unticked.
+
+**Engine-lane notes (round 1, not decided here):** criterion 3 is open for headings: the CDM defines no heading target for `#` links, so only bookmark targets are followed. Round 4, lane FE-131-141 (2026-11-13): the bookmark half is tested through the core in `packages/engine/test/authoring-commands.test.ts` ('following #name moves the caret to the bookmark and changes nothing else'); criterion 3 stays unticked for headings. Criterion 4 (opens without an opener) was closed by lane U-FE-129-141, see Evidence; before that the link mark had no `target`, so it did not open a new browsing context. Criterion 5 needs cross-reference fields (FE-134), which are not built. Bookmark names are unique case-sensitively, because the CDM states no case rule; this is a proposed reading for the owner to confirm, not a decision. The name pattern is copied from `cdm1.ts` because the definition index does not export it. The commands reach the document API (`exec` on the element); the toolbar and command registry entries are UX-003's and are not built.
+
+### FE-134 Insert numbered captions and cross-references
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | should | Author |
+
+**Spec:** 13 §2 (numbered captions with cross-references); 03 §4.3, §4.4 (`field` kinds `seq`, `ref`), §7 · **Requirements:** R1, R14 · **Depends on:** FE-132, CDM-036, CDM-042, SPK-006
+
+As an author, I want to number figures, tables and equations and refer to them from the text, so that references stay right when content moves.
+
+**Acceptance criteria**
+
+- [ ] Given a figure, a table or an equation, when I insert a caption, then a `seq` field numbers it within its sequence name (Figure, Table, Equation).
+- [ ] Given the cross-reference dialog, when I choose a bookmark, a heading, a numbered paragraph, a caption or an equation label, then a `ref` field targeting it is inserted in the chosen format.
+- [ ] Given content is moved or inserted before a captioned item, then caption numbers and the text of every reference update in the editor and match the PDF (CDM-042).
+- [x] Given a reference whose target I try to delete, then the deletion is handled as I4 requires.
+- [x] Given a field, then `cached` holds its last computed text for consumers that cannot compute it (03 §4.4).
+
+**Evidence (lane U-FE-129-141, 2026-11-13, criterion 4; unticked by the round 5 review because `eq:` equation-label targets were not checked, re-ticked by the round 5 fixer once they were; `referenced-targets.ts` walks the whole document on every local edit, unmeasured):** `packages/engine/src/referenced-targets.ts` (`referenceGuardPlugin`, `removedReferencedTargets`; it resolves all three `ref` target forms, `node:`, `bookmark:` and `eq:<label>` to the `equation_block` with that `label`, as the model's validator does), installed in `packages/engine/src/core.ts` after the region guard. `packages/engine/test/fe-134-referenced-target.test.ts` (11 tests, Node.js: a figure that a `ref` names is not deleted, a figure no reference names is deleted, the reference alone may go, the reference and its figure go together, a bookmark that a `ref` names is not deleted, a remote transaction passes; a numbered equation that a `ref` names as `eq:energy` is not deleted, a numbered equation no `ref` names is deleted, an equation is deleted when the `ref` names another label, relabelling a referenced equation is refused, the `ref` and its equation go together) and `packages/engine/test/fe-134-core-target-delete.test.ts` (2 tests through `DocumentCore`: the bookmark, and the numbered equation `eq:energy`, each stay while their `ref` is in the document, and go once the reference is gone). Both run with `pnpm vitest run <file>` and passed. The refusal is silent: the explanation and the offer to show the references (FE-133 criterion 4) are the view's and are not built.
+
+**Evidence:** criterion 5 (lane FE-131-141, round 3, 2026-11-13): `packages/engine/test/captions-refs.test.ts` ('inserts a ref to a captioned figure, with the number as its cached text'; 'renumbers a captioned figure when a figure is inserted before it, and refreshes its cache') and `packages/engine/test/layout-commands.test.ts` ('numbers a new figure caption and refers to it', through `DocumentCore`, which reads back the `cached` text of the `seq` and `ref` fields).
+
+**Notes:** the first market (SPK-006) sets how much cross-references matter in phase 1b. Engine lane, round 2 (2026-11-13, not decided here): `packages/engine/src/captions-refs.ts` inserts a figure caption (`insertCaption`: a `seq` field named `Figure` whose `cached` is the number that `computeLabels` gives), inserts a `ref` field to a `node:`, `bookmark:` or `eq:` target (`insertReference`, refused for a target with no label) and finds stale `cached` texts (`staleCaches`, `refreshCaches`). Tests: `packages/engine/test/captions-refs.test.ts`, passed. Nothing is ticked. Criterion 1 is open for tables (the CDM has no table caption node) and for equations (the CDM numbers them through `numbered`, not a `seq` field). Criterion 2 needs the cross-reference dialog (UX). Criterion 3 needs the editor to refresh `cached` on each change (criterion 5 is ticked, see Evidence); whether that step goes into the committed document is a sync decision not made here. Criterion 4 needed I4 for targets, since built (`referenced-targets.ts`, see Evidence). The commands are not yet in the core's command table (`core.ts`, `api.ts`); see the batch record in `docs/adr/0131-engine-2-backlog-batch.md`.
+
+### FE-135 Insert breaks, page sections, columns and footnotes
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2 (columns, breaks, footnotes); 03 §4.2 (`section_break`), §4.4 (`break`, `footnote`), §8 (I10), §10; 07 §5.2 (P2); 02 §7 · **Requirements:** R1, R3, R14 · **Depends on:** FE-058, CDM-020, CDM-033, CDM-034, PRM-011
+
+As an author, I want to insert page, column and line breaks, start a new page section, set columns and add footnotes, so that I control the structure of the printed document.
+
+**Acceptance criteria**
+
+- [x] Given the caret in body text, when I insert a page, column or line break, then a `break` node of that kind is inserted; page and column breaks inside cells, captions and footnotes are refused (I10).
+- [x] Given the caret in the body outside every region, when I insert a section break with a start type (`nextPage`, `continuous`, `evenPage`, `oddPage`), then a `section_break` with its own page setup becomes a direct child of `body`; this needs `structure` (P2, PRM-011).
+- [x] Given a page section, when I set the number of columns and the gap, then its page setup stores them.
+- [x] Given the caret, when I insert a footnote, then it gets the next number and opens in the footnote panel (FE-058); a footnote inside a footnote or a caption is refused (I10).
+- [x] Given these structures in the web view, then they are marked without pretending to show pages (02 §7).
+- [ ] Given a continuous section break that changes margins, then the editor warns that the PDF will report it as unsupported (03 §10).
+
+**Evidence:** criterion 1 is unticked by review (2026-11-13): `insertBreak` is tested only through its own module and is not in the core's command table or the package's exports, so no user path inserts a break yet; the I10 refusals are tested and become evidence once the command is wired. Criterion 3 stays ticked (`setPageSetup` is wired and accepts `columns` and `columnGap`). Criteria 1 and 3: `packages/engine/src/breaks-sections.ts` (`insertBreak`, `insertSectionBreak`, `sectionWarnings`) and `packages/engine/src/page-setup-commands.ts` (`setPageSetup`, unchanged). `packages/engine/test/breaks-sections.test.ts` (13 tests, passed 2026-11-13): a page, column and line break is inserted in body text; a page or column break in a table cell, a caption or a footnote is refused (`in-cell`, `in-caption`, `in-footnote`) and nothing is dispatched; a line break is allowed in each of those places; a fast-check property covers every break kind and place. Criterion 3: `setPageSetup` stores `columns` 2 and `columnGap` 720 on the page setup of the section. Round 1, lane FE-131-141 (2026-11-13): the statement above that `insertBreak` is not in the core's command table is out of date; `core.ts` registers it (`AUTHORING`, `#authoring`). Criterion 1 is ticked on `packages/engine/test/fe-135-136-core-authoring.test.ts` (a page, column and line break becomes a `break` node in body text through `DocumentCore.run`; a page or column break in a table cell or a footnote is refused and nothing changes, a line break is allowed; a region the real guard protects, no argument and view mode refuse it). Fixer round 2 (B group 1, 2026-11-13): `insertBreak` and `insertSectionBreak` are `AuthoringCommandName`s in `packages/engine/src/api.ts` (argument `breakKind`, `section`), exported from `packages/engine/src/headless.ts`; `packages/engine/test/layout-commands.test.ts` also runs criterion 1 through `exec` and `queryCommand` (15 tests, passed 2026-11-13 with `pnpm exec vitest run packages/engine`, 474 passed). Criterion 2 (lane FE-131-141, round 3, 2026-11-13): `packages/engine/test/fe-135-section-starts.test.ts` ('inserts a section_break with that start type as a direct child of body, with its own page setup', run for `nextPage`, `continuous`, `evenPage` and `oddPage`; 'refuses a start type outside the four, and dispatches nothing'), with `packages/engine/test/layout-commands.test.ts` ('adds a section break as a child of the body and its own page setup, for the owner') and its refusal of `structure` (P2).
+
+**Evidence (lane U-FE-129-141, 2026-11-13, criterion 4):** `packages/element/e2e/fe-135-footnote.spec.ts` ('the new footnote takes the next number and opens in the panel'), run with `pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-135-footnote.spec.ts` (Chromium, Firefox, WebKit and Edge: 4 passed). The S1 page's Insert footnote button inserts a footnote after the first; the body shows `data-n` 1 and 2 with labels `Footnote 1` and `Footnote 2`, the panel's sub-editor takes the typed text, and the validator reports no violation. The refusal of a footnote in a footnote or a caption is in the engine's module tests (`packages/engine/test/footnote-panel.test.ts`) and the browser paste test for nesting (`packages/element/e2e/s1-footnote-model.spec.ts`, not re-run in this lane).
+
+**Evidence (lane U-FE-129-141, round 6, criterion 5):** `packages/engine/src/schema.ts` (`breakMarkDOM`: a page or column break is a non-editable inline label, `Page break` or `Column break`, with `role="separator"`; a line break stays `<br>`; the section break stays its `hr`) and `packages/engine/src/fe-135-break-mark.universal.test.ts` (4 tests: the page break label and its box, the column break label and the line break, the section break mark with its start type, the inline size of the label). Run with `pnpm vitest run --project browser packages/engine/src/fe-135-break-mark.universal.test.ts`: Chromium, Firefox and WebKit, 12 passed. Round 6 fix: the break node also parses `span.de-break[data-kind]` (page and column only) back to the same break, so a break serialised by ProseMirror's own clipboard path no longer pastes as its label text; `packages/engine/src/fe-135-break-clipboard.universal.test.ts` (7 tests: each of page, column and line through the schema parser and through `__parseFromClipboard` on a live view, and an unknown kind left as text), Chromium, Firefox and WebKit, 21 passed. The existing node tests for breaks and sections still pass (`breaks-sections`, `layout-commands`, `fe-135-136-core-authoring`, `paste-section-break`, `fe-135-section-starts`, `fe-135-section-warning-core`: 38 passed).
+
+**Evidence (lane V-FE-129-141, round 4, criterion 2):** `packages/engine/test/fe-135-section-after-sources.test.ts` (1 test, Node.js, `pnpm vitest run packages/engine/test/fe-135-section-after-sources.test.ts`, passed): with a `source_def` in `defs`, the new `page_setup` goes after the last page setup, the document still passes `doc.check()`, and the section names the new setup. The fault the audit found is fixed in `packages/engine/src/breaks-sections.ts` (`pageSetupInsertPos`). The client guard for `structure` is tested in `packages/engine/test/layout-commands.test.ts` (run with the other section tests: 31 passed with `breaks-sections.test.ts`, `fe-135-section-starts.test.ts`). The authority's check of P2 on commit has no test here.
+
+**Notes:** criterion 2 was unticked by audit (2026-11-13): `insertSectionBreak` (`packages/engine/src/breaks-sections.ts`) inserts the new `page_setup` at the end of `defs`, which the content expression (`page_setup+ role_def* rule_def* source_def*`) does not allow after a `source_def`, `role_def` or `rule_def`, so in such a document (for example the authoring test document, which has `source_def` entries) `exec('insertSectionBreak')` returns true, inserts the `section_break`, silently drops the `page_setup`, and leaves `pageSetup` naming a definition that does not exist (I4); the existing tests use a document whose `defs` end with a `page_setup`, so they do not see it. Earlier note, superseded: criterion 2 was ticked in round 3, see Evidence. The module checks the position (body text, outside every region) and builds the new `page_setup` as a copy of the caret section's, without its header and footer stories. The P2 right (`structure`, 07 §5.2) is enforced by the authority; the client guard also refuses it, and `layout-commands.test.ts` shows `exec('insertSectionBreak')` refused with `structure` for an access without it and done for an owner. The criterion was not re-ticked in the fixer round, which may only re-tick what the reviewer unticked; the next review can tick it on that test. Criterion 4 stays open: the refusal of a footnote inside a footnote or a caption is tested in `footnote-panel.test.ts`, but the next number and the opening of the panel are not tested here. Round 4, lane FE-131-141 (2026-11-13): the next number is tested on `packages/engine/test/fe-135-footnote-number.test.ts` (the numbers `footnoteNumbers()` shows follow document order after `insertFootnote` at the caret, and the inserted footnote takes its ordinal); the core names the panel target (`packages/engine/test/footnote-open.test.ts`). Mounting the panel is the view's (FE-058), so criterion 4 stays unticked. Criterion 5 is the web view's and is not built. Criterion 6 stays open: `sectionWarnings` computes the warning and nothing shows it yet. Decisions taken here, not in the spec, recorded in `docs/adr/0131-engine-2-backlog-batch.md`. The commands are in the core's command table (`core.ts`, `api.ts`); the core names the new `section_break` and `page_setup` with its identifier source. Lane V-FE-129-141 (round 2, 2026-11-13), criterion 6 still open: `DocumentCore.sectionWarnings()` now returns the continuous-margin warning, tested in `packages/engine/test/fe-135-section-warning-core.test.ts` (vitest, Node.js, passed); the warning is not yet shown by the view, so the criterion is not ticked.
+
+### FE-136 Insert fields, a table of contents, symbols and equations
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2 (page numbers, symbols, equations, table of contents, fields); 03 §4.3 (`toc`), §4.4 (`field`), §7; 09 §3.2 · **Requirements:** R1, R14 · **Depends on:** FE-057, FE-070, CDM-031, CDM-035
+
+As an author, I want to insert page numbers, dates, the title, a table of contents, symbols and equations, so that common document furniture is one command away.
+
+**Acceptance criteria**
+
+- [x] Given a header or footer, when I insert a page number or the page count, then a `field` of kind `page` or `pageCount` is inserted in the chosen format.
+- [x] Given the body, when I insert a date or title field, then a `field` of that kind is inserted; its text comes from the shared computation and `cached` holds the last value (03 §4.4).
+- [ ] Given the body, when I insert a table of contents with level limits, or a list of figures or tables, then a `toc` atom is inserted and the web view shows its entries, updated as headings and captions change.
+- [ ] Given the symbol command, when I pick a character, then it is inserted as text, and a character the current font lacks is flagged before export (09 §3.2).
+- [ ] Given the equation command, when I insert an inline or block equation, then the math editor opens (FE-070).
+
+**Evidence:** criterion 1 is unticked by review (2026-11-13): `insertField` is tested only through its own module and is not in the core's command table or the package's exports, so no user path inserts a page field yet; the tests become evidence once the command is wired. Criterion 1 as tested: `packages/engine/src/fields-toc.ts` (`insertField`, `insertToc`, `insertSymbol`) and `packages/engine/test/fields-toc.test.ts` (18 tests, passed 2026-11-13). A `page` or `pageCount` field is inserted in a header story with the chosen format stored and `cached` empty; in body text it is refused (`not-in-story`). A fast-check property covers every insertable kind and place. Criterion 2, the date half: a `date` field's `cached` is `dateFieldText`, the model's shared computation (CDM-035), in the workflow's zone (the test checks 23:30 UTC on 6 November is 07/11/2026 in Asia/Kolkata). The module reads no clock. Criterion 3 and criterion 4 are tested for insertion only: a `toc` atom with its level limits and `of` goes after the caret block, in the body or a region; a symbol is inserted as text, one code point at a time. Round 1, lane FE-131-141 (2026-11-13): the statement above that `insertField` is not in the core's command table is out of date; `core.ts` registers it (`AUTHORING`, `#authoring`, with `#caretInStory` for a header). Criterion 1 is ticked on `packages/engine/test/fe-135-136-core-authoring.test.ts` (a page number with its format and a page count are inserted in the header story through `DocumentCore.run`, and the core's selection stays in the body; a page number in body text is refused, and a header the editor may not change is refused with `no-access`, with nothing changed). Fixer round 2 (B group 1, 2026-11-13): `insertField`, `insertToc` and `insertSymbol` are `AuthoringCommandName`s in `packages/engine/src/api.ts` (arguments `field`, a `FieldArgs` with `story: { id, pos }` for a header or footer, `toc`, `symbol`), exported from `packages/engine/src/headless.ts`; `packages/engine/test/layout-commands.test.ts` runs criterion 1 through `exec` and `queryCommand` too (passed 2026-11-13). Round 4, lane FE-131-141 (2026-11-13): criterion 2 is ticked for its date half, on `packages/engine/test/layout-commands.test.ts` ('inserts a date field in the body with the shared computation as `cached`', through `DocumentCore.exec`, which reads back `cached` against `dateFieldText`) and `packages/engine/test/fields-toc.test.ts` (the zone and the date source). The story's `title` half has no data source (03 §4.4): `insertField` stores a title only when the caller gives one, so the criterion is met by the date alone.
+
+**Notes:** 03 gives the `title` field no data source; recorded in the findings note. Criterion 2 stays open for the title: `insertField` stores the title only when the caller gives one, and otherwise leaves `cached` null. Criterion 3 stays open: the view draws the entries and keeps them up to date, which is not built. Criterion 4 stays open: flagging a character the current font lacks needs font coverage data (09 §3.2), not built. Criterion 5 is FE-070's (the math editor, not built). Decisions taken here, not in the spec, recorded in `docs/adr/0131-engine-2-backlog-batch.md`: the date takes the server instant and the workflow zone as arguments; a `toc` defaults to levels 1 to 3 and `headings`, the CDM's defaults; the format is checked against the CDM pattern and stored as given, not rendered. The commands are in the core's command table (`core.ts`, `api.ts`). Decision of the fixer round, not in the spec: a page field's place in a story is given as the story's identifier and a position counted as the story's sub-editor counts it, because the core's own selection never leaves the body. The shell's `insertField` (`packages/ui/src/core-api.ts`, FRW-072) is a form field, a different command under the same name; the element does not route it to the core's `exec`, and the two must not be joined without renaming one.
+
+### FE-137 Set up pages, headers, footers and the watermark
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2 (headers and footers, watermark); 03 §4.1 (`page_setup`), §4.2; 07 §5.3 · **Requirements:** R1, R3, R14 · **Depends on:** FE-057, CDM-020, CDM-021, PRM-012
+
+As an author, I want to set the paper size, orientation, margins, header and footer layout and watermark of each page section, so that the PDF comes out as intended.
+
+**Acceptance criteria**
+
+- [x] Given a page section, when I choose a paper size, orientation and margins, then its `page_setup` stores them in twentieths of a point.
+- [ ] Given different first page or different odd and even pages, when I turn them on, then the matching header and footer stories are created and opened in the header panel (FE-057).
+- [x] Given header and footer distances and the gutter, when I set them, then they are stored.
+- [ ] Given page number start and format, when I set them, then page fields follow them.
+- [ ] Given a watermark text, when I set it, then `watermark` is stored and the PDF prints it (EXP-036).
+- [x] Given page setups are definitions, when anyone changes one, then the rights of 07 §5.3 apply (PRM-012), so a region-only editor cannot.
+
+**Evidence:** criteria 1 and 3: `packages/engine/src/core.ts` registers `setPageSetup` as a document API command (`run`, `exec`, `queryCommand` with `pageSetup: { id, changes }`; `PageSetupArgs` in `api.ts`); it asks the region guard's `canWrite` for the `defs` scope. `packages/engine/test/authoring-commands.test.ts` goes through `DocumentCore`: A4 landscape with margins is stored in twips (11906 by 16838), header and footer distances and the gutter are stored, an editor without `edit` on `defs` gets `no-access` and nothing is changed or queued, and an out-of-range value or an unknown page setup changes nothing. The value rules: `packages/engine/src/page-setup-commands.ts` and `packages/engine/test/page-setup-commands.test.ts` (a property over the margin range). Reviewed and unticked on 2026-11-13 because nothing reached the core; re-ticked after the command was registered. Criterion 6 (engine round 8): `packages/engine/test/authoring-commands.test.ts` ('is unavailable to an editor without edit on the definitions (07 §5.3), and changes nothing') and `packages/engine/test/page-setup-commands.test.ts` ('a region-only editor cannot change a page setup definition (07 §5.3, PRM-012)'), which checks the guard at the definition's own position. Criterion 5, the storing half (lane FE-131-141, round 4, 2026-11-13): `packages/engine/test/fe-137-watermark.test.ts` ('stores the watermark text on the page setup, and clears it with null'; 'refuses a watermark outside 1 to 255 characters and changes nothing'; 'is unavailable to an editor without edit on the definitions, and stores nothing'). Criterion 5 stays unticked: the PDF that prints the watermark is EXP-036's.
+
+**Notes (lane FE-131-141, round 5, 2026-11-13):** criterion 2, the engine part only. `packages/engine/src/variant-turn-on.ts` (`turnOnVariants`) builds one transaction that sets `differentFirstPage` or `differentOddEven` and creates the header and footer stories of that variant, with the variant attribute naming each; a story that exists is kept, a `writable` of false or an identifier already in use returns null. `packages/engine/test/fe-137-variant-turn-on.test.ts` (5 tests, passed 2026-11-13). Criterion 2 stays unticked for two reasons. No command calls the module: the core's `setPageSetup` still sets the flag alone, so no user path creates the stories, and wiring it needs an edit to the shared `core.ts` and `api.ts`, which this lane did not make. The opening of the header panel is the view's (FE-057), as the footnote panel was. The story identifiers are supplied by the caller, not chosen by the module. Criteria 4 (page number start and format) and 5 are not touched in this round. Lane U-FE-129-141 (2026-11-13): the wiring is made. `setPageSetup` takes an optional `storyIdOf` and, when a flag is turned on, builds the stories with `turnOnVariants` in the same transaction; the core passes its identifier source (`packages/engine/src/page-setup-commands.ts`, `packages/engine/src/core.ts`). `packages/engine/test/fe-137-variant-wiring.test.ts` (4 tests, passed with `pnpm exec vitest run`). Criterion 2 stays unticked: the opening of the header panel is the view's (FE-057).
+
+**Notes (lane V-FE-129-141, 2026-11-13):** criterion 4 is partly made in the model. `pageNumberOf` and `pageNumberText` (`packages/model/src/numbering/page-numbers.ts`) give a section's page number and print it in its `pageNumberFormat`, through the shared `formatNumber`; `fieldText` computes a `page` field, and a `pageCount` field in decimal, once the typesetter gives the number (`packages/model/src/structure/field-text.ts`). Tests: `packages/model/src/numbering/v-fe-129-141-page-numbers.test.ts` (7 tests passed in Node.js). Criterion 4 stays unticked: nothing in the layout or the painter gives the page its number and section yet, so no page field in the web view or the PDF follows the start and format. The `pageCount` format is a proposed reading, recorded in `docs/adr/0308-lane-V-FE-129-141.md`. Criterion 2 needs the header panel (FE-057).
+
+**Engine-lane notes (round 1, not decided here):** paper sizes are the two presets A4 and US Letter; the spec names no others here, so further sizes are an open point. Orientation is stored as given and does not swap width and height. Criterion 2 (header and footer stories, the first-page and odd-page variants) and criterion 4 (page fields follow the start and format) are not built. Criterion 5 (the PDF prints the watermark) belongs to EXP-036. Criterion 6 stays open: the core's command refuses an editor without `edit` on `defs` through the region guard, but PRM-012 enforcement is the authority's and is not tested here. The page setup dialog is UX's and is not built.
+
+### FE-138 Zoom the editing surface
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | S | should | Author |
+
+**Spec:** 13 §2 (zoom), §3 (status bar); 02 §10 · **Requirements:** R1, R11, R14 · **Depends on:** FE-066, FE-106
+
+As an author, I want to zoom the editing surface in and out, so that I can read small text or see more of the document.
+
+**Acceptance criteria**
+
+- [x] Given the web view, when I change the zoom level from the status bar, a shortcut or the view commands, then the content scales and reflows to the available width while the interface does not.
+- [x] Given browser zoom as well, then the web view still reflows (FE-106) and the product's zoom works on top of it.
+- [ ] Given the read view or the PDF panel, when I zoom, then the pages scale and stay sharp.
+- [x] Given the keyboard, then zoom in, zoom out and reset are reachable without a pointer.
+
+**Evidence (lane V-FE-129-141, criterion 2):** `packages/ui/e2e/v-fe-129-141-browser-zoom.spec.ts` ('reflows at 320 CSS pixels, the WCAG reflow width'; 'reflows at 640 CSS pixels with the product zoom at 150 per cent on top'; 'keeps the product zoom working at the 320 CSS pixel width'). Run with `DOCEDIT_UI_PORT=57080 DOCEDIT_BROWSERS=<browser> pnpm exec playwright test -c packages/ui/playwright.config.ts e2e/v-fe-129-141-browser-zoom.spec.ts --retries=0`: 3 of 3 passed in Chromium, and 6 of 6 across Firefox and WebKit. Browser zoom is simulated by the CSS viewport width: a 640 CSS pixel window is what 200 per cent shows on a 1280 pixel window, and 320 CSS pixels is the WCAG 1.4.10 width. The browser's own zoom control was not driven, which is a limit of the harness.
+
+**Evidence (lane U-FE-129-141, 2026-11-13):** `packages/ui/e2e/fe-138-zoom.spec.ts`, run with `pnpm exec playwright test -c packages/ui/playwright.config.ts packages/ui/e2e/fe-138-zoom.spec.ts` (Chromium, Firefox, WebKit: 6 passed). Criterion 1: the status bar keeps its size and font size at 150 per cent, the editing surface grows and the body host has no horizontal overflow; a 360 px window at 200 per cent has no horizontal overflow; no core command runs. Criterion 4: Ctrl+F6 reaches the status bar, then Tab and Enter reach and use Zoom out, Zoom in and Reset zoom (`packages/ui/src/components/StatusBar.svelte`). No keyboard shortcut is bound to the zoom commands (`packages/ui/src/commands/builtin.ts` has no `keys` for `view.zoom*`); the choice of keys is still open. Criteria 2 and 3 are not ticked: browser zoom was not driven, and the read view and PDF panel are not built.
+
+**Notes (lane engine-2, round 4, 2026-11-13):** no zoom state or command exists in `packages/engine`, and the spec puts zoom in the view (02 §10). All four criteria need the web view, the status bar or the keyboard, so none is met by a headless engine test. Nothing ticked; no zoom model added to the engine, because the level and its steps are not stated in the spec. Lane U-FE-129-141 (2026-11-13): the zoom is the shell's (`packages/ui/src/shell/zoom.ts`, applied as `style:zoom` on `.de-body-host` in `packages/ui/src/App.svelte`). Criterion 4 is not met: `view.zoomIn`, `view.zoomOut` and `view.zoomReset` in `packages/ui/src/commands/builtin.ts` have no `keys`, so no shortcut reaches them. Choosing the keys is a UX and root decision, not made here. Criteria 1 to 3 need a browser run of the demo shell, not run in this lane. Lane U-FE-129-141 (2026-11-13): criteria 1 and 4 are ticked on the browser run in Evidence; criterion 4 is met by Tab and Enter on the status bar's buttons, which the criterion's "without a pointer" allows, and the shortcut keys stay an open UX decision (the spec names none). Criterion 2 needs browser zoom, which the Playwright harness does not set, and criterion 3 needs the read view or PDF panel (FE-071, FE-072), not built.
+
+### FE-139 Show preserved content with its fallback and change it only as a whole
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 2 | M | must | Author |
+
+**Spec:** 03 §4.6; ADR 0017 (part 3); 02 §5.2, §10 · **Requirements:** R1, R5, R11 · **Depends on:** CDM-051, EXP-117
+
+As an author, I want the charts, text boxes and other content of an imported Word file that the editor cannot edit shown in place, so that I can see and keep them while I edit everything else.
+
+**Acceptance criteria**
+
+- [ ] Given a `preserved_block` or `preserved_inline` atom, when it is shown in the web view, then its fallback image or text is displayed at its display size with a visible label naming its kind, for example "Chart, from Word, not editable here".
+- [ ] Given such an atom, when a person with `edit` in its scope selects, moves, copies, cuts or deletes it, then it behaves as one unit; no command, input method or paste edits inside it.
+- [ ] Given a screen reader, when the caret reaches the atom, then its label and fallback text are announced.
+- [ ] Given find and replace, when it runs, then it does not match inside preserved content and reports how many atoms it skipped.
+- [x] Given the fragment's XML, when the atom is shown, then the editor never parses or renders it; only the fallback asset or text reaches the page.
+- [ ] Given an atom without a fallback image, when the accessibility checker runs, then it reports the atom as content without a text alternative.
+
+**Evidence (lane U-FE-129-141, 2026-11-13, criteria 1, 3 and 5):** `packages/engine/src/fe-139-preserved-render.universal.test.ts` ('shows a label naming the kind and the source, then the fallback text, in a block atom'; 'gives the atom an accessible name that holds its label and its fallback text'; 'is not editable: the atom and the content inside it carry contenteditable false'; 'never renders the XML of the fragment, only the label and the fallback text'; 'shows the label alone when there is no fallback text'), run with `pnpm vitest run --project browser packages/engine/src/fe-139-preserved-render.universal.test.ts` (Chromium, Firefox and WebKit: 15 passed). The rendering is `preservedDOM` in `packages/engine/src/schema.ts`, which sets no `style` attribute (the strict policy, 02 §3). Criterion 5 is ticked on that test. The Node tests `packages/engine/test/fe-139-preserved-find.test.ts`, `fe-139-find-count.test.ts`, `web-view-safety.test.ts` and `packages/engine/src/sec-006-link-render.universal.test.ts` still pass (27 passed in Node.js, 3 skipped). Criterion 1 stays open: the display size needs a CSS rule from the element (no inline style is allowed), and the fallback image is not drawn, only the text. Criterion 3 stays open: the accessible name is tested, but the announcement when the caret reaches the atom is not run in a screen reader. Criterion 2 stays open: the unit behaviour under select, move, copy and delete is not tested in a browser.
+
+**Evidence (lane U-FE-129-141, round 7, 2026-11-14, criterion 2 in part, not ticked):** `packages/engine/src/fe-139-preserved-unit.universal.test.ts` (3 tests on a live `EditorView` over the editing schema: the atom holds no content and its DOM is not editable; a whole-atom selection is deleted in one step and the text around it stays; a text selection that runs from before the atom to after it takes the atom whole). Run with `pnpm vitest run --project browser packages/engine/src/fe-139-preserved-unit.universal.test.ts`: Chromium, Firefox and WebKit, 9 passed. Criterion 2 also names move, copy and cut: a cut is a delete here, and a move is a drag, which is the view's; copy of the atom is not tested, so the criterion stays unticked.
+
+**Evidence (lane U-FE-129-141, round 8, 2026-11-14, criterion 2, copy and cut, not ticked):** `packages/engine/test/fe-139-atom-copy.test.ts` (2 tests, Node.js, `pnpm vitest run packages/engine/test/fe-139-atom-copy.test.ts`, passed): a whole-atom selection copies with the atom and its fallback text in the payload and keeps the atom in the document; a whole-atom cut removes the atom in one step and its payload keeps the atom. Criterion 2 stays unticked: move is a drag, which is the view's.
+
+**Evidence:** criterion 4, the search half (lane FE-131-141, round 4, 2026-11-13): `packages/engine/test/fe-139-preserved-find.test.ts` ('matches the text paragraph but not the fallback text of a preserved atom'; 'reports how many preserved atoms the query would have matched and the search skipped'; 'skips nothing when no preserved fallback holds the query, and nothing for an empty query'; 'counts each preserved atom once, however many times its fallback holds the query'; 'a document without preserved content skips nothing'), over `packages/engine/src/preserved-find.ts` (`skippedPreservedAtoms`) and `findMatches` in `packages/engine/src/search.ts`. Criterion 4 stays unticked: the find panel that shows the count is the view's. Lane U-FE-129-141 (2026-11-13): `DocumentCore.skippedPreservedFind()` (`packages/engine/src/core.ts`) returns `skippedPreservedAtoms` for the current query, so the core's find state has the count; `packages/engine/test/fe-139-find-count.test.ts` (3 tests, passed with `pnpm exec vitest run`, with `search.test.ts` and `search-highlight.test.ts` still passing). The count is not added to the published `FindState`, which would change its shape for existing consumers.
+
+**Notes:** new with the owner's decision on A2 (2026-11-06). Phase 2, with DOCX import, which is the only source of preserved content. Second review (2026-11-06, SPK-027): SR-C2, nothing in the authority enforces "the only source" yet: copies made by the editor may keep preserved data only within the same document, and the authority should refuse preserved data a client creates. SR-M17: many atoms have no fallback image (charts, shapes, text boxes), so the label and fallback text are often all there is ([review](../review/2026-11-06-second-review.md)).
+
+### FE-140 Insert and edit citations and a bibliography
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Author |
+
+**Spec:** 13 §2, §4; 03 §13; 02 §5.2, §10 · **Requirements:** R1, R11 · **Depends on:** CDM-052
+
+As an author, I want to cite sources and place a bibliography as I write, so that references stay correct while the text changes.
+
+**Acceptance criteria**
+
+- [ ] Given the document's sources, when the author inserts a citation at the caret, then a citation node naming the chosen sources is inserted, with an optional prefix, suffix and locator. The command is available from the command registry and the keyboard.
+- [ ] Given a bibliography node, when the web view shows it, then it lists the cited sources in the chosen style, and it updates as citations are added or removed.
+- [ ] Given a screen reader, when the caret reaches a citation, then the sources it names are announced.
+- [x] Given a scope where the user cannot edit, when the user tries to insert a citation, then the command is unavailable, as the region guard requires (07 §7).
+
+**Evidence:** criterion 4: `packages/engine/src/core.ts` registers `insertCitation` as a document API command (`run`, `exec`, `queryCommand` with `citation: { items, mode }`; `CitationItemArgs` in `api.ts`), with the region guard's `canWrite` (`guard.ts`) for the scope of the caret as the writable test. `packages/engine/test/authoring-commands.test.ts` goes through `DocumentCore` with an editor's access: in the restricted region, which the real guard protects (`canEdit` is false), `queryCommand` answers `enabled: false, reason: 'no-access'` and `run` changes and queues nothing; the same command inserts a citation in the body, and in the region once an access grants `edit` there; a view-mode lock gives `read-only`. The module's own rules: `packages/engine/src/citation-insert.ts` and `packages/engine/test/citation-insert.test.ts` (fast-check property over sources, modes and options; refusals for unknown sources, empty or oversize lists, a non-caret selection); `packages/engine/test/authoring-doc.ts` (fixture). Reviewed and unticked on 2026-11-13 because the test used a hand-written predicate; re-ticked with the core-level test.
+
+**Evidence (lane U-FE-129-141, round 6, criterion 3, partly):** `packages/engine/src/schema.ts` (`citationLabel`: the citation is a note whose accessible name is `Citation: ` and the source identifiers in order, and it shows its `cached` text when it has one) and `packages/engine/src/fe-140-citation-name.universal.test.ts` (2 tests: the name holds every source in order, and the cached text with the same name). Run with `pnpm vitest run --project browser packages/engine/src/fe-140-citation-name.universal.test.ts`: Chromium, Firefox and WebKit, 6 passed. The existing `citation-insert` and `authoring-commands` node tests still pass (28 passed with `fe-135-136-core-authoring`). Criterion 3 stays unticked: the name is tested, but no screen reader was run when the caret reaches a citation, and the names are identifiers, not the source titles, which the node cannot read.
+
+**Engine-lane notes (round 1, not decided here):** criterion 1 stays open for its clause "available from the command registry and the keyboard": the command reaches the core and the document API, but the command registry entry and the keyboard binding are UX-003's and are not built. Criteria 2 and 3 (bibliography in the web view, screen-reader announcement of a citation) need the view and are not built. The bibliography node has no insertion command yet.
+
+**Notes:** new on 2026-11-06: the owner decided that the first release serves all three candidate markets (SPK-006), so citations and a bibliography are a version 1 requirement (CDM-004). Second review (2026-11-06, SPK-027), SR-M20: the bibliography in the web view must use the same citation style as the PDF, which the house class fixes (A3); if the editor renders with CSL and the PDF with biblatex, the two can differ ([review](../review/2026-11-06-second-review.md)).
+
+**Notes (lane U-FE-129-141, round 8, 2026-11-14):** criterion 2 (the bibliography in the web view, in the house style) is blocked: no bibliography generator exists in `packages/` (searched 2026-11-14), and the node's view is the static label `Bibliography` (`packages/engine/src/schema.ts`). The style decision (CSL or the house class, SR-M20) is open and is not decided here. Criteria 1 and 3 stay open as before; nothing ticked this round.
+
+## Read restrictions (ADR 0019)
+
+Added on 2026-11-06 from spike S12 (SPK-029; `docs/spikes/2026-11-06-s12-read-restrictions.md`), after the owner decided that version 1 can hide regions and field values from some readers (SPK-005). Every other story that serves content, steps, positions, history, search, exports, comments, presence or field values applies the requester's projection: README §2.2 rule 8.
+
+### FE-141 Render placeholders and redacted values
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 1b | M | must | Viewer |
+
+**Spec:** ADR 0019; 02 §5, §9 · **Requirements:** R3, R11 · **Depends on:** CDM-053, SYN-051
+
+As a reader who may not see part of a document, I want hidden parts shown as clear placeholders, so that I know something is there without seeing it.
+
+**Acceptance criteria**
+
+- [ ] Given a `hidden_region`, when it is rendered in the web and page views, then it shows a fixed-size placeholder with the title when shown, nothing inside it is selectable or editable, and a selection contains it only whole.
+- [x] Given a redacted field value, then it renders as redacted, distinct from an empty value, and screen readers announce it as such.
+- [ ] Given copy, cut or drag of a selection that contains a placeholder or a redacted value, then neither is copied, and pasting such content is refused.
+- [ ] Given the editor's schema, then it is the projection schema, and journalled work whose view token differs from the current one goes to recovered edits.
+
+**Evidence (lane U-FE-129-141, 2026-11-13, criterion 1 in part, not ticked):** `packages/engine/src/fe-141-placeholder-render.universal.test.ts` ('renders the placeholder with its title, a note role and a name that holds the title'; 'is one non-editable unit with no content inside it'), run with `pnpm vitest run --project browser packages/engine/src/fe-141-placeholder-render.universal.test.ts` (Chromium, Firefox and WebKit: 6 passed). It shows the render contract of `hidden_region` in `packages/engine/src/schema.ts`. Criterion 1 stays unticked: the fixed size is a CSS rule of the element that is not built, and the whole-only selection is the view's.
+
+**Evidence (lane U-FE-129-141, round 8, 2026-11-14, criterion 1, fixed size, not ticked):** `packages/engine/src/fe-141-hidden-region-size.universal.test.ts` ('gives a short title, a long title and no title the same height, from the shipped rule'), which reads `packages/element/src/styles/element.css` with `?raw`. The rule `.de-hidden-region` (block size 2.5em, border-box sizing, no wrap, hidden overflow, one line) was added to that file in this round. Run with `pnpm vitest run --project browser packages/engine/src/fe-141-hidden-region-size.universal.test.ts`: Chromium, Firefox and WebKit, 3 passed. Criterion 1 stays unticked: a selection that holds the placeholder only whole is the view's behaviour.
+
+**Evidence:** criterion 2 (lane U-FE-129-141, Chromium, Firefox and WebKit, `pnpm vitest run --project browser packages/engine/src/fe-141-redacted-render.universal.test.ts`, 3 files and 6 tests passed): `packages/engine/src/fe-141-redacted-render.universal.test.ts` serialises a `form_field` with the redaction marker and an empty value through the editing schema's `toDOM` into the live page; the redacted one has `data-redacted="true"`, text `[redacted]`, `role="img"` and the accessible name `Redacted value`, and the empty one has none of these. Criterion 3, copy, cut and paste (lane FE-131-141, round 4, 2026-11-13): `packages/engine/test/fe-141-copy-placeholder.test.ts` ('copies nothing when the placeholder is selected whole, and records the refusal'; 'copies nothing from a text selection that spans a placeholder, and a cut deletes nothing'; 'still copies a selection that holds no placeholder'; 'refuses to copy a redacted value and writes nothing'; 'changes nothing when the clipboard holds a fragment with a placeholder'). Criterion 3 stays unticked: a drag is the view's.
+
+**Evidence (lane V-FE-129-141, round 4, criterion 1 in part, not ticked):** `packages/engine/src/fe-141-placeholder-unit.universal.test.ts` (2 tests on a live `EditorView`: the placeholder is one non-editable element with no content and no field inside it, and a text selection that runs across it contains it whole with its id and title). Run with `pnpm vitest run --project browser packages/engine/src/fe-141-placeholder-unit.universal.test.ts`: Chromium, Firefox and WebKit, 6 passed (2 tests in each browser). Criterion 1 stays unticked: the criterion also names the page view, which is not built, and the drag of a placeholder is the view's.
+
+**Notes:** Element-2 round 1 took no criterion here. Placeholder rendering (criterion 1) and redacted-value rendering with its screen-reader announcement (criterion 2) belong to the web and page views, which the element does not build yet. Copy, cut and drag refusal (criterion 3) belongs to the clipboard (FE-050, FE-055) and the guard. Criterion 4 needs the authority's view token and the recovered-edits journal (FE-008 to FE-010), which are not in `packages/element`. Round 4, lane FE-131-141 (2026-11-13): `copySelection` refuses a selection that holds a placeholder or a redacted value, with the reason `placeholder` or `redacted`, and writes nothing (`copyRefusal` in `packages/engine/src/clipboard.ts`). The reading that the whole copy is refused, rather than copied without the placeholder, is not in the spec; it is recorded as proposed in `docs/adr/0210-lane-FE-131-141.md`. Lane U-FE-129-141 (round 4, 2026-11-13): criterion 2 is ticked (Evidence). Criterion 1 stays open: no stylesheet under `packages/` gives the placeholder a fixed size (searched 2026-11-13), and that a selection holds it only whole is the view's selection behaviour, not built. Criterion 4 stays open: the view token and the recovered-edits journal (FE-008 to FE-010) are not wired to the projection schema.
+
+## Coverage
+
+| Spec section | Stories |
+|---|---|
+| 02 §1 Scope | none: informative |
+| 02 §2 Packaging | FE-001, FE-002 |
+| 02 §2.1 Lifecycle | FE-003, FE-004, FE-005, FE-006 |
+| 02 §2.2 Not losing work | FE-007 to FE-012; the save-state indicator and recovered-edits pane are UX's |
+| 02 §3 Shadow root: root and focus | FE-013 |
+| 02 §3 Styles | FE-014, FE-015 |
+| 02 §3 Trusted Types | FE-016, FE-017 |
+| 02 §3 Theming | FE-018, FE-019; token values of the dark and high-contrast themes, icons and strings: owned by UX |
+| 02 §3 Overlays | FE-020 |
+| 02 §3 Fonts | FE-061; see 02 §6 |
+| 02 §3 Keyboard | FE-021 |
+| 02 §3 Events | FE-022 |
+| 02 §4 Svelte integration | FE-004, FE-023, FE-024, FE-025; the interface inventory is owned by UX |
+| 02 §5.1 Document API | FE-026, FE-027, FE-028; the command registry is owned by UX |
+| 02 §5.2 Schema | FE-030 |
+| 02 §5.2 Sync client | FE-033, FE-034, FE-035; the algorithm is owned by SYN |
+| 02 §5.2 Identifier plugin | FE-031 |
+| 02 §5.2 Body-scoped commands | FE-032 |
+| 02 §5.2 Region guard | FE-036, FE-037, FE-038, FE-039; what is shown to the person is owned by PRM |
+| 02 §5.2 Suggestion mode | FE-040 to FE-047; review tools are owned by UX, marks by CDM, enforcement by PRM |
+| 02 §5.2 Comment ranges | FE-048; mapping in the authority is owned by SYN, threads by UX |
+| 02 §5.2 History | FE-049 |
+| 02 §5.2 Clipboard | FE-050 to FE-055 |
+| 02 §5.2 Sub-editors | FE-056, FE-057, FE-058 |
+| 02 §5.2 Find and replace | FE-059, FE-060 |
+| 02 §6 Fonts | FE-061 to FE-064, FE-069; manifest, default set and licences are owned by BE |
+| 02 §7 View strategy | FE-065, FE-068, FE-072, FE-095, FE-101 |
+| 02 §8 Web view | FE-066, FE-067, FE-057, FE-058; form fields as node views: none: owned by FRW |
+| 02 §9.1 Pipeline | FE-075, FE-076, FE-077; the gate decision is SPK-013 |
+| 02 §9.2 Layout tree | FE-078 |
+| 02 §9.3 Measurement and line breaking | FE-079, FE-080, FE-081, FE-090, FE-091, FE-094 |
+| 02 §9.4 Pagination | FE-082, FE-083, FE-084, FE-085, FE-086, FE-087 |
+| 02 §9.5 Incremental layout and virtualisation | FE-088, FE-089, FE-092, FE-093 |
+| 02 §9.6 Caret, selection and input | FE-096, FE-097, FE-098, FE-099 |
+| 02 §9.7 Reconciling with the typeset result | FE-100 |
+| 02 §9.8 Printing | FE-073, FE-055 |
+| 02 §10 Accessibility | FE-103 to FE-108, FE-099; the accessibility checker and tagged PDF are owned by UX and EXP |
+| 02 §11 Internationalisation | UX-064, FE-111 to FE-115 |
+| 02 §12 Browser support | FE-113, FE-114, FE-115, FE-116 |
+| 02 §13 Performance | FE-088, FE-092, FE-102, FE-118, FE-119, FE-120; the harness is owned by FND |
+| 02 §14 Testing | FE-121 to FE-126, FE-094 |
+| 02 §15 Open issues | Open questions below; spike S9 is owned by SPK |
+| Math display and editing (02 §2, §6; 01 §7; 09 §6.1) | FE-069, FE-070; the math gate and LaTeX are owned by EXP |
+| PDF viewer (02 §2, §7; 09 §9.3) | FE-071, FE-072, FE-073 |
+| 12 §11 Fill mode in the editor | none: owned by FRW |
+| 13 §3 Shell, §4 Command system, §8 Theming and localisation, §9 Budgets | none: owned by UX (budgets by FND) |
+| 13 §2 Parity profile: authoring commands (added in the cross-check) | FE-127 to FE-138 |
+
+## Open questions
+
+Items from the spec's open issues and owner decisions that shape these stories, plus gaps found while writing them. None is decided here.
+
+| # | Question | Source | Affects |
+|---|---|---|---|
+| 1 | The footnote content model (`inline*` today, or `paragraph+` limited to one paragraph) must be settled in S1 before `cdm: 1` is frozen | 03 §13; review §6 item 3 | FE-030, FE-056, FE-058, FE-084 |
+| 2 | The input bridge design and the screen-reader plan for the page view, and whether EditContext is used | 02 §9.6, §15; S9; review F1 | FE-098, FE-099, SPK-013 |
+| 3 | Whether the page view is built at all, and in what form (web plus read view, own read-only painter, full editable view) | 11 §5 gate; decision 13 | SPK-013, FE-093 to FE-102 |
+| 4 | Whether layout runs in a worker from the start or later, and where measurement runs | 02 §15 | FE-075, FE-063, FE-079 |
+| 5 | Whether the typesetter's breaks are adopted always or opt-in: 02 §9.7 describes adoption, 09 §7 calls L1 "opt-in, from phase 3" | 02 §9.7; 09 §7 | FE-100 |
+| 6 | The tolerance for page overflow before a pin is dropped is "small" and has no value; the iteration limit for footnote placement and the fallback result are not given | 02 §9.7, §9.4 | FE-100, FE-084 |
+| 7 | Native spellcheck is lost in the page view and hidden by the editor's own context menu in the web view; the proofing port is the answer | 02 §15; 13 §6.1 | FE-066, FE-098 |
+| 8 | Behaviour of grammar and password-manager extensions with editors in shadow roots needs a compatibility list | 02 §15 | FE-117 |
+| 9 | Touch selection handles and mobile editing in the page view | 02 §15 | FE-098, FE-101, FE-114 |
+| 10 | Select all (and Ctrl+Home, Ctrl+End) when the caret is inside a region: 02 §5.2 limits them to the body, 07 §7 clamps selections that start in a region. Does the selection cover the region or the whole body? | 02 §5.2; 07 §7 | FE-032, FE-038 |
+| 11 | 02 says the guard filters transactions that touch protected scopes, 07 §7 says a deletion across scopes removes only the permitted parts. This epic filters everything except deletions, which it trims | 02 §5.2; 07 §7 | FE-036, FE-037 |
+| 12 | Precise suggestion rules for block-level changes beyond paragraphs and whole rows: splitting and joining paragraphs, deleting text inside one's own `ins`, columns and cells, equation edits. Whether an unavailable command or a direct change is right for a suggester | 03 §13; review §6 item 6 | FE-042, FE-044, FE-045, FE-070 |
+| 13 | Whether Replace all in suggestion mode creates suggestions; search options (case, whole word) and whether headers, footers and footnotes are searched | 02 §5.2 (silent) | FE-059, FE-060 |
+| 14 | Undoing the removal of a region would reuse an identifier that invariant I3 forbids; whether the undo history is shared between the body and the sub-editors | 03 §8 (I3); 02 §5.2 | FE-031, FE-049, FE-056 |
+| 15 | The journal: what happens when IndexedDB is unavailable, a write fails or the quota is exceeded; two tabs on one document; shared computers and retention; whether a returning user may resubmit entries written under another user | 02 §2.2; 10 §3.1 | FE-008, FE-009, FE-010, FE-011 |
+| 16 | A REST commit endpoint that a keep-alive request could use when a page closes | 05 §12 | FE-011 |
+| 17 | How the destroy grace period (default 30 seconds) is configured, and what happens when a destroyed element is connected again | 02 §2.1 | FE-006 |
+| 18 | The default value of `view`, and what `view="print"` does before the page view exists | 05 §8.1; 02 §7 | FE-065 |
+| 19 | When the PDF for the read view is produced, for which `seq`, and how a stale PDF is shown; how the painter's pages are told apart from the typeset PDF; where the sandboxed viewer frame's document comes from | 02 §7; 09 §9.3 | FE-071, FE-072, FE-095 |
+| 20 | Whether KaTeX display is in the initial chunk or lazy; the form of the text alternative for equations; whether an equation can be edited in suggestion mode | 02 §2; 13 §9 | FE-002, FE-069, FE-070 |
+| 21 | What happens in a browser below the minimum versions; whether the surface is read-only on mobile before light editing ships | 02 §12 | FE-116, FE-113 |
+| 22 | How hyphenation works when it is on, what happens to a word wider than its line, and which Unicode version the line-breaking data follows | 02 §9.3 | FE-080, FE-081 |
+| 23 | How a host supplies a string catalogue: 13 §8 promises replaceable strings, 05 §8.1 has no property for them; how inherited CSS properties are kept out of the shadow root (R2) | 13 §8; 05 §8.1; 02 §3 | UX-064, FE-018 |
+| 24 | The fallback font for a family absent from the manifest | 02 §6 | FE-062 |
+| 25 | What "usable" means for a 300-page document in the web view | 13 §9 | FE-120 |
+| 26 | The politeness level of live-region announcements | 02 §10 | FE-107 |
+| 27 | Behaviour of pasted remote image URLs, pasted regions and pasted definitions into a scope that cannot add definitions; Markdown paste (11 §5) is not described in 02 | 02 §5.2; 11 §5 | FE-051, FE-053, FE-054 |
+| 28 | How page guides in the web view behave after an edit since the last compile | 02 §7 | FE-068 |
+| 29 | Whether Ctrl+F6 is usable in each browser (some reserve it) | 02 §10; 13 §4 | FE-103 |
+| 30 | How the client obtains the time of a suggestion, since marks carry none | 03 §5 | FE-046 |

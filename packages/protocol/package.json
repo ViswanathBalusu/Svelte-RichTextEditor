@@ -1,0 +1,39 @@
+{
+  "name": "@docedit/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "DEP types, codecs, client state machines, backend port typings, and the generated AsyncAPI, OpenAPI and JSON Schema artifacts (05; SPK-019).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./contract": {
+      "types": "./src/contract/index.ts",
+      "default": "./src/contract/index.ts"
+    },
+    "./bridge": {
+      "types": "./src/bridge/index.ts",
+      "default": "./src/bridge/index.ts"
+    },
+    "./client": {
+      "types": "./src/client/index.ts",
+      "default": "./src/client/index.ts"
+    }
+  },
+  "scripts": {
+    "generate": "node scripts/generate.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@docedit/authority": "workspace:*",
+    "@docedit/model": "workspace:*"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "yaml": "2.9.1"
+  }
+}

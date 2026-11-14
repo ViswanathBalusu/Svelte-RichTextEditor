@@ -1,0 +1,1605 @@
+{
+  "profile": "parity",
+  "version": 2,
+  "date": "2026-11-06",
+  "source": "docs/spec/13-experience-extensibility.md §2; packages/ui/src/parity/profile.ts",
+  "generator": "pnpm --filter @docedit/ui generate (packages/ui/scripts/generate.ts)",
+  "nonGoalDecision": "13 §2 (specification draft 0.2, 2026-09-18) and PRODUCT.md \"Non-goals for version 1\"",
+  "counts": {
+    "built-in": 50,
+    "ports-and-extensions": 8,
+    "non-goal": 10
+  },
+  "rows": [
+    {
+      "id": "toolbar",
+      "tier": "built-in",
+      "can": "Reach every command from a toolbar, either one compact row or a full layout with commands grouped by task, by pointer or keyboard.",
+      "items": [
+        "A tabbed toolbar with compact and full layouts"
+      ],
+      "spec": "13 §2, §3, §4",
+      "phase": "1b",
+      "firstPhase": "1a",
+      "stories": [
+        {
+          "id": "UX-006",
+          "phase": "1a"
+        },
+        {
+          "id": "UX-007",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "command-search",
+      "tier": "built-in",
+      "can": "Find a command by typing its name or a synonym, and run it, within their rights.",
+      "items": [
+        "command search"
+      ],
+      "spec": "13 §2, §4",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-011",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "access-keys",
+      "tier": "built-in",
+      "can": "Run commands from the keyboard through access keys.",
+      "items": [
+        "access keys"
+      ],
+      "spec": "13 §2, §4",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-012",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "context-menu",
+      "tier": "built-in",
+      "can": "Open a menu of the commands that apply to the selection or to the object under the pointer.",
+      "items": [
+        "context menu"
+      ],
+      "spec": "13 §2, §4",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "UX-008",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "format-painter",
+      "tier": "built-in",
+      "can": "Copy the formatting of one place and apply it to another.",
+      "items": [
+        "format painter"
+      ],
+      "spec": "13 §2",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "UX-009",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "mini-toolbar",
+      "tier": "built-in",
+      "can": "Format a selection from a small set of commands offered next to it.",
+      "items": [
+        "mini toolbar"
+      ],
+      "spec": "13 §2, §4",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-010",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "styles",
+      "tier": "built-in",
+      "can": "See the styles of the document, see which one is in effect at the caret, and apply one to the selection.",
+      "items": [
+        "styles gallery and pane"
+      ],
+      "spec": "13 §2; 03 §4",
+      "phase": "1b",
+      "firstPhase": "1a",
+      "stories": [
+        {
+          "id": "FE-127",
+          "phase": "1a"
+        },
+        {
+          "id": "UX-022",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "navigation-pane",
+      "tier": "built-in",
+      "can": "Move through the document by its headings and by search results, and by page thumbnails once real pages exist.",
+      "items": [
+        "navigation pane (headings, search results, page thumbnails once pages exist)"
+      ],
+      "spec": "13 §2, §3",
+      "phase": "3",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "UX-020",
+          "phase": "1b"
+        },
+        {
+          "id": "UX-021",
+          "phase": "3"
+        }
+      ]
+    },
+    {
+      "id": "rulers",
+      "tier": "built-in",
+      "can": "See and change indents, tab stops and margins on rulers, or with the keyboard or a dialog instead.",
+      "items": [
+        "rulers"
+      ],
+      "spec": "13 §2; 02 §3, §10",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-102",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "zoom",
+      "tier": "built-in",
+      "can": "Change the scale of the content without changing the document.",
+      "items": [
+        "zoom"
+      ],
+      "spec": "13 §2, §3",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-138",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "status-bar",
+      "tier": "built-in",
+      "can": "See word and page counts, language, connection and save state and zoom at a glance.",
+      "items": [
+        "status bar"
+      ],
+      "spec": "13 §2, §3",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "UX-018",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "modes",
+      "tier": "built-in",
+      "can": "Switch between editing, reviewing with suggestions, viewing and filling in fields, within their rights.",
+      "items": [
+        "modes (edit, review, view, fill)"
+      ],
+      "spec": "13 §2, §3; 05 §8.1",
+      "phase": "2",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-029",
+          "phase": "1b"
+        },
+        {
+          "id": "FRW-069",
+          "phase": "1b"
+        },
+        {
+          "id": "PRO-077",
+          "phase": "1b"
+        },
+        {
+          "id": "UX-015",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-041",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "themes",
+      "tier": "built-in",
+      "can": "Work in a light, a dark or a high-contrast theme, and with the system forced colours.",
+      "items": [
+        "dark and high-contrast themes"
+      ],
+      "spec": "13 §2, §8",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "UX-061",
+          "phase": "1b"
+        },
+        {
+          "id": "UX-062",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "character-and-paragraph-formatting",
+      "tier": "built-in",
+      "can": "Format characters (font, size, bold, italic and other effects) and paragraphs (alignment, indents, spacing).",
+      "items": [
+        "fonts and paragraph formatting"
+      ],
+      "spec": "13 §2; 03 §4",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-128",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-129",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "lists",
+      "tier": "built-in",
+      "can": "Make numbered and bulleted lists with several levels.",
+      "items": [
+        "multilevel lists"
+      ],
+      "spec": "13 §2; 03 §7",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "CDM-019",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-130",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "tables",
+      "tier": "built-in",
+      "can": "Insert and edit tables, apply table styles and sort rows.",
+      "items": [
+        "tables with styles and sorting"
+      ],
+      "spec": "13 §2; 03 §4.3",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-040",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-131",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "pictures",
+      "tier": "built-in",
+      "can": "Insert pictures and figures and give them alternative text.",
+      "items": [
+        "pictures with crop and alternative text"
+      ],
+      "spec": "13 §2; 03 §4.3, §4.4",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "CDM-029",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-132",
+          "phase": "1b"
+        }
+      ],
+      "gap": "Cropping has no story: the document model has no crop attributes (FE-132 notes)."
+    },
+    {
+      "id": "symbols",
+      "tier": "built-in",
+      "can": "Insert a symbol by picking it.",
+      "items": [
+        "symbols"
+      ],
+      "spec": "13 §2",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-136",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "equations",
+      "tier": "built-in",
+      "can": "Write and edit equations, and see them on screen and in the PDF.",
+      "items": [
+        "equations"
+      ],
+      "spec": "13 §2; 03 §4.4; 09",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "CDM-030",
+          "phase": "1b"
+        },
+        {
+          "id": "EXP-052",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-069",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-070",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-136",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "headers-and-footers",
+      "tier": "built-in",
+      "can": "Write the headers and footers of each page section.",
+      "items": [
+        "headers and footers"
+      ],
+      "spec": "13 §2; 02 §5.2",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-057",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-137",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "page-numbers",
+      "tier": "built-in",
+      "can": "Insert page numbers, and set where they start and how they are written.",
+      "items": [
+        "page numbers"
+      ],
+      "spec": "13 §2; 03 §4.4",
+      "phase": "2",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-136",
+          "phase": "1b"
+        },
+        {
+          "id": "EXP-036",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "columns",
+      "tier": "built-in",
+      "can": "Set text in columns.",
+      "items": [
+        "columns"
+      ],
+      "spec": "13 §2",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "EXP-040",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-135",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "breaks",
+      "tier": "built-in",
+      "can": "Insert line, page, column and section breaks.",
+      "items": [
+        "breaks"
+      ],
+      "spec": "13 §2; 03 §4",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "CDM-033",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-135",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "footnotes",
+      "tier": "built-in",
+      "can": "Insert footnotes and write them in a panel beside the page.",
+      "items": [
+        "footnotes"
+      ],
+      "spec": "13 §2; 02 §5.2",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-058",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-135",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "table-of-contents",
+      "tier": "built-in",
+      "can": "Insert a table of contents that builds itself from the headings.",
+      "items": [
+        "table of contents"
+      ],
+      "spec": "13 §2; 03 §4.3",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "EXP-023",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-136",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "captions-and-cross-references",
+      "tier": "built-in",
+      "can": "Number figures and tables with captions, and refer to them by number.",
+      "items": [
+        "numbered captions with cross-references"
+      ],
+      "spec": "13 §2; 03 §7",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-134",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "citations",
+      "tier": "built-in",
+      "can": "Cite sources and produce a bibliography.",
+      "items": [
+        "citations and bibliography"
+      ],
+      "spec": "13 §2; 03 §13",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "EXP-121",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-140",
+          "phase": "1b"
+        },
+        {
+          "id": "UX-103",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "bookmarks",
+      "tier": "built-in",
+      "can": "Mark a place in the document and link to it.",
+      "items": [
+        "bookmarks"
+      ],
+      "spec": "13 §2",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-133",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "links",
+      "tier": "built-in",
+      "can": "Insert links and follow them.",
+      "items": [
+        "links"
+      ],
+      "spec": "13 §2; 03 §4.4",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-133",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "watermark",
+      "tier": "built-in",
+      "can": "Print a watermark text on the pages of a section.",
+      "items": [
+        "watermark"
+      ],
+      "spec": "13 §2; 03 §4.1",
+      "phase": "2",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-137",
+          "phase": "1b"
+        },
+        {
+          "id": "EXP-036",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "fields-and-forms",
+      "tier": "built-in",
+      "can": "Add fields for roles to fill in, and fill in their own fields with guidance.",
+      "items": [
+        "fields and forms (12)"
+      ],
+      "spec": "13 §2; 12",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FRW-072",
+          "phase": "1b"
+        },
+        {
+          "id": "FRW-073",
+          "phase": "1b"
+        },
+        {
+          "id": "FRW-076",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "comments",
+      "tier": "built-in",
+      "can": "Comment on text or on a block, reply, resolve, mention people and assign a thread to someone as a task.",
+      "items": [
+        "comments with mentions and tasks"
+      ],
+      "spec": "13 §2, §5",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-028",
+          "phase": "2"
+        },
+        {
+          "id": "UX-029",
+          "phase": "2"
+        },
+        {
+          "id": "UX-030",
+          "phase": "2"
+        },
+        {
+          "id": "UX-031",
+          "phase": "2"
+        },
+        {
+          "id": "UX-032",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "suggestions",
+      "tier": "built-in",
+      "can": "Suggest changes, and accept or reject suggestions one by one or all at once.",
+      "items": [
+        "suggestions with review tools"
+      ],
+      "spec": "13 §2, §5; 02 §5.2",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "FE-042",
+          "phase": "2"
+        },
+        {
+          "id": "FE-046",
+          "phase": "2"
+        },
+        {
+          "id": "FE-047",
+          "phase": "2"
+        },
+        {
+          "id": "UX-035",
+          "phase": "2"
+        },
+        {
+          "id": "UX-036",
+          "phase": "2"
+        },
+        {
+          "id": "UX-037",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "version-history",
+      "tier": "built-in",
+      "can": "Browse earlier versions, compare two of them and restore one.",
+      "items": [
+        "version history"
+      ],
+      "spec": "13 §2; 08",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "HIS-006",
+          "phase": "2"
+        },
+        {
+          "id": "HIS-009",
+          "phase": "2"
+        },
+        {
+          "id": "HIS-010",
+          "phase": "2"
+        },
+        {
+          "id": "HIS-013",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "catch-up",
+      "tier": "built-in",
+      "can": "See what changed and what was said in comments since their last visit.",
+      "items": [
+        "catch-up"
+      ],
+      "spec": "13 §2, §5; 08 §10",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "HIS-027",
+          "phase": "2"
+        },
+        {
+          "id": "HIS-028",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "presence",
+      "tier": "built-in",
+      "can": "See who else is in the document and where they are working.",
+      "items": [
+        "presence"
+      ],
+      "spec": "13 §2, §5",
+      "phase": "1b",
+      "firstPhase": "1a",
+      "stories": [
+        {
+          "id": "UX-026",
+          "phase": "1a"
+        },
+        {
+          "id": "UX-027",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "save-state",
+      "tier": "built-in",
+      "can": "See at all times whether their work is saved, being saved, kept only on this device, or read-only.",
+      "items": [
+        "autosave indicator"
+      ],
+      "spec": "13 §2, §3; 02 §2.2",
+      "phase": "1a",
+      "firstPhase": "1a",
+      "stories": [
+        {
+          "id": "FE-007",
+          "phase": "1a"
+        },
+        {
+          "id": "UX-016",
+          "phase": "1a"
+        }
+      ]
+    },
+    {
+      "id": "recovery-journal",
+      "tier": "built-in",
+      "can": "Get back work after the page was closed or crashed, and content that was set aside.",
+      "items": [
+        "recovery journal"
+      ],
+      "spec": "13 §2, §9; 02 §2.2",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-008",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-009",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-010",
+          "phase": "1b"
+        },
+        {
+          "id": "UX-017",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "templates",
+      "tier": "built-in",
+      "can": "Start a document from a template.",
+      "items": [
+        "templates"
+      ],
+      "spec": "13 §2, §11.2",
+      "phase": "4",
+      "firstPhase": "4",
+      "stories": [
+        {
+          "id": "FRW-062",
+          "phase": "4"
+        },
+        {
+          "id": "UX-100",
+          "phase": "4"
+        }
+      ]
+    },
+    {
+      "id": "accessibility-checker",
+      "tier": "built-in",
+      "can": "Find and fix accessibility problems in the document before exporting it.",
+      "items": [
+        "accessibility checker"
+      ],
+      "spec": "13 §2, §8",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-066",
+          "phase": "2"
+        },
+        {
+          "id": "UX-067",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "export-pdf",
+      "tier": "built-in",
+      "can": "Export the document as a typeset PDF and look at it.",
+      "items": [
+        "import and export (PDF, LaTeX, DOCX, HTML, Markdown)"
+      ],
+      "spec": "13 §2; 09",
+      "phase": "1b",
+      "firstPhase": "1a",
+      "stories": [
+        {
+          "id": "EXP-001",
+          "phase": "1a"
+        },
+        {
+          "id": "FE-071",
+          "phase": "1a"
+        },
+        {
+          "id": "EXP-004",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "export-latex",
+      "tier": "built-in",
+      "can": "Download the LaTeX source of the document.",
+      "items": [
+        "import and export (PDF, LaTeX, DOCX, HTML, Markdown)"
+      ],
+      "spec": "13 §2; 09",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "EXP-085",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "docx",
+      "tier": "built-in",
+      "can": "Open a Word file and write it back as a Word file without losing what the editor cannot show.",
+      "items": [
+        "import and export (PDF, LaTeX, DOCX, HTML, Markdown)"
+      ],
+      "spec": "13 §2; ADR 0017",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "EXP-090",
+          "phase": "2"
+        },
+        {
+          "id": "EXP-098",
+          "phase": "2"
+        },
+        {
+          "id": "EXP-118",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "export-html",
+      "tier": "built-in",
+      "can": "Export the document as HTML.",
+      "items": [
+        "import and export (PDF, LaTeX, DOCX, HTML, Markdown)"
+      ],
+      "spec": "13 §2; 11 §5",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "EXP-087",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "export-markdown",
+      "tier": "built-in",
+      "can": "Export the document as Markdown.",
+      "items": [
+        "import and export (PDF, LaTeX, DOCX, HTML, Markdown)"
+      ],
+      "spec": "13 §2; 11 §5",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "EXP-088",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "editing",
+      "tier": "built-in",
+      "can": "Type and delete text, select the whole body, and undo and redo their own changes.",
+      "items": [],
+      "spec": "02 §5.2 (body-scoped commands, history); 00 R1",
+      "phase": "1b",
+      "firstPhase": "1a",
+      "stories": [
+        {
+          "id": "FE-032",
+          "phase": "1a"
+        },
+        {
+          "id": "FE-049",
+          "phase": "1b"
+        },
+        {
+          "id": "FE-066",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "sharing",
+      "tier": "built-in",
+      "can": "Ask the host application to share the document, in a dialog of its own.",
+      "items": [],
+      "spec": "13 §5 (sharing); 05 §8.1",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "PRO-089",
+          "phase": "1b"
+        },
+        {
+          "id": "UX-039",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "keyboard-shortcuts",
+      "tier": "built-in",
+      "can": "Run commands with the shortcuts word processors use, where the browser allows them, and look every shortcut up in a reference made from the shortcut table.",
+      "items": [],
+      "spec": "13 §4 (shortcut table); 02 §3 (keyboard)",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "UX-013",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "views",
+      "tier": "built-in",
+      "can": "Switch between the views the build supports: the continuous web layout first, real pages once they exist.",
+      "items": [],
+      "spec": "02 §7; 13 §3 (modes and views); 05 §8.1 (view)",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-065",
+          "phase": "1b"
+        },
+        {
+          "id": "UX-007",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "regions-and-permissions",
+      "tier": "built-in",
+      "can": "See which parts of a document they may edit and who can edit the others, move to the next part they may edit, mark blocks as a region and give people roles on it.",
+      "items": [],
+      "spec": "07 §7; 13 §3 (permissions pane); 05 §6.2 (regions, grants)",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "PRM-026",
+          "phase": "1b"
+        },
+        {
+          "id": "PRM-027",
+          "phase": "1b"
+        },
+        {
+          "id": "PRM-033",
+          "phase": "1b"
+        },
+        {
+          "id": "PRM-035",
+          "phase": "1b"
+        },
+        {
+          "id": "PRM-036",
+          "phase": "1b"
+        }
+      ]
+    },
+    {
+      "id": "spelling-and-grammar",
+      "tier": "ports-and-extensions",
+      "can": "Check spelling and grammar through a proofing service that the host or the backend provides.",
+      "items": [
+        "Spelling and grammar"
+      ],
+      "spec": "13 §2, §6.1",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-041",
+          "phase": "2"
+        },
+        {
+          "id": "UX-042",
+          "phase": "2"
+        },
+        {
+          "id": "UX-043",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "text-prediction",
+      "tier": "ports-and-extensions",
+      "can": "Get predictions of the next words while typing.",
+      "items": [
+        "text prediction"
+      ],
+      "spec": "13 §2",
+      "phase": null,
+      "firstPhase": null,
+      "stories": [],
+      "gap": "No port and no story: 13 §6 defines only a proofing and an assistant port (UX open questions)."
+    },
+    {
+      "id": "assistant",
+      "tier": "ports-and-extensions",
+      "can": "Ask an assistant to draft, rewrite, summarise or answer questions; what it writes arrives as suggestions.",
+      "items": [
+        "assistant (draft, rewrite, summarise, chat)"
+      ],
+      "spec": "13 §2, §6.2",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-044",
+          "phase": "2"
+        },
+        {
+          "id": "UX-045",
+          "phase": "2"
+        },
+        {
+          "id": "UX-046",
+          "phase": "2"
+        },
+        {
+          "id": "UX-047",
+          "phase": "2"
+        },
+        {
+          "id": "UX-048",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "translate",
+      "tier": "ports-and-extensions",
+      "can": "Translate text.",
+      "items": [
+        "translate"
+      ],
+      "spec": "13 §2",
+      "phase": null,
+      "firstPhase": null,
+      "stories": [],
+      "gap": "No port and no story (UX open questions)."
+    },
+    {
+      "id": "read-aloud",
+      "tier": "ports-and-extensions",
+      "can": "Have the document read aloud.",
+      "items": [
+        "read aloud"
+      ],
+      "spec": "13 §2",
+      "phase": null,
+      "firstPhase": null,
+      "stories": [],
+      "gap": "No port and no story (UX open questions)."
+    },
+    {
+      "id": "dictation",
+      "tier": "ports-and-extensions",
+      "can": "Dictate through the operating system, whose dictation types into the editing surface like a keyboard.",
+      "items": [
+        "dictation through the operating system"
+      ],
+      "spec": "13 §2; 02 §7, §8",
+      "phase": "1b",
+      "firstPhase": "1b",
+      "stories": [
+        {
+          "id": "FE-066",
+          "phase": "1b"
+        }
+      ],
+      "gap": "No story tests dictation itself; the web view uses the browser input it relies on."
+    },
+    {
+      "id": "custom-blocks",
+      "tier": "ports-and-extensions",
+      "can": "Insert blocks and inline content that a host extension defines, with a fallback every writer can show.",
+      "items": [
+        "custom blocks"
+      ],
+      "spec": "13 §2, §7.3",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-056",
+          "phase": "2"
+        },
+        {
+          "id": "UX-057",
+          "phase": "2"
+        },
+        {
+          "id": "UX-058",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "host-panels-and-commands",
+      "tier": "ports-and-extensions",
+      "can": "Use panels and commands of the host application inside the editor, under the same permissions and accessibility rules.",
+      "items": [
+        "host-specific panels and commands"
+      ],
+      "spec": "13 §2, §7.1",
+      "phase": "2",
+      "firstPhase": "2",
+      "stories": [
+        {
+          "id": "UX-050",
+          "phase": "2"
+        },
+        {
+          "id": "UX-051",
+          "phase": "2"
+        },
+        {
+          "id": "UX-052",
+          "phase": "2"
+        }
+      ]
+    },
+    {
+      "id": "smartart",
+      "tier": "non-goal",
+      "can": "Cannot create or edit diagram graphics; those in imported Word files are kept and shown with their fallback.",
+      "items": [
+        "Creating or editing SmartArt"
+      ],
+      "spec": "13 §2; ADR 0017",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "charts",
+      "tier": "non-goal",
+      "can": "Cannot create or edit charts; those in imported Word files are kept and shown with their fallback.",
+      "items": [
+        "charts"
+      ],
+      "spec": "13 §2; ADR 0017",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "shapes",
+      "tier": "non-goal",
+      "can": "Cannot draw or edit shapes; those in imported Word files are kept and shown with their fallback.",
+      "items": [
+        "shapes"
+      ],
+      "spec": "13 §2; ADR 0017",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "text-boxes-and-ink",
+      "tier": "non-goal",
+      "can": "Cannot create or edit text boxes or ink; those in imported Word files are kept and shown with their fallback.",
+      "items": [
+        "text boxes and ink (those in imported Word files are preserved and shown with their fallback; ADR 0017)"
+      ],
+      "spec": "13 §2; ADR 0017",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "mail-merge",
+      "tier": "non-goal",
+      "can": "Cannot merge a document with a list of recipients; filling fields by role is the supported way.",
+      "items": [
+        "mail merge"
+      ],
+      "spec": "13 §2; PRODUCT.md",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "macros",
+      "tier": "non-goal",
+      "can": "Cannot record or run macros.",
+      "items": [
+        "macros"
+      ],
+      "spec": "13 §2; PRODUCT.md",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "table-formulas",
+      "tier": "non-goal",
+      "can": "Cannot compute values in table cells; field rules compute field values instead.",
+      "items": [
+        "table formulas"
+      ],
+      "spec": "13 §2; 12 §5",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "researcher-lookup",
+      "tier": "non-goal",
+      "can": "Cannot search outside sources from within the editor.",
+      "items": [
+        "researcher-style lookup"
+      ],
+      "spec": "13 §2",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "transcription",
+      "tier": "non-goal",
+      "can": "Cannot transcribe recordings.",
+      "items": [
+        "transcription"
+      ],
+      "spec": "13 §2",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    },
+    {
+      "id": "offline-first",
+      "tier": "non-goal",
+      "can": "Cannot edit without a connection to the service; a lost connection is bridged by the recovery journal (owner decision A1).",
+      "items": [
+        "offline-first editing"
+      ],
+      "spec": "13 §2; ADR 0001; PRODUCT.md",
+      "phase": null,
+      "firstPhase": null,
+      "stories": []
+    }
+  ],
+  "commands": [
+    {
+      "id": "edit.undo",
+      "capability": "editing"
+    },
+    {
+      "id": "edit.redo",
+      "capability": "editing"
+    },
+    {
+      "id": "edit.selectAll",
+      "capability": "editing"
+    },
+    {
+      "id": "format.bold",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "format.italic",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "insert.footnote",
+      "capability": "footnotes"
+    },
+    {
+      "id": "page.header",
+      "capability": "headers-and-footers"
+    },
+    {
+      "id": "format.applyStyle",
+      "capability": "styles"
+    },
+    {
+      "id": "navigate.nextEditableRegion",
+      "capability": "regions-and-permissions"
+    },
+    {
+      "id": "edit.insertRecovered",
+      "capability": "recovery-journal"
+    },
+    {
+      "id": "edit.discardRecovered",
+      "capability": "recovery-journal"
+    },
+    {
+      "id": "insert.field.text",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "insert.field.number",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "insert.field.date",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "insert.field.checkbox",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "insert.field.choice",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "insert.field.signature",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "insert.field.initials",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "insert.field.dateSigned",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "insert.field.formula",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "view.outline",
+      "capability": "navigation-pane"
+    },
+    {
+      "id": "view.comments",
+      "capability": "comments"
+    },
+    {
+      "id": "view.catchUp",
+      "capability": "catch-up"
+    },
+    {
+      "id": "view.history",
+      "capability": "version-history"
+    },
+    {
+      "id": "document.share",
+      "capability": "sharing"
+    },
+    {
+      "id": "view.find",
+      "capability": "navigation-pane"
+    },
+    {
+      "id": "view.styles",
+      "capability": "styles"
+    },
+    {
+      "id": "view.recovered",
+      "capability": "recovery-journal"
+    },
+    {
+      "id": "view.shortcuts",
+      "capability": "keyboard-shortcuts"
+    },
+    {
+      "id": "view.commandSearch",
+      "capability": "command-search"
+    },
+    {
+      "id": "view.permissions",
+      "capability": "regions-and-permissions"
+    },
+    {
+      "id": "view.checker",
+      "capability": "accessibility-checker"
+    },
+    {
+      "id": "view.fillSummary",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "format.painter",
+      "capability": "format-painter"
+    },
+    {
+      "id": "format.applyFormat",
+      "capability": "format-painter"
+    },
+    {
+      "id": "format.language",
+      "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "insert.region",
+      "capability": "regions-and-permissions"
+    },
+    {
+      "id": "review.comment",
+      "capability": "comments"
+    },
+    {
+      "id": "document.export",
+      "capability": "export-pdf"
+    },
+    {
+      "id": "document.print",
+      "capability": "export-pdf"
+    },
+    {
+      "id": "view.zoomIn",
+      "capability": "zoom"
+    },
+    {
+      "id": "view.zoomOut",
+      "capability": "zoom"
+    },
+    {
+      "id": "view.zoomReset",
+      "capability": "zoom"
+    },
+    {
+      "id": "page.closeStory",
+      "capability": "headers-and-footers"
+    },
+    {
+      "id": "mode.edit",
+      "capability": "modes"
+    },
+    {
+      "id": "mode.review",
+      "capability": "modes"
+    },
+    {
+      "id": "mode.view",
+      "capability": "modes"
+    },
+    {
+      "id": "mode.fill",
+      "capability": "modes"
+    },
+    {
+      "id": "view.layout.web",
+      "capability": "views"
+    },
+    {
+      "id": "view.layout.read",
+      "capability": "views"
+    },
+    {
+      "id": "view.layout.print",
+      "capability": "views"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "pictures",
+      "gap": "Cropping has no story: the document model has no crop attributes (FE-132 notes)."
+    },
+    {
+      "id": "text-prediction",
+      "gap": "No port and no story: 13 §6 defines only a proofing and an assistant port (UX open questions)."
+    },
+    {
+      "id": "translate",
+      "gap": "No port and no story (UX open questions)."
+    },
+    {
+      "id": "read-aloud",
+      "gap": "No port and no story (UX open questions)."
+    },
+    {
+      "id": "dictation",
+      "gap": "No story tests dictation itself; the web view uses the browser input it relies on."
+    }
+  ]
+}

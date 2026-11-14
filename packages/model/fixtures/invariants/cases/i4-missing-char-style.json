@@ -1,0 +1,25 @@
+{
+  "name": "i4-missing-char-style",
+  "doc": "addMark: a character style mark that names nothing.",
+  "base": "example",
+  "steps": [
+    {
+      "stepType": "addMark",
+      "mark": { "type": "charStyle", "attrs": { "style": "Missing", "ext": {} } },
+      "from": 8,
+      "to": 10
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I4"]
+}

@@ -1,0 +1,113 @@
+{
+  "description": "Canonical-form fixtures of the CDM (03 §2; CDM-011). For each case, the canonical form of `input` (an envelope, or a node alone for kind `node`) is exactly the bytes of `expected` (UTF-8, no trailing newline), whose SHA-256 is `sha256`. Defaults and the mark order are those of spec/cdm/cdm-1.prosemirror.json.",
+  "canonicalFormVersion": 1,
+  "rules": {
+    "defaults": "An attribute equal to its default is omitted, `ext: {}` and null identifiers included.",
+    "markOrder": "Marks are ordered by the schema mark list, then by the RFC 8785 text of their attributes.",
+    "textMerge": "Adjacent text nodes with equal marks are merged; empty text nodes are dropped.",
+    "ext": "A non-empty `ext` is kept and hashed; an empty one is omitted.",
+    "emptyMembers": "Empty `attrs`, `content` and `marks` are omitted.",
+    "requires": "`requires` is sorted by UTF-16 code units without duplicates.",
+    "objectAttributes": "Object-valued attributes are compared and kept whole; defaults inside them stay.",
+    "subtree": "A subtree is canonicalised alone, without the envelope (07 §11).",
+    "bytes": "The bytes are the UTF-8 encoding of the RFC 8785 text."
+  },
+  "cases": [
+    {
+      "name": "example-03-12",
+      "kind": "envelope",
+      "rules": ["bytes", "defaults", "emptyMembers"],
+      "input": "inputs/example-03-12.json",
+      "inputSha256": "f6c37cec5ae7f7b45d1b8c61aefc1959b769d59a1c47f83a4887341d44ae5600",
+      "expected": "expected/example-03-12.jcs",
+      "sha256": "aaded9773d21afe7d9b76074aa316a37728bce1f8d1fabccae3f675ecd21e683"
+    },
+    {
+      "name": "all-constructs",
+      "kind": "envelope",
+      "rules": ["bytes", "markOrder", "textMerge"],
+      "input": "inputs/all-constructs.json",
+      "inputSha256": "e1f64cc19b2078243b734fdf3f12c924251b8e6e78232e82da51c71a9ec89ff0",
+      "expected": "expected/all-constructs.jcs",
+      "sha256": "8a9f31113a0bb1eb6ec5366d967a6c1c37114b14c4f39a4ffecb3b640b15669f",
+      "assets": [
+        "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+        "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+        "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+        "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+      ]
+    },
+    {
+      "name": "defaults-written-out",
+      "kind": "envelope",
+      "rules": ["defaults", "ext"],
+      "input": "inputs/defaults-written-out.json",
+      "inputSha256": "9530672d7633781f645ac9f3557e20473fb3615e5733957c6aedc980e5026415",
+      "expected": "expected/defaults-written-out.jcs",
+      "sha256": "aaded9773d21afe7d9b76074aa316a37728bce1f8d1fabccae3f675ecd21e683"
+    },
+    {
+      "name": "mark-order",
+      "kind": "envelope",
+      "rules": ["markOrder"],
+      "input": "inputs/mark-order.json",
+      "inputSha256": "2548ed9caef4188d84e9aee4c9287505f5bfdae9e885278819ffda2f4b9cfb9d",
+      "expected": "expected/mark-order.jcs",
+      "sha256": "6d25b53cfab6015ed7de54f685cda5081da022d8cc8a77d4a659ec6efc957847"
+    },
+    {
+      "name": "text-merge",
+      "kind": "envelope",
+      "rules": ["textMerge"],
+      "input": "inputs/text-merge.json",
+      "inputSha256": "be34dbd8e7e2191ffcddc244dfb1a88094fa281d893942fc33d7e180f8e5b3a5",
+      "expected": "expected/text-merge.jcs",
+      "sha256": "464e74063d4fc706fecd533ec84dd9fbccd029b021388eddb633dba3bb1d3bb5"
+    },
+    {
+      "name": "ext",
+      "kind": "envelope",
+      "rules": ["ext"],
+      "input": "inputs/ext.json",
+      "inputSha256": "7e950244bfc64a588f0487681587a96fb4fa264b93a20b433745a3a22068cc54",
+      "expected": "expected/ext.jcs",
+      "sha256": "29ef82a81c9f103ffae49f604955fef9ad54797b0b2ed2694d24f00bea18f430"
+    },
+    {
+      "name": "empty-members",
+      "kind": "envelope",
+      "rules": ["emptyMembers"],
+      "input": "inputs/empty-members.json",
+      "inputSha256": "f5daf459b4cc59b13b17dd3efca687795626b0c3fb07260b6d57633008ece3d5",
+      "expected": "expected/empty-members.jcs",
+      "sha256": "aaded9773d21afe7d9b76074aa316a37728bce1f8d1fabccae3f675ecd21e683"
+    },
+    {
+      "name": "object-attributes",
+      "kind": "envelope",
+      "rules": ["objectAttributes", "defaults"],
+      "input": "inputs/object-attributes.json",
+      "inputSha256": "96a57ce1d67b1e32239934fb2cba8a0ab30a958491ecc345a983df62ba994ebc",
+      "expected": "expected/object-attributes.jcs",
+      "sha256": "fe03e87106e5d42d7a3896486b760c3843c5c2a5d83d7fd7eae4a38f7c3ab887"
+    },
+    {
+      "name": "requires-order",
+      "kind": "envelope",
+      "rules": ["requires"],
+      "input": "inputs/requires-order.json",
+      "inputSha256": "52f99fef1309ed577a92c8badd51a1471a46af1fd8cc846403229512f22aad14",
+      "expected": "expected/requires-order.jcs",
+      "sha256": "fbde11ca90df16134fa66f71b241a790075e7ba80ca7a7f5a9dfc2df55ab2511"
+    },
+    {
+      "name": "region-subtree",
+      "kind": "node",
+      "rules": ["subtree", "defaults"],
+      "input": "inputs/region-subtree.json",
+      "inputSha256": "60f81ca4949724cea4d0d5b2f154155598673190cce6f7bbe541971a2c1c9bee",
+      "expected": "expected/region-subtree.jcs",
+      "sha256": "43d8f6827cbda301d639ba8fc1a0cd4cc45f26f2c1ad6a3908789668af3baec2"
+    }
+  ]
+}

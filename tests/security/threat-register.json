@@ -1,0 +1,721 @@
+{
+  "$comment": "The threat register (SEC-001): every threat of 10 §3 tied to its control, the epic/story that builds it, and the SEC story whose tests prove it. A threat with no proving tests yet is marked \"control-not-built\" with the phase it is due. register.test.ts checks this file on every build (10 §2, §3, §5). Trust boundaries and actors follow 10 §2.",
+  "spec": "10",
+  "review": {
+    "phase": "1a",
+    "secondMaintainerReview": "pending",
+    "note": "The end-of-phase review and the second-maintainer sign-off are SEC-003; this register and the SEC suite are its inputs. The sign-off is a human step and is not asserted here."
+  },
+  "boundaries": [
+    { "id": "host-page-to-element", "from": "host page", "to": "element", "via": "DOM API" },
+    {
+      "id": "element-to-service",
+      "from": "element",
+      "to": "document service",
+      "via": "DEP (WebSocket + REST)"
+    },
+    {
+      "id": "host-backend-to-service",
+      "from": "host backend",
+      "to": "document service",
+      "via": "REST with a service credential"
+    },
+    {
+      "id": "service-to-workers",
+      "from": "document service",
+      "to": "workers",
+      "via": "queue and object storage"
+    },
+    {
+      "id": "service-to-signing",
+      "from": "document service",
+      "to": "signing service",
+      "via": "sealing requests"
+    },
+    {
+      "id": "service-to-host-backend",
+      "from": "document service",
+      "to": "host backend",
+      "via": "webhooks"
+    }
+  ],
+  "actors": [
+    {
+      "id": "host-backend",
+      "trustedFor": "identity, document-level role, group membership, how a participant was authenticated; holds a service credential",
+      "hostile": "no, but attribution is only as strong as the host's authentication"
+    },
+    {
+      "id": "host-page",
+      "trustedFor": "holding the user's token; can do whatever that user can",
+      "hostile": "no"
+    },
+    {
+      "id": "end-user",
+      "trustedFor": "nothing beyond their capabilities",
+      "hostile": "assume a user will send hand-crafted protocol messages"
+    },
+    { "id": "other-tenants", "trustedFor": "nothing", "hostile": "yes" },
+    {
+      "id": "content-and-input",
+      "trustedFor": "nothing; also untrusted as input to an assistant model",
+      "hostile": "yes"
+    },
+    {
+      "id": "workers",
+      "trustedFor": "nothing beyond their one job",
+      "hostile": "assume a worker can be fully compromised by the input it processes, and treat its outputs as hostile"
+    },
+    {
+      "id": "operator",
+      "trustedFor": "running the service",
+      "hostile": "tamper evidence that must hold against the operator needs chain heads anchored outside (08 §12)"
+    }
+  ],
+  "threats": [
+    {
+      "id": "T-3.1-script-content",
+      "section": "3.1",
+      "threat": "Script injection through document content",
+      "control": "No raw HTML in the CDM; every attribute has a grammar (I11); DOM built with DOM APIs",
+      "builtBy": ["CDM-013", "FE-050"],
+      "provenBy": "SEC-005",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+    {
+      "id": "T-3.1-script-paste",
+      "section": "3.1",
+      "threat": "Script injection through paste",
+      "control": "Pasted HTML sanitised then parsed through the schema",
+      "builtBy": ["FE-054"],
+      "provenBy": "SEC-005",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+    {
+      "id": "T-3.1-links",
+      "section": "3.1",
+      "threat": "Dangerous links",
+      "control": "link.href allow-list (I9); noopener, noreferrer",
+      "builtBy": ["CDM-013", "BE-043"],
+      "provenBy": "SEC-006",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+    {
+      "id": "T-3.1-images",
+      "section": "3.1",
+      "threat": "Hostile images",
+      "control": "Never embedded as data; uploaded, validated and re-encoded; SVG never rendered live",
+      "builtBy": ["BE-043"],
+      "provenBy": "SEC-006",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element", "service-to-workers"]
+    },
+    {
+      "id": "T-3.1-hostile-pdf",
+      "section": "3.1",
+      "threat": "A hostile PDF from a compromised worker",
+      "control": "Sandboxed cross-origin viewer with script off",
+      "builtBy": ["FE-071"],
+      "provenBy": "SEC-036",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+    {
+      "id": "T-3.1-token-theft",
+      "section": "3.1",
+      "threat": "Token theft",
+      "control": "Tokens in memory only, never in URLs, short-lived, scoped to documents",
+      "builtBy": ["FE-008", "FE-009"],
+      "provenBy": "SEC-007",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+    {
+      "id": "T-3.1-host-policies",
+      "section": "3.1",
+      "threat": "Strict host policies",
+      "control": "CSP and Trusted Types requirements per feature; no HTML-string templates",
+      "builtBy": ["FE-125"],
+      "provenBy": "FE-125",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+    {
+      "id": "T-3.1-side-effects",
+      "section": "3.1",
+      "threat": "Global side effects on the host page",
+      "control": "Hash-derived font aliases; shortcuts fire only inside the editor; duplicate element detected",
+      "builtBy": ["FE-001", "FE-021"],
+      "provenBy": "SEC-009",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+    {
+      "id": "T-3.1-leak-to-host",
+      "section": "3.1",
+      "threat": "Leaking content to the host page by accident",
+      "control": "Events carry identifiers and counts, not content",
+      "builtBy": ["FE-061"],
+      "provenBy": "SEC-009",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+    {
+      "id": "T-3.1-prompt-injection",
+      "section": "3.1",
+      "threat": "Prompt injection through document text",
+      "control": "Untrusted text marked as data; side effects need approval; output only as escaped suggestions",
+      "builtBy": ["UX-045", "UX-046"],
+      "provenBy": "SEC-010",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+
+    {
+      "id": "T-3.2-cross-site",
+      "section": "3.2",
+      "threat": "Cross-site WebSocket use and cross-site request forgery",
+      "control": "Origin allow-list at hello; bearer tokens only, no cookies; CORS limited to tenant origins",
+      "builtBy": ["BE-029", "BE-032"],
+      "provenBy": "SEC-012",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["cross-site.test.ts"],
+      "boundaries": ["element-to-service", "host-backend-to-service"]
+    },
+    {
+      "id": "T-3.2-token-confusion",
+      "section": "3.2",
+      "threat": "Cross-tenant token confusion; a token that covers many documents",
+      "control": "Keys selected by tenant registration; asymmetric allow-list; exact audience; per-document roles",
+      "builtBy": ["BE-029", "BE-033"],
+      "provenBy": "SEC-013",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["token-confusion.test.ts"],
+      "boundaries": ["element-to-service", "host-backend-to-service"]
+    },
+    {
+      "id": "T-3.2-revocation",
+      "section": "3.2",
+      "threat": "Reconnecting after revocation",
+      "control": "A revocation watermark refuses older tokens on both planes",
+      "builtBy": ["BE-031"],
+      "provenBy": "SEC-014",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.2-replay",
+      "section": "3.2",
+      "threat": "Replay and resubmission; reused idempotency key",
+      "control": "Commit ids unique per document and bound to the user; idempotency keys scoped to tenant, caller, route, body",
+      "builtBy": ["BE-025", "BE-034"],
+      "provenBy": "SEC-015",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service", "host-backend-to-service"]
+    },
+    {
+      "id": "T-3.2-bare-id",
+      "section": "3.2",
+      "threat": "Reaching someone else's thread, export or asset by its bare identifier",
+      "control": "Every resource resolved to its document and checked against the token",
+      "builtBy": ["BE-032"],
+      "provenBy": "SEC-016",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-backend-to-service"]
+    },
+    {
+      "id": "T-3.2-malformed",
+      "section": "3.2",
+      "threat": "Oversized or malformed messages",
+      "control": "Size limits, strict envelope parsing, close codes; the envelope parser is fuzzed",
+      "builtBy": ["BE-029"],
+      "provenBy": "SEC-017",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["malformed-input.test.ts"],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.2-exhaustion",
+      "section": "3.2",
+      "threat": "Resource exhaustion",
+      "control": "Limits per address, connection, user and tenant; bounded queues; admission control",
+      "builtBy": ["BE-030", "BE-027"],
+      "provenBy": "SEC-018",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.2-identity-spoof",
+      "section": "3.2",
+      "threat": "Identity spoofing",
+      "control": "The server stamps user and session; client-supplied identity is checked or ignored",
+      "builtBy": ["BE-024", "BE-033"],
+      "provenBy": "SEC-019",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["identity-spoofing.test.ts"],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.2-webhooks",
+      "section": "3.2",
+      "threat": "Forged webhooks and server-side request forgery",
+      "control": "Standard Webhooks signatures; an egress proxy refuses private addresses",
+      "builtBy": ["BE-055", "BE-056", "BE-057"],
+      "provenBy": "SEC-020",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-host-backend"]
+    },
+
+    {
+      "id": "T-3.3-no-permission",
+      "section": "3.3",
+      "threat": "Changing a part of a document without permission",
+      "control": "The outcome check (07 §5.1), independent of step shape",
+      "builtBy": ["SYN-001", "SYN-006", "PRM-009"],
+      "provenBy": "SEC-021",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["bypass-classes.test.ts"],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.3-shared-styles",
+      "section": "3.3",
+      "threat": "Defacing protected text through shared styles",
+      "control": "A definition change needs edit or manage in every region that uses it (07 §5.3)",
+      "builtBy": ["PRM-009", "PRM-010"],
+      "provenBy": "SEC-024",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.3-rebase",
+      "section": "3.3",
+      "threat": "Bypassing validation through rebase tricks",
+      "control": "Only mapped steps are applied, and they pass every check",
+      "builtBy": ["SYN-001", "SYN-006"],
+      "provenBy": "SEC-025",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["rebase-tricks.test.ts"],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.3-revoked-race",
+      "section": "3.3",
+      "threat": "Editing under permissions that were just revoked",
+      "control": "The log write is conditional on the grants revision (04 G7)",
+      "builtBy": ["BE-026", "PRM-004", "PRM-019"],
+      "provenBy": "SEC-026",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["permission-races.test.ts"],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.3-corrupt",
+      "section": "3.3",
+      "threat": "Corrupting the document",
+      "control": "Schema, invariant and attribute-grammar checks on every commit; step types on an allow-list",
+      "builtBy": ["CDM-013", "SYN-001", "SYN-006"],
+      "provenBy": "SEC-027",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["corrupting-commits.test.ts"],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.3-stall",
+      "section": "3.3",
+      "threat": "Stalling or crashing a process that hosts many rooms",
+      "control": "Admission control; CPU budgets; heavy work in worker threads; structural limits; fuzzing",
+      "builtBy": ["BE-001", "BE-058", "SYN-037"],
+      "provenBy": "SEC-028",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.3-forge-history",
+      "section": "3.3",
+      "threat": "Forging history",
+      "control": "Server-side attribution; a hash chain over permission and workflow changes; anchored chain heads",
+      "builtBy": ["HIS-001", "HIS-002", "BE-081"],
+      "provenBy": "SEC-029",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.3-approved",
+      "section": "3.3",
+      "threat": "Changing an approved region",
+      "control": "Approvals bound to a seq and a content hash; no commit of any origin may change an approved region",
+      "builtBy": ["PRM-046", "PRM-047"],
+      "provenBy": "SEC-030",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service"]
+    },
+    {
+      "id": "T-3.3-two-writers",
+      "section": "3.3",
+      "threat": "Two writers",
+      "control": "Epoch-checked writes and the log's primary key; self-fencing on the node lease",
+      "builtBy": ["BE-017"],
+      "provenBy": "SEC-031",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["two-writers.test.ts"],
+      "boundaries": ["element-to-service", "service-to-workers"]
+    },
+    {
+      "id": "T-3.3-deleted-text",
+      "section": "3.3",
+      "threat": "Reading deleted text through old versions",
+      "control": "One visibility gate on every sequence number a caller can supply (07 §8)",
+      "builtBy": ["BE-036", "BE-038", "PRM-041"],
+      "provenBy": "SEC-032",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service"]
+    },
+
+    {
+      "id": "T-3.4-latex-injection",
+      "section": "3.4",
+      "threat": "LaTeX injection",
+      "control": "Typed emitters for every context; escaping tested adversarially",
+      "builtBy": ["EXP-042", "EXP-043", "EXP-044"],
+      "provenBy": "SEC-033",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.4-math-gate",
+      "section": "3.4",
+      "threat": "Equations that run code or paint over other text",
+      "control": "A strict math gate (I8) that bounds dimensions and removes overlap commands",
+      "builtBy": ["EXP-049", "EXP-050"],
+      "provenBy": "SEC-034",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.4-sandbox",
+      "section": "3.4",
+      "threat": "A compromised compile escaping the sandbox",
+      "control": "No shell escape, paranoid file access, no network, single-use sandbox, hard limits, no credentials",
+      "builtBy": ["EXP-068", "EXP-070", "EXP-073"],
+      "provenBy": "SEC-035",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.4-outputs",
+      "section": "3.4",
+      "threat": "Worker outputs treated as trusted",
+      "control": "Outputs treated as hostile; layout schema-checked; logs bounded; results served nosniff",
+      "builtBy": ["EXP-055", "EXP-064"],
+      "provenBy": "SEC-036",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+
+    {
+      "id": "T-3.5-claim-asset",
+      "section": "3.5",
+      "threat": "Overwriting or claiming an asset; referencing one never uploaded",
+      "control": "Quarantine; the worker computes the hash and alone writes the final object; I4",
+      "builtBy": ["BE-042", "BE-043", "BE-044"],
+      "provenBy": "SEC-037",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.5-bombs",
+      "section": "3.5",
+      "threat": "Decompression and pixel bombs",
+      "control": "Limits on entries, sizes and ratios; pixel limits; time and memory limits",
+      "builtBy": ["BE-043"],
+      "provenBy": "SEC-038",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.5-docx",
+      "section": "3.5",
+      "threat": "XML external entities, remote content and macros in DOCX",
+      "control": "Reject DTDs and entities; never follow external relationships; refuse macros",
+      "builtBy": ["EXP-098", "EXP-099"],
+      "provenBy": "SEC-039",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.5-decoder",
+      "section": "3.5",
+      "threat": "Decoder exploits and content-type confusion",
+      "control": "Sandboxed worker without network or credentials; re-encode; detected type must match",
+      "builtBy": ["BE-043", "BE-045"],
+      "provenBy": "SEC-040",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+
+    {
+      "id": "T-3.6-stolen-key",
+      "section": "3.6",
+      "threat": "Stolen signing key",
+      "control": "Keys in an HSM or key service; signing service separate from every content worker",
+      "builtBy": ["FRW-052"],
+      "provenBy": "SEC-041",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-signing"]
+    },
+    {
+      "id": "T-3.6-tampered-pdf",
+      "section": "3.6",
+      "threat": "A tampered PDF being sealed",
+      "control": "Two independent compiles compared; the bundle pinned to a seq and chain head",
+      "builtBy": ["FRW-052", "EXP-068"],
+      "provenBy": "SEC-042",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-signing"]
+    },
+    {
+      "id": "T-3.6-over-claim",
+      "section": "3.6",
+      "threat": "Claims about signer identity the platform cannot support",
+      "control": "Records the host's authentication claims as given; product language follows 12 §8.3",
+      "builtBy": ["FRW-040", "FRW-050"],
+      "provenBy": "SEC-043",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-signing"]
+    },
+    {
+      "id": "T-3.6-evidence",
+      "section": "3.6",
+      "threat": "Evidence leaking or outliving its purpose",
+      "control": "Evidence kept outside the log with its own retention; only salted hashes enter the chain",
+      "builtBy": ["FRW-040", "FRW-050"],
+      "provenBy": "SEC-044",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-signing"]
+    },
+    {
+      "id": "T-3.6-filler",
+      "section": "3.6",
+      "threat": "A filler changing more than their fields",
+      "control": "Rules P7 to P9, checked by the same outcome check",
+      "builtBy": ["FRW-008", "FRW-009", "FRW-010"],
+      "provenBy": "SEC-022",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["element-to-service"]
+    },
+
+    {
+      "id": "T-3.7-cross-tenant",
+      "section": "3.7",
+      "threat": "One tenant reaching another's data",
+      "control": "Row-level security and a tenant id on every table, object path and cache key; per-tenant keys",
+      "builtBy": ["BE-011", "BE-012", "BE-003"],
+      "provenBy": "SEC-045",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["tenant-isolation.test.ts"],
+      "boundaries": ["host-backend-to-service", "service-to-workers"]
+    },
+    {
+      "id": "T-3.7-signed-urls",
+      "section": "3.7",
+      "threat": "A leaked signed URL opening the whole store",
+      "control": "Short-lived, single-object signed URLs issued only after a permission check",
+      "builtBy": ["BE-045"],
+      "provenBy": "SEC-046",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.7-logs",
+      "section": "3.7",
+      "threat": "Logs and metrics containing content or tokens",
+      "control": "Structured logs of known fields only; URLs redacted; errors by name",
+      "builtBy": ["BE-088"],
+      "provenBy": "SEC-047",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["logs-no-content.test.ts"],
+      "boundaries": ["host-backend-to-service"]
+    },
+    {
+      "id": "T-3.7-secrets",
+      "section": "3.7",
+      "threat": "Leaked secrets that cannot be rotated",
+      "control": "Secrets in a manager; webhook secrets and service credentials have rotation overlap",
+      "builtBy": ["BE-033", "BE-057"],
+      "provenBy": "SEC-048",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-backend-to-service"]
+    },
+    {
+      "id": "T-3.7-backups",
+      "section": "3.7",
+      "threat": "A stolen backup file",
+      "control": "Backups encrypted; access audited; backup keys differ from live keys",
+      "builtBy": ["BE-096"],
+      "provenBy": "SEC-049",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+
+    {
+      "id": "T-3.8-deps",
+      "section": "3.8",
+      "threat": "A compromised or incompatible package entering the build",
+      "control": "Lock files, dependency review, install scripts off, licence policy",
+      "builtBy": ["FND-001", "FND-002"],
+      "provenBy": "SEC-050",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["supply-chain.test.ts"],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.8-sbom",
+      "section": "3.8",
+      "threat": "Not knowing what is inside a release",
+      "control": "A software bill of materials per release artefact",
+      "builtBy": ["SEC-050", "FND-012"],
+      "provenBy": "SEC-051",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.8-images",
+      "section": "3.8",
+      "threat": "A swapped container image",
+      "control": "Signed images; base images pinned by digest",
+      "builtBy": ["BE-006", "FND-012"],
+      "provenBy": "SEC-052",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.8-texlive",
+      "section": "3.8",
+      "threat": "A TeX Live update changing output or security",
+      "control": "A curated TeX Live pinned by digest with a licence manifest",
+      "builtBy": ["EXP-015", "EXP-073"],
+      "provenBy": "SEC-053",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers"]
+    },
+    {
+      "id": "T-3.8-bundle",
+      "section": "3.8",
+      "threat": "A third party changing what runs in the page",
+      "control": "The editor bundle loads scripts, styles, fonts and code only from configured origins",
+      "builtBy": ["FE-125"],
+      "provenBy": "SEC-054",
+      "phase": "1b",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"]
+    },
+
+    {
+      "id": "T-5-fuzzing",
+      "section": "5",
+      "threat": "Parsers and emitters attacked continuously",
+      "control": "Fuzz targets registered, run on every change and kept as regression cases",
+      "builtBy": ["FND-001", "FND-002"],
+      "provenBy": "SEC-059",
+      "phase": "1a",
+      "status": "proven",
+      "tests": ["fuzz.test.ts"],
+      "boundaries": ["element-to-service"]
+    }
+  ]
+}

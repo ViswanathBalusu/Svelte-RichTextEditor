@@ -1,0 +1,25 @@
+{
+  "name": "@docedit/export-latex",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CDM to LaTeX converter, house class, typed emitters and source map (09). Phase 0: spike S4 (SPK-017).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./class/*": "./class/*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@docedit/model": "workspace:*",
+    "katex": "0.19.1"
+  },
+  "devDependencies": {
+    "@docedit/corpus": "workspace:*"
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "name": "i7-columns-64",
+  "doc": "replace: a table of 64 columns (a span is at most 63, so the wider table's geometry is not checked).",
+  "base": "example",
+  "steps": [
+    {
+      "stepType": "replace",
+      "from": 59,
+      "to": 59,
+      "slice": {
+        "content": [
+          {
+            "type": "table",
+            "attrs": {
+              "id": "tFixture00000001",
+              "style": null,
+              "width": null,
+              "align": null,
+              "grid": [
+                100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+                100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+                100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+                100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100
+              ],
+              "headerRows": 0,
+              "borders": null,
+              "cellMargins": null,
+              "preserved": null,
+              "ext": {}
+            },
+            "content": [
+              {
+                "type": "table_row",
+                "attrs": {
+                  "id": "trFixture0000001",
+                  "height": null,
+                  "heightRule": "auto",
+                  "cantSplit": false,
+                  "preserved": null,
+                  "ext": {}
+                },
+                "content": [
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "tcFixture0000001",
+                      "colspan": 63,
+                      "rowspan": 1,
+                      "vAlign": null,
+                      "shading": null,
+                      "borders": null,
+                      "margins": null,
+                      "preserved": null,
+                      "ext": {}
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "pcFixture0000001",
+                          "style": null,
+                          "numbering": null,
+                          "numberingRestart": null,
+                          "align": null,
+                          "dir": null,
+                          "indentLeft": null,
+                          "indentRight": null,
+                          "indentFirstLine": null,
+                          "spaceBefore": null,
+                          "spaceAfter": null,
+                          "contextualSpacing": null,
+                          "lineSpacing": null,
+                          "lineRule": null,
+                          "keepNext": null,
+                          "keepLines": null,
+                          "pageBreakBefore": null,
+                          "widowControl": null,
+                          "tabs": null,
+                          "borders": null,
+                          "shading": null,
+                          "preserved": null,
+                          "ext": {}
+                        },
+                        "content": [{ "type": "text", "text": "x" }]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I7"],
+  "limit": { "name": "tableColumns", "side": "past" }
+}

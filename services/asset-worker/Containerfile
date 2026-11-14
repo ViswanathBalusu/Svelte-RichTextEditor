@@ -1,0 +1,45 @@
+# Asset worker sandbox image (BE-043; SEC-038; SEC-040; ADR 0043). Built with Podman:
+#   node services/asset-worker/scripts/build-image.ts
+# which stages a build context holding only src/sandbox/ and the three decoders (pngjs, jpeg-js,
+# omggif) in a temporary directory, and runs
+#   podman build -f Containerfile -t localhost/docedit-asset-worker:dev <context>
+# (DOCEDIT_ASSET_IMAGE overrides the tag; DOCEDIT_CONTAINER_CLI the binary).
+#
+# Base: the official Node.js image, Node.js 24.21.0 on Debian 12 slim, pinned by digest. Recorded on
+# 2026-11-06 from `podman manifest inspect` and `podman image inspect`:
+#   docker.io/library/node:24.21.0-slim
+#   index    sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+#   amd64    sha256:51b1100cc2a83d370c6a60952e3f2989c8a43159d0e38586e090f3b3326efefd
+#   created  2026-10-06; base debian:bookworm-slim
+# Node.js is MIT; the Debian base system has its own licences (many GPL or LGPL), which a
+# self-hosted distribution of the image lists in a manifest with a source offer, as for the export
+# image (docs/research/2026-11-06-legal-note.md section 3.3). Nothing in it is AGPL.
+FROM docker.io/library/node:24.21.0-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+
+# Nothing at run time needs a package manager: remove npm, npx, corepack and yarn, and the image's
+# default user's home. The job runs as an unprivileged user of its own.
+RUN set -eu; \
+    rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-* /home/node; \
+    groupadd --gid 10001 sandbox; \
+    useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin sandbox
+
+ENV NODE_ENV=production \
+    LANG=C.UTF-8 \
+    HOME=/nonexistent
+
+COPY package.json /opt/docedit/package.json
+COPY node_modules/ /opt/docedit/node_modules/
+COPY sandbox/ /opt/docedit/sandbox/
+RUN set -eu; \
+    chown -R 0:0 /opt/docedit; \
+    chmod -R a+rX,go-w /opt/docedit; \
+    node --version | grep -E '^v24\.'; \
+    node --permission --allow-fs-read=/opt/docedit/ --disallow-code-generation-from-strings \
+      --input-type=module -e "const m = await import('/opt/docedit/sandbox/process.ts'); if (typeof m.handleRequest !== 'function') process.exit(1);"
+
+USER 10001:10001
+WORKDIR /opt/docedit
+# Node.js's permission model: read access to /opt/docedit only; no writes, no child processes, no
+# worker threads, no native add-ons, no WASI. No code generation from strings.
+ENTRYPOINT ["node", "--permission", "--allow-fs-read=/opt/docedit/", "--disallow-code-generation-from-strings", "/opt/docedit/sandbox/main.ts"]

@@ -1,0 +1,69 @@
+{
+  "name": "i3-retired-region-id",
+  "doc": "replace: a region whose identifier was removed from the document before.",
+  "base": "example",
+  "steps": [
+    {
+      "stepType": "replace",
+      "from": 59,
+      "to": 59,
+      "slice": {
+        "content": [
+          {
+            "type": "region",
+            "attrs": {
+              "id": "rRetiredRegion01",
+              "title": null,
+              "policy": "inherit",
+              "preserved": null,
+              "ext": {}
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pRetiredRegion01",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "preserved": null,
+                  "ext": {}
+                },
+                "content": [{ "type": "text", "text": "x" }]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I3"]
+}

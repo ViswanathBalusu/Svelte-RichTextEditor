@@ -1,0 +1,25 @@
+# Build context of the kit image (podman build --ignorefile packages/tck/Containerfile.ignore):
+# everything is left out except what the Containerfile copies.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!packages/tck/package.json
+!packages/tck/src/**
+!packages/tck/fixtures/**
+!packages/protocol/package.json
+!packages/protocol/src/**
+!packages/model/package.json
+!packages/model/src/**
+!packages/model/fixtures/**
+!packages/authority/package.json
+!packages/authority/src/**
+!packages/authority/fixtures/**
+!packages/corpus/package.json
+!packages/corpus/src/**
+!packages/rules/package.json
+!packages/rules/src/**
+!spec/**
+**/node_modules
+**/*.test.ts

@@ -1,0 +1,30 @@
+{
+  "name": "@docedit/history",
+  "version": "0.0.0",
+  "private": true,
+  "description": "History algorithms as pure functions: comparisons from recorded steps and by aligning blocks, the attribution map, history groups, restore plans and their dry runs, and the verification of a log's hash chain (08; ADR 0051, proposed).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "bin": {
+    "docedit-verify-log": "./scripts/verify-log.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@docedit/authority": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "prosemirror-changeset": "2.4.4",
+    "prosemirror-model": "1.25.12",
+    "prosemirror-transform": "1.12.5"
+  },
+  "devDependencies": {
+    "@docedit/corpus": "workspace:*"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Tests run in Node.js, and the universal ones in browsers too; they use no DOM API, and the Node.js types match the document service the service test imports.",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts", "test/**/*.ts", "scripts/**/*.ts", "e2e/**/*.ts"]
+}

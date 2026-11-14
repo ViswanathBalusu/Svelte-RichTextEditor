@@ -1,0 +1,1884 @@
+{
+  "cdm": 1,
+  "requires": ["fields"],
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "defs",
+        "content": [
+          {
+            "type": "settings",
+            "attrs": {
+              "lang": "en-GB",
+              "defaultTabStop": 720,
+              "defaultParagraphStyle": "Normal"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Normal",
+              "kind": "paragraph",
+              "name": "Normal",
+              "builtIn": true,
+              "next": "Normal",
+              "fontFamily": "Noto Serif",
+              "fontSize": 220,
+              "spaceAfter": 160,
+              "lineSpacing": 1150,
+              "lineRule": "multiple",
+              "widowControl": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "rzf0XZHN7KW6Efym",
+              "kind": "paragraph",
+              "name": "Heading Base",
+              "basedOn": "Normal",
+              "next": "Normal",
+              "fontFamily": "Noto Sans",
+              "bold": true,
+              "color": "#1F3864",
+              "keepNext": true,
+              "keepLines": true,
+              "spaceAfter": 120
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading1",
+              "kind": "paragraph",
+              "name": "Heading 1",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 1,
+              "fontSize": 320,
+              "spaceBefore": 480,
+              "numbering": {
+                "numberingId": "aJHxLUSo0_0lq45K",
+                "level": 0,
+                "listId": "M0zW6CmFcXOBCnsO"
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading2",
+              "kind": "paragraph",
+              "name": "Heading 2",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 2,
+              "fontSize": 280,
+              "spaceBefore": 360,
+              "numbering": {
+                "numberingId": "aJHxLUSo0_0lq45K",
+                "level": 1,
+                "listId": "M0zW6CmFcXOBCnsO"
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading3",
+              "kind": "paragraph",
+              "name": "Heading 3",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 3,
+              "fontSize": 260,
+              "spaceBefore": 240,
+              "numbering": {
+                "numberingId": "aJHxLUSo0_0lq45K",
+                "level": 2,
+                "listId": "M0zW6CmFcXOBCnsO"
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading4",
+              "kind": "paragraph",
+              "name": "Heading 4",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 4,
+              "fontSize": 240,
+              "spaceBefore": 240,
+              "numbering": {
+                "numberingId": "aJHxLUSo0_0lq45K",
+                "level": 3,
+                "listId": "M0zW6CmFcXOBCnsO"
+              },
+              "italic": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading5",
+              "kind": "paragraph",
+              "name": "Heading 5",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 5,
+              "fontSize": 240,
+              "spaceBefore": 200
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading6",
+              "kind": "paragraph",
+              "name": "Heading 6",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 6,
+              "fontSize": 220,
+              "spaceBefore": 200
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading7",
+              "kind": "paragraph",
+              "name": "Heading 7",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 7,
+              "fontSize": 220,
+              "spaceBefore": 160
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading8",
+              "kind": "paragraph",
+              "name": "Heading 8",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 8,
+              "fontSize": 220,
+              "spaceBefore": 160
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading9",
+              "kind": "paragraph",
+              "name": "Heading 9",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "outlineLevel": 9,
+              "fontSize": 220,
+              "spaceBefore": 160
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Title",
+              "kind": "paragraph",
+              "name": "Title",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Subtitle",
+              "fontFamily": "Noto Sans",
+              "fontSize": 560,
+              "color": "#1F3864",
+              "align": "center",
+              "spaceAfter": 240
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Subtitle",
+              "kind": "paragraph",
+              "name": "Subtitle",
+              "builtIn": true,
+              "basedOn": "Title",
+              "next": "Normal",
+              "fontSize": 320,
+              "italic": true,
+              "spaceAfter": 480
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Quote",
+              "kind": "paragraph",
+              "name": "Quote",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "italic": true,
+              "color": "#404040",
+              "indentLeft": 720,
+              "indentRight": 720
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "IntenseQuote",
+              "kind": "paragraph",
+              "name": "Intense Quote",
+              "builtIn": true,
+              "basedOn": "Quote",
+              "next": "Normal",
+              "bold": true,
+              "color": "#1F3864",
+              "borders": {
+                "top": {
+                  "style": "single",
+                  "width": 8,
+                  "color": "#1F3864",
+                  "space": 4
+                },
+                "bottom": {
+                  "style": "single",
+                  "width": 8,
+                  "color": "#1F3864",
+                  "space": 4
+                }
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "ListParagraph",
+              "kind": "paragraph",
+              "name": "List Paragraph",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "indentLeft": 720,
+              "contextualSpacing": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "NoSpacing",
+              "kind": "paragraph",
+              "name": "No Spacing",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "spaceAfter": 0,
+              "lineSpacing": 1000,
+              "lineRule": "multiple"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Caption",
+              "kind": "paragraph",
+              "name": "Caption",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "fontSize": 180,
+              "italic": true,
+              "color": "#44546A",
+              "spaceAfter": 200,
+              "keepNext": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "FootnoteText",
+              "kind": "paragraph",
+              "name": "Footnote Text",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "fontSize": 180,
+              "spaceAfter": 0,
+              "lineSpacing": 1000,
+              "lineRule": "multiple"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Header",
+              "kind": "paragraph",
+              "name": "Header",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "fontSize": 180,
+              "spaceAfter": 0,
+              "tabs": [
+                {
+                  "position": 4513,
+                  "align": "center",
+                  "leader": "none"
+                },
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "none"
+                }
+              ]
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Footer",
+              "kind": "paragraph",
+              "name": "Footer",
+              "builtIn": true,
+              "basedOn": "Header"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOCHeading",
+              "kind": "paragraph",
+              "name": "TOC Heading",
+              "builtIn": true,
+              "basedOn": "rzf0XZHN7KW6Efym",
+              "next": "Normal",
+              "fontSize": 320,
+              "spaceBefore": 240
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC1",
+              "kind": "paragraph",
+              "name": "TOC 1",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "bold": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC2",
+              "kind": "paragraph",
+              "name": "TOC 2",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "indentLeft": 220
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC3",
+              "kind": "paragraph",
+              "name": "TOC 3",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "indentLeft": 440
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC4",
+              "kind": "paragraph",
+              "name": "TOC 4",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "indentLeft": 660
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC5",
+              "kind": "paragraph",
+              "name": "TOC 5",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "indentLeft": 880
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC6",
+              "kind": "paragraph",
+              "name": "TOC 6",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "indentLeft": 1100
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC7",
+              "kind": "paragraph",
+              "name": "TOC 7",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "indentLeft": 1320
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC8",
+              "kind": "paragraph",
+              "name": "TOC 8",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "indentLeft": 1540
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TOC9",
+              "kind": "paragraph",
+              "name": "TOC 9",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "spaceAfter": 60,
+              "tabs": [
+                {
+                  "position": 9026,
+                  "align": "right",
+                  "leader": "dot"
+                }
+              ],
+              "indentLeft": 1760
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "2sQ_Eh4SsOj5irC6",
+              "kind": "paragraph",
+              "name": "Body Text",
+              "basedOn": "Normal",
+              "next": "2sQ_Eh4SsOj5irC6",
+              "align": "justify",
+              "spaceAfter": 120
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "jBOki-3oZ303qgvU",
+              "kind": "paragraph",
+              "name": "Body Text Indent",
+              "basedOn": "2sQ_Eh4SsOj5irC6",
+              "next": "jBOki-3oZ303qgvU",
+              "indentFirstLine": 360
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "r2BrDWSQaRPfwTmZ",
+              "kind": "paragraph",
+              "name": "Abstract",
+              "basedOn": "jBOki-3oZ303qgvU",
+              "next": "Normal",
+              "italic": true,
+              "fontSize": 200,
+              "indentLeft": 720,
+              "indentRight": 720
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "6FbJu3VW0xfUsE5Q",
+              "kind": "paragraph",
+              "name": "Note",
+              "basedOn": "2sQ_Eh4SsOj5irC6",
+              "next": "Normal",
+              "indentLeft": 240,
+              "shading": {
+                "fill": "#F2F2F2"
+              },
+              "borders": {
+                "left": {
+                  "style": "thick",
+                  "width": 24,
+                  "color": "#ED7D31",
+                  "space": 4
+                }
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "O1hvLmrLd7a2-nNg",
+              "kind": "paragraph",
+              "name": "Code Block",
+              "basedOn": "NoSpacing",
+              "fontFamily": "Noto Sans Mono",
+              "fontSize": 180,
+              "shading": {
+                "fill": "#F2F2F2"
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "ultfJzGXWgVc7ALk",
+              "kind": "paragraph",
+              "name": "CJK Body",
+              "basedOn": "2sQ_Eh4SsOj5irC6",
+              "align": "distribute",
+              "lineSpacing": 1250,
+              "lineRule": "multiple"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "DefaultParagraphFont",
+              "kind": "character",
+              "name": "Default Paragraph Font",
+              "builtIn": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "FootnoteReference",
+              "kind": "character",
+              "name": "Footnote Reference",
+              "builtIn": true,
+              "basedOn": "DefaultParagraphFont",
+              "vertAlign": "super"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Hyperlink",
+              "kind": "character",
+              "name": "Hyperlink",
+              "builtIn": true,
+              "basedOn": "DefaultParagraphFont",
+              "color": "#0563C1",
+              "underline": "single"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Strong",
+              "kind": "character",
+              "name": "Strong",
+              "builtIn": true,
+              "basedOn": "DefaultParagraphFont",
+              "bold": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Emphasis",
+              "kind": "character",
+              "name": "Emphasis",
+              "builtIn": true,
+              "basedOn": "DefaultParagraphFont",
+              "italic": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "0rqBlPf6F8H98-_c",
+              "kind": "character",
+              "name": "Code",
+              "basedOn": "DefaultParagraphFont",
+              "fontFamily": "Noto Sans Mono",
+              "fontSize": 200
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "YgrlEDCz9KFXHj5F",
+              "kind": "character",
+              "name": "Code Keyword",
+              "basedOn": "0rqBlPf6F8H98-_c",
+              "bold": true,
+              "color": "#7030A0"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "g5Urpchr_LOyRlJB",
+              "kind": "character",
+              "name": "Term",
+              "basedOn": "Emphasis",
+              "smallCaps": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TableNormal",
+              "kind": "table",
+              "name": "Normal Table",
+              "builtIn": true,
+              "cellMargins": {
+                "top": 0,
+                "bottom": 0,
+                "left": 108,
+                "right": 108
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TableGrid",
+              "kind": "table",
+              "name": "Table Grid",
+              "builtIn": true,
+              "basedOn": "TableNormal",
+              "borders": {
+                "top": {
+                  "style": "single",
+                  "width": 4,
+                  "color": null,
+                  "space": 0
+                },
+                "bottom": {
+                  "style": "single",
+                  "width": 4,
+                  "color": null,
+                  "space": 0
+                },
+                "left": {
+                  "style": "single",
+                  "width": 4,
+                  "color": null,
+                  "space": 0
+                },
+                "right": {
+                  "style": "single",
+                  "width": 4,
+                  "color": null,
+                  "space": 0
+                },
+                "insideH": {
+                  "style": "single",
+                  "width": 4,
+                  "color": null,
+                  "space": 0
+                },
+                "insideV": {
+                  "style": "single",
+                  "width": 4,
+                  "color": null,
+                  "space": 0
+                }
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Qn0I-ZM04tNK8k-g",
+              "kind": "table",
+              "name": "Data Table",
+              "basedOn": "TableGrid",
+              "fontSize": 200,
+              "cellMargins": {
+                "top": 40,
+                "bottom": 40,
+                "left": 108,
+                "right": 108
+              },
+              "headerRowShading": {
+                "fill": "#D9E2F3"
+              },
+              "bandedRows": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Lc7EPSigLF03DVli",
+              "kind": "table",
+              "name": "Plain Table",
+              "basedOn": "TableNormal",
+              "borders": {
+                "top": {
+                  "style": "single",
+                  "width": 12,
+                  "color": "#1F3864",
+                  "space": 0
+                },
+                "bottom": {
+                  "style": "single",
+                  "width": 12,
+                  "color": "#1F3864",
+                  "space": 0
+                }
+              }
+            }
+          },
+          {
+            "type": "numbering_def",
+            "attrs": {
+              "id": "aJHxLUSo0_0lq45K",
+              "name": "Outline numbering",
+              "levels": [
+                {
+                  "format": "decimal",
+                  "text": "%1",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2.%3",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2.%3.%4",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2.%3.%4.%5",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2.%3.%4.%5.%6",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2.%3.%4.%5.%6.%7",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2.%3.%4.%5.%6.%7.%8",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2.%3.%4.%5.%6.%7.%8.%9",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0
+                }
+              ]
+            }
+          },
+          {
+            "type": "numbering_def",
+            "attrs": {
+              "id": "Z0Uy0qwvUQ4y3Jeu",
+              "name": "Numbered list",
+              "levels": [
+                {
+                  "format": "decimal",
+                  "text": "%1.",
+                  "start": 1,
+                  "indentLeft": 720,
+                  "hanging": 360
+                },
+                {
+                  "format": "lowerLetter",
+                  "text": "%2)",
+                  "start": 1,
+                  "indentLeft": 1080,
+                  "hanging": 360
+                },
+                {
+                  "format": "lowerRoman",
+                  "text": "(%3)",
+                  "start": 1,
+                  "indentLeft": 1440,
+                  "hanging": 360,
+                  "align": "end"
+                },
+                {
+                  "format": "upperLetter",
+                  "text": "%4.",
+                  "start": 1,
+                  "indentLeft": 1800,
+                  "hanging": 360
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2.%3.%4.%5",
+                  "start": 1,
+                  "legal": true,
+                  "indentLeft": 2160,
+                  "hanging": 360
+                }
+              ]
+            }
+          },
+          {
+            "type": "numbering_def",
+            "attrs": {
+              "id": "ZBkPgEApFcmAYbba",
+              "name": "Bullets",
+              "levels": [
+                {
+                  "format": "bullet",
+                  "text": "",
+                  "start": 1,
+                  "bulletChar": "•",
+                  "indentLeft": 720,
+                  "hanging": 360,
+                  "runProps": {
+                    "color": "#1F3864"
+                  }
+                },
+                {
+                  "format": "bullet",
+                  "text": "",
+                  "start": 1,
+                  "bulletChar": "◦",
+                  "indentLeft": 1080,
+                  "hanging": 360
+                },
+                {
+                  "format": "bullet",
+                  "text": "",
+                  "start": 1,
+                  "bulletChar": "▪",
+                  "indentLeft": 1440,
+                  "hanging": 360
+                },
+                {
+                  "format": "bullet",
+                  "text": "",
+                  "start": 1,
+                  "bulletChar": "–",
+                  "indentLeft": 1800,
+                  "hanging": 360
+                }
+              ]
+            }
+          },
+          {
+            "type": "numbering_def",
+            "attrs": {
+              "id": "lA_9aHHANiIRN9SJ",
+              "name": "Articles",
+              "levels": [
+                {
+                  "format": "upperRoman",
+                  "text": "§ %1.",
+                  "start": 1,
+                  "indentLeft": 0,
+                  "hanging": 0,
+                  "runProps": {
+                    "bold": true
+                  }
+                },
+                {
+                  "format": "decimal",
+                  "text": "%1.%2",
+                  "start": 1,
+                  "legal": true,
+                  "indentLeft": 720,
+                  "hanging": 720
+                },
+                {
+                  "format": "lowerLetter",
+                  "text": "(%3)",
+                  "start": 1,
+                  "restartAfter": 0,
+                  "indentLeft": 1440,
+                  "hanging": 720
+                }
+              ]
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "Xe1UeuFqemhnmu6u",
+              "width": 11906,
+              "height": 16838,
+              "marginTop": 1440,
+              "marginRight": 1440,
+              "marginBottom": 1440,
+              "marginLeft": 1440,
+              "headerDefault": "bgLxW9lkVrTVj6xp",
+              "footerDefault": "EQUdPgfyViB7QcLU"
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "b4YjRRWoNB8sLQWQ",
+              "headerDefault": "bgLxW9lkVrTVj6xp",
+              "footerDefault": "EQUdPgfyViB7QcLU",
+              "pageNumberStart": 1,
+              "pageNumberFormat": "lowerRoman"
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "v1B-6V6JkyJF6VLl",
+              "headerDefault": "bgLxW9lkVrTVj6xp",
+              "footerDefault": "EQUdPgfyViB7QcLU",
+              "pageNumberStart": 1
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "KkuINF5uUcB80W9e",
+              "headerDefault": "bgLxW9lkVrTVj6xp",
+              "footerDefault": "EQUdPgfyViB7QcLU"
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "TVgaJM-NRwpevf1C",
+              "width": 16838,
+              "height": 11906,
+              "orientation": "landscape",
+              "marginTop": 1080,
+              "marginRight": 1080,
+              "marginBottom": 1080,
+              "marginLeft": 1080,
+              "headerDefault": "bgLxW9lkVrTVj6xp",
+              "footerDefault": "EQUdPgfyViB7QcLU"
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "24U97JIffRPQ490q",
+              "columns": 2,
+              "columnGap": 720,
+              "headerDefault": "bgLxW9lkVrTVj6xp",
+              "footerDefault": "EQUdPgfyViB7QcLU"
+            }
+          },
+          {
+            "type": "role_def",
+            "attrs": {
+              "id": "xS3TWGrXvQq8hpDm",
+              "name": "Client",
+              "color": "#2E75B6"
+            }
+          },
+          {
+            "type": "role_def",
+            "attrs": {
+              "id": "_--PHdcpkzfy3_lw",
+              "name": "Supplier",
+              "color": "#C55A11"
+            }
+          },
+          {
+            "type": "rule_def",
+            "attrs": {
+              "id": "jnwQrs9r9LI1mFLK",
+              "when": {
+                "==": [
+                  {
+                    "field": "order.agentInvolved"
+                  },
+                  true
+                ]
+              },
+              "then": [
+                {
+                  "show": ["agent.name"]
+                },
+                {
+                  "require": ["agent.name"]
+                }
+              ],
+              "else": [
+                {
+                  "hide": ["agent.name"]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "type": "story",
+        "attrs": {
+          "id": "bgLxW9lkVrTVj6xp",
+          "kind": "header"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "vU9Sm3ZpLLmQv8U5",
+              "style": "Header"
+            },
+            "content": [
+              {
+                "type": "image",
+                "attrs": {
+                  "asset": "01a1ae27-b407-7a42-b7b3-e484c8d4c426",
+                  "width": 480,
+                  "height": 240,
+                  "alt": "Corpus mark"
+                }
+              },
+              {
+                "type": "text",
+                "text": " Service order form"
+              },
+              {
+                "type": "tab"
+              },
+              {
+                "type": "tab"
+              },
+              {
+                "type": "field",
+                "attrs": {
+                  "kind": "styleRef",
+                  "target": "style:Heading1"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "story",
+        "attrs": {
+          "id": "EQUdPgfyViB7QcLU",
+          "kind": "footer"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "mJf_PK_FsBZe7JlU",
+              "style": "Footer"
+            },
+            "content": [
+              {
+                "type": "tab"
+              },
+              {
+                "type": "text",
+                "text": "Page "
+              },
+              {
+                "type": "field",
+                "attrs": {
+                  "kind": "page"
+                }
+              },
+              {
+                "type": "text",
+                "text": " of "
+              },
+              {
+                "type": "field",
+                "attrs": {
+                  "kind": "pageCount"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "body",
+        "attrs": {
+          "pageSetup": "Xe1UeuFqemhnmu6u"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "N9NasAOU4KcAGZ_z",
+              "style": "Title"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Service order"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "nKsGUdWre1gxVCRq",
+              "style": "2sQ_Eh4SsOj5irC6"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Two roles fill this form. A field assigned to a role is filled by whoever takes that role in a workflow; the template names no person. Fields without a role are set by the author."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "gvaLy6xmb7yUUH99",
+              "style": "Heading1"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Client"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "3zP4CaL7ozwjK4wo",
+              "style": "2sQ_Eh4SsOj5irC6"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Name: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "oclXQIwYDJAy_C52",
+                  "key": "client.name",
+                  "label": "Client name",
+                  "assignee": "xS3TWGrXvQq8hpDm",
+                  "required": true,
+                  "placeholder": "Full name",
+                  "width": 4320
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "Z89Msm_Bphoten2E",
+              "style": "2sQ_Eh4SsOj5irC6"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Email: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "TdBrbBouhCrAPUpv",
+                  "key": "client.email",
+                  "label": "Client email",
+                  "assignee": "xS3TWGrXvQq8hpDm",
+                  "validation": {
+                    "preset": "email",
+                    "maxLength": 254
+                  },
+                  "width": 4320
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "efNAFoG5X0sjeM8y",
+              "style": "2sQ_Eh4SsOj5irC6"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Start date: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "kWn0alE4K13pV8kE",
+                  "key": "order.startDate",
+                  "kind": "date",
+                  "label": "Start date",
+                  "assignee": "xS3TWGrXvQq8hpDm",
+                  "value": "2026-12-01",
+                  "format": {
+                    "datePattern": "d MMMM yyyy"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "YHRuLhdRGkINpJdp",
+              "style": "2sQ_Eh4SsOj5irC6"
+            },
+            "content": [
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "JjGrNXPHVqueUjjA",
+                  "key": "order.agentInvolved",
+                  "kind": "checkbox",
+                  "label": "An agent acts for the client",
+                  "assignee": "xS3TWGrXvQq8hpDm",
+                  "value": false
+                }
+              },
+              {
+                "type": "text",
+                "text": " An agent acts for the client. Agent name: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "rPOeInK-0BK2DT78",
+                  "key": "agent.name",
+                  "label": "Agent name",
+                  "assignee": "xS3TWGrXvQq8hpDm",
+                  "width": 3600
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "SnP7AimF6ZsB0IoU",
+              "style": "Heading1"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Supplier"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "bmfbacbQWL1rTOWH",
+              "style": "Caption"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Table "
+              },
+              {
+                "type": "field",
+                "attrs": {
+                  "kind": "seq",
+                  "name": "Table",
+                  "cached": "1"
+                }
+              },
+              {
+                "type": "text",
+                "text": ": Order details"
+              }
+            ]
+          },
+          {
+            "type": "table",
+            "attrs": {
+              "id": "c-1DaU5TkEfI_WdY",
+              "style": "Qn0I-ZM04tNK8k-g",
+              "grid": [3000, 6026],
+              "headerRows": 1
+            },
+            "content": [
+              {
+                "type": "table_row",
+                "attrs": {
+                  "id": "1vQHy3tRWnI_0ZSt",
+                  "cantSplit": true
+                },
+                "content": [
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "EvXZPnDQYNoCpn3U"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "NiqD2DFrY3HQDSNf",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Item"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "i9ZbbYetFcfE5GYn"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "D0nNs-YOEuPqtQtC",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Value"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "table_row",
+                "attrs": {
+                  "id": "9P_qhkGuKzU7rIhw"
+                },
+                "content": [
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "UZtQtZWK5pj9vias"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "Vb0janF46BMdjMgY",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Hours"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "vg-yfC-KSJ_KXuC3"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "wkwRwNiw3XOYhVm7",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "form_field",
+                            "attrs": {
+                              "id": "KbcW5cAqxm9k4UZ_",
+                              "key": "order.hours",
+                              "kind": "number",
+                              "label": "Hours",
+                              "assignee": "_--PHdcpkzfy3_lw",
+                              "value": "40",
+                              "format": {
+                                "decimals": 0
+                              },
+                              "validation": {
+                                "min": "1",
+                                "max": "500"
+                              },
+                              "width": 1440
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "table_row",
+                "attrs": {
+                  "id": "3m3UxgKZLEexCtx4"
+                },
+                "content": [
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "bXEPB7_ljpHGqF8R"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "Ip2QwO0o6QxL5_V2",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Rate"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "k7_VYEvT95cdPuGt"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "P38qnVzMQI2kAiWO",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "form_field",
+                            "attrs": {
+                              "id": "S-VZF6WYHN9peX4b",
+                              "key": "order.rate",
+                              "kind": "number",
+                              "label": "Hourly rate",
+                              "assignee": "_--PHdcpkzfy3_lw",
+                              "value": "85.00",
+                              "format": {
+                                "decimals": 2,
+                                "prefix": "€"
+                              },
+                              "width": 1440
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "table_row",
+                "attrs": {
+                  "id": "NI7alKVVUvskxRGF"
+                },
+                "content": [
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "eJqgQRMivFS2iV3r"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "eeWQap8KD7XZVn6S",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Plan"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "YRS_GYE2CKpTC8h9"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "rVZkEdhfq-kaQ4SH",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "form_field",
+                            "attrs": {
+                              "id": "dygk0EbDr2rD-89i",
+                              "key": "order.plan",
+                              "kind": "choice",
+                              "label": "Support plan",
+                              "assignee": "_--PHdcpkzfy3_lw",
+                              "value": "standard",
+                              "options": [
+                                {
+                                  "id": "basic",
+                                  "label": "Basic"
+                                },
+                                {
+                                  "id": "standard",
+                                  "label": "Standard"
+                                },
+                                {
+                                  "id": "extended",
+                                  "label": "Extended"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "table_row",
+                "attrs": {
+                  "id": "OxpvoKfuURbXSd1A"
+                },
+                "content": [
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "iBXIzBKiZmXRJmhr"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "K3qpZwbQOryCo2oQ",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "Total"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table_cell",
+                    "attrs": {
+                      "id": "8kPkV9qmr4RBsSNw"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "attrs": {
+                          "id": "E0zisbQykChX0c0s",
+                          "style": "NoSpacing"
+                        },
+                        "content": [
+                          {
+                            "type": "form_field",
+                            "attrs": {
+                              "id": "V_vrIkKFIMPRkvhR",
+                              "key": "order.total",
+                              "kind": "formula",
+                              "label": "Total price",
+                              "readOnly": true,
+                              "width": 1440
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "UK-GzbkIYVL-u42d",
+              "style": "2sQ_Eh4SsOj5irC6"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "When each "
+              },
+              {
+                "type": "text",
+                "text": "margin finishes",
+                "marks": [
+                  {
+                    "type": "bold"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": " officially, the awkward list follows each archive. The distant "
+              },
+              {
+                "type": "text",
+                "text": "avenue",
+                "marks": [
+                  {
+                    "type": "bold"
+                  },
+                  {
+                    "type": "italic"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": " returns each region. Various towers outline this balance over an early waveform. Each figure outlines the summary; the shared schedule gathers efficiently."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "CU_ttWlc_7p3S4-p",
+              "style": "Heading1"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Signatures"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "Yn3jRuHsHvALBQQL",
+              "style": "2sQ_Eh4SsOj5irC6"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Signed for the client by "
+              },
+              {
+                "type": "field",
+                "attrs": {
+                  "kind": "formValue",
+                  "target": "field:client.name"
+                }
+              },
+              {
+                "type": "text",
+                "text": ": "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "C9Xy1gd2SJ3EWhEG",
+                  "key": "client.signature",
+                  "kind": "signature",
+                  "label": "Client signature",
+                  "assignee": "xS3TWGrXvQq8hpDm",
+                  "required": true
+                }
+              },
+              {
+                "type": "text",
+                "text": " Initials: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "wJQsLD2m59VuODyL",
+                  "key": "client.initials",
+                  "kind": "initials",
+                  "label": "Client initials",
+                  "assignee": "xS3TWGrXvQq8hpDm"
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "EopsvEJ2MbuVKpuH",
+              "style": "2sQ_Eh4SsOj5irC6"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Signed for the supplier: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "5qrRsZH91Fbqi9Iy",
+                  "key": "supplier.signature",
+                  "kind": "signature",
+                  "label": "Supplier signature",
+                  "assignee": "_--PHdcpkzfy3_lw",
+                  "required": true
+                }
+              },
+              {
+                "type": "text",
+                "text": " on "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "94DsiNQNVB4C6PdW",
+                  "key": "supplier.dateSigned",
+                  "kind": "dateSigned",
+                  "label": "Date signed by the supplier",
+                  "assignee": "_--PHdcpkzfy3_lw"
+                }
+              },
+              {
+                "type": "text",
+                "text": "."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

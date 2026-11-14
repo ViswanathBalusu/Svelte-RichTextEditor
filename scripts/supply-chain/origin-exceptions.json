@@ -1,0 +1,21 @@
+{
+  "$comment": "Reviewed exceptions to the origin check (SEC-054; scripts/supply-chain/origin-check.ts). Each entry names the package whose code is excused (found through the source maps), the rule, optionally a path prefix in the bundle, the reason, the decision record and an expiry date (YYYY-MM-DD) after which the check fails again. Sandboxed third-party extensions, if they are built (SEC-055), are the exception 10 §3.8 foresees; the entries below are proposed in ADR 0044 and wait for the owner.",
+  "exceptions": [
+    {
+      "package": "pdfjs-dist",
+      "rule": "computed-import",
+      "file": "viewer/assets/pdf-viewer-",
+      "reason": "PDF.js's fallback for a frame without workers imports GlobalWorkerOptions.workerSrc on the main thread (build/pdf.mjs, _setupFakeWorkerGlobal). The viewer sets workerSrc to the URL of its own bundled worker, resolved against its own location (packages/element/src/pdf/viewer/main.ts, startWorker), so the address is a file of the viewer on the viewer's origin. The viewer runs in a sandboxed frame of its own (10 §3.1). Valid only while the viewer sets workerSrc that way.",
+      "decision": "ADR 0044 §6 (proposed, 2026-11-06)",
+      "expires": "2027-05-06"
+    },
+    {
+      "package": "pdfjs-dist",
+      "rule": "computed-import",
+      "file": "viewer/assets/pdf.worker.min-",
+      "reason": "Without WebAssembly, PDF.js's worker imports a JavaScript decoder from the wasmUrl the document was opened with (build/pdf.worker.mjs, WasmImage #getJsInstance: jbig2_nowasm_fallback.js, openjpeg_nowasm_fallback.js). The viewer passes wasmUrl as ./pdfjs/wasm/ resolved against its own location (packages/element/src/pdf/viewer/main.ts, open), where the build copies those files from pdfjs-dist. Valid only while the viewer sets wasmUrl that way.",
+      "decision": "ADR 0044 §6 (proposed, 2026-11-06)",
+      "expires": "2027-05-06"
+    }
+  ]
+}

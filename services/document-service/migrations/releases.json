@@ -1,0 +1,17 @@
+{
+  "$comment": "The migrations each release shipped, oldest first (BE-016; 06 §13; ADR 0054). Migrations not listed belong to the next release. A contract step must ship in a later release than the expand step it completes; migrate.ts planProblems() checks it, and the release notes list each release's steps and how to roll back (src/storage/migrate-cli.ts notes).",
+  "releases": [
+    {
+      "version": "0.1.0-phase1a",
+      "migrations": [
+        "0001_platform",
+        "0002_documents_and_log",
+        "0003_grants",
+        "0004_tenants",
+        "0005_document_metadata",
+        "0006_jobs",
+        "0007_readiness"
+      ]
+    }
+  ]
+}

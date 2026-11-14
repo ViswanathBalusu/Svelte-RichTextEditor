@@ -1,0 +1,27 @@
+{
+  "name": "@docedit/backend-dep",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The backend ports over DEP: one WebSocket to the document service and its REST control plane (05 §8.3; PRO-093, PRO-094).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@docedit/backend-mock": "workspace:*",
+    "@docedit/document-service": "workspace:*",
+    "@types/ws": "8.18.2",
+    "ws": "8.22.1"
+  }
+}

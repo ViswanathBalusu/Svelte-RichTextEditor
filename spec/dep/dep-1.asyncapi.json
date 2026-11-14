@@ -1,0 +1,3602 @@
+{
+  "asyncapi": "3.0.0",
+  "id": "urn:docedit:dep:1:draft:realtime",
+  "info": {
+    "title": "DEP real-time plane",
+    "version": "1.0",
+    "description": "The real-time plane of the Document Editing Protocol 1.0 (draft), generated from packages/protocol/src/definition (05 §4, §5; SPK-019, PRO-001).\n\nThis document describes a DEP server: `receive` operations are messages a client sends, `send` operations are messages the server sends; `both` messages have one of each.\n\nOne multiplexed WebSocket with the subprotocol `dep.v1`. Each text frame is one JSON object, the envelope `{ t, id, re, ch, d }`. Binary frames are reserved for engines with opaque payloads (three unsigned LEB128 integers `ch`, `kind`, `id`, then the payload); `pm-steps/1` does not use them.\n\nReceivers MUST ignore fields and message types they do not know; a message of an unknown type that carries an `id` is answered with `error` `unknown_type`, `fatal: false` (05 §1 rule 3).\n\nGaps and decisions are referenced by identifier (`x-dep-gaps`, `x-dep-decisions`, `$comment`); spec/dep/dep-1.gaps.json lists them.",
+    "x-dep-status": "draft",
+    "x-dep-subprotocol": "dep.v1",
+    "x-dep-engines": [
+      "pm-steps/1"
+    ],
+    "x-dep-cdm": {
+      "min": 1,
+      "max": 1
+    }
+  },
+  "defaultContentType": "application/json",
+  "servers": {
+    "dep": {
+      "host": "{host}",
+      "pathname": "/{path}",
+      "protocol": "wss",
+      "title": "DEP WebSocket",
+      "description": "The `ws` address announced in discovery (05 §2). The `Origin` header is checked against the tenant's allowed origins when `hello` arrives.",
+      "variables": {
+        "host": {
+          "default": "docs.example.com",
+          "description": "Host of the `ws` address from discovery."
+        },
+        "path": {
+          "default": "dep",
+          "description": "Path of the `ws` address from discovery."
+        }
+      }
+    }
+  },
+  "channels": {
+    "dep": {
+      "address": null,
+      "title": "DEP connection",
+      "description": "The whole connection: session messages and every channel multiplexed by `ch`. Messages on one channel are delivered in order; there is no ordering between channels. At most one channel per document may be open on a connection.",
+      "servers": [
+        {
+          "$ref": "#/servers/dep"
+        }
+      ],
+      "messages": {
+        "hello": {
+          "$ref": "#/components/messages/hello"
+        },
+        "welcome": {
+          "$ref": "#/components/messages/welcome"
+        },
+        "auth.expiring": {
+          "$ref": "#/components/messages/auth.expiring"
+        },
+        "auth.refresh": {
+          "$ref": "#/components/messages/auth.refresh"
+        },
+        "auth.ok": {
+          "$ref": "#/components/messages/auth.ok"
+        },
+        "auth.revoked": {
+          "$ref": "#/components/messages/auth.revoked"
+        },
+        "ping": {
+          "$ref": "#/components/messages/ping"
+        },
+        "pong": {
+          "$ref": "#/components/messages/pong"
+        },
+        "goaway": {
+          "$ref": "#/components/messages/goaway"
+        },
+        "error": {
+          "$ref": "#/components/messages/error"
+        },
+        "chunk": {
+          "$ref": "#/components/messages/chunk"
+        },
+        "ch.open": {
+          "$ref": "#/components/messages/ch.open"
+        },
+        "ch.opened": {
+          "$ref": "#/components/messages/ch.opened"
+        },
+        "ch.rejected": {
+          "$ref": "#/components/messages/ch.rejected"
+        },
+        "ch.close": {
+          "$ref": "#/components/messages/ch.close"
+        },
+        "ch.closed": {
+          "$ref": "#/components/messages/ch.closed"
+        },
+        "sync.submit": {
+          "$ref": "#/components/messages/sync.submit"
+        },
+        "sync.ack": {
+          "$ref": "#/components/messages/sync.ack"
+        },
+        "sync.reject": {
+          "$ref": "#/components/messages/sync.reject"
+        },
+        "sync.commit": {
+          "$ref": "#/components/messages/sync.commit"
+        },
+        "sync.caughtUp": {
+          "$ref": "#/components/messages/sync.caughtUp"
+        },
+        "sync.reset": {
+          "$ref": "#/components/messages/sync.reset"
+        },
+        "sync.check": {
+          "$ref": "#/components/messages/sync.check"
+        },
+        "presence.update": {
+          "$ref": "#/components/messages/presence.update"
+        },
+        "presence.state": {
+          "$ref": "#/components/messages/presence.state"
+        },
+        "perm.changed": {
+          "$ref": "#/components/messages/perm.changed"
+        },
+        "event": {
+          "$ref": "#/components/messages/event"
+        },
+        "wf.changed": {
+          "$ref": "#/components/messages/wf.changed"
+        }
+      },
+      "bindings": {
+        "ws": {
+          "bindingVersion": "0.1.0",
+          "headers": {
+            "type": "object",
+            "properties": {
+              "Sec-WebSocket-Protocol": {
+                "const": "dep.v1",
+                "description": "The subprotocol carries the major version (05 §1 rule 1, §4)."
+              }
+            },
+            "required": [
+              "Sec-WebSocket-Protocol"
+            ]
+          }
+        }
+      },
+      "x-dep-close-codes": [
+        {
+          "code": 4400,
+          "meaning": "Malformed message"
+        },
+        {
+          "code": 4401,
+          "meaning": "Unauthenticated, token expired or revoked"
+        },
+        {
+          "code": 4403,
+          "meaning": "Forbidden, including a disallowed origin"
+        },
+        {
+          "code": 4406,
+          "meaning": "No common protocol version. The preceding error lists the server's versions"
+        },
+        {
+          "code": 4408,
+          "meaning": "hello not received in time"
+        },
+        {
+          "code": 4413,
+          "meaning": "Message too large"
+        },
+        {
+          "code": 4429,
+          "meaning": "Rate limited"
+        },
+        {
+          "code": 4500,
+          "meaning": "Internal error"
+        },
+        {
+          "code": 4503,
+          "meaning": "Unavailable or draining"
+        }
+      ]
+    }
+  },
+  "operations": {
+    "receive.hello": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive hello",
+      "summary": "Opens the session. Must be the first message, within 10 seconds.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/hello"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/dep"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/dep/messages/welcome"
+          },
+          {
+            "$ref": "#/channels/dep/messages/error"
+          }
+        ]
+      },
+      "x-dep-spec": "05 §5.1"
+    },
+    "send.welcome": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send welcome",
+      "summary": "Accepts the session.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/welcome"
+        }
+      ],
+      "x-dep-spec": "05 §5.1"
+    },
+    "send.auth.expiring": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send auth.expiring",
+      "summary": "Sent about 60 seconds before `tokenExp`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/auth.expiring"
+        }
+      ],
+      "x-dep-spec": "05 §5.1"
+    },
+    "receive.auth.refresh": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive auth.refresh",
+      "summary": "Presents a new token; with `ch`, a token for that channel.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/auth.refresh"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/dep"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/dep/messages/auth.ok"
+          },
+          {
+            "$ref": "#/channels/dep/messages/error"
+          }
+        ]
+      },
+      "x-dep-spec": "05 §5.1, §3.1"
+    },
+    "send.auth.ok": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send auth.ok",
+      "summary": "Reply to `auth.refresh`: the refreshed token is accepted.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/auth.ok"
+        }
+      ],
+      "x-dep-spec": "05 §5.1"
+    },
+    "send.auth.revoked": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send auth.revoked",
+      "summary": "The session was revoked; followed by close code 4401.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/auth.revoked"
+        }
+      ],
+      "x-dep-spec": "05 §5.1, §3.3"
+    },
+    "receive.ping": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive ping",
+      "summary": "Sent after `heartbeatMs` without sending anything; the peer answers `pong`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/ping"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/dep"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/dep/messages/pong"
+          }
+        ]
+      },
+      "x-dep-spec": "05 §4, §5.1"
+    },
+    "send.ping": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send ping",
+      "summary": "Sent after `heartbeatMs` without sending anything; the peer answers `pong`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/ping"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/dep"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/dep/messages/pong"
+          }
+        ]
+      },
+      "x-dep-spec": "05 §4, §5.1"
+    },
+    "receive.pong": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive pong",
+      "summary": "Answers `ping`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/pong"
+        }
+      ],
+      "x-dep-spec": "05 §4, §5.1"
+    },
+    "send.pong": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send pong",
+      "summary": "Answers `ping`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/pong"
+        }
+      ],
+      "x-dep-spec": "05 §4, §5.1"
+    },
+    "send.goaway": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send goaway",
+      "summary": "The whole connection is draining; never used for a single channel.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/goaway"
+        }
+      ],
+      "x-dep-spec": "05 §5.1"
+    },
+    "receive.error": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive error",
+      "summary": "A typed error; with `re` when it answers a message. A fatal error is followed by the matching close code.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/error"
+        }
+      ],
+      "x-dep-spec": "05 §5.1, §5.7, §5.8"
+    },
+    "send.error": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send error",
+      "summary": "A typed error; with `re` when it answers a message. A fatal error is followed by the matching close code.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/error"
+        }
+      ],
+      "x-dep-spec": "05 §5.1, §5.7, §5.8"
+    },
+    "receive.chunk": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive chunk",
+      "summary": "One part of a message whose UTF-8 size exceeds `maxMessageBytes`; chunks of one message are sent consecutively; reassembly times out after 10 seconds.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/chunk"
+        }
+      ],
+      "x-dep-spec": "05 §4"
+    },
+    "send.chunk": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send chunk",
+      "summary": "One part of a message whose UTF-8 size exceeds `maxMessageBytes`; chunks of one message are sent consecutively; reassembly times out after 10 seconds.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/chunk"
+        }
+      ],
+      "x-dep-spec": "05 §4"
+    },
+    "receive.ch.open": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive ch.open",
+      "summary": "Opens a document channel. Without `resume` the server answers with `catchUp: \"reload\"`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/ch.open"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/dep"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/dep/messages/ch.opened"
+          },
+          {
+            "$ref": "#/channels/dep/messages/ch.rejected"
+          },
+          {
+            "$ref": "#/channels/dep/messages/error"
+          }
+        ]
+      },
+      "x-dep-spec": "05 §5.2"
+    },
+    "send.ch.opened": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send ch.opened",
+      "summary": "The channel is attached; `head` is the durable head at that moment.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/ch.opened"
+        }
+      ],
+      "x-dep-spec": "05 §5.2"
+    },
+    "send.ch.rejected": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send ch.rejected",
+      "summary": "The channel could not be opened.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/ch.rejected"
+        }
+      ],
+      "x-dep-spec": "05 §5.2"
+    },
+    "receive.ch.close": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive ch.close",
+      "summary": "Closes a channel.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/ch.close"
+        }
+      ],
+      "x-dep-spec": "05 §5.2"
+    },
+    "send.ch.closed": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send ch.closed",
+      "summary": "The server closed a channel, for example `forbidden` after revocation, `unavailable` when the room moves or is fenced, `slow_consumer`. Under read restrictions (ADR 0019, proposed) a change of access that hides or reveals content also closes the channel with `unavailable`, and the next open reloads.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/ch.closed"
+        }
+      ],
+      "x-dep-spec": "05 §5.2; ADR 0019"
+    },
+    "receive.sync.submit": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive sync.submit",
+      "summary": "Submits a commit. The envelope `id` correlates the reply; the payload `id` identifies the commit.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/sync.submit"
+        }
+      ],
+      "reply": {
+        "channel": {
+          "$ref": "#/channels/dep"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/dep/messages/sync.ack"
+          },
+          {
+            "$ref": "#/channels/dep/messages/sync.reject"
+          },
+          {
+            "$ref": "#/channels/dep/messages/error"
+          }
+        ]
+      },
+      "x-dep-spec": "05 §5.3; 04 §3.1"
+    },
+    "send.sync.ack": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send sync.ack",
+      "summary": "The commit is stored; sent only after every commit with a lower `seq` on the channel.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/sync.ack"
+        }
+      ],
+      "x-dep-spec": "05 §5.3; 04 §5 step 10, §7"
+    },
+    "send.sync.reject": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send sync.reject",
+      "summary": "The commit was refused; `action` says what to do next and `head` is the current head.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/sync.reject"
+        }
+      ],
+      "x-dep-spec": "05 §5.3; 04 §8"
+    },
+    "send.sync.commit": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send sync.commit",
+      "summary": "Stored commits, in ascending `seq`; the next message continues at the last `seq` plus one.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/sync.commit"
+        }
+      ],
+      "x-dep-spec": "05 §5.3; 04 §5 step 10"
+    },
+    "send.sync.caughtUp": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send sync.caughtUp",
+      "summary": "The catch-up stream is complete; live commits follow.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/sync.caughtUp"
+        }
+      ],
+      "x-dep-spec": "05 §5.2, §5.3"
+    },
+    "send.sync.reset": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send sync.reset",
+      "summary": "A snapshot commit was stored; the client reloads content at `seq`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/sync.reset"
+        }
+      ],
+      "x-dep-spec": "05 §5.3; 04 §3.2"
+    },
+    "send.sync.check": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send sync.check",
+      "summary": "The SHA-256 of the canonical form of the document at `seq`, for divergence detection (04 §13).",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/sync.check"
+        }
+      ],
+      "x-dep-spec": "05 §5.3; 04 §13"
+    },
+    "receive.presence.update": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Receive presence.update",
+      "summary": "Publishes the client's selection; positions refer to the confirmed document at `seq`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/presence.update"
+        }
+      ],
+      "x-dep-spec": "05 §5.4; 04 §11"
+    },
+    "send.presence.state": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send presence.state",
+      "summary": "Peers and sessions that left. The server adds identity and MAY drop or coalesce presence under load.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/presence.state"
+        }
+      ],
+      "x-dep-spec": "05 §5.4"
+    },
+    "send.perm.changed": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send perm.changed",
+      "summary": "A complete new `access` object. The server enforces it from the moment it computes it.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/perm.changed"
+        }
+      ],
+      "x-dep-spec": "05 §5.5"
+    },
+    "send.event": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send event",
+      "summary": "\"This changed; fetch it over REST if you care.\"",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/event"
+        }
+      ],
+      "x-dep-spec": "05 §5.6"
+    },
+    "send.wf.changed": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/dep"
+      },
+      "title": "Send wf.changed",
+      "summary": "The workflow state and the participant's status; sent like `perm.changed`.",
+      "messages": [
+        {
+          "$ref": "#/channels/dep/messages/wf.changed"
+        }
+      ],
+      "x-dep-spec": "12 §10"
+    }
+  },
+  "components": {
+    "schemas": {
+      "Envelope": {
+        "title": "Envelope",
+        "description": "Every text frame is one JSON object. Receivers MUST ignore members they do not know, and ignore message types they do not know (05 §1 rule 3).",
+        "$comment": "05 §4",
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Message type."
+          },
+          "id": {
+            "type": "string",
+            "description": "Set by the sender on a message that expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` this message replies to. Required on every reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number, on every channel-scoped message including `ch.open`."
+          },
+          "d": {
+            "type": "object",
+            "description": "Payload."
+          }
+        },
+        "required": [
+          "t"
+        ]
+      },
+      "Capability": {
+        "title": "Capability",
+        "description": "A capability (07 §1; 12 §4.1).",
+        "$comment": "07 §1",
+        "type": "string",
+        "enum": [
+          "view",
+          "comment",
+          "suggest",
+          "edit",
+          "fill",
+          "structure",
+          "manage"
+        ]
+      },
+      "DocRole": {
+        "title": "DocRole",
+        "description": "A document-level role, carried in the `docs` claim (05 §3.1; 07 §2).",
+        "$comment": "05 §3.1",
+        "type": "string",
+        "enum": [
+          "viewer",
+          "commenter",
+          "suggester",
+          "editor",
+          "owner",
+          "filler"
+        ]
+      },
+      "Restriction": {
+        "title": "Restriction",
+        "description": "An output restriction from the `restrict` claim (05 §3.1; 13 §5).",
+        "$comment": "05 §3.1",
+        "type": "string",
+        "enum": [
+          "no-export",
+          "no-copy",
+          "no-print"
+        ]
+      },
+      "ScopeId": {
+        "title": "ScopeId",
+        "description": "A scope identifier: `doc`, `body`, `defs`, `region:<id>`, `story:<id>` or `field:<id>` (05 §5.3), where `<id>` is a node identifier.",
+        "$comment": "05 §5.3; gaps: G41",
+        "type": "string",
+        "pattern": "^(doc|body|defs|(region|story|field):[A-Za-z0-9_-]{16})$"
+      },
+      "FeatureName": {
+        "title": "FeatureName",
+        "description": "A feature name. Protocol and CDM features share one namespace; experimental names start with `x-` (05 §1).",
+        "$comment": "05 §1, §2; gaps: G01; decisions: D01",
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$",
+        "examples": [
+          "presence",
+          "regions",
+          "suggest-enforced",
+          "history",
+          "comments",
+          "assets",
+          "exports",
+          "leases",
+          "fields",
+          "rules",
+          "workflow",
+          "sign",
+          "seal",
+          "extensions",
+          "preserve"
+        ]
+      },
+      "Capabilities": {
+        "title": "Capabilities",
+        "description": "A set of capabilities.",
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Capability"
+        },
+        "uniqueItems": true
+      },
+      "LeaseInfo": {
+        "title": "LeaseInfo",
+        "description": "A lease in `access.leases` (05 §5.5; 07 §10).",
+        "$comment": "05 §5.5",
+        "type": "object",
+        "properties": {
+          "holder": {
+            "description": "The user who holds the lease: the host's `sub` (D42).",
+            "$comment": "gaps: G45; decisions: D42",
+            "type": "string"
+          },
+          "expiresAt": {
+            "description": "When the lease ends unless it is extended.",
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          }
+        },
+        "required": [
+          "holder",
+          "expiresAt"
+        ]
+      },
+      "FillAccess": {
+        "title": "FillAccess",
+        "description": "Fill permission in `access` (12 §4.1).",
+        "$comment": "12 §4.1; gaps: G45",
+        "type": "object",
+        "properties": {
+          "participant": {
+            "description": "The participant identifier (the `wfp` claim).",
+            "$comment": "gaps: G45, G59",
+            "type": "string"
+          },
+          "roles": {
+            "description": "Role placeholders the participant holds.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "description": "Whether the participant is active in the workflow.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "participant",
+          "roles",
+          "active"
+        ]
+      },
+      "Access": {
+        "title": "Access",
+        "description": "Effective access, sent in `ch.opened` and as the whole payload of `perm.changed` (05 §5.5).",
+        "$comment": "05 §5.5; gaps: G53",
+        "type": "object",
+        "properties": {
+          "rev": {
+            "description": "Access revision of this connection; it increases whenever anything that feeds effective permissions changes.",
+            "$comment": "gaps: G44; decisions: D12",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "asOfSeq": {
+            "description": "The sequence number whose region list this access describes.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "docRole": {
+            "description": "The document-level role.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocRole"
+              }
+            ]
+          },
+          "caps": {
+            "description": "Document-level capabilities, including `structure` and `manage`.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              }
+            ]
+          },
+          "scopes": {
+            "description": "Capabilities per scope. Lists every region of the document; a region not listed is not editable until an access with `asOfSeq` at or after the commit that created it arrives.",
+            "$comment": "gaps: G43; decisions: D11",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Capabilities"
+            },
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^(doc|body|defs|(region|story|field):[A-Za-z0-9_-]{16})$"
+            }
+          },
+          "leases": {
+            "description": "Leases held, by region scope.",
+            "$comment": "gaps: G45",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LeaseInfo"
+            },
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^(doc|body|defs|(region|story|field):[A-Za-z0-9_-]{16})$"
+            }
+          },
+          "fill": {
+            "description": "Fill permission, or null when it does not apply (12 §4.1).",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FillAccess"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "restrictions": {
+            "description": "Output restrictions; empty when none apply.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Restriction"
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "rev",
+          "asOfSeq",
+          "docRole",
+          "caps",
+          "scopes",
+          "leases",
+          "fill",
+          "restrictions"
+        ]
+      },
+      "Step": {
+        "title": "Step",
+        "description": "A step as produced by `Step.toJSON()` of the pinned prosemirror-transform release (04 §4). Validated by the authority, not by the envelope.",
+        "$comment": "04 §4",
+        "type": "object",
+        "properties": {
+          "stepType": {
+            "description": "The step type. The authority accepts only the seven known types and rejects any other with `invalid_op` (04 §4), so the wire format accepts any string.",
+            "type": "string",
+            "minLength": 1,
+            "examples": [
+              "replace",
+              "replaceAround",
+              "addMark",
+              "removeMark",
+              "addNodeMark",
+              "removeNodeMark",
+              "attr"
+            ]
+          }
+        },
+        "required": [
+          "stepType"
+        ]
+      },
+      "Origin": {
+        "title": "Origin",
+        "description": "Origin of a commit: a client hint (recorded, never trusted) or a server-reserved origin (04 §3.1).",
+        "$comment": "04 §3.1",
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "examples": [
+          "input",
+          "paste",
+          "format",
+          "undo",
+          "redo",
+          "suggestion.accept",
+          "suggestion.reject",
+          "fill",
+          "assistant",
+          "restore",
+          "import",
+          "migration",
+          "repair",
+          "sign",
+          "rules",
+          "prefill",
+          "control"
+        ]
+      },
+      "Commit": {
+        "title": "Commit",
+        "description": "A step commit as submitted: the payload of `sync.submit` (04 §3.1; 05 §5.3).",
+        "$comment": "04 §3.1; 05 §5.3",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Commit identifier chosen by the client; reused unchanged when the same commit is resubmitted.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "base": {
+            "description": "The `seq` the client had applied when it created the steps.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "steps": {
+            "description": "One to `maxStepsPerCommit` steps.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "minItems": 1
+          },
+          "origin": {
+            "description": "A hint from the client.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Origin"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "base",
+          "steps"
+        ]
+      },
+      "Ack": {
+        "title": "Ack",
+        "description": "The payload of `sync.ack` (05 §5.3; 04 §7). `re` is the envelope `id` of the submit.",
+        "$comment": "05 §5.3",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The commit identifier.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "seq": {
+            "description": "The sequence number assigned.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "serverTime": {
+            "description": "Server time of the commit (04 G6).",
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          },
+          "rebased": {
+            "description": "Whether the steps were rebased. Always true for a read-restricted reader, whose acknowledgement carries the steps of its class (ADR 0019, proposed).",
+            "$comment": "gaps: G33, G102; decisions: D40",
+            "type": "boolean"
+          },
+          "steps": {
+            "description": "The mapped steps: required when `rebased` is true; an acknowledgement rebuilt for a duplicate always carries them.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "serverTime",
+          "rebased"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "rebased": {
+                  "const": true
+                }
+              },
+              "required": [
+                "rebased"
+              ]
+            },
+            "then": {
+              "properties": {
+                "steps": {}
+              },
+              "required": [
+                "steps"
+              ]
+            }
+          }
+        ]
+      },
+      "RejectAction": {
+        "title": "RejectAction",
+        "description": "What the client does next (04 §8).",
+        "$comment": "04 §8",
+        "type": "string",
+        "enum": [
+          "rebase",
+          "drop",
+          "reload",
+          "retry"
+        ]
+      },
+      "SyncReject": {
+        "title": "SyncReject",
+        "description": "The payload of `sync.reject` (05 §5.3; 04 §8). A commit whose base is older than a snapshot commit gets `stale_base` with action `rebase` (04 §3.2).",
+        "$comment": "05 §5.3; 04 §3.2, §8",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The commit identifier from the submit (it may be malformed, which is why it is not typed as a UUID).",
+            "type": "string"
+          },
+          "code": {
+            "description": "A registry code with the sync surface.",
+            "$comment": "gaps: G34, G38",
+            "type": "string",
+            "enum": [
+              "forbidden",
+              "stale_base",
+              "rebase_failed",
+              "permission_denied",
+              "read_only",
+              "invalid_op",
+              "conflict",
+              "field_invalid",
+              "busy",
+              "too_large",
+              "rate_limited",
+              "quota_exceeded",
+              "unavailable",
+              "internal"
+            ]
+          },
+          "message": {
+            "description": "A human-readable explanation.",
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/components/schemas/RejectAction"
+          },
+          "head": {
+            "description": "The current durable head.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "scopes": {
+            "description": "Scopes involved, for `permission_denied`; never a scope the reader may not see.",
+            "$comment": "gaps: G41, G102; decisions: D40",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScopeId"
+            }
+          },
+          "rule": {
+            "description": "The rule or constraint that failed (12 §5.3).",
+            "$comment": "gaps: G35",
+            "type": "string"
+          },
+          "retryAfterMs": {
+            "description": "How long to wait before retrying.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "message",
+          "action",
+          "head"
+        ]
+      },
+      "Author": {
+        "title": "Author",
+        "description": "Server attribution of a commit (04 G6).",
+        "$comment": "05 §5.3",
+        "type": "object",
+        "properties": {
+          "user": {
+            "description": "The user the commit is attributed to: the host's `sub` (D42), or `system` (04 §10).",
+            "$comment": "decisions: D42",
+            "type": "string"
+          },
+          "session": {
+            "description": "The session; null for server-authored commits.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agent": {
+            "description": "The assistant that acted for the user, or null (13 §6.2).",
+            "$comment": "gaps: G32",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user",
+          "session",
+          "agent"
+        ]
+      },
+      "ControlChange": {
+        "title": "ControlChange",
+        "description": "The change a control commit records (04 §3.2). Only `{ \"type\": \"grants\", \"rev\": n }` appears in the prose.",
+        "$comment": "04 §3.2; 05 §5.9; gaps: G32; decisions: D10",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "What changed (04 §3.2 lists grants revisions, region states, lease breaks, workflow transitions and participant completion).",
+            "type": "string",
+            "examples": [
+              "grants",
+              "region-state",
+              "lease",
+              "workflow",
+              "participant"
+            ]
+          },
+          "rev": {
+            "description": "The grants revision, for `type: \"grants\"` (05 §5.9).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "RemoteCommit": {
+        "title": "RemoteCommit",
+        "description": "A stored commit as broadcast in `sync.commit` (05 §5.3).",
+        "$comment": "05 §5.3; gaps: G32; decisions: D10",
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "steps",
+              "control"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "steps": {
+            "description": "The steps as applied; empty for a control commit. For a read-restricted reader, the steps of its class, which are empty when the commit changed only hidden content (ADR 0019, proposed).",
+            "$comment": "gaps: G102; decisions: D40",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            }
+          },
+          "control": {
+            "description": "The change a control commit records; null for a step commit.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ControlChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "author": {
+            "$ref": "#/components/schemas/Author"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          }
+        },
+        "required": [
+          "seq",
+          "kind",
+          "id",
+          "steps",
+          "control",
+          "author",
+          "serverTime",
+          "origin"
+        ]
+      },
+      "Resume": {
+        "title": "Resume",
+        "description": "Where a client resumes a channel (05 §5.2; 04 §9).",
+        "$comment": "05 §5.2; 04 §9",
+        "type": "object",
+        "properties": {
+          "seq": {
+            "description": "The confirmed `seq` of the client.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "incarnation": {
+            "description": "The log incarnation the `seq` belongs to.",
+            "$comment": "gaps: G29",
+            "type": "string",
+            "minLength": 1
+          },
+          "inflight": {
+            "description": "The in-flight commit, if any (04 §9).",
+            "$comment": "gaps: G27; decisions: D08",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "view": {
+            "description": "The `view` of the `ch.opened` the confirmed document came from (ADR 0019, proposed). Under read restrictions a missing or different token forces `catchUp: \"reload\"`.",
+            "$comment": "gaps: G101; decisions: D28",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "seq",
+          "incarnation"
+        ]
+      },
+      "Inflight": {
+        "title": "Inflight",
+        "description": "The fate of the in-flight commit named in `resume` (04 §9).",
+        "$comment": "05 §5.2; 04 §9; gaps: G27; decisions: D08",
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "unknown"
+            ]
+          },
+          "seq": {
+            "description": "The `seq` of the stored commit, when accepted.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "accepted"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            },
+            "then": {
+              "properties": {
+                "seq": {}
+              },
+              "required": [
+                "seq"
+              ]
+            }
+          }
+        ]
+      },
+      "CatchUp": {
+        "title": "CatchUp",
+        "description": "How a joining client catches up (05 §5.2).",
+        "$comment": "05 §5.2",
+        "type": "string",
+        "enum": [
+          "stream",
+          "page",
+          "reload"
+        ]
+      },
+      "Limits": {
+        "title": "Limits",
+        "description": "Every limit a client must respect (05 §5.1).",
+        "$comment": "05 §5.1; gaps: G53",
+        "type": "object",
+        "properties": {
+          "maxMessageBytes": {
+            "description": "Largest UTF-8 size of one frame; larger messages are chunked.",
+            "$comment": "gaps: G18",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "maxCommitBytes": {
+            "description": "Largest serialised commit (default 1 MiB, 04 §3.1).",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "maxStepsPerCommit": {
+            "description": "Most steps in one commit (default 500, 04 §3.1).",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "maxRebaseSteps": {
+            "description": "Most steps a commit may be rebased over (default 5,000, 04 §5).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "maxChannels": {
+            "description": "Most channels on one connection.",
+            "$comment": "gaps: G18",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "heartbeatMs": {
+            "description": "Idle interval after which a side sends `ping` (default 25,000).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "ackTimeoutMs": {
+            "description": "How long a client waits for an answer to a submit (default 15,000, 04 §8).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "presenceHz": {
+            "description": "Most presence updates per second per client (default 10, 04 §11).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "presenceBytes": {
+            "description": "Largest presence state (default 1 KiB, 04 §11).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "catchUpCommits": {
+            "description": "Most commits streamed on resume (default 5,000, 04 §9).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "catchUpBytes": {
+            "description": "Most bytes streamed on resume (default 5 MiB, 04 §9).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "maxMessageBytes",
+          "maxCommitBytes",
+          "maxStepsPerCommit",
+          "maxRebaseSteps",
+          "maxChannels",
+          "heartbeatMs",
+          "ackTimeoutMs",
+          "presenceHz",
+          "presenceBytes",
+          "catchUpCommits",
+          "catchUpBytes"
+        ]
+      },
+      "CdmRange": {
+        "title": "CdmRange",
+        "description": "A range of CDM major versions (05 §2).",
+        "$comment": "05 §2",
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "max": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "min",
+          "max"
+        ]
+      },
+      "ClientInfo": {
+        "title": "ClientInfo",
+        "description": "The client in `hello` (05 §5.1).",
+        "$comment": "05 §5.1",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "SessionUser": {
+        "title": "SessionUser",
+        "description": "The user of a session (05 §5.1).",
+        "$comment": "05 §5.1",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The user identifier: the token's `sub` (D42).",
+            "$comment": "decisions: D42",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name, when the token has a `name` claim.",
+            "$comment": "gaps: G22",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "ErrorPayload": {
+        "title": "ErrorPayload",
+        "description": "The payload of `error` (05 §5.1).",
+        "$comment": "05 §5.1",
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "bad_message",
+              "unknown_type",
+              "unauthenticated",
+              "token_expired",
+              "revoked",
+              "forbidden",
+              "unsupported_version",
+              "unsupported_engine",
+              "unsupported_cdm",
+              "unsupported_feature",
+              "not_found",
+              "already_open",
+              "channel_limit",
+              "too_large",
+              "rate_limited",
+              "quota_exceeded",
+              "unavailable",
+              "internal"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "retryAfterMs": {
+            "$comment": "gaps: G23; decisions: D06",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "fatal": {
+            "description": "A fatal error is followed by the matching close code (05 §5.7).",
+            "$comment": "gaps: G24",
+            "type": "boolean"
+          },
+          "versions": {
+            "description": "The server's versions, in the error before close 4406.",
+            "$comment": "gaps: G20; decisions: D06",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "fatal"
+        ]
+      },
+      "ChannelOpened": {
+        "title": "ChannelOpened",
+        "description": "The payload of `ch.opened` (05 §5.2).",
+        "$comment": "05 §5.2; gaps: G53",
+        "type": "object",
+        "properties": {
+          "head": {
+            "description": "The durable head when the channel was attached; the first live commit is `head + 1`.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "incarnation": {
+            "$comment": "gaps: G29",
+            "type": "string",
+            "minLength": 1
+          },
+          "catchUp": {
+            "$ref": "#/components/schemas/CatchUp"
+          },
+          "inflight": {
+            "description": "Present when `resume.inflight` was sent.",
+            "$comment": "gaps: G27; decisions: D08",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Inflight"
+              }
+            ]
+          },
+          "access": {
+            "$ref": "#/components/schemas/Access"
+          },
+          "workflow": {
+            "description": "The workflow, if one applies (12).",
+            "$comment": "gaps: G28",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowStatus"
+              }
+            ]
+          },
+          "view": {
+            "description": "An opaque token naming the visibility class (the projection for this reader) that the content and stream of the channel belong to (ADR 0019, proposed). A client echoes it in a later resume.",
+            "$comment": "gaps: G101; decisions: D28",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "head",
+          "incarnation",
+          "catchUp",
+          "access"
+        ]
+      },
+      "WorkflowStatus": {
+        "title": "WorkflowStatus",
+        "description": "The workflow state and the participant's status, carried by `wf.changed` and `ch.opened.workflow` (12 §6.2, §10).",
+        "$comment": "12 §10; gaps: G94, G28; decisions: D26",
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "sent",
+              "in_progress",
+              "correcting",
+              "completed",
+              "finalised",
+              "voided",
+              "declined",
+              "expired"
+            ]
+          },
+          "rev": {
+            "description": "The workflow revision (12 §6.1).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "participant": {
+            "description": "The receiving participant's status.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "state": {
+                "type": "string",
+                "examples": [
+                  "active",
+                  "completed"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "state"
+            ]
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "Notification": {
+        "title": "Notification",
+        "description": "The payload of `event`: \"this changed; fetch it over REST if you care\" (05 §5.6).",
+        "$comment": "05 §5.6; gaps: G47, G49",
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/NotificationType"
+          },
+          "resource": {
+            "description": "The resource that changed, relative to `rest`.",
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "rev": {
+            "$comment": "gaps: G48",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "data": {
+            "description": "Small data; thread events carry the thread's current range and the `seq` it refers to.",
+            "$comment": "gaps: G48",
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "type",
+          "resource"
+        ]
+      },
+      "PresenceState": {
+        "title": "PresenceState",
+        "description": "What a client publishes about itself (05 §5.4).",
+        "$comment": "05 §5.4",
+        "type": "object",
+        "properties": {
+          "selection": {
+            "description": "Positions in the confirmed document at `seq`.",
+            "$comment": "gaps: G42",
+            "type": "object",
+            "properties": {
+              "anchor": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "head": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "anchor",
+              "head"
+            ]
+          },
+          "scope": {
+            "$comment": "gaps: G42",
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "idle"
+            ]
+          }
+        },
+        "required": [
+          "selection",
+          "scope",
+          "status"
+        ]
+      },
+      "PresencePeer": {
+        "title": "PresencePeer",
+        "description": "A peer in `presence.state`; the server adds identity (05 §5.4).",
+        "$comment": "05 §5.4; gaps: G42",
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "user": {
+            "$ref": "#/components/schemas/SessionUser"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "$ref": "#/components/schemas/PresenceState"
+          }
+        },
+        "required": [
+          "session",
+          "user",
+          "seq",
+          "state"
+        ]
+      },
+      "NotificationType": {
+        "title": "NotificationType",
+        "description": "Notification type: an open vocabulary; a client ignores types it does not know (05 §1 rule 3).",
+        "$comment": "05 §5.6; gaps: G49",
+        "type": "string",
+        "minLength": 1,
+        "examples": [
+          "thread.created",
+          "thread.updated",
+          "thread.resolved",
+          "thread.reopened",
+          "thread.deleted",
+          "comment.created",
+          "comment.updated",
+          "comment.deleted",
+          "version.created",
+          "version.restored",
+          "export.progress",
+          "export.completed",
+          "export.failed",
+          "export.cancelled",
+          "import.completed",
+          "import.failed",
+          "asset.ready",
+          "asset.failed",
+          "document.updated"
+        ]
+      },
+      "Hello": {
+        "title": "Hello",
+        "type": "object",
+        "properties": {
+          "versions": {
+            "description": "Protocol versions the client supports.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            },
+            "minItems": 1
+          },
+          "token": {
+            "description": "The user token (a JWT, 05 §3.1). Tokens are never placed in URLs.",
+            "type": "string",
+            "minLength": 1
+          },
+          "client": {
+            "$ref": "#/components/schemas/ClientInfo"
+          },
+          "engines": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "examples": [
+                "pm-steps/1"
+              ]
+            },
+            "minItems": 1
+          },
+          "cdm": {
+            "$ref": "#/components/schemas/CdmRange"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeatureName"
+            },
+            "uniqueItems": true
+          },
+          "traceparent": {
+            "description": "W3C trace context.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "versions",
+          "token",
+          "client",
+          "engines",
+          "cdm",
+          "features"
+        ]
+      },
+      "Welcome": {
+        "title": "Welcome",
+        "$comment": "gaps: G53",
+        "type": "object",
+        "properties": {
+          "version": {
+            "description": "The version chosen.",
+            "$comment": "gaps: G20",
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+          },
+          "session": {
+            "description": "A new identifier for every connection; there is no session resumption.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "user": {
+            "$ref": "#/components/schemas/SessionUser"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeatureName"
+            },
+            "uniqueItems": true
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "tokenExp": {
+            "description": "When the token expires.",
+            "$comment": "gaps: G26",
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          }
+        },
+        "required": [
+          "version",
+          "session",
+          "user",
+          "features",
+          "limits",
+          "tokenExp"
+        ]
+      },
+      "AuthExpiring": {
+        "title": "AuthExpiring",
+        "type": "object",
+        "properties": {
+          "inMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "inMs"
+        ]
+      },
+      "AuthRefresh": {
+        "title": "AuthRefresh",
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "AuthOk": {
+        "title": "AuthOk",
+        "type": "object",
+        "properties": {
+          "tokenExp": {
+            "$comment": "gaps: G26",
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          }
+        },
+        "required": [
+          "tokenExp"
+        ]
+      },
+      "AuthRevoked": {
+        "title": "AuthRevoked",
+        "type": "object",
+        "properties": {
+          "reason": {
+            "$comment": "gaps: G25",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "Goaway": {
+        "title": "Goaway",
+        "type": "object",
+        "properties": {
+          "reconnectInMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "$comment": "gaps: G25",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reconnectInMs",
+          "reason"
+        ]
+      },
+      "Chunk": {
+        "title": "Chunk",
+        "type": "object",
+        "properties": {
+          "of": {
+            "description": "A fresh identifier shared by the chunks of one message.",
+            "type": "string",
+            "minLength": 1
+          },
+          "i": {
+            "description": "Index of this chunk, from 0.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "n": {
+            "description": "Number of chunks.",
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 9007199254740991
+          },
+          "part": {
+            "description": "A substring of the serialised message, split only between Unicode code points.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "of",
+          "i",
+          "n",
+          "part"
+        ]
+      },
+      "ChannelOpen": {
+        "title": "ChannelOpen",
+        "$comment": "gaps: G53",
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "doc"
+          },
+          "doc": {
+            "description": "The document identifier.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "engine": {
+            "type": "string",
+            "examples": [
+              "pm-steps/1"
+            ]
+          },
+          "cdm": {
+            "description": "The CDM version the client will use.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeatureName"
+            },
+            "uniqueItems": true
+          },
+          "resume": {
+            "$ref": "#/components/schemas/Resume"
+          },
+          "token": {
+            "description": "A token for this channel; same `tid` and `sub` as the session (05 §3.1).",
+            "$comment": "gaps: G10",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "doc",
+          "engine",
+          "cdm",
+          "features"
+        ]
+      },
+      "ChannelRejected": {
+        "title": "ChannelRejected",
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "not_found",
+              "forbidden",
+              "unsupported_engine",
+              "unsupported_cdm",
+              "unsupported_feature",
+              "channel_limit",
+              "already_open",
+              "unavailable"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "ChannelClosed": {
+        "title": "ChannelClosed",
+        "type": "object",
+        "properties": {
+          "code": {
+            "$comment": "gaps: G31, G103",
+            "type": "string",
+            "enum": [
+              "forbidden",
+              "too_large",
+              "rate_limited",
+              "quota_exceeded",
+              "slow_consumer",
+              "unavailable",
+              "internal"
+            ]
+          },
+          "reason": {
+            "$comment": "gaps: G25",
+            "type": "string"
+          },
+          "retryInMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cause": {
+            "description": "Why the server closed the channel. `access_changed`: what the reader may see changed (ADR 0019), so the client reopens without `resume`; the others say why a room stopped serving, and the client resumes as for `unavailable`.",
+            "$comment": "gaps: G103; decisions: D41",
+            "type": "string",
+            "examples": [
+              "access_changed",
+              "fenced",
+              "lost",
+              "stopped"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "reason"
+        ]
+      },
+      "SyncCommit": {
+        "title": "SyncCommit",
+        "type": "object",
+        "properties": {
+          "commits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemoteCommit"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "commits"
+        ]
+      },
+      "SyncCaughtUp": {
+        "title": "SyncCaughtUp",
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "seq"
+        ]
+      },
+      "SyncReset": {
+        "title": "SyncReset",
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "import",
+              "restore",
+              "migration",
+              "repair"
+            ]
+          }
+        },
+        "required": [
+          "seq",
+          "reason"
+        ]
+      },
+      "SyncCheck": {
+        "title": "SyncCheck",
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "hash": {
+            "$comment": "gaps: G36",
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "seq",
+          "hash"
+        ]
+      },
+      "PresenceUpdate": {
+        "title": "PresenceUpdate",
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "$ref": "#/components/schemas/PresenceState"
+          }
+        },
+        "required": [
+          "seq",
+          "state"
+        ]
+      },
+      "PresencePeers": {
+        "title": "PresencePeers",
+        "type": "object",
+        "properties": {
+          "peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresencePeer"
+            }
+          },
+          "left": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          }
+        },
+        "required": [
+          "peers",
+          "left"
+        ]
+      },
+      "message.hello": {
+        "title": "hello envelope",
+        "description": "`hello` (client to server): Opens the session. Must be the first message, within 10 seconds.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "hello"
+          },
+          "id": {
+            "type": "string",
+            "description": "Required: the message expects a reply."
+          },
+          "d": {
+            "$ref": "#/components/schemas/Hello"
+          }
+        },
+        "required": [
+          "t",
+          "id",
+          "d"
+        ],
+        "$comment": "05 §5.1"
+      },
+      "message.welcome": {
+        "title": "welcome envelope",
+        "description": "`welcome` (server to client): Accepts the session.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "welcome"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` of the message this one answers."
+          },
+          "d": {
+            "$ref": "#/components/schemas/Welcome"
+          }
+        },
+        "required": [
+          "t",
+          "re",
+          "d"
+        ],
+        "$comment": "05 §5.1"
+      },
+      "message.auth.expiring": {
+        "title": "auth.expiring envelope",
+        "description": "`auth.expiring` (server to client): Sent about 60 seconds before `tokenExp`.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "auth.expiring"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "d": {
+            "$ref": "#/components/schemas/AuthExpiring"
+          }
+        },
+        "required": [
+          "t",
+          "d"
+        ],
+        "$comment": "05 §5.1"
+      },
+      "message.auth.refresh": {
+        "title": "auth.refresh envelope",
+        "description": "`auth.refresh` (client to server): Presents a new token; with `ch`, a token for that channel.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "auth.refresh"
+          },
+          "id": {
+            "type": "string",
+            "description": "Required: the message expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/AuthRefresh"
+          }
+        },
+        "required": [
+          "t",
+          "id",
+          "d"
+        ],
+        "$comment": "05 §5.1, §3.1; gaps: G21, G10; decisions: D07"
+      },
+      "message.auth.ok": {
+        "title": "auth.ok envelope",
+        "description": "`auth.ok` (server to client): Reply to `auth.refresh`: the refreshed token is accepted.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "auth.ok"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` of the message this one answers."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/AuthOk"
+          }
+        },
+        "required": [
+          "t",
+          "re",
+          "d"
+        ],
+        "$comment": "05 §5.1"
+      },
+      "message.auth.revoked": {
+        "title": "auth.revoked envelope",
+        "description": "`auth.revoked` (server to client): The session was revoked; followed by close code 4401.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "auth.revoked"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "d": {
+            "$ref": "#/components/schemas/AuthRevoked"
+          }
+        },
+        "required": [
+          "t",
+          "d"
+        ],
+        "$comment": "05 §5.1, §3.3"
+      },
+      "message.ping": {
+        "title": "ping envelope",
+        "description": "`ping` (either direction): Sent after `heartbeatMs` without sending anything; the peer answers `pong`.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "ping"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "d": {
+            "type": "object",
+            "description": "No payload members; may be omitted (D02)."
+          }
+        },
+        "required": [
+          "t"
+        ],
+        "$comment": "05 §4, §5.1; gaps: G17, G12; decisions: D02"
+      },
+      "message.pong": {
+        "title": "pong envelope",
+        "description": "`pong` (either direction): Answers `ping`.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "pong"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` of the message this one answers."
+          },
+          "d": {
+            "type": "object",
+            "description": "No payload members; may be omitted (D02)."
+          }
+        },
+        "required": [
+          "t"
+        ],
+        "$comment": "05 §4, §5.1; gaps: G17, G12; decisions: D02"
+      },
+      "message.goaway": {
+        "title": "goaway envelope",
+        "description": "`goaway` (server to client): The whole connection is draining; never used for a single channel.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "goaway"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "d": {
+            "$ref": "#/components/schemas/Goaway"
+          }
+        },
+        "required": [
+          "t",
+          "d"
+        ],
+        "$comment": "05 §5.1"
+      },
+      "message.error": {
+        "title": "error envelope",
+        "description": "`error` (either direction): A typed error; with `re` when it answers a message. A fatal error is followed by the matching close code.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "error"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` of the message this one answers."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/ErrorPayload"
+          }
+        },
+        "required": [
+          "t",
+          "d"
+        ],
+        "$comment": "05 §5.1, §5.7, §5.8; gaps: G24"
+      },
+      "message.chunk": {
+        "title": "chunk envelope",
+        "description": "`chunk` (either direction): One part of a message whose UTF-8 size exceeds `maxMessageBytes`; chunks of one message are sent consecutively; reassembly times out after 10 seconds.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "chunk"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "d": {
+            "$ref": "#/components/schemas/Chunk"
+          }
+        },
+        "required": [
+          "t",
+          "d"
+        ],
+        "$comment": "05 §4; gaps: G14; decisions: D04"
+      },
+      "message.ch.open": {
+        "title": "ch.open envelope",
+        "description": "`ch.open` (client to server): Opens a document channel. Without `resume` the server answers with `catchUp: \"reload\"`.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "ch.open"
+          },
+          "id": {
+            "type": "string",
+            "description": "Required: the message expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/ChannelOpen"
+          }
+        },
+        "required": [
+          "t",
+          "id",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.2; gaps: G13"
+      },
+      "message.ch.opened": {
+        "title": "ch.opened envelope",
+        "description": "`ch.opened` (server to client): The channel is attached; `head` is the durable head at that moment.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "ch.opened"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` of the message this one answers."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/ChannelOpened"
+          }
+        },
+        "required": [
+          "t",
+          "re",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.2"
+      },
+      "message.ch.rejected": {
+        "title": "ch.rejected envelope",
+        "description": "`ch.rejected` (server to client): The channel could not be opened.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "ch.rejected"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` of the message this one answers."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/ChannelRejected"
+          }
+        },
+        "required": [
+          "t",
+          "re",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.2"
+      },
+      "message.ch.close": {
+        "title": "ch.close envelope",
+        "description": "`ch.close` (client to server): Closes a channel.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "ch.close"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "type": "object",
+            "description": "No payload members; may be omitted (D02)."
+          }
+        },
+        "required": [
+          "t",
+          "ch"
+        ],
+        "$comment": "05 §5.2; gaps: G30, G12; decisions: D02"
+      },
+      "message.ch.closed": {
+        "title": "ch.closed envelope",
+        "description": "`ch.closed` (server to client): The server closed a channel, for example `forbidden` after revocation, `unavailable` when the room moves or is fenced, `slow_consumer`. Under read restrictions (ADR 0019, proposed) a change of access that hides or reveals content also closes the channel with `unavailable`, and the next open reloads.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "ch.closed"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/ChannelClosed"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.2; ADR 0019; gaps: G103; decisions: D41"
+      },
+      "message.sync.submit": {
+        "title": "sync.submit envelope",
+        "description": "`sync.submit` (client to server): Submits a commit. The envelope `id` correlates the reply; the payload `id` identifies the commit.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "sync.submit"
+          },
+          "id": {
+            "type": "string",
+            "description": "Required: the message expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/Commit"
+          }
+        },
+        "required": [
+          "t",
+          "id",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.3; 04 §3.1"
+      },
+      "message.sync.ack": {
+        "title": "sync.ack envelope",
+        "description": "`sync.ack` (server to client): The commit is stored; sent only after every commit with a lower `seq` on the channel.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "sync.ack"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` of the message this one answers."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/Ack"
+          }
+        },
+        "required": [
+          "t",
+          "re",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.3; 04 §5 step 10, §7"
+      },
+      "message.sync.reject": {
+        "title": "sync.reject envelope",
+        "description": "`sync.reject` (server to client): The commit was refused; `action` says what to do next and `head` is the current head.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "sync.reject"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "re": {
+            "type": "string",
+            "description": "The `id` of the message this one answers."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/SyncReject"
+          }
+        },
+        "required": [
+          "t",
+          "re",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.3; 04 §8"
+      },
+      "message.sync.commit": {
+        "title": "sync.commit envelope",
+        "description": "`sync.commit` (server to client): Stored commits, in ascending `seq`; the next message continues at the last `seq` plus one.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "sync.commit"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/SyncCommit"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.3; 04 §5 step 10"
+      },
+      "message.sync.caughtUp": {
+        "title": "sync.caughtUp envelope",
+        "description": "`sync.caughtUp` (server to client): The catch-up stream is complete; live commits follow.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "sync.caughtUp"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/SyncCaughtUp"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.2, §5.3"
+      },
+      "message.sync.reset": {
+        "title": "sync.reset envelope",
+        "description": "`sync.reset` (server to client): A snapshot commit was stored; the client reloads content at `seq`.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "sync.reset"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/SyncReset"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.3; 04 §3.2"
+      },
+      "message.sync.check": {
+        "title": "sync.check envelope",
+        "description": "`sync.check` (server to client): The SHA-256 of the canonical form of the document at `seq`, for divergence detection (04 §13).",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "sync.check"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/SyncCheck"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.3; 04 §13"
+      },
+      "message.presence.update": {
+        "title": "presence.update envelope",
+        "description": "`presence.update` (client to server): Publishes the client's selection; positions refer to the confirmed document at `seq`.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "presence.update"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/PresenceUpdate"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.4; 04 §11"
+      },
+      "message.presence.state": {
+        "title": "presence.state envelope",
+        "description": "`presence.state` (server to client): Peers and sessions that left. The server adds identity and MAY drop or coalesce presence under load.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "presence.state"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/PresencePeers"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.4; gaps: G42"
+      },
+      "message.perm.changed": {
+        "title": "perm.changed envelope",
+        "description": "`perm.changed` (server to client): A complete new `access` object. The server enforces it from the moment it computes it.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "perm.changed"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/Access"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.5; gaps: G44, G46, G103; decisions: D12"
+      },
+      "message.event": {
+        "title": "event envelope",
+        "description": "`event` (server to client): \"This changed; fetch it over REST if you care.\"",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "event"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/Notification"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "05 §5.6; gaps: G47"
+      },
+      "message.wf.changed": {
+        "title": "wf.changed envelope",
+        "description": "`wf.changed` (server to client): The workflow state and the participant's status; sent like `perm.changed`.",
+        "type": "object",
+        "properties": {
+          "t": {
+            "const": "wf.changed"
+          },
+          "id": {
+            "type": "string",
+            "description": "Set when the sender expects a reply."
+          },
+          "ch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Channel number."
+          },
+          "d": {
+            "$ref": "#/components/schemas/WorkflowStatus"
+          }
+        },
+        "required": [
+          "t",
+          "ch",
+          "d"
+        ],
+        "$comment": "12 §10; gaps: G94"
+      }
+    },
+    "messages": {
+      "hello": {
+        "name": "hello",
+        "title": "hello",
+        "summary": "Opens the session. Must be the first message, within 10 seconds.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.hello"
+        },
+        "correlationId": {
+          "location": "$message.payload#/id"
+        },
+        "x-dep-direction": "c2s",
+        "x-dep-spec": "05 §5.1",
+        "x-dep-owner": "PRO",
+        "x-dep-replies": [
+          "welcome",
+          "error"
+        ]
+      },
+      "welcome": {
+        "name": "welcome",
+        "title": "welcome",
+        "summary": "Accepts the session.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.welcome"
+        },
+        "correlationId": {
+          "location": "$message.payload#/re"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.1",
+        "x-dep-owner": "PRO"
+      },
+      "auth.expiring": {
+        "name": "auth.expiring",
+        "title": "auth.expiring",
+        "summary": "Sent about 60 seconds before `tokenExp`.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.auth.expiring"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.1",
+        "x-dep-owner": "PRO"
+      },
+      "auth.refresh": {
+        "name": "auth.refresh",
+        "title": "auth.refresh",
+        "summary": "Presents a new token; with `ch`, a token for that channel.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.auth.refresh"
+        },
+        "correlationId": {
+          "location": "$message.payload#/id"
+        },
+        "x-dep-direction": "c2s",
+        "x-dep-spec": "05 §5.1, §3.1",
+        "x-dep-owner": "PRO",
+        "x-dep-replies": [
+          "auth.ok",
+          "error"
+        ],
+        "x-dep-gaps": [
+          "G21",
+          "G10"
+        ],
+        "x-dep-decisions": [
+          "D07"
+        ]
+      },
+      "auth.ok": {
+        "name": "auth.ok",
+        "title": "auth.ok",
+        "summary": "Reply to `auth.refresh`: the refreshed token is accepted.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.auth.ok"
+        },
+        "correlationId": {
+          "location": "$message.payload#/re"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.1",
+        "x-dep-owner": "PRO"
+      },
+      "auth.revoked": {
+        "name": "auth.revoked",
+        "title": "auth.revoked",
+        "summary": "The session was revoked; followed by close code 4401.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.auth.revoked"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.1, §3.3",
+        "x-dep-owner": "PRO"
+      },
+      "ping": {
+        "name": "ping",
+        "title": "ping",
+        "summary": "Sent after `heartbeatMs` without sending anything; the peer answers `pong`.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.ping"
+        },
+        "x-dep-direction": "both",
+        "x-dep-spec": "05 §4, §5.1",
+        "x-dep-owner": "PRO",
+        "x-dep-replies": [
+          "pong"
+        ],
+        "x-dep-gaps": [
+          "G17",
+          "G12"
+        ],
+        "x-dep-decisions": [
+          "D02"
+        ]
+      },
+      "pong": {
+        "name": "pong",
+        "title": "pong",
+        "summary": "Answers `ping`.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.pong"
+        },
+        "x-dep-direction": "both",
+        "x-dep-spec": "05 §4, §5.1",
+        "x-dep-owner": "PRO",
+        "x-dep-gaps": [
+          "G17",
+          "G12"
+        ],
+        "x-dep-decisions": [
+          "D02"
+        ]
+      },
+      "goaway": {
+        "name": "goaway",
+        "title": "goaway",
+        "summary": "The whole connection is draining; never used for a single channel.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.goaway"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.1",
+        "x-dep-owner": "PRO"
+      },
+      "error": {
+        "name": "error",
+        "title": "error",
+        "summary": "A typed error; with `re` when it answers a message. A fatal error is followed by the matching close code.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.error"
+        },
+        "x-dep-direction": "both",
+        "x-dep-spec": "05 §5.1, §5.7, §5.8",
+        "x-dep-owner": "PRO",
+        "x-dep-gaps": [
+          "G24"
+        ]
+      },
+      "chunk": {
+        "name": "chunk",
+        "title": "chunk",
+        "summary": "One part of a message whose UTF-8 size exceeds `maxMessageBytes`; chunks of one message are sent consecutively; reassembly times out after 10 seconds.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.chunk"
+        },
+        "x-dep-direction": "both",
+        "x-dep-spec": "05 §4",
+        "x-dep-owner": "PRO",
+        "x-dep-gaps": [
+          "G14"
+        ],
+        "x-dep-decisions": [
+          "D04"
+        ]
+      },
+      "ch.open": {
+        "name": "ch.open",
+        "title": "ch.open",
+        "summary": "Opens a document channel. Without `resume` the server answers with `catchUp: \"reload\"`.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.ch.open"
+        },
+        "correlationId": {
+          "location": "$message.payload#/id"
+        },
+        "x-dep-direction": "c2s",
+        "x-dep-spec": "05 §5.2",
+        "x-dep-owner": "PRO",
+        "x-dep-replies": [
+          "ch.opened",
+          "ch.rejected",
+          "error"
+        ],
+        "x-dep-gaps": [
+          "G13"
+        ]
+      },
+      "ch.opened": {
+        "name": "ch.opened",
+        "title": "ch.opened",
+        "summary": "The channel is attached; `head` is the durable head at that moment.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.ch.opened"
+        },
+        "correlationId": {
+          "location": "$message.payload#/re"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.2",
+        "x-dep-owner": "PRO"
+      },
+      "ch.rejected": {
+        "name": "ch.rejected",
+        "title": "ch.rejected",
+        "summary": "The channel could not be opened.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.ch.rejected"
+        },
+        "correlationId": {
+          "location": "$message.payload#/re"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.2",
+        "x-dep-owner": "PRO"
+      },
+      "ch.close": {
+        "name": "ch.close",
+        "title": "ch.close",
+        "summary": "Closes a channel.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.ch.close"
+        },
+        "x-dep-direction": "c2s",
+        "x-dep-spec": "05 §5.2",
+        "x-dep-owner": "PRO",
+        "x-dep-gaps": [
+          "G30",
+          "G12"
+        ],
+        "x-dep-decisions": [
+          "D02"
+        ]
+      },
+      "ch.closed": {
+        "name": "ch.closed",
+        "title": "ch.closed",
+        "summary": "The server closed a channel, for example `forbidden` after revocation, `unavailable` when the room moves or is fenced, `slow_consumer`. Under read restrictions (ADR 0019, proposed) a change of access that hides or reveals content also closes the channel with `unavailable`, and the next open reloads.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.ch.closed"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.2; ADR 0019",
+        "x-dep-owner": "PRO",
+        "x-dep-gaps": [
+          "G103"
+        ],
+        "x-dep-decisions": [
+          "D41"
+        ]
+      },
+      "sync.submit": {
+        "name": "sync.submit",
+        "title": "sync.submit",
+        "summary": "Submits a commit. The envelope `id` correlates the reply; the payload `id` identifies the commit.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.sync.submit"
+        },
+        "correlationId": {
+          "location": "$message.payload#/id"
+        },
+        "x-dep-direction": "c2s",
+        "x-dep-spec": "05 §5.3; 04 §3.1",
+        "x-dep-owner": "PRO",
+        "x-dep-replies": [
+          "sync.ack",
+          "sync.reject",
+          "error"
+        ]
+      },
+      "sync.ack": {
+        "name": "sync.ack",
+        "title": "sync.ack",
+        "summary": "The commit is stored; sent only after every commit with a lower `seq` on the channel.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.sync.ack"
+        },
+        "correlationId": {
+          "location": "$message.payload#/re"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.3; 04 §5 step 10, §7",
+        "x-dep-owner": "PRO"
+      },
+      "sync.reject": {
+        "name": "sync.reject",
+        "title": "sync.reject",
+        "summary": "The commit was refused; `action` says what to do next and `head` is the current head.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.sync.reject"
+        },
+        "correlationId": {
+          "location": "$message.payload#/re"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.3; 04 §8",
+        "x-dep-owner": "PRO"
+      },
+      "sync.commit": {
+        "name": "sync.commit",
+        "title": "sync.commit",
+        "summary": "Stored commits, in ascending `seq`; the next message continues at the last `seq` plus one.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.sync.commit"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.3; 04 §5 step 10",
+        "x-dep-owner": "PRO"
+      },
+      "sync.caughtUp": {
+        "name": "sync.caughtUp",
+        "title": "sync.caughtUp",
+        "summary": "The catch-up stream is complete; live commits follow.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.sync.caughtUp"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.2, §5.3",
+        "x-dep-owner": "PRO"
+      },
+      "sync.reset": {
+        "name": "sync.reset",
+        "title": "sync.reset",
+        "summary": "A snapshot commit was stored; the client reloads content at `seq`.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.sync.reset"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.3; 04 §3.2",
+        "x-dep-owner": "PRO"
+      },
+      "sync.check": {
+        "name": "sync.check",
+        "title": "sync.check",
+        "summary": "The SHA-256 of the canonical form of the document at `seq`, for divergence detection (04 §13).",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.sync.check"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.3; 04 §13",
+        "x-dep-owner": "PRO"
+      },
+      "presence.update": {
+        "name": "presence.update",
+        "title": "presence.update",
+        "summary": "Publishes the client's selection; positions refer to the confirmed document at `seq`.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.presence.update"
+        },
+        "x-dep-direction": "c2s",
+        "x-dep-spec": "05 §5.4; 04 §11",
+        "x-dep-owner": "PRO",
+        "x-dep-feature": "presence"
+      },
+      "presence.state": {
+        "name": "presence.state",
+        "title": "presence.state",
+        "summary": "Peers and sessions that left. The server adds identity and MAY drop or coalesce presence under load.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.presence.state"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.4",
+        "x-dep-owner": "PRO",
+        "x-dep-feature": "presence",
+        "x-dep-gaps": [
+          "G42"
+        ]
+      },
+      "perm.changed": {
+        "name": "perm.changed",
+        "title": "perm.changed",
+        "summary": "A complete new `access` object. The server enforces it from the moment it computes it.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.perm.changed"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.5",
+        "x-dep-owner": "PRO",
+        "x-dep-gaps": [
+          "G44",
+          "G46",
+          "G103"
+        ],
+        "x-dep-decisions": [
+          "D12"
+        ]
+      },
+      "event": {
+        "name": "event",
+        "title": "event",
+        "summary": "\"This changed; fetch it over REST if you care.\"",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.event"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "05 §5.6",
+        "x-dep-owner": "PRO",
+        "x-dep-gaps": [
+          "G47"
+        ]
+      },
+      "wf.changed": {
+        "name": "wf.changed",
+        "title": "wf.changed",
+        "summary": "The workflow state and the participant's status; sent like `perm.changed`.",
+        "contentType": "application/json",
+        "payload": {
+          "$ref": "#/components/schemas/message.wf.changed"
+        },
+        "x-dep-direction": "s2c",
+        "x-dep-spec": "12 §10",
+        "x-dep-owner": "FRW",
+        "x-dep-feature": "workflow",
+        "x-dep-gaps": [
+          "G94"
+        ]
+      }
+    }
+  }
+}

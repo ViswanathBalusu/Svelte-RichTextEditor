@@ -1,0 +1,5 @@
+{
+  "x-note": "Demo only, test values. The tenant of the reference host's demo stack (UX-091, BE-005). Its keys, API key and allowed origins are generated or derived when the stack starts (scripts/setup.ts); nothing secret is kept here.",
+  "id": "7d6c3a90-5b1e-4f2a-9c84-0e1f2a3b4c5d",
+  "name": "Reference host demo tenant"
+}

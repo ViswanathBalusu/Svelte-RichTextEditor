@@ -1,0 +1,9 @@
+{
+  "//": "The exit-check scenario (e2e/) and its Playwright configuration: Node.js with the DOM types for code that runs in the page. It reaches the stack's storage and sandbox through the scripts it runs, not by importing the services.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["e2e/**/*.ts", "playwright.config.ts"]
+}

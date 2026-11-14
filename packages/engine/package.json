@@ -1,0 +1,46 @@
+{
+  "name": "@docedit/engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Editing core: state, schema from the CDM, identifiers, body and region guards, paragraph styles, the document API, the sync client of pm-steps/1, and the web view (02 §5).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./headless": {
+      "types": "./src/headless.ts",
+      "default": "./src/headless.ts"
+    },
+    "./testing": {
+      "types": "./src/testing.ts",
+      "default": "./src/testing.ts"
+    },
+    "./spike-document": {
+      "types": "./src/spike-document.ts",
+      "default": "./src/spike-document.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@docedit/authority": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*",
+    "prosemirror-commands": "1.7.2",
+    "prosemirror-dropcursor": "1.8.4",
+    "prosemirror-gapcursor": "1.4.1",
+    "prosemirror-history": "1.5.1",
+    "prosemirror-keymap": "1.2.3",
+    "prosemirror-model": "1.25.12",
+    "prosemirror-state": "1.4.4",
+    "prosemirror-transform": "1.12.5",
+    "prosemirror-view": "1.42.9"
+  },
+  "devDependencies": {
+    "@docedit/backend-mock": "workspace:*"
+  }
+}

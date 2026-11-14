@@ -1,0 +1,428 @@
+{
+  "artifact": "permissions",
+  "version": 1,
+  "status": "draft",
+  "spec": "07 §1, §2, §4, §12; 12 §4.1; ADR 0019 (proposed); ADR 0033 (proposed)",
+  "generator": "packages/authority/scripts/generate.ts",
+  "description": "Capabilities, roles, scopes, principals, the operations that need `structure` or `manage`, and the authorisation matrix, as the authority enforces them. `structure` for an editor is document level only: region grants never convey it.",
+  "capabilities": ["view", "comment", "suggest", "edit", "fill", "structure", "manage"],
+  "roles": {
+    "viewer": ["view"],
+    "commenter": ["view", "comment"],
+    "suggester": ["view", "comment", "suggest"],
+    "filler": ["view", "fill"],
+    "editor": ["view", "comment", "suggest", "edit", "fill", "structure"],
+    "owner": ["view", "comment", "suggest", "edit", "fill", "structure", "manage"]
+  },
+  "regionRoles": ["viewer", "commenter", "suggester", "editor"],
+  "regionCapabilities": ["view", "comment", "suggest", "edit"],
+  "regionPolicies": ["inherit", "restricted", "confidential"],
+  "scopes": {
+    "forms": [
+      "doc",
+      "body",
+      "defs",
+      "defs:settings",
+      "defs:<type>/<definitionId>",
+      "story:<nodeId>",
+      "region:<nodeId>",
+      "field:<nodeId>"
+    ],
+    "nodeId": "^[A-Za-z0-9_-]{16}$",
+    "definitionId": "^[A-Za-z0-9_-]{1,64}$",
+    "definitionType": "^[a-z_]+$"
+  },
+  "principals": {
+    "forms": ["user:<sub>", "group:<id>", "everyone", "role:<definitionId>"],
+    "opaque": "sub and group identifiers: 1 to 255 characters without whitespace or control characters"
+  },
+  "operations": [
+    {
+      "id": "region.create",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, P2",
+      "text": "Create a region, including by wrapping blocks of the body."
+    },
+    {
+      "id": "region.delete",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, P2",
+      "text": "Delete a region as a whole node."
+    },
+    {
+      "id": "region.split",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, P2; ADR 0033",
+      "text": "Split a region: one part keeps the identifier and the other is created."
+    },
+    {
+      "id": "region.merge",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, P2; ADR 0033",
+      "text": "Merge regions: one is deleted and its blocks are moved into the other."
+    },
+    {
+      "id": "region.move",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, P2",
+      "text": "Move a region among the blocks of the body."
+    },
+    {
+      "id": "region.retitle",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, P2",
+      "text": "Change a region's title."
+    },
+    {
+      "id": "section_break.change",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, P2",
+      "text": "Insert, remove or move a section break, or change its attributes."
+    },
+    {
+      "id": "doc.change",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, §4",
+      "text": "Change the top of the tree: which stories exist, the attributes of the body, the definitions node and their order."
+    },
+    {
+      "id": "defs.change",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, §4, §5.3",
+      "text": "Change a definition: settings, a style, a numbering definition, a page setup, a role or a rule."
+    },
+    {
+      "id": "story.change",
+      "needs": "structure",
+      "where": "commit",
+      "spec": "07 §2, §4",
+      "text": "Change a header or footer story."
+    },
+    {
+      "id": "grants.change",
+      "needs": "manage",
+      "where": "control",
+      "spec": "07 §2, §12",
+      "text": "Create, change or remove region grants."
+    },
+    {
+      "id": "region_state.change",
+      "needs": "manage",
+      "where": "control",
+      "spec": "07 §2, §11, §12",
+      "text": "Change a region's state."
+    },
+    {
+      "id": "region.policy",
+      "needs": "manage",
+      "where": "commit",
+      "spec": "07 §2, P2, §16; ADR 0019",
+      "text": "Change a region's policy, including to and from confidential, or create a region whose policy is not inherit."
+    },
+    {
+      "id": "lease.break",
+      "needs": "manage",
+      "where": "control",
+      "spec": "07 §2, §10, §12",
+      "text": "Break another user's lease."
+    },
+    {
+      "id": "workflow.action",
+      "needs": "manage",
+      "where": "control",
+      "spec": "07 §2, §12; 12 §6.2",
+      "text": "Send, correct, resume, void or remind a workflow."
+    },
+    {
+      "id": "document.restore",
+      "needs": "manage",
+      "where": "control",
+      "spec": "07 §2, §12, §13",
+      "text": "Restore the whole document."
+    },
+    {
+      "id": "document.delete",
+      "needs": "manage",
+      "where": "control",
+      "spec": "07 §2, §12",
+      "text": "Delete the document."
+    },
+    {
+      "id": "settings.track_changes_off",
+      "needs": "manage",
+      "where": "commit",
+      "spec": "07 §5.2",
+      "text": "Switch `settings.trackChanges` from `everyone` to `off`."
+    },
+    {
+      "id": "field.sensitive",
+      "needs": "manage",
+      "where": "commit",
+      "spec": "ADR 0019 (change 5)",
+      "text": "Set or clear a field's `sensitive` attribute, including by inserting a field with it set."
+    }
+  ],
+  "matrix": [
+    {
+      "row": 1,
+      "id": "read.head",
+      "operation": "Open a channel, read content at the head, presence",
+      "requirement": { "kind": "capability", "any": ["view"], "where": "document" },
+      "conditions": ["content of hidden regions and values is projected away (ADR 0019)"],
+      "routes": ["GET /documents/{id}/content"],
+      "messages": ["ch.open", "presence.update"]
+    },
+    {
+      "row": 2,
+      "id": "read.history",
+      "operation": "Content, history, comparison, attribution, commits at an earlier `seq`",
+      "requirement": { "kind": "capability", "any": ["view"], "where": "document" },
+      "conditions": ["the history gate `minVisibleSeq` (07 §8)"],
+      "routes": [
+        "GET /documents/{id}/content",
+        "GET /documents/{id}/commits",
+        "GET /documents/{id}/history",
+        "GET /documents/{id}/versions",
+        "GET /documents/{id}/diff",
+        "GET /documents/{id}/attribution"
+      ],
+      "messages": ["ch.open"]
+    },
+    {
+      "row": 3,
+      "id": "commit",
+      "operation": "Submit a commit",
+      "requirement": { "kind": "commit" },
+      "conditions": ["07 §5"],
+      "routes": [],
+      "messages": ["sync.submit"]
+    },
+    {
+      "row": 4,
+      "id": "thread.create",
+      "operation": "Create a thread, reply",
+      "requirement": { "kind": "capability", "any": ["comment"], "where": "targets" },
+      "conditions": ["`comment` in the scopes of the target"],
+      "routes": ["POST /documents/{id}/threads", "POST /threads/{tid}/comments"],
+      "messages": []
+    },
+    {
+      "row": 5,
+      "id": "thread.update",
+      "operation": "Resolve, reopen or assign a thread",
+      "requirement": { "kind": "capability", "any": ["comment"], "where": "targets" },
+      "conditions": ["`comment` in its scope", "delete needs the author or `manage`"],
+      "routes": ["PATCH /threads/{tid}", "DELETE /threads/{tid}"],
+      "messages": []
+    },
+    {
+      "row": 6,
+      "id": "asset.upload",
+      "operation": "Upload an asset",
+      "requirement": {
+        "kind": "capability",
+        "any": ["edit", "suggest", "fill"],
+        "where": "somewhere"
+      },
+      "conditions": [],
+      "routes": ["POST /documents/{id}/assets", "POST /assets/{aid}/complete"],
+      "messages": []
+    },
+    {
+      "row": 7,
+      "id": "asset.read",
+      "operation": "Read an asset",
+      "requirement": { "kind": "capability", "any": ["view"], "where": "document" },
+      "conditions": ["on a document the asset is attached to"],
+      "routes": [],
+      "messages": []
+    },
+    {
+      "row": 8,
+      "id": "version.create",
+      "operation": "Named version",
+      "requirement": { "kind": "capability", "any": ["edit"], "where": "somewhere" },
+      "conditions": [],
+      "routes": ["POST /documents/{id}/versions"],
+      "messages": []
+    },
+    {
+      "row": 9,
+      "id": "restore.region",
+      "operation": "Restore a region",
+      "requirement": { "kind": "capability", "any": ["edit"], "where": "region" },
+      "conditions": ["not approved", "not leased to someone else"],
+      "routes": ["POST /documents/{id}/restore"],
+      "messages": []
+    },
+    {
+      "row": 10,
+      "id": "manage",
+      "operation": "Restore a document, grants, region state or policy, break a lease, workflow actions, delete",
+      "requirement": {
+        "kind": "manage",
+        "operations": [
+          "document.restore",
+          "grants.change",
+          "region_state.change",
+          "region.policy",
+          "lease.break",
+          "workflow.action",
+          "document.delete"
+        ]
+      },
+      "conditions": [],
+      "routes": [
+        "POST /documents/{id}/restore",
+        "PATCH /documents/{id}/grants",
+        "PUT /documents/{id}/regions/{rid}/state",
+        "DELETE /documents/{id}/regions/{rid}/lease",
+        "PUT /documents/{id}/workflow",
+        "DELETE /documents/{id}"
+      ],
+      "messages": []
+    },
+    {
+      "row": 11,
+      "id": "lease.acquire",
+      "operation": "Acquire a lease",
+      "requirement": { "kind": "capability", "any": ["edit"], "where": "region" },
+      "conditions": [],
+      "routes": ["POST /documents/{id}/regions/{rid}/lease"],
+      "messages": []
+    },
+    {
+      "row": 12,
+      "id": "export",
+      "operation": "Export",
+      "requirement": { "kind": "capability", "any": ["view"], "where": "document" },
+      "conditions": ["unless restricted with `no-export`", "raw compile logs need `edit`"],
+      "routes": ["POST /documents/{id}/exports", "GET /exports/{jid}"],
+      "messages": []
+    },
+    {
+      "row": 13,
+      "id": "service",
+      "operation": "Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, holds",
+      "requirement": { "kind": "service" },
+      "conditions": [],
+      "routes": [
+        "GET /retention",
+        "PUT /retention",
+        "GET /documents/{id}/retention",
+        "PUT /documents/{id}/retention",
+        "POST /documents/{id}/holds",
+        "GET /holds",
+        "GET /quotas",
+        "PUT /quotas",
+        "GET /origins",
+        "GET /keys",
+        "POST /documents/{id}/imports",
+        "PUT /documents/{id}/content",
+        "POST /documents/{id}/fork",
+        "POST /documents",
+        "GET /documents",
+        "GET /search",
+        "GET /audit",
+        "GET /webhooks",
+        "POST /webhooks",
+        "GET /webhooks/{id}",
+        "PATCH /webhooks/{id}",
+        "DELETE /webhooks/{id}",
+        "POST /tokens",
+        "POST /sessions/revoke"
+      ],
+      "messages": []
+    }
+  ],
+  "unmatrixedRoutes": [
+    {
+      "route": "GET /.well-known/dep",
+      "class": "public",
+      "note": "discovery, without credentials (05 §2)"
+    },
+    { "route": "GET /documents/{id}", "class": "open", "note": "metadata and state: no row" },
+    {
+      "route": "PATCH /documents/{id}",
+      "class": "open",
+      "note": "changing a document's state: no row"
+    },
+    {
+      "route": "GET /documents/{id}/regions",
+      "class": "open",
+      "note": "reading regions: no row (PRM-032 assumes `view`)"
+    },
+    { "route": "GET /documents/{id}/grants", "class": "open", "note": "reading grants: no row" },
+    {
+      "route": "PUT /documents/{id}/regions/{rid}/lease",
+      "class": "open",
+      "note": "a heartbeat by the holder (07 §10): no row"
+    },
+    { "route": "PUT /documents/{id}/read-marker", "class": "open", "note": "read markers: no row" },
+    { "route": "GET /documents/{id}/activity", "class": "open", "note": "activity: no row" },
+    { "route": "GET /documents/{id}/threads", "class": "open", "note": "reading threads: no row" },
+    { "route": "GET /threads/{tid}", "class": "open", "note": "reading a thread: no row" },
+    { "route": "PATCH /comments/{cid}", "class": "open", "note": "editing a comment: no row" },
+    {
+      "route": "DELETE /comments/{cid}",
+      "class": "open",
+      "note": "deleting a comment: no row (row 5 names threads)"
+    },
+    {
+      "route": "POST /documents/{id}/assets/resolve",
+      "class": "open",
+      "note": "resolving asset URLs: no row"
+    },
+    { "route": "DELETE /exports/{jid}", "class": "open", "note": "deleting an export: no row" },
+    { "route": "GET /imports/{jid}", "class": "open", "note": "reading an import job: no row" },
+    { "route": "GET /fonts", "class": "open", "note": "the font manifest: no row" },
+    { "route": "GET /documents/{id}/fields", "class": "fields", "note": "12 §10" },
+    {
+      "route": "GET /documents/{id}/field-values",
+      "class": "fields",
+      "note": "12 §10; values projected per reader (ADR 0019)"
+    },
+    {
+      "route": "PATCH /documents/{id}/field-values",
+      "class": "fields",
+      "note": "12 §9 prefill: a server-authored commit"
+    },
+    { "route": "GET /documents/{id}/workflow", "class": "fields", "note": "12 §6" },
+    {
+      "route": "POST /documents/{id}/workflow/participants/{pid}/consent",
+      "class": "fields",
+      "note": "12 §7, §8.1"
+    },
+    {
+      "route": "POST /documents/{id}/workflow/participants/{pid}/verify",
+      "class": "fields",
+      "note": "12 §7"
+    },
+    {
+      "route": "POST /documents/{id}/workflow/participants/{pid}/complete",
+      "class": "fields",
+      "note": "12 §8.1"
+    },
+    {
+      "route": "POST /documents/{id}/workflow/participants/{pid}/decline",
+      "class": "fields",
+      "note": "12 §6.2"
+    },
+    {
+      "route": "POST /documents/{id}/fields/{fid}/sign",
+      "class": "fields",
+      "note": "12 §8.1: P7 conditions, then origin `sign`"
+    },
+    { "route": "GET /documents/{id}/workflow/evidence", "class": "fields", "note": "12 §7" },
+    { "route": "GET /documents/{id}/workflow/final", "class": "fields", "note": "12 §8.2" }
+  ]
+}

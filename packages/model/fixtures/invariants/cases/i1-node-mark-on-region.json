@@ -1,0 +1,24 @@
+{
+  "name": "i1-node-mark-on-region",
+  "doc": "addNodeMark: a suggestion as a node mark on a region, which ProseMirror allows and the CDM does not.",
+  "base": "example",
+  "steps": [
+    {
+      "stepType": "addNodeMark",
+      "pos": 14,
+      "mark": { "type": "ins", "attrs": { "id": "sInsRegion000001", "user": "bob", "ext": {} } }
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I1"]
+}

@@ -1,0 +1,742 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:docedit:rules:1:draft",
+  "title": "Field rules rules/1 (draft)",
+  "description": "The attributes of a rule_def (12 §3.5, §5; ADR 0012; ADR 0030). This schema checks shapes only.\ncompileRules also checks, with the document at hand:\n- each of when, then and else is at most 16384 bytes of canonical JSON and 32 levels deep (the CDM grammar of rule_def);\n- static types: string literals are read as the decimal or date their position needs, and nothing is converted when a rule runs;\n- every field key exists (I14), set targets formula fields, choice literals are options of their field, role operands name a role_def;\n- one rule at most shows or hides, enables or disables, or sets each field; the graph of set effects has no cycle (I14);\n- at most 500 rules in a document (I15);\n- patterns use the linear-time subset of ADR 0030 §5: repetition counts up to 100, at most 1000 instructions.\nOperator groups: comparison == != < <= > >=; logic and or not; in, empty, matches; formulas + - * / round sum min max concat if.\nThe routing effects addParticipant and skipParticipant belong to the workflow resource, not to a rule_def.",
+  "$ref": "#/$defs/rule",
+  "$defs": {
+    "fieldKey": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*$"
+    },
+    "ruleId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "literal": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "field": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/fieldKey"
+        }
+      },
+      "required": [
+        "field"
+      ],
+      "additionalProperties": false
+    },
+    "role": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "now": {
+      "type": "object",
+      "properties": {
+        "now": {
+          "const": "date"
+        }
+      },
+      "required": [
+        "now"
+      ],
+      "additionalProperties": false
+    },
+    "op_eq": {
+      "type": "object",
+      "properties": {
+        "==": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "=="
+      ],
+      "additionalProperties": false
+    },
+    "op_ne": {
+      "type": "object",
+      "properties": {
+        "!=": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "!="
+      ],
+      "additionalProperties": false
+    },
+    "op_lt": {
+      "type": "object",
+      "properties": {
+        "<": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "<"
+      ],
+      "additionalProperties": false
+    },
+    "op_le": {
+      "type": "object",
+      "properties": {
+        "<=": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "<="
+      ],
+      "additionalProperties": false
+    },
+    "op_gt": {
+      "type": "object",
+      "properties": {
+        ">": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        ">"
+      ],
+      "additionalProperties": false
+    },
+    "op_ge": {
+      "type": "object",
+      "properties": {
+        ">=": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        ">="
+      ],
+      "additionalProperties": false
+    },
+    "op_and": {
+      "type": "object",
+      "properties": {
+        "and": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2
+        }
+      },
+      "required": [
+        "and"
+      ],
+      "additionalProperties": false
+    },
+    "op_or": {
+      "type": "object",
+      "properties": {
+        "or": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2
+        }
+      },
+      "required": [
+        "or"
+      ],
+      "additionalProperties": false
+    },
+    "op_not": {
+      "type": "object",
+      "properties": {
+        "not": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "not"
+      ],
+      "additionalProperties": false
+    },
+    "op_in": {
+      "type": "object",
+      "properties": {
+        "in": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/expression"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ],
+          "minItems": 2,
+          "items": false
+        }
+      },
+      "required": [
+        "in"
+      ],
+      "additionalProperties": false
+    },
+    "op_empty": {
+      "type": "object",
+      "properties": {
+        "empty": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "empty"
+      ],
+      "additionalProperties": false
+    },
+    "op_matches": {
+      "type": "object",
+      "properties": {
+        "matches": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/expression"
+            },
+            {
+              "type": "string",
+              "maxLength": 256
+            }
+          ],
+          "minItems": 2,
+          "items": false
+        }
+      },
+      "required": [
+        "matches"
+      ],
+      "additionalProperties": false
+    },
+    "op_add": {
+      "type": "object",
+      "properties": {
+        "+": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2
+        }
+      },
+      "required": [
+        "+"
+      ],
+      "additionalProperties": false
+    },
+    "op_subtract": {
+      "type": "object",
+      "properties": {
+        "-": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "-"
+      ],
+      "additionalProperties": false
+    },
+    "op_multiply": {
+      "type": "object",
+      "properties": {
+        "*": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2
+        }
+      },
+      "required": [
+        "*"
+      ],
+      "additionalProperties": false
+    },
+    "op_divide": {
+      "type": "object",
+      "properties": {
+        "/": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "/"
+      ],
+      "additionalProperties": false
+    },
+    "op_round": {
+      "type": "object",
+      "properties": {
+        "round": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/expression"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            }
+          ],
+          "minItems": 2,
+          "items": false
+        }
+      },
+      "required": [
+        "round"
+      ],
+      "additionalProperties": false
+    },
+    "op_sum": {
+      "type": "object",
+      "properties": {
+        "sum": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "sum"
+      ],
+      "additionalProperties": false
+    },
+    "op_min": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "min"
+      ],
+      "additionalProperties": false
+    },
+    "op_max": {
+      "type": "object",
+      "properties": {
+        "max": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "max"
+      ],
+      "additionalProperties": false
+    },
+    "op_concat": {
+      "type": "object",
+      "properties": {
+        "concat": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "concat"
+      ],
+      "additionalProperties": false
+    },
+    "op_if": {
+      "type": "object",
+      "properties": {
+        "if": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "if"
+      ],
+      "additionalProperties": false
+    },
+    "expression": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/literal"
+        },
+        {
+          "$ref": "#/$defs/field"
+        },
+        {
+          "$ref": "#/$defs/role"
+        },
+        {
+          "$ref": "#/$defs/now"
+        },
+        {
+          "$ref": "#/$defs/op_eq"
+        },
+        {
+          "$ref": "#/$defs/op_ne"
+        },
+        {
+          "$ref": "#/$defs/op_lt"
+        },
+        {
+          "$ref": "#/$defs/op_le"
+        },
+        {
+          "$ref": "#/$defs/op_gt"
+        },
+        {
+          "$ref": "#/$defs/op_ge"
+        },
+        {
+          "$ref": "#/$defs/op_and"
+        },
+        {
+          "$ref": "#/$defs/op_or"
+        },
+        {
+          "$ref": "#/$defs/op_not"
+        },
+        {
+          "$ref": "#/$defs/op_in"
+        },
+        {
+          "$ref": "#/$defs/op_empty"
+        },
+        {
+          "$ref": "#/$defs/op_matches"
+        },
+        {
+          "$ref": "#/$defs/op_add"
+        },
+        {
+          "$ref": "#/$defs/op_subtract"
+        },
+        {
+          "$ref": "#/$defs/op_multiply"
+        },
+        {
+          "$ref": "#/$defs/op_divide"
+        },
+        {
+          "$ref": "#/$defs/op_round"
+        },
+        {
+          "$ref": "#/$defs/op_sum"
+        },
+        {
+          "$ref": "#/$defs/op_min"
+        },
+        {
+          "$ref": "#/$defs/op_max"
+        },
+        {
+          "$ref": "#/$defs/op_concat"
+        },
+        {
+          "$ref": "#/$defs/op_if"
+        }
+      ]
+    },
+    "effect_show": {
+      "type": "object",
+      "properties": {
+        "show": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldKey"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "show"
+      ],
+      "additionalProperties": false
+    },
+    "effect_hide": {
+      "type": "object",
+      "properties": {
+        "hide": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldKey"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "hide"
+      ],
+      "additionalProperties": false
+    },
+    "effect_require": {
+      "type": "object",
+      "properties": {
+        "require": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldKey"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "require"
+      ],
+      "additionalProperties": false
+    },
+    "effect_enable": {
+      "type": "object",
+      "properties": {
+        "enable": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldKey"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "enable"
+      ],
+      "additionalProperties": false
+    },
+    "effect_disable": {
+      "type": "object",
+      "properties": {
+        "disable": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldKey"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "disable"
+      ],
+      "additionalProperties": false
+    },
+    "effect_validate": {
+      "type": "object",
+      "properties": {
+        "validate": {
+          "type": "object",
+          "properties": {
+            "fields": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/fieldKey"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]*$"
+            }
+          },
+          "required": [
+            "fields",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "validate"
+      ],
+      "additionalProperties": false
+    },
+    "effect_set": {
+      "type": "object",
+      "properties": {
+        "set": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "$ref": "#/$defs/fieldKey"
+            },
+            "value": {
+              "$ref": "#/$defs/expression"
+            }
+          },
+          "required": [
+            "field",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "set"
+      ],
+      "additionalProperties": false
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/effect_show"
+          },
+          {
+            "$ref": "#/$defs/effect_hide"
+          },
+          {
+            "$ref": "#/$defs/effect_require"
+          },
+          {
+            "$ref": "#/$defs/effect_enable"
+          },
+          {
+            "$ref": "#/$defs/effect_disable"
+          },
+          {
+            "$ref": "#/$defs/effect_validate"
+          },
+          {
+            "$ref": "#/$defs/effect_set"
+          }
+        ]
+      }
+    },
+    "rule": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ruleId"
+        },
+        "when": {
+          "$ref": "#/$defs/expression"
+        },
+        "then": {
+          "$ref": "#/$defs/effects"
+        },
+        "else": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/effects"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ext": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "when",
+        "then"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

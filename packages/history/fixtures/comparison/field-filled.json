@@ -1,0 +1,39 @@
+{
+  "name": "field-filled",
+  "description": "A form field is filled in.",
+  "expected": ["field:fTenantName00001"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "field",
+        "fieldId": "fTenantName00001",
+        "blockId": "pNote00000000001",
+        "user": "erin",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "field",
+        "fieldId": "fTenantName00001",
+        "blockId": "pNote00000000001",
+        "user": "erin",
+        "seq": 1
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "//": "Editor and tooling entry point. Each package type-checks with its own tsconfig (pnpm typecheck).",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["*.config.ts"]
+}

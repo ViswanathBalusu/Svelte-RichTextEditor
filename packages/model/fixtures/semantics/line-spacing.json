@@ -1,0 +1,90 @@
+{
+  "rule": "line-spacing",
+  "spec": "03 §7 (Line spacing)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "lineHeight in packages/model/src/spacing/lines.ts",
+  "description": "Line heights: multiple per line on the tallest run, exact and atLeast as lengths.",
+  "format": "`lineSpacing` and `lineRule` are the resolved paragraph properties; `runs` the natural single-spaced heights, in twips, of every run and inline box on one line (as the layout engine measures them); `expected` the line height in twips.",
+  "cases": [
+    {
+      "id": "single",
+      "description": "multiple 1000 is the tallest run's natural height.",
+      "lineSpacing": 1000,
+      "lineRule": "multiple",
+      "runs": [253],
+      "expected": 253
+    },
+    {
+      "id": "multiple-of-the-tallest-run",
+      "description": "multiple applies to the tallest run on the line: 1.15 × 400 = 460.",
+      "lineSpacing": 1150,
+      "lineRule": "multiple",
+      "runs": [276, 400, 230],
+      "expected": 460
+    },
+    {
+      "id": "mixed-sizes-per-line",
+      "description": "Line spacing is per line: 1.5 lines over a line with 11 pt and 16 pt runs (heights 253 and 368) is 552 ...",
+      "lineSpacing": 1500,
+      "lineRule": "multiple",
+      "runs": [253, 368, 253],
+      "expected": 552
+    },
+    {
+      "id": "mixed-sizes-per-line-small",
+      "description": "... while a line of the same paragraph with only 11 pt runs is 380 (1.5 × 253 = 379.5, rounded half up).",
+      "lineSpacing": 1500,
+      "lineRule": "multiple",
+      "runs": [253, 253],
+      "expected": 380
+    },
+    {
+      "id": "rounding",
+      "description": "multiple rounds half up to whole twips: 1.15 × 253 = 290.95 gives 291.",
+      "lineSpacing": 1150,
+      "lineRule": "multiple",
+      "runs": [253],
+      "expected": 291
+    },
+    {
+      "id": "inline-picture",
+      "description": "An inline picture counts as a run of its own height.",
+      "lineSpacing": 1000,
+      "lineRule": "multiple",
+      "runs": [253, 1440],
+      "expected": 1440
+    },
+    {
+      "id": "empty-line",
+      "description": "An empty line has the height of the paragraph mark.",
+      "lineSpacing": 1150,
+      "lineRule": "multiple",
+      "runs": [253],
+      "expected": 291
+    },
+    {
+      "id": "exact",
+      "description": "exact is a length in twips, whatever the runs (taller content is clipped).",
+      "lineSpacing": 240,
+      "lineRule": "exact",
+      "runs": [400, 253],
+      "expected": 240
+    },
+    {
+      "id": "at-least-below",
+      "description": "atLeast is the length when the tallest run is smaller ...",
+      "lineSpacing": 300,
+      "lineRule": "atLeast",
+      "runs": [253],
+      "expected": 300
+    },
+    {
+      "id": "at-least-above",
+      "description": "... and the tallest run's natural height when that is larger.",
+      "lineSpacing": 300,
+      "lineRule": "atLeast",
+      "runs": [253, 368],
+      "expected": 368
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "i4-then-remove-node-mark",
+  "doc": "attr then removeNodeMark: the result is checked whatever the last step was.",
+  "base": "kitchen-sink",
+  "steps": [
+    { "stepType": "attr", "pos": 46, "attr": "style", "value": "Missing" },
+    {
+      "stepType": "removeNodeMark",
+      "pos": 86,
+      "mark": { "type": "del", "attrs": { "id": "sBobDelete000002", "user": "bob", "ext": {} } }
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I4"]
+}

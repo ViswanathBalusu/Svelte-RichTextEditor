@@ -1,0 +1,1840 @@
+{
+  "cdm": 1,
+  "topNode": "doc",
+  "nodes": [
+    [
+      "doc",
+      {
+        "content": "defs story* body",
+        "attrs": {
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "defs",
+      {
+        "content": "settings style_def* numbering_def* page_setup+ role_def* rule_def* source_def* preserved_def*",
+        "selectable": false,
+        "isolating": true,
+        "allowGapCursor": false,
+        "attrs": {
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "settings",
+      {
+        "atom": true,
+        "selectable": false,
+        "attrs": {
+          "lang": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "dir": {
+            "default": "ltr",
+            "validate": "string"
+          },
+          "defaultTabStop": {
+            "default": 720,
+            "validate": "number"
+          },
+          "hyphenation": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "defaultParagraphStyle": {
+            "default": "Normal",
+            "validate": "string"
+          },
+          "footnoteFormat": {
+            "default": "decimal",
+            "validate": "string"
+          },
+          "footnoteRestart": {
+            "default": "continuous",
+            "validate": "string"
+          },
+          "trackChanges": {
+            "default": "off",
+            "validate": "string"
+          },
+          "citationStyle": {
+            "default": "authorYear",
+            "validate": "string"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "style_def",
+      {
+        "atom": true,
+        "selectable": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "kind": {
+            "default": "paragraph",
+            "validate": "string"
+          },
+          "name": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "basedOn": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "next": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "outlineLevel": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "builtIn": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "fontFamily": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "fontSize": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "bold": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "italic": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "underline": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "strike": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "smallCaps": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "allCaps": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "vertAlign": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "color": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "highlight": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "lang": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "hidden": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "align": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "dir": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "indentLeft": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "indentRight": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "indentFirstLine": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "spaceBefore": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "spaceAfter": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "contextualSpacing": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "lineSpacing": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "lineRule": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "keepNext": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "keepLines": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "pageBreakBefore": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "widowControl": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "tabs": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "borders": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "shading": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "numbering": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "cellMargins": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "headerRowShading": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "bandedRows": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "numbering_def",
+      {
+        "atom": true,
+        "selectable": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "name": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "levels": {
+            "default": [],
+            "validate": "object"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "page_setup",
+      {
+        "atom": true,
+        "selectable": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "width": {
+            "default": 11906,
+            "validate": "number"
+          },
+          "height": {
+            "default": 16838,
+            "validate": "number"
+          },
+          "orientation": {
+            "default": "portrait",
+            "validate": "string"
+          },
+          "marginTop": {
+            "default": 1440,
+            "validate": "number"
+          },
+          "marginRight": {
+            "default": 1440,
+            "validate": "number"
+          },
+          "marginBottom": {
+            "default": 1440,
+            "validate": "number"
+          },
+          "marginLeft": {
+            "default": 1440,
+            "validate": "number"
+          },
+          "gutter": {
+            "default": 0,
+            "validate": "number"
+          },
+          "headerDistance": {
+            "default": 708,
+            "validate": "number"
+          },
+          "footerDistance": {
+            "default": 708,
+            "validate": "number"
+          },
+          "columns": {
+            "default": 1,
+            "validate": "number"
+          },
+          "columnGap": {
+            "default": 720,
+            "validate": "number"
+          },
+          "differentFirstPage": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "differentOddEven": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "headerDefault": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "headerFirst": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "headerEven": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "footerDefault": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "footerFirst": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "footerEven": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "pageNumberStart": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "pageNumberFormat": {
+            "default": "decimal",
+            "validate": "string"
+          },
+          "watermark": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "role_def",
+      {
+        "atom": true,
+        "selectable": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "name": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "color": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "rule_def",
+      {
+        "atom": true,
+        "selectable": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "when": {
+            "default": null
+          },
+          "then": {
+            "default": null
+          },
+          "else": {
+            "default": null
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "source_def",
+      {
+        "atom": true,
+        "selectable": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "kind": {
+            "default": "book",
+            "validate": "string"
+          },
+          "title": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "authors": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "editors": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "issued": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "accessed": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "containerTitle": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "publisher": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "publisherPlace": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "edition": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "volume": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "issue": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "pages": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "number": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "doi": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "url": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "isbn": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "issn": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "language": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "note": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "extra": {
+            "default": {},
+            "validate": "object"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "preserved_def",
+      {
+        "atom": true,
+        "selectable": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "tree": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "story",
+      {
+        "content": "story_block+",
+        "marks": "ins del fmt",
+        "selectable": false,
+        "isolating": true,
+        "allowGapCursor": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "kind": {
+            "default": "header",
+            "validate": "string"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "body",
+      {
+        "content": "(block | region | section_break | hidden_region)+",
+        "marks": "ins del fmt",
+        "attrs": {
+          "pageSetup": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "region",
+      {
+        "content": "block+",
+        "marks": "ins del fmt",
+        "isolating": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "title": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "policy": {
+            "default": "inherit",
+            "validate": "string"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "section_break",
+      {
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "pageSetup": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "start": {
+            "default": "nextPage",
+            "validate": "string"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "paragraph",
+      {
+        "content": "inline*",
+        "group": "block story_block cell_block",
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "style": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "numbering": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "numberingRestart": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "align": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "dir": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "indentLeft": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "indentRight": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "indentFirstLine": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "spaceBefore": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "spaceAfter": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "contextualSpacing": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "lineSpacing": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "lineRule": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "keepNext": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "keepLines": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "pageBreakBefore": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "widowControl": {
+            "default": null,
+            "validate": "boolean|null"
+          },
+          "tabs": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "borders": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "shading": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "table",
+      {
+        "content": "table_row+",
+        "marks": "ins del fmt",
+        "group": "block",
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "style": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "width": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "align": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "grid": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "headerRows": {
+            "default": 0,
+            "validate": "number"
+          },
+          "borders": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "cellMargins": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "table_row",
+      {
+        "content": "table_cell+",
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "height": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "heightRule": {
+            "default": "auto",
+            "validate": "string"
+          },
+          "cantSplit": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "table_cell",
+      {
+        "content": "cell_block+",
+        "marks": "ins del fmt",
+        "isolating": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "colspan": {
+            "default": 1,
+            "validate": "number"
+          },
+          "rowspan": {
+            "default": 1,
+            "validate": "number"
+          },
+          "vAlign": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "shading": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "borders": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "margins": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "figure",
+      {
+        "content": "caption?",
+        "group": "block story_block cell_block",
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "asset": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "width": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "height": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "alt": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "align": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "placement": {
+            "default": "here",
+            "validate": "string"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "caption",
+      {
+        "content": "caption_inline*",
+        "attrs": {
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "equation_block",
+      {
+        "group": "block story_block cell_block",
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "latex": {
+            "default": "",
+            "validate": "string"
+          },
+          "numbered": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "label": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "toc",
+      {
+        "group": "block story_block",
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "minLevel": {
+            "default": 1,
+            "validate": "number"
+          },
+          "maxLevel": {
+            "default": 3,
+            "validate": "number"
+          },
+          "of": {
+            "default": "headings",
+            "validate": "string"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "bibliography",
+      {
+        "group": "block",
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "include": {
+            "default": "cited",
+            "validate": "string"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "extension_block",
+      {
+        "group": "block story_block",
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "extension": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "payload": {
+            "default": null
+          },
+          "fallbackAsset": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "fallbackText": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "preserved_block",
+      {
+        "group": "block story_block cell_block",
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "label": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "fragment": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "fallbackAsset": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "fallbackText": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "width": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "height": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "text",
+      {
+        "group": "inline caption_inline",
+        "inline": true
+      }
+    ],
+    [
+      "image",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "asset": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "width": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "height": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "alt": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "origin": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "break",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "kind": {
+            "default": "line",
+            "validate": "string"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "tab",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "equation",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "latex": {
+            "default": "",
+            "validate": "string"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "origin": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "footnote",
+      {
+        "content": "paragraph+",
+        "group": "inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "origin": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "field",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "kind": {
+            "default": "page",
+            "validate": "string"
+          },
+          "format": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "target": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "name": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "cached": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "origin": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "citation",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "items": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "mode": {
+            "default": "normal",
+            "validate": "string"
+          },
+          "cached": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "preserved": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "origin": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "anchor",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "name": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "origin": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "form_field",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "key": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "kind": {
+            "default": "text",
+            "validate": "string"
+          },
+          "label": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "assignee": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "required": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "readOnly": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "value": {
+            "default": null
+          },
+          "default": {
+            "default": null
+          },
+          "placeholder": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "options": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "format": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "validation": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "width": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "sensitive": {
+            "default": false,
+            "validate": "boolean"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "extension_inline",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "extension": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "payload": {
+            "default": null
+          },
+          "fallbackText": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "preserved_inline",
+      {
+        "group": "inline caption_inline",
+        "inline": true,
+        "atom": true,
+        "attrs": {
+          "label": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "fragment": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "tree": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "fallbackAsset": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "fallbackText": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "width": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "height": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "hidden_region",
+      {
+        "atom": true,
+        "selectable": true,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "title": {
+            "default": null,
+            "validate": "string|null"
+          }
+        }
+      }
+    ]
+  ],
+  "marks": [
+    [
+      "link",
+      {
+        "inclusive": false,
+        "attrs": {
+          "href": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "title": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "charStyle",
+      {
+        "attrs": {
+          "style": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "bold",
+      {
+        "attrs": {
+          "value": {
+            "default": true,
+            "validate": "boolean"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "italic",
+      {
+        "attrs": {
+          "value": {
+            "default": true,
+            "validate": "boolean"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "underline",
+      {
+        "attrs": {
+          "style": {
+            "default": "single",
+            "validate": "string"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "strike",
+      {
+        "attrs": {
+          "value": {
+            "default": true,
+            "validate": "boolean"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "smallCaps",
+      {
+        "attrs": {
+          "value": {
+            "default": true,
+            "validate": "boolean"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "allCaps",
+      {
+        "attrs": {
+          "value": {
+            "default": true,
+            "validate": "boolean"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "vertAlign",
+      {
+        "attrs": {
+          "value": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "fontFamily",
+      {
+        "attrs": {
+          "value": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "fontSize",
+      {
+        "attrs": {
+          "value": {
+            "default": null,
+            "validate": "number|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "color",
+      {
+        "attrs": {
+          "value": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "highlight",
+      {
+        "attrs": {
+          "value": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "lang",
+      {
+        "attrs": {
+          "value": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "hidden",
+      {
+        "attrs": {
+          "value": {
+            "default": true,
+            "validate": "boolean"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "preserved",
+      {
+        "attrs": {
+          "props": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "ins",
+      {
+        "excludes": "",
+        "inclusive": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "user": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "del",
+      {
+        "excludes": "",
+        "inclusive": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "user": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ],
+    [
+      "fmt",
+      {
+        "excludes": "",
+        "inclusive": false,
+        "attrs": {
+          "id": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "user": {
+            "default": null,
+            "validate": "string|null"
+          },
+          "before": {
+            "default": null
+          },
+          "ext": {
+            "default": {},
+            "validate": "object"
+          }
+        }
+      }
+    ]
+  ]
+}

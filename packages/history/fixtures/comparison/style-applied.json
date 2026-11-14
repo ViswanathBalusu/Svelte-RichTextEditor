@@ -1,0 +1,113 @@
+{
+  "name": "style-applied",
+  "description": "One paragraph style is applied to five paragraphs.",
+  "expected": [
+    "formatted:pIntro0000000001",
+    "formatted:pTerms000000001A",
+    "formatted:pTerms000000002A",
+    "formatted:pTerms000000003A",
+    "formatted:pEnd00000000001Z"
+  ],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "formatted",
+        "blockId": "pIntro0000000001",
+        "type": "paragraph",
+        "attrs": ["style"],
+        "user": "carol",
+        "seq": 1
+      },
+      {
+        "kind": "formatted",
+        "blockId": "pTerms000000001A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "attrs": ["style"],
+        "user": "carol",
+        "seq": 1
+      },
+      {
+        "kind": "formatted",
+        "blockId": "pTerms000000002A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "attrs": ["style"],
+        "user": "carol",
+        "seq": 1
+      },
+      {
+        "kind": "formatted",
+        "blockId": "pTerms000000003A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "attrs": ["style"],
+        "user": "carol",
+        "seq": 1
+      },
+      {
+        "kind": "formatted",
+        "blockId": "pEnd00000000001Z",
+        "type": "paragraph",
+        "attrs": ["style"],
+        "user": "carol",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "formatted",
+        "blockId": "pIntro0000000001",
+        "type": "paragraph",
+        "attrs": ["style"]
+      },
+      {
+        "kind": "formatted",
+        "blockId": "pTerms000000001A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "attrs": ["style"]
+      },
+      {
+        "kind": "formatted",
+        "blockId": "pTerms000000002A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "attrs": ["style"]
+      },
+      {
+        "kind": "formatted",
+        "blockId": "pTerms000000003A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "attrs": ["style"]
+      },
+      {
+        "kind": "formatted",
+        "blockId": "pEnd00000000001Z",
+        "type": "paragraph",
+        "attrs": ["style"]
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

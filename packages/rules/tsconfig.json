@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Universal package (01 §6; FND-004): lib ES2023 and no ambient types, so a Node.js or browser API fails the type check. The rules run unchanged in the editor, the authority and the authority service (12 §5.2).",
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Universal package (01 §6): no Node.js or browser APIs, so the same code runs in the room, the authority service, the local backend and tests.",
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

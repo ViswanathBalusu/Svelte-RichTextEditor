@@ -1,0 +1,25 @@
+{
+  "name": "i11-colour-mark",
+  "doc": "addMark: a colour in lower case.",
+  "base": "example",
+  "steps": [
+    {
+      "stepType": "addMark",
+      "mark": { "type": "color", "attrs": { "value": "#ff0000", "ext": {} } },
+      "from": 8,
+      "to": 10
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I11"]
+}

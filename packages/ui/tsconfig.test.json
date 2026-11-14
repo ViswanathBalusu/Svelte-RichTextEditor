@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Tests, scripts and the Playwright harness: Node.js and the DOM. Checked by `pnpm --filter @docedit/ui run typecheck`.",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "test/**/*.ts",
+    "scripts/**/*.ts",
+    "e2e/**/*.ts",
+    "e2e/**/*.svelte",
+    "*.config.ts"
+  ]
+}

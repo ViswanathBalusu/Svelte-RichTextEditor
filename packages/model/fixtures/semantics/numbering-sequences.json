@@ -1,0 +1,550 @@
+{
+  "rule": "numbering.sequences",
+  "spec": "03 §4.1, §4.3, §4.4, §7 (Numbering)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "computeLabels, counterEffects and referenceText in packages/model/src/numbering/labels.ts",
+  "description": "seq fields counted per name and numbered equation blocks counted in the Equation sequence.",
+  "format": "Each case is one document. Its defs are, in this order: a settings node with the attributes of the file's `settings` and then the case's `settings`; the file's `styles` and then the case's `styles` (a case style replaces a file style with the same identifier); the file's `numberings` and then the case's; and the page setup `ps1` with every attribute at its default. Then come the case's `stories`, then a body with page setup `ps1` and the case's `body`. Every such document is valid (model.validate) unless the case says `\"valid\": false`. `expected` lists, for each kind it names, every label of that kind in the document: `lists` by paragraph id; `sequences` by the id of the block holding the `seq` fields (paragraph, figure or footnote), one text per field in order; `equations` by equation block id; `footnotes` by footnote id; `references` as the text a `ref` field with that target prints (null: no label).",
+  "settings": { "lang": "en-GB", "defaultParagraphStyle": "Normal" },
+  "styles": [
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Normal",
+        "kind": "paragraph",
+        "name": "Normal",
+        "builtIn": true,
+        "fontSize": 220,
+        "spaceAfter": 160
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading1",
+        "kind": "paragraph",
+        "name": "Heading1",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 1,
+        "numbering": { "numberingId": "outline", "level": 0, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading2",
+        "kind": "paragraph",
+        "name": "Heading2",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 2,
+        "numbering": { "numberingId": "outline", "level": 1, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading3",
+        "kind": "paragraph",
+        "name": "Heading3",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 3,
+        "numbering": { "numberingId": "outline", "level": 2, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "ListParagraph",
+        "kind": "paragraph",
+        "name": "ListParagraph",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "indentLeft": 720,
+        "contextualSpacing": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Caption",
+        "kind": "paragraph",
+        "name": "Caption",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "italic": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "FootnoteText",
+        "kind": "paragraph",
+        "name": "FootnoteText",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "fontSize": 180,
+        "spaceAfter": 0
+      }
+    }
+  ],
+  "numberings": [
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "decimal-list",
+        "name": "decimal-list",
+        "levels": [
+          { "format": "decimal", "text": "%1.", "start": 1 },
+          { "format": "lowerLetter", "text": "%2)", "start": 1 },
+          { "format": "lowerRoman", "text": "(%3)", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "outline",
+        "name": "outline",
+        "levels": [
+          { "format": "decimal", "text": "%1", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1 },
+          { "format": "decimal", "text": "%1.%2.%3", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "bullets",
+        "name": "bullets",
+        "levels": [
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "•" },
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "◦" }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "articles",
+        "name": "articles",
+        "levels": [
+          { "format": "upperRoman", "text": "§ %1.", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1, "legal": true },
+          { "format": "lowerLetter", "text": "(%3)", "start": 1, "restartAfter": 0 }
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "figures-and-tables",
+      "description": "seq fields count per name: table captions and figure captions each have their own sequence.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Caption" },
+          "content": [
+            { "type": "text", "text": "Table " },
+            { "type": "field", "attrs": { "kind": "seq", "name": "Table" } },
+            { "type": "text", "text": ": First" }
+          ]
+        },
+        {
+          "type": "figure",
+          "attrs": {
+            "id": "fig01xxxxxxxxxxx",
+            "asset": "01a1ae27-b400-7315-9767-e3e13f9a5c14",
+            "width": 2880,
+            "height": 1440
+          },
+          "content": [
+            {
+              "type": "caption",
+              "content": [
+                { "type": "text", "text": "Figure " },
+                { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+                { "type": "text", "text": ": First" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Caption" },
+          "content": [
+            { "type": "text", "text": "Table " },
+            { "type": "field", "attrs": { "kind": "seq", "name": "Table" } },
+            { "type": "text", "text": ": Second" }
+          ]
+        },
+        {
+          "type": "figure",
+          "attrs": {
+            "id": "fig02xxxxxxxxxxx",
+            "asset": "01a1ae27-b400-7315-9767-e3e13f9a5c14",
+            "width": 2880,
+            "height": 1440
+          },
+          "content": [
+            {
+              "type": "caption",
+              "content": [
+                { "type": "text", "text": "Figure " },
+                { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+                { "type": "text", "text": ": Second" }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "sequences": [
+          { "holder": "p01xxxxxxxxxxxxx", "texts": ["1"] },
+          { "holder": "fig01xxxxxxxxxxx", "texts": ["1"] },
+          { "holder": "p02xxxxxxxxxxxxx", "texts": ["2"] },
+          { "holder": "fig02xxxxxxxxxxx", "texts": ["2"] }
+        ]
+      }
+    },
+    {
+      "id": "across-a-region-and-a-table",
+      "description": "A sequence counts in document order through regions and table cells.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Caption" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+        },
+        {
+          "type": "region",
+          "attrs": { "id": "regionAxxxxxxxxx", "title": "Region", "policy": "restricted" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Caption" },
+              "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "attrs": { "id": "tableAxxxxxxxxxx", "grid": [4500, 4500] },
+          "content": [
+            {
+              "type": "table_row",
+              "attrs": { "id": "rowA0xxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA00xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p03xxxxxxxxxxxxx" },
+                      "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+                    }
+                  ]
+                },
+                {
+                  "type": "table_cell",
+                  "attrs": { "id": "cellA01xxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "p04xxxxxxxxxxxxx" },
+                      "content": [{ "type": "text", "text": "Text." }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p05xxxxxxxxxxxxx", "style": "Caption" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+        }
+      ],
+      "expected": {
+        "sequences": [
+          { "holder": "p01xxxxxxxxxxxxx", "texts": ["1"] },
+          { "holder": "p02xxxxxxxxxxxxx", "texts": ["2"] },
+          { "holder": "p03xxxxxxxxxxxxx", "texts": ["3"] },
+          { "holder": "p05xxxxxxxxxxxxx", "texts": ["4"] }
+        ]
+      }
+    },
+    {
+      "id": "equations-share-the-equation-sequence",
+      "description": "Numbered equation blocks count in the Equation sequence, together with seq fields named Equation; unnumbered ones do not count.",
+      "body": [
+        {
+          "type": "equation_block",
+          "attrs": { "id": "eq01xxxxxxxxxxxx", "latex": "E = mc^2", "numbered": true }
+        },
+        {
+          "type": "equation_block",
+          "attrs": { "id": "eq02xxxxxxxxxxxx", "latex": "E = mc^2", "numbered": false }
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "(" },
+            { "type": "field", "attrs": { "kind": "seq", "name": "Equation" } },
+            { "type": "text", "text": ")" }
+          ]
+        },
+        {
+          "type": "equation_block",
+          "attrs": { "id": "eq03xxxxxxxxxxxx", "latex": "E = mc^2", "numbered": true }
+        }
+      ],
+      "expected": {
+        "equations": [
+          { "id": "eq01xxxxxxxxxxxx", "text": "1" },
+          { "id": "eq03xxxxxxxxxxxx", "text": "3" }
+        ],
+        "sequences": [{ "holder": "p01xxxxxxxxxxxxx", "texts": ["2"] }]
+      }
+    },
+    {
+      "id": "field-format",
+      "description": "A seq field's format names a number format; an unknown one is decimal.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            {
+              "type": "field",
+              "attrs": { "kind": "seq", "name": "Figure", "format": "upperRoman" }
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            {
+              "type": "field",
+              "attrs": { "kind": "seq", "name": "Figure", "format": "lowerLetter" }
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "field", "attrs": { "kind": "seq", "name": "Figure", "format": "Arabic" } }
+          ]
+        }
+      ],
+      "expected": {
+        "sequences": [
+          { "holder": "p01xxxxxxxxxxxxx", "texts": ["I"] },
+          { "holder": "p02xxxxxxxxxxxxx", "texts": ["b"] },
+          { "holder": "p03xxxxxxxxxxxxx", "texts": ["3"] }
+        ]
+      }
+    },
+    {
+      "id": "field-without-a-name",
+      "description": "A seq field without a name counts in no sequence and shows nothing.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq" } }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Table" } }]
+        }
+      ],
+      "expected": {
+        "sequences": [
+          { "holder": "p01xxxxxxxxxxxxx", "texts": [""] },
+          { "holder": "p02xxxxxxxxxxxxx", "texts": ["1"] }
+        ]
+      }
+    },
+    {
+      "id": "two-fields-in-one-paragraph",
+      "description": "Each seq field counts, so one paragraph can hold two numbers of one sequence.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+            { "type": "text", "text": " and " },
+            { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+        }
+      ],
+      "expected": {
+        "sequences": [
+          { "holder": "p01xxxxxxxxxxxxx", "texts": ["1", "2"] },
+          { "holder": "p02xxxxxxxxxxxxx", "texts": ["3"] }
+        ]
+      }
+    },
+    {
+      "id": "field-inside-a-footnote",
+      "description": "A seq field in a footnote counts at the footnote's place in the text; it belongs to the footnote's paragraph.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "See" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [
+                    { "type": "text", "text": "Figure " },
+                    { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+        }
+      ],
+      "expected": {
+        "sequences": [
+          { "holder": "p01xxxxxxxxxxxxx", "texts": ["1"] },
+          { "holder": "fp01xxxxxxxxxxxx", "texts": ["2"] },
+          { "holder": "p03xxxxxxxxxxxxx", "texts": ["3"] }
+        ]
+      }
+    },
+    {
+      "id": "numbered-paragraph-inside-a-footnote",
+      "description": "A numbered paragraph in a footnote counts in its list at the footnote's place in the text.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "See" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "id": "fp01xxxxxxxxxxxx",
+                    "style": "ListParagraph",
+                    "numbering": {
+                      "numberingId": "decimal-list",
+                      "level": 0,
+                      "listId": "listAxxxxxxxxxxx"
+                    }
+                  },
+                  "content": [{ "type": "text", "text": "Item fp0." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p03xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p03." }]
+        }
+      ],
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "fp01xxxxxxxxxxxx", "text": "2." },
+          { "id": "p03xxxxxxxxxxxxx", "text": "3." }
+        ]
+      }
+    },
+    {
+      "id": "sequences-in-a-story-count-on-their-own",
+      "description": "A seq field in a header story is numbered on its own.",
+      "stories": [
+        {
+          "type": "story",
+          "attrs": { "id": "storyAxxxxxxxxxx", "kind": "header" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p09xxxxxxxxxxxxx" },
+              "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+            }
+          ]
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [{ "type": "field", "attrs": { "kind": "seq", "name": "Figure" } }]
+        }
+      ],
+      "expected": {
+        "sequences": [
+          { "holder": "p01xxxxxxxxxxxxx", "texts": ["1"] },
+          { "holder": "p02xxxxxxxxxxxxx", "texts": ["2"] },
+          { "holder": "p09xxxxxxxxxxxxx", "texts": ["1"] }
+        ]
+      }
+    }
+  ]
+}

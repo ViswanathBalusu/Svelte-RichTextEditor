@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FE-122 two tabs on one service</title>
+    <style>
+      body {
+        margin: 16px;
+        font:
+          16px system-ui,
+          sans-serif;
+        background: #ffffff;
+        color: #1a1a1a;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="mount"></main>
+    <script type="module">
+      // Mounts the library build (as a host would) against a real document service. The
+      // configuration (endpoint, document, token, user) is set by the test before the page loads
+      // (`window.__fe122`, added with addInitScript). Nothing here is test-only except that config.
+      const cfg = window.__fe122;
+      window.__fe122Status = 'loading';
+      try {
+        await import('/lib/doc-editor.js');
+        const el = document.createElement('doc-editor');
+        el.dataset.test = cfg.sub;
+        el.setAttribute('endpoint', cfg.endpoint);
+        el.setAttribute('doc-id', cfg.docId);
+        el.getToken = async () => cfg.token;
+        el.addEventListener('de-ready', () => {
+          window.__fe122Status = 'ready';
+        });
+        el.addEventListener('de-error', (ev) => {
+          window.__fe122Status = 'error';
+          window.__fe122Error = JSON.stringify(ev.detail ?? null);
+        });
+        document.getElementById('mount').append(el);
+      } catch (e) {
+        window.__fe122Status = 'error';
+        window.__fe122Error = String(e);
+      }
+    </script>
+  </body>
+</html>

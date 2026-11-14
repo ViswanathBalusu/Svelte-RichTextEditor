@@ -1,0 +1,33 @@
+{
+  "name": "@docedit/document-service",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The reference document service (06). Phase 1a: the storage layer behind the room's write contract (PostgreSQL commit log, grants, documents, ownership epoch).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "migrate": "node src/storage/migrate-cli.ts",
+    "start": "node src/main.ts",
+    "tenant": "node src/tenant-cli.ts"
+  },
+  "dependencies": {
+    "@docedit/asset-worker": "workspace:*",
+    "@docedit/authority": "workspace:*",
+    "@docedit/export-latex": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*",
+    "@types/pg": "8.23.1",
+    "@types/ws": "8.18.2",
+    "pg": "8.23.1",
+    "ws": "8.22.1"
+  }
+}

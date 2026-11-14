@@ -1,0 +1,24 @@
+{
+  "name": "@docedit/backend-mock",
+  "version": "0.0.0",
+  "private": true,
+  "description": "In-memory backend for tests and demos, running the real authority in process (05 §8.3).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@docedit/authority": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*",
+    "prosemirror-model": "1.25.12",
+    "prosemirror-transform": "1.12.5"
+  }
+}

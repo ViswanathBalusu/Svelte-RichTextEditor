@@ -1,0 +1,67 @@
+{
+  "name": "section-moved",
+  "description": "A heading and its two paragraphs are moved before the introduction.",
+  "expected": ["moved:pSecHead00000001", "moved:pSecBody00000001", "moved:pSecBody00000002"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "moved",
+        "blockId": "pSecHead00000001",
+        "type": "paragraph",
+        "user": "bob",
+        "seq": 1
+      },
+      {
+        "kind": "moved",
+        "blockId": "pSecBody00000001",
+        "type": "paragraph",
+        "user": "bob",
+        "seq": 1
+      },
+      {
+        "kind": "moved",
+        "blockId": "pSecBody00000002",
+        "type": "paragraph",
+        "user": "bob",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "moved",
+        "blockId": "pSecHead00000001",
+        "type": "paragraph",
+        "user": "bob",
+        "seq": 1
+      },
+      {
+        "kind": "moved",
+        "blockId": "pSecBody00000001",
+        "type": "paragraph",
+        "user": "bob",
+        "seq": 1
+      },
+      {
+        "kind": "moved",
+        "blockId": "pSecBody00000002",
+        "type": "paragraph",
+        "user": "bob",
+        "seq": 1
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

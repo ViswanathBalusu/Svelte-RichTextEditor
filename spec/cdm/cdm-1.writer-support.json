@@ -1,0 +1,563 @@
+{
+  "cdm": 1,
+  "status": "draft",
+  "levels": [
+    "supported",
+    "partial",
+    "fallback",
+    "notApplicable"
+  ],
+  "pageSetupFeatures": {
+    "size": [
+      "width",
+      "height"
+    ],
+    "orientation": [
+      "orientation"
+    ],
+    "margins": [
+      "marginTop",
+      "marginRight",
+      "marginBottom",
+      "marginLeft"
+    ],
+    "gutter": [
+      "gutter"
+    ],
+    "headerFooterDistance": [
+      "headerDistance",
+      "footerDistance"
+    ],
+    "columns": [
+      "columns",
+      "columnGap"
+    ],
+    "differentFirstPage": [
+      "differentFirstPage"
+    ],
+    "differentOddEven": [
+      "differentOddEven"
+    ],
+    "headerFooterStories": [
+      "headerDefault",
+      "headerFirst",
+      "headerEven",
+      "footerDefault",
+      "footerFirst",
+      "footerEven"
+    ],
+    "pageNumbering": [
+      "pageNumberStart",
+      "pageNumberFormat"
+    ],
+    "watermark": [
+      "watermark"
+    ]
+  },
+  "nodes": {
+    "doc": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "structure"
+    },
+    "defs": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "structure"
+    },
+    "settings": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "style_def": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "LaTeX uses macros generated from the styles."
+      ],
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "numbering_def": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "Literal labels from the shared algorithm."
+      ],
+      "source": "Multi-level numbering"
+    },
+    "page_setup": {
+      "latex": "partial",
+      "docx": "supported",
+      "source": "Page sections with their own size, orientation and columns"
+    },
+    "role_def": {
+      "latex": "notApplicable",
+      "docx": "supported",
+      "notes": [
+        "Roles do not print; DOCX keeps assignees in a custom part (12 §12)."
+      ],
+      "source": "Form fields"
+    },
+    "rule_def": {
+      "latex": "notApplicable",
+      "docx": "supported",
+      "notes": [
+        "Rules do not print; DOCX keeps them in a custom part (12 §12)."
+      ],
+      "source": "Form fields"
+    },
+    "source_def": {
+      "latex": "supported",
+      "docx": "partial",
+      "notes": [
+        "LaTeX: biblatex in the house class style chosen by `settings.citationStyle`.",
+        "DOCX: Word citations and the sources part; Word renders them in its own styles."
+      ],
+      "source": "proposed (CDM-052)"
+    },
+    "preserved_def": {
+      "latex": "notApplicable",
+      "docx": "supported",
+      "notes": [
+        "A shared preserved tree prints nothing; the DOCX writer writes it back where it is referred to."
+      ],
+      "source": "Preserved content (03 §4.6)"
+    },
+    "story": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Headers and footers, first and even pages, page fields"
+    },
+    "body": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "structure"
+    },
+    "region": {
+      "latex": "notApplicable",
+      "docx": "supported",
+      "notes": [
+        "Not visible in the PDF; content controls plus editable ranges in DOCX (07)."
+      ],
+      "source": "Regions"
+    },
+    "section_break": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "Orientation and margin changes force a page break in LaTeX.",
+        "A `continuous` break that changes margins is reported as unsupported."
+      ],
+      "source": "Page sections with their own size, orientation and columns"
+    },
+    "paragraph": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "table": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "Three table writers in LaTeX (09 §3.2).",
+        "A row taller than a page is split by the converter at paragraph boundaries.",
+        "Tables inside multi-column sections, headers and footnotes cannot span pages."
+      ],
+      "source": "Tables with spans, borders, shading, repeated header rows"
+    },
+    "table_row": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "Three table writers in LaTeX (09 §3.2).",
+        "A row taller than a page is split by the converter at paragraph boundaries.",
+        "Tables inside multi-column sections, headers and footnotes cannot span pages."
+      ],
+      "source": "Tables with spans, borders, shading, repeated header rows"
+    },
+    "table_cell": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "Three table writers in LaTeX (09 §3.2).",
+        "A row taller than a page is split by the converter at paragraph boundaries.",
+        "Tables inside multi-column sections, headers and footnotes cannot span pages."
+      ],
+      "source": "Tables with spans, borders, shading, repeated header rows"
+    },
+    "figure": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Inline images and block figures with captions"
+    },
+    "caption": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Inline images and block figures with captions"
+    },
+    "equation_block": {
+      "latex": "supported",
+      "docx": "partial",
+      "notes": [
+        "DOCX export converts LaTeX to Office math on the server; unsupported macros fall back to an image."
+      ],
+      "source": "Math"
+    },
+    "toc": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Table of contents, lists of figures and tables, bookmarks, cross-references"
+    },
+    "bibliography": {
+      "latex": "supported",
+      "docx": "partial",
+      "notes": [
+        "LaTeX: biblatex in the house class style chosen by `settings.citationStyle`.",
+        "DOCX: Word citations and the sources part; Word renders them in its own styles."
+      ],
+      "source": "proposed (CDM-052)"
+    },
+    "extension_block": {
+      "latex": "fallback",
+      "docx": "fallback",
+      "source": "Extension nodes"
+    },
+    "preserved_block": {
+      "latex": "fallback",
+      "docx": "supported",
+      "notes": [
+        "The LaTeX writer typesets the fallback; the DOCX writer writes the original back unchanged (A2)."
+      ],
+      "source": "Preserved content (03 §4.6)"
+    },
+    "text": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "structure"
+    },
+    "image": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Inline images and block figures with captions"
+    },
+    "break": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "proposed"
+    },
+    "tab": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "The house class implements tab stops itself; decimal tabs inside justified text are approximate."
+      ],
+      "source": "Tab stops"
+    },
+    "equation": {
+      "latex": "supported",
+      "docx": "partial",
+      "notes": [
+        "DOCX export converts LaTeX to Office math on the server; unsupported macros fall back to an image."
+      ],
+      "source": "Math"
+    },
+    "footnote": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "One paragraph each in version 1."
+      ],
+      "source": "Footnotes"
+    },
+    "field": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "See the support by field kind."
+      ],
+      "source": "Headers and footers, first and even pages, page fields"
+    },
+    "citation": {
+      "latex": "supported",
+      "docx": "partial",
+      "notes": [
+        "LaTeX: biblatex in the house class style chosen by `settings.citationStyle`.",
+        "DOCX: Word citations and the sources part; Word renders them in its own styles."
+      ],
+      "source": "proposed (CDM-052)"
+    },
+    "anchor": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Table of contents, lists of figures and tables, bookmarks, cross-references"
+    },
+    "form_field": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "PDF: values are flattened into the text and tagged with their labels; no live form fields (12 §12).",
+        "DOCX: content controls with data binding (12 §12)."
+      ],
+      "source": "Form fields"
+    },
+    "extension_inline": {
+      "latex": "fallback",
+      "docx": "fallback",
+      "source": "Extension nodes"
+    },
+    "preserved_inline": {
+      "latex": "fallback",
+      "docx": "supported",
+      "notes": [
+        "The LaTeX writer typesets the fallback; the DOCX writer writes the original back unchanged (A2)."
+      ],
+      "source": "Preserved content (03 §4.6)"
+    }
+  },
+  "marks": {
+    "link": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "The URL emitter applies the scheme allow-list again (09 §4)."
+      ],
+      "source": "proposed"
+    },
+    "charStyle": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "bold": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "italic": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "underline": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "strike": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "smallCaps": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "proposed"
+    },
+    "allCaps": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "proposed"
+    },
+    "vertAlign": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "fontFamily": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "fontSize": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "color": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "highlight": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "lang": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Named styles, direct formatting, fonts, colours"
+    },
+    "hidden": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "Hidden text is left out of the PDF."
+      ],
+      "source": "proposed"
+    },
+    "preserved": {
+      "latex": "fallback",
+      "docx": "supported",
+      "notes": [
+        "The LaTeX writer typesets the fallback; the DOCX writer writes the original back unchanged (A2)."
+      ],
+      "source": "Preserved content (03 §4.6)"
+    },
+    "ins": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "The PDF writer renders markup or a clean view (09)."
+      ],
+      "source": "Comments and suggestions"
+    },
+    "del": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "The PDF writer renders markup or a clean view (09)."
+      ],
+      "source": "Comments and suggestions"
+    },
+    "fmt": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "The PDF writer renders markup or a clean view (09)."
+      ],
+      "source": "Comments and suggestions"
+    }
+  },
+  "fieldKinds": {
+    "page": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "Only the typesetter knows page numbers (03 §7)."
+      ],
+      "source": "Headers and footers, first and even pages, page fields"
+    },
+    "pageCount": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Headers and footers, first and even pages, page fields"
+    },
+    "date": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "In the time zone of the export job or workflow, never the client's (03 §7)."
+      ],
+      "source": "proposed"
+    },
+    "title": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "The title is control-plane metadata (03 §2); the export job supplies it."
+      ],
+      "source": "proposed"
+    },
+    "ref": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "Prints the computed label as literal text (03 §7)."
+      ],
+      "source": "Table of contents, lists of figures and tables, bookmarks, cross-references"
+    },
+    "styleRef": {
+      "latex": "partial",
+      "docx": "supported",
+      "source": "proposed"
+    },
+    "seq": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "Prints the computed label as literal text (03 §7)."
+      ],
+      "source": "Table of contents, lists of figures and tables, bookmarks, cross-references"
+    },
+    "formValue": {
+      "latex": "supported",
+      "docx": "supported",
+      "notes": [
+        "Prints the value of the target field; nothing when it is empty (FRW-006)."
+      ],
+      "source": "Form fields"
+    }
+  },
+  "pageSetup": {
+    "size": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "A change of size at a section break forces a page break in LaTeX."
+      ],
+      "source": "Page sections with their own size, orientation and columns"
+    },
+    "orientation": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "Orientation changes force a page break in LaTeX."
+      ],
+      "source": "Page sections with their own size, orientation and columns"
+    },
+    "margins": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "Margin changes force a page break in LaTeX.",
+        "A `continuous` break that changes margins is reported as unsupported."
+      ],
+      "source": "Page sections with their own size, orientation and columns"
+    },
+    "gutter": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "proposed"
+    },
+    "headerFooterDistance": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Headers and footers, first and even pages, page fields"
+    },
+    "columns": {
+      "latex": "partial",
+      "docx": "supported",
+      "notes": [
+        "Tables inside multi-column sections cannot span pages."
+      ],
+      "source": "Page sections with their own size, orientation and columns"
+    },
+    "differentFirstPage": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Headers and footers, first and even pages, page fields"
+    },
+    "differentOddEven": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Headers and footers, first and even pages, page fields"
+    },
+    "headerFooterStories": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "Headers and footers, first and even pages, page fields"
+    },
+    "pageNumbering": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "proposed"
+    },
+    "watermark": {
+      "latex": "supported",
+      "docx": "supported",
+      "source": "proposed"
+    }
+  }
+}

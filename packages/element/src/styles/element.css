@@ -1,0 +1,344 @@
+/*
+ * The element's styles (02 §3; FE-014, FE-018): the host box, the isolation of the editor's roots,
+ * ProseMirror's required rules and the document content. The shell's rules (header, toolbar,
+ * workspace, panes, status bar) are the shell's own sheet, @docedit/ui/styles/shell.css; both go
+ * into the one constructable sheet every instance adopts (src/styles.ts).
+ *
+ * Hosts theme the editor only through --de- custom properties and the parts header, toolbar,
+ * ruler, page, sidebar, statusbar and dialog. Custom properties are read with their defaults at
+ * the place of use, so a value set on the element or on any ancestor reaches the editor.
+ * Properties read here, with their defaults:
+ *   --de-text                 #1f2328     text colour
+ *   --de-page-background      #f3f4f6     the canvas around the page
+ *   --de-sheet                #ffffff     the page itself
+ *   --de-border               #d0d7de     lines and borders
+ *   --de-focus                #0969da     focus outline
+ *   --de-font-ui              system-ui, sans-serif
+ *   --de-font-document        'Noto Serif', Georgia, serif
+ *   --de-link                 #0969da     footnote references and links
+ *   --de-region               #8250df     a region's rule and title
+ *   --de-region-background    #fbefff     a region's background
+ *   --de-field-background     #eaeef2     fields
+ * The shell's sheet documents the properties it reads (colours of controls, spacing, avatars).
+ * ProseMirror's own required rules (prosemirror-view/style/prosemirror.css and
+ * prosemirror-gapcursor/style/gapcursor.css) are repeated here, so that nothing is injected.
+ */
+:host {
+  display: block;
+  contain: content;
+  background: var(--de-page-background, #f3f4f6);
+}
+
+/*
+ * The roots of what the editor renders inside its shadow root. Inherited properties (font,
+ * colour, line height, direction, alignment and the rest) stop here, so the host page's values
+ * never change the editor; only --de- properties, which `all` leaves alone, pass (FE-018). The
+ * shell's own rules for .de-shell come later in the sheet and set its display and font.
+ */
+.de-shell,
+.de-feature,
+.de-pdf {
+  all: initial;
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: var(--de-text, #1f2328);
+  font-family: var(--de-font-ui, system-ui, sans-serif);
+}
+
+.de-feature,
+.de-pdf {
+  display: block;
+  margin: 0.5rem 1rem 1rem;
+  padding: 0.75rem;
+  background: var(--de-sheet, #fff);
+  border: 1px solid var(--de-border, #d0d7de);
+}
+
+.de-pdf-frame {
+  display: block;
+  inline-size: 100%;
+  block-size: 32rem;
+  border: 0;
+}
+
+.de-feature canvas {
+  max-width: 100%;
+  border: 1px solid var(--de-border, #d0d7de);
+}
+
+/* ProseMirror's required rules (prosemirror-view 1.42.9). */
+.ProseMirror {
+  position: relative;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
+}
+
+.ProseMirror pre {
+  white-space: pre-wrap;
+}
+
+.ProseMirror li {
+  position: relative;
+}
+
+.ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.ProseMirror-hideselection *::-moz-selection {
+  background: transparent;
+}
+
+.ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
+.ProseMirror [draggable][contenteditable='false'] {
+  user-select: text;
+}
+
+.ProseMirror-selectednode {
+  outline: 2px solid #8cf;
+}
+
+li.ProseMirror-selectednode {
+  outline: none;
+}
+
+li.ProseMirror-selectednode::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: -32px;
+  inset-inline-end: -2px;
+  inset-block: -2px;
+  border: 2px solid #8cf;
+  pointer-events: none;
+}
+
+img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+}
+
+/* prosemirror-gapcursor 1.4.1 */
+.ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+
+.ProseMirror-gapcursor::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid black;
+  animation: ProseMirror-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes ProseMirror-cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+/* Document content. */
+.de-editing-surface {
+  outline: none;
+  font-family: var(--de-font-document, 'Noto Serif', Georgia, serif);
+  line-height: 1.4;
+  min-height: 6rem;
+}
+
+.de-editing-surface:focus-visible {
+  outline: 2px solid var(--de-focus, #0969da);
+  outline-offset: 4px;
+}
+
+.de-p {
+  margin: 0 0 0.6em;
+}
+
+.de-align-center {
+  text-align: center;
+}
+
+.de-align-end {
+  text-align: end;
+}
+
+.de-align-justify,
+.de-align-distribute {
+  text-align: justify;
+}
+
+.de-region {
+  margin: 0.75em 0;
+  padding: 0.5em 0.75em;
+  border-inline-start: 3px solid var(--de-region, #8250df);
+  background: var(--de-region-background, #fbefff);
+}
+
+.de-region-title {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--de-region, #8250df);
+  user-select: none;
+  margin-bottom: 0.25em;
+}
+
+/* FE-141 criterion 1: a placeholder for a hidden region has one fixed size, whatever its title. */
+.de-hidden-region {
+  display: block;
+  box-sizing: border-box;
+  block-size: 2.5em;
+  margin: 0.75em 0;
+  padding: 0.5em 0.75em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border: 1px dashed var(--de-region, #8250df);
+  background: var(--de-region-background, #fbefff);
+  user-select: none;
+}
+
+.de-footnote-ref {
+  cursor: pointer;
+  color: var(--de-link, #0969da);
+}
+
+.de-footnote-ref::after {
+  content: attr(data-n);
+}
+
+.de-field {
+  padding: 0 0.15em;
+  background: var(--de-field-background, #eaeef2);
+  border-radius: 2px;
+}
+
+.de-not-bold {
+  font-weight: normal;
+}
+
+.de-not-italic {
+  font-style: normal;
+}
+
+.de-small-caps {
+  font-variant: small-caps;
+}
+
+.de-all-caps {
+  text-transform: uppercase;
+}
+
+.de-hidden {
+  opacity: 0.5;
+  text-decoration: underline dotted;
+}
+
+.de-hl-yellow {
+  background: #ff0;
+}
+
+.de-section-break {
+  border: none;
+  border-top: 1px dashed var(--de-border, #d0d7de);
+}
+
+.de-sub-editor {
+  min-height: 3rem;
+  padding: 0.5rem;
+  border: 1px solid var(--de-border, #d0d7de);
+  outline: none;
+  font-family: var(--de-font-document, 'Noto Serif', Georgia, serif);
+}
+
+.de-sub-editor:focus-visible {
+  outline: 2px solid var(--de-focus, #0969da);
+}
+
+/* A comment range (FE-048 criterion 1): a dotted underline, so the range is seen without colour. */
+.de-comment-range {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}
+
+/* Suggestions (FE-046 criterion 1): the kind is a line that is not colour (insertion underline, deletion
+   strike-through, formatting overline); the author has a colour and a second cue, the line style, both
+   picked by the tone the core writes on the element (`data-suggestion-tone`, suggestion-markup.ts). */
+.de-suggest-ins,
+.de-suggest-del,
+.de-suggest-fmt {
+  text-decoration-thickness: 2px;
+}
+
+.de-suggest-ins {
+  text-decoration-line: underline;
+}
+
+.de-suggest-del {
+  text-decoration-line: line-through;
+}
+
+.de-suggest-fmt {
+  text-decoration-line: overline;
+}
+
+[data-suggestion-tone='0'] {
+  text-decoration-color: #1a7f37;
+  text-decoration-style: solid;
+}
+
+[data-suggestion-tone='1'] {
+  text-decoration-color: #8250df;
+  text-decoration-style: dashed;
+}
+
+[data-suggestion-tone='2'] {
+  text-decoration-color: #bc4c00;
+  text-decoration-style: dotted;
+}
+
+[data-suggestion-tone='3'] {
+  text-decoration-color: #0969da;
+  text-decoration-style: wavy;
+}
+
+/* Marker rule for the strict-policy checks of spike S2: shows which stylesheet path applied. */
+.de-style-probe {
+  --de-style-applied: yes;
+  outline-color: rgb(1, 2, 3);
+}
+
+@media (forced-colors: active) {
+  .de-region {
+    border-inline-start-color: CanvasText;
+  }
+
+  /* Decorations keep a cue that is not a background colour (FE-019 criterion 3): forced colours
+     drop the background, so the find matches carry an outline; the current match is heavier. */
+  .de-find-match {
+    outline: 1px dashed Highlight;
+  }
+
+  .de-find-current {
+    outline: 3px solid Highlight;
+  }
+
+  /* A comment range keeps its underline under forced colours (FE-048 criterion 7). */
+  .de-comment-range {
+    text-decoration: underline dotted;
+  }
+}

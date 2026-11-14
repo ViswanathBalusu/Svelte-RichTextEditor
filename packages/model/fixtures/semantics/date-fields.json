@@ -1,0 +1,106 @@
+{
+  "rule": "date-fields",
+  "spec": "03 §7 (Fields)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "dateFieldText in packages/model/src/numbering/dates.ts",
+  "description": "date fields in the time zone of the workflow or export job, never the client's.",
+  "format": "`instant` is the server time (RFC 3339, UTC), `timeZone` an IANA zone (required), `format` the field's format; `expected` the field's text, or `{ \"error\": \"RangeError\" }`.",
+  "cases": [
+    {
+      "id": "default-format",
+      "description": "A null format gives yyyy-MM-dd.",
+      "instant": "2026-11-06T12:00:00.000Z",
+      "timeZone": "UTC",
+      "format": null,
+      "expected": "2026-11-06"
+    },
+    {
+      "id": "zone-ahead-changes-the-date",
+      "description": "The same instant is already the next day in Tokyo ...",
+      "instant": "2026-11-06T23:30:00.000Z",
+      "timeZone": "Asia/Tokyo",
+      "format": null,
+      "expected": "2026-11-07"
+    },
+    {
+      "id": "zone-at-utc-keeps-the-date",
+      "description": "... and still the same day in London (GMT in November) ...",
+      "instant": "2026-11-06T23:30:00.000Z",
+      "timeZone": "Europe/London",
+      "format": null,
+      "expected": "2026-11-06"
+    },
+    {
+      "id": "zone-behind",
+      "description": "... and mid-afternoon in Los Angeles.",
+      "instant": "2026-11-06T23:30:00.000Z",
+      "timeZone": "America/Los_Angeles",
+      "format": "yyyy-MM-dd HH:mm",
+      "expected": "2026-11-06 15:30"
+    },
+    {
+      "id": "day-month-year",
+      "description": "A picture with dd, MM and yyyy.",
+      "instant": "2026-11-06T09:00:00.000Z",
+      "timeZone": "Europe/London",
+      "format": "dd/MM/yyyy",
+      "expected": "06/11/2026"
+    },
+    {
+      "id": "half-hour-zone",
+      "description": "A zone with a half-hour offset (UTC+5:30) moves the date and the time.",
+      "instant": "2026-11-06T20:45:00.000Z",
+      "timeZone": "Asia/Kolkata",
+      "format": "yyyy-MM-dd HH:mm",
+      "expected": "2026-11-07 02:15"
+    },
+    {
+      "id": "before-summer-time",
+      "description": "One second before summer time starts in London (01:00 UTC on 29 March 2026).",
+      "instant": "2026-03-29T00:59:59.000Z",
+      "timeZone": "Europe/London",
+      "format": "yyyy-MM-dd HH:mm:ss",
+      "expected": "2026-03-29 00:59:59"
+    },
+    {
+      "id": "after-summer-time",
+      "description": "At the switch the wall clock jumps to 02:00.",
+      "instant": "2026-03-29T01:00:00.000Z",
+      "timeZone": "Europe/London",
+      "format": "yyyy-MM-dd HH:mm:ss",
+      "expected": "2026-03-29 02:00:00"
+    },
+    {
+      "id": "short-tokens",
+      "description": "d, M and yy without padding.",
+      "instant": "2026-01-05T12:00:00.000Z",
+      "timeZone": "UTC",
+      "format": "d.M.yy",
+      "expected": "5.1.26"
+    },
+    {
+      "id": "quoted-text",
+      "description": "Text in single quotes is literal.",
+      "instant": "2026-11-06T12:00:00.000Z",
+      "timeZone": "UTC",
+      "format": "dd 'of' MM",
+      "expected": "06 of 11"
+    },
+    {
+      "id": "month-names-are-not-supported",
+      "description": "Month names need locale data that differs between engines; MMMM is kept as written.",
+      "instant": "2026-11-06T12:00:00.000Z",
+      "timeZone": "UTC",
+      "format": "MMMM yyyy",
+      "expected": "MMMM 2026"
+    },
+    {
+      "id": "a-time-zone-is-required",
+      "description": "There is no default zone: an empty zone is an error, never the client's zone.",
+      "instant": "2026-11-06T12:00:00.000Z",
+      "timeZone": "",
+      "format": null,
+      "expected": { "error": "RangeError" }
+    }
+  ]
+}

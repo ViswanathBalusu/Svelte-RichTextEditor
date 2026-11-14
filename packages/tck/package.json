@@ -1,0 +1,39 @@
+{
+  "name": "@docedit/tck",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The DEP conformance kit: black-box profiles, golden fixtures and fuzzers that certify any DEP backend from a discovery URL, a service credential and a test-mode switch (05 §11; R6).",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "bin": {
+    "docedit-tck": "./src/cli.ts"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./fixtures/*": "./fixtures/*"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.ts",
+    "kit": "node src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@docedit/authority": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*",
+    "fast-check": "4.10.2",
+    "ws": "8.22.1"
+  },
+  "devDependencies": {
+    "@docedit/backend-dep": "workspace:*",
+    "@docedit/backend-mock": "workspace:*",
+    "@types/ws": "8.18.2"
+  }
+}

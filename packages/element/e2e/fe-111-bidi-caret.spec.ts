@@ -1,0 +1,92 @@
+/**
+ * FE-111 criterion 2 (lane U-FE-097-112): in right-to-left text with mixed left-to-right runs, typing
+ * keeps the logical order, and the selection grows as the browser grows it in a plain contenteditable
+ * element with the same direction and text. The reference is the browser's own handling, so the test
+ * does not assert an order of its own: it asserts that the editor and the reference select the same
+ * text, step by step, in each browser. Run from the repository root with
+ * `pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-111-bidi-caret.spec.ts --project=chromium --project=firefox --project=webkit`.
+ *
+ * Criteria 3 (the input matrix over a corpus), 4 (the region clamp in right-to-left text) and 5 (the
+ * PDF export) are not covered here.
+ */
+import { type Page, expect, test } from '@playwright/test';
+import { mountEditor, openEmbed } from './embed-helpers.ts';
+
+const editor = 'doc-editor[data-test="one"]';
+const TYPED = ' abc 123 def';
+const FIRST = 'مرحبا بالعالم';
+const STEPS = 6;
+
+/** The selected text in the editor's shadow root, or in the document when the browser has no shadow selection. */
+function editorSelection(page: Page): Promise<string> {
+  return page.evaluate((sel) => {
+    const root = document.querySelector(sel)!.shadowRoot as
+      (ShadowRoot & { getSelection?: () => Selection | null }) | null;
+    const s = root?.getSelection?.() ?? document.getSelection();
+    return s ? s.toString() : '';
+  }, editor);
+}
+
+test.describe('bidirectional text in the web view (FE-111, criterion 2)', () => {
+  test('typing mixed direction text keeps its order, and selecting it selects what the browser selects', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mountEditor(page, { doc: 'rtl' });
+
+    // In a right-to-left line the logical end is at its left edge: a click in the blank space there
+    // puts the caret at that end, and typing continues the text.
+    const at = await page.evaluate((sel) => {
+      const root = document.querySelector(sel)!.shadowRoot!;
+      const r = (root.querySelector('p.de-p') as HTMLElement).getBoundingClientRect();
+      return { x: r.left + 2, y: r.top + r.height / 2 };
+    }, editor);
+    await page.mouse.click(at.x, at.y);
+    await page.keyboard.type(TYPED);
+
+    const text = await page.evaluate((sel) => {
+      const root = document.querySelector(sel)!.shadowRoot!;
+      return (root.querySelector('p.de-p') as HTMLElement).textContent;
+    }, editor);
+    expect(text).toBe(FIRST + TYPED);
+
+    // The editor: from the end, Shift+Left one step at a time, reading what is selected.
+    const fromEditor: string[] = [];
+    // In right-to-left text the logical end is on the left, so the selection grows to the right.
+    for (let i = 0; i < STEPS; i++) {
+      await page.keyboard.press('Shift+ArrowRight');
+      fromEditor.push(await editorSelection(page));
+    }
+
+    // The reference: the same text in a plain contenteditable element with the same direction.
+    await page.evaluate(
+      ({ first, typed }: { first: string; typed: string }) => {
+        const ref = document.createElement('div');
+        ref.id = 'u-fe-111-reference';
+        ref.setAttribute('contenteditable', 'true');
+        ref.setAttribute('dir', 'rtl');
+        ref.style.cssText = 'position:fixed;left:0;top:0;width:360px;font-size:16px;';
+        ref.textContent = first + typed;
+        document.body.append(ref);
+        ref.focus();
+        const range = document.createRange();
+        range.selectNodeContents(ref);
+        range.collapse(false);
+        const s = document.getSelection()!;
+        s.removeAllRanges();
+        s.addRange(range);
+      },
+      { first: FIRST, typed: TYPED },
+    );
+    const fromReference: string[] = [];
+    for (let i = 0; i < STEPS; i++) {
+      await page.keyboard.press('Shift+ArrowRight');
+      fromReference.push(await page.evaluate(() => document.getSelection()!.toString()));
+    }
+
+    // Each step selects some text, and the two agree at every step.
+    expect(fromReference.at(-1)).not.toBe('');
+    expect(fromEditor.at(-1)).not.toBe('');
+    expect(fromEditor).toEqual(fromReference);
+  });
+});

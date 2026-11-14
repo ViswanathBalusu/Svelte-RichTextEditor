@@ -1,0 +1,477 @@
+{
+  "table": "shortcuts",
+  "source": "packages/ui/src/shortcuts/table.ts; docs/spec/13-experience-extensibility.md §4",
+  "generator": "pnpm --filter @docedit/ui generate (packages/ui/scripts/generate.ts)",
+  "browsers": {
+    "chrome": {
+      "url": "https://support.google.com/chrome/answer/157179",
+      "read": "2026-11-06"
+    },
+    "edge": {
+      "url": "https://support.microsoft.com/en-gb/microsoft-edge/keyboard-shortcuts-in-microsoft-edge-50d3edab-30d9-c7e4-21ce-37fe2713cfad",
+      "read": "2026-11-06"
+    },
+    "firefox": null,
+    "safari": {
+      "url": "https://support.apple.com/en-gb/guide/safari/cpsh003/mac",
+      "read": "2026-11-06"
+    }
+  },
+  "rows": [
+    {
+      "id": "edit.undo",
+      "kind": "command",
+      "conventional": [
+        "Mod-z"
+      ],
+      "keys": [
+        "Mod-z"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "edit.redo",
+      "kind": "command",
+      "conventional": [
+        "Mod-y",
+        "Shift-Mod-z"
+      ],
+      "keys": [
+        "Mod-y",
+        "Shift-Mod-z"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "chrome",
+              "platform": "macos",
+              "key": "Mod-y",
+              "meaning": "Open the History page in a new tab",
+              "resolution": "alternative"
+            }
+          ]
+        },
+        "edge": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "edge",
+              "platform": "macos",
+              "key": "Mod-y",
+              "meaning": "Open History",
+              "resolution": "alternative"
+            }
+          ]
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "edit.selectAll",
+      "kind": "command",
+      "conventional": [
+        "Mod-a"
+      ],
+      "keys": [
+        "Mod-a"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "format.bold",
+      "kind": "command",
+      "conventional": [
+        "Mod-b"
+      ],
+      "keys": [
+        "Mod-b"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "format.italic",
+      "kind": "command",
+      "conventional": [
+        "Mod-i"
+      ],
+      "keys": [
+        "Mod-i"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "format.painter",
+      "kind": "command",
+      "conventional": [
+        "Shift-Mod-c"
+      ],
+      "keys": [
+        "Shift-Mod-c"
+      ],
+      "alternative": [
+        "Alt-Shift-Mod-c"
+      ],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "edge",
+              "platform": "macos",
+              "key": "Shift-Mod-c",
+              "meaning": "Open Developer tools",
+              "resolution": "alternative"
+            }
+          ]
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "view.commandSearch",
+      "kind": "command",
+      "conventional": [
+        "Alt-Q"
+      ],
+      "keys": [
+        "Alt-Q"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "view.find",
+      "kind": "command",
+      "conventional": [
+        "Mod-f"
+      ],
+      "keys": [
+        "Mod-f"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "chrome",
+              "platform": "windows-linux",
+              "key": "Mod-f",
+              "meaning": "Open the Find Bar to search the current page",
+              "resolution": "inside-editor"
+            }
+          ]
+        },
+        "edge": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "edge",
+              "platform": "windows-linux",
+              "key": "Mod-f",
+              "meaning": "Open find on page",
+              "resolution": "inside-editor"
+            }
+          ]
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "safari",
+              "platform": "macos",
+              "key": "Mod-f",
+              "meaning": "Search the current web page",
+              "resolution": "inside-editor"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "shell.nextLandmark",
+      "kind": "shell",
+      "conventional": [
+        "Ctrl-F6"
+      ],
+      "keys": [
+        "Ctrl-F6"
+      ],
+      "alternative": [
+        "Alt-F6"
+      ],
+      "browsers": {
+        "chrome": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "chrome",
+              "platform": "windows-linux",
+              "key": "Ctrl-F6",
+              "meaning": "Skip to web contents",
+              "resolution": "alternative"
+            }
+          ]
+        },
+        "edge": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "edge",
+              "platform": "windows-linux",
+              "key": "Ctrl-F6",
+              "meaning": "Move focus to the web content pane",
+              "resolution": "alternative"
+            }
+          ]
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "shell.previousLandmark",
+      "kind": "shell",
+      "conventional": [
+        "Shift-Ctrl-F6"
+      ],
+      "keys": [
+        "Shift-Ctrl-F6"
+      ],
+      "alternative": [
+        "Shift-Alt-F6"
+      ],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "shell.contextMenu",
+      "kind": "shell",
+      "conventional": [
+        "Shift-F10",
+        "ContextMenu"
+      ],
+      "keys": [
+        "Shift-F10",
+        "ContextMenu"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "conflict",
+          "conflicts": [
+            {
+              "browser": "edge",
+              "platform": "windows-linux",
+              "key": "Shift-F10",
+              "meaning": "Open context menu",
+              "resolution": "inside-editor"
+            }
+          ]
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "shell.applyFormat",
+      "kind": "shell",
+      "conventional": [],
+      "keys": [
+        "Enter"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "shell.cancel",
+      "kind": "shell",
+      "conventional": [],
+      "keys": [
+        "Escape"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    }
+  ]
+}

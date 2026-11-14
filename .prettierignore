@@ -1,0 +1,19 @@
+# The specification, decision records and stories are written by hand; their tables are long lines on purpose.
+docs/
+*.md
+pnpm-lock.yaml
+# Tool caches, rewritten by the tools themselves.
+.impeccable/
+dist/
+# .NET build output of the OOXML validator tool.
+**/bin/Debug/
+**/bin/Release/
+**/obj/
+coverage/
+test-results/
+playwright-report/
+# Generated artifacts are checked byte for byte against a fresh generation (CDM-007), not formatted.
+spec/
+packages/*/src/generated/
+# Byte-for-byte copies of spec/rules/ that the kit ships (PRO-123).
+packages/tck/fixtures/

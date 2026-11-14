@@ -1,0 +1,43 @@
+{
+  "name": "style-definition-changed",
+  "description": "A style definition changes: italic and more space after.",
+  "expected": ["definition:style_def/LegalQuote"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "definition",
+        "defId": "style_def/LegalQuote",
+        "change": "changed",
+        "type": "style_def",
+        "attrs": ["italic", "spaceAfter"],
+        "user": "alice",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "definition",
+        "defId": "style_def/LegalQuote",
+        "change": "changed",
+        "type": "style_def",
+        "attrs": ["italic", "spaceAfter"],
+        "user": "alice",
+        "seq": 1
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

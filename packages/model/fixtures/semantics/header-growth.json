@@ -1,0 +1,183 @@
+{
+  "rule": "header-growth",
+  "spec": "03 §7 (Header growth), §4.1 (page_setup)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "bodyFrame, headerFor and footerFor in packages/model/src/spacing/page.ts",
+  "description": "Where the body goes when a header or footer is taller than the space the page setup gives it, and which header and footer story a page shows.",
+  "format": "`frames`: `pageSetup` holds page_setup attributes (absent ones take their defaults: A4, margins 1440, header and footer distance 708); `headerHeight` and `footerHeight` are the measured heights of the stories in twips. `expected` gives `top` and `bottom` of the body in twips from the top edge, its `height`, and whether the header or footer pushes it. `slots`: for each page (first of its section or not, even or not), the header and footer story ids it shows, or null.",
+  "frames": [
+    {
+      "id": "header-fits",
+      "description": "A header within its space (headerDistance 708 + 500 ≤ marginTop 1440) leaves the body at the top margin.",
+      "pageSetup": {},
+      "headerHeight": 500,
+      "footerHeight": 0,
+      "expected": {
+        "top": 1440,
+        "bottom": 15398,
+        "height": 13958,
+        "headerPushes": false,
+        "footerPushes": false
+      }
+    },
+    {
+      "id": "header-exactly-fills",
+      "description": "A header that exactly fills its space (708 + 732 = 1440) does not push.",
+      "pageSetup": {},
+      "headerHeight": 732,
+      "footerHeight": 0,
+      "expected": { "top": 1440, "headerPushes": false }
+    },
+    {
+      "id": "header-one-twip-over",
+      "description": "One twip more pushes the body down by one twip.",
+      "pageSetup": {},
+      "headerHeight": 733,
+      "footerHeight": 0,
+      "expected": { "top": 1441, "headerPushes": true }
+    },
+    {
+      "id": "tall-header",
+      "description": "A tall header starts the body below it: 708 + 1500 = 2208.",
+      "pageSetup": {},
+      "headerHeight": 1500,
+      "footerHeight": 0,
+      "expected": { "top": 2208, "bottom": 15398, "height": 13190, "headerPushes": true }
+    },
+    {
+      "id": "footer-grows-upwards",
+      "description": "A tall footer moves the end of the body up: 16838 - 708 - 1000 = 15130.",
+      "pageSetup": {},
+      "headerHeight": 0,
+      "footerHeight": 1000,
+      "expected": { "top": 1440, "bottom": 15130, "height": 13690, "footerPushes": true }
+    },
+    {
+      "id": "letter-page-with-both",
+      "description": "A US Letter page with small margins and both a tall header and a footer that fits.",
+      "pageSetup": {
+        "width": 12240,
+        "height": 15840,
+        "marginTop": 1080,
+        "marginBottom": 1080,
+        "headerDistance": 360,
+        "footerDistance": 360
+      },
+      "headerHeight": 900,
+      "footerHeight": 500,
+      "expected": {
+        "top": 1260,
+        "bottom": 14760,
+        "height": 13500,
+        "headerPushes": true,
+        "footerPushes": false
+      }
+    },
+    {
+      "id": "no-header",
+      "description": "No header (height 0) leaves the body at the top margin.",
+      "pageSetup": {},
+      "headerHeight": 0,
+      "footerHeight": 0,
+      "expected": { "top": 1440, "bottom": 15398 }
+    },
+    {
+      "id": "nothing-left-for-the-body",
+      "description": "When header and footer leave no room, the body height is 0.",
+      "pageSetup": {},
+      "headerHeight": 9000,
+      "footerHeight": 9000,
+      "expected": { "top": 9708, "bottom": 7130, "height": 0 }
+    }
+  ],
+  "slots": [
+    {
+      "id": "first-page-header",
+      "description": "With differentFirstPage, the first page of a section shows headerFirst; later pages headerDefault.",
+      "pageSetup": {
+        "differentFirstPage": true,
+        "headerFirst": "storyFxxxxxxxxxx",
+        "headerDefault": "storyDxxxxxxxxxx",
+        "footerDefault": "storyGxxxxxxxxxx"
+      },
+      "pages": [
+        { "firstOfSection": true, "even": false, "header": "storyFxxxxxxxxxx", "footer": null },
+        {
+          "firstOfSection": false,
+          "even": true,
+          "header": "storyDxxxxxxxxxx",
+          "footer": "storyGxxxxxxxxxx"
+        }
+      ]
+    },
+    {
+      "id": "null-slot-means-none",
+      "description": "A null slot means no header on those pages; it does not fall back to headerDefault.",
+      "pageSetup": { "differentFirstPage": true, "headerDefault": "storyDxxxxxxxxxx" },
+      "pages": [{ "firstOfSection": true, "even": false, "header": null, "footer": null }]
+    },
+    {
+      "id": "even-pages",
+      "description": "With differentOddEven, even pages show headerEven; odd pages headerDefault.",
+      "pageSetup": {
+        "differentOddEven": true,
+        "headerEven": "storyExxxxxxxxxx",
+        "headerDefault": "storyDxxxxxxxxxx",
+        "footerEven": "storyHxxxxxxxxxx",
+        "footerDefault": "storyGxxxxxxxxxx"
+      },
+      "pages": [
+        {
+          "firstOfSection": false,
+          "even": true,
+          "header": "storyExxxxxxxxxx",
+          "footer": "storyHxxxxxxxxxx"
+        },
+        {
+          "firstOfSection": false,
+          "even": false,
+          "header": "storyDxxxxxxxxxx",
+          "footer": "storyGxxxxxxxxxx"
+        },
+        {
+          "firstOfSection": true,
+          "even": true,
+          "header": "storyExxxxxxxxxx",
+          "footer": "storyHxxxxxxxxxx"
+        }
+      ]
+    },
+    {
+      "id": "first-page-wins-over-even",
+      "description": "On a first page that is even, differentFirstPage wins.",
+      "pageSetup": {
+        "differentFirstPage": true,
+        "differentOddEven": true,
+        "headerFirst": "storyFxxxxxxxxxx",
+        "headerEven": "storyExxxxxxxxxx",
+        "headerDefault": "storyDxxxxxxxxxx"
+      },
+      "pages": [
+        { "firstOfSection": true, "even": true, "header": "storyFxxxxxxxxxx", "footer": null }
+      ]
+    },
+    {
+      "id": "flags-off",
+      "description": "Without the flags every page shows the default slots.",
+      "pageSetup": {
+        "headerFirst": "storyFxxxxxxxxxx",
+        "headerEven": "storyExxxxxxxxxx",
+        "headerDefault": "storyDxxxxxxxxxx",
+        "footerDefault": "storyGxxxxxxxxxx"
+      },
+      "pages": [
+        {
+          "firstOfSection": true,
+          "even": true,
+          "header": "storyDxxxxxxxxxx",
+          "footer": "storyGxxxxxxxxxx"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+Document editor web component (working name: <doc-editor>)
+Copyright 2026 The project authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+Third-party notices are generated into each distributable by the licence gate (FND-011).
+
+The test corpus in packages/export-docx/corpus/ includes Word documents from other projects,
+unchanged, under their own licences (details in packages/export-docx/corpus/SOURCES.md):
+
+- Apache POI, under the Apache License 2.0. Apache POI. Copyright 2003-2026 The Apache Software
+  Foundation. This product includes software developed at The Apache Software Foundation
+  (https://www.apache.org/).
+- docx4j, under the Apache License 2.0. docx4j. Copyright 2007-2025 Plutext Pty Ltd.
+- python-docx, under the MIT licence; its notice is kept in SOURCES.md.

@@ -1,0 +1,43 @@
+{
+  "name": "paragraph-moved",
+  "description": "The third paragraph of a region is moved to its start.",
+  "expected": ["moved:pTerms000000003A"],
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "moved",
+        "blockId": "pTerms000000003A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "user": "bob",
+        "seq": 1
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 1,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "moved",
+        "blockId": "pTerms000000003A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "user": "bob",
+        "seq": 1
+      }
+    ]
+  },
+  "matches": {
+    "steps": true,
+    "aligned": true
+  }
+}

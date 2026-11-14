@@ -1,0 +1,1420 @@
+/*
+ * Styles of the shell (02 §3; 13 §3, §8): header, toolbar, workspace, panes and status bar. The
+ * element loads this file with `?inline` and adopts it next to its own sheet, so nothing is
+ * injected and a strict style-src holds (spike S2).
+ *
+ * Rules for this file (UX-064; test/logical-css.test.ts): logical properties only, never left or
+ * right; colours, radii, spacing and fonts are `--de-` tokens with their defaults on :host, so a
+ * host overrides them from outside and the themes of UX-061 and UX-062 replace them. Meaning is
+ * never carried by colour alone (WCAG 2.2, 1.4.1).
+ */
+
+.de-shell {
+  /* Internal tokens: each reads its public --de- property, so a host can set it on the element or
+     on any ancestor (FE-018), and falls back to the default here. */
+  --_de-text: var(--de-text, #1f2328);
+  --_de-text-muted: var(--de-text-muted, #57606a);
+  --_de-surface: var(--de-surface, #ffffff);
+  --_de-surface-raised: var(--de-surface-raised, #ffffff);
+  --_de-border: var(--de-border, #d0d7de);
+  --_de-border-strong: var(--de-border-strong, #8c959f);
+  --_de-control-background: var(--de-control-background, #ffffff);
+  --_de-control-hover: var(--de-control-hover, #eef1f4);
+  --_de-control-active: var(--de-control-active, #ddf4ff);
+  --_de-control-active-border: var(--de-control-active-border, #0969da);
+  --_de-control-disabled-text: var(--de-control-disabled-text, #6e7781);
+  --_de-focus: var(--de-focus, #0969da);
+  --_de-radius: var(--de-radius, 4px);
+  --_de-space-1: var(--de-space-1, 0.25em);
+  --_de-space-2: var(--de-space-2, 0.5em);
+  --_de-space-3: var(--de-space-3, 0.75em);
+  --_de-space-4: var(--de-space-4, 1em);
+  --_de-control-size: var(--de-control-size, 2em);
+  --_de-avatar-size: var(--de-avatar-size, 2em);
+  --_de-font-ui: var(--de-font-ui, system-ui, sans-serif);
+  --_de-shadow: var(--de-shadow, 0 2px 8px rgb(31 35 40 / 0.15));
+  /* Avatar backgrounds: each with white initials at a contrast of at least 4.5 to 1. */
+  --_de-person-1: var(--de-person-1, #8250df);
+  --_de-person-2: var(--de-person-2, #0a6e4f);
+  --_de-person-3: var(--de-person-3, #b3261e);
+  --_de-person-4: var(--de-person-4, #0b5cad);
+  --_de-person-5: var(--de-person-5, #8a4600);
+  --_de-person-6: var(--de-person-6, #6d3f99);
+  --_de-person-7: var(--de-person-7, #116329);
+  --_de-person-8: var(--de-person-8, #9e2667);
+  --_de-person-text: var(--de-person-text, #ffffff);
+  --_de-sheet: var(--de-sheet, #ffffff);
+  --_de-page-text: var(--de-page-text, #1f2328);
+  --_de-match: var(--de-match, #fff1a8);
+  --_de-role-viewer: var(--de-role-viewer, #57606a);
+  --_de-role-commenter: var(--de-role-commenter, #0b5cad);
+  --_de-role-suggester: var(--de-role-suggester, #8a4600);
+  --_de-role-editor: var(--de-role-editor, #116329);
+  display: flex;
+  flex-direction: column;
+  min-block-size: 20em;
+  color: var(--_de-text);
+  background: var(--_de-surface);
+  font-family: var(--_de-font-ui);
+}
+
+/*
+ * Themes (UX-061, UX-062): each theme gives the internal tokens other defaults; a host's --de-
+ * property still wins (FE-018). The dark theme leaves the page light unless the host asks for the
+ * page canvas to follow (data-page-theme="follow"); the document's own colours never change.
+ */
+.de-shell[data-theme='dark'] {
+  --_de-text: var(--de-text, #e6e8eb);
+  --_de-text-muted: var(--de-text-muted, #a9b1bb);
+  --_de-surface: var(--de-surface, #16191d);
+  --_de-surface-raised: var(--de-surface-raised, #20242a);
+  --_de-border: var(--de-border, #3d444d);
+  --_de-border-strong: var(--de-border-strong, #8b949e);
+  --_de-control-background: var(--de-control-background, #20242a);
+  --_de-control-hover: var(--de-control-hover, #2c323a);
+  --_de-control-active: var(--de-control-active, #12324f);
+  --_de-control-active-border: var(--de-control-active-border, #79b8ff);
+  --_de-control-disabled-text: var(--de-control-disabled-text, #9198a1);
+  --_de-focus: var(--de-focus, #8ec5ff);
+  --_de-shadow: var(--de-shadow, 0 2px 8px rgb(0 0 0 / 0.5));
+  --_de-match: var(--de-match, #5c4b00);
+  --_de-role-viewer: var(--de-role-viewer, #a9b1bb);
+  --_de-role-commenter: var(--de-role-commenter, #79b8ff);
+  --_de-role-suggester: var(--de-role-suggester, #f0b072);
+  --_de-role-editor: var(--de-role-editor, #7ee2a8);
+  color-scheme: dark;
+}
+
+.de-shell[data-theme='dark'][data-page-theme='follow'] {
+  --_de-sheet: var(--de-sheet, #1b1f24);
+  --_de-page-text: var(--de-page-text, #e6e8eb);
+}
+
+.de-shell[data-theme='high-contrast'] {
+  --_de-text: var(--de-text, #000000);
+  --_de-text-muted: var(--de-text-muted, #000000);
+  --_de-surface: var(--de-surface, #ffffff);
+  --_de-surface-raised: var(--de-surface-raised, #ffffff);
+  --_de-border: var(--de-border, #000000);
+  --_de-border-strong: var(--de-border-strong, #000000);
+  --_de-control-background: var(--de-control-background, #ffffff);
+  --_de-control-hover: var(--de-control-hover, #e6e6e6);
+  --_de-control-active: var(--de-control-active, #ffffff);
+  --_de-control-active-border: var(--de-control-active-border, #000000);
+  --_de-control-disabled-text: var(--de-control-disabled-text, #333333);
+  --_de-focus: var(--de-focus, #00006b);
+  --_de-shadow: var(--de-shadow, none);
+  --_de-sheet: var(--de-sheet, #ffffff);
+  --_de-page-text: var(--de-page-text, #000000);
+  --_de-match: var(--de-match, #ffff00);
+  --_de-role-viewer: var(--de-role-viewer, #000000);
+  --_de-role-commenter: var(--de-role-commenter, #000000);
+  --_de-role-suggester: var(--de-role-suggester, #000000);
+  --_de-role-editor: var(--de-role-editor, #000000);
+  color-scheme: light;
+}
+
+/* High contrast: thicker outlines and borders, so shapes carry every state. */
+.de-shell[data-theme='high-contrast'] :is(.de-tool, .de-action, .de-button, .de-input, .de-tab) {
+  border-width: 2px;
+}
+
+.de-shell[data-theme='high-contrast'] :focus-visible {
+  outline-width: 3px;
+}
+
+/*
+ * Direction (UX-064): the element resets inherited properties on .de-shell, direction included
+ * (FE-018); the shell's dir, set from the interface locale, outranks that reset. The page keeps
+ * the document's own direction.
+ */
+.de-shell[dir='rtl'],
+.de-page[dir='rtl'] {
+  direction: rtl;
+}
+
+.de-shell[dir='ltr'],
+.de-page[dir='ltr'] {
+  direction: ltr;
+}
+
+/* Visually hidden, still read by assistive technology. */
+.de-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Controls shared by the shell. */
+.de-tool,
+.de-action,
+.de-presence-more,
+.de-notice-dismiss,
+.de-panel-head button {
+  /* Never squeezed below their label: what does not fit goes to "More" instead (UX-006). */
+  flex: 0 0 auto;
+  font: inherit;
+  min-block-size: var(--_de-control-size);
+  min-inline-size: var(--_de-control-size);
+  padding-block: 0.25em;
+  padding-inline: 0.6em;
+  border: 1px solid var(--_de-border);
+  border-radius: var(--_de-radius);
+  background: var(--_de-control-background);
+  color: var(--_de-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.de-tool:hover,
+.de-action:hover,
+.de-presence-more:hover,
+.de-notice-dismiss:hover,
+.de-panel-head button:hover {
+  background: var(--_de-control-hover);
+}
+
+.de-tool:focus-visible,
+.de-action:focus-visible,
+.de-presence-more:focus-visible,
+.de-notice-dismiss:focus-visible,
+.de-panel-head button:focus-visible,
+.de-menu-item:focus-visible {
+  outline: 2px solid var(--_de-focus);
+  outline-offset: 1px;
+}
+
+/* Pressed toggles: a stronger border and an inset bar as well as the background (not colour alone). */
+.de-tool[aria-pressed='true'] {
+  background: var(--_de-control-active);
+  border-color: var(--_de-control-active-border);
+  box-shadow: inset 0 -3px 0 var(--_de-control-active-border);
+}
+
+.de-tool[aria-disabled='true'],
+.de-action[aria-disabled='true'],
+.de-menu-item[aria-disabled='true'] {
+  color: var(--_de-control-disabled-text);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+/* Header (UX-014). */
+.de-header {
+  display: flex;
+  align-items: center;
+  gap: var(--_de-space-3);
+  padding-block: var(--_de-space-2);
+  padding-inline: var(--_de-space-4);
+  background: var(--_de-surface);
+  border-block-end: 1px solid var(--_de-border);
+}
+
+.de-header-title {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.de-header-space {
+  flex: 1 1 0;
+}
+
+.de-header-actions {
+  display: flex;
+  gap: var(--_de-space-2);
+  flex: 0 0 auto;
+}
+
+.de-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--_de-space-2);
+}
+
+.de-count {
+  min-inline-size: 1.25em;
+  padding-inline: 0.35em;
+  border: 1px solid var(--_de-border-strong);
+  border-radius: 999px;
+  font-size: 0.85em;
+  text-align: center;
+}
+
+/* Save and connection state (UX-016): words, with a shape for the save state. */
+.de-save {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--_de-space-3);
+  flex: 0 0 auto;
+  font-size: 0.9em;
+  color: var(--_de-text-muted);
+}
+
+.de-save-sync,
+.de-save-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--_de-space-1);
+}
+
+.de-save-mark,
+.de-connection-mark {
+  display: inline-block;
+  inline-size: 0.6em;
+  block-size: 0.6em;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.de-save-mark[data-state='saved'] {
+  background: currentColor;
+}
+
+.de-save-mark[data-state='saving'] {
+  border-style: dotted;
+}
+
+.de-save-mark[data-state='unsaved'] {
+  border-style: dashed;
+}
+
+.de-save-mark[data-state='readonly'] {
+  border-radius: 1px;
+}
+
+.de-connection-mark[data-state='online'] {
+  background: currentColor;
+}
+
+.de-connection-mark[data-state='reconnecting'] {
+  border-style: dotted;
+}
+
+.de-connection-mark[data-state='offline'] {
+  border-radius: 1px;
+  border-style: dashed;
+}
+
+/* Presence (UX-026). */
+.de-presence {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--_de-space-2);
+  flex: 1 1 0;
+  min-inline-size: 0;
+}
+
+.de-avatars {
+  display: flex;
+  gap: var(--_de-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.de-avatar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--_de-avatar-size);
+  block-size: var(--_de-avatar-size);
+  box-sizing: border-box;
+  border: 2px solid var(--_de-text);
+  border-radius: 50%;
+  overflow: hidden;
+  color: var(--_de-person-text);
+  font-size: 0.8em;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Idle: a dashed outline; the word "idle" is in the accessible name and in the full list. */
+.de-avatar[data-status='idle'] {
+  border-style: dashed;
+}
+
+.de-avatar img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.de-person-1 {
+  background: var(--_de-person-1);
+}
+.de-person-2 {
+  background: var(--_de-person-2);
+}
+.de-person-3 {
+  background: var(--_de-person-3);
+}
+.de-person-4 {
+  background: var(--_de-person-4);
+}
+.de-person-5 {
+  background: var(--_de-person-5);
+}
+.de-person-6 {
+  background: var(--_de-person-6);
+}
+.de-person-7 {
+  background: var(--_de-person-7);
+}
+.de-person-8 {
+  background: var(--_de-person-8);
+}
+
+.de-popover {
+  position: absolute;
+  inset-block-start: calc(100% + var(--_de-space-1));
+  inset-inline-end: 0;
+  z-index: 10;
+  min-inline-size: 14em;
+  padding: var(--_de-space-2);
+  background: var(--_de-surface-raised);
+  border: 1px solid var(--_de-border);
+  border-radius: var(--_de-radius);
+  box-shadow: var(--_de-shadow);
+}
+
+.de-popover[hidden] {
+  display: none;
+}
+
+.de-presence-all ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.de-presence-row {
+  display: flex;
+  align-items: center;
+  gap: var(--_de-space-2);
+  padding-block: var(--_de-space-1);
+}
+
+.de-presence-idle {
+  color: var(--_de-text-muted);
+  font-size: 0.85em;
+}
+
+/* Toolbar (UX-006). One row; what does not fit is in the "More" menu. */
+.de-toolbar {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--_de-space-1);
+  padding-block: var(--_de-space-1);
+  padding-inline: var(--_de-space-4);
+  background: var(--_de-surface);
+  border-block-end: 1px solid var(--_de-border);
+}
+
+.de-tool[hidden] {
+  display: none;
+}
+
+.de-group-start {
+  margin-inline-start: var(--_de-space-3);
+}
+
+.de-more {
+  margin-inline-start: auto;
+}
+
+.de-menu {
+  position: absolute;
+  inset-block-start: calc(100% + var(--_de-space-1));
+  inset-inline-end: var(--_de-space-4);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 12em;
+  padding: var(--_de-space-1);
+  background: var(--_de-surface-raised);
+  border: 1px solid var(--_de-border);
+  border-radius: var(--_de-radius);
+  box-shadow: var(--_de-shadow);
+}
+
+.de-menu-item {
+  font: inherit;
+  min-block-size: var(--_de-control-size);
+  padding-block: var(--_de-space-1);
+  padding-inline: var(--_de-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--_de-radius);
+  background: transparent;
+  color: var(--_de-text);
+  text-align: start;
+  cursor: pointer;
+}
+
+.de-menu-item:hover,
+.de-menu-item:focus-visible {
+  background: var(--_de-control-hover);
+}
+
+.de-menu-item[aria-checked='true'] {
+  border-color: var(--_de-control-active-border);
+  background: var(--_de-control-active);
+}
+
+/* Workspace: the page and the panes beside it, or below it in a narrow container (13 §3). */
+.de-workspace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--_de-space-4);
+  padding: var(--_de-space-4);
+  align-items: flex-start;
+  flex: 1 1 auto;
+}
+
+.de-page {
+  /* The view's offsetParent: prosemirror-dropcursor appends its element there (spike S1, 4.8). */
+  position: relative;
+  flex: 1 1 24em;
+  min-inline-size: 0;
+  padding: 2em;
+  background: var(--_de-sheet);
+  color: var(--_de-page-text);
+  border: 1px solid var(--_de-border);
+}
+
+/* The body and the collaborators' layer share one origin (UX-027). */
+.de-body-frame {
+  position: relative;
+}
+
+.de-panel,
+.de-pane {
+  /* Beside the page when there is room, below it otherwise: a pane never covers the text. */
+  flex: 1 1 18em;
+  max-inline-size: 26em;
+  min-inline-size: 0;
+  padding: var(--_de-space-3);
+  background: var(--_de-surface-raised);
+  color: var(--_de-text);
+  border: 1px solid var(--_de-border);
+}
+
+.de-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-block-end: var(--_de-space-2);
+}
+
+.de-outline ol {
+  margin: 0;
+  padding-inline-start: 1.2em;
+}
+
+/* Status bar. */
+.de-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-4);
+  padding-block: var(--_de-space-1);
+  padding-inline: var(--_de-space-4);
+  font-size: 0.85em;
+  background: var(--_de-surface);
+  border-block-start: 1px solid var(--_de-border);
+}
+
+/* Controls of panes, dialogs and the status bar. Targets are at least 24 by 24 CSS pixels. */
+.de-button,
+.de-list-button,
+.de-status-button,
+.de-pane-close,
+.de-dialog-close,
+.de-tab,
+.de-mode-button {
+  font: inherit;
+  min-block-size: max(1.6em, 24px);
+  min-inline-size: 24px;
+  padding-block: 0.2em;
+  padding-inline: 0.6em;
+  border: 1px solid var(--_de-border);
+  border-radius: var(--_de-radius);
+  background: var(--_de-control-background);
+  color: var(--_de-text);
+  cursor: pointer;
+}
+
+.de-button:hover,
+.de-list-button:hover,
+.de-status-button:hover,
+.de-pane-close:hover,
+.de-dialog-close:hover,
+.de-tab:hover {
+  background: var(--_de-control-hover);
+}
+
+.de-button-primary {
+  border-width: 2px;
+  border-color: var(--_de-control-active-border);
+  font-weight: 600;
+}
+
+.de-button-danger {
+  border-width: 2px;
+  border-style: double;
+  border-color: var(--_de-text);
+  font-weight: 600;
+}
+
+.de-button:disabled,
+.de-list-button:disabled {
+  color: var(--_de-control-disabled-text);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+:is(
+  .de-button,
+  .de-list-button,
+  .de-status-button,
+  .de-pane-close,
+  .de-dialog-close,
+  .de-tab,
+  .de-mode-button,
+  .de-input,
+  .de-tree-item,
+  .de-check input
+):focus-visible {
+  outline: 2px solid var(--_de-focus);
+  outline-offset: 1px;
+}
+
+:is(.de-list-button, .de-status-button)[aria-disabled='true'] {
+  color: var(--_de-control-disabled-text);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.de-list-button[aria-current='true'],
+.de-list-button[aria-pressed='true'] {
+  border-color: var(--_de-control-active-border);
+  border-inline-start-width: 4px;
+  background: var(--_de-control-active);
+}
+
+.de-input {
+  font: inherit;
+  min-block-size: max(1.8em, 24px);
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding-block: 0.2em;
+  padding-inline: 0.4em;
+  border: 1px solid var(--_de-border-strong);
+  border-radius: var(--_de-radius);
+  background: var(--_de-surface);
+  color: var(--_de-text);
+}
+
+.de-input[aria-invalid='true'] {
+  border-width: 2px;
+  border-style: dashed;
+}
+
+.de-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--_de-space-2);
+}
+
+.de-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--_de-space-1);
+  margin: 0;
+  padding: var(--_de-space-2);
+  border: 1px solid var(--_de-border);
+  border-radius: var(--_de-radius);
+}
+
+.de-field {
+  font-weight: 600;
+}
+
+.de-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--_de-space-2);
+  min-block-size: 24px;
+}
+
+.de-check input {
+  inline-size: 1.1em;
+  block-size: 1.1em;
+  margin: 0;
+}
+
+.de-hint {
+  margin: 0;
+  color: var(--_de-text-muted);
+  font-size: 0.9em;
+}
+
+.de-error {
+  margin: 0;
+  font-weight: 600;
+}
+
+.de-error::before {
+  content: '! ';
+}
+
+.de-subhead {
+  margin-block: var(--_de-space-3) var(--_de-space-1);
+  font-size: 1em;
+}
+
+.de-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--_de-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.de-list-button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-2);
+  inline-size: 100%;
+  text-align: start;
+}
+
+.de-actions,
+.de-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--_de-space-2);
+  margin-block-start: var(--_de-space-2);
+}
+
+.de-badge {
+  padding-inline: 0.4em;
+  border: 1px solid var(--_de-border-strong);
+  border-radius: 999px;
+  font-size: 0.85em;
+}
+
+.de-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.de-link:focus-visible {
+  outline: 2px solid var(--_de-focus);
+  outline-offset: 1px;
+}
+
+/* The full toolbar (UX-007): tabs for task groups, the chosen group's commands below. */
+.de-toolbar-full {
+  background: var(--_de-surface);
+  border-block-end: 1px solid var(--_de-border);
+}
+
+.de-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--_de-space-1);
+  padding-block-start: var(--_de-space-1);
+  padding-inline: var(--_de-space-4);
+}
+
+.de-tab {
+  border-block-end-width: 0;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.de-tab[aria-selected='true'] {
+  font-weight: 600;
+  box-shadow: inset 0 3px 0 var(--_de-control-active-border);
+  background: var(--_de-control-active);
+}
+
+/* A contextual group: a dotted outline and an italic name, besides its place at the end. */
+.de-tab[data-contextual] {
+  border-style: dotted;
+  font-style: italic;
+}
+
+.de-toolbar-panel {
+  border-block-start: 1px solid var(--_de-border);
+}
+
+/* Menus: the context menu (UX-008) is shown in the top layer, placed at the pointer or caret. */
+.de-context-menu[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  color: var(--_de-text);
+}
+
+.de-context-menu:not([popover]) {
+  position: fixed;
+  inset-inline-end: auto;
+  z-index: 10;
+}
+
+.de-menu-separator {
+  block-size: 1px;
+  margin-block: var(--_de-space-1);
+  background: var(--_de-border);
+}
+
+.de-modes {
+  position: relative;
+}
+
+.de-mode-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--_de-space-2);
+}
+
+.de-mode-mark {
+  display: inline-block;
+  inline-size: 0.6em;
+  block-size: 0.6em;
+  border: 2px solid currentColor;
+}
+
+.de-mode-mark[data-mode='edit'] {
+  background: currentColor;
+}
+
+.de-mode-mark[data-mode='view'] {
+  border-radius: 50%;
+}
+
+.de-mode-mark[data-mode='review'] {
+  border-style: dashed;
+}
+
+.de-mode-mark[data-mode='fill'] {
+  transform: rotate(45deg);
+}
+
+.de-modes-menu {
+  inset-inline-end: auto;
+  inset-inline-start: 0;
+}
+
+/* Dialogs (UX-068): modal, in the top layer, with the dialog part. */
+.de-dialog {
+  inline-size: min(32em, calc(100vw - 2em));
+  max-block-size: calc(100vh - 4em);
+  padding: var(--_de-space-4);
+  border: 1px solid var(--_de-border-strong);
+  border-radius: var(--_de-radius);
+  background: var(--_de-surface-raised);
+  color: var(--_de-text);
+  font-family: var(--_de-font-ui);
+  box-shadow: var(--_de-shadow);
+}
+
+.de-dialog::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+
+.de-dialog-head,
+.de-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--_de-space-2);
+  margin-block-end: var(--_de-space-2);
+}
+
+.de-dialog-title,
+.de-pane-title {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.de-progress {
+  inline-size: 100%;
+}
+
+.de-export-state {
+  display: flex;
+  align-items: center;
+  gap: var(--_de-space-2);
+  font-weight: 600;
+}
+
+.de-state-mark {
+  display: inline-block;
+  inline-size: 0.7em;
+  block-size: 0.7em;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.de-state-mark[data-state='completed'] {
+  background: currentColor;
+}
+
+.de-state-mark[data-state='failed'],
+.de-state-mark[data-state='cancelled'] {
+  border-radius: 1px;
+}
+
+.de-state-mark:is([data-state='queued'], [data-state='converting'], [data-state='compiling']) {
+  border-style: dotted;
+}
+
+.de-severity {
+  font-weight: 600;
+}
+
+.de-severity::after {
+  content: ':';
+}
+
+/* Panes (UX-019). */
+.de-pane-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--_de-space-2);
+}
+
+.de-tree,
+.de-tree-group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.de-tree-group {
+  padding-inline-start: 1.1em;
+}
+
+.de-tree-item {
+  min-block-size: 24px;
+  padding-block: 0.1em;
+  cursor: pointer;
+}
+
+.de-tree-item[aria-selected='true'] > .de-tree-label {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.de-tree-item[aria-expanded='false'] > .de-tree-label::after {
+  content: ' …';
+}
+
+.de-search-row {
+  display: flex;
+  gap: var(--_de-space-1);
+}
+
+.de-match {
+  background: var(--_de-match);
+  color: inherit;
+  outline: 1px solid currentColor;
+}
+
+.de-recovered-item {
+  padding: var(--_de-space-2);
+  border: 1px solid var(--_de-border);
+  border-radius: var(--_de-radius);
+}
+
+.de-recovered-why {
+  display: flex;
+  align-items: center;
+  gap: var(--_de-space-2);
+  margin: 0;
+  font-weight: 600;
+}
+
+.de-recovered-text {
+  margin-block: var(--_de-space-2);
+  margin-inline: 0;
+  padding-inline-start: var(--_de-space-2);
+  border-inline-start: 3px solid var(--_de-border-strong);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.de-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.de-table caption {
+  text-align: start;
+  font-weight: 600;
+  margin-block-end: var(--_de-space-1);
+}
+
+.de-table th,
+.de-table td {
+  padding: var(--_de-space-1);
+  border-block-end: 1px solid var(--_de-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.de-kbd {
+  display: inline-block;
+  padding-inline: 0.3em;
+  border: 1px solid var(--_de-border-strong);
+  border-block-end-width: 2px;
+  border-radius: var(--_de-radius);
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+.de-or {
+  padding-inline: 0.3em;
+  color: var(--_de-text-muted);
+}
+
+/* Roles (PRM-035; FRW-074): a colour, a shape and the name; never the colour alone. */
+.de-grant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-2);
+}
+
+.de-role {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--_de-space-1);
+  padding-inline: 0.4em;
+  border: 1px solid var(--_de-border-strong);
+  border-radius: var(--_de-radius);
+}
+
+.de-role-mark {
+  display: inline-block;
+  inline-size: 0.7em;
+  block-size: 0.7em;
+  border: 2px solid currentColor;
+}
+
+.de-role-mark[data-role='viewer'] {
+  border-radius: 50%;
+  color: var(--_de-role-viewer);
+}
+
+.de-role-mark[data-role='commenter'] {
+  border-radius: 50% 50% 50% 0;
+  color: var(--_de-role-commenter);
+}
+
+.de-role-mark[data-role='suggester'] {
+  transform: rotate(45deg);
+  color: var(--_de-role-suggester);
+}
+
+.de-role-mark[data-role='editor'] {
+  background: currentColor;
+  color: var(--_de-role-editor);
+}
+
+.de-listbox {
+  margin: 0;
+  padding: var(--_de-space-1);
+  list-style: none;
+  border: 1px solid var(--_de-border-strong);
+  border-radius: var(--_de-radius);
+  background: var(--_de-surface-raised);
+}
+
+.de-listbox[hidden] {
+  display: none;
+}
+
+.de-option {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--_de-space-2);
+  min-block-size: 24px;
+  padding-inline: var(--_de-space-1);
+  cursor: pointer;
+}
+
+.de-option[aria-selected='true'] {
+  outline: 2px solid var(--_de-focus);
+  background: var(--_de-control-hover);
+}
+
+/* The status bar's controls (UX-018). */
+.de-status-button {
+  font-size: 1em;
+}
+
+.de-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--_de-space-1);
+}
+
+.de-zoom-level {
+  min-inline-size: 3.5em;
+  text-align: center;
+}
+
+/* The fill bar (FRW-076). */
+.de-fill-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-3);
+  padding-block: var(--_de-space-2);
+  padding-inline: var(--_de-space-4);
+  background: var(--_de-surface-raised);
+  border-block-end: 1px solid var(--_de-border);
+}
+
+/* Role markers (FRW-074, FRW-077): the role's colour and a shape, never colour alone. */
+.de-role-icon {
+  display: inline-block;
+  flex: none;
+  inline-size: 0.8em;
+  block-size: 0.8em;
+  background: currentColor;
+}
+
+/* FRW-074 criterion 3 (ADR 0343, lane V-FRW-073-089): on the dark surface a dark role colour falls
+   below 3:1, so the shape is lightened towards white in the dark theme only. The hue is kept. */
+@media (forced-colors: none) {
+  .de-shell[data-theme='dark'] .de-role-icon {
+    background: color-mix(in srgb, currentColor 40%, #ffffff);
+  }
+}
+
+.de-role-icon[data-icon='circle'] {
+  clip-path: circle(50%);
+}
+
+.de-role-icon[data-icon='square'] {
+  clip-path: inset(8%);
+}
+
+.de-role-icon[data-icon='triangle'] {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.de-role-icon[data-icon='diamond'] {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.de-role-icon[data-icon='pentagon'] {
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+}
+
+.de-role-icon[data-icon='hexagon'] {
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+.de-role-icon[data-icon='star'] {
+  clip-path: polygon(
+    50% 0,
+    61% 35%,
+    98% 35%,
+    68% 57%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 57%,
+    2% 35%,
+    39% 35%
+  );
+}
+
+.de-role-icon[data-icon='cross'] {
+  clip-path: polygon(
+    35% 0,
+    65% 0,
+    65% 35%,
+    100% 35%,
+    100% 65%,
+    65% 65%,
+    65% 100%,
+    35% 100%,
+    35% 65%,
+    0 65%,
+    0 35%,
+    35% 35%
+  );
+}
+
+/* Collaborators' carets and selections (UX-027): no pointer events, no focus. */
+.de-carets {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* The caret is a bar in the person's colour; the flag above it names them in text. */
+.de-peer-caret {
+  position: absolute;
+  inline-size: 2px;
+}
+
+/* Idle: a dashed bar, as the header's dashed avatar (not colour alone). */
+.de-peer-caret[data-status='idle'] {
+  background: repeating-linear-gradient(to bottom, currentColor 0 3px, transparent 3px 6px);
+  color: var(--_de-page-text);
+}
+
+.de-peer-flag {
+  position: absolute;
+  inset-block-end: 100%;
+  inset-inline-start: 0;
+  padding-inline: 0.3em;
+  border-radius: var(--_de-radius) var(--_de-radius) var(--_de-radius) 0;
+  color: var(--_de-person-text);
+  font-family: var(--_de-font-ui);
+  font-size: 0.75em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.de-peer-selection {
+  position: absolute;
+  opacity: 0.25;
+}
+
+/* A change that did not happen (11 §3): words, a shape, and a way to dismiss it. */
+.de-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--_de-space-2);
+  padding-block: var(--_de-space-1);
+  padding-inline: var(--_de-space-2);
+  border: 1px solid var(--_de-border-strong);
+  border-inline-start-width: 4px;
+  border-radius: var(--_de-radius);
+  background: var(--_de-surface-raised);
+}
+
+.de-notice-mark {
+  display: inline-block;
+  inline-size: 0.7em;
+  block-size: 0.7em;
+  border: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+/* Forced colours: system colours, and every state keeps a shape or a word (02 §3; UX-062). */
+@media (forced-colors: active) {
+  .de-avatar {
+    forced-color-adjust: none;
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+
+  .de-tool[aria-pressed='true'],
+  .de-menu-item[aria-checked='true'],
+  .de-tab[aria-selected='true'],
+  .de-list-button[aria-current='true'],
+  .de-list-button[aria-pressed='true'] {
+    border-color: Highlight;
+    box-shadow: inset 0 -3px 0 Highlight;
+  }
+
+  /* Focus stays distinguishable with system colours (UX-062 criterion 1). */
+  .de-shell :focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .de-tool[aria-disabled='true'],
+  .de-action[aria-disabled='true'],
+  .de-menu-item[aria-disabled='true'],
+  .de-list-button[aria-disabled='true'],
+  .de-status-button[aria-disabled='true'] {
+    color: GrayText;
+    border-color: GrayText;
+  }
+
+  /* Collaborators: a caret in system colours, the name in text on the flag (UX-027). */
+  .de-peer-caret,
+  .de-peer-flag {
+    forced-color-adjust: none;
+    background: CanvasText;
+    color: Canvas;
+  }
+
+  /* Idle keeps its dashes, drawn in a system colour; this outranks the base idle rule. */
+  .de-peer-caret[data-status='idle'] {
+    background: repeating-linear-gradient(to bottom, CanvasText 0 3px, transparent 3px 6px);
+    color: CanvasText;
+  }
+
+  .de-peer-selection {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+
+  /* Role icons keep their shape in a system colour; the role's name is in text beside them. */
+  .de-role-icon {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+
+  .de-role-mark,
+  .de-mode-mark,
+  .de-state-mark,
+  .de-notice-mark,
+  .de-save-mark,
+  .de-connection-mark {
+    forced-color-adjust: none;
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+
+  .de-match {
+    forced-color-adjust: none;
+    background: Mark;
+    color: MarkText;
+  }
+
+  .de-dialog,
+  .de-menu,
+  .de-pane,
+  .de-panel,
+  .de-listbox {
+    border-color: CanvasText;
+  }
+}
+
+/* Command search (UX-011): moved here from CommandSearch.svelte, which keeps no style block (02 §3). */
+.de-command-search {
+  position: fixed;
+  inset-block-start: 3.5rem;
+  inset-inline: 0;
+  margin-inline: auto;
+  z-index: 50;
+  width: min(32rem, calc(100% - 2rem));
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border: 1px solid var(--de-border, #888);
+  border-radius: 0.5rem;
+  background: var(--de-surface, #fff);
+  color: var(--de-text, #111);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);
+  font: inherit;
+}
+.de-command-search-field {
+  display: grid;
+  gap: 0.25rem;
+}
+.de-command-search input {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  min-height: 2.25rem;
+  border: 1px solid var(--de-border, #888);
+  border-radius: 0.25rem;
+  background: var(--de-field, #fff);
+  color: inherit;
+}
+.de-command-search-results {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+.de-command-search-option {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+.de-command-search-option[aria-selected='true'] {
+  background: var(--de-selected, #dbeafe);
+}
+.de-command-search-option[aria-disabled='true'] {
+  color: var(--de-muted, #555);
+  cursor: default;
+}
+.de-command-search-reason {
+  font-size: 0.875em;
+}
+.de-command-search-label {
+  font-size: 0.875em;
+}
+
+/* The mini toolbar (UX-010): moved here from MiniToolbar.svelte, which keeps no style block (02 §3). */
+/* The access-key tip (UX-012): a visible key on a control while the access-key mode is on. */
+.de-access-tip {
+  position: fixed;
+  z-index: 50;
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.2rem;
+  font:
+    700 0.75rem/1.2 system-ui,
+    sans-serif;
+  color: var(--de-access-tip-fg, #fff);
+  background: var(--de-access-tip-bg, #1f2937);
+  pointer-events: none;
+}
+.de-mini-toolbar {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--de-border, #888);
+  border-radius: 0.375rem;
+  background: var(--de-surface, #fff);
+  color: var(--de-text, #111);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+  font: inherit;
+}
+.de-mini-toolbar-button {
+  font: inherit;
+  min-height: 2rem;
+  min-width: 2rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.de-mini-toolbar-button[aria-pressed='true'] {
+  border-color: var(--de-border, #888);
+  background: var(--de-selected, #dbeafe);
+}
+.de-mini-toolbar-button[aria-disabled='true'] {
+  color: var(--de-muted, #555);
+  cursor: default;
+}

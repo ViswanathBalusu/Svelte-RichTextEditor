@@ -1,0 +1,520 @@
+{
+  "cdm": 1,
+  "requires": ["extensions", "fields", "preserve"],
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "defs",
+        "content": [
+          { "type": "settings", "attrs": { "lang": "en-GB", "defaultTabStop": 720 } },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Normal",
+              "kind": "paragraph",
+              "name": "Normal",
+              "builtIn": true,
+              "fontFamily": "Noto Serif",
+              "fontSize": 220,
+              "spaceAfter": 160,
+              "lineSpacing": 1150,
+              "lineRule": "multiple"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading1",
+              "kind": "paragraph",
+              "name": "Heading 1",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "outlineLevel": 1,
+              "bold": true,
+              "keepNext": true,
+              "numbering": {
+                "numberingId": "numHeadings00001",
+                "level": 0,
+                "listId": "lHeadings0000001"
+              }
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Caption",
+              "kind": "paragraph",
+              "name": "Caption",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "italic": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Strong",
+              "kind": "character",
+              "name": "Strong",
+              "builtIn": true,
+              "bold": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "TableGrid",
+              "kind": "table",
+              "name": "Table Grid",
+              "builtIn": true,
+              "borders": {
+                "top": { "style": "single", "width": 4 },
+                "bottom": { "style": "single", "width": 4 },
+                "insideH": { "style": "single", "width": 4, "color": "#808080" }
+              },
+              "cellMargins": { "top": 0, "bottom": 0, "left": 108, "right": 108 },
+              "headerRowShading": { "fill": "#D9E2F3" },
+              "bandedRows": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "LegalBody0000001",
+              "kind": "paragraph",
+              "name": "Legal body",
+              "basedOn": "Normal",
+              "indentLeft": 360,
+              "tabs": [{ "position": 4320, "align": "decimal", "leader": "dot" }],
+              "borders": { "left": { "style": "single", "width": 8, "space": 120 } },
+              "shading": { "fill": "#F2F2F2" }
+            }
+          },
+          {
+            "type": "numbering_def",
+            "attrs": {
+              "id": "numHeadings00001",
+              "name": "Headings",
+              "levels": [
+                { "format": "decimal", "text": "%1.", "start": 1 },
+                { "format": "decimal", "text": "%1.%2", "start": 1, "legal": true }
+              ]
+            }
+          },
+          {
+            "type": "numbering_def",
+            "attrs": {
+              "id": "numBullets000001",
+              "levels": [
+                {
+                  "format": "bullet",
+                  "text": "",
+                  "start": 1,
+                  "bulletChar": "•",
+                  "indentLeft": 720,
+                  "hanging": 360
+                }
+              ]
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "psPortrait000001",
+              "headerDefault": "sHeader000000001",
+              "footerDefault": "sFooter000000001"
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "psLandscape00001",
+              "width": 16838,
+              "height": 11906,
+              "orientation": "landscape",
+              "pageNumberFormat": "lowerRoman"
+            }
+          },
+          {
+            "type": "role_def",
+            "attrs": { "id": "role_tenant", "name": "Tenant", "color": "#1F77B4" }
+          },
+          {
+            "type": "rule_def",
+            "attrs": {
+              "id": "ruleShowIncome01",
+              "when": { "==": [{ "field": "tenant.name" }, "Ada Lovelace"] },
+              "then": [{ "show": ["tenant.income"] }],
+              "else": [{ "hide": ["tenant.income"] }]
+            }
+          }
+        ]
+      },
+      {
+        "type": "story",
+        "attrs": { "id": "sHeader000000001", "kind": "header" },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pHeader000000001" },
+            "content": [
+              { "type": "text", "text": "Lease, page " },
+              { "type": "field", "attrs": { "kind": "page" } }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "story",
+        "attrs": { "id": "sFooter000000001", "kind": "footer" },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pFooter000000001" },
+            "content": [{ "type": "field", "attrs": { "kind": "pageCount", "cached": "3" } }]
+          }
+        ]
+      },
+      {
+        "type": "body",
+        "attrs": { "pageSetup": "psPortrait000001" },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pHeading00000001", "style": "Heading1" },
+            "content": [
+              { "type": "anchor", "attrs": { "id": "aTerms0000000001", "name": "Terms" } },
+              { "type": "text", "text": "Terms" }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "pList00000000001",
+              "numbering": {
+                "numberingId": "numBullets000001",
+                "level": 0,
+                "listId": "lBullets00000001"
+              },
+              "align": "justify"
+            },
+            "content": [
+              { "type": "text", "text": "Rent is " },
+              {
+                "type": "text",
+                "text": "due",
+                "marks": [{ "type": "bold" }, { "type": "italic" }]
+              },
+              { "type": "text", "text": " " },
+              {
+                "type": "text",
+                "text": "monthly",
+                "marks": [
+                  { "type": "link", "attrs": { "href": "https://example.org/rent" } },
+                  { "type": "charStyle", "attrs": { "style": "Strong" } }
+                ]
+              },
+              { "type": "text", "text": ", " },
+              {
+                "type": "text",
+                "text": "in advance",
+                "marks": [
+                  { "type": "underline", "attrs": { "style": "double" } },
+                  { "type": "color", "attrs": { "value": "#C00000" } },
+                  { "type": "fontSize", "attrs": { "value": 240 } },
+                  { "type": "highlight", "attrs": { "value": "yellow" } }
+                ]
+              },
+              {
+                "type": "text",
+                "text": "1",
+                "marks": [{ "type": "vertAlign", "attrs": { "value": "super" } }]
+              },
+              {
+                "type": "text",
+                "text": " Miete",
+                "marks": [
+                  { "type": "lang", "attrs": { "value": "de-DE" } },
+                  { "type": "italic", "attrs": { "value": false } }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pSuggested000001" },
+            "marks": [{ "type": "del", "attrs": { "id": "sBobDelete000002", "user": "bob" } }],
+            "content": [
+              {
+                "type": "text",
+                "text": "A deposit of one month ",
+                "marks": [{ "type": "ins", "attrs": { "id": "sAliceInsert0001", "user": "alice" } }]
+              },
+              {
+                "type": "text",
+                "text": "is due",
+                "marks": [{ "type": "del", "attrs": { "id": "sBobDelete000001", "user": "bob" } }]
+              },
+              {
+                "type": "text",
+                "text": " on signing.",
+                "marks": [
+                  { "type": "bold" },
+                  {
+                    "type": "fmt",
+                    "attrs": {
+                      "id": "sCarolFormat0001",
+                      "user": "carol",
+                      "before": { "marks": [], "attrs": {} }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "region",
+            "attrs": { "id": "rLegal0000000001", "title": "Legal", "policy": "restricted" },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "id": "pLegal0000000001", "style": "LegalBody0000001" },
+                "content": [
+                  { "type": "text", "text": "Liability" },
+                  { "type": "tab" },
+                  { "type": "text", "text": "12.50" }
+                ]
+              },
+              {
+                "type": "table",
+                "attrs": {
+                  "id": "tTerms0000000001",
+                  "style": "TableGrid",
+                  "grid": [4000, 4000],
+                  "width": { "type": "pct", "value": 5000 },
+                  "headerRows": 1
+                },
+                "content": [
+                  {
+                    "type": "table_row",
+                    "attrs": { "id": "trHead0000000001", "cantSplit": true },
+                    "content": [
+                      {
+                        "type": "table_cell",
+                        "attrs": {
+                          "id": "tcHead0000000001",
+                          "colspan": 2,
+                          "shading": { "fill": "#D9E2F3" }
+                        },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": { "id": "pCellHead0000001" },
+                            "content": [{ "type": "text", "text": "Payments" }]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "table_row",
+                    "attrs": { "id": "trBody0000000001" },
+                    "marks": [
+                      { "type": "ins", "attrs": { "id": "sAliceInsert0002", "user": "alice" } }
+                    ],
+                    "content": [
+                      {
+                        "type": "table_cell",
+                        "attrs": { "id": "tcRent0000000001", "vAlign": "center" },
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "attrs": { "id": "pCellRent0000001" },
+                            "content": [{ "type": "text", "text": "Rent" }]
+                          }
+                        ]
+                      },
+                      {
+                        "type": "table_cell",
+                        "attrs": { "id": "tcFormula0000001" },
+                        "content": [
+                          {
+                            "type": "equation_block",
+                            "attrs": { "id": "eqRent0000000001", "latex": "r = 12 \\times m" }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "figure",
+                "attrs": {
+                  "id": "figPlan000000001",
+                  "asset": "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+                  "width": 4000,
+                  "height": 3000,
+                  "alt": "Floor plan",
+                  "align": "center"
+                },
+                "content": [
+                  {
+                    "type": "caption",
+                    "content": [
+                      { "type": "text", "text": "Figure " },
+                      { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+                      { "type": "text", "text": ": floor plan" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pFootnote0000001" },
+            "content": [
+              { "type": "text", "text": "The tenant pays utilities." },
+              {
+                "type": "footnote",
+                "attrs": { "id": "fnUtilities00001" },
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "attrs": { "id": "pFnUtilities0001" },
+                    "content": [
+                      { "type": "text", "text": "See " },
+                      { "type": "field", "attrs": { "kind": "ref", "target": "bookmark:Terms" } },
+                      { "type": "text", "text": "." }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": { "id": "pInline000000001" },
+            "content": [
+              {
+                "type": "image",
+                "attrs": {
+                  "asset": "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+                  "width": 480,
+                  "height": 480,
+                  "alt": "Logo"
+                }
+              },
+              { "type": "tab" },
+              { "type": "equation", "attrs": { "latex": "x^2" } },
+              { "type": "break", "attrs": { "kind": "line" } },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "ffTenantName0001",
+                  "key": "tenant.name",
+                  "kind": "text",
+                  "label": "Tenant name",
+                  "assignee": "role_tenant",
+                  "value": "Ada Lovelace"
+                }
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "ffTenantIncome01",
+                  "key": "tenant.income",
+                  "kind": "number",
+                  "label": "Income",
+                  "assignee": "role_tenant",
+                  "value": "1200.50",
+                  "format": { "decimals": 2, "prefix": "GBP " }
+                }
+              },
+              { "type": "field", "attrs": { "kind": "formValue", "target": "field:tenant.name" } },
+              {
+                "type": "extension_inline",
+                "attrs": {
+                  "extension": "com.example.badge",
+                  "payload": { "level": 3 },
+                  "fallbackText": "Badge"
+                }
+              },
+              {
+                "type": "preserved_inline",
+                "attrs": {
+                  "label": "text box",
+                  "fragment": "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+                  "fallbackText": "Text box"
+                }
+              },
+              {
+                "type": "text",
+                "text": "shadowed",
+                "marks": [
+                  {
+                    "type": "preserved",
+                    "attrs": {
+                      "props": {
+                        "children": [
+                          {
+                            "name": "w:shadow"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          { "type": "toc", "attrs": { "id": "tocMain000000001", "maxLevel": 2 } },
+          {
+            "type": "section_break",
+            "attrs": { "id": "sbLandscape00001", "pageSetup": "psLandscape00001" }
+          },
+          {
+            "type": "extension_block",
+            "attrs": {
+              "id": "xChart0000000001",
+              "extension": "com.example.chart",
+              "payload": { "series": [1, 2, 3] },
+              "fallbackText": "Chart"
+            }
+          },
+          {
+            "type": "preserved_block",
+            "attrs": {
+              "id": "pbChart000000001",
+              "label": "chart",
+              "fragment": "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+              "fallbackAsset": "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13",
+              "fallbackText": "Chart",
+              "width": 4000,
+              "height": 3000
+            }
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "pPreserved000001",
+              "preserved": {
+                "children": [
+                  {
+                    "name": "w:textAlignment",
+                    "attrs": {
+                      "w:val": "center"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

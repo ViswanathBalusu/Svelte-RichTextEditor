@@ -1,0 +1,739 @@
+{
+  "rule": "cascade",
+  "spec": "03 §6",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "resolveParagraph, resolveRun and resolveLabelRun in packages/model/src/cascade/resolve.ts",
+  "description": "The formatting cascade: layers 0 to 8, null as inherit, toggles, whole-value properties and typed errors for broken chains.",
+  "format": "Each case is one document built as in numbering-lists.json from the file's settings, styles and numberings and the case's. `paragraph` holds the attributes of the paragraph to resolve, `context.tableStyle` the style of the table it is in, and `marks` the marks of one of its runs. `expected` lists only the properties it checks: `styleId`, `numbering`, `paragraph` (resolved paragraph properties), `run` (the run with `marks`, or the paragraph's run properties without), `labelRun` (the numbering label's run properties), `layers` (the layer that gave each named property: base, settings, default style, table style, numbering level, paragraph style, direct; for runs paragraph, character style, mark) or `error` (the code of the typed error). A case with `\"valid\": false` is an invalid document on purpose.",
+  "settings": { "lang": "en-GB", "defaultParagraphStyle": "Normal" },
+  "styles": [
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Normal",
+        "kind": "paragraph",
+        "name": "Normal",
+        "builtIn": true,
+        "fontFamily": "Noto Serif",
+        "fontSize": 220,
+        "spaceAfter": 160,
+        "lineSpacing": 1150,
+        "lineRule": "multiple"
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "ListParagraph",
+        "kind": "paragraph",
+        "name": "ListParagraph",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "indentLeft": 720,
+        "contextualSpacing": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading1",
+        "kind": "paragraph",
+        "name": "Heading1",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 1,
+        "fontSize": 320,
+        "bold": true,
+        "keepNext": true
+      }
+    }
+  ],
+  "numberings": [
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "decimal-list",
+        "name": "decimal-list",
+        "levels": [
+          { "format": "decimal", "text": "%1.", "start": 1, "indentLeft": 720, "hanging": 360 },
+          {
+            "format": "lowerLetter",
+            "text": "%2)",
+            "start": 1,
+            "indentLeft": 1440,
+            "hanging": 360,
+            "runProps": { "bold": true, "color": "#1F3864" }
+          }
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "base-values",
+      "description": "When no layer sets a property, it has the base value of ADR 0032 (layer 0).",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": { "id": "Normal", "kind": "paragraph", "name": "Normal", "builtIn": true }
+        }
+      ],
+      "paragraph": {},
+      "expected": {
+        "paragraph": {
+          "align": "start",
+          "dir": "ltr",
+          "indentLeft": 0,
+          "indentFirstLine": 0,
+          "spaceBefore": 0,
+          "spaceAfter": 0,
+          "contextualSpacing": false,
+          "lineSpacing": 1000,
+          "lineRule": "multiple",
+          "keepNext": false,
+          "keepLines": false,
+          "pageBreakBefore": false,
+          "widowControl": true,
+          "tabs": [],
+          "borders": null,
+          "shading": null
+        },
+        "run": {
+          "fontFamily": null,
+          "fontSize": 220,
+          "bold": false,
+          "italic": false,
+          "underline": "none",
+          "strike": false,
+          "smallCaps": false,
+          "allCaps": false,
+          "vertAlign": "baseline",
+          "color": null,
+          "highlight": null,
+          "lang": "en-GB",
+          "hidden": false
+        },
+        "layers": {
+          "spaceAfter": "base",
+          "fontSize": "base",
+          "widowControl": "base",
+          "lang": "settings"
+        }
+      }
+    },
+    {
+      "id": "settings-give-direction-and-language",
+      "description": "settings.dir and settings.lang are the defaults of the paragraph direction and the run language.",
+      "settings": { "dir": "rtl", "lang": "ar-EG" },
+      "paragraph": {},
+      "expected": {
+        "paragraph": { "dir": "rtl" },
+        "run": { "lang": "ar-EG" },
+        "layers": { "dir": "settings", "lang": "settings" }
+      }
+    },
+    {
+      "id": "default-style-over-settings",
+      "description": "Within layer 1, the default paragraph style overrides the defaults from settings.",
+      "settings": { "dir": "rtl" },
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Normal",
+            "kind": "paragraph",
+            "name": "Normal",
+            "builtIn": true,
+            "fontFamily": "Noto Serif",
+            "fontSize": 220,
+            "spaceAfter": 160,
+            "dir": "ltr",
+            "lang": "fr-FR"
+          }
+        }
+      ],
+      "paragraph": {},
+      "expected": {
+        "paragraph": { "dir": "ltr" },
+        "run": { "lang": "fr-FR" },
+        "layers": { "dir": "default style", "lang": "default style" }
+      }
+    },
+    {
+      "id": "default-style-is-layer-1",
+      "description": "A paragraph with style null takes the default paragraph style.",
+      "paragraph": { "style": null },
+      "expected": {
+        "styleId": "Normal",
+        "paragraph": { "spaceAfter": 160, "lineSpacing": 1150 },
+        "run": { "fontFamily": "Noto Serif" },
+        "layers": { "spaceAfter": "default style" }
+      }
+    },
+    {
+      "id": "table-style-over-default-style",
+      "description": "S7 question 1: a table style overrides the default paragraph style for a Normal paragraph in the table, because Normal is layer 1 and is not applied again in layer 4.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Grid",
+            "kind": "table",
+            "name": "Grid",
+            "spaceAfter": 0,
+            "lineSpacing": 1000,
+            "fontSize": 200
+          }
+        }
+      ],
+      "paragraph": { "style": "Normal" },
+      "context": { "tableStyle": "Grid" },
+      "expected": {
+        "paragraph": { "spaceAfter": 0, "lineSpacing": 1000 },
+        "run": { "fontSize": 200, "fontFamily": "Noto Serif" },
+        "layers": { "spaceAfter": "table style", "fontFamily": "default style" }
+      }
+    },
+    {
+      "id": "table-style-over-default-style-through-based-on",
+      "description": "The same holds for a style based on Normal: Normal contributes once, in layer 1; the style's own values (layer 4) still win.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Grid",
+            "kind": "table",
+            "name": "Grid",
+            "spaceAfter": 0,
+            "fontSize": 200
+          }
+        },
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Body",
+            "kind": "paragraph",
+            "name": "Body",
+            "basedOn": "Normal",
+            "fontSize": 240
+          }
+        }
+      ],
+      "paragraph": { "style": "Body" },
+      "context": { "tableStyle": "Grid" },
+      "expected": {
+        "paragraph": { "spaceAfter": 0 },
+        "run": { "fontSize": 240 },
+        "layers": { "spaceAfter": "table style", "fontSize": "paragraph style" }
+      }
+    },
+    {
+      "id": "numbering-level-over-table-style",
+      "description": "The numbering level (layer 3) overrides the table style (layer 2).",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Grid",
+            "kind": "table",
+            "name": "Grid",
+            "indentLeft": 100,
+            "indentFirstLine": 50
+          }
+        }
+      ],
+      "paragraph": {
+        "numbering": { "numberingId": "decimal-list", "level": 0, "listId": "listAxxxxxxxxxxx" },
+        "style": "Normal"
+      },
+      "context": { "tableStyle": "Grid" },
+      "expected": {
+        "paragraph": { "indentLeft": 720, "indentFirstLine": -360 },
+        "layers": { "indentLeft": "numbering level", "indentFirstLine": "numbering level" }
+      }
+    },
+    {
+      "id": "numbering-level-over-default-style",
+      "description": "The numbering level overrides the default paragraph style's indents.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Normal",
+            "kind": "paragraph",
+            "name": "Normal",
+            "builtIn": true,
+            "fontFamily": "Noto Serif",
+            "fontSize": 220,
+            "spaceAfter": 160,
+            "indentLeft": 200
+          }
+        }
+      ],
+      "paragraph": {
+        "numbering": { "numberingId": "decimal-list", "level": 1, "listId": "listAxxxxxxxxxxx" },
+        "style": "Normal"
+      },
+      "expected": {
+        "paragraph": { "indentLeft": 1440, "indentFirstLine": -360 },
+        "layers": { "indentLeft": "numbering level" }
+      }
+    },
+    {
+      "id": "paragraph-style-over-numbering-level",
+      "description": "S7 question 2: under 03 §6 as written, the paragraph style (layer 4) overrides the numbering level (layer 3), so ListParagraph's indentLeft 720 replaces level 1's 1440; the hanging indent, which the style does not set, comes from the level. Word applies the level after the style; the owner decides (ADR 0032, open question).",
+      "paragraph": {
+        "numbering": { "numberingId": "decimal-list", "level": 1, "listId": "listAxxxxxxxxxxx" },
+        "style": "ListParagraph"
+      },
+      "expected": {
+        "paragraph": { "indentLeft": 720, "indentFirstLine": -360 },
+        "layers": { "indentLeft": "paragraph style", "indentFirstLine": "numbering level" }
+      }
+    },
+    {
+      "id": "style-chain-from-root-to-style",
+      "description": "Layer 4 applies the basedOn chain from its root to the style, so the nearer style wins.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Base",
+            "kind": "paragraph",
+            "name": "Base",
+            "spaceBefore": 100,
+            "fontSize": 240
+          }
+        },
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Middle",
+            "kind": "paragraph",
+            "name": "Middle",
+            "basedOn": "Base",
+            "fontSize": 260
+          }
+        },
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Leaf",
+            "kind": "paragraph",
+            "name": "Leaf",
+            "basedOn": "Middle",
+            "spaceBefore": 300
+          }
+        }
+      ],
+      "paragraph": { "style": "Leaf" },
+      "expected": {
+        "paragraph": { "spaceBefore": 300, "spaceAfter": 160 },
+        "run": { "fontSize": 260 },
+        "layers": { "spaceBefore": "paragraph style", "spaceAfter": "default style" }
+      }
+    },
+    {
+      "id": "direct-over-paragraph-style",
+      "description": "Direct paragraph attributes (layer 5) override the style chain.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Leaf",
+            "kind": "paragraph",
+            "name": "Leaf",
+            "basedOn": "Normal",
+            "spaceBefore": 300,
+            "align": "center"
+          }
+        }
+      ],
+      "paragraph": { "style": "Leaf", "spaceBefore": 50, "align": "justify" },
+      "expected": {
+        "paragraph": { "spaceBefore": 50, "align": "justify" },
+        "layers": { "spaceBefore": "direct", "align": "direct" }
+      }
+    },
+    {
+      "id": "null-means-inherit",
+      "description": "A null attribute is skipped and the value comes from an earlier layer.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Leaf",
+            "kind": "paragraph",
+            "name": "Leaf",
+            "basedOn": "Normal",
+            "spaceBefore": 300,
+            "keepNext": null
+          }
+        }
+      ],
+      "paragraph": { "style": "Leaf", "spaceBefore": null, "keepNext": null },
+      "expected": {
+        "paragraph": { "spaceBefore": 300, "keepNext": false },
+        "layers": { "spaceBefore": "paragraph style", "keepNext": "base" }
+      }
+    },
+    {
+      "id": "paragraph-numbering-over-style-numbering",
+      "description": "A paragraph's own numbering replaces its style's numbering as a whole.",
+      "numberings": [
+        {
+          "type": "numbering_def",
+          "attrs": {
+            "id": "other",
+            "name": "other",
+            "levels": [
+              { "format": "decimal", "text": "%1", "start": 1, "indentLeft": 360, "hanging": 0 }
+            ]
+          }
+        }
+      ],
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Numbered",
+            "kind": "paragraph",
+            "name": "Numbered",
+            "basedOn": "Normal",
+            "numbering": { "numberingId": "other", "level": 0, "listId": "listBxxxxxxxxxxx" }
+          }
+        }
+      ],
+      "paragraph": {
+        "numbering": { "numberingId": "decimal-list", "level": 0, "listId": "listAxxxxxxxxxxx" },
+        "style": "Numbered"
+      },
+      "expected": {
+        "numbering": { "numberingId": "decimal-list", "level": 0, "listId": "listAxxxxxxxxxxx" },
+        "paragraph": { "indentLeft": 720 }
+      }
+    },
+    {
+      "id": "tabs-are-a-whole-value",
+      "description": "tabs is one value: direct tabs replace the style's list; stops come out in position order.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Tabbed",
+            "kind": "paragraph",
+            "name": "Tabbed",
+            "basedOn": "Normal",
+            "tabs": [
+              { "position": 2000, "align": "left", "leader": "none" },
+              { "position": 4000, "align": "right", "leader": "dot" }
+            ]
+          }
+        }
+      ],
+      "paragraph": {
+        "style": "Tabbed",
+        "tabs": [
+          { "position": 6000, "align": "decimal", "leader": "none" },
+          { "position": 3000, "align": "center", "leader": "none" }
+        ]
+      },
+      "expected": {
+        "paragraph": {
+          "tabs": [
+            { "position": 3000, "align": "center", "leader": "none" },
+            { "position": 6000, "align": "decimal", "leader": "none" }
+          ]
+        },
+        "layers": { "tabs": "direct" }
+      }
+    },
+    {
+      "id": "empty-tabs-clear-inherited-stops",
+      "description": "An empty tabs list is a value, so it clears the stops a style sets.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Tabbed",
+            "kind": "paragraph",
+            "name": "Tabbed",
+            "basedOn": "Normal",
+            "tabs": [{ "position": 2000, "align": "left", "leader": "none" }]
+          }
+        }
+      ],
+      "paragraph": { "style": "Tabbed", "tabs": [] },
+      "expected": { "paragraph": { "tabs": [] } }
+    },
+    {
+      "id": "duplicate-tab-positions",
+      "description": "When two stops share a position, the later one in the list wins.",
+      "paragraph": {
+        "tabs": [
+          { "position": 2000, "align": "left", "leader": "none" },
+          { "position": 2000, "align": "right", "leader": "dot" }
+        ]
+      },
+      "expected": {
+        "paragraph": { "tabs": [{ "position": 2000, "align": "right", "leader": "dot" }] }
+      }
+    },
+    {
+      "id": "run-layers-6-to-8",
+      "description": "A run takes the paragraph's run properties, then its character style chain, then its marks.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Code",
+            "kind": "character",
+            "name": "Code",
+            "fontFamily": "Noto Sans Mono",
+            "bold": false
+          }
+        }
+      ],
+      "paragraph": { "style": "Heading1" },
+      "marks": [
+        { "type": "charStyle", "attrs": { "style": "Code" } },
+        { "type": "italic", "attrs": { "value": true } }
+      ],
+      "expected": {
+        "run": { "fontFamily": "Noto Sans Mono", "bold": false, "italic": true, "fontSize": 320 },
+        "layers": {
+          "fontFamily": "character style",
+          "bold": "character style",
+          "italic": "mark",
+          "fontSize": "paragraph"
+        }
+      }
+    },
+    {
+      "id": "toggle-mark-off",
+      "description": "A toggle mark with value false switches off what the style switches on.",
+      "paragraph": { "style": "Heading1" },
+      "marks": [{ "type": "bold", "attrs": { "value": false } }],
+      "expected": { "run": { "bold": false }, "layers": { "bold": "mark" } }
+    },
+    {
+      "id": "toggle-mark-on",
+      "description": "A toggle mark with value true, or with no attributes (the default), switches the property on.",
+      "paragraph": {},
+      "marks": [{ "type": "bold", "attrs": { "value": true } }, { "type": "italic" }],
+      "expected": { "run": { "bold": true, "italic": true } }
+    },
+    {
+      "id": "character-style-chain",
+      "description": "A character style chain applies from its root to the style.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Emphasis2",
+            "kind": "character",
+            "name": "Emphasis2",
+            "italic": true,
+            "color": "#C00000"
+          }
+        },
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Strong2",
+            "kind": "character",
+            "name": "Strong2",
+            "basedOn": "Emphasis2",
+            "bold": true,
+            "color": "#1F3864"
+          }
+        }
+      ],
+      "paragraph": {},
+      "marks": [{ "type": "charStyle", "attrs": { "style": "Strong2" } }],
+      "expected": { "run": { "italic": true, "bold": true, "color": "#1F3864" } }
+    },
+    {
+      "id": "mark-over-character-style",
+      "description": "A direct mark overrides the character style.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Blue",
+            "kind": "character",
+            "name": "Blue",
+            "color": "#1F3864",
+            "fontSize": 200
+          }
+        }
+      ],
+      "paragraph": {},
+      "marks": [
+        { "type": "charStyle", "attrs": { "style": "Blue" } },
+        { "type": "color", "attrs": { "value": "#00B050" } }
+      ],
+      "expected": { "run": { "color": "#00B050", "fontSize": 200 } }
+    },
+    {
+      "id": "valued-marks",
+      "description": "underline carries a style; vertAlign, fontSize, fontFamily and highlight carry a value; link and suggestion marks do not format.",
+      "paragraph": {},
+      "marks": [
+        { "type": "link", "attrs": { "href": "https://example.com/" } },
+        { "type": "underline", "attrs": { "style": "double" } },
+        { "type": "vertAlign", "attrs": { "value": "super" } },
+        { "type": "fontSize", "attrs": { "value": 180 } },
+        { "type": "fontFamily", "attrs": { "value": "Noto Sans" } },
+        { "type": "highlight", "attrs": { "value": "yellow" } }
+      ],
+      "expected": {
+        "run": {
+          "underline": "double",
+          "vertAlign": "super",
+          "fontSize": 180,
+          "fontFamily": "Noto Sans",
+          "highlight": "yellow",
+          "color": null
+        }
+      }
+    },
+    {
+      "id": "level-run-properties-format-the-label-only",
+      "description": "A level's runProps format its label, not the paragraph's text.",
+      "paragraph": {
+        "numbering": { "numberingId": "decimal-list", "level": 1, "listId": "listAxxxxxxxxxxx" },
+        "style": "ListParagraph"
+      },
+      "expected": {
+        "run": { "bold": false, "color": null },
+        "labelRun": { "bold": true, "color": "#1F3864", "fontFamily": "Noto Serif" }
+      }
+    },
+    {
+      "id": "cycle-is-a-typed-error",
+      "description": "A basedOn cycle (I5) is a typed error, and resolution ends.",
+      "valid": false,
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": { "id": "A", "kind": "paragraph", "name": "A", "basedOn": "B" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "B", "kind": "paragraph", "name": "B", "basedOn": "A" }
+        }
+      ],
+      "paragraph": { "style": "A" },
+      "expected": { "error": "style_cycle" }
+    },
+    {
+      "id": "chain-longer-than-ten-is-a-typed-error",
+      "description": "A chain of eleven styles (I5) is a typed error; a chain of ten resolves.",
+      "valid": false,
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": { "id": "S0", "kind": "paragraph", "name": "S0", "fontSize": 300 }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S1", "kind": "paragraph", "name": "S1", "basedOn": "S0" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S2", "kind": "paragraph", "name": "S2", "basedOn": "S1" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S3", "kind": "paragraph", "name": "S3", "basedOn": "S2" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S4", "kind": "paragraph", "name": "S4", "basedOn": "S3" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S5", "kind": "paragraph", "name": "S5", "basedOn": "S4" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S6", "kind": "paragraph", "name": "S6", "basedOn": "S5" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S7", "kind": "paragraph", "name": "S7", "basedOn": "S6" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S8", "kind": "paragraph", "name": "S8", "basedOn": "S7" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S9", "kind": "paragraph", "name": "S9", "basedOn": "S8" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S10", "kind": "paragraph", "name": "S10", "basedOn": "S9" }
+        }
+      ],
+      "paragraph": { "style": "S10" },
+      "expected": { "error": "style_chain_too_long" }
+    },
+    {
+      "id": "chain-of-ten-resolves",
+      "description": "A chain of exactly ten styles resolves.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": { "id": "S0", "kind": "paragraph", "name": "S0", "fontSize": 300 }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S1", "kind": "paragraph", "name": "S1", "basedOn": "S0" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S2", "kind": "paragraph", "name": "S2", "basedOn": "S1" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S3", "kind": "paragraph", "name": "S3", "basedOn": "S2" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S4", "kind": "paragraph", "name": "S4", "basedOn": "S3" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S5", "kind": "paragraph", "name": "S5", "basedOn": "S4" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S6", "kind": "paragraph", "name": "S6", "basedOn": "S5" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S7", "kind": "paragraph", "name": "S7", "basedOn": "S6" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S8", "kind": "paragraph", "name": "S8", "basedOn": "S7" }
+        },
+        {
+          "type": "style_def",
+          "attrs": { "id": "S9", "kind": "paragraph", "name": "S9", "basedOn": "S8" }
+        }
+      ],
+      "paragraph": { "style": "S9" },
+      "expected": { "run": { "fontSize": 300 } }
+    },
+    {
+      "id": "missing-style-is-a-typed-error",
+      "description": "A style that does not exist (I4) is a typed error.",
+      "valid": false,
+      "paragraph": { "style": "Missing" },
+      "expected": { "error": "style_missing" }
+    }
+  ]
+}

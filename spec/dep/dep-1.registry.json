@@ -1,0 +1,2201 @@
+{
+  "protocol": "1.0",
+  "status": "draft",
+  "subprotocol": "dep.v1",
+  "engines": [
+    "pm-steps/1"
+  ],
+  "messages": [
+    {
+      "t": "hello",
+      "direction": "c2s",
+      "channelScoped": "none",
+      "id": "required",
+      "re": "none",
+      "replies": [
+        "welcome",
+        "error"
+      ],
+      "spec": "05 §5.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "welcome",
+      "direction": "s2c",
+      "channelScoped": "none",
+      "id": "optional",
+      "re": "required",
+      "replies": [],
+      "spec": "05 §5.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "auth.expiring",
+      "direction": "s2c",
+      "channelScoped": "none",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "auth.refresh",
+      "direction": "c2s",
+      "channelScoped": "optional",
+      "id": "required",
+      "re": "none",
+      "replies": [
+        "auth.ok",
+        "error"
+      ],
+      "spec": "05 §5.1, §3.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "auth.ok",
+      "direction": "s2c",
+      "channelScoped": "optional",
+      "id": "optional",
+      "re": "required",
+      "replies": [],
+      "spec": "05 §5.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "auth.revoked",
+      "direction": "s2c",
+      "channelScoped": "none",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.1, §3.3",
+      "owner": "PRO"
+    },
+    {
+      "t": "ping",
+      "direction": "both",
+      "channelScoped": "none",
+      "id": "optional",
+      "re": "none",
+      "replies": [
+        "pong"
+      ],
+      "spec": "05 §4, §5.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "pong",
+      "direction": "both",
+      "channelScoped": "none",
+      "id": "optional",
+      "re": "optional",
+      "replies": [],
+      "spec": "05 §4, §5.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "goaway",
+      "direction": "s2c",
+      "channelScoped": "none",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "error",
+      "direction": "both",
+      "channelScoped": "optional",
+      "id": "optional",
+      "re": "optional",
+      "replies": [],
+      "spec": "05 §5.1, §5.7, §5.8",
+      "owner": "PRO"
+    },
+    {
+      "t": "chunk",
+      "direction": "both",
+      "channelScoped": "none",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §4",
+      "owner": "PRO"
+    },
+    {
+      "t": "ch.open",
+      "direction": "c2s",
+      "channelScoped": "required",
+      "id": "required",
+      "re": "none",
+      "replies": [
+        "ch.opened",
+        "ch.rejected",
+        "error"
+      ],
+      "spec": "05 §5.2",
+      "owner": "PRO"
+    },
+    {
+      "t": "ch.opened",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "required",
+      "replies": [],
+      "spec": "05 §5.2",
+      "owner": "PRO"
+    },
+    {
+      "t": "ch.rejected",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "required",
+      "replies": [],
+      "spec": "05 §5.2",
+      "owner": "PRO"
+    },
+    {
+      "t": "ch.close",
+      "direction": "c2s",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.2",
+      "owner": "PRO"
+    },
+    {
+      "t": "ch.closed",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.2; ADR 0019",
+      "owner": "PRO"
+    },
+    {
+      "t": "sync.submit",
+      "direction": "c2s",
+      "channelScoped": "required",
+      "id": "required",
+      "re": "none",
+      "replies": [
+        "sync.ack",
+        "sync.reject",
+        "error"
+      ],
+      "spec": "05 §5.3; 04 §3.1",
+      "owner": "PRO"
+    },
+    {
+      "t": "sync.ack",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "required",
+      "replies": [],
+      "spec": "05 §5.3; 04 §5 step 10, §7",
+      "owner": "PRO"
+    },
+    {
+      "t": "sync.reject",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "required",
+      "replies": [],
+      "spec": "05 §5.3; 04 §8",
+      "owner": "PRO"
+    },
+    {
+      "t": "sync.commit",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.3; 04 §5 step 10",
+      "owner": "PRO"
+    },
+    {
+      "t": "sync.caughtUp",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.2, §5.3",
+      "owner": "PRO"
+    },
+    {
+      "t": "sync.reset",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.3; 04 §3.2",
+      "owner": "PRO"
+    },
+    {
+      "t": "sync.check",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.3; 04 §13",
+      "owner": "PRO"
+    },
+    {
+      "t": "presence.update",
+      "direction": "c2s",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "feature": "presence",
+      "spec": "05 §5.4; 04 §11",
+      "owner": "PRO"
+    },
+    {
+      "t": "presence.state",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "feature": "presence",
+      "spec": "05 §5.4",
+      "owner": "PRO"
+    },
+    {
+      "t": "perm.changed",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.5",
+      "owner": "PRO"
+    },
+    {
+      "t": "event",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "spec": "05 §5.6",
+      "owner": "PRO"
+    },
+    {
+      "t": "wf.changed",
+      "direction": "s2c",
+      "channelScoped": "required",
+      "id": "optional",
+      "re": "none",
+      "replies": [],
+      "feature": "workflow",
+      "spec": "12 §10",
+      "owner": "FRW"
+    }
+  ],
+  "operations": [
+    {
+      "operationId": "getDiscovery",
+      "method": "GET",
+      "path": "/.well-known/dep",
+      "security": [],
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createToken",
+      "method": "POST",
+      "path": "/tokens",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §3.1, §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "listDocuments",
+      "method": "GET",
+      "path": "/documents",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createDocument",
+      "method": "POST",
+      "path": "/documents",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getDocument",
+      "method": "GET",
+      "path": "/documents/{id}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "requires": "view",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "updateDocument",
+      "method": "PATCH",
+      "path": "/documents/{id}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "requires": "manage, or a service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "deleteDocument",
+      "method": "DELETE",
+      "path": "/documents/{id}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "requires": "manage",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §6.2; 07 §12",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getContent",
+      "method": "GET",
+      "path": "/documents/{id}/content",
+      "security": [
+        "user",
+        "service"
+      ],
+      "requires": "view; for an earlier seq also the history-visibility gate (07 §8)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2, §5.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "replaceContent",
+      "method": "PUT",
+      "path": "/documents/{id}/content",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §6.2; 04 §3.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "listCommits",
+      "method": "GET",
+      "path": "/documents/{id}/commits",
+      "security": [
+        "user",
+        "service"
+      ],
+      "requires": "view and the history-visibility gate (07 §8)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2, §5.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "listRegions",
+      "method": "GET",
+      "path": "/documents/{id}/regions",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "regions",
+      "requires": "view",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "setRegionState",
+      "method": "PUT",
+      "path": "/documents/{id}/regions/{rid}/state",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "regions",
+      "requires": "manage",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 07 §11",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "acquireLease",
+      "method": "POST",
+      "path": "/documents/{id}/regions/{rid}/lease",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "leases",
+      "requires": "edit in that region",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §6.2; 07 §10",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "heartbeatLease",
+      "method": "PUT",
+      "path": "/documents/{id}/regions/{rid}/lease",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "leases",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 07 §10",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "releaseLease",
+      "method": "DELETE",
+      "path": "/documents/{id}/regions/{rid}/lease",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "leases",
+      "requires": "the holder, or manage to break a lease",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §6.2; 07 §10",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getGrants",
+      "method": "GET",
+      "path": "/documents/{id}/grants",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "regions",
+      "requires": "manage, or a service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 07 §1",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "updateGrants",
+      "method": "PATCH",
+      "path": "/documents/{id}/grants",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "regions",
+      "requires": "manage",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 07 §9",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "revokeSessions",
+      "method": "POST",
+      "path": "/sessions/revoke",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §3.3, §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "listHistory",
+      "method": "GET",
+      "path": "/documents/{id}/history",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "requires": "view and the history-visibility gate (07 §8)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 08 §4",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "listVersions",
+      "method": "GET",
+      "path": "/documents/{id}/versions",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 08 §4",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createVersion",
+      "method": "POST",
+      "path": "/documents/{id}/versions",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "requires": "edit somewhere in the document",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §6.2; 08 §4",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getDiff",
+      "method": "GET",
+      "path": "/documents/{id}/diff",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "requires": "view and the history-visibility gate (07 §8)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 08 §6",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getAttribution",
+      "method": "GET",
+      "path": "/documents/{id}/attribution",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "requires": "view and the history-visibility gate (07 §8)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 08 §7",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "restore",
+      "method": "POST",
+      "path": "/documents/{id}/restore",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "requires": "edit in the region (not approved, not leased to someone else); manage for a whole document",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 08 §8; 07 §13",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "forkDocument",
+      "method": "POST",
+      "path": "/documents/{id}/fork",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §6.2; 08 §8",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "setReadMarker",
+      "method": "PUT",
+      "path": "/documents/{id}/read-marker",
+      "security": [
+        "user",
+        "service"
+      ],
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 08 §10",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getActivity",
+      "method": "GET",
+      "path": "/documents/{id}/activity",
+      "security": [
+        "user",
+        "service"
+      ],
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 08 §10",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "listThreads",
+      "method": "GET",
+      "path": "/documents/{id}/threads",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "comments",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 07 §6",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createThread",
+      "method": "POST",
+      "path": "/documents/{id}/threads",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "comments",
+      "requires": "comment in the scopes of the target",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §6.2; 07 §6",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getThread",
+      "method": "GET",
+      "path": "/threads/{tid}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "comments",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "updateThread",
+      "method": "PATCH",
+      "path": "/threads/{tid}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "comments",
+      "requires": "comment in its scope",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 07 §12",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "deleteThread",
+      "method": "DELETE",
+      "path": "/threads/{tid}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "comments",
+      "requires": "the author or manage",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §6.2; 07 §12",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createComment",
+      "method": "POST",
+      "path": "/threads/{tid}/comments",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "comments",
+      "requires": "comment in the scopes of the target",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §6.2; 13 §5",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "updateComment",
+      "method": "PATCH",
+      "path": "/comments/{cid}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "comments",
+      "requires": "the author or manage",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "deleteComment",
+      "method": "DELETE",
+      "path": "/comments/{cid}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "comments",
+      "requires": "the author or manage",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createAsset",
+      "method": "POST",
+      "path": "/documents/{id}/assets",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "assets",
+      "requires": "edit, suggest or fill somewhere in the document",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §6.2; 06 §4.4",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "completeAsset",
+      "method": "POST",
+      "path": "/assets/{aid}/complete",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "assets",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "202",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "resolveAssets",
+      "method": "POST",
+      "path": "/documents/{id}/assets/resolve",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "assets",
+      "requires": "view on a document the asset is attached to",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createExport",
+      "method": "POST",
+      "path": "/documents/{id}/exports",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "exports",
+      "requires": "view, unless restricted with no-export; raw compile logs need edit",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "202",
+      "spec": "05 §6.2; 09 §9.1",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getExport",
+      "method": "GET",
+      "path": "/exports/{jid}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "exports",
+      "requires": "the requester, or a service credential (review SR-C4)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 09 §9.1",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "cancelExport",
+      "method": "DELETE",
+      "path": "/exports/{jid}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "exports",
+      "requires": "the requester, or a service credential (review SR-C4)",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createImport",
+      "method": "POST",
+      "path": "/documents/{id}/imports",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential (07 §12)",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "202",
+      "spec": "05 §6.2; 07 §12; 09 §12",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getImport",
+      "method": "GET",
+      "path": "/imports/{jid}",
+      "security": [
+        "user",
+        "service"
+      ],
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getFonts",
+      "method": "GET",
+      "path": "/fonts",
+      "security": [
+        "user",
+        "service"
+      ],
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "listWebhooks",
+      "method": "GET",
+      "path": "/webhooks",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2, §7",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "createWebhook",
+      "method": "POST",
+      "path": "/webhooks",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §6.2, §7",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getWebhook",
+      "method": "GET",
+      "path": "/webhooks/{id}",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2, §7",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "updateWebhook",
+      "method": "PATCH",
+      "path": "/webhooks/{id}",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2, §7",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "deleteWebhook",
+      "method": "DELETE",
+      "path": "/webhooks/{id}",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §6.2, §7",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "getAudit",
+      "method": "GET",
+      "path": "/audit",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "search",
+      "method": "GET",
+      "path": "/search",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "getTenantRetention",
+      "method": "GET",
+      "path": "/retention",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §11; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "setTenantRetention",
+      "method": "PUT",
+      "path": "/retention",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §11; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "getDocumentRetention",
+      "method": "GET",
+      "path": "/documents/{id}/retention",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §11; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "setDocumentRetention",
+      "method": "PUT",
+      "path": "/documents/{id}/retention",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §11; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "getTenantOrigins",
+      "method": "GET",
+      "path": "/origins",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §4; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "getTenantKeys",
+      "method": "GET",
+      "path": "/keys",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §3.2; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "getTenantQuotas",
+      "method": "GET",
+      "path": "/quotas",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "06 §12; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "setTenantQuotas",
+      "method": "PUT",
+      "path": "/quotas",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "06 §12; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "placeHold",
+      "method": "POST",
+      "path": "/documents/{id}/holds",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "201",
+      "spec": "08 §11; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "listHolds",
+      "method": "GET",
+      "path": "/holds",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §11; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "listFields",
+      "method": "GET",
+      "path": "/documents/{id}/fields",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "fields",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "getFieldValues",
+      "method": "GET",
+      "path": "/documents/{id}/field-values",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "fields",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "prefillFieldValues",
+      "method": "PATCH",
+      "path": "/documents/{id}/field-values",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "fields",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §9, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "getWorkflow",
+      "method": "GET",
+      "path": "/documents/{id}/workflow",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §6.1, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "putWorkflow",
+      "method": "PUT",
+      "path": "/documents/{id}/workflow",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "manage",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §6.1, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "participantConsent",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/participants/{pid}/consent",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "participantVerify",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/participants/{pid}/verify",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "participantComplete",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/participants/{pid}/complete",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "participantDecline",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/participants/{pid}/decline",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "signField",
+      "method": "POST",
+      "path": "/documents/{id}/fields/{fid}/sign",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "sign",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §8.1, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "getWorkflowEvidence",
+      "method": "GET",
+      "path": "/documents/{id}/workflow/evidence",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "getWorkflowFinal",
+      "method": "GET",
+      "path": "/documents/{id}/workflow/final",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "seal",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §10",
+      "owner": "FRW"
+    }
+  ],
+  "errors": [
+    {
+      "code": "bad_message",
+      "surfaces": [
+        "socket"
+      ],
+      "retryable": "no",
+      "clientAction": "Report a bug.",
+      "closeCode": 4400,
+      "closeCodeInferred": true
+    },
+    {
+      "code": "unknown_type",
+      "surfaces": [
+        "socket"
+      ],
+      "retryable": "no",
+      "clientAction": "Report a bug."
+    },
+    {
+      "code": "unauthenticated",
+      "surfaces": [
+        "socket",
+        "rest"
+      ],
+      "retryable": "after-new-token",
+      "clientAction": "Call getToken; raise de-auth-required if it fails.",
+      "closeCode": 4401,
+      "closeCodeInferred": true,
+      "httpStatus": 401
+    },
+    {
+      "code": "token_expired",
+      "surfaces": [
+        "socket",
+        "rest"
+      ],
+      "retryable": "after-new-token",
+      "clientAction": "Call getToken; raise de-auth-required if it fails.",
+      "closeCode": 4401,
+      "closeCodeInferred": true,
+      "httpStatus": 401
+    },
+    {
+      "code": "revoked",
+      "surfaces": [
+        "socket",
+        "rest"
+      ],
+      "retryable": "after-new-token",
+      "clientAction": "Call getToken; raise de-auth-required if it fails.",
+      "closeCode": 4401,
+      "closeCodeInferred": true,
+      "httpStatus": 401
+    },
+    {
+      "code": "forbidden",
+      "surfaces": [
+        "socket",
+        "rest",
+        "sync",
+        "channel-close"
+      ],
+      "retryable": "no",
+      "clientAction": "Show as no access.",
+      "closeCode": 4403,
+      "closeCodeInferred": true,
+      "httpStatus": 403
+    },
+    {
+      "code": "unsupported_version",
+      "surfaces": [
+        "socket"
+      ],
+      "retryable": "no",
+      "clientAction": "Tell the user the component must be updated.",
+      "closeCode": 4406,
+      "closeCodeInferred": true
+    },
+    {
+      "code": "unsupported_engine",
+      "surfaces": [
+        "socket"
+      ],
+      "retryable": "no",
+      "clientAction": "Tell the user the component must be updated."
+    },
+    {
+      "code": "unsupported_cdm",
+      "surfaces": [
+        "socket"
+      ],
+      "retryable": "no",
+      "clientAction": "Tell the user the component must be updated."
+    },
+    {
+      "code": "unsupported_feature",
+      "surfaces": [
+        "socket"
+      ],
+      "retryable": "no",
+      "clientAction": "Tell the user the component must be updated."
+    },
+    {
+      "code": "not_found",
+      "surfaces": [
+        "socket",
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "None given.",
+      "httpStatus": 404
+    },
+    {
+      "code": "already_open",
+      "surfaces": [
+        "socket",
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "None given.",
+      "httpStatus": 409
+    },
+    {
+      "code": "channel_limit",
+      "surfaces": [
+        "socket",
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "None given.",
+      "httpStatus": 409
+    },
+    {
+      "code": "stale_base",
+      "surfaces": [
+        "sync"
+      ],
+      "retryable": "after-catch-up",
+      "clientAction": "Wait until the confirmed seq reaches head, then resubmit the rebased steps with a new id (04 §8); after a snapshot commit, resubmit what still applies to the new content (04 §3.2).",
+      "syncAction": [
+        "rebase"
+      ]
+    },
+    {
+      "code": "rebase_failed",
+      "surfaces": [
+        "sync"
+      ],
+      "retryable": "after-catch-up",
+      "clientAction": "Wait until the confirmed seq reaches head, then resubmit the rebased steps with a new id (04 §8).",
+      "syncAction": [
+        "rebase"
+      ]
+    },
+    {
+      "code": "permission_denied",
+      "surfaces": [
+        "sync"
+      ],
+      "retryable": "no",
+      "clientAction": "Drop and explain; keep the content as recovered edits and refresh permissions.",
+      "syncAction": [
+        "drop"
+      ]
+    },
+    {
+      "code": "read_only",
+      "surfaces": [
+        "sync"
+      ],
+      "retryable": "no",
+      "clientAction": "Drop; switch the editor to read-only. Checked before permission_denied (04 §5 step 1).",
+      "syncAction": [
+        "drop"
+      ]
+    },
+    {
+      "code": "invalid_op",
+      "surfaces": [
+        "sync"
+      ],
+      "retryable": "no",
+      "clientAction": "Drop, or reload when told to.",
+      "syncAction": [
+        "drop",
+        "reload"
+      ]
+    },
+    {
+      "code": "conflict",
+      "surfaces": [
+        "sync",
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "Discard the fill and show the current value (12). On REST: the request conflicts with the current state, for example an `externalId` already in use; read the resource and decide again.",
+      "syncAction": [
+        "drop"
+      ],
+      "httpStatus": 409
+    },
+    {
+      "code": "field_invalid",
+      "surfaces": [
+        "sync",
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "Discard the fill and show the validation message (12).",
+      "syncAction": [
+        "drop"
+      ],
+      "httpStatus": 422
+    },
+    {
+      "code": "busy",
+      "surfaces": [
+        "sync"
+      ],
+      "retryable": "yes",
+      "clientAction": "Resubmit after the pending answer.",
+      "syncAction": [
+        "retry"
+      ]
+    },
+    {
+      "code": "too_large",
+      "surfaces": [
+        "socket",
+        "rest",
+        "sync",
+        "channel-close"
+      ],
+      "retryable": "no",
+      "clientAction": "Split or report.",
+      "syncAction": [
+        "drop"
+      ],
+      "closeCode": 4413,
+      "closeCodeInferred": true,
+      "httpStatus": 413
+    },
+    {
+      "code": "rate_limited",
+      "surfaces": [
+        "socket",
+        "rest",
+        "sync",
+        "channel-close"
+      ],
+      "retryable": "after-retry-after",
+      "clientAction": "Back off for retryAfterMs or Retry-After. Also a spent CPU budget in a room (04 §12; 06 §12).",
+      "syncAction": [
+        "retry"
+      ],
+      "closeCode": 4429,
+      "closeCodeInferred": true,
+      "httpStatus": 429
+    },
+    {
+      "code": "quota_exceeded",
+      "surfaces": [
+        "socket",
+        "rest",
+        "sync",
+        "channel-close"
+      ],
+      "retryable": "after-retry-after",
+      "clientAction": "Back off and tell the user.",
+      "httpStatus": 429
+    },
+    {
+      "code": "slow_consumer",
+      "surfaces": [
+        "channel-close"
+      ],
+      "retryable": "yes",
+      "clientAction": "Resume."
+    },
+    {
+      "code": "precondition_failed",
+      "surfaces": [
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "Fix the request: read the resource for its current ETag and send it in If-Match. 412 for a stale If-Match, 428 for a missing one.",
+      "httpStatus": 412
+    },
+    {
+      "code": "validation_failed",
+      "surfaces": [
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "Fix the request.",
+      "httpStatus": 400
+    },
+    {
+      "code": "pending_suggestions",
+      "surfaces": [
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "Fix the request.",
+      "httpStatus": 409
+    },
+    {
+      "code": "workflow_active",
+      "surfaces": [
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "Fix the request.",
+      "httpStatus": 409
+    },
+    {
+      "code": "idempotency_mismatch",
+      "surfaces": [
+        "rest"
+      ],
+      "retryable": "no",
+      "clientAction": "Fix the request.",
+      "httpStatus": 422
+    },
+    {
+      "code": "unavailable",
+      "surfaces": [
+        "socket",
+        "rest",
+        "sync",
+        "channel-close"
+      ],
+      "retryable": "yes",
+      "clientAction": "Back off.",
+      "syncAction": [
+        "retry"
+      ],
+      "closeCode": 4503,
+      "closeCodeInferred": true,
+      "httpStatus": 503
+    },
+    {
+      "code": "internal",
+      "surfaces": [
+        "socket",
+        "rest",
+        "sync",
+        "channel-close"
+      ],
+      "retryable": "yes",
+      "clientAction": "Back off.",
+      "closeCode": 4500,
+      "closeCodeInferred": true,
+      "httpStatus": 500
+    }
+  ],
+  "closeCodes": [
+    {
+      "code": 4400,
+      "meaning": "Malformed message"
+    },
+    {
+      "code": 4401,
+      "meaning": "Unauthenticated, token expired or revoked"
+    },
+    {
+      "code": 4403,
+      "meaning": "Forbidden, including a disallowed origin"
+    },
+    {
+      "code": 4406,
+      "meaning": "No common protocol version. The preceding error lists the server's versions"
+    },
+    {
+      "code": 4408,
+      "meaning": "hello not received in time"
+    },
+    {
+      "code": 4413,
+      "meaning": "Message too large"
+    },
+    {
+      "code": 4429,
+      "meaning": "Rate limited"
+    },
+    {
+      "code": 4500,
+      "meaning": "Internal error"
+    },
+    {
+      "code": 4503,
+      "meaning": "Unavailable or draining"
+    }
+  ],
+  "features": [
+    {
+      "name": "presence",
+      "relayForbidden": false,
+      "port": "presence",
+      "spec": "05 §2, §5.4",
+      "owner": "PRO"
+    },
+    {
+      "name": "regions",
+      "relayForbidden": true,
+      "spec": "05 §2, §9",
+      "owner": "PRO"
+    },
+    {
+      "name": "suggest-enforced",
+      "relayForbidden": true,
+      "spec": "05 §2, §9",
+      "owner": "PRO"
+    },
+    {
+      "name": "history",
+      "relayForbidden": false,
+      "port": "history",
+      "spec": "05 §2, §6.2",
+      "owner": "PRO"
+    },
+    {
+      "name": "comments",
+      "relayForbidden": false,
+      "port": "comments",
+      "spec": "05 §2, §6.2",
+      "owner": "PRO"
+    },
+    {
+      "name": "assets",
+      "relayForbidden": false,
+      "port": "assets",
+      "spec": "05 §2, §6.2",
+      "owner": "PRO"
+    },
+    {
+      "name": "exports",
+      "relayForbidden": false,
+      "port": "exports",
+      "spec": "05 §2, §6.2",
+      "owner": "PRO"
+    },
+    {
+      "name": "leases",
+      "relayForbidden": false,
+      "port": "leases",
+      "spec": "05 §2, §6.2",
+      "owner": "PRO"
+    },
+    {
+      "name": "fields",
+      "relayForbidden": true,
+      "port": "fields",
+      "spec": "05 §2; 12 §10",
+      "owner": "FRW"
+    },
+    {
+      "name": "rules",
+      "relayForbidden": false,
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "name": "workflow",
+      "relayForbidden": false,
+      "port": "workflow",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "name": "sign",
+      "relayForbidden": false,
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "name": "seal",
+      "relayForbidden": false,
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "name": "extensions",
+      "relayForbidden": false,
+      "spec": "03 §11",
+      "owner": "CDM"
+    },
+    {
+      "name": "preserve",
+      "relayForbidden": false,
+      "spec": "03 §4.6",
+      "owner": "CDM"
+    }
+  ],
+  "notifications": [
+    {
+      "type": "thread.created",
+      "resource": "/threads/{tid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "thread.updated",
+      "resource": "/threads/{tid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "thread.resolved",
+      "resource": "/threads/{tid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "thread.reopened",
+      "resource": "/threads/{tid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "thread.deleted",
+      "resource": "/threads/{tid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "comment.created",
+      "resource": "/comments/{cid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "comment.updated",
+      "resource": "/comments/{cid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "comment.deleted",
+      "resource": "/comments/{cid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "version.created",
+      "resource": "/documents/{id}/versions",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "version.restored",
+      "resource": "/documents/{id}/versions",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "export.progress",
+      "resource": "/exports/{jid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "export.completed",
+      "resource": "/exports/{jid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "export.failed",
+      "resource": "/exports/{jid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "export.cancelled",
+      "resource": "/exports/{jid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "import.completed",
+      "resource": "/imports/{jid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "import.failed",
+      "resource": "/imports/{jid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "asset.ready",
+      "resource": "/assets/{aid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "asset.failed",
+      "resource": "/assets/{aid}",
+      "spec": "05 §5.6"
+    },
+    {
+      "type": "document.updated",
+      "resource": "/documents/{id}",
+      "spec": "05 §5.6"
+    }
+  ],
+  "webhooks": [
+    {
+      "type": "dep.document.created.v1",
+      "when": "A document was created.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.document.deleted.v1",
+      "when": "A document was deleted (soft delete).",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.document.state_changed.v1",
+      "when": "The document state changed (`active`, `locked`, `archived`).",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.document.changed.v1",
+      "when": "Content changed. Debounced to at most once per 10 seconds per document.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.version.created.v1",
+      "when": "A named version was created.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.version.restored.v1",
+      "when": "A version was restored.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.grants.changed.v1",
+      "when": "Region grants changed.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.region.state_changed.v1",
+      "when": "A region state changed (07 §11).",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.session.joined.v1",
+      "when": "A session joined the document.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.session.left.v1",
+      "when": "A session left the document.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.thread.created.v1",
+      "when": "A thread was created.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.thread.resolved.v1",
+      "when": "A thread was resolved.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.thread.reopened.v1",
+      "when": "A thread was reopened.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.thread.deleted.v1",
+      "when": "A thread was deleted.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.comment.created.v1",
+      "when": "A comment was created.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.comment.mentioned.v1",
+      "when": "A comment mentions someone; the host sends the notification (13 §5).",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.task.assigned.v1",
+      "when": "A thread was assigned as a task.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.export.completed.v1",
+      "when": "An export job completed.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.export.failed.v1",
+      "when": "An export job failed.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.import.completed.v1",
+      "when": "An import job completed.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.import.failed.v1",
+      "when": "An import job failed.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.commit.rejected.v1",
+      "when": "A commit was rejected with `permission_denied` or `invalid_op`. Throttled. Useful for security monitoring.",
+      "spec": "05 §7",
+      "owner": "PRO"
+    },
+    {
+      "type": "dep.workflow.sent.v1",
+      "when": "Workflow event `sent` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.participant_activated.v1",
+      "when": "Workflow event `participant_activated` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.participant_viewed.v1",
+      "when": "Workflow event `participant_viewed` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.field_completed.v1",
+      "when": "Workflow event `field_completed` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.participant_completed.v1",
+      "when": "Workflow event `participant_completed` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.participant_declined.v1",
+      "when": "Workflow event `participant_declined` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.auth_failed.v1",
+      "when": "Workflow event `auth_failed` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.reminder_due.v1",
+      "when": "Workflow event `reminder_due` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.corrected.v1",
+      "when": "Workflow event `corrected` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.voided.v1",
+      "when": "Workflow event `voided` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.expired.v1",
+      "when": "Workflow event `expired` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.completed.v1",
+      "when": "Workflow event `completed` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    },
+    {
+      "type": "dep.workflow.finalised.v1",
+      "when": "Workflow event `finalised` (12 §6.3, §10).",
+      "spec": "12 §10",
+      "owner": "FRW"
+    }
+  ]
+}

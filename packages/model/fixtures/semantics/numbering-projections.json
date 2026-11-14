@@ -1,0 +1,634 @@
+{
+  "rule": "numbering.projections",
+  "spec": "03 §4.1, §4.3, §4.4, §7 (Numbering)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "computeLabels, counterEffects and referenceText in packages/model/src/numbering/labels.ts",
+  "description": "Numbering on a projection (ADR 0019): a hidden_region placeholder contributes the counter effect supplied for it. Each case has the full body (`fullBody`), the regions the projection hides (`hidden`, replaced in `body` by hidden_region placeholders), the effects counterEffects computes from the full document (`effects`), the labels of the projection with those effects (`expected`, equal to the full document's labels for what the projection shows) and without them (`expectedWithoutEffects`). The owner decides which one readers see (SR-C3).",
+  "format": "Each case is one document. Its defs are, in this order: a settings node with the attributes of the file's `settings` and then the case's `settings`; the file's `styles` and then the case's `styles` (a case style replaces a file style with the same identifier); the file's `numberings` and then the case's; and the page setup `ps1` with every attribute at its default. Then come the case's `stories`, then a body with page setup `ps1` and the case's `body`. Every such document is valid (model.validate) unless the case says `\"valid\": false`. `expected` lists, for each kind it names, every label of that kind in the document: `lists` by paragraph id; `sequences` by the id of the block holding the `seq` fields (paragraph, figure or footnote), one text per field in order; `equations` by equation block id; `footnotes` by footnote id; `references` as the text a `ref` field with that target prints (null: no label). The full document (`fullBody`) is valid; the projection is not a stored document and is not validated, because hidden_region exists only in projections.",
+  "settings": { "lang": "en-GB", "defaultParagraphStyle": "Normal" },
+  "styles": [
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Normal",
+        "kind": "paragraph",
+        "name": "Normal",
+        "builtIn": true,
+        "fontSize": 220,
+        "spaceAfter": 160
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading1",
+        "kind": "paragraph",
+        "name": "Heading1",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 1,
+        "numbering": { "numberingId": "outline", "level": 0, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading2",
+        "kind": "paragraph",
+        "name": "Heading2",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 2,
+        "numbering": { "numberingId": "outline", "level": 1, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading3",
+        "kind": "paragraph",
+        "name": "Heading3",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 3,
+        "numbering": { "numberingId": "outline", "level": 2, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "ListParagraph",
+        "kind": "paragraph",
+        "name": "ListParagraph",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "indentLeft": 720,
+        "contextualSpacing": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Caption",
+        "kind": "paragraph",
+        "name": "Caption",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "italic": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "FootnoteText",
+        "kind": "paragraph",
+        "name": "FootnoteText",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "fontSize": 180,
+        "spaceAfter": 0
+      }
+    }
+  ],
+  "numberings": [
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "decimal-list",
+        "name": "decimal-list",
+        "levels": [
+          { "format": "decimal", "text": "%1.", "start": 1 },
+          { "format": "lowerLetter", "text": "%2)", "start": 1 },
+          { "format": "lowerRoman", "text": "(%3)", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "outline",
+        "name": "outline",
+        "levels": [
+          { "format": "decimal", "text": "%1", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1 },
+          { "format": "decimal", "text": "%1.%2.%3", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "bullets",
+        "name": "bullets",
+        "levels": [
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "•" },
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "◦" }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "articles",
+        "name": "articles",
+        "levels": [
+          { "format": "upperRoman", "text": "§ %1.", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1, "legal": true },
+          { "format": "lowerLetter", "text": "(%3)", "start": 1, "restartAfter": 0 }
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "hidden-region-in-the-middle-of-a-list",
+      "description": "A hidden region holds list items, a figure caption and a footnote. With the effect the server computes from the full document, the projection shows the full document's numbers; without it, it numbers only what it holds.",
+      "fullBody": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [
+            { "type": "text", "text": "First" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "region",
+          "attrs": { "id": "regionAxxxxxxxxx", "title": "Region", "policy": "restricted" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p02xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listAxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p02." }]
+            },
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p03xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 1,
+                  "listId": "listAxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p03." }]
+            },
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p04xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listAxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p04." }]
+            },
+            {
+              "type": "paragraph",
+              "attrs": { "id": "p05xxxxxxxxxxxxx", "style": "Caption" },
+              "content": [
+                { "type": "text", "text": "Figure " },
+                { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+                { "type": "text", "text": " hidden" },
+                {
+                  "type": "footnote",
+                  "attrs": { "id": "fn02xxxxxxxxxxxx" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "fp02xxxxxxxxxxxx", "style": "FootnoteText" },
+                      "content": [{ "type": "text", "text": "A note." }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p06xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p06." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p07xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p07." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p08xxxxxxxxxxxxx", "style": "Caption" },
+          "content": [
+            { "type": "text", "text": "Figure " },
+            { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn03xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp03xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "hidden": ["regionAxxxxxxxxx"],
+      "effects": {
+        "regionAxxxxxxxxx": {
+          "lists": {
+            "listAxxxxxxxxxxx": {
+              "numberingId": "decimal-list",
+              "levels": [
+                { "add": 2 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 }
+              ]
+            }
+          },
+          "sequences": { "Figure": 1 },
+          "footnotes": { "add": 1 }
+        }
+      },
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p06xxxxxxxxxxxxx", "text": "4." },
+          { "id": "p07xxxxxxxxxxxxx", "text": "a)" }
+        ],
+        "sequences": [{ "holder": "p08xxxxxxxxxxxxx", "texts": ["2"] }],
+        "footnotes": [
+          { "id": "fn01xxxxxxxxxxxx", "text": "1" },
+          { "id": "fn03xxxxxxxxxxxx", "text": "3" }
+        ]
+      },
+      "expectedWithoutEffects": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p06xxxxxxxxxxxxx", "text": "2." },
+          { "id": "p07xxxxxxxxxxxxx", "text": "a)" }
+        ],
+        "sequences": [{ "holder": "p08xxxxxxxxxxxxx", "texts": ["1"] }],
+        "footnotes": [
+          { "id": "fn01xxxxxxxxxxxx", "text": "1" },
+          { "id": "fn03xxxxxxxxxxxx", "text": "2" }
+        ]
+      },
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [
+            { "type": "text", "text": "First" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        { "type": "hidden_region", "attrs": { "id": "regionAxxxxxxxxx", "title": null } },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p06xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p06." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p07xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p07." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p08xxxxxxxxxxxxx", "style": "Caption" },
+          "content": [
+            { "type": "text", "text": "Figure " },
+            { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn03xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp03xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hidden-region-with-a-restart",
+      "description": "A restart inside a hidden region reaches the projection as a fixed value, not as a count.",
+      "fullBody": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "region",
+          "attrs": { "id": "regionAxxxxxxxxx", "title": "Region", "policy": "restricted" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p02xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listAxxxxxxxxxxx"
+                },
+                "numberingRestart": 10
+              },
+              "content": [{ "type": "text", "text": "Item p02." }]
+            },
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p03xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listAxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p03." }]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "hidden": ["regionAxxxxxxxxx"],
+      "effects": {
+        "regionAxxxxxxxxx": {
+          "lists": {
+            "listAxxxxxxxxxxx": {
+              "numberingId": "decimal-list",
+              "levels": [
+                { "set": 11 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p04xxxxxxxxxxxxx", "text": "12." }
+        ]
+      },
+      "expectedWithoutEffects": {
+        "lists": [
+          { "id": "p01xxxxxxxxxxxxx", "text": "1." },
+          { "id": "p04xxxxxxxxxxxxx", "text": "2." }
+        ]
+      },
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        { "type": "hidden_region", "attrs": { "id": "regionAxxxxxxxxx", "title": null } },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ]
+    },
+    {
+      "id": "list-that-starts-in-a-hidden-region",
+      "description": "A list instance first counted inside the hidden region starts from its definition when the effect is applied.",
+      "fullBody": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        {
+          "type": "region",
+          "attrs": { "id": "regionAxxxxxxxxx", "title": "Region", "policy": "restricted" },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p02xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listBxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p02." }]
+            },
+            {
+              "type": "paragraph",
+              "attrs": {
+                "id": "p03xxxxxxxxxxxxx",
+                "style": "ListParagraph",
+                "numbering": {
+                  "numberingId": "decimal-list",
+                  "level": 0,
+                  "listId": "listBxxxxxxxxxxx"
+                }
+              },
+              "content": [{ "type": "text", "text": "Item p03." }]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listBxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ],
+      "hidden": ["regionAxxxxxxxxx"],
+      "effects": {
+        "regionAxxxxxxxxx": {
+          "lists": {
+            "listBxxxxxxxxxxx": {
+              "numberingId": "decimal-list",
+              "levels": [
+                { "add": 2 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 },
+                { "set": 0 }
+              ]
+            }
+          }
+        }
+      },
+      "expected": { "lists": [{ "id": "p04xxxxxxxxxxxxx", "text": "3." }] },
+      "expectedWithoutEffects": { "lists": [{ "id": "p04xxxxxxxxxxxxx", "text": "1." }] },
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        { "type": "hidden_region", "attrs": { "id": "regionAxxxxxxxxx", "title": null } },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p04xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listBxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p04." }]
+        }
+      ]
+    }
+  ]
+}

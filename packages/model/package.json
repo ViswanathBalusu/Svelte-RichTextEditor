@@ -1,0 +1,38 @@
+{
+  "name": "@docedit/model",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Canonical Document Model (CDM): definition, generated types and schemas, canonical form, validation, and the cross-cutting conventions of 01 §8.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./definition": {
+      "types": "./src/definition/index.ts",
+      "default": "./src/definition/index.ts"
+    },
+    "./prosemirror": {
+      "types": "./src/prosemirror/index.ts",
+      "default": "./src/prosemirror/index.ts"
+    },
+    "./validate": {
+      "types": "./src/validate/index.ts",
+      "default": "./src/validate/index.ts"
+    },
+    "./fixtures/*": "./fixtures/*"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "prosemirror-model": "1.25.12"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "prosemirror-transform": "1.12.5"
+  }
+}

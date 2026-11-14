@@ -1,0 +1,75 @@
+/* The PDF viewer's page (FE-071). Served with the frame's own policy: `style-src 'self'`. */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #e5e7eb;
+  color: #1f2328;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  background: #f6f8fa;
+  border-block-end: 1px solid #d0d7de;
+}
+
+.toolbar[hidden] {
+  display: none;
+}
+
+.toolbar .gap {
+  flex: 1 1 auto;
+}
+
+button {
+  font: inherit;
+  min-width: 2.75rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+button:focus-visible,
+.pages:focus-visible {
+  outline: 3px solid #0969da;
+  outline-offset: 2px;
+}
+
+.pages {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 1rem;
+  text-align: center;
+}
+
+.page {
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+}
+
+.message {
+  margin: 1rem;
+}
+
+@media (forced-colors: active) {
+  button:focus-visible,
+  .pages:focus-visible {
+    outline-color: Highlight;
+  }
+}

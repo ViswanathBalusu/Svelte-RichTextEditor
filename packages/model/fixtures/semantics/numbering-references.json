@@ -1,0 +1,487 @@
+{
+  "rule": "numbering.references",
+  "spec": "03 §4.1, §4.3, §4.4, §7 (Numbering)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "computeLabels, counterEffects and referenceText in packages/model/src/numbering/labels.ts",
+  "description": "The text a ref field prints: the label its target carries, as literal text.",
+  "format": "Each case is one document. Its defs are, in this order: a settings node with the attributes of the file's `settings` and then the case's `settings`; the file's `styles` and then the case's `styles` (a case style replaces a file style with the same identifier); the file's `numberings` and then the case's; and the page setup `ps1` with every attribute at its default. Then come the case's `stories`, then a body with page setup `ps1` and the case's `body`. Every such document is valid (model.validate) unless the case says `\"valid\": false`. `expected` lists, for each kind it names, every label of that kind in the document: `lists` by paragraph id; `sequences` by the id of the block holding the `seq` fields (paragraph, figure or footnote), one text per field in order; `equations` by equation block id; `footnotes` by footnote id; `references` as the text a `ref` field with that target prints (null: no label).",
+  "settings": { "lang": "en-GB", "defaultParagraphStyle": "Normal" },
+  "styles": [
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Normal",
+        "kind": "paragraph",
+        "name": "Normal",
+        "builtIn": true,
+        "fontSize": 220,
+        "spaceAfter": 160
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading1",
+        "kind": "paragraph",
+        "name": "Heading1",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 1,
+        "numbering": { "numberingId": "outline", "level": 0, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading2",
+        "kind": "paragraph",
+        "name": "Heading2",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 2,
+        "numbering": { "numberingId": "outline", "level": 1, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Heading3",
+        "kind": "paragraph",
+        "name": "Heading3",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "outlineLevel": 3,
+        "numbering": { "numberingId": "outline", "level": 2, "listId": "headingsxxxxxxxx" }
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "ListParagraph",
+        "kind": "paragraph",
+        "name": "ListParagraph",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "indentLeft": 720,
+        "contextualSpacing": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "Caption",
+        "kind": "paragraph",
+        "name": "Caption",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "italic": true
+      }
+    },
+    {
+      "type": "style_def",
+      "attrs": {
+        "id": "FootnoteText",
+        "kind": "paragraph",
+        "name": "FootnoteText",
+        "builtIn": true,
+        "basedOn": "Normal",
+        "fontSize": 180,
+        "spaceAfter": 0
+      }
+    }
+  ],
+  "numberings": [
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "decimal-list",
+        "name": "decimal-list",
+        "levels": [
+          { "format": "decimal", "text": "%1.", "start": 1 },
+          { "format": "lowerLetter", "text": "%2)", "start": 1 },
+          { "format": "lowerRoman", "text": "(%3)", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "outline",
+        "name": "outline",
+        "levels": [
+          { "format": "decimal", "text": "%1", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1 },
+          { "format": "decimal", "text": "%1.%2.%3", "start": 1 }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "bullets",
+        "name": "bullets",
+        "levels": [
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "•" },
+          { "format": "bullet", "text": "", "start": 1, "bulletChar": "◦" }
+        ]
+      }
+    },
+    {
+      "type": "numbering_def",
+      "attrs": {
+        "id": "articles",
+        "name": "articles",
+        "levels": [
+          { "format": "upperRoman", "text": "§ %1.", "start": 1 },
+          { "format": "decimal", "text": "%1.%2", "start": 1, "legal": true },
+          { "format": "lowerLetter", "text": "(%3)", "start": 1, "restartAfter": 0 }
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "numbered-paragraph",
+      "description": "A ref to a numbered paragraph prints its label as it stands, punctuation included.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p02." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "See item " },
+            { "type": "field", "attrs": { "kind": "ref", "target": "node:p02xxxxxxxxxxxxx" } }
+          ]
+        }
+      ],
+      "expected": { "references": [{ "target": "node:p02xxxxxxxxxxxxx", "text": "2." }] }
+    },
+    {
+      "id": "heading",
+      "description": "A ref to a numbered heading prints its number.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Heading1" },
+          "content": [{ "type": "text", "text": "Heading p01" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Heading2" },
+          "content": [{ "type": "text", "text": "Heading p02" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "See section " },
+            { "type": "field", "attrs": { "kind": "ref", "target": "node:p02xxxxxxxxxxxxx" } }
+          ]
+        }
+      ],
+      "expected": { "references": [{ "target": "node:p02xxxxxxxxxxxxx", "text": "1.1" }] }
+    },
+    {
+      "id": "unnumbered-heading",
+      "description": "A ref to a paragraph that carries no label has no text (null); the writer reports it.",
+      "styles": [
+        {
+          "type": "style_def",
+          "attrs": {
+            "id": "Plain",
+            "kind": "paragraph",
+            "name": "Plain",
+            "basedOn": "Normal",
+            "outlineLevel": 1
+          }
+        }
+      ],
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Plain" },
+          "content": [{ "type": "text", "text": "Text." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "field", "attrs": { "kind": "ref", "target": "node:p01xxxxxxxxxxxxx" } }
+          ]
+        }
+      ],
+      "expected": { "references": [{ "target": "node:p01xxxxxxxxxxxxx", "text": null }] }
+    },
+    {
+      "id": "table-caption",
+      "description": "A ref to a caption paragraph prints the number of its seq field.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Caption" },
+          "content": [
+            { "type": "text", "text": "Table " },
+            { "type": "field", "attrs": { "kind": "seq", "name": "Table" } }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx", "style": "Caption" },
+          "content": [
+            { "type": "text", "text": "Table " },
+            { "type": "field", "attrs": { "kind": "seq", "name": "Table" } }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "See table " },
+            { "type": "field", "attrs": { "kind": "ref", "target": "node:p02xxxxxxxxxxxxx" } }
+          ]
+        }
+      ],
+      "expected": { "references": [{ "target": "node:p02xxxxxxxxxxxxx", "text": "2" }] }
+    },
+    {
+      "id": "figure-bookmark",
+      "description": "A ref to a bookmark in a figure caption prints the figure's number.",
+      "body": [
+        {
+          "type": "figure",
+          "attrs": {
+            "id": "fig01xxxxxxxxxxx",
+            "asset": "01a1ae27-b400-7315-9767-e3e13f9a5c14",
+            "width": 2880,
+            "height": 1440
+          },
+          "content": [
+            {
+              "type": "caption",
+              "content": [
+                { "type": "text", "text": "Figure " },
+                { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+                { "type": "anchor", "attrs": { "id": "anc01xxxxxxxxxxx", "name": "fig_one" } }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "figure",
+          "attrs": {
+            "id": "fig02xxxxxxxxxxx",
+            "asset": "01a1ae27-b400-7315-9767-e3e13f9a5c14",
+            "width": 2880,
+            "height": 1440
+          },
+          "content": [
+            {
+              "type": "caption",
+              "content": [
+                { "type": "text", "text": "Figure " },
+                { "type": "field", "attrs": { "kind": "seq", "name": "Figure" } },
+                { "type": "anchor", "attrs": { "id": "anc02xxxxxxxxxxx", "name": "fig_two" } }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Compare figure " },
+            { "type": "field", "attrs": { "kind": "ref", "target": "bookmark:fig_two" } }
+          ]
+        }
+      ],
+      "expected": { "references": [{ "target": "bookmark:fig_two", "text": "2" }] }
+    },
+    {
+      "id": "bookmark-in-a-numbered-paragraph",
+      "description": "A ref to a bookmark in a numbered paragraph prints the paragraph's label.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p01xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 0,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [{ "type": "text", "text": "Item p01." }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": {
+            "id": "p02xxxxxxxxxxxxx",
+            "style": "ListParagraph",
+            "numbering": {
+              "numberingId": "decimal-list",
+              "level": 1,
+              "listId": "listAxxxxxxxxxxx"
+            }
+          },
+          "content": [
+            { "type": "text", "text": "Sub-item" },
+            { "type": "anchor", "attrs": { "id": "anc01xxxxxxxxxxx", "name": "clause" } }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [{ "type": "field", "attrs": { "kind": "ref", "target": "bookmark:clause" } }]
+        }
+      ],
+      "expected": { "references": [{ "target": "bookmark:clause", "text": "a)" }] }
+    },
+    {
+      "id": "bookmark-in-a-footnote",
+      "description": "A ref to a bookmark in a footnote prints the footnote's mark.",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "One" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn01xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp01xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [{ "type": "text", "text": "A note." }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "Two" },
+            {
+              "type": "footnote",
+              "attrs": { "id": "fn02xxxxxxxxxxxx" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "fp02xxxxxxxxxxxx", "style": "FootnoteText" },
+                  "content": [
+                    { "type": "text", "text": "Note" },
+                    { "type": "anchor", "attrs": { "id": "anc01xxxxxxxxxxx", "name": "note_two" } }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p03xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "text", "text": "See note " },
+            { "type": "field", "attrs": { "kind": "ref", "target": "bookmark:note_two" } }
+          ]
+        }
+      ],
+      "expected": { "references": [{ "target": "bookmark:note_two", "text": "2" }] }
+    },
+    {
+      "id": "equation",
+      "description": "A ref to an equation label prints the equation's number without the parentheses shown at the equation; an unnumbered equation has none.",
+      "body": [
+        {
+          "type": "equation_block",
+          "attrs": {
+            "id": "eq01xxxxxxxxxxxx",
+            "latex": "E = mc^2",
+            "numbered": true,
+            "label": "first"
+          }
+        },
+        {
+          "type": "equation_block",
+          "attrs": {
+            "id": "eq02xxxxxxxxxxxx",
+            "latex": "E = mc^2",
+            "numbered": false,
+            "label": "plain"
+          }
+        },
+        {
+          "type": "equation_block",
+          "attrs": {
+            "id": "eq03xxxxxxxxxxxx",
+            "latex": "E = mc^2",
+            "numbered": true,
+            "label": "energy"
+          }
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "field", "attrs": { "kind": "ref", "target": "eq:energy" } },
+            { "type": "text", "text": " and " },
+            { "type": "field", "attrs": { "kind": "ref", "target": "eq:plain" } }
+          ]
+        }
+      ],
+      "expected": {
+        "references": [
+          { "target": "eq:energy", "text": "2" },
+          { "target": "eq:plain", "text": null }
+        ]
+      }
+    },
+    {
+      "id": "style-reference-is-not-computed-here",
+      "description": "styleRef depends on the page, so the model gives no text (the layout and the typesetter do).",
+      "body": [
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p01xxxxxxxxxxxxx", "style": "Heading1" },
+          "content": [{ "type": "text", "text": "Heading p01" }]
+        },
+        {
+          "type": "paragraph",
+          "attrs": { "id": "p02xxxxxxxxxxxxx" },
+          "content": [
+            { "type": "field", "attrs": { "kind": "styleRef", "target": "style:Heading1" } }
+          ]
+        }
+      ],
+      "expected": { "references": [{ "target": "style:Heading1", "text": null }] }
+    }
+  ]
+}

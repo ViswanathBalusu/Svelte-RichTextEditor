@@ -1,0 +1,25 @@
+{
+  "name": "i10-page-break-in-cell",
+  "doc": "replace: a page break in a table cell.",
+  "base": "kitchen-sink",
+  "steps": [
+    {
+      "stepType": "replace",
+      "from": 165,
+      "to": 165,
+      "slice": { "content": [{ "type": "break", "attrs": { "kind": "page", "ext": {} } }] }
+    }
+  ],
+  "context": {
+    "attachedAssets": [
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a12",
+      "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a13"
+    ],
+    "retiredRegionIds": ["rRetiredRegion01"],
+    "mathGateRefuses": "\\input",
+    "identifierChanges": []
+  },
+  "expected": ["I10"]
+}

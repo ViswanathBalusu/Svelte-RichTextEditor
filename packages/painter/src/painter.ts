@@ -1,0 +1,234 @@
+/**
+ * DOM painter (02 §9.1, §9.3; ADR 0005; FE-090, FE-091). The painter draws a layout tree into page
+ * boxes: every line is one absolutely positioned box with `white-space: pre`, at the point the
+ * engine put it, so the browser never re-wraps a line. Text is real DOM text, built with DOM APIs
+ * (`createElement`, `textContent`), never with HTML strings.
+ *
+ * The tree carries no text and no fonts. The caller supplies them through `PaintSource`: the text of
+ * a CDM range, and the one face and size the measurer used. Justification (FE-091) is applied as
+ * CSS `word-spacing` with the value `justifyLine` computes, and the trailing run of blanks is
+ * reset to zero so that it does not stretch.
+ *
+ * This is a DOM package (`packages/painter`, 01 §6): it is not universal and may use DOM APIs.
+ */
+import type {
+  BoxFragment,
+  LayoutFragment,
+  LayoutLine,
+  LayoutTree,
+  ParagraphFragment,
+} from '../../layout/src/tree.ts';
+import { justifyLine } from '../../layout/src/justify.ts';
+
+/**
+ * The text settings the painter's CSS is pinned to (FE-090 criterion 4). Spec 02 §9.3: the CSS
+ * follows what canvas `measureText` does by default, not the other way round. The default measurer
+ * (`canvasTextMeasurer`, packages/element/src/canvas-measure.ts) leaves `fontKerning` at `auto` and
+ * the ligatures at their default, and CSS `font-kerning: auto` paints the same widths in Firefox
+ * and WebKit. In Chromium no CSS value reproduces canvas `auto` on kerned pairs (about 0.9 px wide
+ * on `AVATAR Wave Yes` at 16 px serif); that is open, see FE-090's Notes.
+ */
+export const PAINT_TEXT_PINS = {
+  fontKerning: 'auto',
+  fontVariantLigatures: 'normal',
+} as const;
+
+/** What the painter needs that the layout tree does not hold. */
+export interface PaintSource {
+  /** The text of the CDM range `[from, to)` of a block, with no line break in it. */
+  lineText(blockId: string, from: number, to: number): string;
+  /** The CSS font family the text is set in: the face the measurer measured. */
+  readonly fontFamily: string;
+  /** The font size in points. */
+  readonly fontSizePt: number;
+  /** The advance of a text in points, from the same measurer as the layout. Needed to justify. */
+  readonly measure?: (text: string) => number;
+}
+
+export interface PaintOptions {
+  /**
+   * Blocks to justify (FE-091). Every line of such a block but its last one is stretched to the
+   * right edge of its paragraph. Ignored when `PaintSource.measure` is absent.
+   */
+  readonly justify?: (blockId: string) => boolean;
+  /** Space between pages, in points. Defaults to 12. */
+  readonly pageGap?: number;
+  /**
+   * Interactive controls (FE-093). Called for each box fragment of a page, in document order (body,
+   * then header, footer and footnotes). The element it returns is placed at the box, in an overlay
+   * above the lines. The overlay takes no pointer events; only the controls do. Null leaves the box
+   * as it is. The caller builds the element with DOM APIs and reads its value from the document.
+   */
+  readonly control?: (box: BoxFragment) => HTMLElement | null;
+}
+
+export interface PaintResult {
+  /** The page boxes, in page order. */
+  readonly pages: readonly HTMLElement[];
+  /** The number of line boxes painted, across all pages. */
+  readonly lineCount: number;
+  /** The number of controls placed in the overlay layers (FE-093), across all pages. */
+  readonly controlCount: number;
+}
+
+/** Characters a trailing run may hold: ordinary space, no-break space and tab. */
+function isBlank(ch: string): boolean {
+  return ch === ' ' || ch === ' ' || ch === '\t';
+}
+
+/**
+ * Paints a layout tree into `root` (an element or a shadow root). The previous content of `root` is
+ * kept; the caller clears it when it repaints.
+ */
+export function paintTree(
+  root: Node,
+  tree: LayoutTree,
+  source: PaintSource,
+  options: PaintOptions = {},
+): PaintResult {
+  const doc = root.ownerDocument ?? (root as Document);
+  const gap = options.pageGap ?? 12;
+  const pages: HTMLElement[] = [];
+  let lineCount = 0;
+  let controlCount = 0;
+  // The overlay of the page being painted (FE-093); set per page below.
+  let overlay: HTMLElement | null = null;
+
+  const paintLine = (
+    parent: HTMLElement,
+    f: ParagraphFragment,
+    line: LayoutLine,
+    index: number,
+  ): void => {
+    const x = f.x + line.x;
+    const y = f.y + line.y;
+    // A line that carries its own text (a field's value, FE-087) shows it; any other line shows the
+    // CDM text of its range.
+    const text = line.text ?? source.lineText(f.blockId, line.from, line.to);
+    const el = doc.createElement('div');
+    el.className = 'de-line';
+    el.dataset['block'] = f.blockId;
+    el.dataset['from'] = String(line.from);
+    el.dataset['to'] = String(line.to);
+    const style = el.style;
+    style.position = 'absolute';
+    style.left = `${x}pt`;
+    style.top = `${y}pt`;
+    style.height = `${line.height}pt`;
+    style.lineHeight = `${line.height}pt`;
+    style.whiteSpace = 'pre';
+    style.overflow = 'visible';
+    style.margin = '0';
+    style.padding = '0';
+    style.fontFamily = source.fontFamily;
+    style.fontSize = `${source.fontSizePt}pt`;
+    // Kerning and ligatures follow the canvas defaults the measurer measures with
+    // (`PAINT_TEXT_PINS`; FE-090 criterion 4, spec 02 §9.3).
+    style.fontKerning = PAINT_TEXT_PINS.fontKerning;
+    style.fontVariantLigatures = PAINT_TEXT_PINS.fontVariantLigatures;
+    style.color = 'CanvasText';
+
+    const span = doc.createElement('span');
+    span.className = 'de-text';
+    const justified =
+      source.measure !== undefined &&
+      options.justify?.(f.blockId) === true &&
+      index < f.lines.length - 1;
+    if (justified && source.measure) {
+      const target = f.x + f.width - x;
+      const { wordSpacing } = justifyLine(text, source.measure(text), target);
+      if (wordSpacing > 0) {
+        // Only the run of blanks at the end of the line is left out of the stretch (FE-091).
+        let end = text.length;
+        while (end > 0 && isBlank(text.charAt(end - 1))) end--;
+        span.style.wordSpacing = `${wordSpacing}pt`;
+        span.appendChild(doc.createTextNode(text.slice(0, end)));
+        if (end < text.length) {
+          const tail = doc.createElement('span');
+          tail.style.wordSpacing = '0pt';
+          tail.textContent = text.slice(end);
+          span.appendChild(tail);
+        }
+      } else {
+        span.textContent = text;
+      }
+    } else {
+      span.textContent = text;
+    }
+    el.appendChild(span);
+    parent.appendChild(el);
+    lineCount++;
+  };
+
+  const paintFragments = (parent: HTMLElement, fragments: readonly LayoutFragment[]): void => {
+    for (const f of fragments) {
+      if (f.kind === 'paragraph') {
+        f.lines.forEach((line, i) => paintLine(parent, f, line, i));
+      } else if (f.kind === 'table') {
+        for (const row of f.rows)
+          for (const cell of row.cells) paintFragments(parent, cell.fragments);
+      } else {
+        const box = doc.createElement('div');
+        box.className = 'de-box';
+        box.dataset['block'] = f.blockId;
+        box.style.position = 'absolute';
+        box.style.left = `${f.x}pt`;
+        box.style.top = `${f.y}pt`;
+        box.style.width = `${f.width}pt`;
+        box.style.height = `${f.height}pt`;
+        // A box is not an interactive surface by itself; only a control placed on it is (FE-093).
+        box.style.pointerEvents = 'none';
+        parent.appendChild(box);
+        const control = options.control?.(f) ?? null;
+        if (control && overlay) {
+          control.classList.add('de-control');
+          control.dataset['block'] = f.blockId;
+          const cs = control.style;
+          cs.position = 'absolute';
+          // The control fills its box exactly, padding and border included (FE-093).
+          cs.boxSizing = 'border-box';
+          cs.left = `${f.x}pt`;
+          cs.top = `${f.y}pt`;
+          cs.width = `${f.width}pt`;
+          cs.height = `${f.height}pt`;
+          cs.pointerEvents = 'auto';
+          overlay.appendChild(control);
+          controlCount++;
+        }
+      }
+    }
+  };
+
+  for (const page of tree.pages) {
+    const el = doc.createElement('div');
+    el.className = 'de-page';
+    el.dataset['page'] = String(page.index);
+    const style = el.style;
+    style.position = 'relative';
+    style.overflow = 'hidden';
+    style.boxSizing = 'border-box';
+    style.width = `${page.width}pt`;
+    style.height = `${page.height}pt`;
+    style.margin = `0 auto ${gap}pt`;
+    style.background = 'Canvas';
+    style.color = 'CanvasText';
+    // The overlay is appended after the lines, so it stacks above them; it takes no pointer events
+    // itself, so text under it stays selectable (FE-093).
+    const layer = doc.createElement('div');
+    layer.className = 'de-overlay';
+    layer.style.position = 'absolute';
+    layer.style.left = '0';
+    layer.style.top = '0';
+    layer.style.width = '100%';
+    layer.style.height = '100%';
+    layer.style.pointerEvents = 'none';
+    overlay = layer;
+    paintFragments(el, page.fragments);
+    paintFragments(el, [...page.header, ...page.footer, ...page.footnotes]);
+    overlay = null;
+    if (layer.childElementCount > 0) el.appendChild(layer);
+    root.appendChild(el);
+    pages.push(el);
+  }
+  return { pages, lineCount, controlCount };
+}

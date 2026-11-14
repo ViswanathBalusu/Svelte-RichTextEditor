@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "The measurement code that also runs in Node.js and in workers: lib ES2023 and no ambient types, like the universal packages (FND-004). WebAssembly is reached through the structural types in src/wasm.ts. Browser pages are checked by tsconfig.browser.json, tests and scripts by tsconfig.test.json.",
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/browser/**"]
+}

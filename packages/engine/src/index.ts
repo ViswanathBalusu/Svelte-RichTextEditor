@@ -1,0 +1,85 @@
+/**
+ * `@docedit/engine`: the editing core (02 §5) with its web view. The element and the shell use
+ * `EditorCore`; the shell sees only the `CoreApi` part of it (packages/ui/src/core-api.ts).
+ *
+ * - `EditorCore`: the document API (FE-026), the read views (FE-023, FE-024), the sync client
+ *   hosted in the core (FE-033; SYN-017 to SYN-020), and the body view and sub-editors.
+ * - `@docedit/engine/headless`: the same core without the view, for Node.js and workers (FE-121).
+ * - `@docedit/engine/testing`: instrumentation for tests and the spike pages; not product API.
+ */
+export { EditorCore } from './view/web.ts';
+export {
+  CDM_VERSION,
+  DocumentCore,
+  ENGINE,
+  UnsupportedDocumentError,
+  capabilities,
+  type CoreConfig,
+  type TransactionInfo,
+} from './core.ts';
+export { REMOTE } from './meta.ts';
+export type {
+  AccessLimit,
+  AccessSummary,
+  AttachOptions,
+  AuthoringCommandName,
+  Capability,
+  CellRectArgs,
+  CdmEnvelope,
+  CdmFragment,
+  CdmJsonNode,
+  CitationItemArgs,
+  CommandArgs,
+  CommandName,
+  CommandState,
+  CommandUnavailable,
+  ConnectionState,
+  CoreLabels,
+  CoreProblem,
+  CoreQueryName,
+  DocumentApi,
+  EditMode,
+  FieldArgs,
+  FindResult,
+  FindState,
+  InsertResult,
+  ModeState,
+  PageSetupArgs,
+  ReplaceReport,
+  StatusSummary,
+  OutlineItem,
+  PanelInfo,
+  PresencePeerInfo,
+  PresencePortLike,
+  RecoveredEdits,
+  ShellCounts,
+  RecoveredItem,
+  RefusalNotice,
+  RefusalReason,
+  SaveState,
+  SelectionScope,
+  SelectionSummary,
+  StyleInfo,
+  SuggestionModeInfo,
+  SyncSnapshot,
+  SyncSummary,
+} from './api.ts';
+export type {
+  AssetsPort,
+  ImagePasteResult,
+  PastedImage,
+  StoredImage,
+  UploadOutcome,
+} from './image-paste.ts';
+export type { ClipboardInput } from './clipboard.ts';
+export { ReadValue, ViewHub, type ReadView, type Schedule } from './read-value.ts';
+export { editingSchema, definitionFor, headingLevel, type FootnoteModel } from './schema.ts';
+export type { SelectionShim } from './view-support.ts';
+export type { Clock, ConnectionStatus } from './sync/session.ts';
+export type { Discarded } from './sync/state.ts';
+export {
+  type JournalContents,
+  type JournalEntry,
+  type JournalPort,
+  memoryJournal,
+} from './sync/journal.ts';

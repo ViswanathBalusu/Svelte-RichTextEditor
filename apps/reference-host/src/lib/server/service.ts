@@ -1,0 +1,202 @@
+/**
+ * The host's calls to the document service's control plane (05 §6) with its service credential
+ * (05 §3.2; PRO-012). Only the host's server makes these calls; the page and the editor never see
+ * the credential. A call made for a person names them with `DEP-Actor` (13 §11.3), so that the
+ * service's history and audit name the person rather than the host.
+ */
+import type {
+  CreateDocumentRequest,
+  DocumentResource,
+  ExportJob,
+  Grants,
+  ProblemDetails,
+  RegionGrant,
+  RegionInfo,
+  TokenRequest,
+  TokenResponse,
+} from '@docedit/protocol';
+
+/** A refusal or failure of the service, with its problem details (05 §6.1). */
+export class ServiceError extends Error {
+  override name = 'ServiceError';
+  readonly status: number;
+  /** The registry code (05 §5.8), or `unavailable` when the service could not be reached. */
+  readonly code: string;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export interface Page<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+export interface ServiceClientOptions {
+  /** The REST base (`rest` of the discovery document). */
+  rest: string;
+  /** The service credential. */
+  apiKey: string;
+  fetch?: typeof fetch;
+}
+
+/** 05 §6.1: list resources return at most 200 items per page. */
+export const MAX_PAGE = 200;
+
+export class ServiceClient {
+  readonly #rest: string;
+  readonly #apiKey: string;
+  readonly #fetch: typeof fetch;
+
+  constructor(opts: ServiceClientOptions) {
+    this.#rest = opts.rest.replace(/\/+$/, '');
+    this.#apiKey = opts.apiKey;
+    this.#fetch = opts.fetch ?? fetch;
+  }
+
+  async #call<T>(
+    method: string,
+    path: string,
+    opts: { body?: unknown; headers?: Record<string, string>; actor?: string } = {},
+  ): Promise<{ status: number; body: T; etag: string | null }> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.#apiKey}`,
+      Accept: 'application/json',
+      ...opts.headers,
+    };
+    if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+    if (opts.actor !== undefined) headers['DEP-Actor'] = opts.actor;
+    let res: Response;
+    try {
+      res = await this.#fetch(`${this.#rest}${path}`, {
+        method,
+        headers,
+        ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+      });
+    } catch (e) {
+      throw new ServiceError(
+        0,
+        'unavailable',
+        `the document service is unreachable (${e instanceof Error ? e.name : 'error'})`,
+      );
+    }
+    const text = await res.text();
+    const body = text ? (JSON.parse(text) as unknown) : null;
+    if (!res.ok) {
+      const p = (body ?? {}) as Partial<ProblemDetails>;
+      // The problem's detail names rules and identifiers only, never content (BE-088).
+      throw new ServiceError(
+        res.status,
+        p.code ?? 'internal',
+        `${method} ${path.split('?')[0]}: ${res.status} ${p.code ?? ''} ${p.detail ?? ''}`.trim(),
+      );
+    }
+    return { status: res.status, body: body as T, etag: res.headers.get('etag') };
+  }
+
+  /** `POST /tokens` (05 §3.1 service-minted; PRO-011). */
+  async mintToken(request: TokenRequest): Promise<TokenResponse> {
+    return (await this.#call<TokenResponse>('POST', '/tokens', { body: request })).body;
+  }
+
+  /** `POST /sessions/revoke` (05 §3.3): the user's tokens issued before now stop working. */
+  async revoke(sub: string, doc?: string): Promise<void> {
+    await this.#call('POST', '/sessions/revoke', { body: doc ? { sub, doc } : { sub } });
+  }
+
+  /** `POST /documents` with an idempotency key, so that a retried creation creates one document. */
+  async createDocument(
+    request: CreateDocumentRequest,
+    idempotencyKey: string,
+    actor?: string,
+  ): Promise<DocumentResource> {
+    return (
+      await this.#call<DocumentResource>('POST', '/documents', {
+        body: request,
+        headers: { 'Idempotency-Key': idempotencyKey },
+        ...(actor !== undefined ? { actor } : {}),
+      })
+    ).body;
+  }
+
+  /** `GET /documents`: one page, optionally filtered by `externalId` (05 §6.2; UX-094). */
+  async listDocuments(
+    query: { externalId?: string; cursor?: string; limit?: number } = {},
+  ): Promise<Page<DocumentResource>> {
+    const q = new URLSearchParams();
+    if (query.externalId !== undefined) q.set('externalId', query.externalId);
+    if (query.cursor !== undefined) q.set('cursor', query.cursor);
+    q.set('limit', String(Math.min(query.limit ?? MAX_PAGE, MAX_PAGE)));
+    return (await this.#call<Page<DocumentResource>>('GET', `/documents?${q}`)).body;
+  }
+
+  /** The document the host created with `externalId`, or null. */
+  async findByExternalId(externalId: string): Promise<DocumentResource | null> {
+    const page = await this.listDocuments({ externalId, limit: MAX_PAGE });
+    return page.items.find((d) => d.externalId === externalId) ?? null;
+  }
+
+  async getDocument(id: string): Promise<{ doc: DocumentResource; etag: string }> {
+    const r = await this.#call<DocumentResource>('GET', `/documents/${encodeURIComponent(id)}`);
+    return { doc: r.body, etag: r.etag ?? '' };
+  }
+
+  /** `PATCH /documents/{id}` with `If-Match` (05 §6.1). */
+  async updateDocument(
+    id: string,
+    patch: { title?: string | null },
+    etag: string,
+    actor?: string,
+  ): Promise<DocumentResource> {
+    return (
+      await this.#call<DocumentResource>('PATCH', `/documents/${encodeURIComponent(id)}`, {
+        body: patch,
+        headers: { 'If-Match': etag },
+        ...(actor !== undefined ? { actor } : {}),
+      })
+    ).body;
+  }
+
+  /** `DELETE /documents/{id}`: a soft delete; the purge follows the retention policy (05 §6.2). */
+  async deleteDocument(id: string, actor?: string): Promise<void> {
+    await this.#call('DELETE', `/documents/${encodeURIComponent(id)}`, {
+      ...(actor !== undefined ? { actor } : {}),
+    });
+  }
+
+  async getGrants(id: string): Promise<{ grants: Grants; etag: string }> {
+    const r = await this.#call<Grants>('GET', `/documents/${encodeURIComponent(id)}/grants`);
+    return { grants: r.body, etag: r.etag ?? '' };
+  }
+
+  /** `PATCH /documents/{id}/grants`: the list replaces the grants (05 §6.2; 07 §9). */
+  async replaceGrants(
+    id: string,
+    grants: readonly RegionGrant[],
+    etag: string,
+    actor?: string,
+  ): Promise<Grants> {
+    return (
+      await this.#call<Grants>('PATCH', `/documents/${encodeURIComponent(id)}/grants`, {
+        body: { grants },
+        headers: { 'If-Match': etag },
+        ...(actor !== undefined ? { actor } : {}),
+      })
+    ).body;
+  }
+
+  async listRegions(id: string): Promise<RegionInfo[]> {
+    return (
+      await this.#call<Page<RegionInfo>>(
+        'GET',
+        `/documents/${encodeURIComponent(id)}/regions?limit=${MAX_PAGE}`,
+      )
+    ).body.items;
+  }
+
+  async getExport(jobId: string): Promise<ExportJob> {
+    return (await this.#call<ExportJob>('GET', `/exports/${encodeURIComponent(jobId)}`)).body;
+  }
+}

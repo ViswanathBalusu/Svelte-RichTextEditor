@@ -1,0 +1,33 @@
+{
+  "//": "Append-only ledger of house class releases (EXP-015 criterion 4). Each entry is a released class version with the SHA-256 of each class file as released. Never edit or remove an entry: a change to docedit.cls or docedit.lua is released by raising CLASS_VERSION (src/convert.ts) and the ProvidesClass version, and appending a new entry. Checked by src/exp-015-class-release.test.ts.",
+  "releases": [
+    {
+      "version": "0.2.0",
+      "files": {
+        "docedit.cls": "0afc7b146abe479f53cbfe381e2dabe2ad11da057edeab394da174a3aad5e19c",
+        "docedit.lua": "21997473fe6544ddce2547da1e8ac6aba710043f2755cf6a86a5224fd6532de9"
+      }
+    },
+    {
+      "version": "0.2.1",
+      "files": {
+        "docedit.cls": "cdc5a1f5e7294c8ca1e29c08724c2c23f7fb3e0d2e250bd5a4bf4fee6f8d81a2",
+        "docedit.lua": "d7854235236a0f7a7d16bf26e79c22addcd1fe0e2e4d6e99c44a2462d1087e7a"
+      }
+    },
+    {
+      "version": "0.2.2",
+      "files": {
+        "docedit.cls": "11e981ae23a067762945d7f60a3a4f6ae1899a1231dcc65e5aa0dba94a16c35c",
+        "docedit.lua": "ff6c284b46c0103dd0a3ff8bdb4ec051ab52186cb3cd796376adf848704ad53f"
+      }
+    },
+    {
+      "version": "0.2.3",
+      "files": {
+        "docedit.cls": "691850ae654760ce65f62a002afb8655deac979a43807ec05e1cde9ce16524c8",
+        "docedit.lua": "ff6c284b46c0103dd0a3ff8bdb4ec051ab52186cb3cd796376adf848704ad53f"
+      }
+    }
+  ]
+}

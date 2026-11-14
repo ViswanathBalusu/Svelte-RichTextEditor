@@ -1,0 +1,76 @@
+{
+  "steps": {
+    "fromSeq": 0,
+    "toSeq": 2,
+    "method": "steps",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "modified",
+        "blockId": "pIntro0000000001",
+        "type": "paragraph",
+        "spans": [
+          {
+            "op": "insert",
+            "at": 5,
+            "text": "very ",
+            "user": "bob",
+            "seq": 1
+          }
+        ]
+      },
+      {
+        "kind": "modified",
+        "blockId": "pTerms000000001A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "spans": [
+          {
+            "op": "delete",
+            "at": 0,
+            "text": "Rent ",
+            "user": "carol",
+            "seq": 2
+          }
+        ]
+      }
+    ]
+  },
+  "aligned": {
+    "fromSeq": 0,
+    "toSeq": 2,
+    "method": "aligned",
+    "granularity": "word",
+    "changes": [
+      {
+        "kind": "modified",
+        "blockId": "pIntro0000000001",
+        "type": "paragraph",
+        "spans": [
+          {
+            "op": "insert",
+            "at": 5,
+            "text": "very ",
+            "user": "bob",
+            "seq": 1
+          }
+        ]
+      },
+      {
+        "kind": "modified",
+        "blockId": "pTerms000000001A",
+        "type": "paragraph",
+        "path": ["rTerms000000000A"],
+        "region": "rTerms000000000A",
+        "spans": [
+          {
+            "op": "delete",
+            "at": 0,
+            "text": "Rent "
+          }
+        ]
+      }
+    ]
+  }
+}

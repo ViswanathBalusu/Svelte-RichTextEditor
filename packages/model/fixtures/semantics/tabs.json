@@ -1,0 +1,177 @@
+{
+  "rule": "tabs",
+  "spec": "03 §4.5, §7 (Tabs)",
+  "decision": "docs/adr/0032-layout-semantics.md",
+  "implementation": "nextTabStop, placeTab and decimalIndex in packages/model/src/spacing/tabs.ts",
+  "description": "Tab stops measured from the left margin: explicit stops, the hanging-indent stop, default stops, alignment of the segment after the tab, and leaders.",
+  "format": "`tabs` are the paragraph's resolved stops in position order, `indentLeft` and `indentFirstLine` its indents (0 when absent), `defaultTabStop` the setting (720 when absent), `x` the position of the tab in twips from the left margin, and `segment` the text after it (its width and, for a decimal stop, the width before the first separator). `expected` gives the stop (`position`, `align`, `leader`, `source`: stop, hanging or default), where the segment starts (`start`) and, for decimal stops, the index of the separator in the segment's `text` (`decimalIndex`).",
+  "defaultTabStop": 720,
+  "cases": [
+    {
+      "id": "left-stop",
+      "description": "A left stop starts the segment at the stop.",
+      "tabs": [{ "position": 2880, "align": "left", "leader": "none" }],
+      "x": 100,
+      "segment": { "width": 500 },
+      "expected": {
+        "position": 2880,
+        "align": "left",
+        "leader": "none",
+        "source": "stop",
+        "start": 2880
+      }
+    },
+    {
+      "id": "right-stop-with-leader",
+      "description": "A right stop ends the segment at the stop; the leader fills from the current position.",
+      "tabs": [{ "position": 9026, "align": "right", "leader": "dot" }],
+      "x": 1000,
+      "segment": { "width": 500 },
+      "expected": {
+        "position": 9026,
+        "align": "right",
+        "leader": "dot",
+        "source": "stop",
+        "start": 8526
+      }
+    },
+    {
+      "id": "center-stop",
+      "description": "A centre stop centres the segment on the stop (half the width rounded down).",
+      "tabs": [{ "position": 4513, "align": "center", "leader": "none" }],
+      "x": 0,
+      "segment": { "width": 1001 },
+      "expected": {
+        "position": 4513,
+        "align": "center",
+        "leader": "none",
+        "source": "stop",
+        "start": 4013
+      }
+    },
+    {
+      "id": "decimal-stop-with-leader",
+      "description": "A decimal stop puts the first decimal separator at the stop (\"1234.56\": 400 twips before the separator).",
+      "tabs": [{ "position": 6000, "align": "decimal", "leader": "dot" }],
+      "x": 2000,
+      "segment": { "text": "1234.56", "width": 700, "beforeDecimal": 400 },
+      "expected": {
+        "position": 6000,
+        "align": "decimal",
+        "leader": "dot",
+        "source": "stop",
+        "start": 5600,
+        "decimalIndex": 4
+      }
+    },
+    {
+      "id": "decimal-stop-without-separator",
+      "description": "A segment without a decimal separator ends at a decimal stop, as at a right stop.",
+      "tabs": [{ "position": 6000, "align": "decimal", "leader": "none" }],
+      "x": 2000,
+      "segment": { "text": "1234", "width": 400, "beforeDecimal": 400 },
+      "expected": {
+        "position": 6000,
+        "align": "decimal",
+        "leader": "none",
+        "source": "stop",
+        "start": 5600,
+        "decimalIndex": 4
+      }
+    },
+    {
+      "id": "segment-too-wide",
+      "description": "A segment that does not fit before a right stop starts at the current position.",
+      "tabs": [{ "position": 2000, "align": "right", "leader": "none" }],
+      "x": 1500,
+      "segment": { "width": 800 },
+      "expected": {
+        "position": 2000,
+        "align": "right",
+        "leader": "none",
+        "source": "stop",
+        "start": 1500
+      }
+    },
+    {
+      "id": "default-stops",
+      "description": "Without stops, a tab goes to the next multiple of defaultTabStop strictly to the right.",
+      "tabs": [],
+      "x": 100,
+      "expected": { "position": 720, "align": "left", "leader": "none", "source": "default" }
+    },
+    {
+      "id": "default-stop-at-a-multiple",
+      "description": "At a multiple of defaultTabStop, a tab goes to the next one.",
+      "tabs": [],
+      "x": 720,
+      "expected": { "position": 1440, "source": "default" }
+    },
+    {
+      "id": "default-stop-just-before-a-multiple",
+      "description": "One twip before a multiple, a tab goes to that multiple.",
+      "tabs": [],
+      "x": 1439,
+      "expected": { "position": 1440, "source": "default" }
+    },
+    {
+      "id": "explicit-stop-clears-default-stops",
+      "description": "Default stops to the left of an explicit stop are cleared.",
+      "tabs": [{ "position": 3000, "align": "left", "leader": "none" }],
+      "x": 100,
+      "expected": { "position": 3000, "source": "stop" }
+    },
+    {
+      "id": "default-stops-after-the-last-stop",
+      "description": "After the last explicit stop, the default stops continue at multiples from the margin.",
+      "tabs": [{ "position": 3000, "align": "left", "leader": "none" }],
+      "x": 3100,
+      "expected": { "position": 3600, "source": "default" }
+    },
+    {
+      "id": "hanging-indent-is-a-stop",
+      "description": "With a hanging indent, the left indent is a left stop; at a tie it wins over the default stop.",
+      "tabs": [],
+      "indentLeft": 720,
+      "indentFirstLine": -360,
+      "x": 560,
+      "expected": { "position": 720, "align": "left", "leader": "none", "source": "hanging" }
+    },
+    {
+      "id": "hanging-indent-does-not-clear-default-stops",
+      "description": "The hanging-indent stop does not clear the default stops before it.",
+      "tabs": [],
+      "indentLeft": 2880,
+      "indentFirstLine": -2880,
+      "x": 100,
+      "expected": { "position": 720, "source": "default" }
+    },
+    {
+      "id": "label-wider-than-the-hanging-indent",
+      "description": "A label that ends beyond the hanging indent goes to the next default stop.",
+      "tabs": [],
+      "indentLeft": 720,
+      "indentFirstLine": -360,
+      "x": 800,
+      "expected": { "position": 1440, "source": "default" }
+    },
+    {
+      "id": "measured-from-the-left-margin",
+      "description": "Stops are measured from the left margin, not from the indent: a stop at 720 lies left of a line starting at 1440.",
+      "tabs": [{ "position": 720, "align": "left", "leader": "none" }],
+      "indentLeft": 1440,
+      "indentFirstLine": 0,
+      "x": 1440,
+      "expected": { "position": 2160, "source": "default" }
+    },
+    {
+      "id": "explicit-stop-before-the-hanging-indent",
+      "description": "An explicit stop nearer than the hanging-indent stop wins.",
+      "tabs": [{ "position": 500, "align": "left", "leader": "none" }],
+      "indentLeft": 720,
+      "indentFirstLine": -360,
+      "x": 400,
+      "expected": { "position": 500, "source": "stop" }
+    }
+  ]
+}

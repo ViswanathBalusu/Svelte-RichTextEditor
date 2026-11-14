@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "Universal package (02 §9.1; FND-004): lib ES2023 and no ambient types, so a DOM or Node.js API fails the type check. Text measurement reaches the engine only through the injected interface in src/measure.ts.",
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

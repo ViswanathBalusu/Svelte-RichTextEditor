@@ -1,0 +1,29 @@
+{
+  "$comment": "Licence gate policy (FND-011), from docs/research/2026-11-06-borrow-list.md section 15. Runtime and service dependencies must match `allow`; fonts may also use `fontsOnly`, data files `dataOnly`. Anything in `deny`, or anything not allowed, fails the build unless licences/exceptions.json records a decision with a reason and an expiry.",
+  "allow": [
+    "MIT",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Apache-2.0",
+    "0BSD",
+    "Zlib",
+    "BlueOak-1.0.0",
+    "Unicode-3.0",
+    "PostgreSQL"
+  ],
+  "fontsOnly": ["OFL-1.1"],
+  "dataOnly": ["CC0-1.0"],
+  "deny": [
+    "GPL",
+    "LGPL",
+    "AGPL",
+    "SSPL",
+    "RSAL",
+    "BUSL",
+    "CC-BY-SA",
+    "EigenPal",
+    "Commons-Clause",
+    "Elastic"
+  ]
+}

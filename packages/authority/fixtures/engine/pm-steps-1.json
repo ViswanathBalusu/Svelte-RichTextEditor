@@ -1,0 +1,35 @@
+{
+  "engine": "pm-steps/1",
+  "spec": "04 §4; SYN-002",
+  "description": "Step semantics of the server-authoritative engine: the JSON of Step.toJSON() in the release of prosemirror-transform named here, applied against the generated CDM ProseMirror schema named here. A release that changes any fixture output is a new engine identifier.",
+  "library": { "name": "prosemirror-transform", "version": "1.12.5" },
+  "alsoPinned": [
+    {
+      "name": "prosemirror-model",
+      "version": "1.25.12",
+      "why": "Applying a step runs the replace algorithm and the content checks of prosemirror-model."
+    }
+  ],
+  "schema": {
+    "cdm": 1,
+    "status": "draft",
+    "artifact": "spec/cdm/cdm-1.prosemirror.json",
+    "sha256": "114aaf8efd1fcdc419226436613a8613f2954bfec5f9e393a714e3a66b841ca5"
+  },
+  "stepTypes": [
+    "replace",
+    "replaceAround",
+    "addMark",
+    "removeMark",
+    "addNodeMark",
+    "removeNodeMark",
+    "attr"
+  ],
+  "fixtures": {
+    "apply": "golden/apply.json",
+    "map": "golden/map.json",
+    "rebase": "golden/rebase.json"
+  },
+  "comparison": "Documents are compared in the CDM canonical form (03 §2) and by the SHA-256 of its RFC 8785 text; steps by their JSON. A failing step is identified by its index.",
+  "generator": "packages/authority/scripts/generate.ts"
+}
