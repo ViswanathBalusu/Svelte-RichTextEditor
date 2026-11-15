@@ -231,9 +231,17 @@ export class Session {
     if (this.#state === 'closed') return;
     // BE-030: before `hello` is accepted, frames count against the address; no token is verified
     // for an address over its limit.
-    if (this.#state === 'hello' && this.#deps.limits.frame(this.#deps.address, Date.now()) > 0) {
+    const addressWaitMs =
+      this.#state === 'hello' ? this.#deps.limits.frame(this.#deps.address, Date.now()) : 0;
+    if (addressWaitMs > 0) {
       this.#deps.metrics.rateLimited.inc({ scope: 'address' });
-      return this.#fatal('rate_limited', 'too many frames from this address');
+      // `rate_limited` always says when to try again (05 §5.8; PRO-038 criterion 3).
+      return this.#fatal(
+        'rate_limited',
+        'too many frames from this address',
+        undefined,
+        Math.max(1, Math.ceil(addressWaitMs)),
+      );
     }
     if (isBinary) return this.#fatal('bad_message', 'pm-steps/1 uses no binary frames');
     const bytes = Array.isArray(data)
@@ -337,7 +345,12 @@ export class Session {
     }
     this.#deps.metrics.rateLimited.inc({ tenant: id.tenant, scope: shared.scope });
     if (++this.#refusals >= this.#deps.settings.rates.closeAfterRefusals) {
-      this.#fatal('rate_limited', 'too many messages');
+      this.#fatal(
+        'rate_limited',
+        'too many messages',
+        undefined,
+        Math.max(1, Math.ceil(shared.waitMs)),
+      );
       return false;
     }
     const retryAfterMs = Math.max(1, shared.waitMs);
@@ -954,12 +967,18 @@ export class Session {
   }
 
   /** A fatal `error`, then the close code it implies (05 §5.7; D25). */
-  #fatal(code: SocketErrorCode, message: string, re?: string): void {
+  #fatal(code: SocketErrorCode, message: string, re?: string, retryAfterMs?: number): void {
     if (this.#state === 'closed') return;
     this.#send({
       t: 'error',
       ...(re !== undefined ? { re } : {}),
-      d: { code, message, retryable: retryable(code), fatal: true },
+      d: {
+        code,
+        message,
+        retryable: retryable(code),
+        ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+        fatal: true,
+      },
     });
     this.#close(closeCodeOf(code), message);
   }

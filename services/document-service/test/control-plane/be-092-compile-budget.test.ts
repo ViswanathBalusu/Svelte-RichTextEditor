@@ -2,6 +2,7 @@
 // compile-minute budget is spent is refused with `quota_exceeded` and a `Retry-After` equal to the
 // seconds to the next UTC month, and a job already running when the budget is spent is not killed.
 // The export and preview budgets are the EXP-009 ledger (src/control-plane/exp-009-compile-budget.ts).
+import { checkProblem } from '@docedit/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EXPORT_KIND } from '../../src/control-plane/exports.ts';
 import { secondsToNextMonth } from '../../src/control-plane/exp-009-compile-budget.ts';
@@ -85,6 +86,14 @@ describe('BE-092 compile-minute budget over HTTP (memory)', () => {
     expect(refused.status).toBe(429);
     expect(refused.json.code).toBe('quota_exceeded');
     const retryAfter = Number(refused.headers.get('retry-after'));
+    // PRO-038 criterion 3: a registry code on its surface, with the retry hint.
+    expect(
+      checkProblem({
+        surface: 'rest',
+        code: refused.json.code,
+        retryAfterHeader: refused.headers.get('retry-after') ?? undefined,
+      }),
+    ).toEqual([]);
     // The clock may tick between the request and the check: allow the seconds it took.
     const expectedLow = secondsToNextMonth(after);
     const expectedHigh = secondsToNextMonth(before);

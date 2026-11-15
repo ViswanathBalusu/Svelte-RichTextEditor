@@ -8,6 +8,7 @@
 import { Reassembler, depCodec, type DecodeResult, type ServerMessage } from '@docedit/protocol';
 import WebSocket from 'ws';
 import { KitFailure, show } from './assert.ts';
+import { messageProblems } from './registry-oracle.ts';
 
 const codec = depCodec();
 
@@ -181,6 +182,9 @@ export class Wire {
       }
       return;
     }
+    // A problem outside the error registry, or without its retry hint, is a defect of the server
+    // (PRO-038); the message is still handed to the scenario.
+    this.problems.push(...messageProblems(m));
     this.messages.push(m);
   }
 
