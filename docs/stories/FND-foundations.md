@@ -44,6 +44,16 @@ As a maintainer, I want every change built and tested in Node.js and in each sup
 - [ ] Test results, traces and screenshots of failures are kept as build artifacts.
 - [ ] The pipeline's duration is reported, so that slow suites are visible.
 
+**Notes:** No criterion is ticked, because the pipeline has never run: this repository has no Git remote (`git remote -v` is empty on 2026-11-15), so there is no hosted CI, no pull request and no branch protection rule. Each criterion asks for a CI run, and a workflow file that has not run is a plan. What exists, and what a first hosted run has to show (lane w5, 2026-11-15):
+
+- (1) `.github/workflows/ci.yml`, job `check`, runs `pnpm lint`, `pnpm typecheck`, `pnpm test` (Node.js, no browser) and `pnpm build` on every pull request. "Must pass before merge" also needs the branch protection rule, which is set on the host, not in the repository.
+- (2) Job `browsers` runs the universal tests, and the new job `e2e` runs the Playwright suites of `packages/element` and `packages/ui`, in Chromium, Edge, Firefox and WebKit (WebKit on macOS stands in for Safari; Safari itself is not run). The minimum versions are pinned once, as `BROWSER_MINIMUMS` in `packages/element/scripts/vite-configs.ts` (the build target of every component build; `packages/element/test/browser-support.test.ts`). The new `scripts/ci/browser-version.ts` launches the browser a job is about to test and fails the job when it is older than that minimum. Run locally on Windows 11 on 2026-11-15 with Playwright 1.65.0 it reported Chromium 158, Edge 157, Firefox 159 and WebKit 27.2, all above the minimums. The suites run on Playwright's current engines, never on the minimum versions themselves; whether a run on the exact minimums is wanted is open (the comment in the `browsers` job names a scheduled compatibility run that does not exist).
+- (3) The axe checks are inside those suites (9 spec files use `@axe-core/playwright`), and a violation fails its test. Checked locally in the form the job uses: `pnpm exec playwright test -c packages/ui/playwright.config.ts --project=chromium axe`, 14 passed, Chromium, Windows 11, 2026-11-15. "New violations" is read as any violation: there is no baseline of accepted ones.
+- (4) Job `e2e` uploads `packages/<suite>/test-results/` on every outcome (the JSON results, and the traces and screenshots Playwright keeps for failed tests); `check` uploads the JUnit file; `browsers` uploads on failure.
+- (5) Job `summary` writes the duration of every job to the run's summary, and now waits for `e2e` too.
+- `scripts/ci/browser-version.test.ts` checks the version gate and that `ci.yml` keeps these jobs, commands and artifact steps. It reads the workflow file; it does not run it.
+- The suites of `apps/reference-host` and `tests/V-FE-113-128` need the demo stack or PostgreSQL and are not in the `e2e` job.
+
 ### FND-003 Shared conventions for identifiers, time, lengths, numbers, colours and errors
 
 | Type | Phase | Size | Priority | Persona |
