@@ -7,6 +7,7 @@ import { RateLimits } from '../../src/data-plane/limits.ts';
 import { DEFAULT_RATES } from '../../src/data-plane/settings.ts';
 import { startHarness, type Harness } from './support.ts';
 import { uuid7 } from '@docedit/model';
+import { checkProblem } from '@docedit/protocol';
 
 describe('REST rate limit by user (BE-030 criterion 2, REST half)', () => {
   it('answers rate_limited with Retry-After over the user bucket, and leaves other users alone', async () => {
@@ -29,6 +30,14 @@ describe('REST rate limit by user (BE-030 criterion 2, REST half)', () => {
       const retryAfter = Number(third.headers.get('Retry-After'));
       expect(Number.isInteger(retryAfter)).toBe(true);
       expect(retryAfter).toBeGreaterThanOrEqual(1);
+      // PRO-038 criterion 3: a registry code on its surface, with the retry hint.
+      expect(
+        checkProblem({
+          surface: 'rest',
+          code: third.json.code,
+          retryAfterHeader: third.headers.get('Retry-After') ?? undefined,
+        }),
+      ).toEqual([]);
 
       // Another user of the same tenant has her own bucket.
       const bob = h.userToken({ [doc]: 'viewer' }, { sub: `bob-${uuid7()}` });

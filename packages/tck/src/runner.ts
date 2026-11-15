@@ -104,8 +104,10 @@ export async function runScenario(
     if (problems.length) {
       outcome = 'failed';
       failure = {
-        message: 'the server sent frames that are not valid DEP messages',
-        expected: 'every frame one valid envelope with a valid payload (05 §4, §5)',
+        message:
+          'the server sent frames that are not valid DEP messages, or problems outside the error registry',
+        expected:
+          'every frame one valid envelope with a valid payload (05 §4, §5); every problem a registry code on its surface, with its retry hint (05 §5.8)',
         received: problems.slice(0, 4).join(' | '),
       };
     }

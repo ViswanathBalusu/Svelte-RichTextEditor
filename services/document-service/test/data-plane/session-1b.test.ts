@@ -3,7 +3,7 @@
 // (BE-027), rate limits (BE-030), chunking (PRO-018), keep-alive (PRO-019), closing channels and
 // draining (PRO-024) and traces (PRO-044, BE-087).
 import { uuid7 } from '@docedit/model';
-import { chunkMessage } from '@docedit/protocol';
+import { checkProblem, chunkMessage } from '@docedit/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { baseDoc, posInside } from '../../../../packages/authority/test/fixtures.ts';
 import type { Span } from '../../src/seams.ts';
@@ -190,6 +190,14 @@ describe('rate limits (BE-030)', () => {
     const c = await DepClient.connect(p.url);
     c.send({ t: 'hello', id: 'h', d: {} });
     expect((await c.closed).code).toBe(4429);
+    // PRO-038 criterion 3: the fatal error says when to try again.
+    const e = c.log.find((m) => m.t === 'error')!;
+    expect(e.d).toMatchObject({ code: 'rate_limited', fatal: true, retryable: true });
+    expect(Number.isSafeInteger(e.d!['retryAfterMs'])).toBe(true);
+    expect(e.d!['retryAfterMs']).toBeGreaterThan(0);
+    expect(
+      checkProblem({ surface: 'socket', code: e.d!['code'], retryAfterMs: e.d!['retryAfterMs'] }),
+    ).toEqual([]);
   });
 
   it('answers messages over the connection limit with rate_limited and retryAfterMs, and closes after repeated refusals', async () => {
@@ -225,6 +233,16 @@ describe('rate limits (BE-030)', () => {
       d: { seq: 1, state: { selection: { anchor: 1, head: 1 }, scope: 'body', status: 'active' } },
     });
     expect((await c.closed).code).toBe(4429);
+    // PRO-038 criterion 3: each of the three refusals carries retryAfterMs, the fatal one too.
+    const last = c.log.filter((m) => m.t === 'error').at(-1)!;
+    expect(last.d).toMatchObject({ code: 'rate_limited', fatal: true });
+    expect(
+      checkProblem({ surface: 'sync', code: r.d!['code'], retryAfterMs: r.d!['retryAfterMs'] }),
+    ).toEqual([]);
+    for (const m of [e, last])
+      expect(
+        checkProblem({ surface: 'socket', code: m.d!['code'], retryAfterMs: m.d!['retryAfterMs'] }),
+      ).toEqual([]);
   });
 
   it('holds one tenant at its limit without slowing another', async () => {

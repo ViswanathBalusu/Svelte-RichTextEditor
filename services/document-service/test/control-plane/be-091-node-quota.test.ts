@@ -15,6 +15,7 @@ import { DepClient, insertText } from '../data-plane/client.ts';
 import { MemoryQuotaStore } from '../../src/control-plane/quotas.ts';
 import { documentWithRegions, startHarness, type Harness } from './support.ts';
 import { cdmSchema } from '@docedit/model/prosemirror';
+import { checkProblem } from '@docedit/protocol';
 
 const METRICS_TOKEN = 'be-091-node-quota-token';
 const INTRO = 'pIntro0000000001';
@@ -69,6 +70,14 @@ describe('BE-091 live-use quotas on a running node', () => {
     expect(refused.t).toBe('error');
     expect(refused.d?.code).toBe('quota_exceeded');
     expect(refused.d?.retryAfterMs).toBeGreaterThan(0);
+    // PRO-038 criterion 3: a registry code on its surface, with the retry hint.
+    expect(
+      checkProblem({
+        surface: 'socket',
+        code: refused.d?.code,
+        retryAfterMs: refused.d?.retryAfterMs,
+      }),
+    ).toEqual([]);
 
     first.terminate();
     // The released connection is not counted any more: a new session is admitted.
@@ -96,6 +105,14 @@ describe('BE-091 live-use quotas on a running node', () => {
     expect(refused.t).toBe('sync.reject');
     expect(refused.d?.code).toBe('quota_exceeded');
     expect(refused.d?.retryAfterMs).toBeGreaterThan(0);
+    // PRO-038 criterion 3: a registry code on its surface, with the retry hint.
+    expect(
+      checkProblem({
+        surface: 'sync',
+        code: refused.d?.code,
+        retryAfterMs: refused.d?.retryAfterMs,
+      }),
+    ).toEqual([]);
 
     // A quota changed in the store applies to the next commit (BE-091 criterion 3, in-process).
     quotas.set(h.tenant, 'commitRate', 5);

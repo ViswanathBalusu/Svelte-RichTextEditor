@@ -17,6 +17,7 @@ import { KitFailure, KitSkip, isObject, show } from './assert.ts';
 import { discoveryUrl, type ResolvedConfig } from './config.ts';
 import { Observed, operationOf } from './coverage.ts';
 import { contractDocument } from './documents.ts';
+import { responseProblems } from './registry-oracle.ts';
 import { Http, ServiceClient, expectStatus, type GrantSpec } from './rest.ts';
 import { Wire, type WireOptions } from './wire.ts';
 
@@ -133,6 +134,8 @@ export class ScenarioContext {
   readonly notes: string[] = [];
   readonly observed = new Observed();
   readonly wires: Wire[] = [];
+  /** REST problem documents the error registry does not allow (PRO-038). */
+  readonly restProblems: string[] = [];
   private readonly cleanups: Array<() => Promise<void> | void> = [];
   private users = 0;
   private readonly stopObserving: () => void;
@@ -140,13 +143,15 @@ export class ScenarioContext {
   constructor(target: Target, scenario: ScenarioRef) {
     this.target = target;
     this.scenario = scenario;
-    this.stopObserving = target.http.observe((r) =>
+    this.stopObserving = target.http.observe((r) => {
       this.observed.operation(
         operationOf(r.method, r.url, target.discovery.rest),
         r.status,
         r.json,
-      ),
-    );
+      );
+      // Every problem document is checked against the error registry (PRO-038).
+      this.restProblems.push(...responseProblems(r, target.discovery.rest));
+    });
   }
 
   get config(): ResolvedConfig {
@@ -262,9 +267,15 @@ export class ScenarioContext {
     this.observed.closeCodes.add(code);
   }
 
-  /** Every frame the server sent on the scenario's connections that is not a valid message. */
+  /**
+   * Every frame the server sent on the scenario's connections that is not a valid message, and
+   * every problem, on the socket or over REST, that the error registry does not allow (PRO-038).
+   */
   problems(): string[] {
-    return this.wires.flatMap((w) => w.problems.map((p) => `${w.label}: ${p}`));
+    return [
+      ...this.wires.flatMap((w) => w.problems.map((p) => `${w.label}: ${p}`)),
+      ...this.restProblems.map((p) => `rest: ${p}`),
+    ];
   }
 
   async dispose(): Promise<void> {

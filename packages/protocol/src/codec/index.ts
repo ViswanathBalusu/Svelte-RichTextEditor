@@ -9,6 +9,7 @@ export {
   type Receiver,
 } from './frame.ts';
 export { ShapeValidator, type Violation } from './validate.ts';
+export { checkProblem, type ProblemInput, type ProblemSurface } from './problem.ts';
 export {
   Reassembler,
   chunkMessage,
