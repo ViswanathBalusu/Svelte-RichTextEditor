@@ -1682,6 +1682,8 @@ export const OPERATIONS: readonly OperationDef[] = [
     security: SERVICE,
     requires: 'Service credential',
     body: ref('HoldRequest'),
+    // 05 §6.1: a POST that creates something accepts `Idempotency-Key` (PRO-002 criterion 2).
+    idempotencyKey: true,
     success: created(ref('Hold')),
     owner: 'UX',
   }),
