@@ -79,6 +79,27 @@ The authority agent then built change 4: a commit is sent to a class as its own 
 
 The same work found two further leaks, both fixed, with S12's suites at 1,000 schedules each passing afterwards: a step that changed nothing still carried a hidden value in its JSON (now never forwarded), and per-step diffs could send hidden text that one step of a commit moved and a later step deleted (now, from the first step that cannot be mapped, a class gets the commit's net result only). ADR 0034 records the details.
 
+### On the reference machine (2026-11-15)
+
+[ADR 0037](../adr/0037-reference-machine-and-throttling-profile.md) (proposed, FND-007) has since named the reference machine `reference-1`. It is the machine the figures above were taken on: Intel Core i9-10900KF (20 logical cores), 128 GiB, Windows 11 (10.0.26300), Node.js 22.18.0, power plan "High performance" (checked with `powercfg /getactivescheme`). The measurement was taken again there on 2026-11-15 with `node packages/authority/scripts/projection-cost.ts 300 1`, one run, on corpus `docedit-corpus 2 (dd2dac5a)`. Each of 300 commits per document types one character, as above. Other development worktrees were running builds and tests on the machine (the processor was 32 % to 50 % busy before and after the run), so the times are upper figures, not quiet-machine figures. The CPU throttling rate of ADR 0037 is for browser pages and does not apply to this Node.js run.
+
+Times are in milliseconds: median / p95 / max, per class per commit. "Mapped steps" is what the gateway does now (`projectCommit`); "projection and diff" is what the spike first did, computed in the same run.
+
+| Document | Body children | Class | Hidden regions, values | Cold projection | Apply on full (baseline) | Outgoing: mapped steps | Outgoing: projection and diff | Incoming: map one step | Routes: mapped, inside, diff |
+|---|---|---|---|---|---|---|---|---|---|
+| form-fields | 14 | half hidden | 0, 7 | 1.4 | 0.006 / 0.018 / 2.098 | 0.012 / 0.047 / 1.083 | 0.038 / 0.133 / 2.181 | 0.010 / 0.033 / 0.415 | 300, 0, 0 |
+| form-fields | 14 | all hidden | 0, 13 | 0.7 | 0.006 / 0.018 / 2.098 | 0.011 / 0.037 / 2.039 | 0.033 / 0.089 / 0.146 | 0.008 / 0.024 / 0.165 | 300, 0, 0 |
+| pages-20 | 123 | half hidden | 1, 0 | 7.7 | 0.007 / 0.015 / 0.029 | 0.017 / 0.037 / 0.175 | 0.087 / 0.178 / 3.357 | 0.014 / 0.028 / 0.177 | 297, 3, 0 |
+| pages-20 | 123 | all hidden | 2, 0 | 3.1 | 0.007 / 0.015 / 0.029 | 0.017 / 0.035 / 0.101 | 0.076 / 0.143 / 3.606 | 0.012 / 0.024 / 0.295 | 295, 5, 0 |
+| pages-100 | 515 | half hidden | 7, 0 | 23.7 | 0.010 / 0.032 / 2.207 | 0.020 / 0.053 / 2.252 | 0.155 / 0.296 / 1.320 | 0.016 / 0.043 / 0.154 | 293, 7, 0 |
+| pages-100 | 515 | all hidden | 14, 0 | 20.3 | 0.010 / 0.032 / 2.207 | 0.021 / 0.053 / 0.237 | 0.148 / 0.292 / 3.971 | 0.011 / 0.033 / 0.304 | 289, 11, 0 |
+| pages-300 | 1,579 | half hidden | 22, 0 | 58.0 | 0.011 / 0.028 / 1.469 | 0.028 / 0.095 / 1.729 | 0.556 / 1.403 / 2.821 | 0.022 / 0.066 / 1.935 | 292, 8, 0 |
+| pages-300 | 1,579 | all hidden | 43, 0 | 42.8 | 0.011 / 0.028 / 1.469 | 0.041 / 0.183 / 0.464 | 0.622 / 1.768 / 2.543 | 0.013 / 0.034 / 0.087 | 286, 14, 0 |
+| pages-1000 | 5,295 | half hidden | 72, 0 | 123.0 | 0.033 / 0.097 / 1.484 | 0.073 / 0.157 / 1.596 | 2.073 / 3.367 / 4.457 | 0.067 / 0.150 / 0.364 | 299, 1, 0 |
+| pages-1000 | 5,295 | all hidden | 143, 0 | 106.9 | 0.033 / 0.097 / 1.484 | 0.165 / 0.460 / 1.854 | 3.005 / 4.543 / 5.722 | 0.026 / 0.046 / 0.061 | 290, 10, 0 |
+
+`pages-1` has nothing to hide. No commit of this workload needed the diff fallback, so the diff step's cost is the "projection and diff" column only. The workload is single-character typing; structural commits, pastes and catch-up are not in it (second review SR-M7).
+
 ## Defects found and fixed
 
 1. **Redaction changed the full document.** `Node.toJSON()` shares each node's attribute object with the node itself. Redacting in place therefore wrote the marker into the full document. Attribute objects are now replaced, never mutated.
