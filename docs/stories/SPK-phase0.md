@@ -177,6 +177,8 @@ As the project owner, I want to confirm the production backend's language, so th
 - [ ] Given another language is chosen, then the PRO stories for the authority service are moved earlier.
 - [ ] The record notes that ADR 0016 keeps the authority, rules and model in TypeScript whatever the backend language.
 
+**Notes:** Lane w4 (2026-11-15): blocked on the owner; nothing ticked. The default applies until the owner decides: Node.js for the reference service, other languages through the authority service of 05 §10 (11 §10 item 9). PRODUCT.md lists the Node.js reference service under "Proposed, not yet confirmed" and has no owner decision on the backend language, so criterion 1 is open. Criterion 2 applies only if another language is chosen; none is, so no PRO story was moved. Criterion 3 is about the owner's record, which does not exist yet; when it is written it should cite ADR 0016 (proposed), item 1 and its consequence "One language for everything that must agree between client and server: model, authority, rules". PRODUCT.md was not edited.
+
 ### SPK-010 Decide who invites and authenticates workflow participants
 
 | Type | Phase | Size | Priority | Persona |
