@@ -13,14 +13,17 @@ import {
   type ContractHarness,
   type ContractUser,
   type HarnessFactory,
+  type WriteHold,
 } from '@docedit/protocol/contract';
 import type { DocRole } from '@docedit/protocol';
 import {
   configFromEnv,
   hashSecret,
+  memoryParts,
   newApiKey,
   startService,
   type Service,
+  type ServiceParts,
 } from '@docedit/document-service';
 import { createDepBackend, type DepBackend } from '../src/index.ts';
 import { IDS, contractDocument, insertText, posIn } from './support/fixtures.ts';
@@ -48,13 +51,10 @@ export const PENDING: Readonly<Record<string, string>> = {
   'channel.submit.ack': LATE_CONTROL,
   'channel.submit.rebased': LATE_CONTROL,
   'channel.reject.rebase': LATE_CONTROL,
-  'core.conversation': LATE_CONTROL,
-  'core.convergence': LATE_CONTROL,
   'sync.open.stream': VIEW,
   'sync.open.inflight': VIEW,
   'channel.readOnly': 'a change of document state sends no event document.updated (05 §5.6)',
   'channel.onReset': 'PUT /documents/{id}/content is not served yet',
-  'core.reset': 'PUT /documents/{id}/content is not served yet',
 };
 
 interface ServiceHarness {
@@ -73,16 +73,66 @@ const FETCH_BAD_PORTS: ReadonlySet<number> = new Set([
 ]);
 
 /** Starts the service on a port the system chooses, again while that port is one fetch refuses. */
-async function startOnFetchablePort(): Promise<Service> {
+async function startOnFetchablePort(parts: ServiceParts): Promise<Service> {
   for (;;) {
-    const service = await startService({ config: { ...configFromEnv({}), port: 0, workers: 1 } });
+    const service = await startService({
+      config: { ...configFromEnv({}), port: 0, workers: 1 },
+      parts,
+    });
     if (!FETCH_BAD_PORTS.has(Number(new URL(service.url).port))) return service;
     await service.close();
   }
 }
 
+/**
+ * The write-hold test hook of the contract harness over the service's in-memory log: while a
+ * document is held, its `append` calls wait, and then run (`release`) or resolve `failed` without
+ * writing (`fail`). A hold that ends before any write arrived still decides the next one, because
+ * a commit sent over the socket reaches the log later than the test's next line. Everything else
+ * goes to the log unchanged. The room, the gateway and the wire
+ * are the service's own.
+ */
+function holdableLogs(inner: ServiceParts['logs']) {
+  const gates = new Map<string, { how: Promise<'run' | 'fail'>; waiting: number }>();
+  const logs = new Proxy(inner, {
+    get(target, prop) {
+      if (prop === 'append')
+        return async (...args: Parameters<ServiceParts['logs']['append']>) => {
+          const doc = args[0].doc;
+          const gate = gates.get(doc);
+          if (gate) {
+            gate.waiting++;
+            const how = await gate.how;
+            if (gates.get(doc) === gate) gates.delete(doc);
+            if (how === 'fail') return { status: 'failed' } as const;
+          }
+          return target.append(...args);
+        };
+      const value: unknown = Reflect.get(target, prop, target);
+      return typeof value === 'function'
+        ? (value as (...a: unknown[]) => unknown).bind(target)
+        : value;
+    },
+  });
+  const hold = (docId: string): WriteHold => {
+    let open!: (how: 'run' | 'fail') => void;
+    const gate = { how: new Promise<'run' | 'fail'>((resolve) => (open = resolve)), waiting: 0 };
+    gates.set(docId, gate);
+    const end = (how: 'run' | 'fail') => {
+      if (gate.waiting > 0 && gates.get(docId) === gate) gates.delete(docId);
+      open(how);
+      return Promise.resolve();
+    };
+    return { release: () => end('run'), fail: () => end('fail') };
+  };
+  return { logs, hold };
+}
+
 async function startServiceHarness(): Promise<ServiceHarness> {
-  const service = await startOnFetchablePort();
+  // One set of in-memory parts, so that the held log is the log the other stores write to.
+  const base = memoryParts();
+  const held = holdableLogs(base.logs);
+  const service = await startOnFetchablePort({ ...base, logs: held.logs });
   const tenant = randomUUID();
   await service.parts.registry.putTenant(tenant, 'backend-dep contract');
   const key = newApiKey(tenant);
@@ -152,6 +202,7 @@ async function startServiceHarness(): Promise<ServiceHarness> {
     revokeSessions: async (sub) => {
       await rest('POST', '/sessions/revoke', { sub });
     },
+    holdWrites: held.hold,
     dispose: async () => {
       for (const b of backends) await b.close();
       await service.close();
