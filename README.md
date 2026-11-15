@@ -86,7 +86,7 @@ You need Node.js 22.18 or later and pnpm 12.18 (`npm install -g pnpm@12.18.0`). 
 | `pnpm licence:check`, `pnpm notices` | The licence gate and the third-party notices |
 | `pnpm stories:check`, `pnpm trace` | Checks the backlog's format; writes the requirements traceability table |
 
-The workspace has `packages/*` (universal and browser packages), `services/*` (Node.js services) and `apps/*` (hosts; none yet). `spec/` holds generated artifacts and is never edited by hand. Package layout and rules: [01 Architecture](docs/spec/01-architecture.md) §6 and [CLAUDE.md](CLAUDE.md).
+The workspace has `packages/*` (universal and browser packages), `services/*` (services for Node.js 22 or later; each declares it in `engines`, and pnpm refuses an older runtime) and `apps/*` (hosts). `spec/` holds generated artifacts and is never edited by hand. Package layout and rules: [01 Architecture](docs/spec/01-architecture.md) §6 and [CLAUDE.md](CLAUDE.md).
 
 ## What is not here yet
 
