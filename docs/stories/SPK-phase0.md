@@ -141,6 +141,8 @@ As the project owner, I want to choose the project's names and licence, so that 
 
 **Outcome (2026-11-06):** the licence is Apache-2.0 (`LICENSE`, `NOTICE`; root `package.json`). The names are not decided yet, so the second criterion stays open, and every package stays private under its working name.
 
+**Notes:** Lane w4 (2026-11-15): the second criterion is still blocked on the owner. A replacement for each working name is the owner's choice, and neither the spec nor PRODUCT.md proposes one (PRODUCT.md lists the project's names as undecided and says a name is never to be invented). No names were proposed here and nothing new was ticked.
+
 ### SPK-008 Decide hosted service, self-hosted distribution, or both at first release
 
 | Type | Phase | Size | Priority | Persona |
