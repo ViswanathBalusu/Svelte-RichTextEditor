@@ -12,7 +12,7 @@
  */
 import { validateDoc, type ValidationContext, type Violation } from '@docedit/model/validate';
 import type { Node } from 'prosemirror-model';
-import { AttrStep, Mapping, type Step } from 'prosemirror-transform';
+import { AttrStep, Mapping, ReplaceAroundStep, type Step } from 'prosemirror-transform';
 import { type Result, fail, ok } from './codes.ts';
 import { regionBoundaryViolation } from './permissions/boundaries.ts';
 import { RULE_INVARIANTS } from './room/rules.ts';
@@ -40,7 +40,22 @@ function countId(doc: Node, id: unknown, atMost = 2): number {
 }
 
 /**
- * The I2 transition, judged by the outcome (ADR 0050 item 1). For each `attr` step on `id` that
+ * The node a `replaceAround` step puts in place of one node around that node's whole content, or
+ * null for any other shape. This is the step `setNodeMarkup` makes: the content stays where it is
+ * and only the type, the attributes and the marks of its parent are replaced, so the node is the
+ * same node and its identifier may not change (ADR 0362, proposed; CDM-012).
+ */
+function sameNodeMarkup(s: ReplaceAroundStep): Node | null {
+  if (s.gapFrom !== s.from + 1 || s.gapTo !== s.to - 1 || s.insert !== 1) return null;
+  const { content, openStart, openEnd } = s.slice;
+  if (openStart !== 0 || openEnd !== 0 || content.childCount !== 1) return null;
+  const node = content.firstChild;
+  return node && node.content.size === 0 && !node.isLeaf ? node : null;
+}
+
+/**
+ * The I2 transition, judged by the outcome (ADR 0050 item 1). For each `attr` step on `id`, and
+ * each `replaceAround` step that replaces a node around its own content (`sameNodeMarkup`), that
  * changes a non-null identifier X held before the commit: the node is followed through the later
  * steps of the commit by its opening token; if a later step removes that token the node is gone
  * and nothing changed identity. Otherwise the node is in the result, and it may hold another
@@ -56,21 +71,34 @@ function identityChange(
   let maps: ReturnType<Step['getMap']>[] | null = null;
   for (let i = 0; i < steps.length; i++) {
     const s = steps[i];
-    if (!(s instanceof AttrStep) || s.attr !== 'id') continue;
     const doc = docs[i];
+    let pos: number;
+    let value: unknown;
     let node: Node | null | undefined;
     try {
-      node = doc?.nodeAt(s.pos);
+      if (s instanceof AttrStep && s.attr === 'id') {
+        pos = s.pos;
+        value = s.value;
+        node = doc?.nodeAt(pos);
+      } else if (s instanceof ReplaceAroundStep) {
+        // A node replaced around its own content (ADR 0362): the same node with new markup.
+        const markup = sameNodeMarkup(s);
+        if (!markup) continue;
+        pos = s.from;
+        value = markup.attrs['id'];
+        node = doc?.nodeAt(pos);
+        if (node && pos + node.nodeSize !== s.to) continue;
+      } else continue;
     } catch {
       // Steps that do not belong to these documents: refuse, never throw (SYN-001).
       return fail('invalid_op', `step ${i} does not apply to the document it was checked against`);
     }
     const old: unknown = node?.attrs['id'];
-    if (!doc || !node || old === null || old === undefined || old === s.value) continue;
+    if (!doc || !node || old === null || old === undefined || old === value) continue;
     // An identifier the commit itself gave out earlier is no identity yet.
     if (countId(before, old, 1) === 0) continue;
     maps ??= steps.map((x) => x.getMap());
-    const followed = new Mapping(maps.slice(i + 1)).mapResult(s.pos, 1);
+    const followed = new Mapping(maps.slice(i + 1)).mapResult(pos, 1);
     if (followed.deletedAfter) continue; // a later step removed the node: it has no identity left
     let now: Node | null;
     try {
