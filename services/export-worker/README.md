@@ -6,6 +6,8 @@ built from `Containerfile` with `scripts/build-image.ts`.
 
 ## Limits of every job
 
+Sizing worker nodes from these limits: [CAPACITY.md](CAPACITY.md).
+
 Each job runs under these limits (09 §9.3 item 4; `src/sandbox.ts`, `LIMITS`). A job that reaches
 one ends `failed` with a diagnostic that names the limit (`limit_time`, `limit_memory`,
 `limit_output`, `limit_pages`, `limit_workdir`, `limit_processes`), and its sandbox is removed.
