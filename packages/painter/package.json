@@ -10,5 +10,8 @@
       "types": "./src/painter.ts",
       "default": "./src/painter.ts"
     }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
   }
 }
