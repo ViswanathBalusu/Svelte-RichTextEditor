@@ -209,6 +209,8 @@ As the project owner, I want to decide which jurisdictions come first and whethe
 - [ ] Given a decision, then spike S8 (SPK-021) and the FRW sealing stories use that party's key and certificate arrangement.
 - [ ] The decision is taken before phase 2 starts workflow work.
 
+**Notes:** 2026-11-15: no criterion can be ticked without the owner's word, and the owner has not decided; PRODUCT.md still lists "jurisdictions and the sealing party" as undecided. The first needs the owner's choice, the second follows from it, and the third is met only when the choice is made. [ADR 0361](../adr/0361-w4-SPK-011-first-jurisdictions-and-sealing-party.md) (proposed) sets out the options (the European Union, the United States, both or others; the operator, each tenant, or the operator with a tenant's own key where one is supplied) and what each means for keys and certificates. It keeps the spec's default (undecided; a simple electronic signature plus a seal at launch, 11 §10) and proposes one working assumption for design only: a sealing key chosen per tenant with the operator's key as the fallback, which is the reading of 12 §8.3 and serves either final choice. It recommends no jurisdiction.
+
 ### SPK-012 Decide fixed-width or reflowing fields
 
 | Type | Phase | Size | Priority | Persona |
