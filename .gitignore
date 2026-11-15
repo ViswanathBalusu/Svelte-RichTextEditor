@@ -25,3 +25,5 @@ infra/containers/.env
 .impeccable/hook.cache.json
 # A stray file from a Windows redirect; Git cannot index this name
 NUL
+# Worktrees of the parallel story agents (one per lane)
+.worktrees/
