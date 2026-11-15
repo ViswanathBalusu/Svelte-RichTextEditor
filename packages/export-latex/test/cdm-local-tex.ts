@@ -69,8 +69,13 @@ export interface LocalCompiled {
   dir: string;
 }
 
-/** Whether `lualatex` starts here. */
+/**
+ * Whether a local compile can run here: `lualatex` starts, and the local font directory exists.
+ * That directory is generated (services/export-worker/out, not committed), so a fresh checkout or
+ * worktree has none, and the tests skip there instead of failing on the missing manifest.
+ */
 export function lualatexAvailable(): boolean {
+  if (!existsSync(join(FONT_DIR, 'fonts.json'))) return false;
   const r = spawnSync(LUALATEX, ['--version'], {
     encoding: 'utf8',
     timeout: 60_000,

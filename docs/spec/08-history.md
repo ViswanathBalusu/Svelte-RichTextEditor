@@ -34,6 +34,58 @@ For every accepted commit, of every kind (steps, control, snapshot), the documen
 
 Because the hash covers the hash of the payload and not the payload itself, a payload can later be thinned or erased without breaking the chain.
 
+### 2.1 The commit hash: byte layout
+
+This layout is the one of ADR 0020 (proposed; the owner has not reviewed it). An implementation that verifies a log MUST reproduce it byte for byte.
+
+`hash = SHA-256(prev ‖ M ‖ H(P))`. The three parts are joined as raw bytes, in that order, with no separator and no length prefix: `prev` and `H(P)` are 32 bytes each, so the bounds of `M` are fixed.
+
+- **`prev`** is the 32-byte `hash` of the commit at `seq − 1` of the same document. For the first commit (`seq` 1) it is 32 zero bytes. Hashes are joined as raw bytes, never as hexadecimal text.
+- **`M`** is the UTF-8 encoding of the canonical JSON (RFC 8785) of one object with exactly these seventeen members, and no others:
+
+  | Member | Value |
+  |---|---|
+  | `doc` | The document identifier, a string |
+  | `seq` | An integer |
+  | `kind` | `steps`, `control` or `snapshot` |
+  | `id` | The commit identifier, a string |
+  | `user` | The tenant's surrogate identifier, or the reserved server author |
+  | `session` | A string, or `null` for a server-authored commit |
+  | `agent` | A string, or `null` when no assistant acted |
+  | `time` | Server time in RFC 3339, UTC, with exactly three fraction digits and `Z` (01, section 8) |
+  | `origin` | A string |
+  | `scopes` | An array of strings, sorted by UTF-16 code units |
+  | `base` | An integer, or `null` when the commit has no base (a control commit) |
+  | `rebased` | A boolean, or `null` when the commit has no base |
+  | `revision` | The access revision, an integer |
+  | `jti` | A string, or `null` when no token was involved |
+  | `cdm` | The CDM version, an integer |
+  | `engine` | A string |
+  | `size` | The byte length of `P`, an integer |
+
+  An absent value is the JSON `null`; the member is never left out. The canonical JSON rules are those of RFC 8785: members sorted by the UTF-16 code units of their names, no white space, strings escaped as ECMAScript's `JSON.stringify` does, integers without fraction or exponent.
+- **`P`** is the canonical payload: the UTF-8 encoding of the RFC 8785 JSON of the payload object (for a steps or control commit `{ "steps", "retired", "claimed" }`; a snapshot commit adds its checkpoint reference). `H(P)` is its SHA-256, 32 raw bytes, taken before compression. The metadata row keeps `H(P)`, so the chain verifies without the payload.
+
+Test vectors. Both commits have the payload `{"claimed":[],"retired":[],"steps":[]}` (38 bytes), whose SHA-256 is `7932c97e6fe8d5fc0b0e75ef29d54f4c609af97d551543061277bf4fd942b0cf`. The `size` in the vectors is 42 on purpose: the hash takes `size` from the metadata and does not compare it with the payload.
+
+Vector 1, the first commit of a document (`prev` is 32 zero bytes). `M` is these 314 bytes:
+
+```json
+{"agent":null,"base":0,"cdm":1,"doc":"doc-1","engine":"engine-1","id":"0190f2a4-0000-7000-8000-000000000001","jti":"jti-1","kind":"steps","origin":"client","rebased":false,"revision":3,"scopes":["body","field:fTenantName00001"],"seq":1,"session":"sess-1","size":42,"time":"2026-11-06T09:00:00.000Z","user":"alice"}
+```
+
+`hash` = `9b6ea6e0158d97a9ee6f6f270a8b8e1b510010ff20578b9731cf2b3b8b307a35`
+
+Vector 2, the next commit (`prev` is the hash of vector 1). `M` is:
+
+```json
+{"agent":null,"base":1,"cdm":1,"doc":"doc-1","engine":"engine-1","id":"0190f2a4-0000-7000-8000-000000000002","jti":"jti-1","kind":"steps","origin":"client","rebased":false,"revision":3,"scopes":["body","field:fTenantName00001"],"seq":2,"session":"sess-1","size":42,"time":"2026-11-06T09:00:00.000Z","user":"alice"}
+```
+
+`hash` = `cdd687fde99148bec40c9fdc9970e47ac7a1e11be2b796c824aca86508ed5f1d`
+
+The vectors are checked against three implementations (the service's codec, the verifier of `packages/history` and one written for the test) in `services/document-service/test/data-plane/his-002-chain-vectors.test.ts`, which reads them from this section.
+
 Control commits put changes of permission and workflow state into the same chain as content: grants revisions, region states and approvals, lease breaks, workflow transitions, participant completion. "This field was filled before that region was approved" is therefore provable from one ordered log.
 
 The document service also stores, per session, the user agent family and the client version. It stores no personal data about users beyond a surrogate identifier and, if supplied, a display name that can be purged. Evidence for signing workflows is the one deliberate exception and is kept elsewhere (12, section 7).
