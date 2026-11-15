@@ -33,7 +33,7 @@ module.exports = {
         "02 §5.1 and ADR 0003: the editing core sits behind the project's own document API; `ui` never imports a `prosemirror-*` module.",
       severity: 'error',
       from: { path: '^packages/ui/' },
-      to: { path: 'node_modules/prosemirror-' },
+      to: { path: '(^|node_modules/)prosemirror-' },
     },
     {
       name: 'hosts-no-prosemirror',
@@ -41,7 +41,7 @@ module.exports = {
         "FE-026 and 02 §5.1: a document changes only through the document API, so the element's source and the host applications reach ProseMirror only through `@docedit/engine`, never by importing a `prosemirror-*` module themselves.",
       severity: 'error',
       from: { path: '^(packages/element/src|apps)/' },
-      to: { path: 'node_modules/prosemirror-' },
+      to: { path: '(^|node_modules/)prosemirror-' },
     },
     {
       name: 'services-no-ui',
