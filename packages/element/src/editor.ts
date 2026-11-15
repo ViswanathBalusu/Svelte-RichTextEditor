@@ -22,6 +22,7 @@ import {
   PeopleDirectory,
   SettingsStore,
   Strings,
+  headerMode,
   themeMode,
   toolbarMode,
   type CoreApi,
@@ -136,13 +137,18 @@ export function settingsFrom(attrs: {
   toolbar: string | null;
   locale: string | null;
   theme: string | null;
+  /** The proposed `header` attribute (UX-014; ADR 0041, ADR 0361): `none` hides the built-in header. */
+  header?: string | null;
 }): Partial<ShellSettings> {
   const out: {
     toolbar?: ShellSettings['toolbar'];
+    header?: ShellSettings['header'];
     locale?: string;
     theme?: ShellSettings['theme'];
   } = {};
   if (attrs.toolbar !== null) out.toolbar = toolbarMode(attrs.toolbar);
+  // Always set, so that removing the attribute brings the header back.
+  if (attrs.header !== undefined) out.header = headerMode(attrs.header);
   if (attrs.locale) out.locale = attrs.locale;
   if (attrs.theme !== null) out.theme = themeMode(attrs.theme);
   return out;
@@ -337,6 +343,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     problem: core.problem,
     // The other sessions this reader may see (FE-107 criterion 3).
     presence: core.presence,
+    // What a host-drawn header reads (UX-014 criterion 5): identifiers, a status and counts only.
+    header: { mode: core.mode, presence: core.presence, counts: core.counts },
     // What `de-selection` and `de-command-state` watch (FE-028); read-only, no content.
     watch: {
       revision: core.revision,

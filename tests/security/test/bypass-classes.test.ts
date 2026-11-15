@@ -7,7 +7,13 @@
  * The document has a restricted region `rLegal0000000001`; a document-level editor holds no grant
  * there, so every attempt to change it must be refused with `permission_denied` and that scope.
  */
-import { AddMarkStep, AttrStep, ReplaceAroundStep, ReplaceStep } from 'prosemirror-transform';
+import {
+  AddMarkStep,
+  AddNodeMarkStep,
+  AttrStep,
+  ReplaceAroundStep,
+  ReplaceStep,
+} from 'prosemirror-transform';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { uuid7 } from '@docedit/model';
 import {
@@ -239,6 +245,116 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const r = await submitAs('editor', stepsJson([step]));
       expect(r.t).toBe('sync.reject');
       expect(['permission_denied', 'invalid_op']).toContain(r.d?.['code']);
+      await expectUnchanged();
+    });
+
+    // Added at the security review of 2026-11-15 (lane w3; docs/review/2026-11-15-sec-021-bypass-
+    // review.md): the rows of 07 §16 that answer this threat and had no fixture over the wire.
+    t()('a node-mark step on a restricted paragraph is refused', async () => {
+      const d = loadDoc(content.doc);
+      // Like attr and mark steps, a node-mark step maps no positions.
+      const del = schema.marks['del']!.create({ id: 'sgEditor00000001', user: 'u-editor' });
+      const step = new AddNodeMarkStep(at(d, 'pLegal0000000001'), del);
+      expect(step.apply(d).failed).toBeNull();
+      const r = await submitAs('editor', stepsJson([step]));
+      expect(r.t).toBe('sync.reject');
+      expect(r.d?.['code']).toBe('permission_denied');
+      expect(r.d?.['scopes']).toContain(LEGAL_SCOPE);
+      await expectUnchanged();
+    });
+
+    t()('a suggested deletion over the text of a restricted region is refused (P4)', async () => {
+      const d = loadDoc(content.doc);
+      const from = inside(d, 'pLegal0000000001');
+      const del = schema.marks['del']!.create({ id: 'sgSuggest0000001', user: 'u-suggester' });
+      const step = new AddMarkStep(from, from + 'Liability'.length, del);
+      expect(step.apply(d).failed).toBeNull();
+      const r = await submitAs('suggester', stepsJson([step]));
+      expect(r.t).toBe('sync.reject');
+      expect(r.d?.['code']).toBe('permission_denied');
+      expect(r.d?.['scopes']).toContain(LEGAL_SCOPE);
+      await expectUnchanged();
+    });
+
+    t()('deleting a whole restricted region as a document editor is refused (P2)', async () => {
+      const d = loadDoc(content.doc);
+      const p = at(d, LEGAL);
+      // A whole-node operation, so P3 does not stop it: only the missing `edit` in the region does.
+      const step = new ReplaceStep(p, p + d.nodeAt(p)!.nodeSize, Slice.empty);
+      expect(step.apply(d).failed).toBeNull();
+      const r = await submitAs('editor', stepsJson([step]));
+      expect(r.t).toBe('sync.reject');
+      expect(r.d?.['code']).toBe('permission_denied');
+      expect(r.d?.['scopes']).toContain(LEGAL_SCOPE);
+      await expectUnchanged();
+    });
+
+    t()('moving a whole restricted region as a document editor is refused (P2)', async () => {
+      const d = loadDoc(content.doc);
+      const p = at(d, LEGAL);
+      const legal = d.nodeAt(p)!;
+      // Cut the region and paste it, byte for byte the same, after the last paragraph, past the
+      // open region and pEnd. Its content does not differ, so a check of the region's content
+      // alone would not see the move. (A swap with one neighbouring block the editor may move is
+      // the same document as moving that block, and is allowed: see the review of 2026-11-15.)
+      const cut = new ReplaceStep(p, p + legal.nodeSize, Slice.empty);
+      const d1 = cut.apply(d).doc!;
+      const to = at(d1, 'pEnd000000000001') + d1.nodeAt(at(d1, 'pEnd000000000001'))!.nodeSize;
+      const paste = new ReplaceStep(to, to, new Slice(Fragment.from(legal), 0, 0));
+      const moved = paste.apply(d1);
+      expect(moved.failed).toBeNull();
+      expect(at(moved.doc!, LEGAL)).toBeGreaterThan(at(moved.doc!, 'pEnd000000000001'));
+      const r = await submitAs('editor', stepsJson([cut, paste]));
+      expect(r.t).toBe('sync.reject');
+      expect(['permission_denied', 'invalid_op']).toContain(r.d?.['code']);
+      await expectUnchanged();
+    });
+
+    t()(
+      'unwrapping a restricted region into the body with a replaceAround is refused',
+      async () => {
+        const d = loadDoc(content.doc);
+        const p = at(d, LEGAL);
+        const size = d.nodeAt(p)!.nodeSize;
+        // Both boundaries go at once and the content stays, now in the body where the editor may write.
+        const step = new ReplaceAroundStep(p, p + size, p + 1, p + size - 1, Slice.empty, 0, true);
+        const local = step.apply(d);
+        expect(local.failed).toBeNull();
+        expect(JSON.stringify(local.doc!.toJSON())).not.toContain(LEGAL);
+        const r = await submitAs('editor', stepsJson([step]));
+        expect(r.t).toBe('sync.reject');
+        expect(r.d?.['code']).toBe('permission_denied');
+        expect(r.d?.['scopes']).toContain(LEGAL_SCOPE);
+        await expectUnchanged();
+      },
+    );
+
+    t()('a commit that mixes an allowed edit with a restricted one is refused whole', async () => {
+      const d = loadDoc(content.doc);
+      const text = (id: string) => {
+        const q = inside(d, id);
+        return new ReplaceStep(q, q, new Slice(Fragment.from(schema.text('x')), 0, 0));
+      };
+      // The restricted paragraph comes later in the document, so the first step does not move it
+      // before the second is built; the second position is shifted by the one character inserted.
+      const allowed = text('pIntro0000000001');
+      const q = inside(d, 'pLegal0000000001') + 1;
+      const hidden = new ReplaceStep(q, q, new Slice(Fragment.from(schema.text('y')), 0, 0));
+      const r = await submitAs('editor', stepsJson([allowed, hidden]));
+      expect(r.t).toBe('sync.reject');
+      expect(r.d?.['code']).toBe('permission_denied');
+      expect(r.d?.['scopes']).toContain(LEGAL_SCOPE);
+      // Nothing of the commit is stored, the allowed step included.
+      await expectUnchanged();
+    });
+
+    t()('flipping a region to restricted without manage is refused (P2)', async () => {
+      const d = loadDoc(content.doc);
+      const step = new AttrStep(at(d, 'rOpen00000000001'), 'policy', 'restricted');
+      expect(step.apply(d).failed).toBeNull();
+      const r = await submitAs('editor', stepsJson([step]));
+      expect(r.t).toBe('sync.reject');
+      expect(r.d?.['code']).toBe('permission_denied');
       await expectUnchanged();
     });
 
