@@ -68,7 +68,36 @@ export interface DocEditorEventMap {
   'de-selection': SelectionDetail;
   /** The commands whose `enabled` or `active` state changed, and only those (FE-028). */
   'de-command-state': { commands: CommandStateChange[] };
+  /**
+   * The mode in effect, or the mode asked for, changed; also raised once when the editor is live
+   * (UX-014 criterion 5; proposed, ADR 0361).
+   */
+  'de-mode-change': ModeChangeDetail;
+  /** The other sessions this reader may see changed; also raised once when the editor is live (UX-014; ADR 0361). */
+  'de-presence': PresenceDetail;
+  /** The counts of the header's buttons changed; also raised once when the editor is live (UX-014; ADR 0361). */
+  'de-counts': CountsDetail;
   'de-error': ErrorDetail;
+}
+
+/** `de-mode-change`: `mode` is the mode in effect, `requested` the one the host or the user asked for. */
+export interface ModeChangeDetail {
+  mode: string;
+  requested: string;
+}
+
+/**
+ * `de-presence`: one entry per other session, with identifiers and a status only. The host resolves
+ * `user` in its own directory; no name and no selection is carried.
+ */
+export interface PresenceDetail {
+  peers: { session: string; user: string; status: 'active' | 'idle' }[];
+}
+
+/** `de-counts`: open comment threads and catch-up activity; `null` while a count is unknown. */
+export interface CountsDetail {
+  comments: number | null;
+  catchUp: number | null;
 }
 
 /** `de-selection`: a DEP scope identifier and the block the selection starts in (05 §8.1). */
@@ -100,6 +129,9 @@ export const EVENT_NAMES: readonly DocEditorEventName[] = [
   'de-export-failed',
   'de-selection',
   'de-command-state',
+  'de-mode-change',
+  'de-presence',
+  'de-counts',
   'de-error',
 ];
 

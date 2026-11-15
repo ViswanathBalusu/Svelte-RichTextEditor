@@ -37,6 +37,8 @@ import type { MountedEditor, SettingsStore, StringOverrides } from './editor.ts'
 
 type EditorModule = typeof EditorChunk;
 import { emit, type DocEditorEventMap, type DocEditorEventName } from './events.ts';
+import type { StatusDetail } from './events.ts';
+import { headerSnapshot, type HeaderSnapshot } from './header-events.ts';
 import { INTERNALS } from './internals.ts';
 import { Announcer } from './announcer.ts';
 import { mountLiveRegion, type LiveRegion } from './live-region.ts';
@@ -71,7 +73,10 @@ const CAPTURED = [
   'strings',
 ] as const;
 
-/** The attributes of 05 §8.1. */
+/**
+ * The attributes of 05 §8.1, and the proposed `header` (`default` or `none`; UX-014, ADR 0041 and
+ * ADR 0361), which 05 §8.1 does not name yet.
+ */
 export const OBSERVED_ATTRIBUTES = [
   'doc-id',
   'endpoint',
@@ -80,6 +85,7 @@ export const OBSERVED_ATTRIBUTES = [
   'locale',
   'theme',
   'toolbar',
+  'header',
   'keep-alive',
 ] as const;
 
@@ -103,6 +109,11 @@ function isBackend(value: unknown): value is Backend {
   if (value === null || typeof value !== 'object') return false;
   const b = value as Partial<Backend>;
   return typeof b.connect === 'function' && typeof b.close === 'function' && !!b.sync;
+}
+
+/** The `headerState` property: `status` is null where the editor reports none. */
+export interface HeaderState extends HeaderSnapshot {
+  readonly status: StatusDetail | null;
 }
 
 export class DocEditorElement extends Base {
@@ -272,6 +283,22 @@ export class DocEditorElement extends Base {
     this.#mounted?.setExtensions(this.#extensions);
   }
 
+  /**
+   * What a host-drawn header shows, as it is now (UX-014 criterion 5; proposed, ADR 0361): the
+   * connection and save state of `de-status`, and the details of `de-mode-change`, `de-presence`
+   * and `de-counts`. Null until the editor is live. Read-only: identifiers, states and counts, no
+   * content and no token.
+   */
+  get headerState(): HeaderState | null {
+    const editor = this.#session?.editor;
+    if (!editor?.header) return null;
+    const status = editor.status?.get() ?? null;
+    return {
+      status: status ? { connection: status.connection, sync: status.sync } : null,
+      ...headerSnapshot(editor.header),
+    };
+  }
+
   // --- Lifecycle (02 §2.1) ------------------------------------------------------------------
 
   connectedCallback(): void {
@@ -317,6 +344,7 @@ export class DocEditorElement extends Base {
         }
         break;
       case 'toolbar':
+      case 'header':
       case 'locale':
       case 'theme':
         // Reflected into the mounted shell without remounting it (FE-003; PRO-079).
@@ -338,8 +366,14 @@ export class DocEditorElement extends Base {
     }
   }
 
-  #attributes(): { toolbar: string | null; locale: string | null; theme: string | null } {
+  #attributes(): {
+    toolbar: string | null;
+    locale: string | null;
+    theme: string | null;
+    header: string | null;
+  } {
     return {
+      header: this.getAttribute('header'),
       toolbar: this.getAttribute('toolbar'),
       locale: this.getAttribute('locale'),
       theme: this.getAttribute('theme'),

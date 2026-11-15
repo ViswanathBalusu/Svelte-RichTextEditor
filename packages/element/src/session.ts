@@ -46,6 +46,7 @@ import {
 } from './presence-notices.ts';
 import { ChangeReporter, StatusReporter, type Scheduler } from './status.ts';
 import { SelectionEvents, type SelectionWatch } from './selection-events.ts';
+import { HeaderEvents, type HeaderWatch } from './header-events.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -104,6 +105,8 @@ export interface EditorHandle {
   readonly api?: HostApi;
   /** The selection and command state the `de-selection` and `de-command-state` events watch (FE-028). */
   readonly watch?: SelectionWatch;
+  /** What `de-mode-change`, `de-presence` and `de-counts` watch (UX-014; ADR 0361); absent in stand-in editors. */
+  readonly header?: HeaderWatch;
 }
 
 export interface SessionHost {
@@ -360,6 +363,16 @@ export class Session {
         commandState: (detail) => this.#emit('de-command-state', detail),
       });
       this.#unsubscribe.push(selection.start());
+    }
+    // What a host-drawn header shows besides `de-status` (UX-014 criterion 5): the state now, then
+    // each change. Torn down with the other subscriptions at close().
+    if (editor.header) {
+      const header = new HeaderEvents(editor.header, {
+        mode: (detail) => this.#emit('de-mode-change', detail),
+        presence: (detail) => this.#emit('de-presence', detail),
+        counts: (detail) => this.#emit('de-counts', detail),
+      });
+      this.#unsubscribe.push(header.start());
     }
     const confirmed = editor.confirmedSeq;
     if (confirmed) {
