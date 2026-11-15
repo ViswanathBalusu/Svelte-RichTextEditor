@@ -19,6 +19,8 @@ const SKIP_DIRS = new Set([
   'coverage',
   '.pnpm-store',
   '.turbo',
+  // Worktrees of the parallel story lanes: each is a second copy of this tree, scanned on its own.
+  '.worktrees',
 ]);
 const BINARY = /\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|tgz|woff2?|ttf|otf|wasm|bin|sqlite|db)$/i;
 const MAX_BYTES = 1_000_000;
