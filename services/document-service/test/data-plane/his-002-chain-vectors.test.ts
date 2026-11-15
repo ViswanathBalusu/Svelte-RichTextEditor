@@ -3,9 +3,10 @@
 // the previous hash of the first commit (08 §2; ADR 0020). Three implementations must agree on the
 // vectors below: the service codec (`storage/codec.ts`), the history verifier (`packages/history`),
 // and a third written here with `node:crypto` and its own canonical JSON for these simple values.
-// The vectors are computed by the third implementation. The spec write-up with these vectors is
-// not done here (docs/spec is outside this lane), so HIS-002 criterion 2 stays unticked.
+// The vectors are published in 08 §2.1 (docs/spec/08-history.md): the last test reads them from
+// there, so the spec, the three implementations and this file cannot drift apart.
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { chainHash as historyChainHash } from '../../../../packages/history/src/chain.ts';
 import {
@@ -87,5 +88,39 @@ describe('commit hash test vectors (HIS-002 criterion 2)', () => {
     expect(h1).toBe(H1);
     const h2 = await historyChainHash(h1, meta2, payloadHex);
     expect(h2).toBe(H2);
+  });
+
+  it('08 §2.1 publishes the layout with these vectors, and they hash as it says', () => {
+    const spec = readFileSync(
+      new URL('../../../../docs/spec/08-history.md', import.meta.url),
+      'utf8',
+    );
+    const section = spec.slice(
+      spec.indexOf('### 2.1 The commit hash: byte layout'),
+      spec.indexOf('## 3. Checkpoints'),
+    );
+    expect(section.length).toBeGreaterThan(0);
+    // The layout: the join, the first commit's previous hash, and every metadata member.
+    expect(section).toContain('no separator and no length prefix');
+    expect(section).toContain('32 zero bytes');
+    expect(section).toContain('RFC 8785');
+    for (const member of Object.keys(meta1)) expect(section).toContain(`| \`${member}\` |`);
+    // The vectors: the payload, the metadata bytes and the hashes, as printed in the spec.
+    const blocks = [...section.matchAll(/```json\n([^\n]+)\n```/g)].map((m) => m[1]!);
+    const hashes = [...section.matchAll(/^`hash` = `([0-9a-f]{64})`$/gm)].map((m) => m[1]!);
+    const payload = /payload `([^`]+)` \((\d+) bytes\), whose SHA-256 is `([0-9a-f]{64})`/.exec(
+      section,
+    );
+    expect(blocks).toEqual([canon(meta1), canon(meta2)]);
+    expect(hashes).toEqual([H1, H2]);
+    expect(payload?.[1]).toBe(PAYLOAD.toString('utf8'));
+    expect(Number(payload?.[2])).toBe(PAYLOAD.length);
+    expect(payload?.[3]).toBe(sha256(PAYLOAD).toString('hex'));
+    // Recomputed from the spec's own text alone, by the independent implementation.
+    const p = sha256(Buffer.from(payload![1]!, 'utf8'));
+    const h1 = sha256(Buffer.alloc(32), Buffer.from(blocks[0]!, 'utf8'), p);
+    const h2 = sha256(h1, Buffer.from(blocks[1]!, 'utf8'), p);
+    expect([h1.toString('hex'), h2.toString('hex')]).toEqual(hashes);
+    expect(section).toContain(`these ${Buffer.byteLength(blocks[0]!)} bytes`);
   });
 });
