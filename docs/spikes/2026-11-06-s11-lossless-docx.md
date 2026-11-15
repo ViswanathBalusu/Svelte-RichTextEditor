@@ -203,7 +203,32 @@ On `bug65649.docx` from Apache POI (474,844 bytes, `document.xml` 12.6 MB, not c
 
 Hashing every node with `nodeHash` costs time proportional to size times depth, because a table, each row, each cell and each paragraph are canonicalised separately. On the large file the import took 21 to 29 s before the prototype composed container texts from their children's (`src/hash.ts`; the tests check the result equals `canonicalNodeText`).
 
+### On the reference machine (2026-11-15)
+
+[ADR 0037](../adr/0037-reference-machine-and-throttling-profile.md) (proposed, FND-007) has since named the reference machine `reference-1`. It is the machine the spike ran on: the same processor, memory, operating system build and Node.js version, with the power plan "High performance" (checked with `powercfg /getactivescheme`). The measurement was taken again there on 2026-11-15, in the same way: `pnpm exec vitest run --project node packages/export-docx/test/measure.test.ts`, which writes `packages/export-docx/test-results/s11-measurements.json`. Times are the median of three runs per file in one warm process. Four other development worktrees were running builds and tests on the machine at the time, so the times are upper figures, not quiet-machine figures. The CPU throttling rate of ADR 0037 applies to browser pages and does not apply to this Node.js run.
+
+The prototype is no longer the one measured above. It now uses the model changes that this report asked for (registered prefixes, shared trees in `preserved_def`, `origin` on inline atoms, element trees on small markers), so sizes differ from the first table.
+
+| Measure | Corpus (78 files), 2026-11-15 |
+|---|---|
+| Nodes carrying preserved data | 2,145 of 3,175 non-text nodes (68 %); 154 of 986 text nodes have a `preserved` mark (16 %) |
+| Canonical CDM with preservation / without | 889,340 / 393,633 bytes: 2.3 times; median per file 2.4 times, maximum 7.5 times |
+| The same without shared trees | 944,909 bytes; sharing made 105 `preserved_def` nodes |
+| Preserved data inside the CDM | 430,028 bytes, 48 % of it |
+| Source maps | 942,704 bytes; median 0.37 times the package |
+| Fragment assets | 197 fragments, 966,895 bytes; 257 small markers keep a tree instead |
+| Commits: step payloads of 1,000 simulated commits per file, as above, 62 files with text | 10,786,708 bytes with preservation, 8,010,423 without: 35 % more; median per file 1.00 times, maximum 7.61 times |
+
+| | Corpus file, median | 90th percentile | Maximum | Corpus total |
+|---|---|---|---|---|
+| Import | 24 ms | 92 ms | 260 ms | 3,110 ms |
+| Export without edits | 10 ms | 35 ms | 149 ms | 1,327 ms |
+
+The commits are still simulated step payloads, not a replay through the authority. `bug65649.docx` is not in the repository and was not measured again.
+
 ### Element trees against the grammar
+
+The table below is the measurement of 2026-11-06, taken before the model changed.
 
 Every tree the import produced (in the document, or not fitting and replaced by a fallback), by where it is kept. "Fits" counts trees within a depth and a size limit.
 
@@ -285,6 +310,18 @@ The model change of 2026-11-06 (footnote content `paragraph+`) does not affect t
 5. **`page_setup` defaults.** Nullable attributes, or none of them defaulted, so that a section's residue need not keep the whole `w:sectPr`.
 6. **Import labels in suggestion marks** (SR-M14): 03 §5's `user` check needs the exception for commits with origin `import`.
 7. **Small markers.** An optional element tree on `preserved_inline` for content without relationships, instead of a fragment asset per bookmark.
+
+### State of these changes on 2026-11-15
+
+The model definition and 03 now carry changes 1 to 4 and 7, and `cdm: 1` is still a draft:
+
+- change 1: marks apply to inline atoms as to text (03 §5);
+- change 2: the attribute `origin` on `image`, `equation`, `field`, `footnote`, `anchor` and `citation` (03 §4.6; `packages/model/src/definition/cdm1.ts`);
+- change 3: depth 12, 16 KiB and 32 KiB on `style_def`, registered prefixes (`PRESERVED_DEPTH`, `PRESERVED_BYTES` and `PRESERVED_STYLE_BYTES` in `packages/model/src/definition/shared.ts`; `packages/model/src/validate/validate.test.ts`, "preserved content (CDM-051)");
+- change 4: `preserved_def` in `defs`, referred to by `{ "ref": id }`;
+- change 7: `tree` on `preserved_inline`.
+
+The prototype imports the corpus into that model: all 78 documents are valid and R0 and R1 still pass (`test/roundtrip.test.ts`, `test/edits.test.ts`, run on 2026-11-15). ADR 0017 (§2 and its section "Changes from spike S11") and the preserved-data row of ADR 0018 state these limits, and the story CDM-051 words its second criterion and its Evidence with them (depth 12, 16 KiB, 32 KiB on `style_def`, registered prefixes, references to `preserved_def`). Nothing of changes 1 to 4 and 7 is left for CDM-051 to take before `cdm: 1` is frozen. Changes 5 and 6 are not CDM-051's; they stay with the second-review items SR-C2 and SR-M14.
 
 ## Not covered, and why
 
