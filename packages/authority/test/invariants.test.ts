@@ -46,6 +46,41 @@ describe('invariants', () => {
     expect(region.ok).toBe(false);
   });
 
+  it('refuses changing the identifier by replacing the node around its content (I2; ADR 0362)', () => {
+    // `setNodeMarkup` makes one `replaceAround` step: the content stays, the markup is replaced.
+    const r = run((tr) => {
+      const pos = posOf(tr.doc, 'pIntro0000000001');
+      const node = tr.doc.nodeAt(pos)!;
+      tr.setNodeMarkup(pos, null, { ...node.attrs, id: 'pRenamed00000001' });
+      expect(tr.steps[0]!.toJSON().stepType).toBe('replaceAround');
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/changes the identifier of a paragraph \(I2\)/);
+    const region = run((tr) => {
+      const pos = posOf(tr.doc, 'rLegal000000000B');
+      tr.setNodeMarkup(pos, null, { ...tr.doc.nodeAt(pos)!.attrs, id: 'rStolen00000000X' });
+    });
+    expect(region.ok).toBe(false);
+    if (!region.ok) expect(region.reason).toMatch(/I2/);
+  });
+
+  it('accepts a replacement around the content that keeps the identifier, or that a later step removes', () => {
+    const same = run((tr) => {
+      const pos = posOf(tr.doc, 'pIntro0000000001');
+      const node = tr.doc.nodeAt(pos)!;
+      tr.setNodeMarkup(pos, null, { ...node.attrs, align: 'center' });
+    });
+    expect(same.ok, same.ok ? '' : same.reason).toBe(true);
+    // Renamed and then deleted in the same commit: no node is left to have changed identity.
+    const gone = run((tr) => {
+      const pos = posOf(tr.doc, 'pIntro0000000001');
+      const node = tr.doc.nodeAt(pos)!;
+      tr.setNodeMarkup(pos, null, { ...node.attrs, id: 'pRenamed00000001' });
+      tr.delete(pos, pos + tr.doc.nodeAt(pos)!.nodeSize);
+    });
+    if (!gone.ok) expect(gone.reason).not.toMatch(/changes the identifier/);
+  });
+
   it('judges I2 by the outcome: the undo of a split and of a join is accepted (ADR 0050 item 1)', () => {
     // A split with the identifier fill, as the client sends it...
     const before = baseDoc();

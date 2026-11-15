@@ -124,6 +124,10 @@ interface State {
   suggestionUsers: Map<string, { user: string; path: string }>;
   regions: number;
   tooDeep: boolean;
+  /** A lower bound of the canonical size passed 16 MiB: the walk stopped (I7; CDM-013). */
+  tooLarge: boolean;
+  /** Bytes the canonical form has at least, counted as the walk goes. */
+  minBytes: number;
   nodes: IndexedNode[];
   byType: Map<string, IndexedNode[]>;
   byPath: Map<string, IndexedNode>;
@@ -179,6 +183,8 @@ export function validate(envelope: unknown, ctx: ValidationContext = {}): Valida
     suggestionUsers: new Map(),
     regions: 0,
     tooDeep: false,
+    tooLarge: false,
+    minBytes: 0,
     nodes: [],
     byType: new Map(),
     byPath: new Map(),
@@ -204,6 +210,16 @@ export function validate(envelope: unknown, ctx: ValidationContext = {}): Valida
   const req = envelope['requires'];
   if (!Array.isArray(req))
     add(st, 'requires_invalid', '/requires', null, 'requires must be an array');
+  else if (req.length > ix.features.size)
+    // Each feature is listed once, so a longer list is wrong whatever it holds; a hostile list is
+    // not read item by item.
+    add(
+      st,
+      'requires_invalid',
+      '/requires',
+      null,
+      `requires has ${req.length} entries, more than the ${ix.features.size} features there are`,
+    );
   else
     req.forEach((f, i) => {
       if (typeof f !== 'string' || !ix.features.has(f as never))
@@ -220,7 +236,18 @@ export function validate(envelope: unknown, ctx: ValidationContext = {}): Valida
   }
   if (ctx.previous !== undefined && ctx.mathGate) st.previousLatex = latexOf(ctx.previous);
 
-  walk(st, doc, '/doc', [], 1, null);
+  // A document whose nodes and text alone are over the size limit is refused before the walk.
+  if (nodesOverLimit(doc)) spend(st, LIMITS.canonicalBytes + 1, '', null);
+  else walk(st, doc, '/doc', [], 1, null);
+  if (st.tooLarge) {
+    // The walk stopped where the size passed the limit, so the checks that need the whole
+    // document cannot run. They are listed as not checked, never as passed.
+    notChecked.push(
+      'every check past the point where the canonical size passed 16 MiB (I7): the walk stopped there',
+    );
+    v.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return { valid: false, violations: v, notChecked };
+  }
   resolveReferences(st);
   checkStyleChains(st);
   checkNumberingLevels(st);
@@ -254,6 +281,102 @@ export function validateDoc(
   );
 }
 
+/** `{"type":""}`: what a node adds to the canonical form besides its name. */
+const MIN_NODE_BYTES = 11;
+/** Children that are not node objects reported per content array before the walk gives up. */
+const MAX_MALFORMED_CHILDREN = 16;
+
+/**
+ * Counts bytes the canonical form is sure to have, and reports I7 once when they pass the limit.
+ * The canonical form (03 §2) keeps every node with its type name, every character of text and
+ * every attribute value that is not the default, so these counts are a lower bound of its size.
+ * A hostile document is then refused where it passes the limit, before the grammar walk and the
+ * exact measurement (CDM-013). The nodes and the text are counted before the walk
+ * (`nodesOverLimit`), an attribute value where it is read. Returns whether the walk must stop.
+ */
+function spend(st: State, bytes: number, path: string, nodeId: string | null): boolean {
+  st.minBytes += bytes;
+  if (st.minBytes <= LIMITS.canonicalBytes) return false;
+  if (!st.tooLarge)
+    add(
+      st,
+      'canonical_too_large',
+      path,
+      nodeId,
+      'the canonical size is more than 16 MiB: the limit is passed here',
+    );
+  st.tooLarge = true;
+  return true;
+}
+
+/** What a node adds to the canonical form at the least: its text, or its braces and type name. */
+function leastBytes(node: Record<string, unknown>): number {
+  const type = node['type'];
+  if (type === 'text') return typeof node['text'] === 'string' ? node['text'].length : 0;
+  return typeof type === 'string' ? MIN_NODE_BYTES + type.length : 2;
+}
+
+/**
+ * Whether the nodes and the text of a document alone are over the size limit (see `spend`). It
+ * reads no attribute and reports nothing, stops as soon as the bound passes the limit, and does
+ * not recurse, so hostile nesting and hostile length both cost at most the limit.
+ */
+function nodesOverLimit(doc: Record<string, unknown>): boolean {
+  let n = leastBytes(doc);
+  const stack: Array<Record<string, unknown>> = [doc];
+  while (stack.length) {
+    const content = stack.pop()!['content'];
+    if (!Array.isArray(content)) continue;
+    for (let i = 0; i < content.length; i++) {
+      const child: unknown = content[i];
+      if (!isObject(child)) continue;
+      n += leastBytes(child);
+      if (n > LIMITS.canonicalBytes) return true;
+      stack.push(child);
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether the JSON text of a value is longer than `limit` bytes, without writing it. It counts a
+ * lower bound (a number, a boolean or null as one byte, a UTF-16 code unit as one byte) and stops
+ * as soon as the bound passes the limit, so the work and the memory are bounded by the limit and
+ * not by the input. No recursion.
+ */
+function jsonSizeOver(value: unknown, limit: number): boolean {
+  if (typeof value !== 'object' || value === null)
+    return typeof value === 'string' && value.length + 2 > limit;
+  let n = 0;
+  const stack: object[] = [value];
+  const count = (v: unknown): void => {
+    if (typeof v === 'string') n += v.length + 2;
+    else if (typeof v === 'object' && v !== null) stack.push(v);
+    else if (v !== undefined) n += 1;
+  };
+  while (stack.length) {
+    const v = stack.pop()!;
+    if (Array.isArray(v)) {
+      // The brackets and the commas between the items, then each item.
+      n += v.length ? v.length + 1 : 2;
+      if (n > limit) return true;
+      for (let i = 0; i < v.length; i++) {
+        count(v[i]);
+        if (n > limit) return true;
+      }
+    } else {
+      n += 2;
+      for (const key of Object.keys(v)) {
+        // The quotes and the colon, then the value. (The comma is not counted: one fewer than keys.)
+        n += key.length + 3;
+        count((v as Record<string, unknown>)[key]);
+        if (n > limit) return true;
+      }
+    }
+  }
+  return n > limit;
+}
+
 const ALLOWED_KEYS = new Set(['type', 'attrs', 'content', 'marks']);
 const TEXT_KEYS = new Set(['type', 'text', 'marks']);
 
@@ -266,6 +389,7 @@ function walk(
   nearestId: string | null,
 ): void {
   const { ix } = st;
+  if (st.tooLarge) return;
   const type = node['type'];
   if (typeof type !== 'string')
     return add(st, 'unknown_node_type', path, nearestId, 'node without a type');
@@ -359,11 +483,17 @@ function walk(
           );
       }
       const next = [...ancestors, type];
-      content.forEach((child, i) => {
-        if (!isObject(child))
+      let malformed = 0;
+      for (let i = 0; i < content.length && !st.tooLarge; i++) {
+        const child: unknown = content[i];
+        if (isObject(child)) walk(st, child, `${path}/content/${i}`, next, depth + 1, nodeId);
+        else {
           add(st, 'malformed', `${path}/content/${i}`, nodeId, 'child is not a node object');
-        else walk(st, child, `${path}/content/${i}`, next, depth + 1, nodeId);
-      });
+          // The array is wrong already (I1); a hostile one is not reported item by item.
+          if (++malformed >= MAX_MALFORMED_CHILDREN) break;
+        }
+      }
+      if (st.tooLarge) return;
       if (type === 'table') checkTableGeometry(st, attrs, content, path, nodeId);
       if (type === 'paragraph' && typeof own === 'string') {
         const info = st.paragraphs.get(own);
@@ -438,6 +568,11 @@ function checkAttrs(
       else
         add(st, 'attribute_missing', `${path}/${name}`, nodeId, `${ownerName}.${name} is required`);
       continue;
+    }
+    // A value that alone is over the size limit is I7; its grammar is not walked item by item.
+    if (present && jsonSizeOver(value, LIMITS.canonicalBytes)) {
+      spend(st, LIMITS.canonicalBytes + 1, `${path}/${name}`, nodeId);
+      break;
     }
     // Field values (`reportAs` I15) are checked whole, by kind, by the field invariants.
     if (present && a.reportAs?.['*'] !== 'I15')
