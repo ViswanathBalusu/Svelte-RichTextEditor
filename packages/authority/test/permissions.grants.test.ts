@@ -25,6 +25,29 @@ import {
 } from './permission-fixtures.ts';
 
 const TERMS = 'rTerms000000000A';
+const LEGAL = 'rLegal000000000B';
+
+/** Grant, state and lease data under a vendor key, as an `ext` attribute could carry it. */
+const GRANT_SHAPED_EXT = {
+  'vendor.example:permissions': {
+    grants: [{ region: LEGAL, principal: 'user:carol', role: 'editor' }],
+    regionStates: [[LEGAL, 'approved']],
+    leases: [{ region: LEGAL, holder: 'carol', expiresAt: 1_760_000_900_000 }],
+    documentState: 'final',
+  },
+};
+
+/** The position of the first node of a type. */
+const posOfType = (doc: Node, type: string): number => {
+  let found = -1;
+  doc.descendants((n, pos) => {
+    if (found >= 0) return false;
+    if (n.type.name === type) found = pos;
+    return found < 0;
+  });
+  if (found < 0) throw new Error(`no ${type} node`);
+  return found;
+};
 
 /** The permission state as plain data, with the region-state map made comparable. */
 const snapshotOf = (p: PermissionState): unknown => ({
@@ -70,8 +93,32 @@ function shapes(doc: Node): Array<{ name: string; steps: Step[] }> {
       name: 'attr step on the region title',
       steps: [new AttrStep(posOf(doc, TERMS), 'title', 'Terms of tenancy')],
     },
+    // `ext` is free JSON on every node (03 §8). The authority never reads permissions from it.
+    {
+      name: 'attr step on the ext of a paragraph',
+      steps: [new AttrStep(posOf(doc, 'pIntro0000000001'), 'ext', GRANT_SHAPED_EXT)],
+    },
+    {
+      name: 'attr step on the ext of a region',
+      steps: [new AttrStep(posOf(doc, TERMS), 'ext', GRANT_SHAPED_EXT)],
+    },
+    {
+      name: 'attr step on the ext of a restricted region',
+      steps: [new AttrStep(posOf(doc, LEGAL), 'ext', GRANT_SHAPED_EXT)],
+    },
+    {
+      name: 'attr step on the ext of body',
+      steps: [new AttrStep(posOfType(doc, 'body'), 'ext', GRANT_SHAPED_EXT)],
+    },
   ];
 }
+
+/** The names of the `ext` shapes, which the first test expects to find among the stored commits. */
+const EXT_SHAPES = [
+  'attr step on the ext of a paragraph',
+  'attr step on the ext of a region',
+  'attr step on the ext of body',
+];
 
 describe('a commit cannot change grants, region states or leases (PRM-002 criterion 4)', () => {
   it('leaves the permission state unchanged for every commit shape of an editor', () => {
@@ -90,6 +137,8 @@ describe('a commit cannot change grants, region states or leases (PRM-002 criter
     }
     // Some of the shapes were stored, so the check ran over real commits.
     expect(stored.length).toBeGreaterThan(0);
+    // The `ext` steps an editor may make were stored with their grant-shaped data, and changed nothing.
+    expect(stored).toEqual(expect.arrayContaining(EXT_SHAPES));
     expect(room.head).toBe(stored.length);
     expect(room.permissions.revision).toBe(1);
   });
