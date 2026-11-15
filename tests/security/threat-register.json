@@ -1,5 +1,5 @@
 {
-  "$comment": "The threat register (SEC-001): every threat of 10 §3 tied to its control, the epic/story that builds it, and the SEC story whose tests prove it. A threat with no proving tests yet is marked \"control-not-built\" with the phase it is due. register.test.ts checks this file on every build (10 §2, §3, §5). Trust boundaries and actors follow 10 §2.",
+  "$comment": "The threat register (SEC-001): every threat of 10 §3 tied to its control, the epic/story that builds it, and the SEC story whose tests prove it. A threat with no proving tests yet is marked \"control-not-built\" with the phase it is due. register.test.ts checks this file on every build (10 §2, §3, §5). Trust boundaries and actors follow 10 §2. specRows quotes the wording of 10 §3 that a row covers (a table row's threat, or a phrase of the prose in §3.4, §3.7 and §3.8); register.test.ts reads docs/spec/10-security.md and fails when a table row, a §3.7 item or a §3.8 sentence has no register row.",
   "spec": "10",
   "review": {
     "phase": "1a",
@@ -7,7 +7,12 @@
     "note": "The end-of-phase review and the second-maintainer sign-off are SEC-003; this register and the SEC suite are its inputs. The sign-off is a human step and is not asserted here."
   },
   "boundaries": [
-    { "id": "host-page-to-element", "from": "host page", "to": "element", "via": "DOM API" },
+    {
+      "id": "host-page-to-element",
+      "from": "host page",
+      "to": "element",
+      "via": "DOM API"
+    },
     {
       "id": "element-to-service",
       "from": "element",
@@ -55,7 +60,11 @@
       "trustedFor": "nothing beyond their capabilities",
       "hostile": "assume a user will send hand-crafted protocol messages"
     },
-    { "id": "other-tenants", "trustedFor": "nothing", "hostile": "yes" },
+    {
+      "id": "other-tenants",
+      "trustedFor": "nothing",
+      "hostile": "yes"
+    },
     {
       "id": "content-and-input",
       "trustedFor": "nothing; also untrusted as input to an assistant model",
@@ -83,7 +92,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Script injection through document content"]
     },
     {
       "id": "T-3.1-script-paste",
@@ -95,7 +105,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Script injection through paste"]
     },
     {
       "id": "T-3.1-links",
@@ -107,7 +118,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Dangerous links"]
     },
     {
       "id": "T-3.1-images",
@@ -119,7 +131,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element", "service-to-workers"]
+      "boundaries": ["host-page-to-element", "service-to-workers"],
+      "specRows": ["Hostile images"]
     },
     {
       "id": "T-3.1-hostile-pdf",
@@ -131,7 +144,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["A hostile PDF from a compromised worker"]
     },
     {
       "id": "T-3.1-token-theft",
@@ -143,7 +157,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Token theft"]
     },
     {
       "id": "T-3.1-host-policies",
@@ -155,7 +170,10 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Strict host policies"],
+      "mergedFrom": "SEC-008",
+      "provenByNote": "SEC-008 (Prove the component works under strict host policies) was merged into FE-125 in the cross-check of 2026-11-06, so FE-125 both builds and proves this row. Proposed reading, not an owner decision: docs/adr/0360-w3-SEC-001-register-proving-story.md."
     },
     {
       "id": "T-3.1-side-effects",
@@ -167,7 +185,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Global side effects on the host page"]
     },
     {
       "id": "T-3.1-leak-to-host",
@@ -179,7 +198,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Leaking content to the host page by accident"]
     },
     {
       "id": "T-3.1-prompt-injection",
@@ -191,9 +211,9 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Prompt injection through document text"]
     },
-
     {
       "id": "T-3.2-cross-site",
       "section": "3.2",
@@ -204,7 +224,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["cross-site.test.ts"],
-      "boundaries": ["element-to-service", "host-backend-to-service"]
+      "boundaries": ["element-to-service", "host-backend-to-service"],
+      "specRows": ["Cross-site WebSocket use", "Cross-site request forgery on REST"]
     },
     {
       "id": "T-3.2-token-confusion",
@@ -216,7 +237,11 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["token-confusion.test.ts"],
-      "boundaries": ["element-to-service", "host-backend-to-service"]
+      "boundaries": ["element-to-service", "host-backend-to-service"],
+      "specRows": [
+        "Cross-tenant token confusion",
+        "A token that covers many documents with one role"
+      ]
     },
     {
       "id": "T-3.2-revocation",
@@ -228,7 +253,8 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Reconnecting after revocation"]
     },
     {
       "id": "T-3.2-replay",
@@ -240,7 +266,11 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service", "host-backend-to-service"]
+      "boundaries": ["element-to-service", "host-backend-to-service"],
+      "specRows": [
+        "Replay and resubmission",
+        "Taking over another caller's job through a reused idempotency key"
+      ]
     },
     {
       "id": "T-3.2-bare-id",
@@ -252,7 +282,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-backend-to-service"]
+      "boundaries": ["host-backend-to-service"],
+      "specRows": ["Reaching someone else's thread, export or asset by its bare identifier"]
     },
     {
       "id": "T-3.2-malformed",
@@ -264,7 +295,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["malformed-input.test.ts"],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Oversized or malformed messages"]
     },
     {
       "id": "T-3.2-exhaustion",
@@ -276,7 +308,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Resource exhaustion"]
     },
     {
       "id": "T-3.2-identity-spoof",
@@ -288,7 +321,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["identity-spoofing.test.ts"],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Identity spoofing"]
     },
     {
       "id": "T-3.2-webhooks",
@@ -300,9 +334,9 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-host-backend"]
+      "boundaries": ["service-to-host-backend"],
+      "specRows": ["Forged webhooks", "Server-side request forgery through webhook targets"]
     },
-
     {
       "id": "T-3.3-no-permission",
       "section": "3.3",
@@ -313,7 +347,9 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["bypass-classes.test.ts"],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Changing a part of a document without permission"],
+      "alsoProvenBy": ["SEC-022", "SEC-023"]
     },
     {
       "id": "T-3.3-shared-styles",
@@ -325,7 +361,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Defacing protected text through shared styles"]
     },
     {
       "id": "T-3.3-rebase",
@@ -337,7 +374,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["rebase-tricks.test.ts"],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Bypassing validation through rebase tricks"]
     },
     {
       "id": "T-3.3-revoked-race",
@@ -349,7 +387,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["permission-races.test.ts"],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Editing under permissions that were just revoked"]
     },
     {
       "id": "T-3.3-corrupt",
@@ -361,7 +400,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["corrupting-commits.test.ts"],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Corrupting the document"]
     },
     {
       "id": "T-3.3-stall",
@@ -373,7 +413,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Stalling or crashing a process that hosts many rooms"]
     },
     {
       "id": "T-3.3-forge-history",
@@ -385,7 +426,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Forging history"]
     },
     {
       "id": "T-3.3-approved",
@@ -397,7 +439,8 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Changing an approved region"]
     },
     {
       "id": "T-3.3-two-writers",
@@ -409,7 +452,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["two-writers.test.ts"],
-      "boundaries": ["element-to-service", "service-to-workers"]
+      "boundaries": ["element-to-service", "service-to-workers"],
+      "specRows": ["Two writers"]
     },
     {
       "id": "T-3.3-deleted-text",
@@ -421,9 +465,9 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["Reading deleted text through old versions"]
     },
-
     {
       "id": "T-3.4-latex-injection",
       "section": "3.4",
@@ -434,7 +478,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["typed emitters for every context in which a user's string can reach TeX"]
     },
     {
       "id": "T-3.4-math-gate",
@@ -446,7 +491,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["a strict gate on math that also stops content painted outside its box"]
     },
     {
       "id": "T-3.4-sandbox",
@@ -458,7 +504,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["a single-use sandbox per job"]
     },
     {
       "id": "T-3.4-outputs",
@@ -470,9 +517,22 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["outputs treated as hostile"]
     },
-
+    {
+      "id": "T-3.4-two-compiles",
+      "section": "3.4",
+      "threat": "One compromised compile deciding what is sealed",
+      "control": "Two independent compiles are compared before sealing",
+      "builtBy": ["FRW-052", "EXP-068"],
+      "provenBy": "SEC-042",
+      "phase": "2",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["service-to-workers", "service-to-signing"],
+      "specRows": ["two independent compiles before sealing"]
+    },
     {
       "id": "T-3.5-claim-asset",
       "section": "3.5",
@@ -483,7 +543,11 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": [
+        "Overwriting or claiming an asset by declaring its hash",
+        "Referencing an asset one never uploaded to gain read access to it"
+      ]
     },
     {
       "id": "T-3.5-bombs",
@@ -495,7 +559,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["Decompression bombs"]
     },
     {
       "id": "T-3.5-docx",
@@ -507,7 +572,8 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["XML external entities", "Remote content in DOCX", "Macros and embedded objects"]
     },
     {
       "id": "T-3.5-decoder",
@@ -519,9 +585,22 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["Decoder exploits", "Content-type confusion"]
     },
-
+    {
+      "id": "T-3.5-imported-authors",
+      "section": "3.5",
+      "threat": "Impersonation through imported tracked changes",
+      "control": "Imported authors become labels, never user identities",
+      "builtBy": ["EXP-098", "EXP-099"],
+      "provenBy": "SEC-039",
+      "phase": "2",
+      "status": "proven",
+      "tests": ["docx-import-abuse.test.ts"],
+      "boundaries": ["service-to-workers"],
+      "specRows": ["Impersonation through imported tracked changes"]
+    },
     {
       "id": "T-3.6-stolen-key",
       "section": "3.6",
@@ -532,7 +611,8 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-signing"]
+      "boundaries": ["service-to-signing"],
+      "specRows": ["Stolen signing key"]
     },
     {
       "id": "T-3.6-tampered-pdf",
@@ -544,7 +624,8 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-signing"]
+      "boundaries": ["service-to-signing"],
+      "specRows": ["A tampered PDF being sealed"]
     },
     {
       "id": "T-3.6-over-claim",
@@ -556,7 +637,8 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-signing"]
+      "boundaries": ["service-to-signing"],
+      "specRows": ["Claims about signer identity the platform cannot support"]
     },
     {
       "id": "T-3.6-evidence",
@@ -568,7 +650,8 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-signing"]
+      "boundaries": ["service-to-signing"],
+      "specRows": ["Evidence leaking or outliving its purpose"]
     },
     {
       "id": "T-3.6-filler",
@@ -580,9 +663,9 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["element-to-service"]
+      "boundaries": ["element-to-service"],
+      "specRows": ["A filler changing more than their fields"]
     },
-
     {
       "id": "T-3.7-cross-tenant",
       "section": "3.7",
@@ -593,7 +676,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["tenant-isolation.test.ts"],
-      "boundaries": ["host-backend-to-service", "service-to-workers"]
+      "boundaries": ["host-backend-to-service", "service-to-workers"],
+      "specRows": ["Row-level security and a tenant identifier on every table"]
     },
     {
       "id": "T-3.7-signed-urls",
@@ -605,7 +689,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["Signed URLs are short-lived"]
     },
     {
       "id": "T-3.7-logs",
@@ -617,7 +702,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["logs-no-content.test.ts"],
-      "boundaries": ["host-backend-to-service"]
+      "boundaries": ["host-backend-to-service"],
+      "specRows": ["Logs and metrics never contain document content or tokens"]
     },
     {
       "id": "T-3.7-secrets",
@@ -629,7 +715,8 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-backend-to-service"]
+      "boundaries": ["host-backend-to-service"],
+      "specRows": ["Secrets are held in a secret manager and rotated"]
     },
     {
       "id": "T-3.7-backups",
@@ -641,9 +728,9 @@
       "phase": "2",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["Backups are encrypted"]
     },
-
     {
       "id": "T-3.8-deps",
       "section": "3.8",
@@ -654,7 +741,8 @@
       "phase": "1a",
       "status": "proven",
       "tests": ["supply-chain.test.ts"],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["Lock files, dependency review"]
     },
     {
       "id": "T-3.8-sbom",
@@ -666,7 +754,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["a software bill of materials per release"]
     },
     {
       "id": "T-3.8-images",
@@ -678,7 +767,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["signed container images, pinned base images"]
     },
     {
       "id": "T-3.8-texlive",
@@ -690,7 +780,8 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["service-to-workers"]
+      "boundaries": ["service-to-workers"],
+      "specRows": ["a pinned TeX Live with a licence manifest"]
     },
     {
       "id": "T-3.8-bundle",
@@ -702,9 +793,22 @@
       "phase": "1b",
       "status": "control-not-built",
       "tests": [],
-      "boundaries": ["host-page-to-element"]
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["The editor bundle loads no code at run time from third-party origins"]
     },
-
+    {
+      "id": "T-3.8-extensions",
+      "section": "3.8",
+      "threat": "A sandboxed third-party extension reaching past its boundary",
+      "control": "Sandboxed third-party extensions, if they are ever built, are an explicit exception with their own review (13 §7.2)",
+      "builtBy": ["UX-050", "UX-060"],
+      "provenBy": "SEC-055",
+      "phase": "cond",
+      "status": "control-not-built",
+      "tests": [],
+      "boundaries": ["host-page-to-element"],
+      "specRows": ["Sandboxed third-party extensions"]
+    },
     {
       "id": "T-5-fuzzing",
       "section": "5",

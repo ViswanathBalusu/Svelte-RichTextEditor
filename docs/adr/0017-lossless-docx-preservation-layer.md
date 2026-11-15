@@ -59,8 +59,8 @@ Attributes and child elements of a modelled element that the CDM does not model 
 
 Both hold a JSON element tree, never XML text:
 
-- element names in Clark notation (`{namespace-uri}local-name`), attribute values and text as strings;
-- depth at most 8 and at most 16 KiB of canonical JSON per attribute (targets to confirm in S11).
+- element names with a registered short prefix for the OOXML namespaces (`w:val`) and in Clark notation (`{namespace-uri}local-name`) for any other namespace, attribute values and text as strings (a name of a registered namespace is never written in Clark notation, so that one tree has one spelling);
+- depth at most 12 and at most 16 KiB of canonical JSON per attribute, 32 KiB on `style_def` (the limits after spike S11, see "Changes from spike S11"; the first proposal was Clark notation only, depth 8 and 16 KiB).
 
 The writer serialises the tree with its own escaping. A hostile value therefore cannot inject markup, and the authority can check the grammar without an XML parser.
 

@@ -16,6 +16,8 @@ export interface ChunkInfo {
   imports: readonly string[];
   dynamicImports: readonly string[];
   moduleIds: readonly string[];
+  /** Rendered length of each module in the chunk (after tree-shaking, before minification). */
+  moduleSizes?: Readonly<Record<string, number>>;
   code: string;
 }
 
@@ -72,12 +74,68 @@ function contents(chunk: ChunkInfo): string[] {
   return [...out].sort();
 }
 
+/** The package a module belongs to: a dependency's name, `@docedit/<name>`, or null. */
+export function packageOf(moduleId: string): string | null {
+  const path = moduleId.replaceAll('\\', '/');
+  const pkg = /.*node_modules\/((?:@[^/]+\/)?[^/]+)/.exec(path);
+  if (pkg) return pkg[1]!;
+  const ws = /packages\/([^/]+)\//.exec(path);
+  return ws ? `@docedit/${ws[1]}` : null;
+}
+
+/** One package's part of a set of chunks (CDM-008: `@docedit/model` is listed on its own). */
+export interface PackageShare {
+  package: string;
+  /** Bytes of the package's modules as the bundler rendered them, before minification. */
+  rendered: number;
+  /** `rendered` over the rendered bytes of every module in the set, 0 to 1. */
+  share: number;
+  /** An estimate: each chunk's gzip size split by the packages' rendered bytes in that chunk. */
+  gzipEstimate: number;
+}
+
+/** Splits the chunks of a set between the packages whose modules they hold, largest first. */
+export function packageShares(chunks: readonly ChunkInfo[]): PackageShare[] {
+  const rendered = new Map<string, number>();
+  const gzip = new Map<string, number>();
+  let all = 0;
+  for (const chunk of chunks) {
+    const inChunk = new Map<string, number>();
+    let chunkTotal = 0;
+    for (const [id, length] of Object.entries(chunk.moduleSizes ?? {})) {
+      const name = packageOf(id) ?? '(other)';
+      inChunk.set(name, (inChunk.get(name) ?? 0) + length);
+      chunkTotal += length;
+    }
+    if (chunkTotal === 0) continue;
+    const chunkGzip = sizeOf(chunk.code).gzip;
+    all += chunkTotal;
+    for (const [name, length] of inChunk) {
+      rendered.set(name, (rendered.get(name) ?? 0) + length);
+      gzip.set(name, (gzip.get(name) ?? 0) + (chunkGzip * length) / chunkTotal);
+    }
+  }
+  return [...rendered]
+    .map(([name, length]) => ({
+      package: name,
+      rendered: length,
+      share: length / all,
+      gzipEstimate: Math.round(gzip.get(name)!),
+    }))
+    .sort((a, b) => b.rendered - a.rendered || a.package.localeCompare(b.package));
+}
+
 export interface Report {
   measuredAt: string;
   how: string;
   budgetGzipBytes: number;
   /** With a `backend` the host passes: the entry and the editor, with their static imports. */
   firstInteractive: { files: string[]; size: Size };
+  /**
+   * The first interactive editor (host backend) split by package, so that the part of each
+   * workspace package, `@docedit/model` among them, is listed separately (CDM-008).
+   */
+  firstInteractiveByPackage: PackageShare[];
   /** With `endpoint` and `getToken`: the same plus the DEP client (`@docedit/backend-dep`). */
   firstInteractiveWithDep: { files: string[]; size: Size } | null;
   chunks: Array<{ file: string; kind: string; size: Size; contents: string[] }>;
@@ -104,9 +162,13 @@ export function bundleReport(chunks: readonly ChunkInfo[], viewerDir: string | n
   const withDep = dep ? closure([...files, dep.fileName], byName) : null;
   const report: Report = {
     measuredAt: new Date().toISOString(),
-    how: 'Node.js zlib on the files of `vite build` (library mode, minified): gzip level 9, Brotli quality 11.',
+    how:
+      'Node.js zlib on the files of `vite build` (library mode, minified): gzip level 9, Brotli quality 11. ' +
+      "Per package: the bundler's rendered module lengths (before minification); the gzip figure is an " +
+      "estimate, each chunk's gzip size split by those lengths.",
     budgetGzipBytes: BUDGET_GZIP_BYTES,
     firstInteractive: { files, size },
+    firstInteractiveByPackage: packageShares(files.map((f) => byName.get(f)!)),
     firstInteractiveWithDep: withDep ? { files: [...withDep].sort(), size: total(withDep) } : null,
     chunks: chunks.map((c) => ({
       file: c.fileName,
@@ -160,6 +222,11 @@ export function printReport(report: Report): void {
   line('first interactive editor, host backend', report.firstInteractive);
   if (report.firstInteractiveWithDep)
     line('first interactive editor, DEP client', report.firstInteractiveWithDep);
+  console.log('first interactive editor by package (rendered before minification; gzip estimated)');
+  for (const p of report.firstInteractiveByPackage)
+    console.log(
+      `${p.package.padEnd(46)}${kb(p.rendered).padStart(10)}${`~${kb(p.gzipEstimate)}`.padStart(11)}${`${(p.share * 100).toFixed(1)} %`.padStart(11)}`,
+    );
   console.log(
     `budget ${kb(report.budgetGzipBytes)} gzip: ${report.withinBudget ? 'within' : 'EXCEEDED'}`,
   );

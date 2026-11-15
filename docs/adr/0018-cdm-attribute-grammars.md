@@ -33,7 +33,7 @@
 | `ext` | An object whose keys are `vendor.example:name`, at most 4 KiB of canonical JSON and 8 levels deep, integers only |
 | `fmt.before` | `{ "marks": [mark JSON], "attrs": { name: value } }`, at most 4 KiB |
 | Payloads | `extension_block` up to 16 KiB (I12), `extension_inline` up to 4 KiB, never non-integer numbers |
-| Preserved data | Element trees (ADR 0017) of at most 16 KiB and 8 levels, with names in Clark notation. They may be non-null only with the feature `preserve` |
+| Preserved data | Element trees (ADR 0017) of at most 16 KiB (32 KiB on `style_def`) and 12 levels, with names in registered-prefix notation for the OOXML namespaces and in Clark notation for any other (the limits after spike S11). They may be non-null only with the feature `preserve` |
 
 ### Content expressions carry what they can of I10
 
