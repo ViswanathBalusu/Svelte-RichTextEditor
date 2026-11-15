@@ -1193,7 +1193,7 @@
       ],
       "requires": "Service credential",
       "ifMatch": "none",
-      "idempotencyKey": false,
+      "idempotencyKey": true,
       "success": "201",
       "spec": "08 §11; 13 §10",
       "owner": "UX"

@@ -4907,6 +4907,9 @@
             "description": "Document identifier."
           },
           {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
             "$ref": "#/components/parameters/DepActor"
           },
           {
