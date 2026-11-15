@@ -32,6 +32,7 @@ import {
   gitShow,
   resolveBaseRef,
 } from '../test/exp-015-class-ledger.ts';
+import { doc, para, run } from '../test/docs.ts';
 import { CLASS_VERSION } from './convert.ts';
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -141,9 +142,22 @@ describe('EXP-015 criterion 4: a class change is released with a raised version'
     });
   });
 
-  const candidates = [process.env['DOCEDIT_CLASS_BASE_REF'] ?? '', 'origin/main', 'main'].filter(
-    (r) => r !== '',
-  );
+  it('writes the released version to the manifest.json of every bundle', async () => {
+    const released = ledger.releases.at(-1)?.version;
+    expect(released).toBe(CLASS_VERSION);
+    const bundle = await run(doc([para('A paragraph.')]));
+    expect(bundle.manifest.classVersion).toBe(released);
+    const written = JSON.parse(bundle.files['manifest.json']!) as { classVersion?: string };
+    expect(written.classVersion).toBe(released);
+  });
+
+  // master is the base branch of a tree that has no main (as this repository's has not).
+  const candidates = [
+    process.env['DOCEDIT_CLASS_BASE_REF'] ?? '',
+    'origin/main',
+    'main',
+    'master',
+  ].filter((r) => r !== '');
   const baseRef = resolveBaseRef(repo, candidates);
   const rel = 'packages/export-latex/class';
   it.skipIf(baseRef === null)(
