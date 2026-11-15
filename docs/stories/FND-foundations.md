@@ -310,10 +310,12 @@ As the project owner, I want each requirement traced to stories and tests, so th
 **Acceptance criteria**
 
 - [x] A matrix maps R1 to R15 to the stories that implement them and the test suites that prove them.
-- [ ] The release notes list the requirements whose coverage changed.
+- [x] The release notes list the requirements whose coverage changed.
 - [x] A requirement with no story or no test is shown as a gap.
 
-**Evidence:** `docs/stories/tools/traceability.ps1` (`pnpm trace`) writes `docs/stories/TRACEABILITY.md`. It maps R1 to R15 to stories (from their Requirements field) and to test suites (from their Evidence lines), and marks a requirement with no story or no test as a gap. Release notes (criterion 2) wait for the release pipeline (FND-012).
+**Evidence:** `docs/stories/tools/traceability.ps1` (`pnpm trace`) writes `docs/stories/TRACEABILITY.md`. It maps R1 to R15 to stories (from their Requirements field) and to test suites (from their Evidence lines), and marks a requirement with no story or no test as a gap. Criterion 2 (lane w5, 2026-11-15): the release pipeline of FND-012 now exists and does this. `scripts/release/stories.ts` (`coverage`, `coverageChanges`) compares the story snapshot kept by the previous release with the current one, and `scripts/release/notes.ts` (`renderReleaseNotes`) writes the section "Requirements whose coverage changed" into `RELEASE-NOTES.md` (`scripts/release/release.ts`, option `--previous-snapshot`). Tests: `scripts/release/stories.test.ts` ("lists the requirements whose coverage changed") and `scripts/release/notes.test.ts` ("list artefacts, images, what is missing, how to verify and the coverage that changed"), run in Node.js.
+
+**Notes:** In the release notes, a requirement's coverage is the set of stories that have at least one met criterion; a change in that set is what is listed. The test suites per requirement are in the matrix only. No release has been published yet, so the section has only been produced in tests.
 
 ## Coverage
 

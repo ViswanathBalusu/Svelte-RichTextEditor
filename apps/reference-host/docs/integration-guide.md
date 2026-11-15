@@ -45,6 +45,18 @@ The token's role comes from the catalogue as it is now. The token issuer is in `
 
 Registration of keys and origins is seeded from configuration in the reference host (`scripts/lib/stack.ts`, `tenantRegistration`).
 
+### The user identifier: `sub`
+
+The `sub` claim of the token names the user (protocol, 05 section 3.1). Choose it with care:
+
+- **Opaque.** The document service gives `sub` no meaning. It only compares it for equality. Do not put a name, a role or anything else a person could read into it.
+- **Stable.** Send the same `sub` for the same person in every token, for as long as the person exists in your directory. Grants, comments and history are attributed through it. If it changes, the service sees a different user.
+- **Not an e-mail address.** Do not use e-mail addresses as `sub`. An address is personal data, and it changes when a person changes name or employer. Use the key of the user's record in your own directory. The reference host uses identifiers such as `u-ada`.
+
+The document service does not write `sub` into the commit log. It stores a per-tenant surrogate identifier for each `sub`, in one row per user, and the log holds the surrogate (history, 08 section 13). Erasing a person deletes that row. Their contributions remain, attributed to an identifier that no longer leads anywhere.
+
+The display name is the optional `name` claim. It is separate from `sub` and can be purged.
+
 ## 2. The page glue
 
 The page glue connects the element to your host. It uses only the element's attributes, properties, methods and events (05 section 8.1). The glue is framework-free: copy `src/lib/glue/page-glue.ts` into your page. Your page calls `attachEditor` once and keeps the function it returns to detach.
