@@ -533,11 +533,73 @@ describe('model.validate(): references, limits and hostile input (CDM-013, CDM-0
     expect(r.violations.map((v) => v.invariant)).toContain('I7');
   });
 
-  it('I11: returns for a 16 MiB array in `ext` without unbounded memory', () => {
+  // Hostile inputs (CDM-013, criterion 8): each returns I7 within a bound far below what walking
+  // the input item by item costs, and says what it did not check.
+  const PROMPT_MS = 2000;
+  const timed = (d: unknown) => {
+    const start = performance.now();
+    const r = validate(d, ctx);
+    return { r, ms: performance.now() - start };
+  };
+
+  it('I7: a 16 MiB array in `ext` is refused promptly, at the attribute, without walking it', () => {
     const d = clone();
     defs(d)[0]!.attrs.ext = { 'vendor.example:data': new Array<number>(8 * 1024 * 1024).fill(1) };
-    const r = validate(d, ctx);
-    expect(r.violations.map((v) => v.invariant)).toContain('I11');
+    const { r, ms } = timed(d);
+    expect(r.violations.map((v) => v.invariant)).toEqual(['I7']);
+    expect(r.violations[0]!.code).toBe('canonical_too_large');
+    expect(r.violations[0]!.path).toMatch(/\/attrs\/ext$/);
+    expect(r.notChecked.some((n) => n.includes('16 MiB'))).toBe(true);
+    expect(ms).toBeLessThan(PROMPT_MS);
+  });
+
+  it('I7: 16 MiB of nested arrays and of long keys in an attribute are refused promptly', () => {
+    const nested = clone();
+    defs(nested)[0]!.attrs.ext = {
+      'vendor.example:data': new Array<unknown>(6 * 1024 * 1024).fill([]),
+    };
+    const keys = clone();
+    const big: Record<string, number> = {};
+    for (let i = 0; i < 20; i++) big[`${i}`.padEnd(1024 * 1024, 'k')] = 1;
+    defs(keys)[0]!.attrs.ext = { 'vendor.example:data': big };
+    for (const d of [nested, keys]) {
+      const { r, ms } = timed(d);
+      expect(r.violations.map((v) => v.invariant)).toEqual(['I7']);
+      expect(ms).toBeLessThan(PROMPT_MS);
+    }
+  });
+
+  it('I7: two million empty paragraphs are refused where the size passes the limit', () => {
+    const d = clone();
+    const content = body(d);
+    for (let i = 0; i < 2_000_000; i++) content.push({ type: 'paragraph' });
+    const { r, ms } = timed(d);
+    // Refused before the walk: none of the two million missing identifiers is reported.
+    expect(r.violations.map((v) => v.invariant)).toEqual(['I7']);
+    expect(r.notChecked.some((n) => n.includes('16 MiB'))).toBe(true);
+    expect(ms).toBeLessThan(PROMPT_MS);
+  });
+
+  it('I1: a 16 MiB array that is not content or not features is reported a bounded number of times', () => {
+    const d = clone();
+    (d['doc'] as Json)['content'] = new Array<number>(8 * 1024 * 1024).fill(1);
+    const a = timed(d);
+    expect(a.r.valid).toBe(false);
+    expect(a.r.violations.filter((v) => v.code === 'malformed').length).toBe(16);
+    expect(a.ms).toBeLessThan(PROMPT_MS);
+
+    const e = clone();
+    e['requires'] = new Array<string>(8 * 1024 * 1024).fill('tables');
+    const b = timed(e);
+    expect(b.r.violations.filter((v) => v.code === 'requires_invalid').length).toBe(1);
+    expect(b.ms).toBeLessThan(PROMPT_MS);
+  });
+
+  it('the size bound never refuses a document below the limit', () => {
+    // 16 MiB less the rest of the example is under the limit by the exact measure too.
+    const d = clone();
+    body(d)[2]!.content = [{ type: 'text', text: 'x'.repeat(16 * 1024 * 1024 - 64 * 1024) }];
+    expect(invariants(d)).toEqual([]);
   });
 });
 
