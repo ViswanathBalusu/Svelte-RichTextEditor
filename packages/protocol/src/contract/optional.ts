@@ -4,6 +4,7 @@
  * the other ports have a member check only, until their resources exist (phases 1b and 2).
  */
 import type { PresencePeers } from '../generated/types.ts';
+import type { Backend } from '../ports/core.ts';
 import type { OptionalPortName } from '../ports/features.ts';
 import { check, equal, includes, jsonEqual } from './assert.ts';
 import { type ContractCase, waitUntil } from './core.ts';
@@ -11,8 +12,9 @@ import { USERS } from './fixtures.ts';
 import type { CaseContext, ContractHarness, ContractOptions, HarnessFactory } from './harness.ts';
 import { connect, createDoc, join, quiet, withHarness } from './support.ts';
 
-/** Every member of each optional port (src/ports/optional.ts). */
-export const OPTIONAL_MEMBERS: Readonly<Record<OptionalPortName, readonly string[]>> = {
+type PortOf<K extends OptionalPortName> = NonNullable<Backend[K]>;
+
+const MEMBERS = {
   presence: ['update', 'onPeers'],
   history: [
     'history',
@@ -43,7 +45,22 @@ export const OPTIONAL_MEMBERS: Readonly<Record<OptionalPortName, readonly string
   workflow: ['get', 'put', 'act', 'participant', 'evidence', 'final', 'onChange'],
   proofing: ['check', 'addWord'],
   assistant: ['request'],
-};
+} as const satisfies { readonly [K in OptionalPortName]: readonly (keyof PortOf<K>)[] };
+
+/** Members of the port typings that the list above leaves out; `never` when it is complete. */
+export type UnlistedOptionalMembers = {
+  [K in OptionalPortName]: Exclude<keyof PortOf<K>, (typeof MEMBERS)[K][number]> extends never
+    ? never
+    : `${K}.${Exclude<keyof PortOf<K>, (typeof MEMBERS)[K][number]> & string}`;
+}[OptionalPortName];
+
+/**
+ * Every member of each optional port (src/ports/optional.ts). The type-check fails when a name here
+ * is not a member of its port, or when a port gains a member that is not listed here (PRO-092
+ * criterion 5), so a new member cannot be left without a contract case.
+ */
+export const OPTIONAL_MEMBERS: Readonly<Record<OptionalPortName, readonly string[]>> =
+  MEMBERS satisfies [UnlistedOptionalMembers] extends [never] ? unknown : never;
 
 export function optionalCases(factory: HarnessFactory, opts: ContractOptions): ContractCase[] {
   const c = (
