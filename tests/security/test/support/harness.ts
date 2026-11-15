@@ -29,6 +29,7 @@ import type { EventSink } from '../../../../services/document-service/src/contro
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { uuid7 } from '@docedit/model';
 import pg from 'pg';
+import { startOnFetchablePort } from '../../../../services/document-service/test/support/ports.ts';
 import { b64url, keyPair, signJws, type KeyPair } from './jws.ts';
 
 export type Storage = 'memory' | 'postgres';
@@ -290,33 +291,43 @@ export async function startHarness(storage: Storage, opts: HarnessOptions = {}):
   const now = () => Date.now();
   const logs: string[] = [];
   const logger = createLogger((line) => logs.push(line));
-  const service = await startService({
-    config: {
-      ...configFromEnv(opts.env ?? {}),
-      port: opts.port ?? 0,
-      ...(opts.host ? { host: opts.host } : {}),
-      workers: 1,
-      databaseUrl,
-      ...(opts.node ? { node: opts.node } : {}),
-    },
-    ...(opts.parts ? { parts: opts.parts } : {}),
-    ...(opts.views ? { views: opts.views } : {}),
-    ...(opts.rateLimits ? { rateLimits: opts.rateLimits } : {}),
-    ...(opts.events ? { events: opts.events } : {}),
-    ...(opts.webhooks ? { webhooks: opts.webhooks } : {}),
-    ...(opts.dataPlane
-      ? {
-          createDataPlane: (deps: Parameters<typeof defaultDataPlane>[0]) =>
-            defaultDataPlane({
-              ...deps,
-              settings: { ...deps.settings, ...opts.dataPlane },
-            } as Parameters<typeof defaultDataPlane>[0]),
-        }
-      : {}),
-    ...(opts.onSpan ? { onSpan: opts.onSpan } : {}),
-    logger,
-    now,
-  });
+  const start = () =>
+    startService({
+      config: {
+        ...configFromEnv(opts.env ?? {}),
+        port: opts.port ?? 0,
+        ...(opts.host ? { host: opts.host } : {}),
+        workers: 1,
+        databaseUrl,
+        ...(opts.node ? { node: opts.node } : {}),
+      },
+      ...(opts.parts ? { parts: opts.parts } : {}),
+      ...(opts.views ? { views: opts.views } : {}),
+      ...(opts.rateLimits ? { rateLimits: opts.rateLimits } : {}),
+      ...(opts.events ? { events: opts.events } : {}),
+      ...(opts.webhooks ? { webhooks: opts.webhooks } : {}),
+      ...(opts.dataPlane
+        ? {
+            createDataPlane: (deps: Parameters<typeof defaultDataPlane>[0]) =>
+              defaultDataPlane({
+                ...deps,
+                settings: { ...deps.settings, ...opts.dataPlane },
+              } as Parameters<typeof defaultDataPlane>[0]),
+          }
+        : {}),
+      ...(opts.onSpan ? { onSpan: opts.onSpan } : {}),
+      logger,
+      now,
+    });
+  // A port the system chooses can be one fetch refuses ("bad port"); choose again then.
+  const service =
+    (opts.port ?? 0) === 0
+      ? await startOnFetchablePort(
+          start,
+          (s) => s.url,
+          (s) => s.close(),
+        )
+      : await start();
   if (opts.host === '0.0.0.0') {
     // Windows does not connect to 0.0.0.0; the same listener answers on 127.0.0.1.
     (service as { url: string }).url = service.url.replace('//0.0.0.0:', '//127.0.0.1:');
