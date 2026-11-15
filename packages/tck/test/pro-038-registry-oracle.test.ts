@@ -47,6 +47,7 @@ describe('the kit fails a problem the error registry does not allow (PRO-038)', 
     id: 'oracle',
     title: 'the registry oracle',
     spec: '05 §5.8',
+    stories: ['PRO-038'],
     requires: { kind: 'always' },
     scenarios: [],
   };
@@ -55,6 +56,7 @@ describe('the kit fails a problem the error registry does not allow (PRO-038)', 
     id: 'oracle.rest',
     title: 'one REST call',
     spec: '05 §5.8',
+    covers: {},
     run: async (ctx: ScenarioContext) => {
       await ctx.service.call('GET', '/documents/x');
     },
@@ -64,6 +66,7 @@ describe('the kit fails a problem the error registry does not allow (PRO-038)', 
     id: 'oracle.socket',
     title: 'one socket',
     spec: '05 §5.8',
+    covers: {},
     run: async (ctx: ScenarioContext) => {
       const expected = frames.length;
       const w = await ctx.connect({ label: 'oracle' });
@@ -96,7 +99,7 @@ describe('the kit fails a problem the error registry does not allow (PRO-038)', 
     const base = `http://127.0.0.1:${port}`;
     const http = new Http();
     target = {
-      config: resolveConfig({ discovery: base, credential: 'not-used' }),
+      config: resolveConfig({ discovery: base, credential: 'not-used', testMode: false }),
       discoveryUrl: `${base}/.well-known/dep`,
       discovery: { rest: `${base}/v1`, ws: `ws://127.0.0.1:${port}/dep` } as Discovery,
       features: new Set<string>(),
