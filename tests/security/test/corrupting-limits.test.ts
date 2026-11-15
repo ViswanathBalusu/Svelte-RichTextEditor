@@ -28,13 +28,9 @@
  * those two commits itself, by the same rules as the corpus, at the limit and one past it (ADR 0121
  * item 7; the corpus itself is the model's, `packages/model`).
  */
-import { readdirSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ReplaceStep } from 'prosemirror-transform';
-import { chunkMessage } from '@docedit/protocol';
 import { canonicalText, uuid7, type JsonEnvelope } from '@docedit/model';
-import { cdmSchema } from '@docedit/model/prosemirror';
 import { Fragment, Slice, at, loadDoc, schema, stepsJson } from './support/cdm.ts';
 import {
   insertText,
@@ -43,13 +39,17 @@ import {
   type Harness,
   type Storage,
 } from './support/harness.ts';
-import { WireClient, type Received } from './support/wire.ts';
+import {
+  allCases,
+  asCommit,
+  baseOf,
+  contentOf,
+  openAsOwner,
+  readCase,
+  submitCommit,
+  type Json,
+} from './support/invariant-corpus.ts';
 
-type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-const FIXTURES = fileURLToPath(new URL('../../../packages/model/fixtures/', import.meta.url));
-const CASES = FIXTURES + 'invariants/cases/';
-const MAX_FRAME = 131_072; // maxMessageBytes (05 §4; protocol negotiation)
 const CANONICAL_LIMIT = 16 * 1024 * 1024; // I7 (03 §8)
 /** Characters of text per growth commit: its JSON stays under maxCommitBytes (1 MiB, SEC-017). */
 const GROWTH_CHARS = 1_000_000;
@@ -65,97 +65,14 @@ interface LimitCase {
   expected: string[];
 }
 
-/** Expands `{ "$repeat": s, "count": n }` into s repeated n times, as the model's loader does. */
-function expand(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(expand);
-  if (value && typeof value === 'object') {
-    const o = value as Json;
-    if (typeof o['$repeat'] === 'string' && typeof o['count'] === 'number')
-      return (o['$repeat'] as string).repeat(o['count'] as number);
-    const out: Json = {};
-    for (const [k, v] of Object.entries(o)) out[k] = expand(v);
-    return out;
-  }
-  return value;
-}
-
-function baseOf(base: unknown): Json {
-  if (typeof base === 'object' && base !== null) return expand(base) as Json;
-  const file = base === 'kitchen-sink' ? 'kitchen-sink.json' : 'example-03-12.json';
-  return JSON.parse(readFileSync(FIXTURES + file, 'utf8')) as Json;
-}
-
-function readCase(name: string): Json {
-  return JSON.parse(readFileSync(`${CASES}${name}.json`, 'utf8')) as Json;
-}
-
-/**
- * A fixture without steps describes a stored document that no step may produce. As a commit, its
- * base is the document without the last block of the body, and the commit inserts that block at
- * the end of the body.
- */
-function asCommit(base: Json, steps: Json[]): { base: Json; steps: Json[] } {
-  if (steps.length > 0) return { base, steps };
-  const shorter = structuredClone(base);
-  const body = (shorter['doc']['content'] as Json[]).find((n) => n['type'] === 'body')!;
-  const block = (body['content'] as Json[]).pop()!;
-  const end = cdmSchema().nodeFromJSON(shorter['doc']).content.size - 1;
-  return {
-    base: shorter,
-    steps: [{ stepType: 'replace', from: end, to: end, slice: { content: [block] } }],
-  };
-}
-
 /** The past-the-limit fixtures: each one crosses a numeric limit and expects an invariant to break. */
 function pastLimitCases(): LimitCase[] {
-  return readdirSync(CASES)
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(readFileSync(CASES + f, 'utf8')) as Json & LimitCase)
+  return allCases()
     .filter((c) => c.limit?.side === 'past' && c.expected.length > 0)
     .map((c) => {
       const commit = asCommit(baseOf(c.base), c.steps);
-      return { name: c.name, limit: c.limit, expected: c.expected, ...commit };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * Submits a commit as the component would: one frame when it fits maxMessageBytes, otherwise
- * chunks. Resolves with the answer (`sync.ack` or `sync.reject`).
- */
-async function submitCommit(
-  c: WireClient,
-  commit: { id: string; base: number; steps: unknown[] },
-): Promise<Received> {
-  const id = c.nextId();
-  const envelope = { t: 'sync.submit', id, ch: 1, d: commit };
-  const text = JSON.stringify(envelope);
-  if (Buffer.byteLength(text, 'utf8') <= MAX_FRAME) c.sendRaw(text);
-  else for (const frame of chunkMessage(text, MAX_FRAME, uuid7())) c.sendRaw(frame);
-  return c.take((m) => m.re === id, 60_000, `answer to sync.submit ${id}`);
-}
-
-/** Connects an owner of `doc` and opens it on channel 1 with the features the document requires. */
-async function openAsOwner(h: Harness, doc: string, requires: unknown): Promise<WireClient> {
-  const features = [
-    ...new Set(['presence', 'regions', ...(Array.isArray(requires) ? (requires as string[]) : [])]),
-  ];
-  const token = await h.mintToken(h.a, 'olivia', { [doc]: 'owner' });
-  const owner = await WireClient.connect(h.wsUrl, { origin: h.a.origin });
-  try {
-    const welcome = await owner.hello(token, { features });
-    expect(welcome.t, JSON.stringify(welcome.d)).toBe('welcome');
-    const opened = await owner.open(1, doc, { features });
-    expect(opened.t, JSON.stringify(opened.d)).toBe('ch.opened');
-    return owner;
-  } catch (e) {
-    owner.terminate();
-    throw e;
-  }
-}
-
-async function contentOf(h: Harness, doc: string): Promise<Json> {
-  return (await h.call('GET', `/v1/documents/${doc}/content`, { token: h.a.apiKey })).json as Json;
+      return { name: c.name, limit: c.limit!, expected: c.expected, ...commit };
+    });
 }
 
 /** A base with `count` rule definitions in its `defs` (I15: 500 is the limit). */
