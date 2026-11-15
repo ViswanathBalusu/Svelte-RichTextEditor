@@ -10,6 +10,7 @@ import {
   portContract,
   uncoveredMembers,
 } from '../src/contract/index.ts';
+import type { UnlistedOptionalMembers } from '../src/contract/optional.ts';
 import type * as W from '../src/generated/types.ts';
 import {
   OPTIONAL_PORTS,
@@ -116,6 +117,25 @@ describe('the port typings', () => {
     );
     const uncovered = uncoveredMembers(cases);
     expect(uncovered.filter((m) => CORE_MEMBERS.includes(m))).toEqual([]);
+  });
+
+  it('list every member of every optional port, each with a contract case (PRO-092)', () => {
+    // The list is checked against the typings: a member missing from it is a type error.
+    expectTypeOf<UnlistedOptionalMembers>().toBeNever();
+    const cases = portContract(
+      async () => {
+        throw new Error('not run');
+      },
+      { sleep: async () => {} },
+    );
+    expect(uncoveredMembers(cases)).toEqual([]);
+    for (const [port, members] of Object.entries(OPTIONAL_MEMBERS)) {
+      expect(members.length, port).toBeGreaterThan(0);
+      for (const m of members) {
+        const own = cases.filter((k) => k.port === port && k.members.includes(`${port}.${m}`));
+        expect(own.length, `${port}.${m}`).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('answer "is this feature available" from the port and the announced feature (PRO-092)', () => {

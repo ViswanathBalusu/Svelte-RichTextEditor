@@ -4,6 +4,9 @@
   "private": true,
   "description": "The export worker (09 §9): takes export jobs from the control plane's queue, converts, compiles in a single-use LuaLaTeX sandbox (Podman) and stores the outputs. Includes its container image.",
   "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "start": "node src/main.ts",
     "typecheck": "tsc -p tsconfig.json"
