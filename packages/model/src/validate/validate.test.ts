@@ -576,6 +576,26 @@ describe('model.validate(): preserved content (CDM-051)', () => {
     for (const [name, value] of cases)
       expect(invariants(withPreserved(value)), name).toEqual(['I11']);
   });
+  it('I11: the depth limit is exact: 12 levels pass and 13 fail, for the attribute and for props', () => {
+    // The value itself is level 1, so a chain of n elements reaches level n + 1.
+    const chain = (elements: number): Json => {
+      let e: Json = { name: `${W}leaf` };
+      for (let i = 1; i < elements; i++) e = { name: `${W}n${i}`, children: [e] };
+      return tree([e]);
+    };
+    expect(invariants(withPreserved(chain(11)))).toEqual([]);
+    expect(invariants(withPreserved(chain(12)))).toEqual(['I11']);
+    const withProps = (props: Json): Json => {
+      const d = clone();
+      d['requires'] = ['preserve'];
+      body(d)[0]!.content[0].marks = [{ type: 'preserved', attrs: { props } }];
+      return d;
+    };
+    expect(invariants(withProps(chain(11)))).toEqual([]);
+    expect(invariants(withProps(chain(12)))).toEqual(['I11']);
+    const big = tree([{ name: `${W}t`, children: [{ text: 'x'.repeat(17000) }] }]);
+    expect(invariants(withProps(big))).toEqual(['I11']);
+  });
   it('I11: the props of a preserved mark follow the same grammar', () => {
     const d = clone();
     d['requires'] = ['preserve'];

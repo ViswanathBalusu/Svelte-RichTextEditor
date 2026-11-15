@@ -22,6 +22,9 @@ function chunksOf(result: Awaited<ReturnType<typeof build>>): ChunkInfo[] {
         imports: c.imports,
         dynamicImports: c.dynamicImports,
         moduleIds: c.moduleIds,
+        moduleSizes: Object.fromEntries(
+          Object.entries(c.modules).map(([id, m]) => [id, m.renderedLength]),
+        ),
         code: c.code,
       })),
   );
