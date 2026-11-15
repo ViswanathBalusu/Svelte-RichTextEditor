@@ -87,7 +87,7 @@ As a maintainer, I want the remaining ambiguities of the canonical form closed, 
 
 **Evidence:** `docs/adr/0018-cdm-attribute-grammars.md` (status proposed), table "Canonical form". The rules are implemented in `packages/model/src/canonical/canonical-form.ts` (`canonicalNode` for subtrees, `CANONICAL_FORM_VERSION = 1`) and tested in `canonical-form.universal.test.ts`: empty `attrs`, `content` and `marks` omitted; `requires` sorted without duplicates; object-valued attributes kept whole; the hash of a region alone.
 
-**Notes:** All gaps found while writing this epic. See Open questions. Ticked on the strength of ADR 0018, which the project owner has not reviewed; the last criterion waits for acceptance and the update of 03 §2. Stamping the version in commits and checkpoints is HIS's and BE's.
+**Notes:** All gaps found while writing this epic. See Open questions. Ticked on the strength of ADR 0018, which the project owner has not reviewed; the last criterion waits for acceptance and the update of 03 §2. Stamping the version in commits and checkpoints is HIS's and BE's. Lane w1 (2026-11-15): blocked on the owner. ADR 0018 is still "proposed", so the condition "when it is accepted" of the last criterion has not happened and 03 §2 is left as it is; nothing new could be ticked. What the owner's acceptance unlocks: the edit of 03 §2 from the ADR's "Canonical form" table, then the tick once CDM-010 and CDM-011 are done.
 
 ### CDM-004 Decide whether citations and a bibliography enter CDM 1
 
