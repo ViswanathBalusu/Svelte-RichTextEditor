@@ -19,6 +19,13 @@ interface Threat {
   status: 'proven' | 'control-not-built';
   tests: string[];
   boundaries: string[];
+  /** The wording of 10 §3 this row covers: a table row's threat, or a phrase of the prose. */
+  specRows?: string[];
+  /** Further SEC stories whose tests prove the same threat. */
+  alsoProvenBy?: string[];
+  /** The SEC story that was merged into the story named by provenBy, when that is not a SEC story. */
+  mergedFrom?: string;
+  provenByNote?: string;
 }
 interface Register {
   boundaries: Array<{ id: string; from: string; to: string; via: string }>;
@@ -30,6 +37,43 @@ interface Register {
 const HERE = fileURLToPath(new URL('..', import.meta.url)); // tests/security/
 const register = JSON.parse(readFileSync(HERE + 'threat-register.json', 'utf8')) as Register;
 const testDir = HERE + 'test/';
+const DOCS = fileURLToPath(new URL('../../../docs/', import.meta.url));
+const spec = readFileSync(DOCS + 'spec/10-security.md', 'utf8').replaceAll('\r\n', '\n');
+const epic = readFileSync(DOCS + 'stories/SEC-security.md', 'utf8').replaceAll('\r\n', '\n');
+
+/** The text of one subsection of 10 §3, from its heading to the next heading. */
+function specSection(section: string): string {
+  const start = spec.indexOf(`\n### ${section} `);
+  expect(start, `10 §${section} exists`).toBeGreaterThanOrEqual(0);
+  const end = spec.indexOf('\n##', start + 1);
+  return spec.slice(start, end === -1 ? undefined : end);
+}
+
+/** The first cell of every body row of the tables in a piece of Markdown. */
+function firstCells(markdown: string, header: string): string[] {
+  const cells: string[] = [];
+  for (const line of markdown.split('\n')) {
+    if (!line.startsWith('|')) continue;
+    const cell = (line.split('|')[1] ?? '').trim();
+    if (cell === header || /^-+$/.test(cell)) continue;
+    cells.push(cell);
+  }
+  return cells;
+}
+
+/** Story identifiers in a piece of text, with "SEC-012 to SEC-020" expanded. */
+function storyIds(text: string): string[] {
+  const ids = new Set<string>();
+  for (const m of text.matchAll(/SEC-(\d{3}) to SEC-(\d{3})/g))
+    for (let n = Number(m[1]); n <= Number(m[2]); n++) ids.add(`SEC-${String(n).padStart(3, '0')}`);
+  for (const m of text.matchAll(/\b[A-Z]{2,4}-\d{3}\b/g)) ids.add(m[0]);
+  return [...ids];
+}
+
+const SECTIONS = ['3.1', '3.2', '3.3', '3.4', '3.5', '3.6', '3.7', '3.8'];
+const TABLE_SECTIONS = ['3.1', '3.2', '3.3', '3.5', '3.6'];
+const covered = (section: string): string[] =>
+  register.threats.filter((t) => t.section === section).flatMap((t) => t.specRows ?? []);
 
 describe('SEC-001 threat register', () => {
   it('gives every threat an identifier, a control, the building epic/story and the proving story', () => {
@@ -41,14 +85,110 @@ describe('SEC-001 threat register', () => {
       seen.add(t.id);
       expect(t.control, `${t.id} control`).toBeTruthy();
       expect(t.builtBy.length, `${t.id} builtBy`).toBeGreaterThan(0);
-      expect(t.provenBy, `${t.id} provenBy`).toMatch(/^SEC-\d+$|^FE-\d+$/);
+      for (const story of t.builtBy) expect(story, `${t.id} builtBy`).toMatch(/^[A-Z]{2,4}-\d{3}$/);
+      expect(t.provenBy, `${t.id} provenBy`).toMatch(/^[A-Z]{2,4}-\d{3}$/);
+    }
+  });
+
+  it('names a SEC story of this epic as the proof, or records the SEC story merged into another', () => {
+    for (const t of register.threats) {
+      for (const story of [t.provenBy, ...(t.alsoProvenBy ?? [])]) {
+        if (story.startsWith('SEC-')) {
+          expect(epic, `${t.id}: ${story} is a story of the SEC epic`).toContain(`\n### ${story} `);
+          continue;
+        }
+        // Not a SEC story: allowed only where the epic records that its SEC story was merged away.
+        expect(t.mergedFrom, `${t.id} mergedFrom`).toMatch(/^SEC-\d{3}$/);
+        expect(t.provenByNote, `${t.id} provenByNote`).toBeTruthy();
+        expect(epic, `${t.id}: ${t.mergedFrom} is no longer a story`).not.toContain(
+          `\n### ${t.mergedFrom} `,
+        );
+        expect(epic, `${t.id}: the epic records the merge`).toMatch(
+          new RegExp(`${t.mergedFrom} \\([^)]*\\) was merged into ${story}\\b`),
+        );
+      }
+    }
+  });
+
+  it('quotes 10 §3 in every row, and each quote is in the section the row names', () => {
+    for (const t of register.threats) {
+      if (!SECTIONS.includes(t.section)) continue;
+      expect(t.specRows?.length ?? 0, `${t.id} specRows`).toBeGreaterThan(0);
+      const text = specSection(t.section);
+      for (const row of t.specRows ?? [])
+        expect(text, `${t.id}: "${row}" is in 10 §${t.section}`).toContain(row);
+    }
+    // No wording is claimed by two rows.
+    const all = register.threats.flatMap((t) => t.specRows ?? []);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('covers every threat row of the tables of 10 §3.1, §3.2, §3.3, §3.5 and §3.6', () => {
+    for (const section of TABLE_SECTIONS) {
+      const rows = firstCells(specSection(section), 'Threat');
+      expect(rows.length, `10 §${section} has a table`).toBeGreaterThan(0);
+      const have = covered(section);
+      for (const row of rows) expect(have, `10 §${section} row "${row}"`).toContain(row);
+      // And the register quotes no table row the spec no longer has.
+      for (const row of have) expect(rows, `register row "${row}" of §${section}`).toContain(row);
+    }
+  });
+
+  it('covers every item of 10 §3.7 and every sentence of 10 §3.8', () => {
+    const items = specSection('3.7')
+      .split('\n')
+      .filter((line) => line.startsWith('- '));
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items)
+      expect(
+        covered('3.7').some((phrase) => item.includes(phrase)),
+        `10 §3.7 item "${item}"`,
+      ).toBe(true);
+
+    const prose = specSection('3.8').split('\n').slice(2).join(' ').trim();
+    const sentences = prose.split(/(?<=\.)\s+(?=[A-Z])/).filter((s) => s.length > 0);
+    expect(sentences.length).toBeGreaterThan(0);
+    for (const sentence of sentences)
+      expect(
+        covered('3.8').some((phrase) => sentence.includes(phrase)),
+        `10 §3.8 sentence "${sentence}"`,
+      ).toBe(true);
+  });
+
+  it("agrees with the epic's own coverage tables", () => {
+    // "Section of 10 | Covered by": every story named for a §3.x row proves a threat of that section.
+    for (const section of SECTIONS) {
+      const line = epic.split('\n').find((l) => l.startsWith(`| §${section} `));
+      expect(line, `coverage row for §${section}`).toBeTruthy();
+      const proving = new Set(
+        register.threats
+          .filter((t) => t.section === section)
+          .flatMap((t) => [t.provenBy, ...(t.alsoProvenBy ?? [])]),
+      );
+      for (const story of storyIds((line ?? '').split('|')[2] ?? ''))
+        expect(proving, `§${section}: ${story} proves a register row`).toContain(story);
+    }
+    // "Threat | Proved by" (10 §3.1 to §3.3): the stories of each line prove the rows it names.
+    const start = epic.indexOf('| Threat | Proved by |');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const table = epic.slice(start, epic.indexOf('\n\n', start));
+    const lines = table.split('\n').slice(2);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      const stories = storyIds(line.split('|')[2] ?? '');
+      const rows = register.threats.filter(
+        (t) =>
+          ['3.1', '3.2', '3.3'].includes(t.section) &&
+          stories.includes(t.provenBy) &&
+          stories.every((s) => s === t.provenBy || (t.alsoProvenBy ?? []).includes(s)),
+      );
+      expect(rows.length, `epic line "${line}"`).toBeGreaterThan(0);
     }
   });
 
   it('every row of 10 §3.1 to §3.8 is present', () => {
     const sections = new Set(register.threats.map((t) => t.section));
-    for (const s of ['3.1', '3.2', '3.3', '3.4', '3.5', '3.6', '3.7', '3.8'])
-      expect(sections, `section ${s} has threats`).toContain(s);
+    for (const s of SECTIONS) expect(sections, `section ${s} has threats`).toContain(s);
   });
 
   it('a proven row names tests that exist; an unproven row is marked control-not-built with a phase', () => {
