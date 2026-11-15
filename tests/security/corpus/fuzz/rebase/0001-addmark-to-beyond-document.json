@@ -1,1 +1,6 @@
-{"target":"rebase","kind":"crash","detail":"found before the harness saved inputs; kept from the hand-written list of fuzz.test.ts","input":[{"stepType":"addMark","from":1,"to":1000000000,"mark":{"type":"bold"}}]}
+{
+  "target": "rebase",
+  "kind": "crash",
+  "detail": "found before the harness saved inputs; kept from the hand-written list of fuzz.test.ts",
+  "input": [{ "stepType": "addMark", "from": 1, "to": 1000000000, "mark": { "type": "bold" } }]
+}

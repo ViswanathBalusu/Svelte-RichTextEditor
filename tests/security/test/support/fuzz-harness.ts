@@ -12,6 +12,9 @@
  *   stopped from inside the process; the runner kills it, the file stays, and the next run that
  *   sees the file saves that input as a regression case and fails.
  *
+ * A saved case is committed with the fix; run `pnpm format` on it first, because the file is
+ * written compactly and the repository's format check covers the corpus folder.
+ *
  * The limits are not set by the spec (SEC-059 Notes; ADR 0121 item 39). The defaults here are
  * proposed values: 1,000 ms per input (as fuzz-time-limit.test.ts) and 256 MiB of heap growth.
  */
