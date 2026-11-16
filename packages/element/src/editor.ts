@@ -288,6 +288,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     queryReason: (name) => core.queryReason(name),
     setLabels: (labels) => core.setLabels(labels),
     presence: core.presence,
+    // The peers' carets, measured by the core's body view (SYN-036 criterion 5; UX-027).
+    carets: core.carets,
     features: core.features,
     counts: core.counts,
     // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a

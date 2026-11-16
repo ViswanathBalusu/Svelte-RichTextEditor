@@ -67,6 +67,7 @@ import type {
   ModeState,
   OutlineItem,
   PanelInfo,
+  PeerSelectionInfo,
   PresencePeerInfo,
   RecoveredEdits,
   RecoveredItem,
@@ -630,6 +631,8 @@ export class DocumentCore implements DocumentApi {
   readonly recovered: ReadValue<RecoveredEdits>;
   readonly syncSummary: ReadValue<SyncSummary>;
   readonly presence: ReadValue<readonly PresencePeerInfo[]>;
+  /** The peers of `presence` with their positions in the visible document (SYN-036). */
+  readonly peerSelections: ReadValue<readonly PeerSelectionInfo[]>;
   readonly features: ReadValue<readonly string[]>;
   readonly counts: ReadValue<ShellCounts>;
   readonly problem: ReadValue<CoreProblem | null>;
@@ -747,6 +750,7 @@ export class DocumentCore implements DocumentApi {
       hub,
     );
     this.presence = new ReadValue<readonly PresencePeerInfo[]>([], sameJson, hub);
+    this.peerSelections = new ReadValue<readonly PeerSelectionInfo[]>([], sameJson, hub);
     this.features = new ReadValue<readonly string[]>([], sameJson, hub);
     this.counts = new ReadValue<ShellCounts>({}, sameJson, hub);
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
@@ -2491,6 +2495,7 @@ export class DocumentCore implements DocumentApi {
             return { anchor, head, scope: core.#mainScope() };
           },
           setPeers: (peers) => core.presence.set(peers),
+          setSelections: (peers) => core.peerSelections.set(peers),
           visibleDoc: () => core.#state.doc,
         },
         {
@@ -2516,6 +2521,7 @@ export class DocumentCore implements DocumentApi {
         this.#attachedAssets = null;
         this.connection.set('detached');
         this.presence.set([]);
+        this.peerSelections.set([]);
         this.#publishSync();
       }
     };

@@ -44,7 +44,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'onTransaction'
       // FE-005: the element suspends and resumes the channel when a host moves it out and back.
       | 'suspendSync'
-      | 'resumeSync';
+      | 'resumeSync'
+      // SYN-036: the peers of `presence` with their positions in the visible document.
+      | 'peerSelections';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed
@@ -56,7 +58,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // FE-068: the element hands the web view the blocks that start a page.
       | 'setPageGuides'
       // UX-008: where the shell opens a menu asked for from the keyboard.
-      | 'caretRect';
+      | 'caretRect'
+      // SYN-036: the peers' carets as rectangles, which the shell draws (UX-027).
+      | 'carets';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });
