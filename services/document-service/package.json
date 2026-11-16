@@ -23,6 +23,7 @@
     "@docedit/asset-worker": "workspace:*",
     "@docedit/authority": "workspace:*",
     "@docedit/export-latex": "workspace:*",
+    "@docedit/history": "workspace:*",
     "@docedit/model": "workspace:*",
     "@docedit/protocol": "workspace:*",
     "@types/pg": "8.23.1",

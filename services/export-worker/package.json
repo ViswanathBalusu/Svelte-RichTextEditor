@@ -8,6 +8,7 @@
     "node": ">=22.18.0"
   },
   "scripts": {
+    "generate": "node scripts/write-diagnostic-codes.ts",
     "start": "node src/main.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
