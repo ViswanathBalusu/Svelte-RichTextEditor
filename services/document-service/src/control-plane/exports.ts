@@ -48,6 +48,11 @@ export interface ExportOutputs {
    * worker that does not report it.
    */
   chainHead?: string | null;
+  /**
+   * The number of images and figures without alternative text, one per occurrence (09 §13;
+   * EXP-113 criterion 2). Absent from a worker that does not report it.
+   */
+  imagesWithoutAlt?: number;
   /** The job whose prefix holds the files, when it is not this job (a cached result). */
   from?: string;
 }

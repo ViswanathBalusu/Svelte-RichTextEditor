@@ -295,6 +295,12 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
               ...(canSeeLog && out.log ? { log: sign(out.log) } : {}),
               // The chain head of the manifest, so that the host can anchor it (08 §12; EXP-011).
               ...(out.chainHead !== undefined ? { chainHead: out.chainHead } : {}),
+              // The count of pictures without alternative text (09 §13; EXP-113 criterion 2).
+              ...(typeof out.imagesWithoutAlt === 'number' &&
+              Number.isSafeInteger(out.imagesWithoutAlt) &&
+              out.imagesWithoutAlt >= 0
+                ? { imagesWithoutAlt: out.imagesWithoutAlt }
+                : {}),
             }
           : null,
       diagnostics: out?.diagnostics ?? [],
