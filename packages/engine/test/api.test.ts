@@ -37,7 +37,14 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
   it('every public member of the cores is a member of the document API or of the web view', () => {
     // A member not listed here fails to compile: the surface is the API, nothing else.
     type Allowed =
-      keyof DocumentApi | 'hasParagraphStyle' | 'readOnly' | 'reconnect' | 'onTransaction';
+      | keyof DocumentApi
+      | 'hasParagraphStyle'
+      | 'readOnly'
+      | 'reconnect'
+      | 'onTransaction'
+      // FE-005: the element suspends and resumes the channel when a host moves it out and back.
+      | 'suspendSync'
+      | 'resumeSync';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed

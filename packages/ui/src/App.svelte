@@ -156,8 +156,11 @@
   // Themes (UX-061, UX-062): resolved before the first paint, `auto` following the browser.
   const scheme = watchColourScheme((dark) => (prefersDark = dark));
   let prefersDark = $state(scheme.dark);
-  let stopScheme = scheme.stop;
-  onDestroy(() => stopScheme());
+  onDestroy(scheme.stop);
+  // The watcher in force: the first one, or the one started again after a suspension (FE-005).
+  // Stopping the first one a second time at destruction is harmless.
+  let stopWatching: () => void = scheme.stop;
+  onDestroy(() => stopWatching());
 
   // Suspension (FE-005; 02 §2.1): while the element is out of the document the shell keeps its
   // state and stops what watches the page (shell/suspension.ts).
@@ -168,12 +171,12 @@
   export function setSuspended(on: boolean): void {
     if (on === suspended) return;
     suspended = on;
-    stopScheme();
-    stopScheme = () => {};
+    stopWatching();
+    stopWatching = () => {};
     if (on) return;
     const again = watchColourScheme((dark) => (prefersDark = dark));
     prefersDark = again.dark;
-    stopScheme = again.stop;
+    stopWatching = again.stop;
   }
   const theme = $derived(resolveTheme(mode.theme, prefersDark));
 
