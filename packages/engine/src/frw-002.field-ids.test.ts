@@ -1,14 +1,16 @@
 /**
  * FRW-002 criteria 3 and 4 in the editing core, in Node.js: a field inserted in the editor gets a
  * 16-character identifier in the same transaction (I2 holds at the end of the commit), and a field
- * copied and pasted gets a fresh identifier while the document still satisfies I13 (unique keys
- * are the model's; here the identifiers must be unique). Criterion 1 (the editing schema default
+ * copied and pasted gets a fresh identifier and, when its key is taken, a key of its own (ADR 0366,
+ * proposed), so the document still satisfies I13 (unique keys). Criterion 1 (the editing schema default
  * of `id`) is tested in packages/model/src/fields/fields.test.ts.
  */
 import { validate } from '@docedit/model/validate';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
+import { FIELD_KEY_PATTERN } from '@docedit/model/definition';
 import { DocumentCore } from './core.ts';
+import { copiedFieldKey } from './ids.ts';
 import { SPIKE_IDS, spikeDocument } from './spike-document.ts';
 import { internals } from './testing.ts';
 
@@ -51,6 +53,16 @@ function fieldIds(c: DocumentCore): Array<string | null> {
   const out: Array<string | null> = [];
   internals(c).state.doc.descendants((node) => {
     if (node.type.name === 'form_field') out.push((node.attrs['id'] as string | null) ?? null);
+    return true;
+  });
+  return out;
+}
+
+/** Every key of a form field in the document, in order. */
+function fieldKeys(c: DocumentCore): string[] {
+  const out: string[] = [];
+  internals(c).state.doc.descendants((node) => {
+    if (node.type.name === 'form_field') out.push(String(node.attrs['key']));
     return true;
   });
   return out;
@@ -109,12 +121,58 @@ describe('form fields in the editing core (FRW-002 criteria 3 and 4)', () => {
     expect(ids).toHaveLength(2);
     for (const id of ids) expect(id).toMatch(SHAPE);
     expect(new Set(ids).size).toBe(2);
-    // The copy keeps its key. How a copy's key is chosen is an open question (12 §4.1, FRW-002
-    // Open questions), so the only violation allowed here is the duplicate key that follows from
-    // it. Criterion 4 stays unticked until that question is decided.
-    const v = violations(c);
-    expect(v.length).toBeGreaterThan(0);
-    expect(v.every((x) => x.invariant === 'I13')).toBe(true);
-    expect(JSON.stringify(v)).toContain('duplicate_field_key');
+    // The copy gets a key of its own in the same transaction (ADR 0366, proposed), so I13 holds.
+    // The copy was pasted before the original: the original keeps its key.
+    expect(fieldKeys(c)).toEqual(['tenant.name_2', 'tenant.name']);
+    expect(violations(c)).toEqual([]);
+
+    // A second copy takes the next free number.
+    caretAtStart(c);
+    expect(c.insertContent(copied).ok).toBe(true);
+    expect(fieldKeys(c)).toEqual(['tenant.name_3', 'tenant.name_2', 'tenant.name']);
+    expect(new Set(fieldIds(c)).size).toBe(3);
+    expect(violations(c)).toEqual([]);
+  });
+
+  it('a field that is cut and pasted keeps its key, and undo takes the key of a copy with it (criterion 4)', () => {
+    const c = core();
+    caretAtStart(c);
+    expect(c.insertContent(fieldFragment(null, 'tenant.name')).ok).toBe(true);
+    const i = internals(c);
+    let pos = -1;
+    i.state.doc.descendants((node, p) => {
+      if (pos < 0 && node.type.name === 'form_field') pos = p;
+      return pos < 0;
+    });
+    i.dispatch(i.state.tr.setSelection(NodeSelection.create(i.state.doc, pos)));
+    const copied = c.getSelectionContent();
+    // Cut: the original is removed, so the key is free when the field is pasted back.
+    i.dispatch(i.state.tr.deleteSelection());
+    expect(fieldKeys(c)).toEqual([]);
+    caretAtStart(c);
+    expect(c.insertContent(copied).ok).toBe(true);
+    expect(fieldKeys(c)).toEqual(['tenant.name']);
+    expect(violations(c)).toEqual([]);
+
+    // A copy next to it is renamed; undoing the paste leaves the one field with its key.
+    caretAtStart(c);
+    expect(c.insertContent(copied).ok).toBe(true);
+    expect(fieldKeys(c)).toEqual(['tenant.name_2', 'tenant.name']);
+    // Undo takes the copy and its key away together (the history may group the pastes).
+    expect(c.run('undo')).toBe(true);
+    expect(fieldKeys(c)).not.toContain('tenant.name_2');
+    expect(violations(c)).toEqual([]);
+  });
+
+  it('gives a copy a key inside the grammar and the length limit (criterion 4)', () => {
+    const pattern = new RegExp(FIELD_KEY_PATTERN);
+    expect(copiedFieldKey('a.b', new Set(['a.b']))).toBe('a.b_2');
+    expect(copiedFieldKey('a.b', new Set(['a.b', 'a.b_2', 'a.b_3']))).toBe('a.b_4');
+    const long = `a${'b'.repeat(127)}`;
+    const next = copiedFieldKey(long, new Set([long]));
+    expect(next).toHaveLength(128);
+    expect(next.endsWith('_2')).toBe(true);
+    expect(next).toMatch(pattern);
+    expect(copiedFieldKey('tenant.income', new Set())).toMatch(pattern);
   });
 });

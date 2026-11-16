@@ -17,7 +17,10 @@
 // - incoming: mapping one character typed by a reader of that class to full positions, from the
 //   class's projection (its hidden spans), as the gateway does.
 //
-// It prints the machine it ran on and one row per document and class, in milliseconds.
+// It prints the machine it ran on and one row per document and class, in milliseconds, and then the
+// worst class against the authority's budget (04 §12: validating and applying a typical commit costs
+// well under a millisecond of CPU), taken here as `BUDGET_MS` for a class's outgoing work per commit
+// (SYN-050 criterion 4). The reference machine is the one of ADR 0037 (FND-007).
 import { cpus, platform, release, totalmem } from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { corpusLabel, documentNames, loadDocument } from '@docedit/corpus';
@@ -38,6 +41,14 @@ import {
 const schema = cdmSchema();
 const pschema = projectionSchema();
 const COMMITS = Number(process.argv[2] ?? 300);
+/** 04 §12 gives no number below "well under a millisecond"; one millisecond is the ceiling checked. */
+const BUDGET_MS = 1;
+/** The class with the highest median outgoing cost, and the one with the highest 95th percentile. */
+const worst = { median: 0, medianOf: '', p95: 0, p95Of: '', classes: 0 };
+const quantile = (xs: number[], f: number): number => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(f * s.length))] ?? 0;
+};
 let seed = Number(process.argv[3] ?? 1);
 
 /** mulberry32: a small deterministic generator, so that runs are repeatable. */
@@ -158,8 +169,17 @@ for (const name of documentNames) {
   }
   classes.forEach((c, ci) => {
     const rt = routes[ci]!;
+    const med = quantile(outgoing[ci]!, 0.5);
+    const p95 = quantile(outgoing[ci]!, 0.95);
+    worst.classes++;
+    if (med > worst.median) Object.assign(worst, { median: med, medianOf: `${name}, ${c.label}` });
+    if (p95 > worst.p95) Object.assign(worst, { p95, p95Of: `${name}, ${c.label}` });
     console.log(
       `| ${name} | ${bodyChildren} | ${c.label} | ${c.hidden.regions.size}, ${c.hidden.values.size} | ${cold[ci]!.toFixed(1)} | ${stats(apply)} | ${stats(outgoing[ci]!)} | ${stats(spike[ci]!)} | ${stats(incoming[ci]!)} | ${rt.get('mapped') ?? 0}, ${rt.get('inside') ?? 0}, ${rt.get('diff') ?? 0} | ${empty[ci]} of ${outgoing[ci]!.length} |`,
     );
   });
 }
+
+console.log(
+  `Budget (04 §12): under ${BUDGET_MS} ms of CPU per commit. Outgoing work per class and commit over ${worst.classes} classes: highest median ${worst.median.toFixed(3)} ms (${worst.medianOf}), highest p95 ${worst.p95.toFixed(3)} ms (${worst.p95Of}): ${worst.median < BUDGET_MS ? 'the median is within the budget' : 'the median is OVER the budget'}; ${worst.p95 < BUDGET_MS ? 'the p95 is within it' : 'the p95 is over it'}.`,
+);
