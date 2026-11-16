@@ -12,7 +12,13 @@
  * sends to Bob's page (Playwright's WebSocket route), which is a slow network and nothing else: the
  * service, the room and the client are the real ones.
  */
-import { expect, test, type BrowserContext, type Page, type WebSocketRoute } from '@playwright/test';
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type Page,
+  type WebSocketRoute,
+} from '@playwright/test';
 import {
   editor,
   eventsOf,
