@@ -80,6 +80,30 @@ describe('pasted definitions (CDM-023)', () => {
     expect(r.content[0]!.attrs!['style']).toBe('Heading1');
   });
 
+  it('drops a brought numbering definition the target has, and adds a new one once', () => {
+    const target = exampleDoc();
+    const defs = target['doc'].content[0].content as Json[];
+    const levels = [{ format: 'decimal', text: '%1.', start: 1 }];
+    const at = defs.findIndex((d) => d.type === 'page_setup');
+    defs.splice(at, 0, { type: 'numbering_def', attrs: { id: 'numHave', levels } });
+    const numbered = (id: string, numberingId: string) =>
+      para(id, 'item', {
+        numbering: { numberingId, level: 0, listId: 'lList00000000001' },
+      });
+    const r = mapPastedDefinitions(target['doc'], {
+      definitions: [
+        { type: 'numbering_def', attrs: { id: 'numHave', levels: [{ format: 'upperRoman' }] } },
+        { type: 'numbering_def', attrs: { id: 'numNew', levels } },
+        { type: 'numbering_def', attrs: { id: 'numNew', levels: [{ format: 'bullet' }] } },
+      ],
+      content: [numbered('pPasted000000001', 'numHave'), numbered('pPasted000000002', 'numNew')],
+    });
+    expect(r.mapped).toEqual(['numHave']);
+    expect(r.definitions).toEqual([{ type: 'numbering_def', attrs: { id: 'numNew', levels } }]);
+    expect(r.dropped).toEqual([]);
+    expect(r.content.map((p) => p.attrs!['numbering'].numberingId)).toEqual(['numHave', 'numNew']);
+  });
+
   it('leaves no unresolved style, basedOn, next or numbering reference and no duplicate identifier', () => {
     const target = exampleDoc();
     const r = mapPastedDefinitions(
