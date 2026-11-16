@@ -19,10 +19,10 @@ import {
   enumOf,
   idOf,
   num,
+  ownLines,
   register,
   str,
   warnOnce,
-  within,
   type Ctx,
   type J,
   type Mark,
@@ -423,7 +423,9 @@ function footnoteText(ctx: Ctx, n: J): { fn: number; props: Tex; body: Tex } {
     place: 'footnote',
     holder: blockId,
   });
-  const body = within(ctx, fn, () => join(paragraphBody(ctx, inlines, inner), t('%\n')));
+  // The text stands on lines of its own, owned by the footnote's block and not by the host
+  // paragraph, cell, heading or caption it is written in (EXP-012 criterion 2).
+  const body = ownLines(fn, join(paragraphBody(ctx, inlines, inner), t('%\n')));
   return { fn, props: f.tex, body };
 }
 

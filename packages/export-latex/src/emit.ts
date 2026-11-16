@@ -70,6 +70,19 @@ export function join(parts: readonly Tex[], separator: Tex = EMPTY): Tex {
   return asTex(parts.join(separator));
 }
 
+/**
+ * `value` on lines of its own, each line starting with `mark`. The line ends added before and
+ * after end in `%`, and TeX skips the spaces that start a line, so the tokens TeX reads are those
+ * of `value` alone. The converter's `line` reads the marks and removes them (EXP-012).
+ */
+export function markedLines(mark: Tex, value: Tex): Tex {
+  const marked = value
+    .split('\n')
+    .map((l) => mark + l)
+    .join('\n');
+  return asTex(`%\n${marked}%\n`);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Cleaning shared by the string emitters
 

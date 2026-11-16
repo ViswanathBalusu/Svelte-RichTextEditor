@@ -81,6 +81,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         diagnostics: [
           { severity: 'warning', code: 'overfull', blockId: null, message: 'An overfull line.' },
         ],
+        imagesWithoutAlt: 2,
       };
       return out as unknown as Record<string, unknown>;
     };
@@ -122,6 +123,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(done.json.state).toBe('completed');
         expect(done.json.progress).toBe(100);
         expect(done.json.result).toMatchObject({ pages: 1, converged: true });
+        // The count of pictures without alternative text the worker stored (EXP-113 criterion 2).
+        expect(done.json.result.imagesWithoutAlt).toBe(2);
         expect(done.json.result.url).toContain(
           objectKeys
             .exportFile(h.tenant, r.json.id, 'output.pdf')

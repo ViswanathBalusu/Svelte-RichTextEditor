@@ -515,6 +515,9 @@ export const EN_GB = {
   'export.severity.warning': 'Warning',
   'export.severity.info': 'Note',
   'export.diagnostic.gone': 'That part is no longer in the document.',
+  'export.diagnostic.changed': 'Changed since this export',
+  'export.diagnostic.moved':
+    'The editor has moved to that part. It has changed since this export, so the problem may no longer be there.',
   'export.failed.start': 'The export could not be started.',
   // Client export filters of extensions (UX-055). The format's label is the extension's own text.
   'export.filter.noExport': 'Your access does not allow export.',

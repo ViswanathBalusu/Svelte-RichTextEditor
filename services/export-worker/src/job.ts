@@ -19,6 +19,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   CLASS_VERSION,
+  bundleAltTextReport,
   cdmWriter,
   texArchive,
   type Diagnostic,
@@ -362,6 +363,9 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     );
     m.convertMs = now() - t1;
     const diagnostics: Diagnostic[] = [...plan.diagnostics, ...bundle.diagnostics];
+    // Counted from the converter's own list, one per occurrence, before `dedupe` joins the equal
+    // diagnostics of two pictures in one block (09 §13; EXP-113 criterion 2).
+    const imagesWithoutAlt = bundleAltTextReport(bundle).count;
     if (bundle.ok === false || bundle.diagnostics.some((d) => d.severity === 'error'))
       throw failed('unsupported_feature', 'the converter cannot write this document', diagnostics);
 
@@ -392,6 +396,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         log: null,
         diagnostics: dedupe(diagnostics),
         chainHead: bundle.manifest.chainHead,
+        imagesWithoutAlt,
       };
       return texOut as unknown as Record<string, unknown>;
     }
@@ -534,6 +539,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       diagnostics: dedupe(diagnostics),
       // The same value as the manifests: the host reads it from the job (EXP-011 criterion 5).
       chainHead: bundle.manifest.chainHead,
+      imagesWithoutAlt,
       manifest: OUTPUT_FILES.manifest,
       metrics: m,
     };
