@@ -209,8 +209,14 @@ export class EditorCore extends DocumentCore {
       // The browser's own selection first: after a caret key the view's state follows it only on
       // the next `selectionchange`, which may come after the key that asks for the menu.
       let head = view.state.selection.head;
-      const dom = view.domSelectionRange();
-      if (dom.focusNode && view.dom.contains(dom.focusNode))
+      // `domSelectionRange` reads the selection inside a shadow root in every browser. The view's
+      // types do not publish it, so it is called only when present; without it the state is used.
+      const dom = (
+        view as unknown as {
+          domSelectionRange?: () => { focusNode: Node | null; focusOffset: number };
+        }
+      ).domSelectionRange?.();
+      if (dom?.focusNode && view.dom.contains(dom.focusNode))
         head = view.posAtDOM(dom.focusNode, dom.focusOffset);
       const c = view.coordsAtPos(head);
       return { x: c.left, y: c.top, width: c.right - c.left, height: c.bottom - c.top };

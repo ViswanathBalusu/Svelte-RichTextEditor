@@ -47,7 +47,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'setLabels'
       | 'labels'
       // FE-068: the element hands the web view the blocks that start a page.
-      | 'setPageGuides';
+      | 'setPageGuides'
+      // UX-008: where the shell opens a menu asked for from the keyboard.
+      | 'caretRect';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });
