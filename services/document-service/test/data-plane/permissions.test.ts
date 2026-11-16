@@ -316,6 +316,57 @@ describe('each trigger of a new access (PRM-006, PRO-032)', () => {
       },
     );
   });
+
+  /** A complete access object (05 §5.5) with a `rev` above the one the channel opened with. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const complete = (d: Record<string, any>, opened: Received) => {
+    expect(d['rev']).toBeGreaterThan(opened.d!['access'].rev as number);
+    expect(typeof d['asOfSeq']).toBe('number');
+    expect(typeof d['docRole']).toBe('string');
+    expect(Array.isArray(d['caps'])).toBe(true);
+    // Every region of the document, and the two scopes outside regions.
+    expect(Object.keys(d['scopes']).sort()).toEqual(Object.keys(opened.d!['access'].scopes).sort());
+    expect(Object.keys(d['scopes'])).toEqual(
+      expect.arrayContaining(['body', 'defs', 'region:rTerms000000000A', LEGAL]),
+    );
+    expect(d['leases']).toEqual({});
+    expect(d['restrictions']).toEqual([]);
+    expect(d).toHaveProperty('fill');
+  };
+
+  it('the workflow: starting it sends a complete access with a higher rev', async () => {
+    const p = await plane();
+    const { doc, alice, bob, opened } = await room(p);
+    // Bob edits the legal region through his group while no workflow runs.
+    expect(opened.get(bob)!.d!['access'].scopes[LEGAL]).toContain('edit');
+    await p.changeGrants(doc, { workflowActive: true, documentState: 'locked' });
+    for (const c of [alice, bob]) {
+      const pc = await c.take((m) => m.t === 'perm.changed');
+      complete(pc.d!, opened.get(c)!);
+      // 07 §4, limit 1: a running workflow leaves view and comment on the content.
+      expect(pc.d!['scopes']['body']).toEqual(['view', 'comment']);
+      expect(pc.d!['scopes'][LEGAL]).toEqual(['view', 'comment']);
+      expect(accesses(c)).toHaveLength(1);
+    }
+  });
+
+  it('a refreshed token: a lower role in the next token sends a complete access with a higher rev', async () => {
+    const p = await plane();
+    const { doc, bob, opened } = await room(p);
+    const id = bob.nextId();
+    bob.send({
+      t: 'auth.refresh',
+      id,
+      d: { token: p.tokens.issue({ user: 'bob', docs: { [doc]: 'viewer' }, groups: [] }) },
+    });
+    await bob.take((m) => m.re === id, 3000, 'answer to auth.refresh');
+    const pc = await bob.take((m) => m.t === 'perm.changed' && m.ch === 1);
+    complete(pc.d!, opened.get(bob)!);
+    expect(pc.d).toMatchObject({ docRole: 'viewer', caps: ['view'] });
+    expect(pc.d!['scopes']['body']).toEqual(['view']);
+    expect(pc.d!['scopes'][LEGAL]).not.toContain('edit');
+    expect(accesses(bob)).toHaveLength(1);
+  });
 });
 
 describe('revocation of one document (05 §3.3)', () => {

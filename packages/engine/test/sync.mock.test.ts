@@ -322,6 +322,45 @@ describe('rejections end to end (SYN-020; SYN-017 criterion 5)', () => {
     await service.dispose();
   });
 
+  it('permission_denied after a grant ran out: the access the room sends is applied (SYN-020 criterion 2)', async () => {
+    // Nothing tells the client that the grant ran out: the mock runs no expiry timer. The
+    // rejection is the first sign, and the room sends the access it judged the commit under.
+    let now = 1_760_000_000_000;
+    const service = newService({ now: () => now });
+    const docId = service.createDocument(contractDocument(), {
+      grants: [{ ...LEGAL_GRANT_FOR_TESTS, expiresAt: now + 1000 }],
+    });
+    const g = await join(service, docId, 'grace', 'editor', {}, { groups: ['legal'] });
+    const ig = internals(g.core);
+    const scope = `region:${IDS.locked}`;
+    expect(g.core.permissions.get()?.scopes[scope]).toContain('edit');
+    const rev = g.core.permissions.get()!.rev;
+    now += 2000;
+    caret(g.core, IDS.lockedPara, 0);
+    type(g.core, 'clause '); // the guard still allows it: the client's access is the old one
+    expect(unconfirmed(ig.sync)).not.toHaveLength(0);
+    await until(
+      () => g.core.recovered.get().items.some((r) => r.reason === 'permission_denied'),
+      'the rejection',
+      5000,
+    );
+    // The client's access is now the server's: no edit in the region, a higher rev.
+    const access = g.core.permissions.get()!;
+    expect(access.scopes[scope]).not.toContain('edit');
+    expect(access.scopes[scope]).toContain('view');
+    expect(access.rev).toBeGreaterThan(rev);
+    expect(textOfNode(ig.state.doc, IDS.lockedPara)).toBe('Restricted text');
+    expect(g.core.recovered.get().items.map((r) => r.text)).toContain('clause ');
+    // The guard refuses the next attempt, so nothing more is sent to be rejected.
+    await until(() => g.core.saveState.get() === 'saved', 'saved', 5000);
+    caret(g.core, IDS.lockedPara, 0);
+    type(g.core, 'again');
+    expect(unconfirmed(ig.sync)).toHaveLength(0);
+    expect(g.core.refusal.get()?.scopes).toEqual([scope]);
+    g.detach();
+    await service.dispose();
+  });
+
   it('read_only: the editor switches to read-only, and back when the document is unlocked', async () => {
     const service = newService();
     const docId = service.createDocument(contractDocument());

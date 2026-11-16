@@ -38,12 +38,20 @@ jobs:
         run: pnpm deps:check
       - name: Licence gate (FND-011)
         run: pnpm licence:check
+      - name: Fetch the base branch, for the class release ledger test (EXP-015)
+        # The checkout is one commit deep. The test compares the class and its ledger with the base
+        # revision, so that a released entry rewritten in place fails; it skips without the base.
+        env:
+          BASE: ${{ github.base_ref || 'main' }}
+        run: git fetch --no-tags --depth=1 origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
       - name: Unit and property tests in Node.js, without a browser (02 §12)
+        env:
+          DOCEDIT_CLASS_BASE_REF: origin/${{ github.base_ref || 'main' }}
         run: pnpm test -- --reporter=default --reporter=junit --outputFile.junit=test-results/node.xml
       - name: Generated artifacts are current (CDM-007)
         run: |
           pnpm generate
-          git diff --exit-code -- spec packages/model/src/generated
+          git diff --exit-code -- spec packages/model/src/generated packages/tck/fixtures
       - name: Actions and base images are pinned (SEC-052)
         run: pnpm pins:check
       - name: Build
@@ -64,6 +72,8 @@ jobs:
 
   browsers:
     name: Browser tests (${{ matrix.browser }})
+    # FE-121 criterion 4: the browser run starts only after the Node.js tests of `check` pass.
+    needs: check
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -204,6 +214,71 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File infra/test-env.ps1 run -NoExport pnpm test
 
+  export:
+    # The export pipeline with its real tools: the worker image is built, and the tests of the
+    # export worker and of the LaTeX converter compile in the single-use sandbox and validate with
+    # veraPDF. This is the reference corpus of EXP-016, the stored references of EXP-114, the
+    # sandbox environment of SEC-035 and the compile-level tests that skip in the other jobs.
+    # DOCEDIT_REQUIRE_SANDBOX makes a missing sandbox or veraPDF image a failure, not a skip.
+    name: Export tests in the sandbox, with veraPDF (EXP-016, EXP-114, SEC-035)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: podman --version
+      - name: Pull the pinned veraPDF image (the reference is in services/export-worker/src/verapdf.ts)
+        run: |
+          image="$(node --input-type=module -e "import { VERAPDF_IMAGE } from './services/export-worker/src/verapdf.ts'; console.log(VERAPDF_IMAGE);")"
+          podman pull "$image"
+      - name: Start the environment with the export worker, run the export tests, tear it down
+        shell: pwsh
+        env:
+          DOCEDIT_REQUIRE_SANDBOX: '1'
+        run: pwsh -NoProfile -File infra/test-env.ps1 run pnpm exec vitest run --project node services/export-worker packages/export-latex
+
+  fuzz:
+    # SEC-059 criterion 3 and SYN-049 criterion 3: every pull request runs the fuzz targets bounded
+    # (they are part of `pnpm test`); this job is the longer nightly run. The two lengths below are
+    # provisional, not figures from the specification: set the repository variables
+    # FUZZ_RUNS_NIGHTLY (generated inputs per target of 10 §5) and FUZZ_MS_NIGHTLY (time box of the
+    # authority fuzzer, in milliseconds) to change them (ADR 0121 item 39 leaves them to the owner).
+    name: Fuzz targets, the longer nightly run (SEC-059, SYN-049)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      FUZZ_RUNS: ${{ vars.FUZZ_RUNS_NIGHTLY || '2000' }}
+      FUZZ_MS: ${{ vars.FUZZ_MS_NIGHTLY || '600000' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The targets of 10 §5 with FUZZ_RUNS generated inputs each (SEC-059)
+        run: pnpm exec vitest run --project node tests/security/test/fuzz.test.ts
+      - name: The authority fuzzer for FUZZ_MS (SYN-049)
+        # The test has no time limit of its own, so the limit is the time box plus two minutes.
+        if: always()
+        run: pnpm exec vitest run --project node packages/authority/test/fuzz.test.ts --testTimeout=$((FUZZ_MS + 120000))
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A crash is saved as a minimised case; keep it so that it can be committed as a regression.
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: |
+            tests/security/corpus/fuzz/
+            tests/security/corpus/fuzz-inflight/
+          if-no-files-found: ignore
+
   convergence-nightly:
     name: Convergence suite against PostgreSQL, 3,000 schedules (SYN-047)
     if: github.event_name == 'schedule'
@@ -223,9 +298,39 @@ jobs:
           SYN047_RUNS: '3000'
         run: pwsh -NoProfile -File infra/test-env.ps1 run -NoExport pnpm test
 
+  fuzz-nightly:
+    # SEC-059 criterion 3. A pull request runs every fuzz target bounded, inside `pnpm test` (200
+    # generated inputs per target). This is the longer run. FUZZ_RUNS is a proposed value, not a
+    # figure from the spec (SEC-059 Notes): it is the run the story's evidence was taken with.
+    name: Fuzz targets, longer run (SEC-059)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Every registered fuzz target with 5,000 generated inputs
+        env:
+          FUZZ_RUNS: '5000'
+        run: pnpm exec vitest run --project node tests/security/test/fuzz.test.ts
+      - name: Keep the failing inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-findings
+          path: |
+            tests/security/corpus/fuzz
+            tests/security/corpus/fuzz-inflight
+          if-no-files-found: ignore
+
   summary:
     name: Pipeline duration
-    needs: [check, browsers, e2e, conformance-kit, integration, convergence-nightly]
+    needs: [check, browsers, e2e, conformance-kit, integration, export, fuzz, convergence-nightly, fuzz-nightly]
     if: always()
     runs-on: ubuntu-24.04
     steps:
