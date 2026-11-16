@@ -14,6 +14,8 @@
  * ../clipboard-html.ts reads only text and an allowed link target from it. The policy object stays
  * private to this module and is never handed out, so no other code can use it for a live sink.
  */
+import { DOMParser as SchemaParser } from 'prosemirror-model';
+import type { EditorView } from 'prosemirror-view';
 import type { CdmFragment } from '../cdm-fragment.ts';
 import { fragmentFromForeignDocument, picturesFromForeignDocument } from '../clipboard-html.ts';
 import type { PastedImage } from '../image-paste.ts';
@@ -93,4 +95,39 @@ export function foreignClipboard(
   } catch {
     return none;
   }
+}
+
+/**
+ * Pastes clipboard data into a view without ProseMirror's own reading of HTML (FE-016 criterion 5).
+ * ProseMirror reads an HTML string under its own policy name, `ProseMirrorClipboard`, which is not the
+ * project's. Here the string is read by `parseClipboardHtml` (the page's `default` policy or
+ * `docedit-paste`) into an inert document, and the view's schema then parses that document's nodes,
+ * which is not a Trusted Types sink. Where the HTML cannot be read, or holds nothing the schema takes,
+ * the plain text is pasted. Returns false when the data holds neither HTML nor text. Never throws for
+ * a refused policy.
+ */
+export function pasteThroughPolicy(view: EditorView, data: DataTransfer): boolean {
+  const html = data.getData('text/html');
+  const text = data.getData('text/plain');
+  if (html === '' && text === '') return false;
+  const doc = html === '' ? null : parseClipboardHtml(html);
+  if (doc) {
+    const slice = SchemaParser.fromSchema(view.state.schema).parseSlice(doc.body, {
+      preserveWhitespace: true,
+      context: view.state.selection.$from,
+    });
+    if (slice.size > 0) {
+      view.dispatch(
+        view.state.tr
+          .replaceSelection(slice)
+          .scrollIntoView()
+          .setMeta('paste', true)
+          .setMeta('uiEvent', 'paste'),
+      );
+      return true;
+    }
+  }
+  // `pasteText` builds its nodes with DOM calls; it reads no HTML string.
+  if (text !== '') view.pasteText(text);
+  return true;
 }

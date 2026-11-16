@@ -75,16 +75,15 @@ describe('a locked document under a running workflow (FRW-029 criteria 1 and 2)'
     expect(room.head).toBe(0);
   });
 
-  // NOTE (FRW-029 criterion 1, recorded in the story Notes): an owner or an editor is refused and
-  // stores nothing, but with `permission_denied`, not the `read_only` that 12 §3.3 names. Their roles
-  // carry `fill` (permissions/model.ts), so room step 1 (`fill.allowed`) admits the commit and the
-  // outcome check refuses it. These tests pin the refusal and the stored state, not the code.
+  // An owner or an editor keeps `fill` under the lock, so room step 1 admits the commit and the
+  // outcome check refuses it. Since SYN-007 (ADR 0363, proposed) the room answers `read_only` when
+  // the same connection could make the change on an active document with no workflow.
   it('refuses an owner who changes text under the lock, and stores nothing', () => {
     const doc = fieldsDoc();
     const room = roomWith(doc, locked());
     room.open('a1', USERS.alice);
     const fx = submit(room, 'a1', 0, typeIn(doc));
-    expect(rejection(fx, 'a1')).not.toBeNull();
+    expect(rejection(fx, 'a1')).toMatchObject({ code: 'read_only', action: 'drop' });
     expect(fx.write).toBeNull();
     expect(room.head).toBe(0);
   });
@@ -94,7 +93,7 @@ describe('a locked document under a running workflow (FRW-029 criteria 1 and 2)'
     const room = roomWith(doc, locked());
     room.open('b1', USERS.bob);
     const fx = submit(room, 'b1', 0, attrChange(doc));
-    expect(rejection(fx, 'b1')).not.toBeNull();
+    expect(rejection(fx, 'b1')).toMatchObject({ code: 'read_only', action: 'drop' });
     expect(fx.write).toBeNull();
     expect(room.document.nodeAt(posOf(doc, FIELDS.number))!.attrs['key']).toBe('tenant.amount');
   });

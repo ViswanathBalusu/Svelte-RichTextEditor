@@ -34,14 +34,16 @@ Needed for every page that shows the editor.
   body, and then the plain text is pasted. Allow `docedit-paste` to avoid it.
 - With neither `docedit-paste` nor a `default` policy allowed, the HTML is not read and the plain text
   is pasted; the paste never throws.
-- ProseMirror's own parse still runs where the element does not take the event: a paste into a
-  footnote or story panel (the sub-editor, `packages/engine/src/subeditor.ts`, has no paste handler)
-  and a drop of HTML onto any surface (no `drop` handler in `packages/engine/src/view/web.ts`). That
-  parse needs `ProseMirrorClipboard` or a `default` policy. Read from the source on 2026-11-14; these
-  two paths were not measured in a browser.
-- The directive for paste on every surface is therefore
-  `trusted-types docedit-paste ProseMirrorClipboard` (the S2 GUIDE table,
-  `packages/element/e2e/s2-features.spec.ts`).
+- Since FE-016 (2026-11-15) the element takes a paste into a footnote or story panel and a drop of
+  HTML onto any surface too, and reads them under `docedit-paste` (`pasteThroughPolicy` and the
+  `drop` handlers in `packages/engine/src/view/web.ts`). Measured in
+  `packages/element/e2e/fe-016-paste-policy.spec.ts` with `trusted-types docedit-paste` alone: no
+  Trusted Types violation in Chromium, Edge and WebKit. No surface of the element then needs
+  `ProseMirrorClipboard`; only a caller of ProseMirror's own `pasteHTML` (the spike harness) does.
+- The S2 GUIDE table (`packages/element/e2e/s2-features.spec.ts`) still lists
+  `trusted-types docedit-paste ProseMirrorClipboard`, because its paste run drives ProseMirror's
+  `pasteHTML` through the harness. Whether to stop publishing `ProseMirrorClipboard` is left to
+  FE-017.
 - Omit: if the host never pastes HTML. The editor still accepts plain text input.
 
 ## Panes (outline, footnote and header panels)
