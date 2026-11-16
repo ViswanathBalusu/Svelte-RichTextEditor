@@ -129,6 +129,31 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
   const covers = (t: MockToken, doc: string) =>
     t.docs[doc] !== undefined && t.serial > (docWatermarks.get(`${t.sub}\u0000${doc}`) ?? 0);
 
+  /** One page of a list (05 §6.1; D14, D72): `limit` of 1 to 200, and an opaque offset cursor. */
+  function page<T>(url: URL, all: readonly T[]): { items: T[]; nextCursor: string | null } {
+    const limit = url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : 50;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+      throw new Problem('validation_failed', 'limit is 1 to 200 (D72)', {
+        violations: [{ path: 'limit', rule: '1 to 200' }],
+      });
+    let start = 0;
+    const cursor = url.searchParams.get('cursor');
+    if (cursor !== null) {
+      const text = Buffer.from(cursor, 'base64url').toString('utf8');
+      const n = Number(text.replace(/^o:/, ''));
+      if (!text.startsWith('o:') || !Number.isInteger(n))
+        throw new Problem('validation_failed', 'an unknown cursor (D72)', {
+          violations: [{ path: 'cursor', rule: 'a cursor of this server' }],
+        });
+      start = n;
+    }
+    return {
+      items: all.slice(start, start + limit),
+      nextCursor:
+        start + limit < all.length ? Buffer.from(`o:${start + limit}`).toString('base64url') : null,
+    };
+  }
+
   function mint(body: Record<string, unknown>): { token: string; expiresAt: string } {
     const sub = body['sub'];
     const d = body['docs'];
@@ -343,34 +368,12 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
         return out;
       }
       if (method === 'GET') {
-        const limit = url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : 50;
-        if (!Number.isInteger(limit) || limit < 1 || limit > 200)
-          throw new Problem('validation_failed', 'limit is 1 to 200 (D72)', {
-            violations: [{ path: 'limit', rule: '1 to 200' }],
-          });
-        let start = 0;
-        const cursor = url.searchParams.get('cursor');
-        if (cursor !== null) {
-          const n = Number(Buffer.from(cursor, 'base64url').toString('utf8').replace(/^o:/, ''));
-          if (
-            !Buffer.from(cursor, 'base64url').toString('utf8').startsWith('o:') ||
-            !Number.isInteger(n)
-          )
-            throw new Problem('validation_failed', 'an unknown cursor (D72)', {
-              violations: [{ path: 'cursor', rule: 'a cursor of this server' }],
-            });
-          start = n;
-        }
         const ext = url.searchParams.get('externalId');
         const all = order
           .map((id) => docs.get(id)!)
           .filter((d) => !d.deleted && (ext === null || d.externalId === ext));
-        const items = all.slice(start, start + limit).map(resource);
-        const next =
-          start + limit < all.length
-            ? Buffer.from(`o:${start + limit}`).toString('base64url')
-            : null;
-        return { status: 200, body: { items, nextCursor: next } };
+        const p = page(url, all);
+        return { status: 200, body: { items: p.items.map(resource), nextCursor: p.nextCursor } };
       }
       throw new Problem('not_found', 'the route has no such method');
     }
@@ -423,7 +426,7 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
       return { status: 204 };
     }
     if (rest === 'regions' && method === 'GET')
-      return { status: 200, body: { items: doc.regions(), nextCursor: null } };
+      return { status: 200, body: page(url, doc.regions()) };
     if (rest === 'grants' && method === 'GET') {
       manage(r);
       const g = doc.grants();
