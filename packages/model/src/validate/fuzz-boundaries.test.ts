@@ -192,6 +192,7 @@ function measure(doc: Json): {
 describe('documents at the boundary sizes of I7 (CDM-015 criterion 1)', () => {
   it.for(SEEDS)(
     'end in a result or a typed error within the time limit and the memory bound (seed %i)',
+    { timeout: 180_000 },
     (seed, { task }) => {
       const seen = { slowestMs: 0, largestHeapGrowthBytes: 0, largestInputBytes: 0 };
       const run = fc.check(
@@ -241,7 +242,6 @@ describe('documents at the boundary sizes of I7 (CDM-015 criterion 1)', () => {
           `largest input ${Math.round(seen.largestInputBytes / MIB)} MiB`,
       );
     },
-    180_000,
   );
 
   it('each limit on its own: at the limit is accepted, one over is refused, both in time', () => {

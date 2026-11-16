@@ -27,7 +27,10 @@ const JONES =
   'Jones, Bo and Cy Adams (2024). An article. Journal of Tests, 3(2), pp. 10-20. https://doi.org/10.1234/abc';
 const BROWN = 'Brown Institute (2020). Uncited report.';
 
-function envelope(style: 'authorYear' | 'numeric', include: 'cited' | 'all' = 'cited'): CdmEnvelope {
+function envelope(
+  style: 'authorYear' | 'numeric',
+  include: 'cited' | 'all' = 'cited',
+): CdmEnvelope {
   const paragraph = (id: string, text: string) => ({
     type: 'paragraph',
     attrs: { id, style: null },
