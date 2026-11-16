@@ -90,9 +90,17 @@ class ScriptedChannel implements SyncChannel {
     const c = this.submits[this.#answered()]!;
     this.#answers.shift()!.resolve({ id: c.id, seq, serverTime: 't', rebased: false });
   }
-  reject(code: string, action: string, head: number): void {
+  reject(code: string, action: string, head: number, retryAfterMs?: number): void {
     const c = this.submits[this.#answered()]!;
-    this.#answers.shift()!.reject(Object.assign(new Error(code), { id: c.id, code, action, head }));
+    this.#answers.shift()!.reject(
+      Object.assign(new Error(code), {
+        id: c.id,
+        code,
+        action,
+        head,
+        ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+      }),
+    );
   }
   #answered(): number {
     return this.submits.length - this.#answers.length;
@@ -221,6 +229,58 @@ describe('sending (SYN-018)', () => {
     await h.clock.advance(1);
     expect(h.first.submits.map((s) => s.id)).toEqual(['c1', 'c1']);
     expect(h.first.submits[1]).toEqual(h.first.submits[0]);
+  });
+
+  it('waits at least retryAfterMs before it sends the same commit again (PRO-028; 04 §8)', async () => {
+    for (const code of ['busy', 'rate_limited', 'unavailable']) {
+      const h = harness();
+      await sleep(0);
+      caret(h.c, SPIKE_IDS.after, 0);
+      type(h.c, 'a');
+      await sleep(0);
+      const rejectedAt = h.clock.now();
+      h.first.reject(code, 'retry', 0, 250);
+      // Later typing does not bring the resubmission forward, and nothing else is sent meanwhile.
+      await h.clock.advance(100);
+      type(h.c, 'b');
+      await h.clock.advance(149);
+      expect(h.clock.now() - rejectedAt).toBe(249);
+      expect(h.first.submits.map((s) => s.id)).toEqual(['c1']);
+      await h.clock.advance(1);
+      expect(h.first.submits.map((s) => s.id)).toEqual(['c1', 'c1']);
+      expect(h.first.submits[1]).toEqual(h.first.submits[0]);
+      // Once it is acknowledged, the queued work follows as a new commit.
+      h.first.ack(1);
+      await h.clock.advance(100);
+      expect(h.first.submits.map((s) => [s.id, s.base])).toEqual([
+        ['c1', 0],
+        ['c1', 0],
+        ['c2', 1],
+      ]);
+      h.detach();
+    }
+  });
+
+  it('waits the longer of retryAfterMs and its own backoff when retries repeat (PRO-028)', async () => {
+    const h = harness();
+    await sleep(0);
+    caret(h.c, SPIKE_IDS.after, 0);
+    type(h.c, 'a');
+    await sleep(0);
+    const waits: number[] = [];
+    for (const hint of [30, 5, 5, 300]) {
+      const sent = h.first.submits.length;
+      const at = h.clock.now();
+      h.first.reject('busy', 'retry', 0, hint);
+      await h.clock.advance(hint - 1);
+      expect(h.first.submits).toHaveLength(sent);
+      while (h.first.submits.length === sent) await h.clock.advance(1);
+      waits.push(h.clock.now() - at);
+      expect(h.first.submits[sent]).toEqual(h.first.submits[0]);
+    }
+    // The hint is the floor; from the third refusal the session's own backoff (10 ms, doubling) is longer.
+    expect(waits).toEqual([30, 5, 10, 300]);
+    h.detach();
   });
 });
 
