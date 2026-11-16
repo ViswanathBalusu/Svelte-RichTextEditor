@@ -400,6 +400,11 @@ export interface OracleCommit {
   /** The commit's origin, and whether the server authored it (an import may name labels). */
   origin?: string;
   serverAuthored?: boolean;
+  /**
+   * The `field:<id>` scopes changed by commits accepted after this commit's `base` and before
+   * it, from the oracle's own replay (P9). Left out, P9 is not checked.
+   */
+  fieldsChangedSinceBase?: ReadonlySet<string>;
 }
 
 /**
@@ -428,8 +433,99 @@ function identityViolations(c: OracleCommit, importing: boolean): string[] {
   return out;
 }
 
-/** Returns the violations of one stored commit: scopes changed outside the writable set. */
-export function oracleViolations(c: OracleCommit): string[] {
+// -- the writable set and its hooks ---------------------------------------------------------------
+
+/** One changed scope of one commit, as a hook sees it. */
+export interface WritableQuery {
+  commit: OracleCommit;
+  /** `body`, `region:<id>` or `field:<id>`; a field is asked about only when it exists on both sides. */
+  scope: string;
+  /** The submitter's document capabilities under the document's state. */
+  caps: ReadonlySet<Cap>;
+  /** Their capabilities in the scope, or for a field in the scope that contains it; null when unknown. */
+  scopeCaps: ReadonlySet<Cap> | null;
+  /** Whether P1 alone already lets the submitter change the scope (`edit` there, tracking not forced). */
+  p1: boolean;
+  /** `settings.trackChanges` is `everyone` (07 §5.2). */
+  everyone: boolean;
+  /** A server-authored import, which may name labels (spike S11). */
+  importing: boolean;
+}
+
+/**
+ * A rule beyond P1. It answers null when it says nothing about the change, an empty list when it
+ * puts the scope in the submitter's writable set, and its violations otherwise. A changed scope is
+ * accepted when P1 or some hook puts it in the writable set and no hook reports a violation; when
+ * neither P1 nor any hook speaks for it, the oracle reports it as changed without the right.
+ */
+export type WritableHook = (q: WritableQuery) => string[] | null;
+
+const HOOKS = new Map<string, WritableHook>();
+
+/**
+ * Registers a rule that extends (or narrows) the writable set of 07 §5.1 (PRM-017). The generator
+ * and the suites do not change: they call `oracleViolations`, which asks every registered hook.
+ * Returns a function that takes the rule out again.
+ */
+export function registerWritableHook(rule: string, hook: WritableHook): () => void {
+  if (HOOKS.has(rule)) throw new Error(`the oracle already has a hook for ${rule}`);
+  HOOKS.set(rule, hook);
+  return () => {
+    if (HOOKS.get(rule) === hook) HOOKS.delete(rule);
+  };
+}
+
+/** The rules registered now, in order of registration. */
+export function writableRules(): string[] {
+  return [...HOOKS.keys()];
+}
+
+/** 07 §5.2 P4: with `suggest` but not `edit`, a scope may change only through one's own suggestions. */
+export const p4Suggestions: WritableHook = (q) => {
+  if (q.p1 || q.scope.startsWith('field:') || !q.scopeCaps?.has('suggest')) return null;
+  const { commit: c } = q;
+  const why = validSuggestion(c.before, c.after, q.scope, c.user.sub, c.owners, q.importing);
+  return why ? [`${q.scope}: invalid suggestion (${why})`] : [];
+};
+
+/** 12 §4.2 P7: with `fill`, the value of a field assigned to one of the participant's roles. */
+export const p7Fill: WritableHook = (q) => {
+  if (q.p1 || !q.scope.startsWith('field:')) return null;
+  const { user, perms, after } = q.commit;
+  const field = fieldNode(after, q.scope.slice(6));
+  const ok =
+    q.caps.has('fill') &&
+    (perms.documentState === 'active' || perms.workflowActive) &&
+    user.participantActive &&
+    typeof field?.attrs['assignee'] === 'string' &&
+    user.participantRoles.includes(field.attrs['assignee']);
+  return ok ? [] : null;
+};
+
+/**
+ * 12 §4.2 P9: "If any commit accepted after the commit's `base` changed the same field, the commit
+ * is rejected with `conflict`". It narrows the set, whoever writes the value; it says nothing when
+ * the replay did not supply the fields changed since the base.
+ */
+export const p9ExclusiveFill: WritableHook = (q) => {
+  if (!q.scope.startsWith('field:') || q.commit.serverAuthored === true) return null;
+  return q.commit.fieldsChangedSinceBase?.has(q.scope)
+    ? [`${q.scope}: changed although another commit changed it after the base (P9)`]
+    : null;
+};
+
+registerWritableHook('P4', p4Suggestions);
+registerWritableHook('P7', p7Fill);
+registerWritableHook('P9', p9ExclusiveFill);
+
+/**
+ * Returns the violations of one stored commit: scopes changed outside the writable set. P1, P2,
+ * P8 and the `manage` operations are here; every other rule is a registered hook.
+ */
+export function oracleViolations(
+  c: OracleCommit,
+  hooks: ReadonlyMap<string, WritableHook> = HOOKS,
+): string[] {
   const { user, perms, time, before, after } = c;
   const caps = docCaps(user, perms);
   const everyone = before.child(0).child(0).attrs['trackChanges'] === 'everyone';
@@ -439,6 +535,18 @@ export function oracleViolations(c: OracleCommit): string[] {
     const p = regionPolicy(doc, id);
     return p ? regionCaps(user, perms, id, p, time) : null;
   };
+  /** Asks P1 and every hook about one scope; `denied` is reported when nothing lets it change. */
+  const ask = (scope: string, scopeCaps: Set<Cap> | null, p1: boolean, denied: string) => {
+    let writable = p1;
+    for (const hook of hooks.values()) {
+      const said = hook({ commit: c, scope, caps, scopeCaps, p1, everyone, importing });
+      if (said === null) continue;
+      // A hook that judged the change has spoken for it: its violations replace `denied`.
+      writable = true;
+      out.push(...said);
+    }
+    if (!writable) out.push(denied);
+  };
   for (const scope of changedScopes(before, after)) {
     if (scope === 'doc' || scope.startsWith('defs:') || scope.startsWith('story:')) {
       if (!caps.has('structure')) out.push(`${scope}: changed without structure`);
@@ -446,13 +554,7 @@ export function oracleViolations(c: OracleCommit): string[] {
       continue;
     }
     if (scope === 'body') {
-      if (caps.has('edit') && !everyone) continue;
-      if (caps.has('suggest')) {
-        const why = validSuggestion(before, after, scope, user.sub, c.owners, importing);
-        if (why) out.push(`body: invalid suggestion (${why})`);
-        continue;
-      }
-      out.push('body: changed without edit or suggest');
+      ask(scope, caps, caps.has('edit') && !everyone, 'body: changed without edit or suggest');
       continue;
     }
     if (scope.startsWith('region:')) {
@@ -462,13 +564,7 @@ export function oracleViolations(c: OracleCommit): string[] {
       if (b && a) {
         if (regionPolicy(before, id) !== regionPolicy(after, id) && !caps.has('manage'))
           out.push(`${scope}: policy changed without manage`);
-        if (b.has('edit') && !everyone) continue;
-        if (b.has('suggest')) {
-          const why = validSuggestion(before, after, scope, user.sub, c.owners, importing);
-          if (why) out.push(`${scope}: invalid suggestion (${why})`);
-          continue;
-        }
-        out.push(`${scope}: changed without edit or suggest`);
+        ask(scope, b, b.has('edit') && !everyone, `${scope}: changed without edit or suggest`);
       } else {
         // Added or removed: structure, edit in the body, edit in the region (P2).
         if (!caps.has('structure') || !caps.has('edit'))
@@ -493,14 +589,12 @@ export function oracleViolations(c: OracleCommit): string[] {
       }
       const container = fieldContainer(before, id);
       const containerCaps = container === 'body' ? caps : regionCapsAt(before, container.slice(7));
-      if (containerCaps?.has('edit') && !perms.workflowActive && !everyone) continue;
-      const fillOk =
-        caps.has('fill') &&
-        (perms.documentState === 'active' || perms.workflowActive) &&
-        user.participantActive &&
-        typeof na.attrs['assignee'] === 'string' &&
-        user.participantRoles.includes(na.attrs['assignee']);
-      if (!fillOk) out.push(`${scope}: filled without the fill rules`);
+      ask(
+        scope,
+        containerCaps,
+        containerCaps?.has('edit') === true && !perms.workflowActive && !everyone,
+        `${scope}: filled without the fill rules`,
+      );
     }
   }
   out.push(...fieldViolations(c));
