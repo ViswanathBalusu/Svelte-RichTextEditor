@@ -410,7 +410,7 @@ function footnoteParts(ctx: Ctx, n: J): { para: J | null; inlines: J[]; blockId:
   return { para, inlines, blockId: idOf(para ?? undefined) ?? idOf(n) };
 }
 
-function footnoteText(ctx: Ctx, n: J, mark: Tex): { fn: number; tex: Tex } {
+function footnoteText(ctx: Ctx, n: J): { fn: number; props: Tex; body: Tex } {
   const { para, inlines, blockId } = footnoteParts(ctx, n);
   const fn = register(ctx, blockId, para ? 'footnoteParagraph' : 'footnote', idOf(n));
   const attrs = { ...(para?.attrs ?? {}) };
@@ -424,7 +424,7 @@ function footnoteText(ctx: Ctx, n: J, mark: Tex): { fn: number; tex: Tex } {
     holder: blockId,
   });
   const body = within(ctx, fn, () => join(paragraphBody(ctx, inlines, inner), t('%\n')));
-  return { fn, tex: tex`\DEfntext{${int(fn)}}{${mark}}{${f.tex}}{${body}}` };
+  return { fn, props: f.tex, body };
 }
 
 function footnote(ctx: Ctx, n: J, st: InlineState): Tex {
@@ -437,12 +437,20 @@ function footnote(ctx: Ctx, n: J, st: InlineState): Tex {
     st.off += 1;
     return EMPTY;
   }
-  const { fn, tex: body } = footnoteText(ctx, n, mark);
-  const out = tex`\DEfnmark{${int(st.off)}}{${int(fn)}}{${mark}}`;
+  const { fn, props, body } = footnoteText(ctx, n);
+  const off = st.off;
   st.off += 1;
-  if (st.place === 'heading') st.deferred.push(body);
-  else return tex`${out}${body}`;
-  return out;
+  // `\footnote` where LaTeX allows it: a paragraph of the body flow (EXP-029 criterion 1).
+  if (st.place === 'body') return tex`\DEfn{${int(off)}}{${int(fn)}}{${mark}}{${props}}{${body}}`;
+  // Elsewhere the mark and the text are apart: a table cell and a caption set the text right after
+  // the mark, and a heading (a moving argument) sets it after the heading.
+  const out = tex`\DEfnmark{${int(off)}}{${int(fn)}}{${mark}}`;
+  const note = tex`\DEfntext{${int(fn)}}{${mark}}{${props}}{${body}}`;
+  if (st.place === 'heading') {
+    st.deferred.push(note);
+    return out;
+  }
+  return tex`${out}${note}`;
 }
 
 // ---------------------------------------------------------------------------------------------

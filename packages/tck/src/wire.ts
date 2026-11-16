@@ -70,6 +70,17 @@ export class Wire {
   /** Texts sent, in order. */
   readonly sent: string[] = [];
   closed: Closed | null = null;
+  /**
+   * Whether the server ended the connection: it closed before the kit asked for a close or dropped
+   * the connection itself. Only such an end is held against 05 §5.7 (PRO-037).
+   */
+  endedByServer = false;
+  /**
+   * Close codes outside 05 §5.7 that the scenario accepts on this connection, because the
+   * specification names no code for what it provokes (a silent peer, 05 §4).
+   */
+  readonly toleratedCloses = new Set<number>();
+  private ending = false;
   /** The subprotocol the server selected. */
   protocol = '';
   private readonly ws: WebSocket;
@@ -114,6 +125,7 @@ export class Wire {
       ws.on('message', (data, isBinary) => wire.receive(data, isBinary));
       ws.on('close', (code, reason) => {
         wire.closed = { code, reason: reason.toString('utf8'), at: Date.now() };
+        wire.endedByServer = !wire.ending;
         if (!settled) {
           settled = true;
           reject(new Error(`the connection closed before it opened (${code})`));
@@ -316,6 +328,7 @@ export class Wire {
   /** Closes the connection (normal closure) and waits briefly for the close to complete. */
   async close(code = 1000): Promise<void> {
     if (this.closed) return;
+    this.ending = true;
     try {
       this.ws.close(code);
     } catch {
@@ -327,6 +340,7 @@ export class Wire {
 
   /** Drops the TCP connection without a close frame (a client that vanished). */
   terminate(): void {
+    this.ending = true;
     this.ws.terminate();
   }
 }

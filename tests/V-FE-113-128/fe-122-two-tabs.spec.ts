@@ -6,6 +6,10 @@
  * two people. Requests from the page reach the service through Playwright's routing (CORS is added
  * to the routed responses; the service itself is unchanged).
  *
+ * The grants differ (lane w1, 2026-11-15): the document has a restricted region, "Legal review",
+ * and only `ada` holds an editor grant on it. The second test edits inside that region from both
+ * tabs: Ada's change reaches Grace, and Grace's is refused in her tab and never reaches Ada.
+ *
  * Skips, with the reason, when PostgreSQL is not up (infra/test-env.ps1 up).
  */
 import { randomUUID } from 'node:crypto';
@@ -23,6 +27,9 @@ import {
 
 const TENANT_NAME = 'V-FE-113-128 two tabs';
 const PAGE_ORIGIN = 'http://127.0.0.1:57078';
+/** The restricted region of `documentWithRegions` and the text of its paragraph. */
+const LEGAL_REGION = 'rLegal0000000001';
+const LEGAL_TEXT = 'Liability';
 const skip = await postgresUnavailable();
 test.describe.configure({ mode: 'serial' });
 test.skip(skip !== null, skip ?? '');
@@ -67,6 +74,23 @@ test.beforeAll(async () => {
   tokenGrace = (
     await service.tokens.mint(tenant, { sub: 'grace', docs: { [docId]: 'editor' }, name: 'Grace' })
   ).token;
+
+  // The unequal grant: Ada may change the restricted region, Grace may only read it (07 §4).
+  const auth = { Authorization: `Bearer ${key.credential}` };
+  const grants = await fetch(`${service.url}/v1/documents/${docId}/grants`, { headers: auth });
+  expect(grants.status).toBe(200);
+  const patched = await fetch(`${service.url}/v1/documents/${docId}/grants`, {
+    method: 'PATCH',
+    headers: {
+      ...auth,
+      'Content-Type': 'application/json',
+      'If-Match': grants.headers.get('etag') ?? '',
+    },
+    body: JSON.stringify({
+      grants: [{ region: LEGAL_REGION, principal: 'user:ada', role: 'editor' }],
+    }),
+  });
+  expect(patched.status).toBe(200);
 });
 
 test.afterAll(async () => {
@@ -167,6 +191,64 @@ test('two tabs on one service type, select, undo and edit the same document', as
   await grace.keyboard.type('Gamma');
   await expect.poll(() => bodyText(ada), { timeout: 20_000 }).toContain('Gamma');
   await expect.poll(() => bodyText(ada), { timeout: 20_000 }).not.toContain('Beta');
+
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test('two tabs with different grants: only the tab with the region grant changes the region', async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const ada = await context.newPage();
+  const grace = await context.newPage();
+  const errors: string[] = [];
+  for (const p of [ada, grace]) p.on('pageerror', (e) => errors.push(e.message));
+
+  await openTab(ada, 'ada', tokenAda);
+  await openTab(grace, 'grace', tokenGrace);
+
+  const legal = (p: Page) =>
+    p.locator('doc-editor .de-editing-surface p', { hasText: LEGAL_TEXT }).first();
+  const legalText = (p: Page) => legal(p).evaluate((el) => el.textContent ?? '');
+
+  // 1. Ada, who holds the region grant, types in the restricted region; Grace sees it.
+  await legal(ada).click();
+  await ada.keyboard.press('End');
+  await ada.keyboard.type(' Ada-may');
+  await expect.poll(() => legalText(grace), { timeout: 20_000 }).toContain('Ada-may');
+
+  // 2. Grace, an editor without the grant, types in the same paragraph: her tab refuses it and
+  // Ada's tab never shows it. A later change of Grace's does arrive (step 3), so the absence here
+  // is a refusal and not a delay.
+  await legal(grace).click();
+  await grace.keyboard.press('End');
+  await grace.keyboard.type(' Grace-may-not');
+  await grace.waitForTimeout(1500);
+  expect(await legalText(grace)).not.toContain('Grace-may-not');
+  expect(await bodyText(grace)).not.toContain('Grace-may-not');
+
+  // 3. Grace edits outside the region, where her editor role applies; Ada sees it.
+  const intro = (p: Page) => p.locator('doc-editor .de-editing-surface p').first();
+  await intro(grace).click();
+  await grace.keyboard.press('End');
+  await grace.keyboard.type(' Grace-may');
+  await expect.poll(() => bodyText(ada), { timeout: 20_000 }).toContain('Grace-may');
+  expect(await bodyText(ada)).not.toContain('Grace-may-not');
+
+  // 4. Ada undoes her change in the region; it goes from both tabs.
+  await legal(ada).click();
+  await ada.keyboard.press('Control+z');
+  await expect.poll(() => legalText(ada), { timeout: 20_000 }).not.toContain('Ada-may');
+  await expect.poll(() => legalText(grace), { timeout: 20_000 }).not.toContain('Ada-may');
+
+  // 5. Ada selects the region's text (Shift+Home from its end) and replaces it; Grace sees it.
+  await legal(ada).click();
+  await ada.keyboard.press('End');
+  await ada.keyboard.press('Shift+Home');
+  await ada.keyboard.type('Indemnity');
+  await expect.poll(() => bodyText(grace), { timeout: 20_000 }).toContain('Indemnity');
+  expect(await bodyText(grace)).not.toContain(LEGAL_TEXT);
 
   expect(errors).toEqual([]);
   await context.close();

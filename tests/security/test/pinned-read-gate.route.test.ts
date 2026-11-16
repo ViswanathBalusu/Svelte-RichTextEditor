@@ -28,6 +28,7 @@ import type {
   DocumentStore,
 } from '../../../services/document-service/src/storage/types.ts';
 import { FULL_VIEWS } from '../../../services/document-service/src/control-plane/visibility.ts';
+import { startOnFetchablePort } from '../../../services/document-service/test/support/ports.ts';
 import { keyPair, signJws } from './support/jws.ts';
 import { documentWithRegions, insertText, posInside } from './support/harness.ts';
 
@@ -69,14 +70,21 @@ async function rig(): Promise<Rig> {
       return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v;
     },
   }) as DocumentStore;
-  const service = await startService({
-    config: { ...configFromEnv({}), port: 0, workers: 1 },
-    parts,
-    // Full views: no read restriction, so a copy is kept (the default views restrict every read,
-    // and a restricted read is never cached, SR-C4). Every reader is in the full class, as above.
-    views: FULL_VIEWS,
-    pinnedCache: { enabled: () => true, maxEntries: 100 },
-  });
+  // A port the system chooses can be one fetch refuses ("bad port"); choose again then.
+  const service = await startOnFetchablePort(
+    () =>
+      startService({
+        config: { ...configFromEnv({}), port: 0, workers: 1 },
+        parts,
+        // Full views: no read restriction, so a copy is kept (the default views restrict every
+        // read, and a restricted read is never cached, SR-C4). Every reader is in the full class,
+        // as above.
+        views: FULL_VIEWS,
+        pinnedCache: { enabled: () => true, maxEntries: 100 },
+      }),
+    (s) => s.url,
+    (s) => s.close(),
+  );
   open = service;
   const tenant = randomUUID();
   await parts.registry.putTenant(tenant, 'Test tenant');

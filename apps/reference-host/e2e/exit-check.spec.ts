@@ -256,10 +256,6 @@ test('4. the commit log is recorded in full', async () => {
 });
 
 test('4b. the commit log can be read over REST (GET /documents/{id}/commits)', async () => {
-  test.fail(
-    true,
-    'Expected to fail: the document service has no handler for listCommits yet (05 §6.2; asked of the control-plane agent, phase 1b).',
-  );
   const token = (await hostToken(contexts[0]!, PEOPLE.olivia, docId)).token;
   const r = await fetch(`${serviceUrl()}/v1/documents/${docId}/commits?after=0`, {
     headers: { Authorization: `Bearer ${token}` },
