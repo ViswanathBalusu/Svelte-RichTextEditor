@@ -25,6 +25,7 @@
     "svelte": "5.57.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@docedit/backend-mock": "workspace:*",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "katex": "0.19.1",

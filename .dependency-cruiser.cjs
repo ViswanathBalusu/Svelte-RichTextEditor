@@ -53,7 +53,8 @@ module.exports = {
     },
     {
       name: 'no-circular',
-      comment: 'Packages form a directed graph; a cycle means two packages are really one.',
+      comment:
+        '01 §6: the layout lists separate packages, and `authority` (with `model` and `rules` under it) is shared by the room, the authority service, the local backend and tests. A cycle makes two of them one unit, and can carry a Node.js or browser dependency back into a package that must have none.',
       severity: 'error',
       from: {},
       to: { circular: true },
