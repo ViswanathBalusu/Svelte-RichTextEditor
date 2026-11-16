@@ -16,7 +16,7 @@ import { DOC_ROLES, type Connection, type DocRole, parsePrincipal } from '@doced
 import { formatTimestamp, parseTimestamp, uuid7 } from '@docedit/model';
 import type { TokenRequest } from '@docedit/protocol';
 import type { VerifiedIdentity, VerifyToken } from '../seams.ts';
-import { isUuid } from '../storage/db.ts';
+import { isUuid } from '../storage/ids.ts';
 import {
   type Algorithm,
   type PublicJwk,
@@ -84,6 +84,18 @@ export interface ServiceIdentity {
   credential: string;
 }
 
+/**
+ * Verification of the credentials a request or a socket carries (`TokenVerifier`, 06 §14; BE-002):
+ * user tokens (05 §3.1) and service credentials (05 §3.2). The pipeline and the data plane depend
+ * on this, so a deployment may verify with another implementation; minting is not part of it.
+ */
+export interface TokenVerifier {
+  /** The data plane's `VerifyToken` (seams.ts): a user token to the identity it proves. */
+  readonly verifyUser: VerifyToken;
+  /** An API key or a service JWT to the tenant it belongs to. */
+  verifyService(credential: string): Promise<ServiceIdentity>;
+}
+
 export interface TokenServiceOptions {
   registry: TenantRegistry;
   users: UserDirectory;
@@ -105,7 +117,7 @@ export function isOpaqueId(v: unknown): v is string {
   return typeof v === 'string' && parsePrincipal(`user:${v}`) !== null;
 }
 
-export class TokenService {
+export class TokenService implements TokenVerifier {
   readonly #registry: TenantRegistry;
   readonly #users: UserDirectory;
   readonly serviceId: string;
