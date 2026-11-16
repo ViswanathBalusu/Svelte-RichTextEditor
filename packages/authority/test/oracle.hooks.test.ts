@@ -92,6 +92,8 @@ describe('the oracle writable set is extended through registered hooks (PRM-017)
     const violation = `field:${FIELD}: changed although another commit changed it after the base (P9)`;
     // Without the hook the racing fill passes; with it, it fails, for a filler and for an editor.
     expect(oracleViolations(commit(USERS.erin, fill, raced), only(['P7', p7Fill]))).toEqual([]);
+    const withP9 = only(['P7', p7Fill], ['P9', p9ExclusiveFill]);
+    expect(oracleViolations(commit(USERS.erin, fill, raced), withP9)).toEqual([violation]);
     expect(oracleViolations(commit(USERS.erin, fill, raced))).toEqual([violation]);
     expect(oracleViolations(commit(USERS.bob, fill, raced))).toEqual([violation]);
     // Another field changed since the base, or no record of the base: nothing to report.
