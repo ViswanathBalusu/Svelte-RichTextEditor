@@ -749,6 +749,8 @@ export class Room {
     const ch = this.channels.get(channel);
     if (!ch) return fx;
     const id = isObject(input) && typeof input.id === 'string' ? input.id : '';
+    /** The access this submission is judged under, once step 1 has computed it. */
+    let judged: Access | null = null;
     const reject = (
       code: RejectCode,
       reason: string,
@@ -757,6 +759,22 @@ export class Room {
       retryAfterMs?: number,
       rule?: string,
     ) => {
+      // 04 §8: on `permission_denied` the client refreshes its permissions. The room sends the
+      // access the commit was judged under, ahead of the rejection, when it is not the access
+      // the channel was last sent (a grant or lease that ran out before `expire` was called);
+      // DEP has no request for it, so the room does not wait to be asked (ADR 0364).
+      if (code === 'permission_denied' && judged && !sameAccess(judged, ch.access)) {
+        ch.access = judged;
+        fx.send.push({
+          channel,
+          msg: {
+            t: 'perm.changed',
+            revision: this.perms.revision,
+            access: judged,
+            refresh: true,
+          },
+        });
+      }
       fx.send.push({
         channel,
         msg: {
@@ -784,8 +802,10 @@ export class Room {
 
     // 1. Authorise and limit: the document state, P6, the size limits and admission control, all
     // before any deduplication, rebase or apply work.
+    // `ch.access` stays the access last sent on the channel, so that a later `expire` or the
+    // rejection below still sees that the client holds an older one.
     const access = this.access(ch.conn);
-    ch.access = access;
+    judged = access;
     if (this.perms.documentState !== 'active' && !access.fill.allowed)
       return reject('read_only', `the document is ${this.perms.documentState}`);
     if (!canSubmitAnything(access))
@@ -938,28 +958,55 @@ export class Room {
       this.ruleBudget,
       (id) => index.field(id)?.key,
     );
-    const verdict = outcomeCheck({
-      before: docBefore,
-      after: docAfter,
-      user: s.conn.sub,
-      access: s.access,
-      perms: this.perms,
-      suggestionOwners: this.suggestionOwners(),
-      fieldsChangedSinceBase: this.fieldsChangedAfter(s.base),
-      serverAuthored: s.serverAuthored,
-      origin: s.origin,
-      ...(gate ? { fieldEnabled: gate.enabled } : {}),
-      definitionUse: {
-        before: () => index.definitionUse(docBefore),
-        after: (diff) => nextIndex(diff).definitionUse(docAfter),
-      },
-    });
+    const judge = (access: Access, perms: PermissionState) =>
+      outcomeCheck({
+        before: docBefore,
+        after: docAfter,
+        user: s.conn.sub,
+        access,
+        perms,
+        suggestionOwners: this.suggestionOwners(),
+        fieldsChangedSinceBase: this.fieldsChangedAfter(s.base),
+        serverAuthored: s.serverAuthored,
+        origin: s.origin,
+        ...(gate ? { fieldEnabled: gate.enabled } : {}),
+        definitionUse: {
+          before: () => index.definitionUse(docBefore),
+          after: (diff) => nextIndex(diff).definitionUse(docAfter),
+        },
+      });
+    const verdict = judge(s.access, this.perms);
     if (gate?.overrun)
       return reject(
         'rate_limited',
         `evaluating the rules took more than ${this.ruleBudget} steps (04 §12)`,
         'retry',
       );
+    // 04 §5 step 1 and 07 §5.2 P6: "If the document's state forbids the change (`locked`,
+    // `archived`, or a workflow that does not permit it), reject with `read_only`". A connection
+    // that keeps `fill` under a lock passes step 1, so the question is asked here: a change the
+    // same connection could make were the document active with no workflow running is one the
+    // state forbids; any other refusal stays `permission_denied` (ADR 0363).
+    if (
+      !verdict.ok &&
+      verdict.code === 'permission_denied' &&
+      !s.serverAuthored &&
+      this.perms.documentState !== 'active'
+    ) {
+      const unlocked: PermissionState = {
+        ...this.perms,
+        documentState: 'active',
+        workflowActive: false,
+      };
+      const access = computeAccess(s.conn, index.regionList(), unlocked, this.now());
+      if (judge(access, unlocked).ok)
+        return reject(
+          'read_only',
+          `the document is ${this.perms.documentState}`,
+          DEFAULT_ACTION['read_only'],
+          verdict.scopes,
+        );
+    }
     if (!verdict.ok) {
       // A fill the rules refused names the rule that hid or disabled its field (12 §5.3).
       const rule =

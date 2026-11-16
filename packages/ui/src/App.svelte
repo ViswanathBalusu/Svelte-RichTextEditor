@@ -469,6 +469,8 @@
   // Dialogs of the shell.
   let dialog = $state<'language' | 'region' | 'export' | 'comment' | null>(null);
   // Their code is one chunk, requested the first time a dialog opens (13 §9; FE-002).
+  // A type query, not an import: a static import here could pull the chunk into the first load.
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   type DialogComponents = typeof import('./components/dialogs.ts');
   let dialogs = $state.raw<DialogComponents | null>(null);
   let dialogsLoading = false;

@@ -113,7 +113,7 @@ export class MockDocument implements ChannelHost {
             region: g.region,
             principal: g.principal,
             role: g.role,
-            expiresAt: null,
+            expiresAt: g.expiresAt ?? null,
           }) satisfies RegionGrant,
       ),
       regionStates: new Map(),
@@ -410,7 +410,7 @@ export class MockDocument implements ChannelHost {
         region: g.region,
         principal: g.principal,
         role: g.role,
-        expiresAt: null,
+        expiresAt: g.expiresAt ?? null,
       })),
     }));
   }
@@ -537,4 +537,6 @@ export interface GrantSpec {
   region: string;
   principal: string;
   role: 'viewer' | 'commenter' | 'suggester' | 'editor';
+  /** When the grant runs out, Unix milliseconds on the service clock (07 §1); never, when left out. */
+  expiresAt?: number;
 }

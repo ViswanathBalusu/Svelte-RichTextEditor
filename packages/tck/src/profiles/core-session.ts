@@ -625,7 +625,10 @@ export const CORE_SESSION: ScenarioDef[] = [
       if (hb * 2.5 + 2000 > 55_000) ctx.skip(`heartbeatMs is ${hb} ms even in test mode`);
       const doc = await ctx.document();
       const w = await ctx.session('silent', { [doc]: 'editor' }, { wire: { autoPong: false } });
-      // The kit never answers the server's pings.
+      // The kit never answers the server's pings. 05 §4 says the server closes and 05 §5.7 names no
+      // code for it, so the normal closures 1000 and 1001 are accepted here as well as the nine
+      // (open question: ADR 0315, decision 3). A drop without a close frame (1006) is not.
+      w.wire.toleratedCloses.add(1000).add(1001);
       const closed = await w.wire.closes('two silent heartbeat intervals', hb * 2.5 + 2000);
       ctx.closeCode(closed.code);
       check(

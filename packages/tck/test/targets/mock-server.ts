@@ -69,6 +69,18 @@ export interface MockTargetOptions {
    * answered, every further ping is ignored, so the server stalls. Unset, the server never stalls.
    */
   stallAfterPings?: number;
+  /**
+   * Test of the kit's close-code check (PRO-037 criterion 4): after `hello`, a message of one of
+   * these unknown types makes the server close with the code given, or drop the connection without
+   * a close frame (`'drop'`). Unset, the server closes only as 05 §5.7 says.
+   */
+  closeOnUnknown?: Readonly<Record<string, number | 'drop'>>;
+  /**
+   * Test of the kit's CORS scenarios (PRO-041 criterion 5): a server that leaves one header out of
+   * `Access-Control-Allow-Headers` or `Access-Control-Expose-Headers`, or that grants every origin
+   * by echoing it or with `*`. Unset, the server answers as 05 §6.1 says.
+   */
+  cors?: { withoutAllowed?: string; withoutExposed?: string; anyOrigin?: 'echo' | 'star' };
 }
 
 class Problem extends Error {
@@ -122,6 +134,31 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
 
   const covers = (t: MockToken, doc: string) =>
     t.docs[doc] !== undefined && t.serial > (docWatermarks.get(`${t.sub}\u0000${doc}`) ?? 0);
+
+  /** One page of a list (05 §6.1; D14, D72): `limit` of 1 to 200, and an opaque offset cursor. */
+  function page<T>(url: URL, all: readonly T[]): { items: T[]; nextCursor: string | null } {
+    const limit = url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : 50;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+      throw new Problem('validation_failed', 'limit is 1 to 200 (D72)', {
+        violations: [{ path: 'limit', rule: '1 to 200' }],
+      });
+    let start = 0;
+    const cursor = url.searchParams.get('cursor');
+    if (cursor !== null) {
+      const text = Buffer.from(cursor, 'base64url').toString('utf8');
+      const n = Number(text.replace(/^o:/, ''));
+      if (!text.startsWith('o:') || !Number.isInteger(n))
+        throw new Problem('validation_failed', 'an unknown cursor (D72)', {
+          violations: [{ path: 'cursor', rule: 'a cursor of this server' }],
+        });
+      start = n;
+    }
+    return {
+      items: all.slice(start, start + limit),
+      nextCursor:
+        start + limit < all.length ? Buffer.from(`o:${start + limit}`).toString('base64url') : null,
+    };
+  }
 
   function mint(body: Record<string, unknown>): { token: string; expiresAt: string } {
     const sub = body['sub'];
@@ -337,34 +374,12 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
         return out;
       }
       if (method === 'GET') {
-        const limit = url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : 50;
-        if (!Number.isInteger(limit) || limit < 1 || limit > 200)
-          throw new Problem('validation_failed', 'limit is 1 to 200 (D72)', {
-            violations: [{ path: 'limit', rule: '1 to 200' }],
-          });
-        let start = 0;
-        const cursor = url.searchParams.get('cursor');
-        if (cursor !== null) {
-          const n = Number(Buffer.from(cursor, 'base64url').toString('utf8').replace(/^o:/, ''));
-          if (
-            !Buffer.from(cursor, 'base64url').toString('utf8').startsWith('o:') ||
-            !Number.isInteger(n)
-          )
-            throw new Problem('validation_failed', 'an unknown cursor (D72)', {
-              violations: [{ path: 'cursor', rule: 'a cursor of this server' }],
-            });
-          start = n;
-        }
         const ext = url.searchParams.get('externalId');
         const all = order
           .map((id) => docs.get(id)!)
           .filter((d) => !d.deleted && (ext === null || d.externalId === ext));
-        const items = all.slice(start, start + limit).map(resource);
-        const next =
-          start + limit < all.length
-            ? Buffer.from(`o:${start + limit}`).toString('base64url')
-            : null;
-        return { status: 200, body: { items, nextCursor: next } };
+        const p = page(url, all);
+        return { status: 200, body: { items: p.items.map(resource), nextCursor: p.nextCursor } };
       }
       throw new Problem('not_found', 'the route has no such method');
     }
@@ -417,7 +432,7 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
       return { status: 204 };
     }
     if (rest === 'regions' && method === 'GET')
-      return { status: 200, body: { items: doc.regions(), nextCursor: null } };
+      return { status: 200, body: page(url, doc.regions()) };
     if (rest === 'grants' && method === 'GET') {
       manage(r);
       const g = doc.grants();
@@ -444,15 +459,23 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
     const requestId = uuid7();
     const url = new URL(req.url ?? '/', origin);
     const reqOrigin = req.headers.origin;
-    const cors: Record<string, string> =
-      reqOrigin === KIT_ORIGIN
-        ? {
-            'access-control-allow-origin': KIT_ORIGIN,
-            'access-control-expose-headers':
-              'ETag, Retry-After, Deprecation, Sunset, DEP-Request-Id',
-            vary: 'Origin',
-          }
-        : {};
+    const without = (list: string, name: string | undefined) =>
+      list
+        .split(', ')
+        .filter((h) => h.toLowerCase() !== name?.toLowerCase())
+        .join(', ');
+    const granted =
+      reqOrigin === KIT_ORIGIN || (reqOrigin !== undefined && opts.cors?.anyOrigin !== undefined);
+    const cors: Record<string, string> = granted
+      ? {
+          'access-control-allow-origin': opts.cors?.anyOrigin === 'star' ? '*' : reqOrigin!,
+          'access-control-expose-headers': without(
+            'ETag, Retry-After, Deprecation, Sunset, DEP-Request-Id',
+            opts.cors?.withoutExposed,
+          ),
+          vary: 'Origin',
+        }
+      : {};
     const send = (
       status: number,
       body: unknown,
@@ -468,11 +491,13 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
       res.end(body === undefined ? undefined : JSON.stringify(body));
     };
     if (req.method === 'OPTIONS') {
-      if (reqOrigin !== KIT_ORIGIN) return send(403, undefined);
+      if (!granted) return send(403, undefined);
       return send(204, undefined, {
         'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE',
-        'access-control-allow-headers':
+        'access-control-allow-headers': without(
           'Authorization, Content-Type, If-Match, Idempotency-Key, DEP-Actor, traceparent',
+          opts.cors?.withoutAllowed,
+        ),
       });
     }
     const chunks: Buffer[] = [];
@@ -544,6 +569,7 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
         features: service.features,
         ended: (x) => sessions.delete(x),
         stall,
+        closeOnUnknown: opts.closeOnUnknown ?? {},
       });
       sessions.add(s);
     });
@@ -574,6 +600,7 @@ interface SessionDeps {
   features: readonly string[];
   ended: (s: Session) => void;
   stall: { answered: number; after: number } | null;
+  closeOnUnknown: Readonly<Record<string, number | 'drop'>>;
 }
 
 interface Open {
@@ -673,6 +700,14 @@ class Session {
     if (r.kind === 'unknown') {
       if (!this.backend)
         return this.fatal(undefined, 'bad_message', 'the first message must be hello', 4400);
+      const how = Object.hasOwn(this.deps.closeOnUnknown, r.t)
+        ? this.deps.closeOnUnknown[r.t]
+        : undefined;
+      if (how === 'drop') {
+        this.ws.terminate();
+        return this.finish();
+      }
+      if (how !== undefined) return this.end(how, 'closed on request of the test');
       if (r.reply) this.send(r.reply as unknown as Record<string, unknown>);
       return;
     }

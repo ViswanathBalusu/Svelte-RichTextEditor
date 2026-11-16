@@ -10,10 +10,9 @@
  *
  * The report judges capability by stories only. It never reads the look of the product (UX-002
  * criterion 4). Pure: the caller passes the story progress, which `parseCriteria` reads from the
- * epic files, and the profile rows. Shipped rows linking to their automated tests (criterion 2) and
- * the ports and extensions evidence (criterion 3) is carried by `demonstrators.ts`, one entry per row
- * of that tier. Shipped rows linking to their automated tests (criterion 2) still need data the
- * profile does not carry and are not checked here (see UX-002 Notes).
+ * epic files, and the profile rows. The ports and extensions evidence (criterion 3) is carried by
+ * `demonstrators.ts`, one entry per row of that tier. The automated tests of a shipped row
+ * (criterion 2) are in `tests.ts` and are checked by `report.ts`, which builds the published files.
  */
 import { phaseRank } from './build.ts';
 import { DEMONSTRATORS, type Demonstrator } from './demonstrators.ts';

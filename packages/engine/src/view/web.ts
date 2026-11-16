@@ -220,6 +220,29 @@ export class EditorCore extends DocumentCore {
     this.#view?.setProps({});
   }
 
+  /**
+   * The caret's rectangle in viewport coordinates: the head of the selection of the view that has
+   * focus (the panel's sub-editor when focus is there, otherwise the body). The shell opens a menu
+   * there when it is asked for from the keyboard (UX-008; ui `CoreApi.caretRect`). Null while no
+   * view is mounted, or when the browser gives no position for the caret.
+   */
+  caretRect(): { x: number; y: number; width: number; height: number } | null {
+    const view = this.#sub?.view.hasFocus() ? this.#sub.view : this.#view;
+    if (!view) return null;
+    try {
+      // The browser's own selection first: after a caret key the view's state follows it only on
+      // the next `selectionchange`, which may come after the key that asks for the menu.
+      let head = view.state.selection.head;
+      const dom = view.domSelectionRange();
+      if (dom.focusNode && view.dom.contains(dom.focusNode))
+        head = view.posAtDOM(dom.focusNode, dom.focusOffset);
+      const c = view.coordsAtPos(head);
+      return { x: c.left, y: c.top, width: c.right - c.left, height: c.bottom - c.top };
+    } catch {
+      return null;
+    }
+  }
+
   /** Mounts the body web view on an element inside the shadow root. */
   mountBody(target: HTMLElement): () => void {
     if (this.#view) throw new Error('the body view is already mounted');
