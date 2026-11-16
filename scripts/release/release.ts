@@ -517,6 +517,28 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
   for (const f of ['stories-snapshot.json', 'CHANGELOG.md', 'RELEASE-NOTES.md'])
     addArtefact(f, 'release record');
 
+  // 8b. The parity report (UX-002; 13 §2), published beside the release notes. The script
+  // refuses to write while a shipped row links to no automated test.
+  const parity = run(
+    'pnpm',
+    [
+      '--filter',
+      '@docedit/ui',
+      'parity:report',
+      '--release',
+      version,
+      '--date',
+      created.slice(0, 10),
+      '--out',
+      artefactsDir,
+    ],
+    o.root,
+  );
+  const parityFiles = ['PARITY-REPORT.md', 'parity-report.json'];
+  const parityOk = parity.ok && parityFiles.every((f) => existsSync(join(artefactsDir, f)));
+  step('parity report', parityOk, parityOk ? [] : parity.output.trim().split('\n').slice(-15));
+  if (parityOk) for (const f of parityFiles) addArtefact(f, 'parity report');
+
   // 9. The manifest and the checksums of every file.
   const failed = steps.filter((s) => !s.ok).map((s) => s.name);
   const manifest = {
