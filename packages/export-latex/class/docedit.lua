@@ -504,6 +504,66 @@ local function hpack_missing(head)
   report_missing(todirect(head))
   return true
 end
+-- Vertical alignment of table cells (EXP-038). A cell is a \vtop that hangs from its first
+-- baseline, and the height of its row is not known while the cell is set. So a centred or
+-- bottom-aligned cell ends with a mark (\DEva), and when the page is shipped out the cell's box is
+-- moved down inside its row: by the room under it for bottom (2), by half the room for centre (1).
+-- The row is the horizontal box around the cell's own horizontal box (an \halign row and its cell).
+local WHATSIT      = node.id("whatsit")
+local USER_DEFINED = node.subtype("user_defined")
+local VA_ID        = luatexbase.new_whatsit("docedit.va")
+local getfield     = direct.getfield
+local setfield     = direct.setfield
+local va_used      = false
+
+function docedit.va_mark(k)
+  local n = node.new(WHATSIT, USER_DEFINED)
+  n.user_id = VA_ID
+  n.type = 100
+  n.value = k
+  node.write(n)
+  va_used = true
+end
+
+local function va_of(box)
+  local n = getlist(box)
+  while n do
+    if getid(n) == WHATSIT and getsubtype(n) == USER_DEFINED and getfield(n, "user_id") == VA_ID then
+      return getfield(n, "value")
+    end
+    n = getnext(n)
+  end
+  return nil
+end
+
+local function va_walk(head, cell, row)
+  local n = head
+  while n do
+    local id = getid(n)
+    if id == HLIST then
+      va_walk(getlist(n), n, cell)
+    elseif id == VLIST then
+      local k = cell and row and va_of(n)
+      if k then
+        local _, rh, rd = getwhd(row)
+        local _, vh, vd = getwhd(n)
+        local room
+        if k == 2 then room = rd - vd
+        else room = math.floor(((rh + rd) - (vh + vd)) / 2) - (rh - vh) end
+        if room > getshift(n) then setfield(n, "shift", room) end
+      end
+      va_walk(getlist(n), nil, nil)
+    end
+    n = getnext(n)
+  end
+end
+
+function docedit.valign(box)
+  if not va_used then return end
+  local b = tex.box[box]
+  if b then va_walk(getlist(todirect(b)), nil, nil) end
+end
+
 -- pre_linebreak_filter, after shaping: tabs on the first line are set before the line breaker
 -- runs, so it measures them (the lines are measured again after breaking).
 local function pre_tabs(head)

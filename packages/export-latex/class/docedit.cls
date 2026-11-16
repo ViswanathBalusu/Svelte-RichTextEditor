@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-15 v0.2.4 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-15 v0.2.5 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -133,6 +133,8 @@
 \else
   \AddToHook{shipout/before}{\directlua{docedit.page(-1)}}
 \fi
+% Centred and bottom-aligned table cells are moved inside their rows when the page is shipped out.
+\AddToHook{shipout/before}{\directlua{docedit.valign(\the\ShipoutBox)}}
 \AddToHook{enddocument/afterlastpage}{\directlua{docedit.finish()}}
 
 % Hex-encoded strings: inert characters when typeset, written to auxiliary files as hex.
@@ -519,6 +521,8 @@
 \newcommand*\DEboxtblend{\end{tabular}\par\endgroup}
 % Space inside a cell (cell margins top and bottom).
 \newcommand*\DEcellpad[1]{\par\vskip#1\relax}
+% \DEva{1 centre, 2 bottom}: the last thing in a cell that is not top-aligned (docedit.valign).
+\newcommand*\DEva[1]{\par\directlua{docedit.va_mark(#1)}}
 % A cell that spans rows: \DErowspan{rows}{content}. Its content hangs from the first row over the
 % rows below (no multirow). With tagging, the cell carries /RowSpan rows in the structure tree
 % (EXP-041 criterion 4; the key is tagpdf's table/multirow from latex-lab's table test phase).

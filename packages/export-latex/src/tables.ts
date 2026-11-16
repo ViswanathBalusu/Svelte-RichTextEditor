@@ -249,9 +249,12 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
     const w = grid.slice(from, from + span).reduce((s, x) => s + x, 0);
     return dimen(Math.max(20, w - 2 * marginLR), { min: 20, max: 31680 });
   };
-  const colType = (cell: J | null): Tex => {
+  // Every cell is a `p` column, which hangs from its first line. A centred or bottom-aligned cell
+  // ends with `\DEva`, and the class moves it inside its row when the page is shipped out: `m` and
+  // `b` columns do not do it, because they only align cells with each other, not with the row.
+  const vaCode = (cell: J | null): Tex | null => {
     const v = str(attr(cell ?? undefined, 'vAlign'));
-    return v === 'center' ? t('m') : v === 'bottom' ? t('b') : t('p');
+    return v === 'center' ? t('1') : v === 'bottom' ? t('2') : null;
   };
   const spec = join([
     vsep(borders.left),
@@ -351,10 +354,8 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
       const right = vedge(rightEdge, tableRight);
       const ownEdges =
         (p.col === 0 && !same(leftEdge, borders.left)) || !same(rightEdge, tableRight);
-      const type = colType(p.cell);
-      const needsMulti =
-        p.span > 1 || type !== t('p') || (p.col === 0 && left !== EMPTY) || ownEdges;
-      const cellSpec = tex`${left}${type}{${colWidth(p.col, p.span)}}${right}`;
+      const needsMulti = p.span > 1 || (p.col === 0 && left !== EMPTY) || ownEdges;
+      const cellSpec = tex`${left}p{${colWidth(p.col, p.span)}}${right}`;
       const open =
         p.span > 1
           ? tex`\DEcolspan{${int(p.span)}}{${cellSpec}}{%`
@@ -390,6 +391,9 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
           );
           if (exactH !== null) line(ctx, t('\\vss}%'));
           if (bottom > 0) line(ctx, tex`\DEcellpad{${dimen(bottom, { min: 0, max: 31680 })}}%`);
+          // A cell that spans rows hangs over them in a box of no height, so it stays top-aligned.
+          const va = p.rowspan === 1 ? vaCode(p.cell) : null;
+          if (va !== null) line(ctx, tex`\DEva{${va}}%`);
         };
         if (p.rowspan > 1) {
           if (!repeated && (p.cell!.content ?? []).length > 0)
