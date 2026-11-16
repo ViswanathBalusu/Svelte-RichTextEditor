@@ -33,11 +33,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation GET /documents/{id}/attribution': HISTORY,
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,
   'operation GET /documents/{id}/threads': COMMENTS,
-  'operation GET /threads/{tid}': COMMENTS,
-  'operation DELETE /threads/{tid}': COMMENTS,
-  'operation POST /threads/{tid}/comments': COMMENTS,
-  'operation PATCH /comments/{cid}': COMMENTS,
-  'operation DELETE /comments/{cid}': COMMENTS,
   'operation GET /imports/{jid}':
     'imports take a service credential and arrive with EXP (G79; D16)',
   'operation GET /fonts': 'the font manifest has no shape and no feature yet (G75; G06)',

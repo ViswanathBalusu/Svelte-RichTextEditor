@@ -70,7 +70,8 @@ describe('the CI workflow (FND-002)', () => {
 
   it('reports the duration of every job, the browser jobs included', () => {
     const summary = job('summary');
-    expect(summary).toMatch(/needs: \[[^\]]*\be2e\b[^\]]*\]/);
+    // Prettier breaks a long flow list after the key, so white space is allowed before the bracket.
+    expect(summary).toMatch(/needs:\s*\[[^\]]*\be2e\b[^\]]*\]/);
     expect(summary).toContain('GITHUB_STEP_SUMMARY');
   });
 });

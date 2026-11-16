@@ -2,8 +2,8 @@
  * Table shading, cell margins, vertical alignment and table alignment, checked on the compiled PDF
  * (Node.js only, sandbox): EXP-038 criterion 4, for the properties it names other than banded rows.
  * Banded rows are not shaded: 03 §4.3 gives `bandedRows` no colour (ADR 0143, question 19), so that
- * part of the criterion stays unticked. The header row shading is set through a table style and is
- * not covered here.
+ * part of the criterion stays unticked. The header row shading, which a table style sets, has a
+ * test of its own in this file.
  *
  * The first page is rendered with `pdftoppm` at 100 dpi and the pixels of each fill colour are read;
  * word positions come from `pdftotext -bbox`.
@@ -70,6 +70,7 @@ type Match = (r: number, g: number, b: number) => boolean;
 const BLUE: Match = (r, g, b) => b > 180 && r < 90 && g < 90;
 const YELLOW: Match = (r, g, b) => r > 180 && g > 180 && b < 90;
 const GREEN: Match = (r, g, b) => g > 140 && r < 90 && b < 90;
+const RED: Match = (r, g, b) => r > 180 && g < 60 && b < 60;
 
 /** The bounding box and the pixel count of one colour on a page. */
 function extent(
@@ -213,15 +214,60 @@ describe.skipIf(!ready)(
       const inset = at(ws, 'MARGINWORD').xMin - at(ws, 'PLAINWORD').xMin;
       expect(inset, `inset ${inset}`).toBeGreaterThan(25);
       expect(inset, `inset ${inset}`).toBeLessThan(36);
-      // Vertical alignment, top and centre: the top cell starts with the tall cell's first line, and
-      // the centred cell starts below it and above the tall cell's last line.
-      // Bottom alignment is not drawn: the `b` column leaves BOT at the top of the row (measured as
-      // about 47 pt above the last line of the tall cell), so no bottom check is made here.
+      // Vertical alignment: the top cell is level with the tall cell's first line, the bottom cell
+      // with its last line, and the centred cell half way between the two (the tall cell has four
+      // lines of one height, so its middle is the mean of its first and last lines).
+      const first = at(ws, 'T1').yMin;
+      const last = at(ws, 'T4').yMin;
+      expect(last - first, 'the tall cell has four lines').toBeGreaterThan(30);
       const top = at(ws, 'TOP').yMin;
       const mid = at(ws, 'MID').yMin;
-      expect(Math.abs(top - at(ws, 'T1').yMin), `top ${top}`).toBeLessThan(2);
-      expect(mid).toBeGreaterThan(top);
-      expect(mid).toBeLessThan(at(ws, 'T4').yMin);
+      const bot = at(ws, 'BOT').yMin;
+      expect(Math.abs(top - first), `top ${top}, first line ${first}`).toBeLessThan(2);
+      expect(Math.abs(bot - last), `bottom ${bot}, last line ${last}`).toBeLessThan(2);
+      expect(Math.abs(mid - (first + last) / 2), `centre ${mid}`).toBeLessThan(2);
+    }, 300_000);
+
+    it('shades the header rows with the header row shading of the table style, and no other row', async () => {
+      const style: J = {
+        type: 'style_def',
+        attrs: {
+          id: 'Shaded',
+          kind: 'table',
+          name: 'Shaded',
+          headerRowShading: { fill: '#D00000' },
+        },
+      };
+      const shaded = table({ grid: [1440, 1440], style: 'Shaded', headerRows: 1 }, [
+        row(cell('HEADA'), cell('HEADB')),
+        row(cell('BODYA'), cell('BODYB')),
+      ]);
+      const c = await convertAndCompile(doc([para('before'), shaded], { styles: [style] }), {
+        profile: 'preview',
+        title: 'table-header-shading',
+        instant: INSTANT,
+        timeZone: 'Europe/London',
+        suggestions: 'accept',
+      } as never);
+      if (!c.compile.ok || !c.compile.pdf)
+        throw new Error(`the compile failed:\n${firstError(c.compile.log)}`);
+
+      const red = extent(renderFirstPage(c.compile.pdf), RED);
+      const ws = words(c.compile.pdf);
+      const px = (pt: number): number => (pt * DPI) / 72;
+      // The fill is as wide as the two columns (2880 twips, 200 px) and one row high.
+      expect(red.count, JSON.stringify(red)).toBeGreaterThan(1500);
+      expect(red.maxX - red.minX).toBeGreaterThan(190);
+      expect(red.maxX - red.minX).toBeLessThan(210);
+      // It is behind the header row's words and above the body row's.
+      for (const text of ['HEADA', 'HEADB']) {
+        const w = at(ws, text);
+        expect(px(w.yMin)).toBeGreaterThan(red.minY - 1);
+        expect(px(w.yMin)).toBeLessThan(red.maxY);
+        expect(px(w.xMin)).toBeGreaterThan(red.minX);
+        expect(px(w.xMin)).toBeLessThan(red.maxX);
+      }
+      expect(px(at(ws, 'BODYA').yMin)).toBeGreaterThan(red.maxY);
     }, 300_000);
   },
 );

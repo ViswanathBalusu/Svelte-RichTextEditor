@@ -304,6 +304,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         converged: null,
         log: null,
         diagnostics: [],
+        chainHead: cdmChainHead,
       };
       return cdmOut as unknown as Record<string, unknown>;
     }
@@ -390,6 +391,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         converged: null,
         log: null,
         diagnostics: dedupe(diagnostics),
+        chainHead: bundle.manifest.chainHead,
       };
       return texOut as unknown as Record<string, unknown>;
     }
@@ -530,6 +532,8 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       converged,
       log: OUTPUT_FILES.log,
       diagnostics: dedupe(diagnostics),
+      // The same value as the manifests: the host reads it from the job (EXP-011 criterion 5).
+      chainHead: bundle.manifest.chainHead,
       manifest: OUTPUT_FILES.manifest,
       metrics: m,
     };

@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-15 v0.2.4 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-15 v0.2.7 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -133,6 +133,8 @@
 \else
   \AddToHook{shipout/before}{\directlua{docedit.page(-1)}}
 \fi
+% Centred and bottom-aligned table cells are moved inside their rows when the page is shipped out.
+\AddToHook{shipout/before}{\directlua{docedit.valign(\the\ShipoutBox)}}
 \AddToHook{enddocument/afterlastpage}{\directlua{docedit.finish()}}
 
 % Hex-encoded strings: inert characters when typeset, written to auxiliary files as hex.
@@ -519,6 +521,8 @@
 \newcommand*\DEboxtblend{\end{tabular}\par\endgroup}
 % Space inside a cell (cell margins top and bottom).
 \newcommand*\DEcellpad[1]{\par\vskip#1\relax}
+% \DEva{1 centre, 2 bottom}: the last thing in a cell that is not top-aligned (docedit.valign).
+\newcommand*\DEva[1]{\par\directlua{docedit.va_mark(#1)}}
 % A cell that spans rows: \DErowspan{rows}{content}. Its content hangs from the first row over the
 % rows below (no multirow). With tagging, the cell carries /RowSpan rows in the structure tree
 % (EXP-041 criterion 4; the key is tagpdf's table/multirow from latex-lab's table test phase).
@@ -558,13 +562,16 @@
 \newcommand\DEimg[5]{{\DE@attr@rlh=#4\relax\DE@attr@rld=0\relax
   \includegraphics[width=#2,height=#3,alt=#5]{#1}}}
 % \DEfig{n}{float}{align: 0 start, 1 centre, 2 end}{picture}{caption}: picture and caption kept
-% together; a floating figure may move to the top or bottom of a page.
+% together; a floating figure may move to the top or bottom of a page. The \kern after the
+% closing \hfill keeps \par from removing it, so that centre is centred (EXP-028).
+% Its material is in area 4, so a page whose first material is the figure is reported as opening
+% with a float (EXP-055).
 \newcommand\DE@figbody[3]{%
   \par\begingroup\DE@defaults\DE@apply\prevdepth=-1000pt\noindent
-  \ifcase#1\or\hfill\or\hfill\fi #2\ifcase#1\hfill\or\hfill\or\fi\par\endgroup
+  \ifcase#1\or\hfill\or\hfill\fi #2\ifcase#1\hfill\or\hfill\or\fi\kern\z@\par\endgroup
   \penalty\@M #3}
 \newcommand\DEfig[5]{\par\begingroup\DE@attr@block=#1\relax\DE@attr@area=1\relax
-  \ifnum#2=1 \begin{figure}[tbp]\DE@figbody{#3}{#4}{#5}\end{figure}%
+  \ifnum#2=1 \begin{figure}[tbp]\DE@attr@area=4\relax\DE@figbody{#3}{#4}{#5}\end{figure}%
   \else \DE@figbody{#3}{#4}{#5}\fi\par\endgroup}
 \newcommand\DEcap[2]{\DE@par{}{#1}{#2}}
 

@@ -111,7 +111,7 @@
     <fieldset class="de-comments-state">
       <legend>{tr.t('comments.filter.label')}</legend>
       {#each STATES as s (s)}
-        <label>
+        <label class="de-check">
           <input
             type="radio"
             name="comments-state"

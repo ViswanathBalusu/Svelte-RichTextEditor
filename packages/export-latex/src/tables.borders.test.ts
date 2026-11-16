@@ -220,7 +220,7 @@ describe('EXP-038 criterion 4: cell borders are drawn', () => {
 });
 
 describe('EXP-038 criterion 4: the other table properties in the converter output', () => {
-  it('writes vAlign as the column type, align as the table position and cell margins as padding', async () => {
+  it('writes vAlign as a mark at the end of the cell, align as the table position and cell margins as padding', async () => {
     const { main } = await convert(
       table(
         [1440, 1440, 1440],
@@ -236,8 +236,11 @@ describe('EXP-038 criterion 4: the other table properties in the converter outpu
         },
       ),
     );
-    expect(main).toMatch(/\\multicolumn\{1\}\{m\{/);
-    expect(main).toMatch(/\\multicolumn\{1\}\{b\{/);
+    // Every cell is a `p` column; a centred cell ends with \DEva{1} and a bottom-aligned one with
+    // \DEva{2}, after its bottom padding (the class moves the cell when the page is shipped out).
+    expect(main).not.toMatch(/\{[mb]\{[\d.]+bp\}/);
+    expect([...main.matchAll(/\\DEva\{(\d)\}%/g)].map((m) => m[1])).toEqual(['1', '2']);
+    expect(main).toMatch(/\\DEcellpad\{3bp\}%\n\\DEva\{2\}%/);
     expect(main).toMatch(/\\DEtbl\{\d+\}\{0\}\{1\}/);
     expect(main).toContain('\\DEcellpad{5bp}%');
     expect(main).toContain('\\DEcellpad{3bp}%');

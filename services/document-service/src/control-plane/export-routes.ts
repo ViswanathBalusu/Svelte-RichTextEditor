@@ -293,6 +293,8 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
               layout: out.layout ? sign(out.layout) : null,
               converged: out.converged ?? null,
               ...(canSeeLog && out.log ? { log: sign(out.log) } : {}),
+              // The chain head of the manifest, so that the host can anchor it (08 §12; EXP-011).
+              ...(out.chainHead !== undefined ? { chainHead: out.chainHead } : {}),
             }
           : null,
       diagnostics: out?.diagnostics ?? [],

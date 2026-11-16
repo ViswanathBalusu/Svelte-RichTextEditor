@@ -117,7 +117,7 @@
   {:else if snapshot}
     <form class="de-history-filters" aria-labelledby={`${id}-filters`} onsubmit={(e) => e.preventDefault()}>
       <h3 class="de-subhead" id={`${id}-filters`}>{tr.t('history.filters')}</h3>
-      <label>
+      <label class="de-check">
         <input
           type="checkbox"
           checked={snapshot.filter.namedOnly}

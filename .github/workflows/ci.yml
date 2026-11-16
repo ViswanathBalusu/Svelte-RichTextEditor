@@ -330,7 +330,18 @@ jobs:
 
   summary:
     name: Pipeline duration
-    needs: [check, browsers, e2e, conformance-kit, integration, export, fuzz, convergence-nightly, fuzz-nightly]
+    needs:
+      [
+        check,
+        browsers,
+        e2e,
+        conformance-kit,
+        integration,
+        export,
+        fuzz,
+        convergence-nightly,
+        fuzz-nightly,
+      ]
     if: always()
     runs-on: ubuntu-24.04
     steps:

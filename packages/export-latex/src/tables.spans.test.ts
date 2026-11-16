@@ -98,13 +98,13 @@ describe('EXP-041 criterion 1: spans use the class cell macros, not multirow', (
     expect(main_).not.toMatch(/multirow/);
   });
 
-  it('keeps \\multicolumn for a single column whose alignment needs it (not a span)', async () => {
+  it('keeps \\multicolumn for a single column whose own border needs it (not a span)', async () => {
     const main_ = await main(
       table(
         [1440, 1440],
         [
           [
-            ['One.', { vAlign: 'center' }],
+            ['One.', { borders: { left: { style: 'single', width: 16, color: 'FF0000' } } }],
             ['Two.', {}],
           ],
         ],

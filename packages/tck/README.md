@@ -51,7 +51,7 @@ profile whose requirement the server does not meet is reported as skipped, with 
 | `core-relay` | mode `relay` | Relays only (05 §9); not yet built (PRO-124). |
 | `perm-suggest` | feature `suggest-enforced` | Suggestion-only rule (07 §5.2); built (PRO-118), run against the mock backend. |
 | `history` | feature `history` | History, versions, comparison, attribution, restore; not yet built (PRO-119). |
-| `comments` | feature `comments` | Threads and comments; not yet built (PRO-120). |
+| `comments` | feature `comments` | Threads and comments; not yet built (PRO-120), except the rule that a thread or a comment is refused to a caller of another document (PRO-045). |
 | `webhooks` | feature `webhooks` | Signed webhooks; not yet built (PRO-121). |
 | `leases` | feature `leases` | Exclusive-edit leases; not yet built (PRO-122). |
 | `authority-service` | always | The authority service interface (05 §10); not reachable over DEP (PRO-125). |

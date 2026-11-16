@@ -7,6 +7,7 @@ import { canonicalNodeText, uuid7, type JsonNode } from '@docedit/model';
 import { KitFailure, check, equal, includes, isObject, jsonEqual } from '../assert.ts';
 import { shapeViolations } from '../context.ts';
 import { IDS, contractDocument, insertText, posIn } from '../documents.ts';
+import { bareRoutes, untestedBareRoutes } from '../identifiers.ts';
 import { everyItemOnce, listRoutes } from '../lists.ts';
 import { scenario, type ScenarioDef } from '../scenario.ts';
 import { acked, join, problemOf, readContent } from './support.ts';
@@ -440,6 +441,30 @@ export const CORE_REST: ScenarioDef[] = [
         const v = shapeViolations('RegionInfo', r);
         check(v.length === 0, 'a region item matches the published schema', 'no violations', v);
       }
+    },
+  }),
+  s({
+    id: 'identifiers.table',
+    title:
+      'every route addressed by a bare identifier that the server announces has a cross-document scenario',
+    spec: '05 §6.1; 10 §3.2',
+    covers: {},
+    async run(ctx) {
+      const untested = untestedBareRoutes(ctx.target.features);
+      check(
+        untested.length === 0,
+        'the kit has a cross-document scenario for every announced route addressed by a bare identifier',
+        'a scenario for each',
+        untested.map((r) => `${r.operation} (${r.feature}): ${r.pending ?? 'no scenario'}`),
+      );
+      for (const r of bareRoutes())
+        ctx.note(
+          r.feature === null
+            ? `${r.operation}: not announceable (${r.pending ?? 'no feature'})`
+            : ctx.has(r.feature)
+              ? `${r.operation}: tested by ${r.scenario}`
+              : `${r.operation}: \`${r.feature}\` is not announced`,
+        );
     },
   }),
   s({

@@ -115,6 +115,32 @@ export function definitionUse(doc: Node): Map<string, Set<string>> {
   return use;
 }
 
+/**
+ * The section each region sits in: the attributes of the last `section_break` before it, or the
+ * body's own page setup for the first section (07 §5.2 P2; PRM-011). A change of section breaks
+ * affects every region whose entry differs between the two versions.
+ */
+export function regionSections(doc: Node): Map<string, string> {
+  const body = doc.child(doc.childCount - 1);
+  let section = `body:${String(body.attrs['pageSetup'])}`;
+  const out = new Map<string, string>();
+  body.forEach((block) => {
+    if (block.type.name === 'section_break')
+      section = `section_break:${canonicalAttrs(block.attrs)}`;
+    else if (block.type.name === 'region') out.set(String(block.attrs['id']), section);
+  });
+  return out;
+}
+
+/** Attributes as text with sorted keys, for comparing two nodes' attributes. */
+function canonicalAttrs(attrs: Record<string, unknown>): string {
+  return JSON.stringify(
+    Object.keys(attrs)
+      .sort()
+      .map((k) => [k, attrs[k]]),
+  );
+}
+
 function bodyContent(doc: Node): ScopeContent {
   const out: Array<Node | { regionRef: string }> = [];
   doc
@@ -258,6 +284,20 @@ export function outcomeCheck(input: OutcomeInput): OutcomeVerdict {
     for (const id of diff.regionTitleChanged)
       if (!regionCaps(id).has('edit'))
         deny(`region:${id}`, '`region.retitle` needs `edit` in the region (P2)');
+    // A region is affected by a change of section breaks when the section it sits in differs
+    // afterwards: a break added, removed, moved or changed before it. Regions the commit adds or
+    // removes are checked as regions above.
+    if (diff.sectionBreaksChanged) {
+      const sectionsBefore = regionSections(before);
+      for (const [id, section] of regionSections(after)) {
+        const was = sectionsBefore.get(id);
+        if (was !== undefined && was !== section && !regionCaps(id).has('edit'))
+          deny(
+            `region:${id}`,
+            '`section_break.change` needs `edit` in every region whose section it changes (P2)',
+          );
+      }
+    }
   }
   // `manage`: a region's policy, including at creation (07 §2, §16; ADR 0019).
   for (const id of diff.regionPolicyChanged)
