@@ -139,7 +139,8 @@ function decorationsOf(doc: PMNode): DecorationSet {
   return DecorationSet.create(
     doc,
     tableCellStyles(doc).map((c) =>
-      Decoration.node(c.pos, c.pos + c.size, {}, { tableCellCss: c.css }),
+      // A string, so that an unchanged cell is an equal decoration and is not drawn again.
+      Decoration.node(c.pos, c.pos + c.size, {}, { tableCellCss: JSON.stringify(c.css) }),
     ),
   );
 }
@@ -170,8 +171,8 @@ const PROPS = [
 
 function cssOf(decorations: readonly Decoration[]): CellCss {
   for (const d of decorations) {
-    const css = (d.spec as { tableCellCss?: CellCss } | undefined)?.tableCellCss;
-    if (css) return css;
+    const css = (d.spec as { tableCellCss?: string } | undefined)?.tableCellCss;
+    if (css !== undefined) return JSON.parse(css) as CellCss;
   }
   return {};
 }
