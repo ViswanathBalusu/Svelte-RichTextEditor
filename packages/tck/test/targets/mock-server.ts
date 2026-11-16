@@ -75,6 +75,12 @@ export interface MockTargetOptions {
    * a close frame (`'drop'`). Unset, the server closes only as 05 §5.7 says.
    */
   closeOnUnknown?: Readonly<Record<string, number | 'drop'>>;
+  /**
+   * Test of the kit's CORS scenarios (PRO-041 criterion 5): a server that leaves one header out of
+   * `Access-Control-Allow-Headers` or `Access-Control-Expose-Headers`, or that grants every origin
+   * by echoing it or with `*`. Unset, the server answers as 05 §6.1 says.
+   */
+  cors?: { withoutAllowed?: string; withoutExposed?: string; anyOrigin?: 'echo' | 'star' };
 }
 
 class Problem extends Error {
@@ -453,15 +459,23 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
     const requestId = uuid7();
     const url = new URL(req.url ?? '/', origin);
     const reqOrigin = req.headers.origin;
-    const cors: Record<string, string> =
-      reqOrigin === KIT_ORIGIN
-        ? {
-            'access-control-allow-origin': KIT_ORIGIN,
-            'access-control-expose-headers':
-              'ETag, Retry-After, Deprecation, Sunset, DEP-Request-Id',
-            vary: 'Origin',
-          }
-        : {};
+    const without = (list: string, name: string | undefined) =>
+      list
+        .split(', ')
+        .filter((h) => h.toLowerCase() !== name?.toLowerCase())
+        .join(', ');
+    const granted =
+      reqOrigin === KIT_ORIGIN || (reqOrigin !== undefined && opts.cors?.anyOrigin !== undefined);
+    const cors: Record<string, string> = granted
+      ? {
+          'access-control-allow-origin': opts.cors?.anyOrigin === 'star' ? '*' : reqOrigin!,
+          'access-control-expose-headers': without(
+            'ETag, Retry-After, Deprecation, Sunset, DEP-Request-Id',
+            opts.cors?.withoutExposed,
+          ),
+          vary: 'Origin',
+        }
+      : {};
     const send = (
       status: number,
       body: unknown,
@@ -477,11 +491,13 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
       res.end(body === undefined ? undefined : JSON.stringify(body));
     };
     if (req.method === 'OPTIONS') {
-      if (reqOrigin !== KIT_ORIGIN) return send(403, undefined);
+      if (!granted) return send(403, undefined);
       return send(204, undefined, {
         'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE',
-        'access-control-allow-headers':
+        'access-control-allow-headers': without(
           'Authorization, Content-Type, If-Match, Idempotency-Key, DEP-Actor, traceparent',
+          opts.cors?.withoutAllowed,
+        ),
       });
     }
     const chunks: Buffer[] = [];
