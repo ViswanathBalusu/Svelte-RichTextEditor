@@ -5,6 +5,7 @@
  */
 import type { ProfileDef } from '../scenario.ts';
 import { AUTHZ } from './authz.ts';
+import { COMMENTS } from './comments.ts';
 import { CORE_CHANNELS } from './core-channels.ts';
 import { CORE_REST } from './core-rest.ts';
 import { CORE_SESSION } from './core-session.ts';
@@ -71,14 +72,7 @@ export const PROFILES: readonly ProfileDef[] = [
   ),
   PERM_SUGGEST,
   HISTORY,
-  later(
-    'comments',
-    'Threads and comments',
-    '05 §6.2; 07 §6',
-    { kind: 'features', features: ['comments'] },
-    ['PRO-120'],
-    'PRO-120: phase 2',
-  ),
+  COMMENTS,
   later(
     'webhooks',
     'Signed webhooks',

@@ -11,10 +11,9 @@ import { mountEditor, openEmbed } from './embed-helpers.ts';
 const EL = 'doc-editor[data-test="one"]';
 
 test.describe('PRO-080 criterion 2: the grants pane asks the host for people and groups', () => {
-  // Known gap (lane U-PRO-069-085, 2026-11-13): the element's shell core has no `regions` view (PRM-032)
-  // and no `grants` service (PRM-035), so the grants pane is not offered and `openPane` returns false.
-  // The test stays as a fixme until the engine and the element provide them.
-  test.fixme('an owner who types in the grant search gets the host’s answer, with identifiers and text only', async ({
+  // The element reads the region list and the grants from the backend's permissions port
+  // (src/permissions-shell.ts), so the pane is offered and its grant controls are shown.
+  test('an owner who types in the grant search gets the host’s answer, with identifiers and text only', async ({
     page,
   }) => {
     await openEmbed(page);
@@ -49,7 +48,8 @@ test.describe('PRO-080 criterion 2: the grants pane asks the host for people and
     expect(opened).toBe(true);
 
     const element = page.locator(EL);
-    await element.getByRole('button', { name: 'Middle', exact: true }).click();
+    // The button's name is the region's title and its state ("Middle Draft").
+    await element.getByRole('button', { name: /^Middle\b/ }).click();
     const search = element.getByRole('combobox', { name: 'Find a person or group' });
     await search.fill('Bo');
 
