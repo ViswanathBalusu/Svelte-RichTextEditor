@@ -602,6 +602,13 @@ export interface CoreApi {
 
   /** Puts the caret at the start of a block and scrolls it into view; false when it is gone. */
   selectBlock?(id: string): boolean;
+  /**
+   * Whether a block has changed after the commit `seq` (an export job's `seq`; EXP-065
+   * criterion 3): true when it has, false when it has not, null when the core cannot tell (the
+   * block is gone, or `seq` is older than what the core has followed). Never about hidden content
+   * (ADR 0019).
+   */
+  blockChangedSince?(id: string, seq: number): boolean | null;
   /** Searches what this reader holds (ADR 0019: never hidden content). */
   search?(query: string, options?: SearchOptions): Promise<SearchResults>;
   /** Selects a match of the last search and scrolls it into view; false when it is gone. */
