@@ -25,9 +25,12 @@ import {
   type NodeView,
   type NodeViewConstructor,
 } from 'prosemirror-view';
-import { type Attrs, resolveTableFormat, styleTable } from '@docedit/model';
+import { resolveTableFormat, styleTable } from '@docedit/model';
 import { cellEntries } from '../table-span.ts';
 import { colourValue } from '../view-support.ts';
+
+/** The attributes of a node as the model's cascade reads them. */
+type Attrs = Readonly<Record<string, unknown>>;
 
 export const tableStyleKey = new PluginKey<DecorationSet>('docedit-table-style');
 
