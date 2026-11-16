@@ -69,6 +69,12 @@ export interface MockTargetOptions {
    * answered, every further ping is ignored, so the server stalls. Unset, the server never stalls.
    */
   stallAfterPings?: number;
+  /**
+   * Test of the kit's close-code check (PRO-037 criterion 4): after `hello`, a message of one of
+   * these unknown types makes the server close with the code given, or drop the connection without
+   * a close frame (`'drop'`). Unset, the server closes only as 05 §5.7 says.
+   */
+  closeOnUnknown?: Readonly<Record<string, number | 'drop'>>;
 }
 
 class Problem extends Error {
@@ -544,6 +550,7 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
         features: service.features,
         ended: (x) => sessions.delete(x),
         stall,
+        closeOnUnknown: opts.closeOnUnknown ?? {},
       });
       sessions.add(s);
     });
@@ -574,6 +581,7 @@ interface SessionDeps {
   features: readonly string[];
   ended: (s: Session) => void;
   stall: { answered: number; after: number } | null;
+  closeOnUnknown: Readonly<Record<string, number | 'drop'>>;
 }
 
 interface Open {
@@ -673,6 +681,14 @@ class Session {
     if (r.kind === 'unknown') {
       if (!this.backend)
         return this.fatal(undefined, 'bad_message', 'the first message must be hello', 4400);
+      const how = Object.hasOwn(this.deps.closeOnUnknown, r.t)
+        ? this.deps.closeOnUnknown[r.t]
+        : undefined;
+      if (how === 'drop') {
+        this.ws.terminate();
+        return this.finish();
+      }
+      if (how !== undefined) return this.end(how, 'closed on request of the test');
       if (r.reply) this.send(r.reply as unknown as Record<string, unknown>);
       return;
     }
