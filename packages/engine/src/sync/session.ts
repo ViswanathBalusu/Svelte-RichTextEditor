@@ -229,6 +229,11 @@ export class SyncSession {
   #queueKey = '[]';
   /** Recovered edits kept for this document (FE-010): restored from the journal, then written back. */
   #recoveredKept: Discarded[] = [];
+  /** The access in force on this channel: the one of `ch.opened`, then every `perm.changed`. */
+  #access: Access | null = null;
+  /** Scopes a `permission_denied` named while the access still allowed writing there (PRM-020). */
+  #staleScopes: readonly string[] | null = null;
+  #accessTimer: unknown = null;
 
   constructor(host: SyncHost, channel: SyncChannel, opts: SessionOptions = {}) {
     this.#host = host;
@@ -318,6 +323,7 @@ export class SyncSession {
     this.#held = false;
     this.#loading = false;
     this.#clearAckTimer();
+    this.#clearAccessTimer();
     if (ch && (close === 'always' || (close === 'own' && ch !== this.#given))) ch.close();
   }
 
@@ -424,7 +430,7 @@ export class SyncSession {
     switch (input.t) {
       case 'opened': {
         const o = input.opened;
-        host.setAccess(o.access);
+        this.#setAccess(o.access);
         if (o.catchUp !== 'stream') {
           // `page` would read the missing commits over REST; no port member does that, so the
           // session reloads instead (ADR 0038).
@@ -480,7 +486,7 @@ export class SyncSession {
         return 'done';
       }
       case 'access':
-        host.setAccess(input.access);
+        this.#setAccess(input.access);
         return 'done';
       case 'check':
         this.#check(input.check);
@@ -649,6 +655,7 @@ export class SyncSession {
         return;
       case 'refresh-permissions':
         host.event({ type: 'permissions-stale', scopes: a.scopes });
+        this.#refreshAccess(a.scopes);
         return;
       case 'discarded':
         host.event({ type: 'discarded', items: a.items });
@@ -666,6 +673,50 @@ export class SyncSession {
         host.event({ type: 'report', code: a.code, message: a.message });
         return;
     }
+  }
+
+  // --- Refreshing permissions (04 §6, `permission_denied`; PRM-020) ------------------------------
+
+  #setAccess(access: Access): void {
+    this.#access = access;
+    this.#host.setAccess(access);
+    if (this.#staleScopes && !this.#accessAllows(this.#staleScopes)) this.#clearAccessTimer();
+  }
+
+  /** Whether the access in force still says the client may write in one of the refused scopes. */
+  #accessAllows(scopes: readonly string[]): boolean {
+    const a = this.#access;
+    if (!a) return false;
+    const writes = (caps: readonly string[] | undefined) =>
+      caps?.some((c) => c !== 'view' && c !== 'comment') ?? false;
+    // A refusal without scopes is the capability check of 07 §5 (P6): the document-level set.
+    if (scopes.length === 0) return writes(a.caps);
+    return scopes.some((s) => writes(a.scopes[s.startsWith('defs:') ? 'defs' : s]));
+  }
+
+  /**
+   * The server refused a commit with `permission_denied`. When the access in force already denies
+   * the refused scopes, the `perm.changed` came first and the client's access is the server's. When
+   * it still allows them, the access is stale: the `perm.changed` is still on its way (it follows
+   * the control commit of its revision, D12) or was lost. DEP has no request that reads the access
+   * again, so the session waits for it for the time it waits for any answer (`ackTimeoutMs`) and
+   * then reopens the channel, whose `ch.opened` carries the server's access (05 §5.2).
+   */
+  #refreshAccess(scopes: readonly string[]): void {
+    if (!this.#accessAllows(scopes)) return;
+    this.#clearAccessTimer();
+    this.#staleScopes = scopes;
+    this.#accessTimer = this.#clock.setTimeout(() => {
+      this.#accessTimer = null;
+      this.#staleScopes = null;
+      this.#reconnect('permissions refreshed after permission_denied');
+    }, this.#ackTimeoutMs);
+  }
+
+  #clearAccessTimer(): void {
+    if (this.#accessTimer !== null) this.#clock.clearTimeout(this.#accessTimer);
+    this.#accessTimer = null;
+    this.#staleScopes = null;
   }
 
   // --- Sending ---------------------------------------------------------------------------------
