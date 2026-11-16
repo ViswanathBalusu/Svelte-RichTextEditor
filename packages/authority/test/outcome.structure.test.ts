@@ -305,16 +305,69 @@ describe('P2: regions and section breaks (PRM-011)', () => {
     const remove = () => [new ReplaceStep(at, at + 1, Slice.empty)];
     expect(verdictOf(USERS.carol, withBreak, remove).ok).toBe(true);
     expect(verdictOf(MORE.rita, withBreak, remove).ok).toBe(false);
-    // Moving it next to the restricted region and into place between regions needs edit in the
-    // body only: a section break is a body block. Moving it into a region is impossible: a region
-    // holds blocks, and section breaks are children of the body only.
+    // The break at the end has no region after it, so it affects none. Moving it to the top puts
+    // every region in its section: that needs `edit` in each of them, the restricted Legal
+    // included. Moving it into a region is impossible: a region holds blocks, and section breaks
+    // are children of the body only.
     const top = posOf(withBreak, 'pTitle0000000001');
     const move = () => [
       new ReplaceStep(at, at + 1, Slice.empty),
       new ReplaceStep(top, top, new Slice(Fragment.from(sb), 0, 0)),
     ];
-    expect(verdictOf(USERS.carol, withBreak, move).ok).toBe(true);
+    expect(refused(verdictOf(USERS.carol, withBreak, move))).toEqual(['region:rLegal000000000B']);
+    expect(verdictOf(USERS.bob, withBreak, move).ok, 'Bob holds an editor grant on Legal').toBe(
+      true,
+    );
+    expect(verdictOf(USERS.alice, withBreak, move).ok).toBe(true);
     expect(verdictOf(USERS.dave, withBreak, move).ok).toBe(false);
+  });
+
+  it('needs edit in every region whose section a section break change alters (criterion 4)', () => {
+    const doc = baseDoc();
+    const LEGAL = 'rLegal000000000B';
+    const breakNode = (pageSetup: string) =>
+      schema.nodeFromJSON({
+        type: 'section_break',
+        attrs: { id: 'sbNew00000000001', pageSetup },
+      });
+    // Adding a break just before the restricted region changes the section Legal sits in.
+    const legalAt = posOf(doc, LEGAL);
+    const add = () => [
+      new ReplaceStep(legalAt, legalAt, new Slice(Fragment.from(breakNode('ps1')), 0, 0)),
+    ];
+    // Carol is an editor with `structure` and `edit` in the body, and no `edit` in Legal.
+    const denied = verdictOf(USERS.carol, doc, add);
+    expect(refused(denied)).toEqual([`region:${LEGAL}`]);
+    if (!denied.ok) expect(denied.reason).toContain('`section_break.change` needs `edit`');
+    expect(verdictOf(USERS.bob, doc, add).ok, 'Bob holds an editor grant on Legal').toBe(true);
+    expect(verdictOf(USERS.alice, doc, add).ok).toBe(true);
+
+    // Removing it, and changing its attributes, affect Legal in the same way.
+    const withBreak = apply(doc, add());
+    const at = posOf(withBreak, 'sbNew00000000001');
+    const remove = () => [new ReplaceStep(at, at + 1, Slice.empty)];
+    const change = () => [new AttrStep(at, 'ext', { x: 1 })];
+    for (const make of [remove, change]) {
+      expect(refused(verdictOf(USERS.carol, withBreak, make))).toEqual([`region:${LEGAL}`]);
+      expect(verdictOf(USERS.bob, withBreak, make).ok).toBe(true);
+      expect(verdictOf(USERS.alice, withBreak, make).ok).toBe(true);
+    }
+
+    // Moving it from before Legal to after Legal affects Legal and nothing before it.
+    const afterLegal = at + 1 + withBreak.nodeAt(at + 1)!.nodeSize;
+    const move = () => [
+      new ReplaceStep(afterLegal, afterLegal, new Slice(Fragment.from(breakNode('ps1')), 0, 0)),
+      new ReplaceStep(at, at + 1, Slice.empty),
+    ];
+    expect(refused(verdictOf(USERS.carol, withBreak, move))).toContain(`region:${LEGAL}`);
+    expect(verdictOf(USERS.alice, withBreak, move).ok).toBe(true);
+
+    // In the room the refused commit is not stored.
+    const room = roomWith(doc);
+    room.open('c1', USERS.carol);
+    const fx = room.submit('c1', { id: commitId(), base: 0, steps: stepsToJson(add()) });
+    expect(rejection(fx, 'c1')).toMatchObject({ code: 'permission_denied' });
+    expect(room.head).toBe(0);
   });
 
   it('needs manage to flip a policy between inherit and restricted', () => {

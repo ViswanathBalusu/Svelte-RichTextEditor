@@ -114,6 +114,41 @@ describe('Session: loading a document', () => {
     await s.dispose();
   });
 
+  it('raises de-permission-change for the access of a channel the core reopened, whose rev starts again (PRM-020)', async () => {
+    const { service: s, docId } = service();
+    const editor = fakeEditor();
+    const host = recordingHost(editor);
+    const session = new Session({
+      docId,
+      backend: backendFor(s, docId, 'editor', 'editor'),
+      ownsBackend: false,
+      host,
+      scheduler: immediate,
+    });
+    await session.start();
+    await settle();
+    s.setGrants(docId, [
+      { region: IDS.locked, principal: `user:${USERS.editor.sub}`, role: 'editor' },
+    ]);
+    await settle();
+    const before = host.events.filter((e) => e.name === 'de-permission-change');
+    const last = before.at(-1)!.detail as Access;
+    expect(last.rev).toBeGreaterThan(1);
+    // The core reopened the channel: the access of its `ch.opened` has rev 1 and no `edit` there.
+    const reopened: Access = {
+      ...last,
+      rev: 1,
+      scopes: { ...last.scopes, [`region:${IDS.locked}`]: ['view'] },
+    };
+    editor.access.set(reopened);
+    editor.access.set(reopened);
+    const after = host.events.filter((e) => e.name === 'de-permission-change');
+    expect(after).toHaveLength(before.length + 1);
+    expect(after.at(-1)!.detail).toEqual(reopened);
+    await session.close();
+    await s.dispose();
+  });
+
   it('raises de-permission-change once per access message, with the new complete access (PRO-088)', async () => {
     const { service: s, docId } = service();
     const editor = fakeEditor();
