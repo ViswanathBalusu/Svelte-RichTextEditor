@@ -223,9 +223,39 @@ jobs:
           SYN047_RUNS: '3000'
         run: pwsh -NoProfile -File infra/test-env.ps1 run -NoExport pnpm test
 
+  fuzz-nightly:
+    # SEC-059 criterion 3. A pull request runs every fuzz target bounded, inside `pnpm test` (200
+    # generated inputs per target). This is the longer run. FUZZ_RUNS is a proposed value, not a
+    # figure from the spec (SEC-059 Notes): it is the run the story's evidence was taken with.
+    name: Fuzz targets, longer run (SEC-059)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Every registered fuzz target with 5,000 generated inputs
+        env:
+          FUZZ_RUNS: '5000'
+        run: pnpm exec vitest run --project node tests/security/test/fuzz.test.ts
+      - name: Keep the failing inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-findings
+          path: |
+            tests/security/corpus/fuzz
+            tests/security/corpus/fuzz-inflight
+          if-no-files-found: ignore
+
   summary:
     name: Pipeline duration
-    needs: [check, browsers, e2e, conformance-kit, integration, convergence-nightly]
+    needs: [check, browsers, e2e, conformance-kit, integration, convergence-nightly, fuzz-nightly]
     if: always()
     runs-on: ubuntu-24.04
     steps:
