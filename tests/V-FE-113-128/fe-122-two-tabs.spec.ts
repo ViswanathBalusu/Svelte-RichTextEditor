@@ -116,8 +116,21 @@ async function reachService(page: Page): Promise<void> {
     await route.fulfill({ response, headers: { ...response.headers(), ...cors } });
   });
   const wsOrigin = origin.replace(/^http/, 'ws').replace(/\./g, '\\.');
-  await page.routeWebSocket(new RegExp(`^${wsOrigin}/dep`), (ws) => ws.connectToServer());
+  const sockets = { opened: 0, closedByPage: 0 };
+  socketsOf.set(page, sockets);
+  await page.routeWebSocket(new RegExp(`^${wsOrigin}/dep`), (ws) => {
+    sockets.opened++;
+    const server = ws.connectToServer();
+    // A close from the page is counted and passed on to the service.
+    ws.onClose((code, reason) => {
+      sockets.closedByPage++;
+      server.close({ code: code ?? 1000, reason: reason ?? '' });
+    });
+  });
 }
+
+/** The /dep WebSockets each page opened and closed itself (FE-005). */
+const socketsOf = new WeakMap<Page, { opened: number; closedByPage: number }>();
 
 /** Opens one tab on the document as `sub`, with that user's token, and waits for `de-ready`. */
 async function openTab(page: Page, sub: string, token: string): Promise<void> {
@@ -249,6 +262,55 @@ test('two tabs with different grants: only the tab with the region grant changes
   await ada.keyboard.type('Indemnity');
   await expect.poll(() => bodyText(grace), { timeout: 20_000 }).toContain('Indemnity');
   expect(await bodyText(grace)).not.toContain(LEGAL_TEXT);
+
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test('FE-005: a suspended element closes its socket, and a reconnected one resumes on a new one', async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const ada = await context.newPage();
+  const grace = await context.newPage();
+  const errors: string[] = [];
+  for (const p of [ada, grace]) p.on('pageerror', (e) => errors.push(e.message));
+  await openTab(ada, 'ada', tokenAda);
+  await openTab(grace, 'grace', tokenGrace);
+  const sockets = socketsOf.get(ada)!;
+  expect(sockets).toEqual({ opened: 1, closedByPage: 0 });
+
+  const intro = (p: Page) => p.locator('doc-editor .de-editing-surface p').first();
+  await intro(ada).click();
+  await ada.keyboard.press('End');
+  await ada.keyboard.type(' Before-suspend');
+  await expect.poll(() => bodyText(grace), { timeout: 20_000 }).toContain('Before-suspend');
+
+  // The host takes the element out of the document and keeps it: it suspends after one microtask.
+  await ada.evaluate(() => {
+    const el = document.querySelector('doc-editor') as HTMLElement;
+    (window as unknown as { __held: HTMLElement }).__held = el;
+    el.remove();
+  });
+  await expect.poll(() => sockets.closedByPage, { timeout: 10_000 }).toBe(1);
+  expect(sockets.opened).toBe(1);
+
+  // Grace goes on while Ada's element is suspended.
+  await intro(grace).click();
+  await grace.keyboard.press('End');
+  await grace.keyboard.type(' While-away');
+
+  // Back within the grace period: a new socket, the same editor, and the missed change arrives.
+  await ada.evaluate(() => {
+    document.getElementById('mount')!.append((window as unknown as { __held: HTMLElement }).__held);
+  });
+  await expect.poll(() => sockets.opened, { timeout: 20_000 }).toBe(2);
+  await expect.poll(() => bodyText(ada), { timeout: 20_000 }).toContain('While-away');
+  expect(await bodyText(ada)).toContain('Before-suspend');
+  await intro(ada).click();
+  await ada.keyboard.press('End');
+  await ada.keyboard.type(' After-resume');
+  await expect.poll(() => bodyText(grace), { timeout: 20_000 }).toContain('After-resume');
 
   expect(errors).toEqual([]);
   await context.close();

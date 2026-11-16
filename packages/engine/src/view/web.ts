@@ -32,6 +32,7 @@ import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
+import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
 function viewPlugins(schema: Schema): Plugin[] {
   return [
@@ -41,6 +42,8 @@ function viewPlugins(schema: Schema): Plugin[] {
     dropCursor(),
     footnoteNumbers(),
     listSemanticsPlugin(),
+    // FE-131 criterion 1: the borders and shading a table takes from its table style.
+    tableStylePlugin(),
     // FE-053 criterion 3: draws the core's pending picture placeholders (the core keeps only state).
     picturePlaceholderView(),
   ];
@@ -259,7 +262,10 @@ export class EditorCore extends DocumentCore {
         state: this.editorState,
         dispatchTransaction: this.dispatch,
         editable: () => !this.readOnly,
-        nodeViews: { footnote: footnoteRefView((id) => this.openFootnote(id)) },
+        nodeViews: {
+          footnote: footnoteRefView((id) => this.openFootnote(id)),
+          table_cell: tableCellView,
+        },
         markViews: cssomMarkViews(this.#fontAlias),
         attributes: this.#bodyAttributes(),
         // Copy and cut are the core's (FE-050, FE-055): the browser's own copy would write ProseMirror's format.
