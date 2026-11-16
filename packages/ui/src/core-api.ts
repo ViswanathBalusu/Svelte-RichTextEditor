@@ -423,6 +423,14 @@ export interface ExportService {
   readonly targets: ReadView<readonly ExportTarget[]>;
   /** True when an export leaves out parts hidden from this reader (ADR 0019; UX-104). */
   readonly projected?: ReadView<boolean>;
+  /**
+   * The warnings of the preflight shared with the converter (09 §1; EXP-003), for the document as
+   * the core holds it now, before any job is created. Empty when nothing was found. Absent when
+   * the core has no preflight; the dialog then creates the job at once.
+   */
+  preflight?(
+    target: ExportTarget,
+  ): readonly ExportDiagnostic[] | Promise<readonly ExportDiagnostic[]>;
   /** Starts a job; resolves with its identifier, or rejects with an error that has a `code`. */
   request(target: ExportTarget, options: ExportOptions): Promise<{ jobId: string }>;
   /** The job as `export.*` events report it; null for an unknown job. */

@@ -72,6 +72,12 @@
   let announced: string | null = null;
   let gone = $state<string | null>(null);
   let moved = $state<string | null>(null);
+  // The preflight's warnings for a request the author has not confirmed yet (EXP-003).
+  let pending = $state.raw<{
+    target: ExportTarget;
+    options: ExportOptions;
+    warnings: readonly ExportDiagnostic[];
+  } | null>(null);
 
   const running = $derived(
     job !== null && (job.state === 'queued' || job.state === 'converting' || job.state === 'compiling'),
@@ -146,19 +152,47 @@
       if (filterEnabled) await runFilter(chosenFilter);
       return;
     }
-    if (!chosen || !exports) return;
+    if (!chosen || !exports || pending) return;
     failedToStart = false;
-    announced = null;
     gone = null;
     moved = null;
     const options: ExportOptions =
       chosen === 'pdf' ? { profile, tagging, fields } : chosen === 'tex' ? { fields } : {};
+    // The preflight runs before any job is created (EXP-003 criterion 3). With warnings the author
+    // chooses to continue or not; a preflight that fails does not stop the export, since the job
+    // reports the same things.
+    if (exports.preflight) {
+      let warnings: readonly ExportDiagnostic[] = [];
+      try {
+        warnings = await exports.preflight(chosen);
+      } catch {
+        warnings = [];
+      }
+      if (closed) return;
+      if (warnings.length > 0) {
+        pending = { target: chosen, options, warnings };
+        return;
+      }
+    }
+    await begin(chosen, options);
+  }
+
+  async function begin(to: ExportTarget, options: ExportOptions): Promise<void> {
+    if (!exports) return;
+    announced = null;
     try {
-      const { jobId } = await exports.request(chosen, options);
+      const { jobId } = await exports.request(to, options);
       follow(jobId);
     } catch {
       failedToStart = true;
     }
+  }
+
+  /** The author read the preflight's warnings and exports anyway. */
+  async function proceed(): Promise<void> {
+    const held = pending;
+    pending = null;
+    if (held) await begin(held.target, held.options);
   }
 
   function cancel(): void {
@@ -208,7 +242,7 @@
     <p class="de-hint" data-export="hidden">{tr.t('dialog.export.hidden')}</p>
   {/if}
   <form class="de-form" onsubmit={start}>
-    <fieldset class="de-fieldset" disabled={running || writing}>
+    <fieldset class="de-fieldset" disabled={running || writing || pending !== null}>
       <legend>{tr.t('dialog.export.target')}</legend>
       {#each targets.current as t, i (t)}
         <label class="de-check">
@@ -282,12 +316,46 @@
         <button
           type="submit"
           class="de-button de-button-primary"
-          disabled={noExport || (chosenFilter ? !filterEnabled || writing : !chosen)}
+          disabled={noExport ||
+            pending !== null ||
+            (chosenFilter ? !filterEnabled || writing : !chosen)}
           >{job || saved ? tr.t('dialog.export.again') : tr.t('dialog.export.start')}</button
         >
       {/if}
     </div>
   </form>
+  {#if pending}
+    <section class="de-export-preflight" data-export="preflight" aria-labelledby={`${id}-preflight`}>
+      <h3 class="de-subhead" id={`${id}-preflight`}>{tr.t('export.preflight.title')}</h3>
+      <p class="de-hint" role="status">{tr.t('export.preflight.hint')}</p>
+      <ul class="de-list" aria-label={tr.t('export.preflight.title')}>
+        {#each pending.warnings as d, i (i)}
+          <li data-severity={d.severity}>
+            <button
+              type="button"
+              class="de-list-button"
+              disabled={!d.blockId}
+              onclick={() => goTo(d)}
+            >
+              <span class="de-severity" data-severity={d.severity}>{tr.t(severityKey(d))}</span>
+              <span data-content>{d.message}</span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+      {#if gone}
+        <p class="de-error" role="status">{tr.t('export.diagnostic.gone')}</p>
+      {/if}
+      <div class="de-dialog-actions">
+        <button type="button" class="de-button" onclick={() => (pending = null)}
+          >{tr.t('export.preflight.cancel')}</button
+        >
+        <button type="button" class="de-button de-button-primary" onclick={proceed}
+          >{tr.t('export.preflight.continue')}</button
+        >
+      </div>
+    </section>
+  {/if}
   {#if failedToStart}
     <p class="de-error" role="alert">{tr.t('export.failed.start')}</p>
   {/if}

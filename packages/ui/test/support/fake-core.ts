@@ -224,6 +224,14 @@ export class FakeExports implements ExportService {
   readonly requests: Array<{ target: ExportTarget; options: ExportOptions }> = [];
   readonly cancelled: string[] = [];
   failNext = false;
+  /** What `preflight` answers; a test sets it (EXP-003 criterion 3). */
+  preflightWarnings: ExportJobView['diagnostics'] = [];
+  readonly preflights: ExportTarget[] = [];
+
+  preflight(target: ExportTarget): ExportJobView['diagnostics'] {
+    this.preflights.push(target);
+    return this.preflightWarnings;
+  }
 
   constructor(targets: readonly ExportTarget[], projected: boolean, notify: Notify) {
     this.targets = new Value(targets, notify);
