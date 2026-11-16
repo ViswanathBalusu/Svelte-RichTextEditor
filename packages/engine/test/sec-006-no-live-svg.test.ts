@@ -23,7 +23,7 @@ function tags(spec: DOMOutputSpec, out: string[] = []): string[] {
   }
   const [name, ...rest] = spec as [string, ...unknown[]];
   out.push(String(name).toLowerCase().replace(/^.*\s/, ''));
-  for (const part of rest) if (Array.isArray(part)) tags(part as DOMOutputSpec, out);
+  for (const part of rest) if (Array.isArray(part)) tags(part as unknown as DOMOutputSpec, out);
   return out;
 }
 
@@ -47,7 +47,7 @@ describe('SEC-006: the editing schema draws no live SVG', () => {
     let checked = 0;
     for (const type of Object.values(schema.nodes)) {
       if (!type.spec.toDOM) continue;
-      let node: Node | null = null;
+      let node: Node | null;
       try {
         node = type.isText ? schema.text('x') : type.createAndFill();
       } catch {
