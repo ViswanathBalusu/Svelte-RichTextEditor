@@ -60,6 +60,30 @@ describe('FE-016: Svelte builds DOM without HTML strings', () => {
     );
     expect(hits).toEqual([]);
   });
+
+  it("never calls ProseMirror's own HTML paste, and takes paste and drop on both views", () => {
+    // ProseMirror reads an HTML string under its own policy name. The bundle reads HTML only in
+    // paste-policy.ts, under the project's policy (criterion 5; e2e/fe-016-paste-policy.spec.ts).
+    const callers = BUNDLE.filter((f) => /\.pasteHTML\s*\(/.test(readFileSync(f, 'utf8'))).map(
+      (f) => relative(packages, f),
+    );
+    expect(callers).toEqual([]);
+    const parsers = BUNDLE.filter((f) => /parseFromString\s*\(/.test(readFileSync(f, 'utf8'))).map(
+      (f) => relative(packages, f).replaceAll('\\', '/'),
+    );
+    // clipboard-html.ts keeps `fragmentFromHtmlString`, a plain parse for the tests of the whitelist.
+    // Nothing in the bundle may call it.
+    expect(parsers).toEqual(['engine/src/clipboard-html.ts', 'engine/src/view/paste-policy.ts']);
+    const plain = BUNDLE.filter(
+      (f) =>
+        !f.endsWith('clipboard-html.ts') &&
+        /\bfragmentFromHtmlString\b/.test(readFileSync(f, 'utf8')),
+    ).map((f) => relative(packages, f));
+    expect(plain).toEqual([]);
+    const web = readFileSync(join(packages, 'engine/src/view/web.ts'), 'utf8');
+    expect(web.match(/^\s+paste: \(view, event\) => \{/gm)).toHaveLength(2);
+    expect(web.match(/^\s+drop: \(view, event\) =>/gm)).toHaveLength(2);
+  });
 });
 
 describe('FE-001: one hand-written element', () => {

@@ -8,7 +8,13 @@ import { dropCursor } from 'prosemirror-dropcursor';
 import { gapCursor } from 'prosemirror-gapcursor';
 import { keymap } from 'prosemirror-keymap';
 import type { Schema } from 'prosemirror-model';
-import type { Command, EditorState, Plugin, Transaction } from 'prosemirror-state';
+import {
+  type Command,
+  type EditorState,
+  type Plugin,
+  Selection,
+  type Transaction,
+} from 'prosemirror-state';
 import { Mapping } from 'prosemirror-transform';
 import { EditorView } from 'prosemirror-view';
 import type { CoreLabels } from '../api.ts';
@@ -23,7 +29,7 @@ import { SubEditor, type SubEditorTarget } from '../subeditor.ts';
 import { cssomMarkViews, type SelectionShim, shimShadowSelection } from '../view-support.ts';
 import { footnoteNumbers, footnoteRefView } from './footnote-view.ts';
 import { listSemanticsPlugin } from './list-view.ts';
-import { foreignClipboard } from './paste-policy.ts';
+import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 
@@ -77,15 +83,34 @@ function clipboardPictures(data: DataTransfer): File[] {
   return files;
 }
 
+/**
+ * Takes a drop that did not start in this view: the caret goes to the drop point and `paste` reads
+ * the data. A drag inside the view keeps ProseMirror's handling, which moves the dragged slice and
+ * reads no HTML. Returns whether the event was taken.
+ */
+function dropFromOutside(
+  view: EditorView,
+  event: DragEvent,
+  paste: (data: DataTransfer) => void,
+): boolean {
+  const data = event.dataTransfer;
+  if (view.dragging || !view.editable || !data) return false;
+  event.preventDefault();
+  const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
+  if (!at) return true;
+  view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(at.pos))));
+  paste(data);
+  return true;
+}
+
 export class EditorCore extends DocumentCore {
   /**
    * A paste whose clipboard holds pictures and no text goes through the core (FE-053): the files are
    * read and handed to `pasteFromClipboard`, which asks the guard before anything is uploaded.
    * Everything else stays with ProseMirror's own paste handling.
    */
-  #pastePictures(event: ClipboardEvent): boolean {
-    const data = event.clipboardData;
-    const files = data ? clipboardPictures(data) : [];
+  #pastePictures(data: DataTransfer): boolean {
+    const files = clipboardPictures(data);
     if (files.length === 0) return false;
     void Promise.all(
       files.map(async (f) => ({
@@ -102,10 +127,9 @@ export class EditorCore extends DocumentCore {
    * through the whitelist, then plain text, then pictures are chosen by `pasteFromClipboard`. The HTML
    * is parsed here into an inert document and never by ProseMirror's own paste.
    */
-  #paste(event: ClipboardEvent): boolean {
-    const data = event.clipboardData;
+  #paste(data: DataTransfer | null): boolean {
     if (!data) return false;
-    if (clipboardPictures(data).length > 0) return this.#pastePictures(event);
+    if (clipboardPictures(data).length > 0) return this.#pastePictures(data);
     const html = data.getData('text/html');
     const text = data.getData('text/plain');
     if (html === '' && text === '') return false;
@@ -216,7 +240,7 @@ export class EditorCore extends DocumentCore {
           // refuse (FE-054 criterion 5). Read-only views keep ProseMirror's handling, which does nothing there.
           paste: (view, event) => {
             if (!view.editable) return false;
-            const handled = this.#paste(event);
+            const handled = this.#paste(event.clipboardData);
             if (handled) event.preventDefault();
             return handled;
           },
@@ -235,6 +259,12 @@ export class EditorCore extends DocumentCore {
             event.preventDefault();
             return true;
           },
+          // A drop from outside the view is read as a paste at the drop point (FE-016 criterion 5):
+          // ProseMirror's own drop would read the HTML under its own policy name.
+          drop: (view, event) =>
+            dropFromOutside(view, event, (data) => {
+              this.#paste(data);
+            }),
         },
         // The find highlights (FE-059): drawn from the document and the find state, never stored.
         // The suggestion marks in the `all` view are drawn too (FE-046 criterion 4; FE-045 criterion 1).
@@ -357,6 +387,18 @@ export class EditorCore extends DocumentCore {
           event.preventDefault();
           return true;
         },
+        // Paste and drop are read under the project's policy, never ProseMirror's (FE-016 criterion 5).
+        // The sub-editor's own schema parses the result, as ProseMirror's paste did.
+        paste: (view, event) => {
+          if (!view.editable || !event.clipboardData) return false;
+          const handled = pasteThroughPolicy(view, event.clipboardData);
+          if (handled) event.preventDefault();
+          return handled;
+        },
+        drop: (view, event) =>
+          dropFromOutside(view, event, (data) => {
+            pasteThroughPolicy(view, data);
+          }),
       },
     });
     this.#sub = sub;
