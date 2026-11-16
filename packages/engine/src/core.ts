@@ -14,7 +14,12 @@
  * - the document API (FE-026) and small read-only views with one notification per frame (FE-023,
  *   FE-024).
  */
-import { type StepJson, stepsToJson } from '@docedit/authority';
+import {
+  type EntryProblem,
+  type FieldReport,
+  type StepJson,
+  stepsToJson,
+} from '@docedit/authority';
 import type { RemoteCommit } from '@docedit/protocol';
 import type { Access, SyncChannel } from '@docedit/protocol';
 import { LOCATOR_LABELS, mayOpen, supportedFeatures } from '@docedit/model/definition';
@@ -44,7 +49,7 @@ import {
   type Transaction,
 } from 'prosemirror-state';
 import { type Step, replaceStep } from 'prosemirror-transform';
-import { nodeId } from '@docedit/model';
+import { type JsonValue, nodeId } from '@docedit/model';
 import type {
   AccessLimit,
   AccessSummary,
@@ -115,7 +120,8 @@ import {
   picturePlaceholderPlugin,
   removePlaceholder,
 } from './picture-placeholder.ts';
-import { type Refusal, canWrite, capsOf, depScope, guardPlugin } from './guard.ts';
+import { type EnterResult, FieldEntries, type FieldEntryState } from './field-entries.ts';
+import { type Refusal, canWrite, capsOf, checkChange, depScope, guardPlugin } from './guard.ts';
 import { idTypesOf, identifierPlugin } from './ids.ts';
 import { type Internals, register } from './internals.ts';
 import { INTERNAL, REMOTE, SUGGESTED } from './meta.ts';
@@ -671,6 +677,11 @@ export class DocumentCore implements DocumentApi {
   /** The `mode` the host set, and the one in force under the access (FE-029). */
   #requested: EditMode = 'edit';
   #effective: EditMode = 'edit';
+  /** The entries typed into form fields (FRW-004). */
+  readonly #fieldEntries = new FieldEntries({
+    state: () => this.#state,
+    dispatch: (tr) => this.dispatchTransaction(tr),
+  });
   #readOnly = false;
   #readOnlyRev = -1;
   #refusals = 0;
@@ -785,7 +796,9 @@ export class DocumentCore implements DocumentApi {
       guardPlugin(
         {
           access: () => this.#accessValue,
-          readOnly: () => this.#locked(),
+          // In the fill mode the document is locked but for the values of form fields (12 §4.2).
+          readOnly: () => this.#readOnly || this.#effective === 'view',
+          valuesOnly: () => this.#effective === 'fill',
           refused: (r) => this.#refused(r),
         },
         withParagraphsAfterRegions,
@@ -1269,6 +1282,49 @@ export class DocumentCore implements DocumentApi {
       changedBy: i.change?.user ?? null,
       changedAt: i.change?.time ?? null,
     };
+  }
+
+  /**
+   * What the form field `id` shows: its entry, the stored value and the problems of the entry
+   * (FRW-004). Null when the document has no such field.
+   */
+  fieldEntry(id: string): FieldEntryState | null {
+    return this.#fieldEntries.entry(id);
+  }
+
+  /** The problems `value` would have as the entry of the field `id`, without submitting it. */
+  checkFieldEntry(id: string, value: JsonValue): readonly EntryProblem[] {
+    return this.#fieldEntries.check(id, value);
+  }
+
+  /**
+   * Whether the person may change the value of the field `id` now: the guard's answer for a
+   * change of that value alone (12 §4.2). The authority's check is the boundary.
+   */
+  fieldFillable(id: string): boolean {
+    if (this.#readOnly || this.#effective === 'view') return false;
+    const tr = this.#fieldEntries.probe(id);
+    if (!tr) return false;
+    return (
+      checkChange(this.#state.doc, tr.doc, tr.steps, tr.docs, this.#accessValue, false) === null
+    );
+  }
+
+  /**
+   * Submits `value` as the entry of the field `id` (FRW-004 criterion 5): one `attr` step on
+   * the field's `value`. An entry with a problem is submitted too, and the field keeps showing it
+   * until the entry changes, whatever the authority answers.
+   */
+  enterFieldValue(id: string, value: JsonValue): EnterResult {
+    return this.#fieldEntries.enter(id, value);
+  }
+
+  /**
+   * `validateFields()` of the embedding API (12 §10; FRW-004): the fields that are required and
+   * empty or whose entry has a problem, in document order, by the checks of `@docedit/rules`.
+   */
+  validateFields(): FieldReport[] {
+    return this.#fieldEntries.validate();
   }
 
   canEdit(scope: string): boolean {
