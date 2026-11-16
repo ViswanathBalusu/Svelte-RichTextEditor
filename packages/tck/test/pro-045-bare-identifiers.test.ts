@@ -103,8 +103,8 @@ describe.skipIf(skip)(
         credential: target.credential,
         origin: target.origin,
         testMode: false,
-        profiles: ['core'],
-        scenarios: ['core.identifiers'],
+        profiles: ['core', 'comments'],
+        scenarios: ['core.identifiers', 'comments.identifiers'],
       });
     }, 300_000);
 
@@ -118,14 +118,14 @@ describe.skipIf(skip)(
       const ran = report.profiles.flatMap((p) => p.scenarios);
       expect(ran.map((s) => [s.id, s.outcome, s.failure ?? s.reason ?? null])).toEqual([
         ['core.identifiers.table', 'passed', null],
-        ['core.identifiers.threads', 'passed', null],
+        ['comments.identifiers', 'passed', null],
       ]);
     });
 
     it('called all six thread and comment routes', () => {
       const s = report.profiles
         .flatMap((p) => p.scenarios)
-        .find((x) => x.id === 'core.identifiers.threads');
+        .find((x) => x.id === 'comments.identifiers');
       expect(s?.observed?.operations).toEqual(
         expect.arrayContaining([
           'GET /threads/{tid}',

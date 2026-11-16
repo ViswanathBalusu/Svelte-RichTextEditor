@@ -134,10 +134,9 @@ describe.skipIf(unavailable !== null)(
           .flatMap((p) => p.scenarios)
           .map((s) => [s.id, s.reason ? `${s.outcome} (${s.reason})` : s.outcome]),
       );
-      // The thread scenario is skipped here: this service does not announce `comments`.
+      // The thread scenario is not run here: this service does not announce `comments`.
       expect(ran).toEqual({
         'core.identifiers.table': 'passed',
-        'core.identifiers.threads': 'skipped (the target does not announce comments)',
         'exports.identifiers': 'passed',
         'assets.other-document': 'passed',
       });

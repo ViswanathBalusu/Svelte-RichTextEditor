@@ -22,8 +22,8 @@ export interface BareRoute {
 const BY_RESOURCE: Readonly<Record<string, Omit<BareRoute, 'operation'>>> = {
   exports: { feature: 'exports', scenario: 'exports.identifiers' },
   assets: { feature: 'assets', scenario: 'assets.other-document' },
-  threads: { feature: 'comments', scenario: 'core.identifiers.threads' },
-  comments: { feature: 'comments', scenario: 'core.identifiers.threads' },
+  threads: { feature: 'comments', scenario: 'comments.identifiers' },
+  comments: { feature: 'comments', scenario: 'comments.identifiers' },
   imports: {
     feature: null,
     scenario: null,
