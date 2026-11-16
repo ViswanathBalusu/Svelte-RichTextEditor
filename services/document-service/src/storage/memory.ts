@@ -7,7 +7,7 @@
 import type { LogCommit, PermissionState, WriteRequest, WriteResult } from '@docedit/authority';
 import { uuid7, type JsonEnvelope } from '@docedit/model';
 import { chainHash, encodeCommit } from './codec.ts';
-import { isUuid } from './db.ts';
+import { isUuid } from './ids.ts';
 import {
   DocumentNotFoundError,
   DuplicateExternalIdError,

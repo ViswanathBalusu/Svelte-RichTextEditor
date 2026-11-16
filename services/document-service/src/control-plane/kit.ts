@@ -10,13 +10,13 @@ import type { AuditStore, OutboxStore } from '../storage/types.ts';
 import type { ReadMarkerStore } from '../storage/read-markers.ts';
 import type { ThreadStore } from '../storage/thread-store.ts';
 import type { VersionStorePort } from '../storage/versions-memory.ts';
-import type { AssetStore } from '../objects/checkpoints.ts';
 import type { DataPlane, RoomNotifier } from '../seams.ts';
 import {
   DocumentNotFoundError,
   DuplicateExternalIdError,
   RetiredRegionError,
   RevisionConflictError,
+  type AssetStore,
   type CheckpointStore,
   type DocRef,
   type DocumentRecord,
