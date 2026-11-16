@@ -1704,6 +1704,9 @@ export class DocumentCore implements DocumentApi {
     if (isTableOp(name) && this.#suggestsTable()) return this.#runSuggestedTable(name);
     if ((name === 'mergeCells' || name === 'splitCell') && this.#suggestsTable())
       return this.#refuseSuggestedSpan();
+    // FE-131 criterion 4: a sort under suggestion mode is unavailable (ADR 0365, proposed), and it
+    // is refused as a span change is: with the `suggestion` reason and no change.
+    if (name === 'sortTableRows' && this.#suggestsTable()) return this.#refuseSuggestedSpan();
     if (BLOCK_ONLY_COMMANDS.has(name) && this.queryCommand(name, args).reason === 'suggestion') {
       // FE-044 criterion 5: refused with the reason, and the document does not change.
       this.#refused({
@@ -1799,6 +1802,9 @@ export class DocumentCore implements DocumentApi {
     if (name === 'setTableStyle' || name === 'sortTableRows') {
       // Table styles and sorting (FE-131) say why they are unavailable, as the table commands do.
       if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      // Under suggestion mode a sort cannot be recorded (FE-131 criterion 4; ADR 0365, proposed).
+      if (name === 'sortTableRows' && this.#suggestsTable())
+        return { enabled: false, active: false, reason: 'suggestion' };
       if (name === 'sortTableRows' && args?.sortDirection === undefined)
         return { enabled: false, active: false };
       const refusal =
