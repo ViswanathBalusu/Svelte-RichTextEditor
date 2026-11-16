@@ -79,7 +79,13 @@ export type SyncEvent =
   | { type: 'permissions-stale'; scopes: readonly string[] }
   | { type: 'sent'; id: string; base: number; steps: number }
   /** The journal write failed (`ok` false) or succeeded again (FE-008): nothing is sent meanwhile. */
-  | { type: 'journal'; ok: boolean; reason: string };
+  | { type: 'journal'; ok: boolean; reason: string }
+  /**
+   * The service answered our commit with `unavailable` (`ok` false): it cannot store commits now
+   * (06 §8, database unavailable). The commit stays in the journal and is sent again; `ok` is true
+   * again once a commit of ours is acknowledged, refused for another reason or set aside (FE-008).
+   */
+  | { type: 'service'; ok: boolean };
 
 export type ConnectionStatus = 'online' | 'reconnecting' | 'offline';
 
@@ -219,6 +225,8 @@ export class SyncSession {
   #retryMs: number;
   #status: ConnectionStatus = 'online';
   #ended = false;
+  #suspended = false;
+  #serviceOk = true;
   /** The journal (FE-008); writes run one after another, in the order they were requested. */
   readonly #journal: JournalPort | null;
   #journalChain: Promise<void> = Promise.resolve();
@@ -229,6 +237,11 @@ export class SyncSession {
   #queueKey = '[]';
   /** Recovered edits kept for this document (FE-010): restored from the journal, then written back. */
   #recoveredKept: Discarded[] = [];
+  /** The access in force on this channel: the one of `ch.opened`, then every `perm.changed`. */
+  #access: Access | null = null;
+  /** Scopes a `permission_denied` named while the access still allowed writing there (PRM-020). */
+  #staleScopes: readonly string[] | null = null;
+  #accessTimer: unknown = null;
 
   constructor(host: SyncHost, channel: SyncChannel, opts: SessionOptions = {}) {
     this.#host = host;
@@ -318,7 +331,15 @@ export class SyncSession {
     this.#held = false;
     this.#loading = false;
     this.#clearAckTimer();
+    this.#clearAccessTimer();
     if (ch && (close === 'always' || (close === 'own' && ch !== this.#given))) ch.close();
+  }
+
+  /** Whether the service can store commits, as its last answer to a commit of ours said (FE-008). */
+  #setServiceOk(ok: boolean): void {
+    if (this.#serviceOk === ok) return;
+    this.#serviceOk = ok;
+    this.#host.event({ type: 'service', ok });
   }
 
   #setStatus(status: ConnectionStatus, reason: string): void {
@@ -329,7 +350,7 @@ export class SyncSession {
 
   /** Closes the channel and opens a new one with a resume (04 §9), after `delayMs`. */
   #reconnect(reason: string, delayMs = 0): void {
-    if (this.#ended) return;
+    if (this.#ended || this.#suspended) return;
     this.#unbind('always');
     if (!this.#opts.sync) {
       this.#setStatus('offline', `${reason}; there is no sync port to reopen the channel`);
@@ -345,7 +366,7 @@ export class SyncSession {
 
   async #open(): Promise<void> {
     const port = this.#opts.sync;
-    if (!port || this.#ended) return;
+    if (!port || this.#ended || this.#suspended) return;
     const s = this.#host.sync;
     const resume: Resume = { seq: s.seq, incarnation: s.incarnation };
     if (s.inflight) resume.inflight = s.inflight.id;
@@ -424,7 +445,7 @@ export class SyncSession {
     switch (input.t) {
       case 'opened': {
         const o = input.opened;
-        host.setAccess(o.access);
+        this.#setAccess(o.access);
         if (o.catchUp !== 'stream') {
           // `page` would read the missing commits over REST; no port member does that, so the
           // session reloads instead (ADR 0038).
@@ -470,6 +491,7 @@ export class SyncSession {
         if (!this.#adopt(receiveReject(host.sync, r), `reject ${r.code}`)) return 'wait';
         if (!ours) return 'done';
         this.#failures++;
+        this.#setServiceOk(r.code !== 'unavailable');
         // A `rebase` whose head the client has already reached failed on commits the room holds
         // but has not stored yet (its tentative state, 04 §5): resubmitting at once fails again.
         // Wait for the next commit, or a growing delay, whichever comes first (ADR 0038).
@@ -480,7 +502,7 @@ export class SyncSession {
         return 'done';
       }
       case 'access':
-        host.setAccess(input.access);
+        this.#setAccess(input.access);
         return 'done';
       case 'check':
         this.#check(input.check);
@@ -649,13 +671,16 @@ export class SyncSession {
         return;
       case 'refresh-permissions':
         host.event({ type: 'permissions-stale', scopes: a.scopes });
+        this.#refreshAccess(a.scopes);
         return;
       case 'discarded':
+        this.#setServiceOk(true);
         host.event({ type: 'discarded', items: a.items });
         this.#recordRecovered(a.items);
         return;
       case 'acknowledged':
         this.#failures = 0;
+        this.#setServiceOk(true);
         this.#journalDrop(a.id);
         host.event({ type: 'acknowledged', id: a.id, seq: a.seq });
         return;
@@ -666,6 +691,50 @@ export class SyncSession {
         host.event({ type: 'report', code: a.code, message: a.message });
         return;
     }
+  }
+
+  // --- Refreshing permissions (04 §6, `permission_denied`; PRM-020) ------------------------------
+
+  #setAccess(access: Access): void {
+    this.#access = access;
+    this.#host.setAccess(access);
+    if (this.#staleScopes && !this.#accessAllows(this.#staleScopes)) this.#clearAccessTimer();
+  }
+
+  /** Whether the access in force still says the client may write in one of the refused scopes. */
+  #accessAllows(scopes: readonly string[]): boolean {
+    const a = this.#access;
+    if (!a) return false;
+    const writes = (caps: readonly string[] | undefined) =>
+      caps?.some((c) => c !== 'view' && c !== 'comment') ?? false;
+    // A refusal without scopes is the capability check of 07 §5 (P6): the document-level set.
+    if (scopes.length === 0) return writes(a.caps);
+    return scopes.some((s) => writes(a.scopes[s.startsWith('defs:') ? 'defs' : s]));
+  }
+
+  /**
+   * The server refused a commit with `permission_denied`. When the access in force already denies
+   * the refused scopes, the `perm.changed` came first and the client's access is the server's. When
+   * it still allows them, the access is stale: the `perm.changed` is still on its way (it follows
+   * the control commit of its revision, D12) or was lost. DEP has no request that reads the access
+   * again, so the session waits for it for the time it waits for any answer (`ackTimeoutMs`) and
+   * then reopens the channel, whose `ch.opened` carries the server's access (05 §5.2).
+   */
+  #refreshAccess(scopes: readonly string[]): void {
+    if (!this.#accessAllows(scopes)) return;
+    this.#clearAccessTimer();
+    this.#staleScopes = scopes;
+    this.#accessTimer = this.#clock.setTimeout(() => {
+      this.#accessTimer = null;
+      this.#staleScopes = null;
+      this.#reconnect('permissions refreshed after permission_denied');
+    }, this.#ackTimeoutMs);
+  }
+
+  #clearAccessTimer(): void {
+    if (this.#accessTimer !== null) this.#clock.clearTimeout(this.#accessTimer);
+    this.#accessTimer = null;
+    this.#staleScopes = null;
   }
 
   // --- Sending ---------------------------------------------------------------------------------
@@ -942,6 +1011,32 @@ export class SyncSession {
   reconnect(): void {
     this.#retryMs = (this.#opts.retry ?? DEFAULT_RETRY).minMs;
     this.#reconnect('reconnect requested', 0);
+  }
+
+  /** Whether the session is suspended: no channel, and none is opened until `resume` (FE-005). */
+  get suspended(): boolean {
+    return this.#suspended;
+  }
+
+  /**
+   * Closes the channel and opens none until `resume` (FE-005; 02 §2.1). The sync state, the queue of
+   * unsent steps and the journal stay; local edits made meanwhile wait in the queue.
+   */
+  suspend(): void {
+    if (this.#ended || this.#suspended) return;
+    this.#suspended = true;
+    if (this.#retryTimer !== null) this.#clock.clearTimeout(this.#retryTimer);
+    this.#retryTimer = null;
+    this.#clearSendTimer();
+    this.#unbind('always');
+    this.#setStatus('offline', 'suspended');
+  }
+
+  /** Opens a new channel with a resume (04 §9) after `suspend`; unsent steps are then sent. */
+  resume(): void {
+    if (this.#ended || !this.#suspended) return;
+    this.#suspended = false;
+    this.reconnect();
   }
 
   /** Stops the session. A channel the session opened itself is closed; the given one is not. */

@@ -1,7 +1,7 @@
 {
   "artifact": "export-diagnostic-codes",
   "version": 1,
-  "classVersion": "0.2.4",
+  "classVersion": "0.2.7",
   "codes": [
     {
       "code": "bundle_refused",

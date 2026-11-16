@@ -306,8 +306,9 @@ export class DocEditorElement extends Base {
     // A move that removed the focused editor and put it back in the same task: the browser has
     // dropped the selection with the subtree, so focus is put back with it (FE-005).
     const refocus = this.#focusWithin;
-    // Resuming keeps the session, its core and its shell; FE-005 (phase 1b) adds the channel's
-    // resume. A change made while disconnected is picked up by the same reconciliation.
+    // Resuming keeps the session, its core and its shell, and reopens the channel with a resume
+    // (FE-005). A change made while disconnected is picked up by the same reconciliation.
+    if (this.#suspended) this.#session?.resume();
     this.#suspended = false;
     this.#scheduleLoad();
     if (refocus && !this.#root.activeElement) this.focus();
@@ -383,6 +384,8 @@ export class DocEditorElement extends Base {
   #suspend(): void {
     if (!this.#session || this.#suspended) return;
     this.#suspended = true;
+    // Listeners on the page, observers and the channel go; the core and the journal stay (FE-005).
+    this.#session.suspend();
     if (!this.hasAttribute('keep-alive')) this.#startGrace();
   }
 
@@ -606,6 +609,9 @@ export class DocEditorElement extends Base {
       // The host's directory search and the document it is asked about (PRO-080 criterion 2).
       searchPrincipals: () => this.#searchPrincipals,
       docId,
+      // The session's backend is connected before the editor is mounted (session.ts).
+      permissions:
+        this.#session?.docId === docId ? (this.#session.backend?.permissions ?? null) : null,
       settings,
       mode: modeFrom(this.getAttribute('mode')),
       // The share command asks the host (PRO-089). Only the session that is current raises it.

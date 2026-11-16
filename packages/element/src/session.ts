@@ -81,6 +81,13 @@ export interface EditorHandle {
   setAccess(access: Access): void;
   /** Resolves once the journal holds all unconfirmed work requested so far (FE-011). */
   flushJournal?(): Promise<void>;
+  /**
+   * Suspends the editor (FE-005; 02 §2.1): the core closes its channel and opens none, and the shell
+   * stops its observers. The core, the shell and the journal stay. Absent in stand-in editors.
+   */
+  suspend?(): void;
+  /** Ends a suspension: the shell observes again and the core reopens the channel with a resume. */
+  resume?(): void;
   readonly saveState: ReadView<SyncState>;
   /** The confirmed `seq` (04 §7). */
   readonly confirmedSeq: ReadView<number> | null;
@@ -189,6 +196,11 @@ export class Session {
   #peersAwaited = false;
   #peersTaken = false;
   #presenceWatch: PresenceWatch | null = null;
+  /** FE-005: whether the session is suspended, and the suspensions and resumes in order. */
+  #suspended = false;
+  #turn: Promise<void> = Promise.resolve();
+  /** The `visibilitychange` listener on `document` (FE-011): added and removed as one. */
+  #hidden: { add(): void; remove(): void } | null = null;
 
   constructor(options: SessionOptions) {
     this.#options = options;
@@ -308,6 +320,11 @@ export class Session {
       this.#emit('de-ready', { docId: this.docId, seq: content.seq });
       this.#onAccess(channel.opened.access);
       this.#updateStatus();
+      // The element left the document while this load ran: the suspension is carried out now.
+      if (this.#suspended) {
+        this.#suspended = false;
+        this.suspend();
+      }
     } catch (e) {
       if (!this.closed) this.#fail(e);
     }
@@ -342,15 +359,21 @@ export class Session {
       const onHidden = () => {
         if (document.visibilityState === 'hidden') void flush().catch(() => {});
       };
-      document.addEventListener('visibilitychange', onHidden);
-      this.#unsubscribe.push(() => document.removeEventListener('visibilitychange', onHidden));
+      const hidden = {
+        add: () => document.addEventListener('visibilitychange', onHidden),
+        remove: () => document.removeEventListener('visibilitychange', onHidden),
+      };
+      this.#hidden = hidden;
+      // A session that was suspended while it loaded has no listener on the page until it resumes.
+      if (!this.#suspended) hidden.add();
+      this.#unsubscribe.push(() => hidden.remove());
     }
     const access = editor.access;
     if (access)
       this.#unsubscribe.push(
         access.subscribe(() => {
           const a = access.get();
-          if (a) this.#onAccess(a);
+          if (a) this.#onAccess(a, true);
         }),
       );
     if (editor.status) this.#unsubscribe.push(editor.status.subscribe(() => this.#updateStatus()));
@@ -454,9 +477,21 @@ export class Session {
     };
   }
 
-  /** `access` from `ch.opened`, then from each `perm.changed`: raised once per revision. */
-  #onAccess(access: Access): void {
-    if (this.#access && access.rev <= this.#access.rev) return;
+  /**
+   * `access` from `ch.opened`, then from each `perm.changed`: raised once per revision. `rev`
+   * counts the access objects of one channel (D12), so a channel the core reopened starts again at
+   * a lower one: an access the core holds (`fromCore`) is skipped only when it is the one already
+   * raised, never because its `rev` is not higher (PRM-020 criterion 4).
+   */
+  #onAccess(access: Access, fromCore = false): void {
+    const last = this.#access;
+    if (last && fromCore) {
+      if (
+        access === last ||
+        (access.rev === last.rev && JSON.stringify(access) === JSON.stringify(last))
+      )
+        return;
+    } else if (last && access.rev <= last.rev) return;
     this.#access = access;
     // A core that takes access from the channel itself needs no copy.
     if (this.#editor && !this.#editor.access) this.#editor.setAccess(access);
@@ -508,7 +543,65 @@ export class Session {
     return true;
   }
 
+  get suspended(): boolean {
+    return this.#suspended;
+  }
+
+  /**
+   * Suspends the session (FE-005; 02 §2.1): the element is out of the document and may come back.
+   * The listener on `document` goes, the editor closes its channel and stops its observers, and a
+   * backend the session created closes its socket. A backend the host passed stays connected: its
+   * socket is the host's and may serve other elements. The editing core and the journal stay.
+   */
+  suspend(): void {
+    if (this.#suspended || this.closed || this.#phase === 'failed') return;
+    this.#suspended = true;
+    this.#hidden?.remove();
+    const editor = this.#phase === 'ready' ? this.#editor : null;
+    // The journal's pending writes are started before the channel goes (FE-011).
+    void editor?.flushJournal?.().catch(() => {});
+    editor?.suspend?.();
+    this.#turn = this.#turn.then(async () => {
+      // A load still under way when the element left goes on; only a ready session's socket closes.
+      if (!this.#suspended || this.#phase !== 'ready' || !this.ownsBackend) return;
+      await this.#backend?.close().catch(() => {});
+    });
+  }
+
+  /**
+   * Ends a suspension: the listener comes back, a backend the session created connects again, and
+   * the editor reopens its channel with a resume (04 §9), so unconfirmed work is sent, not lost.
+   */
+  resume(): void {
+    if (!this.#suspended || this.closed) return;
+    this.#suspended = false;
+    if (this.#phase !== 'failed') this.#hidden?.add();
+    this.#turn = this.#turn.then(async () => {
+      if (this.#suspended || this.#phase !== 'ready') return;
+      const backend = this.#backend;
+      try {
+        if (this.ownsBackend && backend) await backend.connect();
+      } catch (e) {
+        if (this.closed || this.#suspended) return;
+        // The core and its unconfirmed work stay; the host hears why the channel did not come back.
+        const code = codeOf(e);
+        if (AUTH_CODES.has(code)) this.#authRequired(code);
+        else this.#emit('de-error', { code, message: `resuming: ${messageOf(e)}`, fatal: false });
+        return;
+      }
+      if (this.closed || this.#suspended) return;
+      this.#editor?.resume?.();
+      this.#updateStatus();
+    });
+  }
+
+  /** Resolves when every suspension and resume asked for so far has been carried out (tests). */
+  settled(): Promise<void> {
+    return this.#turn;
+  }
+
   #teardown(): void {
+    this.#hidden = null;
     for (const off of this.#unsubscribe.splice(0)) off();
     this.#detach?.();
     this.#detach = null;

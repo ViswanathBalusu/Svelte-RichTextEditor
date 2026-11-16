@@ -671,6 +671,8 @@ export class DocumentCore implements DocumentApi {
   #session: SyncSession | null = null;
   /** The journal could not write (FE-008): unconfirmed work is not protected, so it reads unsaved. */
   #journalFailed = false;
+  /** The service's last answer to a commit of ours was `unavailable` (FE-008 criterion 4; 06 §8). */
+  #serviceUnavailable = false;
   #accessValue: Access | null;
   /** The `mode` the host set, and the one in force under the access (FE-029). */
   #requested: EditMode = 'edit';
@@ -1126,7 +1128,7 @@ export class DocumentCore implements DocumentApi {
       ? 'readonly'
       : settled(s)
         ? 'saved'
-        : conn === 'online' && !this.#journalFailed
+        : conn === 'online' && !this.#journalFailed && !this.#serviceUnavailable
           ? 'saving'
           : 'unsaved';
     this.saveState.set(save);
@@ -1711,6 +1713,9 @@ export class DocumentCore implements DocumentApi {
     if (isTableOp(name) && this.#suggestsTable()) return this.#runSuggestedTable(name);
     if ((name === 'mergeCells' || name === 'splitCell') && this.#suggestsTable())
       return this.#refuseSuggestedSpan();
+    // FE-131 criterion 4: a sort under suggestion mode is unavailable (ADR 0365, proposed), and it
+    // is refused as a span change is: with the `suggestion` reason and no change.
+    if (name === 'sortTableRows' && this.#suggestsTable()) return this.#refuseSuggestedSpan();
     if (BLOCK_ONLY_COMMANDS.has(name) && this.queryCommand(name, args).reason === 'suggestion') {
       // FE-044 criterion 5: refused with the reason, and the document does not change.
       this.#refused({
@@ -1834,6 +1839,9 @@ export class DocumentCore implements DocumentApi {
     if (name === 'setTableStyle' || name === 'sortTableRows') {
       // Table styles and sorting (FE-131) say why they are unavailable, as the table commands do.
       if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      // Under suggestion mode a sort cannot be recorded (FE-131 criterion 4; ADR 0365, proposed).
+      if (name === 'sortTableRows' && this.#suggestsTable())
+        return { enabled: false, active: false, reason: 'suggestion' };
       if (name === 'sortTableRows' && args?.sortDirection === undefined)
         return { enabled: false, active: false };
       const refusal =
@@ -2498,6 +2506,7 @@ export class DocumentCore implements DocumentApi {
       ...(opts.journal ? { journal: opts.journal } : {}),
     };
     this.#journalFailed = false;
+    this.#serviceUnavailable = false;
     this.connection.set('online');
     if (opts.features) this.setFeatures(opts.features);
     if (opts.assets) this.#attachedAssets = opts.assets;
@@ -2555,6 +2564,19 @@ export class DocumentCore implements DocumentApi {
   }
 
   /**
+   * Closes the channel and opens none until `resumeSync` (FE-005; 02 §2.1): the element calls it when
+   * it suspends. The document, the unconfirmed work and the journal stay.
+   */
+  suspendSync(): void {
+    this.#session?.suspend();
+  }
+
+  /** Opens a channel again with a resume (04 §9) after `suspendSync`. */
+  resumeSync(): void {
+    this.#session?.resume();
+  }
+
+  /**
    * Resolves once every journal write requested so far is durable (FE-011). Without a channel, or
    * without a journal, there is nothing to wait for.
    */
@@ -2607,6 +2629,10 @@ export class DocumentCore implements DocumentApi {
         return;
       case 'journal':
         this.#journalFailed = !e.ok;
+        this.#publishSync();
+        return;
+      case 'service':
+        this.#serviceUnavailable = !e.ok;
         this.#publishSync();
         return;
       case 'discarded': {

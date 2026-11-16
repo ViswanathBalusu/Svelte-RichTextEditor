@@ -53,6 +53,15 @@ describe.skipIf(skip)('the kit against the reference service', () => {
     expect(v.unexpected).toEqual([]);
   });
 
+  // PRM-005 criterion 4: a commit on a locked and on an archived document is refused with
+  // `read_only` and `drop`, and the content and its seq do not change.
+  it('passes sync.read-only for locked and archived documents (PRM-005)', () => {
+    const s = report.profiles
+      .flatMap((p) => p.scenarios)
+      .find((x) => x.id === 'core.sync.read-only');
+    expect(s?.outcome, JSON.stringify(s?.failure)).toBe('passed');
+  });
+
   it('exercises in its traffic what every passing scenario declares (PRO-117)', () => {
     expect(judge(report, REFERENCE_KNOWN).unproven).toEqual([]);
   });

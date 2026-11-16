@@ -5,7 +5,8 @@
  *
  * Not covered here, and left unticked in the stories: the selection after a move (not checked
  * here, see FE-005 Notes), listeners removed on suspend, the socket closed on suspend, the resume of
- * the channel (FE-005 criteria 3 and 4), instrumented release counters and the 100-route memory
+ * the channel (FE-005 criteria 3 and 4; see fe-005-suspend-resume.spec.ts and
+ * tests/V-FE-113-128/fe-122-two-tabs.spec.ts), instrumented release counters and the 100-route memory
  * check (FE-006 criteria 3 and 5), and the journal (FE-006 criterion 4, FE-008).
  */
 import { expect, test } from '@playwright/test';

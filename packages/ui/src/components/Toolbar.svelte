@@ -13,6 +13,7 @@
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
   import { boundKeys } from '../shortcuts/table.ts';
+  import { useSuspension } from '../shell/suspension.ts';
   import { toolbarCommands } from '../shell/toolbar-groups.ts';
   import { fittingItems, nextIndex } from '../shell/toolbar-layout.ts';
 
@@ -28,6 +29,7 @@
   }
 
   let { onEscape, items: given, label, standalone = true }: Props = $props();
+  const suspended = useSuspension();
 
   const shell = useShell()!;
   const snapshot = live(shell.registry.view);
@@ -115,7 +117,8 @@
   });
 
   $effect(() => {
-    if (!toolbar) return;
+    // Not observed while the shell is suspended (FE-005); laid out again when it resumes.
+    if (!toolbar || suspended()) return;
     const observer = new ResizeObserver(() => layout());
     observer.observe(toolbar);
     return () => observer.disconnect();

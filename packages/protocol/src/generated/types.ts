@@ -712,6 +712,8 @@ export interface ExportResult {
   converged: boolean | null;
   /** A signed URL of the raw compile log: only for the requester, and only while they have `edit` (09 §9.2; 07 §12). */
   log?: string;
+  /** The hash-chain head of the exported state, as in the export's manifest, so that a host can anchor it (08 §12); null when the log has no commit at that `seq`. */
+  chainHead?: string | null;
 }
 
 /** An export job (05 §6.2; 09 §9.1). It belongs to its requester: only they, and service credentials of the tenant, may read or cancel it (review SR-C4). */

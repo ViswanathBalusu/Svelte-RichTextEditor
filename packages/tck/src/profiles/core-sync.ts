@@ -292,12 +292,30 @@ export const CORE_SYNC: ScenarioDef[] = [
         `> ${m.opened.access.rev}`,
         perm.d.rev,
       );
-      const r = await rejected(m.wire, 1, {
-        base: knownSeq(m),
-        steps: [insertText(posIn(m.content.doc, IDS.intro), 'x')],
-      });
-      equal(r.code, 'read_only', 'code (04 §5 step 1; G40)');
-      equal(r.action, 'drop', 'action');
+      // 07 §4 limit 1 (PRM-005): the commit is refused in both states and nothing is stored.
+      const refusedIn = async (state: 'locked' | 'archived'): Promise<void> => {
+        const before = await readContent(ctx, m.token, doc);
+        const r = await rejected(m.wire, 1, {
+          base: knownSeq(m),
+          steps: [insertText(posIn(m.content.doc, IDS.intro), 'x')],
+        });
+        equal(r.code, 'read_only', `code in a ${state} document (04 §5 step 1; G40)`);
+        equal(r.action, 'drop', `action in a ${state} document`);
+        const after = await readContent(ctx, m.token, doc);
+        equal(after.seq, before.seq, `nothing is stored in a ${state} document: the seq`);
+        equal(
+          canonicalNodeText(after.doc as unknown as JsonNode),
+          canonicalNodeText(before.doc as unknown as JsonNode),
+          `nothing is stored in a ${state} document: the content`,
+        );
+      };
+      await refusedIn('locked');
+      const archivedFrom = m.wire.mark();
+      await ctx.service.setState(doc, 'archived');
+      const archived = await m.wire.nextOf('perm.changed', { from: archivedFrom });
+      excludes(archived.d.scopes['body'], 'edit', 'no edit in an archived document (07 §4)');
+      excludes(archived.d.scopes['body'], 'comment', 'no comment in an archived document (07 §4)');
+      await refusedIn('archived');
     },
   }),
   s({

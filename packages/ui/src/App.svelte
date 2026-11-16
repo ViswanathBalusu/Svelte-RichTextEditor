@@ -77,6 +77,7 @@
   import { PaneRegistry, type PaneComponent } from './shell/panes.ts';
   import { regionLabels, scopeAnnouncement } from './shell/regions.ts';
   import { DEFAULT_SETTINGS, type ShellSettings } from './shell/settings.ts';
+  import { provideSuspension } from './shell/suspension.ts';
   import { resolveTheme, watchColourScheme } from './shell/theme.ts';
   import { contextMenuGroups, contextTargets } from './shell/toolbar-groups.ts';
   import { canZoom, DEFAULT_ZOOM, stepZoom } from './shell/zoom.ts';
@@ -156,6 +157,27 @@
   const scheme = watchColourScheme((dark) => (prefersDark = dark));
   let prefersDark = $state(scheme.dark);
   onDestroy(scheme.stop);
+  // The watcher in force: the first one, or the one started again after a suspension (FE-005).
+  // Stopping the first one a second time at destruction is harmless.
+  let stopWatching: () => void = scheme.stop;
+  onDestroy(() => stopWatching());
+
+  // Suspension (FE-005; 02 §2.1): while the element is out of the document the shell keeps its
+  // state and stops what watches the page (shell/suspension.ts).
+  let suspended = $state(false);
+  provideSuspension(() => suspended);
+
+  /** Stops, or starts again, the shell's observers and its colour-scheme listener. */
+  export function setSuspended(on: boolean): void {
+    if (on === suspended) return;
+    suspended = on;
+    stopWatching();
+    stopWatching = () => {};
+    if (on) return;
+    const again = watchColourScheme((dark) => (prefersDark = dark));
+    prefersDark = again.dark;
+    stopWatching = again.stop;
+  }
   const theme = $derived(resolveTheme(mode.theme, prefersDark));
 
   const panel = live(core.panel);
