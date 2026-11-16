@@ -662,6 +662,8 @@ export class DocumentCore implements DocumentApi {
   #session: SyncSession | null = null;
   /** The journal could not write (FE-008): unconfirmed work is not protected, so it reads unsaved. */
   #journalFailed = false;
+  /** The service's last answer to a commit of ours was `unavailable` (FE-008 criterion 4; 06 §8). */
+  #serviceUnavailable = false;
   #accessValue: Access | null;
   /** The `mode` the host set, and the one in force under the access (FE-029). */
   #requested: EditMode = 'edit';
@@ -1117,7 +1119,7 @@ export class DocumentCore implements DocumentApi {
       ? 'readonly'
       : settled(s)
         ? 'saved'
-        : conn === 'online' && !this.#journalFailed
+        : conn === 'online' && !this.#journalFailed && !this.#serviceUnavailable
           ? 'saving'
           : 'unsaved';
     this.saveState.set(save);
@@ -2461,6 +2463,7 @@ export class DocumentCore implements DocumentApi {
       ...(opts.journal ? { journal: opts.journal } : {}),
     };
     this.#journalFailed = false;
+    this.#serviceUnavailable = false;
     this.connection.set('online');
     if (opts.features) this.setFeatures(opts.features);
     if (opts.assets) this.#attachedAssets = opts.assets;
@@ -2583,6 +2586,10 @@ export class DocumentCore implements DocumentApi {
         return;
       case 'journal':
         this.#journalFailed = !e.ok;
+        this.#publishSync();
+        return;
+      case 'service':
+        this.#serviceUnavailable = !e.ok;
         this.#publishSync();
         return;
       case 'discarded': {
