@@ -12,6 +12,7 @@
  * `DOCEDIT_UI_PORT=57462 pnpm exec playwright test -c packages/ui/playwright.config.ts ux-068-target-size-rest`.
  */
 import type { Page } from '@playwright/test';
+import type { ThreadSummary } from '../src/core-api.ts';
 import { expect, open, test } from './helpers.ts';
 
 const PEOPLE = ['u1', 'u2', 'u5', 'u6', 'u7', 'u8', 'u9'].map((user, i) => ({
@@ -65,7 +66,61 @@ function expectTargets(
   expect(result.small, `controls under 24 by 24 CSS pixels in ${state}`).toEqual([]);
 }
 
+const RANGE = { range: { from: 3, to: 12, baseSeq: 41 } } as const;
+const THREADS: ThreadSummary[] = [
+  {
+    id: 't1',
+    position: 30,
+    state: 'open',
+    author: 'Ada Lovelace',
+    createdAt: '2026-11-10T09:15:00.000Z',
+    replyCount: 2,
+    assignee: 'Grace Hopper',
+    target: RANGE,
+    excerpt: 'Check this sentence.',
+    blockKind: null,
+  },
+  {
+    id: 't3',
+    position: 50,
+    state: 'open',
+    author: 'Alan Turing',
+    createdAt: '2026-11-11T16:30:00.000Z',
+    replyCount: 1,
+    assignee: 'Grace Hopper',
+    target: RANGE,
+    excerpt: null,
+    blockKind: null,
+  },
+];
+
 test.describe('pointer targets in the remaining shell states (UX-068, criterion 2)', () => {
+  test('the comments pane with threads listed', async ({ page }) => {
+    const h = await open(page, { extended: true, comments: true, commentsPane: true });
+    await h.setThreads(THREADS);
+    expect(await h.exec('view.comments')).toEqual({ ran: true, reason: null });
+    const pane = page.locator('.de-pane[data-pane="comments"]');
+    await expect(pane.locator('li[data-thread]')).toHaveCount(2);
+    expectTargets(await measure(page, '.de-pane[data-pane="comments"]'), 'the comments pane', 2);
+    expectTargets(await measure(page), 'the shell with the comments pane');
+  });
+
+  test('the history pane with groups and a named version', async ({ page }) => {
+    const h = await open(page, { history: 'full', features: ['history'], people: 'host' });
+    expect(await h.exec('view.history')).toMatchObject({ ran: true });
+    const pane = page.locator('.de-pane[data-pane="history"]');
+    await expect(pane.locator('[data-history="group"]').first()).toBeVisible();
+    expectTargets(await measure(page, '.de-pane[data-pane="history"]'), 'the history pane', 2);
+  });
+
+  test('the accessibility checker pane with issues listed', async ({ page }) => {
+    const h = await open(page, { extended: true, checker: true });
+    await h.exec('view.checker');
+    const pane = page.locator('.de-pane[data-pane="checker"]');
+    await expect(pane.locator('li.de-checker-item').first()).toBeVisible();
+    expectTargets(await measure(page, '.de-pane[data-pane="checker"]'), 'the checker pane', 2);
+  });
+
   test('the outline pane', async ({ page }) => {
     const h = await open(page, { extended: true });
     await h.exec('view.outline');
