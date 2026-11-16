@@ -27,6 +27,7 @@ import { pageGuideDecorations } from '../page-guide-decorations.ts';
 import { FIND_CURRENT_CLASS, findDecorations } from '../search-highlight.ts';
 import { SubEditor, type SubEditorTarget } from '../subeditor.ts';
 import { cssomMarkViews, type SelectionShim, shimShadowSelection } from '../view-support.ts';
+import { bibliographyPlugin, bibliographyView } from './bibliography-view.ts';
 import { footnoteNumbers, footnoteRefView } from './footnote-view.ts';
 import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
@@ -44,6 +45,8 @@ function viewPlugins(schema: Schema): Plugin[] {
     listSemanticsPlugin(),
     // FE-131 criterion 1: the borders and shading a table takes from its table style.
     tableStylePlugin(),
+    // FE-140 criterion 2: the generated entries of each bibliography.
+    bibliographyPlugin(),
     // FE-053 criterion 3: draws the core's pending picture placeholders (the core keeps only state).
     picturePlaceholderView(),
   ];
@@ -265,6 +268,7 @@ export class EditorCore extends DocumentCore {
         nodeViews: {
           footnote: footnoteRefView((id) => this.openFootnote(id)),
           table_cell: tableCellView,
+          bibliography: bibliographyView,
         },
         markViews: cssomMarkViews(this.#fontAlias),
         attributes: this.#bodyAttributes(),
