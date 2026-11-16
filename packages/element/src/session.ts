@@ -350,7 +350,7 @@ export class Session {
       this.#unsubscribe.push(
         access.subscribe(() => {
           const a = access.get();
-          if (a) this.#onAccess(a);
+          if (a) this.#onAccess(a, true);
         }),
       );
     if (editor.status) this.#unsubscribe.push(editor.status.subscribe(() => this.#updateStatus()));
@@ -454,9 +454,21 @@ export class Session {
     };
   }
 
-  /** `access` from `ch.opened`, then from each `perm.changed`: raised once per revision. */
-  #onAccess(access: Access): void {
-    if (this.#access && access.rev <= this.#access.rev) return;
+  /**
+   * `access` from `ch.opened`, then from each `perm.changed`: raised once per revision. `rev`
+   * counts the access objects of one channel (D12), so a channel the core reopened starts again at
+   * a lower one: an access the core holds (`fromCore`) is skipped only when it is the one already
+   * raised, never because its `rev` is not higher (PRM-020 criterion 4).
+   */
+  #onAccess(access: Access, fromCore = false): void {
+    const last = this.#access;
+    if (last && fromCore) {
+      if (
+        access === last ||
+        (access.rev === last.rev && JSON.stringify(access) === JSON.stringify(last))
+      )
+        return;
+    } else if (last && access.rev <= last.rev) return;
     this.#access = access;
     // A core that takes access from the channel itself needs no copy.
     if (this.#editor && !this.#editor.access) this.#editor.setAccess(access);
