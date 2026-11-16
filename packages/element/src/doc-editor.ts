@@ -606,6 +606,9 @@ export class DocEditorElement extends Base {
       // The host's directory search and the document it is asked about (PRO-080 criterion 2).
       searchPrincipals: () => this.#searchPrincipals,
       docId,
+      // The session's backend is connected before the editor is mounted (session.ts).
+      permissions:
+        this.#session?.docId === docId ? (this.#session.backend?.permissions ?? null) : null,
       settings,
       mode: modeFrom(this.getAttribute('mode')),
       // The share command asks the host (PRO-089). Only the session that is current raises it.

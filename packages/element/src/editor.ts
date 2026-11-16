@@ -13,6 +13,7 @@ import {
   PortError,
   type Access,
   type Content,
+  type PermissionsPort,
   type PrincipalInfo,
   type SearchPrincipals,
   type SyncChannel,
@@ -36,6 +37,7 @@ import type { Connection, StatusDetail } from './events.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
 import type { PdfViewerFrame } from './pdf/viewer-frame.ts';
+import { grantsService, regionsView } from './permissions-shell.ts';
 import type { AttachAt, EditorHandle, ReadView } from './session.ts';
 import { attachShortcuts } from './shortcuts.ts';
 import { mayChange } from './status.ts';
@@ -59,6 +61,11 @@ export interface MountOptions {
   searchPrincipals: () => SearchPrincipals | null;
   /** The document identifier the element was loaded with, for `searchPrincipals`. */
   docId: string;
+  /**
+   * The backend's permissions port, when the session has one (PRO-080 criterion 2). With its
+   * `regions` read the shell offers the permissions pane; with its grants reads, the grant controls.
+   */
+  permissions?: PermissionsPort | null;
   /** The manifest's family-to-alias lookup (FE-062 criterion 1); absent when none was read. */
   fontAlias?: (family: string) => string | undefined;
   /** The shell's attribute-driven settings (`toolbar`, `locale`). */
@@ -201,6 +208,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     };
   });
 
+  const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;
   const pdf: PdfService = {
@@ -289,6 +297,20 @@ export function mountEditor(options: MountOptions): MountedEditor {
     trimmed: core.trimmed,
     status,
     pdf,
+    // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
+    // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
+    permissions: core.permissions,
+    ...(port?.regions
+      ? { regions: regionsView(port.regions.bind(port), options.docId, [core.permissions]) }
+      : {}),
+    ...(port?.grants && port.updateGrants
+      ? {
+          grants: grantsService(
+            { grants: port.grants.bind(port), updateGrants: port.updateGrants.bind(port) },
+            options.docId,
+          ),
+        }
+      : {}),
   };
 
   // The property as it is when the shell asks (PRO-080 criterion 2): the shell reads its props once,
