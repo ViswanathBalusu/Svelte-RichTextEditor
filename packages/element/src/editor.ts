@@ -38,6 +38,7 @@ import type { PdfSource } from './pdf/messages.ts';
 import type { PdfViewerFrame } from './pdf/viewer-frame.ts';
 import type { AttachAt, EditorHandle, ReadView } from './session.ts';
 import { attachShortcuts } from './shortcuts.ts';
+import { sourcesService } from './sources.ts';
 import { mayChange } from './status.ts';
 import { attachStyles, type StylePath } from './styles.ts';
 
@@ -287,6 +288,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     refusal: core.refusal,
     recovered: core.recovered,
     trimmed: core.trimmed,
+    // The sources pane (UX-103): the core's sources and the changes to them, as commits.
+    sources: sourcesService(core),
     status,
     pdf,
   };

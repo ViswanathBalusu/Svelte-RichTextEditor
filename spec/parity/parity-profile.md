@@ -125,6 +125,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `view.commandSearch` | command-search |
 | `view.permissions` | regions-and-permissions |
 | `view.checker` | accessibility-checker |
+| `view.sources` | citations |
 | `view.fillSummary` | fields-and-forms |
 | `format.painter` | format-painter |
 | `format.applyFormat` | format-painter |

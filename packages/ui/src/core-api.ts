@@ -630,6 +630,58 @@ export interface CoreApi {
    * does not show (05 §8.3).
    */
   readonly history?: HistoryPort;
+  /** The sources the document cites (UX-103; CDM-052). Absent: the sources pane is not offered. */
+  readonly sources?: SourcesService;
+}
+
+/** A person of a source: family and given name, or one literal name (CSL). */
+export interface SourcePerson {
+  readonly family?: string;
+  readonly given?: string;
+  readonly literal?: string;
+}
+
+/**
+ * The attributes of a source by their CDM names (`kind`, `title`, `authors`, `issued`,
+ * `containerTitle`, `doi`, `url` and the other CSL variables of `source_def`). Text, a list of
+ * people, or null where the attribute is not set.
+ */
+export type SourceValues = Readonly<Record<string, string | readonly SourcePerson[] | null>>;
+
+export interface SourceSummary {
+  readonly id: string;
+  readonly values: SourceValues;
+  /** The text of each block that cites the source, in document order. */
+  readonly citedAt: readonly { readonly excerpt: string }[];
+}
+
+export type SourceChangeResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      /** `invalid` names the attributes whose value its grammar refuses (I11). */
+      readonly reason:
+        'read-only' | 'duplicate' | 'not-defined' | 'no-change' | 'cited' | 'invalid';
+      readonly fields?: readonly string[];
+    };
+
+/**
+ * The sources of the document and the changes an author may make to them (UX-103). A change is a
+ * commit to the source definition through the log; it needs `structure` (07 §4), which `canChange`
+ * reports. Citing an existing source is a change of the text and follows the text's permissions.
+ */
+export interface SourcesService {
+  readonly list: ReadView<readonly SourceSummary[]>;
+  readonly canChange: ReadView<boolean>;
+  /** The attributes (and `id`) whose value its grammar refuses; empty when all pass. */
+  check(id: string | null, values: SourceValues): readonly string[];
+  add(id: string, values: SourceValues): SourceChangeResult;
+  update(id: string, values: SourceValues): SourceChangeResult;
+  remove(id: string): SourceChangeResult;
+  /** Whether a citation of an existing source can be inserted at the caret. */
+  canCite(): boolean;
+  /** Inserts a citation of the source at the caret; false where it cannot. */
+  cite(id: string): boolean;
 }
 
 /** One group of editing sessions, or one named version, as the history pane lists it (HIS-008). */
