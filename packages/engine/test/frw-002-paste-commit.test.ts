@@ -5,7 +5,6 @@
  * key of the copy follows the rule proposed in ADR 0366.
  */
 import { MockService } from '@docedit/backend-mock';
-import type { JsonNode } from '@docedit/model';
 import { validate } from '@docedit/model/validate';
 import { NodeSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
@@ -14,10 +13,17 @@ import { internals } from '../src/testing.ts';
 import { IDS, LEGAL_GRANT_FOR_TESTS, contractDocument } from './fixtures.ts';
 import { caret, until } from './support.ts';
 
+/** A node of a stored document, as far as this test reads it. */
+interface StoredNode {
+  readonly type: string;
+  readonly attrs?: Readonly<Record<string, unknown>>;
+  readonly content?: readonly StoredNode[];
+}
+
 /** The form fields of a stored document, in order. */
-function fieldsOf(doc: JsonNode): Array<{ id: unknown; key: unknown }> {
+function fieldsOf(doc: StoredNode): Array<{ id: unknown; key: unknown }> {
   const out: Array<{ id: unknown; key: unknown }> = [];
-  const walk = (n: JsonNode): void => {
+  const walk = (n: StoredNode): void => {
     if (n.type === 'form_field') out.push({ id: n.attrs?.['id'], key: n.attrs?.['key'] });
     for (const child of n.content ?? []) walk(child);
   };
@@ -94,7 +100,7 @@ describe('a pasted field through the authority (FRW-002 criterion 4)', () => {
       const stored = await backend.sync.loadContent(docId);
       // One commit: the paste, the identifier and the key travel together.
       expect(stored.seq).toBe(before + 1);
-      const fields = fieldsOf(stored.doc);
+      const fields = fieldsOf(stored.doc as unknown as StoredNode);
       expect(fields.map((f) => f.key)).toEqual(['tenant.name_2', 'tenant.name']);
       expect(new Set(fields.map((f) => f.id)).size).toBe(2);
       for (const f of fields) expect(f.id).toMatch(/^[A-Za-z0-9_-]{16}$/);

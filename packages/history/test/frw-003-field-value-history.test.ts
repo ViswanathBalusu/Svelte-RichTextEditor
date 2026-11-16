@@ -6,7 +6,12 @@
 // - A comparison of seq 15 with the head reports the change of seq 20 as a change of the field,
 //   attributed to its author and seq, next to the style change, by both comparison methods.
 // - The field's history lists seq 20 and seq 10, newest first.
-import { NOTHING_HIDDEN, contentAt, defaultReplayers, type ContentSource } from '@docedit/authority';
+import {
+  NOTHING_HIDDEN,
+  contentAt,
+  defaultReplayers,
+  type ContentSource,
+} from '@docedit/authority';
 import type { Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
