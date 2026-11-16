@@ -749,6 +749,8 @@ export class Room {
     const ch = this.channels.get(channel);
     if (!ch) return fx;
     const id = isObject(input) && typeof input.id === 'string' ? input.id : '';
+    /** The access this submission is judged under, once step 1 has computed it. */
+    let judged: Access | null = null;
     const reject = (
       code: RejectCode,
       reason: string,
@@ -757,6 +759,22 @@ export class Room {
       retryAfterMs?: number,
       rule?: string,
     ) => {
+      // 04 §8: on `permission_denied` the client refreshes its permissions. The room sends the
+      // access the commit was judged under, ahead of the rejection, when it is not the access
+      // the channel was last sent (a grant or lease that ran out before `expire` was called);
+      // DEP has no request for it, so the room does not wait to be asked (ADR 0364).
+      if (code === 'permission_denied' && judged && !sameAccess(judged, ch.access)) {
+        ch.access = judged;
+        fx.send.push({
+          channel,
+          msg: {
+            t: 'perm.changed',
+            revision: this.perms.revision,
+            access: judged,
+            refresh: true,
+          },
+        });
+      }
       fx.send.push({
         channel,
         msg: {
@@ -784,8 +802,10 @@ export class Room {
 
     // 1. Authorise and limit: the document state, P6, the size limits and admission control, all
     // before any deduplication, rebase or apply work.
+    // `ch.access` stays the access last sent on the channel, so that a later `expire` or the
+    // rejection below still sees that the client holds an older one.
     const access = this.access(ch.conn);
-    ch.access = access;
+    judged = access;
     if (this.perms.documentState !== 'active' && !access.fill.allowed)
       return reject('read_only', `the document is ${this.perms.documentState}`);
     if (!canSubmitAnything(access))

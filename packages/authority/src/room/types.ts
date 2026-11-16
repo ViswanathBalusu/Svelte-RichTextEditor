@@ -206,7 +206,11 @@ export type ToClient =
    * document at `seq`. A client whose confirmed document is at `seq` compares it with its own.
    */
   | { t: 'sync.check'; seq: number; hash: string }
-  | { t: 'perm.changed'; revision: number; access: Access }
+  /**
+   * `refresh` marks the access sent ahead of a `permission_denied` rejection (04 §8; SYN-020): no
+   * control commit follows it, so a bridge that holds `perm.changed` for one sends it at once.
+   */
+  | { t: 'perm.changed'; revision: number; access: Access; refresh?: true }
   | { t: 'ch.closed'; code: 'unavailable'; reason?: CloseReason };
 
 export interface Outbound {
