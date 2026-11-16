@@ -1,14 +1,15 @@
 // SYN-007 criterion 2 (lane V-SYN-001-018): a document whose workflow locks it refuses a commit from
 // a connection with no fill allowance with `read_only` and `drop` (04 §5 step 1). The lock is the one
 // the workflow state implies (workflow/lock.ts, 12 §6.2), applied to the room's permission state.
-import { AttrStep } from 'prosemirror-transform';
+import { Fragment, Slice } from 'prosemirror-model';
+import { AttrStep, ReplaceStep } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import type { WorkflowStateName } from '../src/workflow/lifecycle.ts';
 import { lockFor } from '../src/workflow/lock.ts';
 import { Room } from '../src/room/room.ts';
 import type { Effects, ToClient } from '../src/room/types.ts';
 import { stepsToJson } from '../src/steps.ts';
-import { REQUIRES, USERS, baseDoc, basePermissions, posOf, schema } from './fixtures.ts';
+import { REQUIRES, USERS, baseDoc, basePermissions, posInside, posOf, schema } from './fixtures.ts';
 
 let clock = 1_780_000_000_000;
 let counter = 0;
@@ -44,8 +45,8 @@ function rejectOf(fx: Effects, channel: string) {
 
 describe('a workflow lock refuses an owner edit (SYN-007 criterion 2)', () => {
   // A viewer has no fill allowance, so the workflow lock alone decides (P6, step 1). An owner in
-  // `sent` or `in_progress` holds fill, so the room passes them on to P7 (permission_denied); that
-  // reading is left open (SYN-007 Notes), and the owner is tested only where the workflow is stopped.
+  // `sent` or `in_progress` holds fill and passes step 1; the cases after these show what the
+  // outcome check then answers (ADR 0363).
   for (const state of ['sent', 'in_progress', 'declined', 'voided'] as const) {
     it(`refuses a viewer's commit with read_only while the workflow is ${state}`, () => {
       const r = roomUnder(state);
@@ -85,5 +86,74 @@ describe('a workflow lock refuses an owner edit (SYN-007 criterion 2)', () => {
       steps: stepsToJson([new AttrStep(pos, 'value', 'Changed')]),
     });
     expect(rejectOf(fx, 'a1')).toBeNull();
+  });
+});
+
+describe('a running workflow that does not permit the change gives read_only (SYN-007 criterion 2)', () => {
+  const text = (doc: ReturnType<typeof baseDoc>) => {
+    const pos = posInside(doc, 'pIntro0000000001');
+    return stepsToJson([
+      new ReplaceStep(pos, pos, new Slice(Fragment.from(schema.text('x')), 0, 0)),
+    ]);
+  };
+  const value = (doc: ReturnType<typeof baseDoc>, v: string) =>
+    stepsToJson([new AttrStep(posOf(doc, 'fTenantName00001'), 'value', v)]);
+
+  for (const state of ['sent', 'in_progress'] as const) {
+    it(`refuses an owner's text change with read_only while the workflow is ${state}`, () => {
+      const r = roomUnder(state);
+      r.open('a1', USERS.alice);
+      const fx = r.submit('a1', { id: id(), base: 0, steps: text(baseDoc()) });
+      expect(rejectOf(fx, 'a1')).toMatchObject({
+        code: 'read_only',
+        action: 'drop',
+        head: 0,
+        scopes: ['body'],
+      });
+      expect(fx.write).toBeNull();
+      expect(r.head).toBe(0);
+    });
+
+    it(`refuses an editor who sets a field value directly with read_only while it is ${state}`, () => {
+      // Bob may set the value while the document is a draft (P1); the workflow takes that away.
+      const r = roomUnder(state);
+      r.open('b1', USERS.bob);
+      const fx = r.submit('b1', { id: id(), base: 0, steps: value(baseDoc(), 'Set by Bob') });
+      expect(rejectOf(fx, 'b1')).toMatchObject({ code: 'read_only', action: 'drop' });
+      expect(r.head).toBe(0);
+    });
+
+    it(`keeps permission_denied for a participant's change outside their fields while it is ${state}`, () => {
+      // Erin could not change the text on an active document either: the state is not what stops her.
+      const r = roomUnder(state);
+      r.open('e1', USERS.erin);
+      const fx = r.submit('e1', { id: id(), base: 0, steps: text(baseDoc()) });
+      expect(rejectOf(fx, 'e1')).toMatchObject({ code: 'permission_denied', action: 'drop' });
+      expect(r.head).toBe(0);
+    });
+
+    it(`accepts the fill of the active participant while it is ${state}`, () => {
+      const r = roomUnder(state);
+      r.open('e1', USERS.erin);
+      const fx = r.submit('e1', { id: id(), base: 0, steps: value(baseDoc(), 'Ada Lovelace') });
+      expect(rejectOf(fx, 'e1')).toBeNull();
+      expect(fx.write).not.toBeNull();
+    });
+  }
+
+  it('keeps permission_denied on an active document, whatever the change', () => {
+    const r = roomUnder('draft');
+    r.open('c1', USERS.carol);
+    // Carol has no grant on the restricted region that holds the field.
+    const fx = r.submit('c1', { id: id(), base: 0, steps: value(baseDoc(), 'Set by Carol') });
+    expect(rejectOf(fx, 'c1')).toMatchObject({ code: 'permission_denied', action: 'drop' });
+  });
+
+  it('keeps permission_denied under the lock for a change the editor could never make', () => {
+    // Carol under a running workflow: the lock is not what stops her, the missing grant is.
+    const r = roomUnder('sent');
+    r.open('c1', USERS.carol);
+    const fx = r.submit('c1', { id: id(), base: 0, steps: value(baseDoc(), 'Set by Carol') });
+    expect(rejectOf(fx, 'c1')).toMatchObject({ code: 'permission_denied', action: 'drop' });
   });
 });

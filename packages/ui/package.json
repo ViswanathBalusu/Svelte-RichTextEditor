@@ -20,6 +20,7 @@
   },
   "scripts": {
     "generate": "node scripts/generate.ts",
+    "parity:report": "node scripts/parity-report.ts",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json && svelte-check --tsconfig ./tsconfig.test.json",
     "test:e2e": "playwright test -c playwright.config.ts"
   },

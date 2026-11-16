@@ -4,6 +4,7 @@
  * in a profile that runs makes the run fail. Scenarios run one after another, each with its own
  * documents and users, and each with a time limit.
  */
+import { DEP1 } from '@docedit/protocol';
 import { KitFailure, isKitFailure, isKitSkip } from './assert.ts';
 import { resolveConfig, type KitConfig, type ResolvedConfig } from './config.ts';
 import { BootstrapError, ScenarioContext, bootstrap, type Target } from './context.ts';
@@ -110,6 +111,17 @@ export async function runScenario(
           'every frame one valid envelope with a valid payload (05 §4, §5); every problem a registry code on its surface, with its retry hint (05 §5.8)',
         received: problems.slice(0, 4).join(' | '),
       };
+    } else {
+      // Whatever the scenario provoked, a close by the server carries a code of 05 §5.7 (PRO-037).
+      const closes = ctx.closeProblems();
+      if (closes.length) {
+        outcome = 'failed';
+        failure = {
+          message: 'the server ended a connection with a close code that 05 §5.7 does not define',
+          expected: `one of ${DEP1.closeCodes.map((c) => c.code).join(', ')} (05 §5.7)`,
+          received: closes.slice(0, 4).join(' | '),
+        };
+      }
     }
   } catch (e) {
     if (isKitSkip(e)) {

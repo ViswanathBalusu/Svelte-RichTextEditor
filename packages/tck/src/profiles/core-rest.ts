@@ -7,6 +7,7 @@ import { canonicalNodeText, uuid7, type JsonNode } from '@docedit/model';
 import { KitFailure, check, equal, includes, isObject, jsonEqual } from '../assert.ts';
 import { shapeViolations } from '../context.ts';
 import { IDS, contractDocument, insertText, posIn } from '../documents.ts';
+import { everyItemOnce, listRoutes } from '../lists.ts';
 import { scenario, type ScenarioDef } from '../scenario.ts';
 import { acked, join, problemOf, readContent } from './support.ts';
 
@@ -177,6 +178,74 @@ export const CORE_REST: ScenarioDef[] = [
         'validation_failed',
         'a cursor the server did not issue (D72)',
       );
+    },
+  }),
+  s({
+    id: 'rest.cursors',
+    title: 'following nextCursor to the end shows every item once, on every list route',
+    spec: '05 §6.1; D14, D72',
+    timeoutMs: 180_000,
+    covers: { operations: ['GET /documents'] },
+    async run(ctx) {
+      // A document with three commits after its first content, and three documents to list.
+      const tag = `tck-${ctx.config.run}-${uuid7()}`;
+      const made: string[] = [];
+      for (const n of [1, 2, 3])
+        made.push(
+          (
+            await ctx.service.createDocument({
+              content: contractDocument(),
+              externalId: `${tag}-${n}`,
+            })
+          ).id,
+        );
+      const doc = made[0]!;
+      const m = await join(ctx, 'lister', doc, 'editor');
+      let head = m.content.seq;
+      for (const t of ['1', '2', '3'])
+        head = (
+          await acked(m.wire, 1, {
+            base: head,
+            steps: [insertText(posIn(m.content.doc, IDS.end), t)],
+          })
+        ).seq;
+      const params: Record<string, string | number> = { after: m.content.seq };
+      let walked = 0;
+      for (const route of listRoutes()) {
+        const unknown = route.required.filter((q) => !(q in params));
+        if (unknown.length) {
+          ctx.note(
+            `GET ${route.path} is not walked: the kit has no value for ${unknown.join(', ')}`,
+          );
+          continue;
+        }
+        const path = route.path.replace('{id}', doc);
+        const fixed = Object.fromEntries(route.required.map((q) => [q, params[q]!]));
+        const result = await everyItemOnce(
+          (query) => ctx.service.call('GET', path, { query: { ...fixed, ...query } }),
+          `GET ${route.path}`,
+        );
+        if (result === null) {
+          ctx.note(`GET ${route.path} is not offered by this server`);
+          continue;
+        }
+        walked += 1;
+        ctx.note(
+          `GET ${route.path}: ${result.items.length} items, each once, in pages of ${result.limit}`,
+        );
+        if (route.operationId === 'listDocuments') {
+          const ids = (result.items as Array<{ id?: unknown }>).map((d) => d.id);
+          for (const id of made)
+            equal(ids.filter((x) => x === id).length, 1, `the document ${id} is listed once`);
+        }
+        if (route.operationId === 'listCommits')
+          jsonEqual(
+            (result.items as Array<{ seq?: unknown }>).map((c) => c.seq),
+            [head - 2, head - 1, head],
+            'the three commits, each once and in order',
+          );
+      }
+      check(walked >= 1, 'the document list is offered (05 §6.2)', '≥ 1 list route', walked);
     },
   }),
   s({

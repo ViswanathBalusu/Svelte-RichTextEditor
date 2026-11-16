@@ -32,7 +32,9 @@
   function isCurrent(style: StyleSummary): boolean {
     const s = selection.current;
     if (style.kind !== 'paragraph') return false;
-    return s.styleId != null ? s.styleId === style.id : s.style === style.name;
+    return s.styleId !== null && s.styleId !== undefined
+      ? s.styleId === style.id
+      : s.style === style.name;
   }
 
   function choose(style: StyleSummary): void {

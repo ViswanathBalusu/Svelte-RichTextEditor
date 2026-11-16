@@ -278,6 +278,25 @@ export class ScenarioContext {
     ];
   }
 
+  /**
+   * Every connection of the scenario that the server ended with a close code outside 05 §5.7, or
+   * without a close frame (which a client sees as 1006). A close the kit asked for is not counted:
+   * the server only echoes the kit's code then. Nor is a code the scenario tolerates on that
+   * connection (`Wire.toleratedCloses`) (PRO-037).
+   */
+  closeProblems(): string[] {
+    const defined = new Set<number>(DEP1.closeCodes.map((c) => c.code));
+    return this.wires.flatMap((w) => {
+      const c = w.closed;
+      if (!c || !w.endedByServer || defined.has(c.code) || w.toleratedCloses.has(c.code)) return [];
+      return [
+        c.code === 1006
+          ? `${w.label}: the server ended the connection without a close frame (1006)`
+          : `${w.label}: the server closed with ${c.code}${c.reason ? ` (${c.reason})` : ''}`,
+      ];
+    });
+  }
+
   async dispose(): Promise<void> {
     this.stopObserving();
     for (const fn of this.cleanups.reverse()) {

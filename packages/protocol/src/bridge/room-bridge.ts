@@ -248,8 +248,9 @@ export class RoomBridge {
           break;
         case 'perm.changed':
           flush(channel);
-          if (opts.expiry) {
-            // An expiry changes access without a new revision: nothing to wait for.
+          if (opts.expiry || msg.refresh) {
+            // An expiry changes access without a new revision, and a refresh sent with a rejection
+            // repeats a revision that is already stored (SYN-020): nothing to wait for.
             const src = this.#source();
             a.rev += 1;
             out.push({

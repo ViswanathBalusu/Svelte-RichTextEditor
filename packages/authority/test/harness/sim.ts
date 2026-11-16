@@ -568,6 +568,8 @@ export class Simulation {
     // Replay the log: every stored step applies (the log never holds garbage).
     let doc: Node = this.storage.initial;
     const owners = new Map<string, string>();
+    /** `field:<id>` scopes each commit changed, by sequence number (for P9). */
+    const fieldChanges = new Map<number, string[]>();
     for (const c of log) {
       const before = doc;
       try {
@@ -607,6 +609,11 @@ export class Simulation {
       if (!perms || !user)
         failures.push(`commit ${c.seq}: unknown revision ${c.revision} or user ${c.user}`);
       else {
+        // P9: the fields changed by commits after this commit's base, from this replay.
+        const since = new Set<string>();
+        if (c.base !== undefined)
+          for (const [seq, fields] of fieldChanges)
+            if (seq > c.base) fields.forEach((f) => since.add(f));
         for (const v of oracleViolations({
           user,
           perms,
@@ -616,9 +623,12 @@ export class Simulation {
           owners,
           origin: c.origin,
           serverAuthored: c.session === 'system',
+          ...(c.base !== undefined ? { fieldsChangedSinceBase: since } : {}),
         }))
           failures.push(`commit ${c.seq} by ${c.user}: ${v}`);
       }
+      const fields = oracleScopes.filter((s) => s.startsWith('field:'));
+      if (fields.length) fieldChanges.set(c.seq, fields);
       doc.descendants((n) => {
         for (const m of n.marks)
           if (['ins', 'del', 'fmt'].includes(m.type.name) && !owners.has(String(m.attrs['id'])))

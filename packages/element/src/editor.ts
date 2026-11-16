@@ -230,6 +230,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     run: (command) => core.run(command),
     closePanel: () => core.closePanel(),
     focus: () => core.focus(),
+    // Where a menu asked for from the keyboard opens (UX-008 criterion 1).
+    caretRect: () => core.caretRect(),
     mountBody: (target) => core.mountBody(target),
     mountPanel: (target) => core.mountPanel(target),
     access: core.access,
