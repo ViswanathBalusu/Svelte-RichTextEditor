@@ -1418,3 +1418,10 @@
   color: var(--de-muted, #555);
   cursor: default;
 }
+
+/* The filter lists of the comments and history panes: at least 24 CSS pixels high (UX-068; WCAG 2.2, 2.5.8). */
+.de-comments-filters select,
+.de-history-filters select {
+  font: inherit;
+  min-block-size: 24px;
+}
