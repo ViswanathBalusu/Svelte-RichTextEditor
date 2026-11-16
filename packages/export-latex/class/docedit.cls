@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-14 v0.2.3 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-15 v0.2.4 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -456,7 +456,8 @@
 
 % Footnotes (EXP-029): the mark is an atom of the paragraph and prints the literal mark of the
 % numbering algorithm; the text, in area 2, belongs to the footnote's paragraph block.
-% \DEfnmark{offset}{n}{mark}; \DEfntext{n}{mark}{properties}{content}
+% \DEfnmark{offset}{n}{mark}; \DEfntext{n}{mark}{properties}{content}: the mark and the text apart,
+% for the places where \footnote cannot be set directly (table cells, captions, headings).
 \def\thefootnote{\csname DE@fnmark@\the\c@footnote\endcsname}
 \newcommand\DEfnmark[3]{%
   \expandafter\gdef\csname DE@fnmark@\the\numexpr\c@footnote+1\endcsname{#3}%
@@ -465,6 +466,17 @@
 \newcommand\DEfntext[4]{%
   {\DE@noattrs\DE@attr@block=#1\relax\DE@attr@area=2\relax
    \footnotetext[\csname DE@fnnum@#1\endcsname]{\DE@defaults #3\DE@apply #4}}}
+
+% \DEfn{offset}{n}{mark}{properties}{content}: a footnote set directly with \footnote, for the
+% places where LaTeX allows it (a paragraph of the body flow). \@makefntext runs inside the insert,
+% so the note, with its own mark, is in area 2 and belongs to the footnote's block, as \DEfntext
+% sets it; the mark in the text stays an atom of the paragraph.
+\newcommand\DEfn[5]{%
+  \expandafter\gdef\csname DE@fnmark@\the\numexpr\c@footnote+1\endcsname{#3}%
+  \DEa{#1}{\let\DE@fn@make\@makefntext
+    \def\@makefntext##1{\DE@noattrs\DE@attr@block=#2\relax\DE@attr@area=2\relax\DE@fn@make{##1}}%
+    \footnote{\DE@defaults #4\DE@apply #5}}%
+  \expandafter\xdef\csname DE@fnnum@#2\endcsname{\the\c@footnote}}
 
 % Tables: longtable in the body flow (09 §3.2).
 % \DEtbl{n}{header rows}{align: 0 start, 1 centre, 2 end}{cell margin}{rule width}{rule colour}
