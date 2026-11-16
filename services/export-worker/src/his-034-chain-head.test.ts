@@ -174,6 +174,8 @@ describe('HIS-034 criterion 3: the export manifest names the seq and the chain h
     expect(run.bundleManifest?.['chainHead']).toBe(HASH_AT_2);
     expect(run.resultManifest?.['seq']).toBe(2);
     expect(run.resultManifest?.['chainHead']).toBe(HASH_AT_2);
+    // EXP-011 criterion 5: the job's result, which the control plane reads, holds the same head.
+    expect((run.job.result as { chainHead?: unknown }).chainHead).toBe(HASH_AT_2);
   });
 
   it('records null when the stores offer no chain head, as before (no invented hash)', async () => {
@@ -181,5 +183,6 @@ describe('HIS-034 criterion 3: the export manifest names the seq and the chain h
     expect(run.job.state).toBe('completed');
     expect(run.bundleManifest?.['chainHead']).toBeNull();
     expect(run.resultManifest?.['chainHead']).toBeNull();
+    expect((run.job.result as { chainHead?: unknown }).chainHead).toBeNull();
   });
 });

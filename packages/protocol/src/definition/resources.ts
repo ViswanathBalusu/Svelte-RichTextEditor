@@ -640,6 +640,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
           str({ format: 'uri' }),
           'A signed URL of the raw compile log: only for the requester, and only while they have `edit` (09 §9.2; 07 §12).',
         ),
+        chainHead: opt(
+          nullable(str({ format: 'sha256' })),
+          "The hash-chain head of the exported state, as in the export's manifest, so that a host can anchor it (08 §12); null when the log has no commit at that `seq`.",
+        ),
       },
       {
         doc: "The result of a completed export (09 §9.1). Warnings are in the job's `diagnostics`.",

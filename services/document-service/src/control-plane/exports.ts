@@ -42,6 +42,12 @@ export interface ExportOutputs {
   converged?: boolean | null;
   log?: string | null;
   diagnostics?: Diagnostic[];
+  /**
+   * The hash-chain head of the exported state, as the worker wrote it into the export's manifest
+   * (08 §12; EXP-011 criterion 5). Null when the log has no commit at that `seq`; absent from a
+   * worker that does not report it.
+   */
+  chainHead?: string | null;
   /** The job whose prefix holds the files, when it is not this job (a cached result). */
   from?: string;
 }
