@@ -162,7 +162,7 @@
     // chooses to continue or not; a preflight that fails does not stop the export, since the job
     // reports the same things.
     if (exports.preflight) {
-      let warnings: readonly ExportDiagnostic[] = [];
+      let warnings: readonly ExportDiagnostic[];
       try {
         warnings = await exports.preflight(chosen);
       } catch {
