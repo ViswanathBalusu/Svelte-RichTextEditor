@@ -7,11 +7,53 @@ import { canonicalNodeText, uuid7, type JsonNode } from '@docedit/model';
 import { KitFailure, check, equal, includes, isObject, jsonEqual } from '../assert.ts';
 import { shapeViolations } from '../context.ts';
 import { IDS, contractDocument, insertText, posIn } from '../documents.ts';
+import { bareRoutes, untestedBareRoutes } from '../identifiers.ts';
 import { everyItemOnce, listRoutes } from '../lists.ts';
+import type { ScenarioContext } from '../context.ts';
+import type { HttpResponse } from '../rest.ts';
 import { scenario, type ScenarioDef } from '../scenario.ts';
 import { acked, join, problemOf, readContent } from './support.ts';
 
 const s = (def: Omit<ScenarioDef, 'id'> & { id: string }) => scenario('core', def);
+
+/**
+ * A call with a token of another document must be refused, and must not say more than that: the
+ * problem is `forbidden` (403) or `not_found` (404), the two refusals 05 §6.1 gives a caller whose
+ * token does not cover the resource's document.
+ */
+function refusedToOutsider(res: HttpResponse, what: string): void {
+  const p = problemOf(res, what);
+  check(
+    (p.code === 'forbidden' && p.status === 403) || (p.code === 'not_found' && p.status === 404),
+    `${what}: refused to a caller of another document (05 §6.1)`,
+    'forbidden (403) or not_found (404)',
+    `${p.code} (${p.status})`,
+  );
+}
+
+/** A thread with one more comment on a new document, made by a commenter of that document. */
+async function threadOf(ctx: ScenarioContext) {
+  const doc = await ctx.document();
+  const { token } = await ctx.token('commenter', { [doc]: 'commenter' });
+  const content = await readContent(ctx, token, doc);
+  const from = posIn(content.doc, IDS.intro);
+  const made = await ctx.service.as(token, 'POST', `/documents/${doc}/threads`, {
+    body: {
+      target: { range: { from, to: from + 1, baseSeq: content.seq } },
+      comment: { body: 'kit' },
+    },
+  });
+  equal(made.status, 201, 'POST /documents/{id}/threads as a commenter');
+  const tid = (made.json as { id?: unknown }).id;
+  check(typeof tid === 'string', 'the created thread has an id', 'a string', made.json);
+  const added = await ctx.service.as(token, 'POST', `/threads/${tid}/comments`, {
+    body: { body: 'a second comment' },
+  });
+  equal(added.status, 201, 'POST /threads/{tid}/comments as a commenter');
+  const cid = (added.json as { id?: unknown }).id;
+  check(typeof cid === 'string', 'the created comment has an id', 'a string', added.json);
+  return { doc, token, tid, cid };
+}
 
 export const CORE_REST: ScenarioDef[] = [
   s({
@@ -440,6 +482,72 @@ export const CORE_REST: ScenarioDef[] = [
         const v = shapeViolations('RegionInfo', r);
         check(v.length === 0, 'a region item matches the published schema', 'no violations', v);
       }
+    },
+  }),
+  s({
+    id: 'identifiers.table',
+    title:
+      'every route addressed by a bare identifier that the server announces has a cross-document scenario',
+    spec: '05 §6.1; 10 §3.2',
+    covers: {},
+    async run(ctx) {
+      const untested = untestedBareRoutes(ctx.target.features);
+      check(
+        untested.length === 0,
+        'the kit has a cross-document scenario for every announced route addressed by a bare identifier',
+        'a scenario for each',
+        untested.map((r) => `${r.operation} (${r.feature}): ${r.pending ?? 'no scenario'}`),
+      );
+      for (const r of bareRoutes())
+        ctx.note(
+          r.feature === null
+            ? `${r.operation}: not announceable (${r.pending ?? 'no feature'})`
+            : ctx.has(r.feature)
+              ? `${r.operation}: tested by ${r.scenario}`
+              : `${r.operation}: \`${r.feature}\` is not announced`,
+        );
+    },
+  }),
+  s({
+    id: 'identifiers.threads',
+    title: 'a thread and a comment are refused to a caller whose token covers another document',
+    spec: '05 §6.1; 10 §3.2',
+    needs: { features: ['comments'] },
+    covers: {
+      operations: [
+        'GET /threads/{tid}',
+        'PATCH /threads/{tid}',
+        'DELETE /threads/{tid}',
+        'POST /threads/{tid}/comments',
+        'PATCH /comments/{cid}',
+        'DELETE /comments/{cid}',
+      ],
+    },
+    async run(ctx) {
+      const t = await threadOf(ctx);
+      const before = await ctx.service.as(t.token, 'GET', `/threads/${t.tid}`);
+      equal(before.status, 200, 'GET /threads/{tid} as a commenter of its document');
+      // The outsider owns another document, so only the document check can refuse them.
+      const other = await ctx.document();
+      const { token: outsider } = await ctx.token('outsider', { [other]: 'owner' });
+      const any = { 'if-match': '*' };
+      const calls: Array<[string, string, { body?: unknown; headers?: Record<string, string> }]> = [
+        ['GET', `/threads/${t.tid}`, {}],
+        ['PATCH', `/threads/${t.tid}`, { body: { state: 'resolved' }, headers: any }],
+        ['POST', `/threads/${t.tid}/comments`, { body: { body: 'from another document' } }],
+        ['PATCH', `/comments/${t.cid}`, { body: { body: 'changed' }, headers: any }],
+        ['DELETE', `/comments/${t.cid}`, {}],
+        ['DELETE', `/threads/${t.tid}`, {}],
+      ];
+      for (const [method, path, opts] of calls)
+        refusedToOutsider(
+          await ctx.service.as(outsider, method, path, opts),
+          `${method} ${path.replace(t.tid, '{tid}').replace(t.cid, '{cid}')}`,
+        );
+      // Nothing the outsider tried took effect.
+      const after = await ctx.service.as(t.token, 'GET', `/threads/${t.tid}`);
+      equal(after.status, 200, 'the thread is still there for its own document');
+      jsonEqual(after.json, before.json, 'the thread is unchanged');
     },
   }),
   s({
