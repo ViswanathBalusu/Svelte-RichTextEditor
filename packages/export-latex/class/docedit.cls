@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-15 v0.2.5 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-15 v0.2.6 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -563,12 +563,14 @@
   \includegraphics[width=#2,height=#3,alt=#5]{#1}}}
 % \DEfig{n}{float}{align: 0 start, 1 centre, 2 end}{picture}{caption}: picture and caption kept
 % together; a floating figure may move to the top or bottom of a page.
+% Its material is in area 4, so a page whose first material is the figure is reported as opening
+% with a float (EXP-055).
 \newcommand\DE@figbody[3]{%
   \par\begingroup\DE@defaults\DE@apply\prevdepth=-1000pt\noindent
   \ifcase#1\or\hfill\or\hfill\fi #2\ifcase#1\hfill\or\hfill\or\fi\par\endgroup
   \penalty\@M #3}
 \newcommand\DEfig[5]{\par\begingroup\DE@attr@block=#1\relax\DE@attr@area=1\relax
-  \ifnum#2=1 \begin{figure}[tbp]\DE@figbody{#3}{#4}{#5}\end{figure}%
+  \ifnum#2=1 \begin{figure}[tbp]\DE@attr@area=4\relax\DE@figbody{#3}{#4}{#5}\end{figure}%
   \else \DE@figbody{#3}{#4}{#5}\fi\par\endgroup}
 \newcommand\DEcap[2]{\DE@par{}{#1}{#2}}
 
