@@ -357,6 +357,19 @@ export function mountEditor(options: MountOptions): MountedEditor {
     flushJournal() {
       return core.flushJournal();
     },
+    // FE-005: the shell stops its observers and its colour-scheme listener; the core closes its
+    // channel. A PDF viewer's frame, and the PDF.js worker in it, is unloaded by the browser when the
+    // element leaves the document.
+    suspend() {
+      if (destroyed) return;
+      app.setSuspended(true);
+      core.suspendSync();
+    },
+    resume() {
+      if (destroyed) return;
+      app.setSuspended(false);
+      core.resumeSync();
+    },
     setAccess(access: Access) {
       core.setAccess(access);
     },

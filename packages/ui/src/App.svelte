@@ -77,6 +77,7 @@
   import { PaneRegistry, type PaneComponent } from './shell/panes.ts';
   import { regionLabels, scopeAnnouncement } from './shell/regions.ts';
   import { DEFAULT_SETTINGS, type ShellSettings } from './shell/settings.ts';
+  import { provideSuspension } from './shell/suspension.ts';
   import { resolveTheme, watchColourScheme } from './shell/theme.ts';
   import { contextMenuGroups, contextTargets } from './shell/toolbar-groups.ts';
   import { canZoom, DEFAULT_ZOOM, stepZoom } from './shell/zoom.ts';
@@ -155,7 +156,25 @@
   // Themes (UX-061, UX-062): resolved before the first paint, `auto` following the browser.
   const scheme = watchColourScheme((dark) => (prefersDark = dark));
   let prefersDark = $state(scheme.dark);
-  onDestroy(scheme.stop);
+  let stopScheme = scheme.stop;
+  onDestroy(() => stopScheme());
+
+  // Suspension (FE-005; 02 §2.1): while the element is out of the document the shell keeps its
+  // state and stops what watches the page (shell/suspension.ts).
+  let suspended = $state(false);
+  provideSuspension(() => suspended);
+
+  /** Stops, or starts again, the shell's observers and its colour-scheme listener. */
+  export function setSuspended(on: boolean): void {
+    if (on === suspended) return;
+    suspended = on;
+    stopScheme();
+    stopScheme = () => {};
+    if (on) return;
+    const again = watchColourScheme((dark) => (prefersDark = dark));
+    prefersDark = again.dark;
+    stopScheme = again.stop;
+  }
   const theme = $derived(resolveTheme(mode.theme, prefersDark));
 
   const panel = live(core.panel);

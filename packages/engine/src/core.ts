@@ -2518,6 +2518,19 @@ export class DocumentCore implements DocumentApi {
   }
 
   /**
+   * Closes the channel and opens none until `resumeSync` (FE-005; 02 §2.1): the element calls it when
+   * it suspends. The document, the unconfirmed work and the journal stay.
+   */
+  suspendSync(): void {
+    this.#session?.suspend();
+  }
+
+  /** Opens a channel again with a resume (04 §9) after `suspendSync`. */
+  resumeSync(): void {
+    this.#session?.resume();
+  }
+
+  /**
    * Resolves once every journal write requested so far is durable (FE-011). Without a channel, or
    * without a journal, there is nothing to wait for.
    */

@@ -272,3 +272,55 @@ describe('a stream goes live on sync.caughtUp (SYN-028 criterion 3)', () => {
     expect(second.submits.map((s) => s.id)).toEqual(['c1']);
   });
 });
+
+describe('suspend and resume (FE-005 criteria 3 and 4; 02 §2.1)', () => {
+  it('suspend closes the channel and opens none; the unconfirmed work stays', async () => {
+    const h = setup([{}]);
+    await typeOneLetter(h);
+    const sent = h.channels[0]!.submits[0]!;
+    h.c.suspendSync();
+    expect(h.channels[0]!.closed).toBe(true);
+    expect(h.c.connection.get()).toBe('offline');
+    // No retry timer reopens it, however long the suspension lasts.
+    await h.clock.advance(60_000);
+    expect(h.channels).toHaveLength(1);
+    expect(h.resumes).toEqual([]);
+    expect(h.c.syncSnapshot().inflight?.id).toBe(sent.id);
+    expect(textOfNode(h.i.state.doc, SPIKE_IDS.after).startsWith('a')).toBe(true);
+  });
+
+  it('a second suspend and a resume without a suspend do nothing', async () => {
+    const h = setup([{}]);
+    await sleep(0);
+    h.c.resumeSync();
+    await h.clock.advance(100);
+    expect(h.channels).toHaveLength(1);
+    expect(h.channels[0]!.closed).toBe(false);
+    h.c.suspendSync();
+    h.c.suspendSync();
+    expect(h.channels[0]!.closed).toBe(true);
+  });
+
+  it('resume reopens with the confirmed seq and the in-flight commit, and sends what waited', async () => {
+    const h = setup([{ inflight: { state: 'unknown' } }]);
+    await typeOneLetter(h);
+    const sent = h.channels[0]!.submits[0]!;
+    h.c.suspendSync();
+    // An edit made while suspended waits in the queue: there is no channel to send it on.
+    type(h.c, 'b');
+    await h.clock.advance(1_000);
+    expect(h.channels).toHaveLength(1);
+
+    h.c.resumeSync();
+    await h.clock.advance(1);
+    await sleep(5);
+    expect(h.channels).toHaveLength(2);
+    expect(h.resumes[0]).toEqual({ seq: 0, incarnation: 'inc-1', inflight: sent.id });
+    expect(h.c.connection.get()).toBe('online');
+    await h.clock.advance(1_000);
+    // The commit whose fate is unknown is sent again under its identifier (04 §9).
+    expect(h.channels[1]!.submits.map((s) => s.id)).toContain(sent.id);
+    expect(textOfNode(h.i.state.doc, SPIKE_IDS.after).startsWith('ab')).toBe(true);
+    expect(h.c.recovered.get().count).toBe(0);
+  });
+});

@@ -12,12 +12,14 @@
   import { live } from '../live.ts';
   import type { Person } from '../people/directory.ts';
   import { colourSlot, initials, peopleOf, visibleAvatars } from '../shell/presence.ts';
+  import { useSuspension } from '../shell/suspension.ts';
 
   interface Props {
     presence: ReadView<readonly PresencePeer[]>;
   }
 
   let { presence }: Props = $props();
+  const suspended = useSuspension();
 
   const shell = useShell()!;
   const tr = $derived(shell.strings.current);
@@ -61,7 +63,8 @@
   const failed = new SvelteSet<string>();
 
   $effect(() => {
-    if (!region) return;
+    // Not observed while the shell is suspended (FE-005).
+    if (!region || suspended()) return;
     const host = region;
     const observer = new ResizeObserver(() => {
       available = host.clientWidth;

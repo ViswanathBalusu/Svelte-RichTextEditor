@@ -219,6 +219,7 @@ export class SyncSession {
   #retryMs: number;
   #status: ConnectionStatus = 'online';
   #ended = false;
+  #suspended = false;
   /** The journal (FE-008); writes run one after another, in the order they were requested. */
   readonly #journal: JournalPort | null;
   #journalChain: Promise<void> = Promise.resolve();
@@ -329,7 +330,7 @@ export class SyncSession {
 
   /** Closes the channel and opens a new one with a resume (04 §9), after `delayMs`. */
   #reconnect(reason: string, delayMs = 0): void {
-    if (this.#ended) return;
+    if (this.#ended || this.#suspended) return;
     this.#unbind('always');
     if (!this.#opts.sync) {
       this.#setStatus('offline', `${reason}; there is no sync port to reopen the channel`);
@@ -345,7 +346,7 @@ export class SyncSession {
 
   async #open(): Promise<void> {
     const port = this.#opts.sync;
-    if (!port || this.#ended) return;
+    if (!port || this.#ended || this.#suspended) return;
     const s = this.#host.sync;
     const resume: Resume = { seq: s.seq, incarnation: s.incarnation };
     if (s.inflight) resume.inflight = s.inflight.id;
@@ -942,6 +943,32 @@ export class SyncSession {
   reconnect(): void {
     this.#retryMs = (this.#opts.retry ?? DEFAULT_RETRY).minMs;
     this.#reconnect('reconnect requested', 0);
+  }
+
+  /** Whether the session is suspended: no channel, and none is opened until `resume` (FE-005). */
+  get suspended(): boolean {
+    return this.#suspended;
+  }
+
+  /**
+   * Closes the channel and opens none until `resume` (FE-005; 02 §2.1). The sync state, the queue of
+   * unsent steps and the journal stay; local edits made meanwhile wait in the queue.
+   */
+  suspend(): void {
+    if (this.#ended || this.#suspended) return;
+    this.#suspended = true;
+    if (this.#retryTimer !== null) this.#clock.clearTimeout(this.#retryTimer);
+    this.#retryTimer = null;
+    this.#clearSendTimer();
+    this.#unbind('always');
+    this.#setStatus('offline', 'suspended');
+  }
+
+  /** Opens a new channel with a resume (04 §9) after `suspend`; unsent steps are then sent. */
+  resume(): void {
+    if (this.#ended || !this.#suspended) return;
+    this.#suspended = false;
+    this.reconnect();
   }
 
   /** Stops the session. A channel the session opened itself is closed; the given one is not. */
