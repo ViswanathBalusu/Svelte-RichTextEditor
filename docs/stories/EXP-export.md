@@ -2658,11 +2658,15 @@ As a viewer who uses assistive technology, I want the structure of the document 
 
 **Acceptance criteria**
 
-- [ ] Given `headerRows`, when exported with tagging, then those rows are tagged as header cells, and spans are recorded.
-- [ ] Given numbered and bulleted lists made by the class's own macros, when exported with tagging, then they are tagged as lists with labels and bodies.
-- [ ] Given headings, when exported with tagging, then they are tagged with their levels in order.
-- [ ] Given graphics with `alt`, when exported with tagging, then the alternative text is attached; given links, they are tagged as links.
-- [ ] Given an equation, when exported with tagging, then it is tagged and has a text alternative.
+- [x] Given `headerRows`, when exported with tagging, then those rows are tagged as header cells, and spans are recorded.
+- [x] Given numbered and bulleted lists made by the class's own macros, when exported with tagging, then they are tagged as lists with labels and bodies.
+- [x] Given headings, when exported with tagging, then they are tagged with their levels in order.
+- [x] Given graphics with `alt`, when exported with tagging, then the alternative text is attached; given links, they are tagged as links.
+- [x] Given an equation, when exported with tagging, then it is tagged and has a text alternative.
+
+**Evidence (lane w2, 2026-11-17):** `packages/export-latex/src/exp-112-structure.compile.test.ts` (5 tests, one per criterion; each compiles in the worker's sandbox with `tagging` on and PDF/UA-2, reads the structure tree back, and has veraPDF PDF/UA-2 pass; Podman, no network, image `localhost/docedit-export-worker:s4`, this Windows machine, `DOCEDIT_CONTAINER_CGROUPS=disabled`, `DOCEDIT_REQUIRE_SANDBOX=1`; `pnpm exec vitest run --project node packages/export-latex/src/exp-112-structure.compile.test.ts`, 5 passed, about 3 minutes). Criterion 1: a table with one header row has `TR` > `TH` for it and `TD` below, a `colspan` 2 cell has `/ColSpan 2` and a `rowspan` 2 cell has `/RowSpan 2`. Criterion 2: a numbered list of two items and a bulleted list of one are `L` > `LI` > `Lbl` (with content) + `LBody` (holding the paragraph). Criterion 3: headings of outline levels 1, 2, 3, 1, 2 are `H1`, `H2`, `H3`, `H1`, `H2` in order. Criterion 4: a figure with `alt` is a `Figure` with that text, and a link is a `Link` with its annotation as a child. Criterion 5: an inline and a display equation are each a `Formula` with content and with the equation's LaTeX as alternative text (class 0.2.9; proposed `docs/adr/0369-w2-EXP-112-equation-alternative-text.md`).
+
+**Notes (lane w2, 2026-11-17):** all five criteria ticked. The alternative text of an equation is its LaTeX source: this is the lane's default, recorded as proposed in ADR 0369, and the owner may ask for a spoken form or MathML. With a header row, tagpdf writes the head that `longtable` repeats as a structure element of type `Artifact` between the header row and the body (empty cells, no content); veraPDF PDF/UA-2 accepts it, and it is not a reading-order problem, but it is not what a reader of the tree expects. Not examined further.
 
 **Notes:** What the text alternative of an equation is, and whether PDF/UA-2's mathematics support is used, is not specified (Open questions). Round 3 (lane export-latex-4, 2026-11-13): no criterion is ticked and no test was added. Each criterion is a property of the tagged PDF (the table header cells, the list labels and bodies, the heading levels, the alternative text of a graphic, the link tags, the equation tag), which needs a LuaLaTeX compile with tagpdf and a read of the structure tree. This package does not run either. The source side (how the converter writes `\DEimg` alternative text and the list and heading macros) is covered only in part by `src/alt-report.test.ts` (EXP-113) and the class audit in `src/class.test.ts`.
 
