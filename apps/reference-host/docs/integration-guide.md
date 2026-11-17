@@ -266,6 +266,28 @@ These notes say where each framework sets the things above. They were not run in
 - **Vue.** Tell the compiler that `doc-editor` is a custom element (`compilerOptions.isCustomElement`), and set `config` with the `.prop` modifier or through a ref.
 - **SvelteKit.** The `kit.csp` option in `svelte.config.js` can generate a nonce per request. Read it from the page data and pass it into `config.styleNonce`. Check the generated policy against the list above.
 
+## Extensions (UX-050, UX-052; 13 section 7)
+
+You register an extension through the element's `extensions` property: an array of entries, each with a manifest and its code. The editor checks each manifest on its own. An invalid entry, an unsupported API version and an activation that throws are each reported as a `de-error` that names the entry, with `fatal` false, and the other entries still load.
+
+**Tier 1 extensions run in the page, with the host's trust.** This is the only tier built. An extension you register runs in your page, in the same JavaScript realm as your own code. It can do what your page can do: read the editor's shadow root, call its methods and read everything your page holds, including the user's token. The editor does not sandbox it. Register only code you would put in your page yourself. A sandboxed tier for third-party add-ins is planned for later and is not built.
+
+An extension's hooks must not sit on the typing path: the editor calls them after the change and a hook that throws or never answers does not stop editing.
+
+### What a panel is held to
+
+A panel an extension contributes is held to the same accessibility bar as a built-in panel (13 section 7.2). The editor supplies the pane host; you supply the content. Your panel must:
+
+1. **Name itself.** Give the panel a title, which the pane host shows as its heading. Give every control and region inside it an accessible name.
+2. **Work from the keyboard.** Every control is reachable with Tab and has a visible focus. Nothing traps focus. The panel is reachable with Ctrl+F6, as every pane is, and Escape closes it and returns focus to the text.
+3. **Take focus when opened.** The pane host moves focus into the panel's content when it opens; the content must have somewhere to take it.
+4. **Give a text alternative for a status-bar item.** The visible text is hidden from assistive technology, and a label that says what it means is read in its place.
+5. **Not rely on colour alone.** Use the `--de-` properties for text, surface and border colours, so that your panel follows the host's theme, dark mode and forced colours.
+6. **Pass axe with no violations.** The editor's own panels are checked with axe. Run axe and a keyboard pass on your panel before you ship, in light and dark mode.
+7. **Obey the strict content security policy.** Under the policy in the section above, a `style` attribute and a `style` element are refused. Set styles through the CSS object model or an adopted style sheet.
+
+The editor's tests check items 1 to 3, 4, 5 and 6 on a panel that a test harness contributes, in Chromium, Firefox and WebKit. This reference host does not ship a sample extension yet (UX-050), so the guide has no sample to point to.
+
 ## Backend tiers (05 section 9; PRO-101)
 
 A backend announces its features in `welcome`, and the client shows only the controls those features allow. Choose the tier by how much document semantics you run yourself.
@@ -286,7 +308,7 @@ Each limit below comes from the story that sets it. The state given is as it sto
 
 - **Output restrictions (UX-040).** The restrictions `no-export`, `no-copy` and `no-print` deter casual copying. They are not a security boundary: a person who can open a document can still read it. Who may open a document is decided by your token endpoint and enforced by the document service, not by these restrictions. The editor's rule for each restriction is built, but the copy, cut and drag guards, the `print()` and export call sites and the update of commands on `perm.changed` are not wired yet. Do not promise your users that the editor enforces them. The service's refusal of a direct export request under `no-export` is not yet tested.
 - **The shadow root (SEC-009).** The editor attaches an open shadow root. An open shadow root is not a security boundary: your page can read it, and so can any script you load into your page. That is acceptable, because your page already holds the user's token and could ask the service for the same content. It does mean that a script you do not trust must not run in the page that embeds the editor. Content leaves the editor towards your code only through its methods, such as `getContent`; its `de-*` events carry no document text.
-- **Extension panels (UX-052).** A panel must meet the same accessibility bar as a built-in panel (13 section 7.2). The editor is responsible for the pane host and the status bar. Its own sample extension is to be checked with axe in CI, and that check is not yet built. Content that a panel loads is the host's own code: run axe and a keyboard pass on it before you ship.
+- **Extension panels (UX-052).** A panel must meet the same accessibility bar as a built-in panel (13 section 7.2); the requirements are listed in the section "Extensions". The editor is responsible for the pane host and the status bar. The reference host ships no sample extension yet, so no axe check of a sample panel runs in CI; the editor's own tests run axe on a panel that a test harness contributes. Content that a panel loads is the host's own code: run axe and a keyboard pass on it before you ship.
 - **Parity (UX-001).** The parity profile (`spec/parity/parity-profile.md`, built from `packages/ui/src/parity/profile.ts`) puts every capability in one tier: built in, through ports and extensions, or non-goal. The non-goals are SmartArt, charts, shapes, text boxes and ink, mail merge, macros, table formulas, researcher-style lookup, transcription and offline-first editing. Read the profile before you promise a feature to your users. Its Gaps section lists what has no story yet, and it changes with each release. This guide matches [parity profile version 2 (2026-11-06)](../../../spec/parity/parity-profile.md). The link is relative, so in the checkout of a release it opens the profile of that release, and a test fails if the version stated here is not the version of that file.
 
 ## Keeping this guide current
