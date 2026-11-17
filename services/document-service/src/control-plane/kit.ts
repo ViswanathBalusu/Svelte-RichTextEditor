@@ -27,7 +27,12 @@ import {
 import type { AssetRegistry, AssetUploads } from './assets.ts';
 import type { ContentReader } from './content.ts';
 import type { EventSink } from './events.ts';
-import { CHANGE_WINDOW_MS, DOCUMENT_CHANGED, DocumentChangeDebounce } from './event-throttle.ts';
+import {
+  CHANGE_WINDOW_MS,
+  DOCUMENT_CHANGED,
+  DebouncedEventSink,
+  DocumentChangeDebounce,
+} from './event-throttle.ts';
 import type { ExportPolicy, NotifyFn } from './exports.ts';
 import type { FontCatalogue } from './fonts.ts';
 import type { Cursors } from './http.ts';
@@ -257,7 +262,8 @@ export function createKit(d: HandlerDeps): Kit {
       };
       // PRO-072 criterion 2: at most one dep.document.changed per document per window; the last of a
       // burst is raised when its window ends (armChangeFlush).
-      if (event.type === DOCUMENT_CHANGED) {
+      // A sink that already debounces (the running service shares one with the rooms) takes it as it is.
+      if (event.type === DOCUMENT_CHANGED && !(d.events instanceof DebouncedEventSink)) {
         changes.offer(event, d.now());
         armChangeFlush();
         return;

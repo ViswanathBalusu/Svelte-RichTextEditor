@@ -1162,9 +1162,36 @@ ecentHead, keeping one entry older than the window. */
     return this.#deps.logs.append(this.ref, req, options);
   }
 
+  /**
+   * BE-055 criterion 2: a stored commit raises `dep.document.changed.v1` with the sequence number and
+   * the hash-chain head the log holds (05 §7; PRO-069 criterion 3). The sink debounces it, at most one
+   * per document per window. The head is read from the log after the write, so `seq` and `chainHead`
+   * come from the same state. A log without a head state, or a document with no chain head, raises
+   * nothing: the envelope refuses the event without a head.
+   */
+  #raiseChanged(): void {
+    const sink = this.#deps.events;
+    const state = this.#deps.logs.state?.bind(this.#deps.logs);
+    if (!sink || !state) return;
+    void state(this.ref).then(
+      (head) => {
+        if (head.chainHead === null) return;
+        sink.emit({
+          type: 'dep.document.changed.v1',
+          tenant: this.ref.tenant,
+          subject: this.ref.doc,
+          data: { seq: head.seq, chainHead: head.chainHead },
+          time: this.#deps.now(),
+        });
+      },
+      (e: unknown) => this.#report(e, 'change event'),
+    );
+  }
+
   #written(req: WriteRequest, result: WriteResult): void {
     this.#writing = null;
     this.#settleWrite();
+    if (result.status === 'ok') this.#raiseChanged();
     if (req.snapshot && result.status !== 'ok' && result.status !== 'unknown')
       this.#snapshots.delete(req.snapshot.id);
     if (this.#stopped) return;

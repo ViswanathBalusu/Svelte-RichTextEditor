@@ -36,6 +36,7 @@ import {
 } from './control-plane/assets.ts';
 import { ContentReader } from './control-plane/content.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
+import { DebouncedEventSink } from './control-plane/event-throttle.ts';
 import { CompileBudget } from './control-plane/exp-009-compile-budget.ts';
 import { EXPORT_KIND, PREVIEW_KIND, exportHooks } from './control-plane/exports.ts';
 import {
@@ -559,7 +560,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
     parts.webhooks = webhooks.routes;
     parts.webhookStore = webhooks.store;
   }
-  const events: EventSink = opts.events ?? webhooks?.dispatcher ?? new MemoryEventSink();
+  const rawEvents: EventSink = opts.events ?? webhooks?.dispatcher ?? new MemoryEventSink();
+  // One debounce for every source of `dep.document.changed` (the rooms and the REST routes): at most
+  // one per document per window (BE-055 criterion 2). Other events pass through unchanged.
+  const events = new DebouncedEventSink(rawEvents, now);
 
   const fonts =
     opts.fonts ??
@@ -1062,7 +1066,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     dataPlane,
     content,
     pool,
-    events,
+    events: rawEvents,
     webhooks: webhooks?.dispatcher ?? null,
     runner,
     runners,
@@ -1084,6 +1088,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
         await exportWorkers?.stop();
         await Promise.all(runners.map((r) => r.stop()));
         await dataPlane.close().catch(() => undefined);
+        // The last change of a burst that still waits for its window is raised before the sends drain.
+        events.close();
         // Sends already started finish; each is bounded by the egress timeout (BE-056).
         await webhooks?.dispatcher.drain().catch(() => undefined);
         server.closeAllConnections();
