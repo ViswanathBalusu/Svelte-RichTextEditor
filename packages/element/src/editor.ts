@@ -8,7 +8,13 @@
  * (02 §4). The shell reaches the core only through `CoreApi`; this file is the one place where the
  * element meets the core's API and the shell's props, so a change in either is adapted here.
  */
-import { EditorCore, type ConnectionState, type EditMode } from '@docedit/engine';
+import {
+  type AssetImageLookup,
+  EditorCore,
+  type ConnectionState,
+  type EditMode,
+  type EquationDrawer,
+} from '@docedit/engine';
 import {
   PortError,
   type Access,
@@ -44,6 +50,7 @@ import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
 import { fieldPropertiesService } from './field-properties.ts';
+import { mathEditorService } from './math-editor.ts';
 import { mayChange } from './status.ts';
 import { attachStyles, type StylePath } from './styles.ts';
 
@@ -72,6 +79,12 @@ export interface MountOptions {
   permissions?: PermissionsPort | null;
   /** The manifest's family-to-alias lookup (FE-062 criterion 1); absent when none was read. */
   fontAlias?: (family: string) => string | undefined;
+  /** The signed URL of an asset, for the web view's pictures (FE-067 criterion 3); absent without assets. */
+  assetImage?: AssetImageLookup;
+  /** Draws equations in the web view (FE-069); absent, the LaTeX source is shown as text. */
+  drawEquation?: EquationDrawer;
+  /** The directory the math fonts are served from (`config.katexFontsUrl`), for the math editor (FE-070). */
+  mathFontsUrl?: string | null;
   /** The shell's attribute-driven settings (`toolbar`, `locale`). */
   settings: SettingsStore;
   /** The `mode` the host asked for (05 §8.1); the core applies the most restrictive one allowed. */
@@ -196,6 +209,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     deferRemoteWhileComposing: config.deferRemoteWhileComposing,
     mode: options.mode,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    ...(options.assetImage ? { assetImage: options.assetImage } : {}),
+    ...(options.drawEquation ? { drawEquation: options.drawEquation } : {}),
   });
   const stylePath = attachStyles(root, {
     nonce: config.styleNonce,
@@ -309,6 +324,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     roles: rolesService(core),
     // The field properties pane (FRW-073): a field's authored attributes and the change of them.
     fieldProperties: fieldPropertiesService(core),
+    // The math editor (FE-070): the selected equation, its limits and its confirmation; MathLive loads on first use.
+    mathEditor: mathEditorService(core, { fontsUrl: options.mathFontsUrl }),
     // Fill mode (FRW-076, FRW-078): the fields without their values, for the guided bar and the
     // fill pane, and the move of focus to a field's control.
     fill,

@@ -165,9 +165,11 @@ describe('the session registers the manifest fonts (FE-061 criterion 1)', () => 
     });
     await session.start();
     expect(session.phase).toBe('ready');
-    expect(seen).toEqual([fonts]);
-    // Two reads by design: the registrar's, and the family lookup's (FE-062 criterion 1).
-    expect(fonts.calls).toBe(2);
+    // The registrar gets a port derived from the backend's, whose manifest is read once.
+    expect(seen.length).toBe(1);
+    expect(Object.getPrototypeOf(seen[0])).toBe(fonts);
+    // One read, shared by the registrar and the family lookup (FE-062 criterion 1).
+    expect(fonts.calls).toBe(1);
     await session.close();
   });
 

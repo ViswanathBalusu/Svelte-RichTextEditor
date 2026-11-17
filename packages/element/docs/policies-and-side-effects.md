@@ -111,6 +111,13 @@ In-page panel (`packages/element/src/features/pdf.ts`, measured in the spike):
 - The math editor's markup is not the only markup MathLive writes: ten of its `innerHTML`
   assignments (menus, the virtual keyboard's toolbar, static rendering) do not go through the policy.
   None was exercised in the spike; each would raise a Trusted Types violation when used.
+  The editor (FE-070, `src/math-field.ts`) switches the virtual keyboard off (`mathVirtualKeyboardPolicy`
+  is `manual`) and gives the field no menu items, so it does not reach those assignments; the person
+  types, or uses the LaTeX source field of the dialog. The dialog's source field works without the
+  visual field, so a host that never allows `docedit-math` can still change an equation's LaTeX
+  there; the dialog then says the visual editor could not be loaded.
+- The fonts of the field come from `config.katexFontsUrl`, the directory of the KaTeX files (the file
+  names are MathLive's own). Without it MathLive is told to load none.
 - Without `docedit-math` (strict baseline, no policy name allowed), the editor does not work: the
   policy cannot be created, MathLive's markup is never written, and the `math-field` element is on
   the page but empty (a few pixels wide) and takes no input. The page reports one `trusted-types`

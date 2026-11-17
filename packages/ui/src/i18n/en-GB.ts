@@ -517,6 +517,27 @@ export const EN_GB = {
   'announce.language.set': 'Language set.',
   'announce.language.failed': 'The language could not be set here.',
 
+  // The math editor (FE-070). The equation's LaTeX is content; the words around it are not.
+  'dialog.math.title': 'Edit equation',
+  'dialog.math.visual': 'Equation editor',
+  'dialog.math.source': 'LaTeX source',
+  'dialog.math.hint':
+    'Edit the equation above, or type its LaTeX here. Escape closes without changing it.',
+  'dialog.math.loading': 'Loading the equation editor.',
+  'dialog.math.unavailable':
+    'The equation editor could not be loaded. You can still edit the LaTeX source.',
+  'dialog.math.readOnly': 'You cannot change this equation.',
+  'dialog.math.suggestion': 'An equation cannot be changed in suggestion mode.',
+  'dialog.math.refused': 'This equation cannot be changed now.',
+  'dialog.math.tooLong': 'The equation is longer than {max} characters.',
+  'dialog.math.tooDeep': 'The equation is nested more than {max} levels deep.',
+  'dialog.math.rejected': 'The document service did not accept this equation. Your input is kept.',
+  'dialog.math.rejectedWhy': 'Reason: {reason}',
+  'dialog.math.apply': 'Apply equation',
+  'dialog.math.applying': 'Checking the equation.',
+  'announce.equation.set': 'Equation changed.',
+  'announce.equation.rejected': 'The equation was not accepted.',
+
   // Comments (UX-028, UX-031). The comment and the names are content.
   'dialog.comment.title': 'New comment',
   'dialog.comment.field': 'Comment',

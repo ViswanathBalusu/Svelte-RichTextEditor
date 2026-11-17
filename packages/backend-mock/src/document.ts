@@ -53,6 +53,7 @@ export interface DocumentHooks {
   now(): number;
   limits: Limits;
   presence: boolean;
+  mathGate?: (latex: string, display: boolean) => string | null;
 }
 
 interface Segment {
@@ -148,6 +149,7 @@ export class MockDocument implements ChannelHost {
       epoch: 1,
       incarnation: this.incarnation,
       now: () => this.hooks.now(),
+      ...(this.hooks.mathGate ? { mathGate: this.hooks.mathGate } : {}),
     });
   }
 

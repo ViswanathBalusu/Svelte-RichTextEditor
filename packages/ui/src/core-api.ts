@@ -652,6 +652,83 @@ export interface CoreApi {
   readonly roles?: RolesService;
   /** The properties of form fields (FRW-073). Absent: the field properties pane is not offered. */
   readonly fieldProperties?: FieldPropertiesService;
+  /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
+  readonly mathEditor?: MathEditorService;
+}
+
+/** An equation as the math editor takes it (FE-070): where it is, its LaTeX source and its kind. */
+export interface EquationRef {
+  /** The node's position in the document; opaque to the shell. */
+  readonly pos: number;
+  readonly latex: string;
+  /** True for a display equation, false for one in a line of text. */
+  readonly display: boolean;
+}
+
+/** A request to open the math editor on an equation: a double click or Enter on it. */
+export interface EquationEditRequest extends EquationRef {
+  /** Counts requests, so that asking twice for the same equation opens it twice. */
+  readonly n: number;
+}
+
+/** What confirming an equation came to (FE-070). */
+export type EquationOutcome =
+  | { readonly ok: true; readonly confirmed: boolean }
+  | {
+      readonly ok: false;
+      /** `too-long` and `too-deep` are the limits (I7); `rejected` is the service's answer (I8). */
+      readonly reason:
+        'too-long' | 'too-deep' | 'read-only' | 'suggestion' | 'rejected' | 'refused';
+      /** The document service's own reason, for `rejected`. */
+      readonly message?: string;
+    };
+
+/** The visual field of the math editor, once its chunk has loaded. */
+export interface MathFieldHandle {
+  /** The LaTeX the field holds now. */
+  readonly value: string;
+  setValue(latex: string): void;
+  focus(): void;
+  /** Removes the field from the page. */
+  destroy(): void;
+}
+
+export interface MathFieldOptions {
+  latex: string;
+  readOnly: boolean;
+  /** The accessible name of the field. */
+  label: string;
+  /** Called with the new LaTeX when the person changes it in the field. */
+  onInput(latex: string): void;
+  /** Called when the person presses Escape in the field (the field would otherwise keep it). */
+  onEscape(): void;
+}
+
+/**
+ * The math editor's port (FE-070; 02 §2). The visual field is a third-party piece that registers
+ * global custom elements, so it is loaded on demand by `mount` and by nothing earlier. The limits
+ * and the confirmation are the core's: a source over a limit is not committed, and the answer to
+ * `confirm` waits for the document service, which may reject the source (the math gate).
+ */
+export interface MathEditorService {
+  /** The last request to open the editor on an equation, or null. */
+  readonly request: ReadView<EquationEditRequest | null>;
+  /** The equation the person selected in the document, or null. */
+  readonly selected: ReadView<EquationRef | null>;
+  /** Asks to open the editor on the selected equation (a command). False when none is selected. */
+  edit(): boolean;
+  /** Selects the equation at `pos` again, as the editor closes, so that focus returns to it. */
+  select(pos: number): boolean;
+  /** Whether this person may change the equation at `pos` now, and why not. */
+  access(pos: number): { readonly canEdit: boolean; readonly reason?: string };
+  /** The limits of a source (I7; 09 §6.3). */
+  readonly limits: { readonly length: number; readonly depth: number };
+  /** The limit a source breaks, or null. */
+  check(latex: string): 'too-long' | 'too-deep' | null;
+  /** Stores the source as one commit and waits for the service's answer. */
+  confirm(pos: number, latex: string): Promise<EquationOutcome>;
+  /** Loads the visual field and puts it into `container`; rejects when it cannot be loaded. */
+  mount(container: HTMLElement, options: MathFieldOptions): Promise<MathFieldHandle>;
 }
 
 /** A person of a source: family and given name, or one literal name (CSL). */

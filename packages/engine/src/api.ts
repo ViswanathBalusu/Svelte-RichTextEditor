@@ -504,6 +504,31 @@ export interface CoreProblem {
   fatal: boolean;
 }
 
+/** An equation of the document as the math editor takes it (FE-070): where it is and its source. */
+export interface EquationTarget {
+  /** The node's position in the document. */
+  pos: number;
+  latex: string;
+  /** True for a display `equation_block`, false for an inline `equation`. */
+  display: boolean;
+}
+
+/** A request to open the math editor on an equation (FE-070): `n` counts requests. */
+export interface EquationRequest extends EquationTarget {
+  n: number;
+}
+
+/**
+ * What confirming an equation came to (FE-070). A refusal changed nothing: `reason` is the
+ * command's (`too-long`, `too-deep`, `read-only`, `suggestion`, `not-equation`). `rejected` means
+ * the document service did not accept the commit (the math gate, I8; 09 §6.3) and the change was
+ * taken back: `message` is the service's. `confirmed` is false when the commit was made but the
+ * service had not answered in time.
+ */
+export type EquationConfirmation =
+  | { readonly ok: true; readonly confirmed: boolean }
+  | { readonly ok: false; readonly reason: string; readonly message?: string };
+
 /** The sync client's state as plain data (FE-033 criterion 7). */
 export interface SyncSummary {
   seq: number;
