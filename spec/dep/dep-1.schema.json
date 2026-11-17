@@ -2832,6 +2832,12 @@
               "type": "null"
             }
           ]
+        },
+        "imagesWithoutAlt": {
+          "description": "The number of images and figures without alternative text in the exported content, one per occurrence (09 §13). Each is also a diagnostic with the code `image_without_alt` and its block. Absent when the worker does not report it (a target that is not typeset).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [

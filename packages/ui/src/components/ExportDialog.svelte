@@ -71,6 +71,7 @@
   let stop: (() => void) | null = null;
   let announced: string | null = null;
   let gone = $state<string | null>(null);
+  let moved = $state<string | null>(null);
 
   const running = $derived(
     job !== null && (job.state === 'queued' || job.state === 'converting' || job.state === 'compiling'),
@@ -149,6 +150,7 @@
     failedToStart = false;
     announced = null;
     gone = null;
+    moved = null;
     const options: ExportOptions =
       chosen === 'pdf' ? { profile, tagging, fields } : chosen === 'tex' ? { fields } : {};
     try {
@@ -171,10 +173,24 @@
         : 'export.severity.info';
   }
 
+  /** True when the core says the diagnostic's block changed after the exported `seq` (EXP-065). */
+  function changedSince(d: ExportDiagnostic): boolean {
+    if (!d.blockId || !job) return false;
+    return shell.core.blockChangedSince?.(d.blockId, job.seq) === true;
+  }
+
   function goTo(d: ExportDiagnostic): void {
     if (!d.blockId) return;
-    if (shell.core.selectBlock?.(d.blockId)) onClose();
-    else gone = d.blockId;
+    gone = null;
+    moved = null;
+    if (!shell.core.selectBlock?.(d.blockId)) {
+      gone = d.blockId;
+      return;
+    }
+    // The editor has moved. When the block changed after the exported commit, the dialog stays
+    // open and says so, because the problem may no longer be there (EXP-065 criterion 3).
+    if (changedSince(d)) moved = d.blockId;
+    else onClose();
   }
 
   const TARGETS: Readonly<Record<ExportTarget, StringKey>> = {
@@ -336,12 +352,22 @@
                 >
                   <span class="de-severity" data-severity={d.severity}>{tr.t(severityKey(d))}</span>
                   <span data-content>{d.message}</span>
+                  {#if changedSince(d)}
+                    <span class="de-hint" data-export="changed"
+                      >{tr.t('export.diagnostic.changed')}</span
+                    >
+                  {/if}
                 </button>
               </li>
             {/each}
           </ul>
           {#if gone}
             <p class="de-error" role="status">{tr.t('export.diagnostic.gone')}</p>
+          {/if}
+          {#if moved}
+            <p class="de-hint" role="status" data-export="moved">
+              {tr.t('export.diagnostic.moved')}
+            </p>
           {/if}
         {/if}
       {/if}

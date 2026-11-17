@@ -13,7 +13,15 @@ import type {
   Suggestions,
 } from './bundle.ts';
 import type { CodeRange } from './fonts/coverage.ts';
-import { color as colorEmitter, enumLookup, type Tex } from './emit.ts';
+import {
+  color as colorEmitter,
+  enumLookup,
+  int,
+  join,
+  lit,
+  markedLines,
+  type Tex,
+} from './emit.ts';
 
 /** A node of the document as plain JSON; projections may hold nodes the CDM types lack. */
 export interface J {
@@ -202,10 +210,40 @@ export function register(
   return ctx.blocks.length - 1;
 }
 
+/**
+ * The owner mark of `ownLines`: U+0001, the block number, U+0002. No emitter can write these two
+ * characters (every string emitter removes the C0 controls), so a mark never comes from the
+ * document. `line` reads the marks and removes them; they never reach main.tex.
+ */
+const MARK_OPEN = '\u0001';
+const MARK_CLOSE = '\u0002';
+
+/**
+ * Text that is written inside another block's TeX but belongs to `block` (a footnote's text in its
+ * host paragraph, EXP-012 criterion 2). The text is put on lines of its own, and each line carries
+ * an owner mark, so that map.json gives those lines to `block` and not to the host.
+ *
+ * The line ends added here end in `%`, and TeX skips the spaces that start a line, so the tokens
+ * TeX reads are the same as when the text stands on the host's line.
+ */
+export function ownLines(block: number, value: Tex): Tex {
+  return markedLines(join([lit(MARK_OPEN), int(block), lit(MARK_CLOSE)]), value);
+}
+
 export function line(ctx: Ctx, value: Tex): void {
   for (const l of value.split('\n')) {
-    ctx.out.lines.push(l);
-    ctx.out.owners.push(ctx.out.current);
+    // With nested marks (a footnote inside a footnote) the last, innermost one owns the line.
+    let owner = ctx.out.current;
+    let clean: string = l;
+    for (;;) {
+      const open = clean.indexOf(MARK_OPEN);
+      const close = open < 0 ? -1 : clean.indexOf(MARK_CLOSE, open);
+      if (close < 0) break;
+      owner = Number(clean.slice(open + 1, close));
+      clean = clean.slice(0, open) + clean.slice(close + 1);
+    }
+    ctx.out.lines.push(clean);
+    ctx.out.owners.push(owner);
   }
 }
 

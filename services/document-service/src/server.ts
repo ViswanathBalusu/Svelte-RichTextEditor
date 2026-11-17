@@ -119,7 +119,11 @@ import {
   assetUploads,
   workerObjects,
 } from './objects/asset-pipeline.ts';
-import { AssetStore, encodeCheckpoint, ObjectCheckpointStore } from './objects/checkpoints.ts';
+import {
+  ObjectAssetStore,
+  encodeCheckpoint,
+  ObjectCheckpointStore,
+} from './objects/checkpoints.ts';
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
@@ -140,6 +144,7 @@ import { PgVersionStore } from './storage/versions-store.ts';
 import { MemoryVersionStore, type VersionStorePort } from './storage/versions-memory.ts';
 import { Tracer } from './data-plane/tracing.ts';
 import type {
+  AssetStore,
   AuditStore,
   CheckpointIndex,
   CheckpointStore,
@@ -509,7 +514,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   const logs = meteredLogs(parts.logs, meter);
   const objectCheckpoints = new ObjectCheckpointStore(parts.objects);
   const checkpoints = meteredCheckpoints(objectCheckpoints, meter, encodeCheckpoint);
-  const assets = new AssetStore(parts.objects);
+  const assets = new ObjectAssetStore(parts.objects);
   if (config.webhooks && opts.events)
     throw new Error(
       'config.webhooks and events are exclusive: the webhook dispatcher is the event sink',

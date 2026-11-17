@@ -18,23 +18,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { uuid7 } from '@docedit/model';
 import { documentWithRegions, insertText, startHarness, type Harness } from './support/harness.ts';
 import { at, inside, loadDoc, node, stepsJson, type Node } from './support/cdm.ts';
+import { PAYLOADS } from './support/payloads.ts';
 import { WireClient } from './support/wire.ts';
 
-/** Payloads of the classes the story names: script, handlers, URLs, SVG, MathML, CSS, prototype keys. */
-export const PAYLOADS: readonly string[] = [
-  '<script>window.__pwned = 1</script>',
-  '<img src=x onerror=alert(1)>',
-  'javascript:alert(1)',
-  'data:text/html,<script>alert(1)</script>',
-  '<svg onload=alert(1)>',
-  '<math><mi xlink:href="javascript:alert(1)">x</mi></math>',
-  'expression(alert(1))',
-  'url(javascript:alert(1))',
-  '"><script>alert(1)</script>',
-  '__proto__',
-  'constructor.prototype.polluted',
-  'DEP-CANARY-7f3a-<b>',
-];
+export { PAYLOADS };
 
 /** Text positions: an open paragraph and the body paragraph (both editable by an editor). */
 const TEXT_POSITIONS = ['pIntro0000000001', 'pOpen00000000001'] as const;

@@ -641,6 +641,7 @@ import type { ResolveAction, SuggestionReport, SuggestionTarget } from './sugges
 import type { MarkupView, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
 import type { SectionWarning } from './breaks-sections.ts';
+import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
 
 export interface DocumentApi {
   readonly selection: ReadView<SelectionSummary>;
@@ -779,4 +780,12 @@ export interface DocumentApi {
   flushJournal(): Promise<void>;
   /** The continuous section breaks whose page setup changes a margin (FE-135 criterion 6). */
   sectionWarnings(): SectionWarning[];
+  /** The document's sources in the order of its definitions, each with where it is cited (UX-103). */
+  sources(): SourceInfo[];
+  /**
+   * Adds, changes or deletes a source definition (UX-103; CDM-052): a change of the definitions,
+   * which needs `structure` (07 §4) and leaves as a commit. A cited source is not deleted (I4).
+   * With `check`, only says whether the change would be made.
+   */
+  editSource(edit: SourceEdit, check?: boolean): SourceEditOutcome;
 }

@@ -25,9 +25,12 @@ import {
   type NodeView,
   type NodeViewConstructor,
 } from 'prosemirror-view';
-import { type Attrs, resolveTableFormat, styleTable } from '@docedit/model';
+import { resolveTableFormat, styleTable } from '@docedit/model';
 import { cellEntries } from '../table-span.ts';
 import { colourValue } from '../view-support.ts';
+
+/** The attributes of a node as the model's cascade reads them. */
+type Attrs = Readonly<Record<string, unknown>>;
 
 export const tableStyleKey = new PluginKey<DecorationSet>('docedit-table-style');
 
@@ -139,7 +142,8 @@ function decorationsOf(doc: PMNode): DecorationSet {
   return DecorationSet.create(
     doc,
     tableCellStyles(doc).map((c) =>
-      Decoration.node(c.pos, c.pos + c.size, {}, { tableCellCss: c.css }),
+      // A string, so that an unchanged cell is an equal decoration and is not drawn again.
+      Decoration.node(c.pos, c.pos + c.size, {}, { tableCellCss: JSON.stringify(c.css) }),
     ),
   );
 }
@@ -170,8 +174,8 @@ const PROPS = [
 
 function cssOf(decorations: readonly Decoration[]): CellCss {
   for (const d of decorations) {
-    const css = (d.spec as { tableCellCss?: CellCss } | undefined)?.tableCellCss;
-    if (css) return css;
+    const css = (d.spec as { tableCellCss?: string } | undefined)?.tableCellCss;
+    if (css !== undefined) return JSON.parse(css) as CellCss;
   }
   return {};
 }

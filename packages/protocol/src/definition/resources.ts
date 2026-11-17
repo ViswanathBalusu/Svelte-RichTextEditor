@@ -644,6 +644,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
           nullable(str({ format: 'sha256' })),
           "The hash-chain head of the exported state, as in the export's manifest, so that a host can anchor it (08 §12); null when the log has no commit at that `seq`.",
         ),
+        imagesWithoutAlt: opt(
+          count(),
+          'The number of images and figures without alternative text in the exported content, one per occurrence (09 §13). Each is also a diagnostic with the code `image_without_alt` and its block. Absent when the worker does not report it (a target that is not typeset).',
+        ),
       },
       {
         doc: "The result of a completed export (09 §9.1). Warnings are in the job's `diagnostics`.",

@@ -5,7 +5,7 @@
  * prefix before a request is sent (BE-003 criterion 2).
  */
 import { createHmac } from 'node:crypto';
-import { assertUuid } from '../storage/db.ts';
+import { assertUuid } from '../storage/ids.ts';
 
 export interface PutOptions {
   contentType?: string;

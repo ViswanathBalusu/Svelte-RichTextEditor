@@ -3,7 +3,7 @@
 // test environment (Versity S3 Gateway, FND-010).
 import { createHash, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { AssetStore, ObjectCheckpointStore } from '../../src/objects/checkpoints.ts';
+import { ObjectAssetStore, ObjectCheckpointStore } from '../../src/objects/checkpoints.ts';
 import { S3ObjectStore } from '../../src/objects/s3.ts';
 import {
   ForeignKeyError,
@@ -105,7 +105,7 @@ for (const kind of ['memory', 's3'] as const) {
     );
 
     it.skipIf(skip)('writes a sealed PDF once (criterion 3)', async () => {
-      const assets = new AssetStore(store());
+      const assets = new ObjectAssetStore(store());
       const t = randomUUID();
       const d = randomUUID();
       await assets.putSealed(t, d, 'wf1', Buffer.from('%PDF-1.7 sealed'));
@@ -138,7 +138,7 @@ for (const kind of ['memory', 's3'] as const) {
       'passes the AssetStore contract: quarantine, content-addressed finals, exports (criterion 4)',
       async () => {
         const s = store();
-        const assets = new AssetStore(s);
+        const assets = new ObjectAssetStore(s);
         const t = randomUUID();
         const asset = randomUUID();
         await assets.putQuarantined(t, asset, Buffer.from('raw upload'));

@@ -169,6 +169,7 @@ function check(g: Grammar, value: unknown, path: string, out: GrammarProblem[]):
     case 'json': {
       if (g.objectOnly && (typeof value !== 'object' || Array.isArray(value)))
         return add('type', 'expected an object');
+      if (tooLarge(value, g.maxBytes, g.maxDepth, path, out)) return;
       const before = out.length;
       checkJson(value, path, 1, g.maxDepth, out);
       if (g.keyPattern && typeof value === 'object' && !Array.isArray(value)) {
@@ -198,11 +199,64 @@ function check(g: Grammar, value: unknown, path: string, out: GrammarProblem[]):
       }
       if (typeof value === 'object' && value !== null && Object.hasOwn(value, 'name'))
         add('element', 'the top level names no element; the node implies it', `${path}/name`);
+      if (tooLarge(value, g.maxBytes, g.maxDepth, path, out)) return;
       checkElementBody(value, path, 1, g.maxDepth, out);
       if (out.length === before) checkSize(value, g.maxBytes, path, out);
       return;
     }
   }
+}
+
+/**
+ * A lower bound of the canonical size of a JSON value, counted until it passes `limit`: a number, a
+ * boolean or null as one byte, a string or a key as its length in UTF-16 code units plus its
+ * quotes, and the brackets, colons and commas. Values below `maxDepth + 1` levels are counted as
+ * one byte, so a hostile nesting is not followed. It never exceeds the real size.
+ */
+function sizeBound(value: unknown, limit: number, depthLeft: number): number {
+  if (typeof value === 'string') return value.length + 2;
+  if (typeof value !== 'object' || value === null || depthLeft <= 0) return 1;
+  let bytes = 2;
+  if (Array.isArray(value)) {
+    // Each item is at least one byte and each but the first has a comma.
+    if (2 * value.length - 1 > limit) return 2 * value.length - 1;
+    for (let i = 0; i < value.length; i++) {
+      bytes += (i > 0 ? 1 : 0) + sizeBound(value[i], limit - bytes, depthLeft - 1);
+      if (bytes > limit) return bytes;
+    }
+    return bytes;
+  }
+  let first = true;
+  for (const key in value) {
+    if (!Object.hasOwn(value, key)) continue;
+    // The key with its quotes, the colon, and a comma after every member but the last.
+    bytes += key.length + (first ? 3 : 4);
+    first = false;
+    bytes += sizeBound((value as Record<string, unknown>)[key], limit - bytes, depthLeft - 1);
+    if (bytes > limit) return bytes;
+  }
+  return bytes;
+}
+
+/**
+ * Whether a value is certainly larger than `maxBytes` in canonical form. Such a value is reported
+ * once, as a size problem, and is not walked item by item or canonicalised (CDM-015 criterion 1:
+ * a million-item array in an attribute of 16 KiB otherwise costs time and memory for each item).
+ */
+function tooLarge(
+  value: unknown,
+  maxBytes: number,
+  maxDepth: number,
+  path: string,
+  out: GrammarProblem[],
+): boolean {
+  if (sizeBound(value, maxBytes, maxDepth + 1) <= maxBytes) return false;
+  out.push({
+    path,
+    kind: 'size',
+    message: `${path}: more than ${maxBytes} bytes of canonical JSON`,
+  });
+  return true;
 }
 
 function checkSize(value: unknown, maxBytes: number, path: string, out: GrammarProblem[]): void {

@@ -6,7 +6,7 @@
 import { createHash } from 'node:crypto';
 import { zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import { canonicalize, type JsonEnvelope } from '@docedit/model';
-import type { CheckpointStore, DocRef } from '../storage/types.ts';
+import type { AssetStore, CheckpointStore, DocRef } from '../storage/types.ts';
 import { objectKeys, TenantObjects, type ObjectStore } from './store.ts';
 
 /** A checkpoint as stored: canonical JSON (RFC 8785) compressed with Zstandard (FND-005). */
@@ -99,7 +99,7 @@ export class ObjectCheckpointStore implements CheckpointStore {
 }
 
 /** Assets, exports and sealed PDFs of one tenant (06 §4.2, §4.4; BE-003). */
-export class AssetStore {
+export class ObjectAssetStore implements AssetStore {
   readonly #store: ObjectStore;
 
   constructor(store: ObjectStore) {

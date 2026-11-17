@@ -413,6 +413,7 @@ export class FakeCore implements CoreApi {
         setView: undefined,
         setRegionLabels: undefined,
         selectBlock: undefined,
+        blockChangedSince: undefined,
         search: undefined,
         selectMatch: undefined,
         caretRect: undefined,
@@ -626,6 +627,12 @@ export class FakeCore implements CoreApi {
   selectBlock(id: string): boolean {
     this.#record('selectBlock', id);
     return id !== 'gone';
+  }
+
+  /** The block `changed` has changed after any `seq`; a block that is gone is unknown. */
+  blockChangedSince(id: string, seq: number): boolean | null {
+    this.#record('blockChangedSince', id, seq);
+    return id === 'gone' ? null : id === 'changed';
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<SearchResults> {
