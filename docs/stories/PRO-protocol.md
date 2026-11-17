@@ -2754,13 +2754,14 @@ As an integrating developer, I want a profile for threads and comments, so that 
 
 **Acceptance criteria**
 
-- [ ] Given a thread on a range, when other users insert text before it, then the range reported with the thread follows the text.
-- [ ] Given a user with `view` only, when they create a thread, then it is refused; given `comment` in the target's scope, then it is accepted.
-- [ ] Given a `baseSeq` outside the rebase window, when a thread is created, then it is refused.
-- [ ] Given thread and comment changes, when they are made, then the matching events arrive on the channel.
+- [x] Given a thread on a range, when other users insert text before it, then the range reported with the thread follows the text.
+- [x] Given a user with `view` only, when they create a thread, then it is refused; given `comment` in the target's scope, then it is accepted.
+- [x] Given a `baseSeq` outside the rebase window, when a thread is created, then it is refused.
+- [x] Given thread and comment changes, when they are made, then the matching events arrive on the channel.
 
-**Notes:** Not built in lane PRO-113-126. The `comments` profile is still a `later` entry with no scenarios (packages/tck/src/profiles/index.ts). The mock backend does not announce `comments`, and pending.ts lists the comment resources and events as phase 2, so no target can run it yet.
+**Evidence:** packages/tck/src/profiles/comments.ts (the `comments` profile: `comments.range.follows-text` makes a thread on a range as a commenter, inserts text before it as an editor and reads the thread at the head and at the earlier seq; `comments.permissions.comment-scope` refuses a viewer with `forbidden` and accepts a commenter; `comments.range.base-seq-window` makes the head pass the server's advertised `maxRebaseSteps` and refuses a `baseSeq` beyond it and one above the head with `validation_failed`, accepting one at the edge; `comments.events.thread-and-comment` receives `thread.created`, `comment.created`, `comment.updated`, `thread.resolved`, `thread.reopened`, `thread.updated`, `comment.deleted` and `thread.deleted` on an editor's channel); packages/tck/test/pro-120-comments.reference.test.ts runs the profile against the reference service started with `comments` in DOCEDIT_FEATURES and DOCEDIT_MAX_REBASE_STEPS=5 and passes (Node.js, `pnpm exec vitest run --project node packages/tck/test/pro-120-comments.reference.test.ts`, 2026-11-17). The `GET /documents/{id}/threads` operation and the eight thread and comment events are removed from packages/tck/test/pending.ts.
 
+**Notes:** Run against the reference service only; the mock backend does not announce `comments`. The window scenario goes past the server's own `maxRebaseSteps` with real commits, so it skips (with the reason) on a server whose window is above 200 steps; the reference test sets 5. The profile still has the bare-identifier scenario of PRO-045.
 ### PRO-121 Provide the `webhooks` profile
 
 | Type | Phase | Size | Priority | Persona |
