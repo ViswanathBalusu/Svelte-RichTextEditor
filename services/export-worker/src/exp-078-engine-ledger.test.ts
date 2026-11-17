@@ -62,7 +62,11 @@ describe('EXP-078 criterion 1: a TeX Live upgrade is a class version change', ()
 
   it('refuses an entry that is not later than the one before it, or repeats its image', () => {
     const same = { classVersion: first.classVersion, texlive: '2027', baseImage: NEW_IMAGE };
-    const repeat = { classVersion: CLASS_VERSION, texlive: first.texlive, baseImage: first.baseImage };
+    const repeat = {
+      classVersion: CLASS_VERSION,
+      texlive: first.texlive,
+      baseImage: first.baseImage,
+    };
     expect(
       check({
         ledger: { engines: [first, same] },
