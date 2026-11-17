@@ -3,7 +3,7 @@
  *
  * - A `form_field` of kind `text`, `number`, `date`, `checkbox` or `choice` is a node view that
  *   holds a native control in the same shadow root. The control is named by the field's `label`,
- *   carries `aria-required`, and carries `aria-invalid` with a message it is described by while
+ *   carries `aria-required`, and carries `aria-invalid` with a message it is described by (`aria-description`) while
  *   its entry has a problem (FRW-004 criterion 1). The other kinds, and a redacted value, keep the
  *   static text of the schema.
  * - An entry is checked while it is typed and submitted when the control reports a change. The
@@ -83,8 +83,6 @@ function schemaDOM(node: PMNode): HTMLElement {
   return dom as HTMLElement;
 }
 
-let serial = 0;
-
 function optionsOf(node: PMNode): Array<{ id: string; label: string }> {
   const options: unknown = node.attrs['options'];
   if (!Array.isArray(options)) return [];
@@ -122,7 +120,6 @@ class FormFieldView implements NodeView, Refreshable {
     this.#control = this.#makeControl(kind);
     const message = document.createElement('span');
     message.className = 'de-form-field-message';
-    message.id = `de-form-field-message-${++serial}`;
     message.setAttribute('role', 'alert');
     message.hidden = true;
     this.#message = message;
@@ -193,10 +190,10 @@ class FormFieldView implements NodeView, Refreshable {
       this.#message.hidden = true;
       return;
     }
-    c.setAttribute('aria-invalid', 'true');
-    // The message is also the control's description, as text and not as an ID reference: a
-    // reference set from script escapes the lint of FE-108, and the alert is announced anyway.
     const text = problems.map((p) => p.message).join('; ');
+    c.setAttribute('aria-invalid', 'true');
+    // The description is the message's text, not a reference to its id: no ID reference is set
+    // from script (FE-108 criterion 2).
     c.setAttribute('aria-description', text);
     this.#message.textContent = text;
     this.#message.hidden = false;

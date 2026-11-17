@@ -11,7 +11,7 @@
  * - Insertion never overwrites a style the document already defines; a missing one is added to the
  *   `defs` in the same change (FE-027 criterion 1 and 2).
  */
-import { styleTable } from '@docedit/model';
+import { mapPastedDefinitions, styleTable, type JsonNode } from '@docedit/model';
 import { CDM1, mayOpen, supportedFeatures } from '@docedit/model/definition';
 import { Fragment, type Node as PMNode, type Schema, Slice } from 'prosemirror-model';
 import type { CdmFragment, CdmJsonNode } from './api.ts';
@@ -198,17 +198,19 @@ export interface BuiltFragment {
   readonly numberings: PMNode[];
 }
 
-/** The identifiers of the document's `numbering_def` nodes. */
-function numberingIdsOf(doc: PMNode): Set<string> {
-  const out = new Set<string>();
+/** The definition types a fragment carries (FE-050 criterion 3). */
+const FRAGMENT_DEFINITION_TYPES: ReadonlySet<'style_def' | 'numbering_def'> = new Set([
+  'style_def',
+  'numbering_def',
+]);
+
+/** The document's `defs` node as CDM JSON, for the model's mapping of pasted definitions. */
+function targetDefinitions(doc: PMNode): JsonNode {
+  let defs: JsonNode = { type: 'defs', content: [] };
   doc.forEach((top) => {
-    if (top.type.name !== 'defs') return;
-    top.forEach((def) => {
-      const id = def.attrs['id'];
-      if (def.type.name === 'numbering_def' && typeof id === 'string') out.add(id);
-    });
+    if (top.type.name === 'defs') defs = top.toJSON() as JsonNode;
   });
-  return out;
+  return defs;
 }
 
 /**
@@ -223,28 +225,40 @@ export function buildFragment(
   doc: PMNode,
   options: BuildOptions,
 ): BuiltFragment | FragmentProblem {
-  const existingStyles = styleTable(doc).styles;
-  const existingNumberings = numberingIdsOf(doc);
   const defs: PMNode[] = [];
   const numberings: PMNode[] = [];
-  const seen = new Set<string>();
+  for (const def of fragment.defs) {
+    if (
+      (def.type !== 'style_def' && def.type !== 'numbering_def') ||
+      typeof def.attrs?.['id'] !== 'string'
+    )
+      return {
+        reason: 'invalid',
+        message: 'a definition is not a style_def or a numbering_def with an id',
+      };
+  }
+  // The one mapping of pasted definitions (CDM-023): the model decides which brought definitions
+  // the document already has, and which references of the pasted content resolve.
+  const mapped = mapPastedDefinitions(
+    targetDefinitions(doc),
+    {
+      definitions: fragment.defs.map(
+        (def) => ({ type: def.type, attrs: def.attrs }) as unknown as JsonNode,
+      ),
+      content: fragment.content as unknown as readonly JsonNode[],
+    },
+    // A fragment carries style and numbering definitions only, so only those references are mapped.
+    { types: FRAGMENT_DEFINITION_TYPES },
+  );
   try {
-    for (const def of fragment.defs) {
-      const id = def.attrs?.['id'];
-      if ((def.type !== 'style_def' && def.type !== 'numbering_def') || typeof id !== 'string')
-        return {
-          reason: 'invalid',
-          message: 'a definition is not a style_def or a numbering_def with an id',
-        };
-      const key = `${def.type}:${id}`;
-      const existing = def.type === 'style_def' ? existingStyles : existingNumberings;
-      if (existing.has(id) || seen.has(key)) continue;
-      seen.add(key);
-      const node = schema.nodeFromJSON({ type: def.type, attrs: def.attrs });
+    for (const def of mapped.definitions) {
+      const node = schema.nodeFromJSON(def);
       node.check();
       (def.type === 'style_def' ? defs : numberings).push(node);
     }
-    const nodes = withFreshIds(fragment.content, options).map((n) => schema.nodeFromJSON(n));
+    const nodes = withFreshIds(mapped.content as unknown as CdmJsonNode[], options).map((n) =>
+      schema.nodeFromJSON(n),
+    );
     for (const n of nodes) n.check();
     const slice = new Slice(Fragment.fromArray(nodes), fragment.openStart, fragment.openEnd);
     return { slice, defs, numberings };

@@ -11,9 +11,10 @@
  * character collection leaves them out in the view the reader uses; the writer's tests check the
  * `w:vanish` mark. Needs Microsoft Word on Windows; on other platforms the tests are skipped.
  */
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import {
   resolveParagraph,
@@ -31,6 +32,13 @@ const WORK_DIR = fileURLToPath(new URL('../test-results/exp-090-cascade/', impor
 const SCRIPT = fileURLToPath(
   new URL('../tools/word-cascade/read-word-formatting.ps1', import.meta.url),
 );
+const run = promisify(execFile);
+/**
+ * How many corpus files Word reads at the same time. Each reading starts its own Word and quits
+ * it, so the readings do not share state. One at a time, the corpus is the longest test file of
+ * the suite by a wide margin.
+ */
+const WORD_AT_ONCE = 4;
 /** The face of the font registry's default, stated to the writer; Word reads it from the defaults. */
 const DEFAULT_FONT = 'Carlito';
 
@@ -96,12 +104,12 @@ function modelParagraphs(doc: JsonNode, table: ReturnType<typeof styleTable>): C
 }
 
 /** Word's effective formatting of each paragraph's characters, read with Word COM. */
-function wordParagraphs(docx: string, name: string): Char[][] {
+async function wordParagraphs(docx: string, name: string): Promise<Char[][]> {
   const out = `${WORK_DIR}${name}.word.json`;
-  execFileSync(
+  await run(
     'powershell.exe',
     ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-Docx', docx, '-Out', out],
-    { stdio: ['ignore', 'pipe', 'pipe'], timeout: 900_000 },
+    { timeout: 900_000, windowsHide: true },
   );
   const raw = readFileSync(out, 'utf8').replace(/^\uFEFF/, '');
   const parsed = JSON.parse(raw) as { runs: WordRun[] }[];
@@ -135,7 +143,7 @@ async function compare(
   writeFileSync(docx, out.bytes);
   const table = styleTable(written.envelope.doc as unknown as TreeNode);
   const expected = modelParagraphs(written.envelope.doc as unknown as JsonNode, table);
-  const word = wordParagraphs(docx, name);
+  const word = await wordParagraphs(docx, name);
   let cursor = 0;
   const result: Comparison = {
     paragraphs: expected.length,
@@ -195,14 +203,24 @@ describe.skipIf(!hasWord)(
       const mismatches: string[] = [];
       let chars = 0;
       let files = 0;
-      for (const f of corpusFiles()) {
-        const safe = f.name.replace(/[^A-Za-z0-9]+/g, '-');
-        const imported = await importDocx(readFile(f));
-        const r = await compare(`corpus-${safe}`, {
-          envelope: imported.envelope,
-          assets: imported.assets,
-          options: { suggestions: 'accept', defaultFont: DEFAULT_FONT },
-        });
+      const all = corpusFiles();
+      const results: Comparison[] = [];
+      let next = 0;
+      const worker = async (): Promise<void> => {
+        for (let i = next++; i < all.length; i = next++) {
+          const f = all[i]!;
+          const safe = f.name.replace(/[^A-Za-z0-9]+/g, '-');
+          const imported = await importDocx(readFile(f));
+          results[i] = await compare(`corpus-${safe}`, {
+            envelope: imported.envelope,
+            assets: imported.assets,
+            options: { suggestions: 'accept', defaultFont: DEFAULT_FONT },
+          });
+        }
+      };
+      await Promise.all(Array.from({ length: WORD_AT_ONCE }, worker));
+      for (const [i, f] of all.entries()) {
+        const r = results[i]!;
         chars += r.chars;
         files += 1;
         mismatches.push(...r.mismatches);

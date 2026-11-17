@@ -184,7 +184,7 @@ export class Session {
     ws.on('message', (data, isBinary) => this.#frame(data, isBinary));
     ws.on('close', () => this.#ended());
     ws.on('error', (e) => {
-      this.#deps.settings.onError(e, 'socket');
+      this.#report(e, 'socket');
       this.#ended();
     });
     // 05 §5.1: `hello` must arrive within 10 seconds. A token in the URL is never read (BE-029).
@@ -196,6 +196,19 @@ export class Session {
 
   get identity(): VerifiedIdentity | null {
     return this.#identity;
+  }
+
+  /**
+   * Reports an error with this session's identifier, its tenant once `hello` was accepted, and
+   * the document where the error belongs to one channel (BE-088 criterion 1).
+   */
+  #report(e: unknown, where: string, doc?: string): void {
+    const tenant = this.#identity?.tenant;
+    this.#deps.settings.onError(e, where, {
+      session: this.id,
+      ...(tenant !== undefined ? { tenant } : {}),
+      ...(doc !== undefined ? { doc } : {}),
+    });
   }
 
   /**
@@ -265,7 +278,7 @@ export class Session {
     this.#queue = this.#queue
       .then(() => (this.#state === 'closed' ? undefined : task()))
       .catch((e: unknown) => {
-        this.#deps.settings.onError(e, 'session');
+        this.#report(e, 'session');
         this.#fatal('internal', 'the server failed to handle the message');
       });
   }
@@ -552,7 +565,7 @@ export class Session {
     try {
       return (await lookup(tenant)).includes(this.#origin);
     } catch (e) {
-      this.#deps.settings.onError(e, 'origins');
+      this.#report(e, 'origins');
       return false;
     }
   }
@@ -768,7 +781,7 @@ export class Session {
       if (own) this.#armChannelToken(c, identity.expiresAt);
     } catch (e) {
       if (this.#channels.get(m.ch) === c) this.#channels.delete(m.ch);
-      if (!(e instanceof Refusal)) this.#deps.settings.onError(e, 'ch.open');
+      if (!(e instanceof Refusal)) this.#report(e, 'ch.open', d.doc);
       const r =
         e instanceof Refusal ? e : new Refusal('unavailable', 'the document could not be opened');
       c.span?.end({ outcome: 'rejected', code: r.code });
@@ -885,7 +898,7 @@ export class Session {
       text = codec.encode(msg);
     } catch (e) {
       // The server built an invalid message: a defect. Close rather than leave the client stuck.
-      this.#deps.settings.onError(e, `encode ${msg.t}`);
+      this.#report(e, `encode ${msg.t}`);
       this.#close(CLOSE.internal, 'internal error');
       return;
     }
@@ -991,7 +1004,7 @@ export class Session {
   /** Verification failed: the registry code of the error, or `unauthenticated` (fail closed). */
   #refused(e: unknown, re: string): void {
     const code = socketCodeOf(e);
-    if (!code) this.#deps.settings.onError(e, 'verify');
+    if (!code) this.#report(e, 'verify');
     this.#fatal(code ?? 'unauthenticated', 'the token was refused', re);
   }
 

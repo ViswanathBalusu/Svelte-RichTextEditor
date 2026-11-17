@@ -387,6 +387,9 @@ local function paragraph_of(head)
           tabs = has_attribute(m, A.tabs) or 0,
           indl = has_attribute(m, A.indl) or 0,
           indf = has_attribute(m, A.indf) or 0,
+          indr = (A.indr and has_attribute(m, A.indr)) or 0,
+          shade = (A.shade and has_attribute(m, A.shade)) or 0,
+          bord = (A.bord and has_attribute(m, A.bord)) or 0,
         }
       end
       local id = getid(m)
@@ -436,15 +439,122 @@ local function tallest_run(head)
   return tallest, descent
 end
 
--- post_linebreak_filter: tab stops, then line boxes.
+-- Paragraph shading and borders (03 §4.5; EXP-020). A paragraph's lines stack without glue between
+-- them, so the fill is drawn line by line: each line box starts with a PDF literal that fills the
+-- box from the left indent to the right indent, and strokes the left and right borders. The first
+-- line grows by the top border and its space and draws it; the last line does the same below. A
+-- paragraph that breaks across pages keeps its side borders and fill on both pages. The drawing is
+-- marked as an artifact, so tagged output does not read it.
+local SP_PER_BP = 65781.76
+local borderlists = {}
+local BORDER_SIDE = { t = "top", b = "bottom", l = "left", r = "right" }
+
+-- spec: "side:style:width:space:RRGGBB;..." with side t, b, l or r, style s (single), d (double),
+-- o (dotted), a (dashed) or k (thick), and width and space in twips.
+function docedit.defborders(k, spec)
+  local list = {}
+  for side, style, width, space, colour in
+    spec:gmatch("([tblr]):([sdoak]):(%d+):(%d+):(%x%x%x%x%x%x)")
+  do
+    local w = sp(tonumber(width))
+    list[BORDER_SIDE[side]] = {
+      style = style,
+      width = w,
+      total = style == "d" and 3 * w or w,
+      space = sp(tonumber(space)),
+      colour = tonumber(colour, 16),
+    }
+  end
+  borderlists[k] = list
+end
+
+-- The attribute value of a shading colour: the colour plus one, so that zero is no shading.
+function docedit.shade_value(hex)
+  local v = tonumber(hex, 16)
+  return v and v + 1 or 0
+end
+function docedit.shade(hex) tex.sprint(tostring(docedit.shade_value(hex))) end
+
+local function bp(v) return string.format("%.3f", v / SP_PER_BP) end
+local function rgb(c, op)
+  return string.format("%.3f %.3f %.3f %s",
+    (c // 65536) / 255, (c // 256 % 256) / 255, (c % 256) / 255, op)
+end
+
+-- One border as PDF operators: a line from (x1, y1) to (x2, y2), in scaled points from the start
+-- of the line box on its baseline. (nx, ny) is the unit normal a double border is doubled along.
+local function stroke(out, b, x1, y1, x2, y2, nx, ny)
+  out[#out + 1] = rgb(b.colour, "RG") .. " " .. bp(b.width) .. " w"
+  if b.style == "o" then
+    out[#out + 1] = "[" .. bp(b.width) .. " " .. bp(b.width) .. "] 0 d"
+  elseif b.style == "a" then
+    out[#out + 1] = "[" .. bp(3 * b.width) .. " " .. bp(2 * b.width) .. "] 0 d"
+  else
+    out[#out + 1] = "[] 0 d"
+  end
+  local offsets = b.style == "d" and { -b.width, b.width } or { 0 }
+  for _, o in ipairs(offsets) do
+    out[#out + 1] = bp(x1 + o * nx) .. " " .. bp(y1 + o * ny) .. " m "
+      .. bp(x2 + o * nx) .. " " .. bp(y2 + o * ny) .. " l S"
+  end
+end
+
+-- The PDF operators that draw the shading and borders of one line box of width w, height h and
+-- depth d (scaled points), and the box's new height and depth. Exposed for the texlua tests.
+function docedit.decoration(para, w, h, d, first, last)
+  local borders = borderlists[para.bord] or {}
+  local shade = para.shade > 0 and para.shade - 1 or nil
+  if not shade and not next(borders) then return nil, h, d end
+  local top, bottom, left, right = borders.top, borders.bottom, borders.left, borders.right
+  if first and top then h = h + top.space + top.total end
+  if last and bottom then d = d + bottom.space + bottom.total end
+  -- the text edges, then the outer edges of the side borders
+  local x0 = math.min(para.indl, para.indl + para.indf)
+  local x1 = w - para.indr
+  if left then x0 = x0 - left.space - left.total end
+  if right then x1 = x1 + right.space + right.total end
+  local out = { "/Artifact BMC q" }
+  if shade then
+    out[#out + 1] = rgb(shade, "rg") .. " " .. bp(x0) .. " " .. bp(-d) .. " " .. bp(x1 - x0)
+      .. " " .. bp(h + d) .. " re f"
+  end
+  if left then stroke(out, left, x0 + left.total / 2, -d, x0 + left.total / 2, h, 1, 0) end
+  if right then stroke(out, right, x1 - right.total / 2, -d, x1 - right.total / 2, h, 1, 0) end
+  if first and top then stroke(out, top, x0, h - top.total / 2, x1, h - top.total / 2, 0, 1) end
+  if last and bottom then
+    stroke(out, bottom, x0, -d + bottom.total / 2, x1, -d + bottom.total / 2, 0, 1)
+  end
+  out[#out + 1] = "Q EMC"
+  return table.concat(out, " "), h, d
+end
+
+local PDF_LITERAL
+local function decorate(line, para, first, last)
+  local w, h, d = getwhd(line)
+  local data, nh, nd = docedit.decoration(para, w, h, d, first, last)
+  if not data then return end
+  setheight(line, nh)
+  setdepth(line, nd)
+  PDF_LITERAL = PDF_LITERAL or node.subtype("pdf_literal")
+  local lit = new_node(node.id("whatsit"), PDF_LITERAL)
+  direct.setfield(lit, "mode", 0)
+  direct.setfield(lit, "data", data)
+  local list = getlist(line)
+  if list then setlist(line, insert_before(list, list, lit)) else setlist(line, lit) end
+end
+
+-- post_linebreak_filter: tab stops, then line boxes, then shading and borders.
 local function lines(head)
   local h = todirect(head)
   local para = paragraph_of(h)
   if not para then return true end
+  local first_line, last_line
   local n = h
   while n do
     local id = getid(n)
     if id == HLIST and getsubtype(n) == HLIST_LINE then
+      first_line = first_line or n
+      last_line = n
       local list = getlist(n)
       if resolve_tabs(list, getshift(n), para) then
         local w = getwidth(n)
@@ -466,6 +576,15 @@ local function lines(head)
       if st == GLUE_BASELINE or st == GLUE_LINESKIP then setglue(n, 0, 0, 0, 0, 0) end
     end
     n = getnext(n)
+  end
+  if first_line and (para.shade > 0 or para.bord > 0) then
+    n = h
+    while n do
+      if getid(n) == HLIST and getsubtype(n) == HLIST_LINE then
+        decorate(n, para, n == first_line, n == last_line)
+      end
+      n = getnext(n)
+    end
   end
   return true
 end

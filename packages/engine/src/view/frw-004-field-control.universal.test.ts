@@ -34,10 +34,14 @@ function mounted(config: Partial<ConstructorParameters<typeof EditorCore>[0]> = 
     if (commit) el.dispatchEvent(new Event('change', { bubbles: true }));
     return el;
   };
-  /** The message that describes a control (its alert sibling), or null. */
+  /**
+   * The message a control is described by, or null: the alert beside the control, when the control's
+   * description is that alert's text (the description is text, not an ID reference; FE-108).
+   */
   const message = (el: HTMLElement): HTMLElement | null => {
-    if (!el.hasAttribute('aria-description')) return null;
-    return el.parentElement?.querySelector<HTMLElement>('[role="alert"]') ?? null;
+    const text = el.getAttribute('aria-description');
+    const alert = el.parentElement?.querySelector<HTMLElement>('[role="alert"]') ?? null;
+    return text !== null && alert !== null && alert.textContent === text ? alert : null;
   };
   return {
     core,

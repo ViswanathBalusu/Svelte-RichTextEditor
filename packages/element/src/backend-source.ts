@@ -31,7 +31,9 @@ const depBackend: EndpointBackendFactory = async (options) => {
     endpoint: options.endpoint,
     getToken: options.getToken,
     docId: options.docId,
-    features: [...new Set([...DEFAULT_FEATURES, ...capabilities().features])],
+    // `exports` and `assets` are asked for because the element uses both ports (`requestExport`,
+    // pasted pictures); they are negotiated only where the server announces them (SEC-007).
+    features: [...new Set([...DEFAULT_FEATURES, 'exports', 'assets', ...capabilities().features])],
   });
 };
 

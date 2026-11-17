@@ -7,6 +7,7 @@
  * Prepares FE-014, FE-016, FE-017, FE-069, FE-070, FE-071, FE-125.
  */
 import { type Page, expect, test } from '@playwright/test';
+import { clickToolbarCommand } from './embed-helpers.ts';
 import { SPIKE_IDS, openPanel, record, runId } from './helpers.ts';
 import {
   collect,
@@ -26,7 +27,12 @@ export const GUIDE: Record<string, Record<string, string>> = {
   pdf: { 'trusted-types': 'docedit-worker' },
   'math display': {},
   'math editor': { 'trusted-types': 'docedit-math', 'style-src-attr': "'unsafe-inline'" },
+  // The baseline's `font-src 'self'` is all the manifest fonts need (FE-061; the guide's Fonts section).
+  fonts: {},
 };
+
+/** The font file the S2 page's manifest lists when the page is opened with `fonts=1` (demo/s2-page.ts). */
+const S2_FONT_FILE = '/vendor/mathlive/fonts/KaTeX_Main-Regular.woff2';
 
 /** The worker script's own policy for the PDF viewer (served with pdf.worker.mjs). */
 export const PDF_WORKER_POLICY =
@@ -77,9 +83,32 @@ async function exercise(page: Page, feature: string, run: string): Promise<unkno
       return { handled, after: await h.nodeText(SPIKE_IDS.after) };
     }
     case 'pane': {
-      await page.locator('doc-editor button[data-command="outline"]').click();
+      await clickToolbarCommand(page, 'outline');
       await page.locator('doc-editor .de-outline').waitFor();
       return { outline: await page.locator('doc-editor .de-outline').innerText() };
+    }
+    case 'fonts': {
+      // The session registered the manifest's file under its hash alias (FE-061); loading the
+      // alias makes the browser fetch the file, which `font-src` governs.
+      return page.evaluate(async (file) => {
+        const aliases = (): string[] =>
+          Array.from(document.fonts, (f) => f.family.replace(/^["']|["']$/g, '')).filter((f) =>
+            f.startsWith('de-font-'),
+          );
+        for (let i = 0; i < 100 && aliases().length === 0; i++)
+          await new Promise((r) => setTimeout(r, 50));
+        const [alias] = aliases();
+        if (alias === undefined) return { aliases: 0, status: 'not registered', fetched: false };
+        const loaded = await document.fonts.load(`16px "${alias}"`).then(
+          (faces) => faces.map((f) => f.status),
+          (e: Error) => [`threw: ${e.message}`],
+        );
+        return {
+          aliases: aliases().length,
+          status: loaded.join(','),
+          fetched: performance.getEntriesByType('resource').some((e) => e.name.includes(file)),
+        };
+      }, S2_FONT_FILE);
     }
     case 'pdf': {
       return showSamplePdf(page, run, { workerPolicy: PDF_WORKER_POLICY });
@@ -119,7 +148,7 @@ for (const feature of Object.keys(GUIDE)) {
     }) => {
       const run = runId();
       const csp = policy(which === 'guide' ? GUIDE[feature] : {});
-      await openS2(page, run, csp);
+      await openS2(page, run, csp, feature === 'fonts' ? '&fonts=1' : '');
       const result = await exercise(page, feature, run);
       const collected = await collect(page, request, run);
       const fetched = await requests(request, run);
@@ -145,6 +174,10 @@ for (const feature of Object.keys(GUIDE)) {
         expect(result).toMatchObject({
           tags: { 'math-field': true, 'math-span': true, 'math-div': true },
         });
+      // `font-src 'self'` is in the baseline, so the file loads under both policies.
+      if (feature === 'fonts')
+        expect(result).toEqual({ aliases: 1, status: 'loaded', fetched: true });
+      if (feature === 'pane') expect((result as { outline: string }).outline).not.toBe('');
       if (feature === 'web view')
         expect(result).toMatchObject({
           typedHere: true,
