@@ -442,8 +442,12 @@ export class DocEditorElement extends Base {
       current.docId === docId &&
       this.#sessionKey === source.key &&
       current.phase !== 'closed'
-    )
+    ) {
+      // Back from the read view: the same core is shown again (FE-065 criterion 3).
+      this.#setEditorHidden(false);
+      if (this.#mounted !== null) this.#showWebLabel();
       return;
+    }
     this.#reload = false;
     void current?.close();
     const session: Session = new Session({
@@ -506,13 +510,27 @@ export class DocEditorElement extends Base {
       !this.#reload
     )
       return;
+    const reload = this.#reload;
     this.#reload = false;
     this.#closeReadView();
     this.#hideWebLabel();
     const current = this.#session;
-    this.#session = null;
-    this.#sessionKey = null;
-    void current?.close();
+    if (
+      current &&
+      !reload &&
+      current.docId === docId &&
+      this.#sessionKey === source.key &&
+      current.phase !== 'closed'
+    ) {
+      // The session stays open behind the read view, so that a return to the web view finds the
+      // same editing core and no unconfirmed work is lost (FE-065 criterion 3; ADR 0304 item 1,
+      // option a, proposed default).
+      this.#setEditorHidden(true);
+    } else {
+      this.#session = null;
+      this.#sessionKey = null;
+      void current?.close();
+    }
     const token = {};
     this.#readToken = token;
     this.#readViewOf = { docId, key: source.key };
@@ -560,6 +578,18 @@ export class DocEditorElement extends Base {
     label.textContent = VIEW_STRINGS.web;
     this.#root.prepend(label);
     this.#webLabel = label;
+  }
+
+  /**
+   * Hides or shows the editing shell without unmounting it (FE-065 criterion 3). The rule is set
+   * through the style object, which a strict `style-src` policy allows (FE-017).
+   */
+  #setEditorHidden(hidden: boolean): void {
+    const shell = this.#root.querySelector<HTMLElement>('.de-shell');
+    if (shell === null) return;
+    if (hidden) shell.style.setProperty('display', 'none', 'important');
+    else shell.style.removeProperty('display');
+    shell.toggleAttribute('inert', hidden);
   }
 
   #hideWebLabel(): void {
@@ -645,7 +675,9 @@ export class DocEditorElement extends Base {
         }),
     });
     this.#mounted = mounted;
-    this.#showWebLabel();
+    // A shell that mounts while the read view is shown stays hidden until the view returns.
+    if (this.#readViewOf !== null) this.#setEditorHidden(true);
+    else this.#showWebLabel();
     this.#applyPageGuides();
     return mounted;
   }
