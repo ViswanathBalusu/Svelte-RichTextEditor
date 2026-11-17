@@ -49,6 +49,8 @@ export type {
   StatusSummary,
   OutlineItem,
   PanelInfo,
+  PeerCaretInfo,
+  PeerSelectionInfo,
   PresencePeerInfo,
   PresencePortLike,
   RecoveredEdits,

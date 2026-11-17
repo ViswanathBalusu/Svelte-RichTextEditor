@@ -16,7 +16,7 @@ import { inverseMapsOf } from '@docedit/authority';
 import type { PresencePeers, PresenceUpdate, Unsubscribe } from '@docedit/protocol';
 import type { Node } from 'prosemirror-model';
 import { Mapping, type StepMap } from 'prosemirror-transform';
-import type { PresencePeerInfo, PresencePortLike } from './api.ts';
+import type { PeerSelectionInfo, PresencePeerInfo, PresencePortLike } from './api.ts';
 import { PLACEHOLDER } from './schema.ts';
 import type { Clock } from './sync/session.ts';
 import { type Confirmed, type SyncState, unconfirmed } from './sync/state.ts';
@@ -82,6 +82,8 @@ export interface PresenceHost {
   /** The visible selection and its DEP scope. */
   selection(): { anchor: number; head: number; scope: string };
   setPeers(peers: readonly PresencePeerInfo[]): void;
+  /** The same peers with their positions in the visible document, for a view that draws carets. */
+  setSelections?(peers: readonly PeerSelectionInfo[]): void;
   visibleDoc(): Node;
 }
 
@@ -207,7 +209,7 @@ export class PresenceClient {
     const hidden = hiddenRegions(doc);
     // The placed positions are in the confirmed document; the visible one adds the local steps.
     const forward = new Mapping(unconfirmed(s).map((step) => step.getMap()));
-    const list: PresencePeerInfo[] = [];
+    const list: PeerSelectionInfo[] = [];
     for (const { peer, anchor, head } of this.#peers.values()) {
       const selection = { anchor: forward.map(anchor), head: forward.map(head) };
       if (!visiblePeer({ ...peer, state: { ...peer.state, selection } }, doc, hidden)) continue;
@@ -216,10 +218,15 @@ export class PresenceClient {
         user: peer.user.id,
         name: peer.user.name ?? null,
         status: peer.state.status,
+        anchor: selection.anchor,
+        head: selection.head,
       });
     }
     list.sort((a, b) => (a.session < b.session ? -1 : a.session > b.session ? 1 : 0));
-    this.#host.setPeers(list);
+    this.#host.setPeers(
+      list.map(({ session, user, name, status }) => ({ session, user, name, status })),
+    );
+    this.#host.setSelections?.(list);
   }
 
   /** The selection or the confirmed seq changed: publish, at most every `1 / presenceHz` s. */

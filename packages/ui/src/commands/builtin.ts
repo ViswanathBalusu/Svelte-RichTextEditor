@@ -266,6 +266,7 @@ export const SHELL_QUERY_NAMES = [
   'shell.pane.permissions',
   'shell.pane.fill',
   'shell.pane.checker',
+  'shell.pane.sources',
   'shell.storyOpen',
   'shell.commentAllowed',
   'shell.exportAllowed',
@@ -421,6 +422,15 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       changesContent: false,
       capability: 'accessibility-checker',
       run: () => host.togglePane('checker'),
+    },
+    'view.sources': {
+      id: 'view.sources',
+      label: 'command.view.sources',
+      group: 'view',
+      active: 'shell.pane.sources',
+      changesContent: false,
+      capability: 'citations',
+      run: () => host.togglePane('sources'),
     },
     'view.fillSummary': {
       id: 'view.fillSummary',

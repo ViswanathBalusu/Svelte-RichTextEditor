@@ -369,6 +369,25 @@ export interface PresencePeerInfo {
   readonly status: 'active' | 'idle';
 }
 
+/**
+ * A peer with its selection as positions in the visible document of this reader (SYN-036): the
+ * confirmed positions mapped through the reader's own unconfirmed steps. Every position lies inside
+ * the visible document, so a caret drawn from it is never inside text the reader does not have.
+ */
+export interface PeerSelectionInfo extends PresencePeerInfo {
+  readonly anchor: number;
+  readonly head: number;
+}
+
+/**
+ * A peer's caret and selection as rectangles in CSS pixels relative to the element the body view is
+ * mounted in (ui `PeerCaret`, UX-027). `caret` is null when the view gives no position for it.
+ */
+export interface PeerCaretInfo extends PresencePeerInfo {
+  readonly caret: { x: number; y: number; width: number; height: number } | null;
+  readonly selection: readonly { x: number; y: number; width: number; height: number }[];
+}
+
 /** Counts shown on header buttons (13 §3); an absent member is unknown and shows no count. */
 export interface ShellCounts {
   /** Open comment threads. */
@@ -622,6 +641,7 @@ import type { ResolveAction, SuggestionReport, SuggestionTarget } from './sugges
 import type { MarkupView, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
 import type { SectionWarning } from './breaks-sections.ts';
+import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
 
 export interface DocumentApi {
   readonly selection: ReadView<SelectionSummary>;
@@ -760,4 +780,12 @@ export interface DocumentApi {
   flushJournal(): Promise<void>;
   /** The continuous section breaks whose page setup changes a margin (FE-135 criterion 6). */
   sectionWarnings(): SectionWarning[];
+  /** The document's sources in the order of its definitions, each with where it is cited (UX-103). */
+  sources(): SourceInfo[];
+  /**
+   * Adds, changes or deletes a source definition (UX-103; CDM-052): a change of the definitions,
+   * which needs `structure` (07 §4) and leaves as a commit. A cited source is not deleted (I4).
+   * With `check`, only says whether the change would be made.
+   */
+  editSource(edit: SourceEdit, check?: boolean): SourceEditOutcome;
 }

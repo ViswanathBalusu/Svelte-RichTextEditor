@@ -5,7 +5,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { AzureBlobObjectStore, type AzureBlobSettings } from '../../src/objects/azure.ts';
-import { AssetStore, ObjectCheckpointStore } from '../../src/objects/checkpoints.ts';
+import { ObjectAssetStore, ObjectCheckpointStore } from '../../src/objects/checkpoints.ts';
 import {
   ObjectExistsError,
   objectKeys,
@@ -131,7 +131,7 @@ describe.skipIf(skip !== null)('Azure Blob adapter (BE-004)', () => {
   });
 
   it('passes the AssetStore sealed-PDF contract (BE-003 criterion 4, Azure)', async () => {
-    const assets = new AssetStore(store as ObjectStore);
+    const assets = new ObjectAssetStore(store as ObjectStore);
     const t = randomUUID();
     const d = randomUUID();
     await assets.putSealed(t, d, 'wf1', Buffer.from('%PDF-1.7 sealed'));
@@ -142,7 +142,7 @@ describe.skipIf(skip !== null)('Azure Blob adapter (BE-004)', () => {
   });
 
   it('passes the AssetStore contract: quarantine, content-addressed finals, exports (criterion 1)', async () => {
-    const assets = new AssetStore(store as ObjectStore);
+    const assets = new ObjectAssetStore(store as ObjectStore);
     const t = randomUUID();
     const asset = randomUUID();
     await assets.putQuarantined(t, asset, Buffer.from('raw upload'));

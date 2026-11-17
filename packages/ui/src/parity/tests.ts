@@ -9,7 +9,7 @@
  * itself is open (UX-002 Notes). Paths are relative to the repository root.
  *
  * A row gains its entry when it becomes shipped. The entries below are the rows shipped at
- * 2026-11-15.
+ * 2026-11-15. A lane that closes the last story of a row adds the row's entry in the same change.
  */
 export interface TestLink {
   /** Path of the test file from the repository root. */
@@ -31,6 +31,18 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
     [
       { path: 'packages/element/e2e/ux-039-share.spec.ts', kind: 'playwright' },
       { path: 'packages/element/e2e/pro-089-share-request.spec.ts', kind: 'playwright' },
+    ],
+  ],
+  // Shipped when FE-131 closed (2026-11-15). No Playwright spec presses the table commands yet:
+  // the links are the tests that run them through the core, one of them in every browser.
+  [
+    'tables',
+    [
+      { path: 'packages/engine/test/table.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/table-span.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/table-style-sort.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-131-sort-suggest.test.ts', kind: 'unit' },
+      { path: 'packages/engine/src/view/fe-131-table-style.universal.test.ts', kind: 'unit' },
     ],
   ],
 ];

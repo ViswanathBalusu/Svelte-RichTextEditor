@@ -714,6 +714,8 @@ export interface ExportResult {
   log?: string;
   /** The hash-chain head of the exported state, as in the export's manifest, so that a host can anchor it (08 §12); null when the log has no commit at that `seq`. */
   chainHead?: string | null;
+  /** The number of images and figures without alternative text in the exported content, one per occurrence (09 §13). Each is also a diagnostic with the code `image_without_alt` and its block. Absent when the worker does not report it (a target that is not typeset). */
+  imagesWithoutAlt?: number;
 }
 
 /** An export job (05 §6.2; 09 §9.1). It belongs to its requester: only they, and service credentials of the tenant, may read or cancel it (review SR-C4). */

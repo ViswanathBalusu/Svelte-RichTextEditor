@@ -74,6 +74,17 @@ export {
   type CitationResult,
 } from './citation-insert.ts';
 export {
+  SOURCE_FIELDS,
+  sourceProblems,
+  type SourceCitedAt,
+  type SourceEdit,
+  type SourceEditOutcome,
+  type SourceField,
+  type SourceInfo,
+  type SourceProblem,
+  type SourceValues,
+} from './source-edit.ts';
+export {
   BOOKMARK_NAME_PATTERN,
   MAX_HREF_LENGTH,
   addLink,

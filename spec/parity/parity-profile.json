@@ -1504,6 +1504,10 @@
       "capability": "accessibility-checker"
     },
     {
+      "id": "view.sources",
+      "capability": "citations"
+    },
+    {
       "id": "view.fillSummary",
       "capability": "fields-and-forms"
     },
