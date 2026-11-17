@@ -28,7 +28,9 @@ const ADMIN_PATHS = [
   '/retention',
   '/documents/{id}/retention',
   '/origins',
+  '/origins/{origin}',
   '/keys',
+  '/keys/{kid}',
   '/quotas',
   '/documents/{id}/holds',
   '/holds',
@@ -88,9 +90,11 @@ describe('UX-076: what the administration contract defines', () => {
     expect(missing).toEqual(['tenants', 'usage']);
   });
 
-  it('has no write route for the keys and origins: they are read only', () => {
-    expect(Object.keys(paths['/keys']!)).toEqual(['get']);
-    expect(Object.keys(paths['/origins']!)).toEqual(['get']);
+  it('has write routes for the keys and origins, each with a service credential (UX-077)', () => {
+    expect(Object.keys(paths['/keys']!).sort()).toEqual(['get', 'post']);
+    expect(Object.keys(paths['/keys/{kid}']!)).toEqual(['delete']);
+    expect(Object.keys(paths['/origins']!).sort()).toEqual(['get', 'post']);
+    expect(Object.keys(paths['/origins/{origin}']!)).toEqual(['delete']);
   });
 });
 

@@ -811,6 +811,26 @@ export interface OriginList {
   origins: string[];
 }
 
+/** The public key a tenant administrator registers (UX-077; 05 section 3.2). */
+export interface KeyRegistration {
+  /** The key identifier, unique within the tenant. */
+  kid: string;
+  /** user keys verify user tokens; service keys verify service credentials. */
+  use: "user" | "service";
+  /** The algorithm the key verifies; symmetric and other algorithms are refused. */
+  alg: "ES256" | "EdDSA" | "RS256";
+  /** The public key as a JWK. A key with private members is refused. */
+  jwk: { [key: string]: unknown };
+  /** The iss the key verifies, or null for any. */
+  issuer?: string | null;
+}
+
+/** An origin a tenant administrator allows (UX-077; 05 section 4). */
+export interface OriginRegistration {
+  /** An origin: scheme, host and optional port. */
+  origin: string;
+}
+
 /** The quota values of a tenant; a dimension is null when no value is set (UX-078; 06 section 12). */
 export interface QuotaSettings {
   /** Connections a tenant may hold at once. */
@@ -1934,6 +1954,42 @@ export interface Operations {
     query: Record<string, never>;
     body: never;
     response: KeyList;
+  };
+  /** POST /keys: Registers a public key for the tenant; audited (UX-077). (05 §3.2; 13 §10) */
+  registerTenantKey: {
+    method: "POST";
+    path: "/keys";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: KeyRegistration;
+    response: TenantKeyView;
+  };
+  /** DELETE /keys/{kid}: Removes a registered key; tokens it signed are refused at once; audited (UX-077). (05 §3.2; 13 §10) */
+  removeTenantKey: {
+    method: "DELETE";
+    path: "/keys/{kid}";
+    params: { kid: string };
+    query: Record<string, never>;
+    body: never;
+    response: void;
+  };
+  /** POST /origins: Allows an origin for the tenant; audited (UX-077). (05 §4; 13 §10) */
+  addTenantOrigin: {
+    method: "POST";
+    path: "/origins";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: OriginRegistration;
+    response: OriginRegistration;
+  };
+  /** DELETE /origins/{origin}: Removes an allowed origin; the origin is percent-encoded in the path; audited (UX-077). (05 §4; 13 §10) */
+  removeTenantOrigin: {
+    method: "DELETE";
+    path: "/origins/{origin}";
+    params: { origin: string };
+    query: Record<string, never>;
+    body: never;
+    response: void;
   };
   /** GET /quotas: The tenant quota values; null for a dimension with no value (UX-078). (06 §12; 13 §10) */
   getTenantQuotas: {

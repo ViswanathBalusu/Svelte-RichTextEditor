@@ -196,6 +196,11 @@ export const MATRIX: readonly MatrixRow[] = [
       // The tenant's allowed origins and public keys, read with a service credential (UX-077 criterion 4).
       'GET /origins',
       'GET /keys',
+      // The registration and removal of a key or an origin, with a service credential (UX-077 criterion 5).
+      'POST /origins',
+      'DELETE /origins/{origin}',
+      'POST /keys',
+      'DELETE /keys/{kid}',
       'POST /documents/{id}/imports',
       'PUT /documents/{id}/content',
       'POST /documents/{id}/fork',
