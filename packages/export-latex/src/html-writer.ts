@@ -744,7 +744,7 @@ export function htmlText(
   if (
     content.some((c) => c.type === 'defs' && (c.content ?? []).some((d) => d.type === 'page_setup'))
   )
-    note(ctx, 'info', 'page_setup_omitted', 'page setups are not written in HTML', null);
+    note(ctx, 'warning', 'page_setup_omitted', 'page setups are not written in HTML', null);
   const body = content.find((c) => c.type === 'body');
   const blocks = blocksHtml(ctx, body?.content);
   if (ctx.footnotes.length > 0) {

@@ -21,6 +21,7 @@ import {
   CLASS_VERSION,
   bundleAltTextReport,
   cdmWriter,
+  htmlText,
   texArchive,
   type Diagnostic,
   type FontManifest,
@@ -147,6 +148,9 @@ export interface ExportHandlerDeps {
 /** The file of the `cdm` target under the job's prefix (EXP-086). */
 export const CDM_OUTPUT_FILE = 'output.json';
 
+/** The file of the `html` target under the job's prefix (EXP-087; docs/adr/0371-w2-exp-087-html-job.md). */
+export const HTML_OUTPUT_FILE = 'output.html';
+
 /** The file of the `tex` target under the job's prefix: the bundle as one archive (EXP-085). */
 export const TEX_OUTPUT_FILE = 'source.tar';
 
@@ -262,10 +266,15 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     const tenant = job.tenant;
     const payload = readPayload(job);
     m.target = payload.target.slice(0, 20);
-    if (payload.target !== 'pdf' && payload.target !== 'cdm' && payload.target !== 'tex')
+    if (
+      payload.target !== 'pdf' &&
+      payload.target !== 'cdm' &&
+      payload.target !== 'tex' &&
+      payload.target !== 'html'
+    )
       throw new JobFailure(
         'validation_failed',
-        `this worker exports pdf, tex and cdm, not ${payload.target.slice(0, 20)}`,
+        `this worker exports pdf, tex, cdm and html, not ${payload.target.slice(0, 20)}`,
       );
     // The control plane keys cached results by the class version (EXP-006): a worker with another
     // class leaves the job to one that has it.
@@ -325,6 +334,64 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         chainHead: cdmChainHead,
       };
       return cdmOut as unknown as Record<string, unknown>;
+    }
+
+    // The HTML target (09 §11; EXP-087): the direct writer reads the projected envelope. It needs no
+    // font and no sandbox. The writer's diagnostics are the job's, so a construct HTML cannot
+    // express is named in the result (criterion 4). The worker reads no picture bytes, so every
+    // picture is written as its alternative text with `image_asset_missing`; the packaging of
+    // pictures (criterion 6) waits for that read.
+    if (payload.target === 'html') {
+      const htmlContent = await contentAt(
+        deps.stores,
+        { tenant, doc: payload.doc },
+        payload.incarnation,
+        payload.seq,
+      );
+      stopIfCancelled(ctx);
+      const htmlEnvelope = projectedEnvelope(htmlContent.envelope, payload);
+      const htmlPlan = planJob(payload.options, documentLang(htmlEnvelope));
+      if (!htmlPlan.ok)
+        throw failed(
+          'validation_failed',
+          'an export option cannot be honoured',
+          htmlPlan.diagnostics,
+        );
+      const htmlChainHead = await chainHeadOf(
+        deps.stores,
+        { tenant, doc: payload.doc },
+        payload.seq,
+      );
+      const html = htmlText(htmlEnvelope, {
+        suggestions: htmlPlan.plan.suggestions,
+        ...(htmlContent.title !== null ? { title: htmlContent.title } : {}),
+      });
+      const htmlDiagnostics: Diagnostic[] = [...htmlPlan.plan.diagnostics, ...html.diagnostics];
+      if (!html.ok)
+        throw failed(
+          'unsupported_feature',
+          'the writer cannot write this document',
+          htmlDiagnostics,
+        );
+      stopIfCancelled(ctx);
+      await ctx.report('converting', 50);
+      await deps.outputs.putExport(
+        tenant,
+        job.id,
+        HTML_OUTPUT_FILE,
+        html.bytes,
+        'text/html; charset=utf-8',
+      );
+      const htmlOut: ExportOutputs = {
+        output: HTML_OUTPUT_FILE,
+        pages: null,
+        layout: null,
+        converged: null,
+        log: null,
+        diagnostics: dedupe(htmlDiagnostics),
+        chainHead: htmlChainHead,
+      };
+      return htmlOut as unknown as Record<string, unknown>;
     }
 
     const t0 = now();
