@@ -1254,12 +1254,14 @@ As a maintainer, I want a time-boxed comparison of converters between LaTeX and 
 
 **Acceptance criteria**
 
-- [ ] Given the candidates (Microsoft's stylesheet, which is not redistributable, the strongest open-source converter, which is under the GPL, and any permissively licensed one), when they are compared, then the report states each licence and what it allows: the GPL converter only as a separate process.
+- [x] Given the candidates (Microsoft's stylesheet, which is not redistributable, the strongest open-source converter, which is under the GPL, and any permissively licensed one), when they are compared, then the report states each licence and what it allows: the GPL converter only as a separate process.
 - [ ] Given a corpus of equations taken from real Word files and from the gate's allow-list, when each converter runs in both directions, then the report gives the share converted correctly, the share converted wrongly, and the share not converted.
 - [ ] Given the recommendation, when it is read, then it names the converter, the process boundary, where it runs, and how an equation that cannot be converted is turned into an image whose alternative text is the LaTeX source.
 - [ ] Given the time box ends, when the report is delivered, then it recommends one converter or states that none fits.
 
-**Notes:** The roadmap lists no numbered spike for this (review M-15 asks for "a converter spike"). Phase 2 is inferred, because DOCX import (EXP-105) needs the answer. How an equation image is rendered is not specified anywhere (Open questions).
+**Evidence:** Criterion 1 (lane w2, 2026-11-17): `docs/spikes/2026-11-17-exp-054-math-converter-licences.md` states the licence of six candidates (Microsoft's `MML2OMML.XSL`, texmath, `temml`, `mathjax`, `omml2mathml`, `mathml2omml`), what each allows, and that texmath, as the GPL converter, may only run as a separate process. It is a desk comparison: the licences are those of `docs/research/2026-11-06-borrow-list.md` (package metadata read on 2026-11-06), and the licence text of Microsoft's stylesheet was not read. No converter was run.
+
+**Notes:** Lane w2 (2026-11-17): partial. Criteria 2 to 4 stay unticked. Criterion 2 needs a corpus of equations from real Word files and each converter run in both directions; this repository has no Office math sample (the corpus package has none), no converter is installed, and `docs/spikes/2026-11-17-exp-054-math-converter-licences.md` records that texmath would have to be pulled as a container image (a download that needs the owner's word) and the npm candidates are new dependencies. Criteria 3 and 4 follow from the measurements. One finding of the licence pass: no permissively licensed converter from MathML to Office math is on the list, so the DOCX export direction needs texmath as a separate process, a converter of our own, or the image fallback. That is for the owner and the spike to decide. The roadmap lists no numbered spike for this (review M-15 asks for "a converter spike"). Phase 2 is inferred, because DOCX import (EXP-105) needs the answer. How an equation image is rendered is not specified anywhere (Open questions).
 
 ## Pagination parity and `layout.json`
 
