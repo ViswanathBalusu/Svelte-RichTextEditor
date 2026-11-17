@@ -77,7 +77,13 @@ import {
   type DepEvent,
   type DepOutbound,
 } from '@docedit/protocol/bridge';
-import type { CommitPage, ContentRead, UserLookup, VerifiedIdentity } from '../seams.ts';
+import type {
+  CommitPage,
+  ContentRead,
+  ErrorContext,
+  UserLookup,
+  VerifiedIdentity,
+} from '../seams.ts';
 import {
   DocumentNotFoundError,
   type AppendOptions,
@@ -484,13 +490,13 @@ export class HostedRoom {
             data: { region: m.region, seq: m.seq, expected: m.expected, actual: m.actual, head },
             at: this.#deps.now(),
           });
-          this.#deps.settings.onError(
+          this.#report(
             new Error(`approval of region ${m.region} at seq ${m.seq}: ${m.reason}`),
             'approvals',
           );
         }
       },
-      (e: unknown) => this.#deps.settings.onError(e, 'approvals'),
+      (e: unknown) => this.#report(e, 'approvals'),
     );
   }
 
@@ -519,7 +525,7 @@ export class HostedRoom {
       (found) => {
         for (const [s, sub] of found) this.#subs.set(s, sub);
       },
-      (e: unknown) => this.#deps.settings.onError(e, 'users'),
+      (e: unknown) => this.#report(e, 'users'),
     );
   }
 
@@ -603,6 +609,18 @@ ecentHead, keeping one entry older than the window. */
     return this.#room.minVisibleSeq(conn);
   }
 
+  /**
+   * Reports an error of this room with its tenant and document, and with the session where the
+   * error belongs to one channel (BE-088 criterion 1).
+   */
+  #report(e: unknown, where: string, session?: string): void {
+    this.#deps.settings.onError(e, where, {
+      tenant: this.ref.tenant,
+      doc: this.ref.doc,
+      ...(session !== undefined ? { session } : {}),
+    });
+  }
+
   // --- Channels (05 §5.2) ----------------------------------------------------------------------
 
   /**
@@ -657,7 +675,7 @@ ecentHead, keeping one entry older than the window. */
       inflight: null,
     };
     if (ch.gatewayView !== this.#deps.tokens.gatewayToken(now))
-      this.#deps.settings.onError(new Error('the gateway chose another class'), 'open');
+      this.#report(new Error('the gateway chose another class'), 'open', port.session);
     this.#channels.set(key, ch);
     if (port.trace) this.#lastTrace = port.trace;
     let inflight: Inflight | undefined;
@@ -971,9 +989,10 @@ ecentHead, keeping one entry older than the window. */
           if (e.t === 'sync.reject')
             this.#auditRejection(ch.conn.sub, ch.conn.agent, ch.port.session, e.d);
           if (re === undefined) {
-            this.#deps.settings.onError(
+            this.#report(
               new Error(`${e.t} for ${e.d.id} answers no submit on the channel`),
               'dispatch',
+              ch.port.session,
             );
             continue;
           }
@@ -1032,7 +1051,7 @@ ecentHead, keeping one entry older than the window. */
       });
     } catch (err) {
       // An entry that cannot be built is reported, never stored half-formed; the refusal still goes.
-      this.#deps.settings.onError(err, 'audit');
+      this.#report(err, 'audit');
       return;
     }
     if (!entry) return;
@@ -1067,7 +1086,7 @@ ecentHead, keeping one entry older than the window. */
   #write(req: WriteRequest): void {
     if (this.#writing) {
       // The room never asks for a second write while one is in flight; refuse to make one.
-      this.#deps.settings.onError(new Error('a second write while one is in flight'), 'write');
+      this.#report(new Error('a second write while one is in flight'), 'write');
       return;
     }
     this.#writing = req;
@@ -1127,7 +1146,7 @@ ecentHead, keeping one entry older than the window. */
       try {
         key = (await this.#deps.checkpointer.save(this.ref, req.snapshot.seq, content, false)).key;
       } catch (e) {
-        this.#deps.settings.onError(e, `checkpoint of snapshot ${req.snapshot.seq}`);
+        this.#report(e, `checkpoint of snapshot ${req.snapshot.seq}`);
         this.#deps.metrics.checkpointFailures.inc({ tenant: this.ref.tenant });
         return { status: 'failed' };
       }
@@ -1187,7 +1206,7 @@ ecentHead, keeping one entry older than the window. */
     this.#writing = null;
     this.#settleWrite();
     if (this.#stopped) return;
-    this.#deps.settings.onError(e, `write to ${this.ref.doc}`);
+    this.#report(e, `write to ${this.ref.doc}`);
     try {
       this.#apply(this.#gateway.writeCompleted({ status: 'lost' }));
     } catch (e2) {
@@ -1200,7 +1219,7 @@ ecentHead, keeping one entry older than the window. */
   /** The room itself failed: its channels close and nothing more is asked of it. */
   #halt(e: unknown): void {
     if (this.#stopped) return;
-    this.#deps.settings.onError(e, `room ${this.ref.doc}`);
+    this.#report(e, `room ${this.ref.doc}`);
     const d: ChannelClosed = { code: 'unavailable', reason: closeReasonText('stopped') };
     const channels = [...this.#channels.values()];
     this.#channels.clear();
@@ -1350,7 +1369,7 @@ ecentHead, keeping one entry older than the window. */
       } catch (err) {
         this.#checkpointFailures++;
         this.#deps.metrics.checkpointFailures.inc({ tenant });
-        this.#deps.settings.onError(err, `checkpoint of ${this.ref.doc}`);
+        this.#report(err, `checkpoint of ${this.ref.doc}`);
         span.end({ outcome: 'failed' });
         // Object storage may be down (06 §8): try again later; the log alone keeps every commit.
         if (!this.#stopped && !this.transient && !this.#checkpointTimer) {
@@ -1449,7 +1468,7 @@ ecentHead, keeping one entry older than the window. */
     try {
       await this.#deps.ownership.release(this.ref, this.#deps.node, this.epoch);
     } catch (e) {
-      this.#deps.settings.onError(e, `release ${this.ref.doc}`);
+      this.#report(e, `release ${this.ref.doc}`);
     }
   }
 
@@ -1516,7 +1535,7 @@ ecentHead, keeping one entry older than the window. */
       try {
         this.#apply(this.#gateway.stop());
       } catch (e) {
-        this.#deps.settings.onError(e, `stop ${this.ref.doc}`);
+        this.#report(e, `stop ${this.ref.doc}`);
       }
       const d: ChannelClosed = { code: 'unavailable', reason };
       // Stored commits still held on the window go before the close (SYN-041).
@@ -1539,7 +1558,7 @@ ecentHead, keeping one entry older than the window. */
     try {
       this.#gateway.stop();
     } catch (e) {
-      this.#deps.settings.onError(e, `fence ${this.ref.doc}`);
+      this.#report(e, `fence ${this.ref.doc}`);
     }
     const d: ChannelClosed = { code: 'unavailable', reason, retryInMs: 1000 };
     // The held commits are stored ones: they go before the close (SYN-041).
@@ -1742,7 +1761,7 @@ export class RoomHost {
     } catch (e) {
       if (e instanceof Refusal) throw e;
       if (e instanceof DocumentNotFoundError) throw new Refusal('not_found', 'no such document');
-      d.settings.onError(e, `open ${ref.doc}`);
+      d.settings.onError(e, `open ${ref.doc}`, { tenant: ref.tenant, doc: ref.doc });
       throw new Refusal('unavailable', 'the document could not be opened');
     }
   }
@@ -1792,7 +1811,7 @@ export class RoomHost {
       // The document resource changed (metadata or state): open channels may re-read it (05 §5.6).
       room.notify({ type: 'document.updated', resource: `/documents/${ref.doc}` });
     } catch (e) {
-      this.#deps.settings.onError(e, `refresh ${ref.doc}`);
+      this.#deps.settings.onError(e, `refresh ${ref.doc}`, { tenant: ref.tenant, doc: ref.doc });
     }
   }
 
@@ -1982,16 +2001,16 @@ export class RoomHost {
         view: d.tokens.tokenFor(hidden),
       };
     } catch (e) {
-      throw this.#readError(e, `content of ${doc}`);
+      throw this.#readError(e, `content of ${doc}`, { tenant: identity.tenant, doc });
     }
   }
 
-  #readError(e: unknown, where: string): DataPlaneError {
+  #readError(e: unknown, where: string, context: ErrorContext): DataPlaneError {
     if (e instanceof DataPlaneError) return e;
     if (e instanceof DocumentNotFoundError)
       return new DataPlaneError('not_found', 'no such document');
     if (e instanceof Refusal) return new DataPlaneError('unavailable', e.message);
-    this.#deps.settings.onError(e, where);
+    this.#deps.settings.onError(e, where, context);
     return new DataPlaneError('unavailable', 'the content could not be read');
   }
 
@@ -2099,7 +2118,7 @@ export class RoomHost {
         incarnation: head.incarnation,
       };
     } catch (e) {
-      throw this.#readError(e, `commits of ${doc}`);
+      throw this.#readError(e, `commits of ${doc}`, { tenant: identity.tenant, doc });
     }
   }
 

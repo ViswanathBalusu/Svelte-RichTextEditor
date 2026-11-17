@@ -7,6 +7,7 @@
  * Prepares FE-014, FE-016, FE-017, FE-069, FE-070, FE-071, FE-125.
  */
 import { type Page, expect, test } from '@playwright/test';
+import { clickToolbarCommand } from './embed-helpers.ts';
 import { SPIKE_IDS, openPanel, record, runId } from './helpers.ts';
 import {
   collect,
@@ -77,7 +78,7 @@ async function exercise(page: Page, feature: string, run: string): Promise<unkno
       return { handled, after: await h.nodeText(SPIKE_IDS.after) };
     }
     case 'pane': {
-      await page.locator('doc-editor button[data-command="outline"]').click();
+      await clickToolbarCommand(page, 'outline');
       await page.locator('doc-editor .de-outline').waitFor();
       return { outline: await page.locator('doc-editor .de-outline').innerText() };
     }

@@ -92,10 +92,22 @@ describe('the compose definition (UX-091 criterion 1 in part; BE-005 criterion 4
   });
 
   it('gives the export sandbox no network (the worker runs its jobs there, 09 §9.3)', async () => {
+    type Services = Record<
+      string,
+      { network_mode?: string; read_only?: boolean; extends?: { file: string; service: string } }
+    >;
     const compose = JSON.parse(await readFile(join(APP_DIR, 'compose.json'), 'utf8')) as {
-      services: Record<string, { network_mode?: string; read_only?: boolean }>;
+      services: Services;
     };
-    expect(compose.services['export-sandbox']).toMatchObject({
+    // The sandbox settings are those of the integration-test environment, taken with `extends`
+    // (FND-010 criterion 2), and the demo's file does not set them again.
+    const sandbox = compose.services['export-sandbox']!;
+    expect(sandbox.extends?.service).toBe('export-sandbox');
+    expect(sandbox).not.toHaveProperty('network_mode');
+    const shared = JSON.parse(await readFile(join(APP_DIR, sandbox.extends!.file), 'utf8')) as {
+      services: Services;
+    };
+    expect(shared.services['export-sandbox']).toMatchObject({
       network_mode: 'none',
       read_only: true,
     });
