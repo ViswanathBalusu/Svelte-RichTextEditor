@@ -26,7 +26,9 @@
  *   credential writes no comment and edits none, but may delete one, as it may delete a thread.
  * - a thread's state notice and webhook: `resolved` and `reopened` have both; an assignee change
  *   has only the `thread.updated` notice, since webhooks have no `thread.updated` (gaps.ts).
- * - mentions (PRO-060 criterion 4, the `dep.comment.mentioned` webhook) are not read yet.
+ * - mentions (PRO-060 criterion 4): the mention nodes of a new comment, and of the first comment of
+ *   a new thread, raise `dep.comment.mentioned` once for each distinct principal (mentions.ts,
+ *   docs/adr/0375-w5-PRO-060-comment-mentions.md). An edit of a comment raises none.
  */
 import {
   authoriseComment,
@@ -44,6 +46,7 @@ import type { DocRef } from '../storage/types.ts';
 import { accessOf, connectionOn, regionInfosOfJson } from './gate.ts';
 import { checkIfMatch, pageLimit, seqParam } from './http.ts';
 import { json, type Kit } from './kit.ts';
+import { mentionsOf } from './mentions.ts';
 import type { Ctx, Handler, Reply } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { readerView } from './visibility.ts';
@@ -289,6 +292,23 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     };
   };
 
+  /**
+   * `dep.comment.mentioned` once for each distinct principal a comment body mentions (PRO-060
+   * criterion 4; 13 §5): the host sends the notification. The data names the principal as the
+   * mention node holds it, `user:<sub>` or `group:<id>`.
+   */
+  const raiseMentions = (
+    ctx: Ctx,
+    doc: string,
+    comment: string,
+    thread: string,
+    body: unknown,
+    seq: number,
+  ): void => {
+    for (const principal of mentionsOf(body))
+      emit(ctx, 'dep.comment.mentioned', doc, { comment, thread, principal, seq });
+  };
+
   const createThread: Handler = async (ctx): Promise<Reply> => {
     const doc = ctx.params['id']!;
     const s = store();
@@ -326,6 +346,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       },
     });
     emit(ctx, 'dep.thread.created', doc, { thread: thread.id, seq: head.seq });
+    raiseMentions(ctx, doc, thread.comments[0]?.id ?? '', thread.id, body.comment, head.seq);
     const told = await eventOf(ctx.caller.tenant, thread);
     k.notify()?.(
       ref,
@@ -524,11 +545,9 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     };
     const added = await store().addComment(ctx.caller.tenant, t.id, comment);
     if (!added) throw new ApiError('not_found', 'no such thread');
-    emit(ctx, 'dep.comment.created', t.docId, {
-      comment: comment.id,
-      thread: t.id,
-      seq: (await d.logs.head(refOf(ctx, t.docId))).seq,
-    });
+    const seq = (await d.logs.head(refOf(ctx, t.docId))).seq;
+    emit(ctx, 'dep.comment.created', t.docId, { comment: comment.id, thread: t.id, seq });
+    raiseMentions(ctx, t.docId, comment.id, t.id, comment.body, seq);
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
       { type: 'comment.created', resource: `/comments/${comment.id}`, data: { thread: t.id } },
