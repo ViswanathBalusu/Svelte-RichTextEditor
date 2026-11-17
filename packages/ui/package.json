@@ -16,6 +16,7 @@
       "svelte": "./src/panes/*",
       "default": "./src/panes/*"
     },
+    "./fill": "./src/shell/fill.ts",
     "./styles/*": "./src/styles/*"
   },
   "scripts": {

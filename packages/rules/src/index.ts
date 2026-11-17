@@ -82,6 +82,7 @@ export {
   checkRuleInvariants,
   compileDocument,
   evaluateDocument,
+  fieldFrom,
   readDocument,
   type DocumentRules,
   type RuleViolation,

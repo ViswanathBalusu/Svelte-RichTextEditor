@@ -13,7 +13,7 @@
  * - close() closes the channels and the socket with a normal closure and cancels every timer.
  */
 import {
-  DEP1,
+  DEP1_WIRE,
   OrderedDelivery,
   PortError,
   ShapeValidator,
@@ -145,7 +145,7 @@ const FINAL_CODES: ReadonlySet<string> = new Set([
   'unsupported_cdm',
 ]);
 
-const validator = new ShapeValidator(DEP1);
+const validator = new ShapeValidator(DEP1_WIRE);
 const messageOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 /** The two limits of `welcome` that bound one commit, as the channel enforces them (PRO-022). */

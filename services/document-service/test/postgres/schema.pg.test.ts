@@ -147,6 +147,63 @@ describe.skipIf(unavailable !== null)('schema (PostgreSQL)', () => {
       'epoch',
       'chain_head',
     ]);
+    // BE-009 criterion 1: the other three tables of the log. `documents` starts with the columns
+    // of 06 §4.1 in the sketch's order (tenant_id is in the sketch); later migrations may only
+    // add columns after them (meta_rev, 0005).
+    expect((await columns('documents')).slice(0, 15)).toEqual([
+      'id',
+      'tenant_id',
+      'external_id',
+      'title',
+      'properties',
+      'label',
+      'state',
+      'cdm_version',
+      'requires',
+      'history_visibility',
+      'forked_from',
+      'forked_at_seq',
+      'created_by',
+      'created_at',
+      'deleted_at',
+    ]);
+    expect(await columns('doc_commit_payloads')).toEqual(['doc_id', 'seq', 'tenant_id', 'payload']);
+    expect(await columns('commit_scopes')).toEqual(['doc_id', 'scope', 'seq', 'tenant_id']);
+    const types = async (table: string) =>
+      Object.fromEntries(
+        (
+          await q<{ c: string; t: string; n: string }>(
+            `SELECT column_name AS c, data_type AS t, is_nullable AS n
+               FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+            [table],
+          )
+        ).map((r) => [r.c, `${r.t}${r.n === 'NO' ? ' not null' : ''}`]),
+      );
+    expect(await types('doc_commit_payloads')).toMatchObject({
+      doc_id: 'uuid not null',
+      seq: 'bigint not null',
+      payload: 'bytea not null',
+    });
+    expect(await types('commit_scopes')).toMatchObject({
+      doc_id: 'uuid not null',
+      scope: 'text not null',
+      seq: 'bigint not null',
+    });
+    expect(await types('documents')).toMatchObject({
+      id: 'uuid not null',
+      tenant_id: 'uuid not null',
+      external_id: 'text',
+      properties: 'jsonb not null',
+      state: 'text not null',
+      cdm_version: 'integer not null',
+      requires: 'ARRAY not null',
+      history_visibility: 'text not null',
+      forked_at_seq: 'bigint',
+      created_by: 'text not null',
+      created_at: 'timestamp with time zone not null',
+      deleted_at: 'timestamp with time zone',
+    });
+    expect(await keyColumns('documents', 'p')).toEqual([['id']]);
     expect(await columns('region_grants')).toEqual([
       'doc_id',
       'region_id',

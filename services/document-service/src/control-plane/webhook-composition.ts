@@ -10,6 +10,8 @@
  * - Deliveries: the in-memory store by default; `PgDeliveryStore` waits for its migration.
  * - Egress: every send goes through `EgressProxy` with the system resolver and the Node.js
  *   connector (BE-056); a target whose address is not public is refused and the row records why.
+ * - Retries (PRO-071): with `settings.retry` the dispatcher retries a failed delivery with
+ *   exponential delay inside the 24 hours of 05 §7; without it, it does not (no default, ADR 0216).
  * - Throttle: `dep.commit.rejected.v1` is admitted `rejectedMax` times per `rejectedWindowMs`.
  *
  * No number has a default here: the spec gives none (ADR 0146), so `config.ts` requires them.
@@ -21,8 +23,16 @@ import {
   WebhookDispatcher,
   type DeliveryStore,
   type DispatcherLogEntry,
+  RETRY_WINDOW_MS,
 } from './webhook-dispatcher.ts';
-import { EgressProxy, nodeConnector, systemResolver, type Transport } from './webhook-egress.ts';
+import {
+  EgressProxy,
+  nodeConnector,
+  systemResolver,
+  type Connector,
+  type Resolver,
+  type Transport,
+} from './webhook-egress.ts';
 import {
   MemorySubscriptionStore,
   WebhookSubscriptions,
@@ -34,6 +44,10 @@ export interface WebhookOverrides {
   /** Replaces the egress proxy. Tests only: production sends go through `EgressProxy`. */
   transport?: Transport;
   deliveries?: DeliveryStore;
+  /** Replaces the resolver and the connector under the real `EgressProxy`: the rules stay in force. */
+  egress?: { resolver?: Resolver; connector?: Connector };
+  /** Replaces the timer of the retries, so that a test fires them by hand. */
+  schedule?: (run: () => void, delayMs: number) => void;
 }
 
 export interface ComposeWebhooksInput {
@@ -64,16 +78,27 @@ function logTo(logger: Logger): (entry: DispatcherLogEntry) => void {
         if (e.reason !== null || e.status === null || e.status < 200 || e.status > 299)
           logger.warn({
             event: 'webhook.attempt.failed',
+            tenant: e.tenant,
             message: e.eventType,
             ...(e.status !== null ? { status: e.status } : {}),
             ...(e.reason !== null ? { code: e.reason } : {}),
           });
         return;
       case 'suppressed':
-        logger.info({ event: 'webhook.suppressed', message: e.eventType, code: e.reason });
+        logger.info({
+          event: 'webhook.suppressed',
+          tenant: e.tenant,
+          message: e.eventType,
+          code: e.reason,
+        });
         return;
       case 'envelope_refused':
-        logger.error({ event: 'webhook.envelope_refused', message: e.eventType, code: e.reason });
+        logger.error({
+          event: 'webhook.envelope_refused',
+          tenant: e.tenant,
+          message: e.eventType,
+          code: e.reason,
+        });
         return;
       default:
         return;
@@ -93,8 +118,8 @@ export function composeWebhooks(input: ComposeWebhooksInput): ComposedWebhooks {
   const transport =
     overrides.transport ??
     new EgressProxy({
-      resolver: systemResolver,
-      connector: nodeConnector(settings.timeoutMs),
+      resolver: overrides.egress?.resolver ?? systemResolver,
+      connector: overrides.egress?.connector ?? nodeConnector(settings.timeoutMs),
       maxRedirects: settings.maxRedirects,
     });
   const dispatcher = new WebhookDispatcher({
@@ -105,6 +130,9 @@ export function composeWebhooks(input: ComposeWebhooksInput): ComposedWebhooks {
     now: input.now,
     rejectedThrottle: { windowMs: settings.rejectedWindowMs, max: settings.rejectedMax },
     log: logTo(input.logger),
+    // PRO-071: with a schedule in the settings, a failed delivery is retried inside 24 hours.
+    ...(settings.retry ? { retry: { ...settings.retry, maxAgeMs: RETRY_WINDOW_MS } } : {}),
+    ...(overrides.schedule ? { schedule: overrides.schedule } : {}),
   });
   return { dispatcher, store, routes, deliveries };
 }

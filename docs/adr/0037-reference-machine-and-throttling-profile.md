@@ -1,6 +1,6 @@
 # ADR 0037: The reference machine, its CPU throttling profile, and how the harness compares runs
 
-**Status:** proposed, 2026-11-06 (FND-007).
+**Status:** proposed, 2026-11-06 (FND-007). Accepted in part, 2026-11-15: the owner confirmed the reference machine and the laptop class (decision 22 of [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)). The tolerances (§6, §7) stay provisional until they are measured again on a dedicated runner.
 
 ## Context
 

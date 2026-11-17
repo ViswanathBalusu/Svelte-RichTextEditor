@@ -21,7 +21,7 @@
   import type { StringKey } from '../i18n/en-GB.ts';
   import { live } from '../live.ts';
   import { capabilitiesAnywhere } from '../shell/modes.ts';
-  import { whoCanEdit } from '../shell/regions.ts';
+  import { grantableCandidates, whoCanEdit } from '../shell/regions.ts';
 
   const shell = useShell()!;
   const core = shell.core;
@@ -139,7 +139,7 @@
           limit: 20,
         });
         if (query.trim() !== text) return;
-        candidates = Array.isArray(found) ? found.filter((p) => typeof p?.principal === 'string') : [];
+        candidates = Array.isArray(found) ? grantableCandidates(found, selected?.policy) : [];
         for (const p of candidates)
           if (p.principal.startsWith('group:') && typeof p.name === 'string')
             groupNames.set(p.principal, p.name);

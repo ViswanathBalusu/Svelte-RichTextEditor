@@ -64,8 +64,16 @@ Production (`packages/element/src/pdf/viewer-frame.ts`, a sandboxed iframe):
 - The viewer page's own policy, when the host serves it: `script-src` for the viewer origin plus
   `'wasm-unsafe-eval'` for the WebAssembly decoders; `connect-src` for the viewer origin, since the
   worker fetches decoders, CMaps and standard fonts.
-- Not measured in the spike: the production frame, its sandbox and the behaviour when `frame-src`
-  is missing. The spike did not build the frame (S2 report, sections 8 and 9).
+- With `frame-src` for the viewer's origin added to the strict baseline, the frame draws the PDF and
+  the page reports no violation (`packages/element/e2e/pdf-viewer.spec.ts`, 'works under a strict
+  host policy').
+- Without `frame-src` for the viewer's origin (strict baseline, `frame-src 'none'`), the browser
+  refuses the frame and the page reports one `frame-src` violation. The viewer never answers, so
+  the open is refused with the error code `unavailable` ("the PDF viewer did not answer") when the
+  ready timeout ends (15 s, `READY_TIMEOUT_MS`). The frame is then removed and the editor itself
+  keeps working. Measured in Chromium, Edge, Firefox and WebKit on Windows 11 by
+  `packages/element/e2e/fe-017-without-directives.spec.ts` (lane w1, 2026-11-15).
+- Not measured: the viewer page's own policy with `'wasm-unsafe-eval'` left out.
 
 In-page panel (`packages/element/src/features/pdf.ts`, measured in the spike):
 - `trusted-types docedit-worker`: the component creates its worker through this policy, for
@@ -103,6 +111,15 @@ In-page panel (`packages/element/src/features/pdf.ts`, measured in the spike):
 - The math editor's markup is not the only markup MathLive writes: ten of its `innerHTML`
   assignments (menus, the virtual keyboard's toolbar, static rendering) do not go through the policy.
   None was exercised in the spike; each would raise a Trusted Types violation when used.
+- Without `docedit-math` (strict baseline, no policy name allowed), the editor does not work: the
+  policy cannot be created, MathLive's markup is never written, and the `math-field` element is on
+  the page but empty (a few pixels wide) and takes no input. The page reports one `trusted-types`
+  violation and sees an uncaught `TypeError` that names the policy. There is no fallback editor.
+- With `docedit-math` but without `style-src-attr 'unsafe-inline'`, the field is drawn and takes
+  input, and the page reports `style-src-attr` violations for the inline styles the browser
+  refuses. How the formula looks without those styles was not judged.
+- Both cases were measured in Chromium, Edge, Firefox and WebKit on Windows 11 by
+  `packages/element/e2e/fe-017-without-directives.spec.ts` (lane w1, 2026-11-15).
 - Omit: `trusted-types docedit-math` and `style-src-attr` only if the host never opens the math
   editor.
 
@@ -121,7 +138,9 @@ In-page panel (`packages/element/src/features/pdf.ts`, measured in the spike):
   and adds nothing.
 - The faces stay in `document.fonts` after the element is removed; the editor does not delete them.
 - A face is only registered: the browser fetches the file when text first uses the alias. That
-  fetch is what `font-src` must allow.
+  fetch is what `font-src` must allow. Measured: a manifest file on the page's own origin loads
+  under the strict baseline (`font-src 'self'`) with no violation
+  (`packages/element/e2e/s2-features.spec.ts`, 'fonts').
 - The aliases are not applied to the math families (they keep their own names, see below).
 
 ## Global side effects visible to the host page

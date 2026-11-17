@@ -27,13 +27,15 @@
     context: FieldContext;
     /** Read-only: every control is disabled and nothing is committed. */
     readOnly: boolean;
+    /** The roles' names by identifier, shown in the assignee list; an identifier without one shows itself. */
+    roleNames?: Readonly<Record<string, string>>;
     /** The string catalogue's translator. */
     t: (key: string, params?: Readonly<Record<string, string | number>>) => string;
     /** Receives only the attributes that changed, and only when the draft has no problem. */
     oncommit?: (patch: Partial<FieldDraft>) => void;
   }
 
-  let { original, context, readOnly, t, oncommit }: Props = $props();
+  let { original, context, readOnly, roleNames = {}, t, oncommit }: Props = $props();
 
   // The inputs start from the field as given. A later change of `original` does not reset them.
   // svelte-ignore state_referenced_locally
@@ -113,7 +115,7 @@
     >
       <option value="">{t('field.panel.noRole')}</option>
       {#each roles as role (role)}
-        <option value={role}>{role}</option>
+        <option value={role}>{roleNames[role] ?? role}</option>
       {/each}
     </select>
 
@@ -170,14 +172,17 @@
   </div>
 
   {#if problems.length > 0}
-    <ul id="fp-problems" class="de-problems" role="alert">
-      <li class="de-problems-title">{t('field.panel.problems')}</li>
-      {#each problems as problem, i (i)}
-        <li data-property={problem.property}>
-          {t(`field.prop.${problem.property}`)}: {t(`field.problem.${problem.code}`)}
-        </li>
-      {/each}
-    </ul>
+    <!-- The alert holds a list; it is not itself the list, so the items keep their list. -->
+    <div id="fp-problems" class="de-problems" role="alert">
+      <p class="de-problems-title">{t('field.panel.problems')}</p>
+      <ul>
+        {#each problems as problem, i (i)}
+          <li data-property={problem.property}>
+            {t(`field.prop.${problem.property}`)}: {t(`field.problem.${problem.code}`)}
+          </li>
+        {/each}
+      </ul>
+    </div>
   {/if}
 
   <p role="status" data-status="apply">{status}</p>

@@ -83,7 +83,8 @@ function expected(c: Omit<CapabilityCase, 'id' | 'name' | 'expected'>): Capabili
       (g.expiresAt === null || NOW < g.expiresAt) &&
       (g.principal === `user:${USER.sub}` ||
         (g.principal.startsWith('group:') && USER.groups.includes(g.principal.slice(6))) ||
-        g.principal === 'everyone' ||
+        // PRM-061: `everyone` conveys nothing on a restricted region (owner decision 12, 2026-11-15).
+        (g.principal === 'everyone' && c.policy !== 'restricted') ||
         (g.principal.startsWith('role:') &&
           c.workflowActive &&
           USER.participantRoles.includes(g.principal.slice(5)))),

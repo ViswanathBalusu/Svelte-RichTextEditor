@@ -27,7 +27,16 @@ import {
 import { capabilityFixtures, type CapabilityCase } from '../fixtures.ts';
 import { judge, permissionState, type OracleGrant } from '../oracle.ts';
 import { scenario, type ProfileDef, type ScenarioDef } from '../scenario.ts';
-import { acked, join, opened, readContent, rejected, submit, type Member } from './support.ts';
+import {
+  acked,
+  join,
+  opened,
+  problemOf,
+  readContent,
+  rejected,
+  submit,
+  type Member,
+} from './support.ts';
 
 const doc = (def: Omit<ScenarioDef, 'id'> & { id: string }) => scenario('perm-doc', def);
 const reg = (def: Omit<ScenarioDef, 'id'> & { id: string }) => scenario('perm-region', def);
@@ -219,6 +228,8 @@ export const PERM_REGION: ProfileDef = {
             c.grants.every(
               (g) =>
                 g.expiresAt === null &&
+                // `everyone` on a restricted region is refused (PRM-061); the scenario below checks it.
+                !(g.principal === 'everyone' && c.policy === 'restricted') &&
                 !g.principal.startsWith('role:') &&
                 ['viewer', 'commenter', 'suggester', 'editor'].includes(g.role),
             ),
@@ -226,6 +237,9 @@ export const PERM_REGION: ProfileDef = {
         // A stratified sample: every role and policy, a spread of grants and states.
         const step = Math.max(1, Math.floor(usable.length / 48));
         const sample = usable.filter((_, i) => i % step === 0);
+        // The sample keeps a non-active document state, which the scenario declares (PATCH /documents/{id}).
+        const inactive = usable.find((c) => c.documentState !== 'active');
+        if (inactive && !sample.some((c) => c.documentState !== 'active')) sample.push(inactive);
         const group = `tck-${ctx.config.run}-group`;
         let checked = 0;
         for (const c of sample) {
@@ -329,6 +343,43 @@ export const PERM_REGION: ProfileDef = {
         equal(r.code, 'permission_denied', 'outside the granted region');
         includes(r.scopes, `region:${SECOND}`, 'the rejection names the region (05 §5.3)');
         excludes(r.scopes, LOCKED_SCOPE, 'and not the granted one');
+      },
+    }),
+    reg({
+      id: 'everyone-restricted',
+      title:
+        'a grant to everyone on a restricted region is validation_failed and stores nothing; a named user is accepted',
+      spec: '07 §1, §17; PRM-061; owner decision 12 of 2026-11-15',
+      covers: {
+        operations: ['PATCH /documents/{id}/grants'],
+        errors: ['validation_failed'],
+      },
+      async run(ctx) {
+        const d = await ctx.document(twoRegions());
+        const read = await ctx.service.call('GET', `/documents/${d}/grants`);
+        const etag = read.headers.get('etag') ?? '*';
+        const refused = await ctx.service.call('PATCH', `/documents/${d}/grants`, {
+          body: { grants: [{ region: IDS.locked, principal: 'everyone', role: 'editor' }] },
+          headers: { 'if-match': etag },
+        });
+        equal(
+          problemOf(refused, 'everyone on a restricted region').code,
+          'validation_failed',
+          'code',
+        );
+        equal(refused.status, 400, 'the HTTP status of validation_failed (D61)');
+        const after = await ctx.service.call('GET', `/documents/${d}/grants`);
+        equal(
+          after.headers.get('etag') ?? '*',
+          etag,
+          'nothing was stored: the revision is unchanged',
+        );
+        jsonEqual((after.json as { grants?: unknown }).grants, [], 'nothing was stored: no grant');
+        // The same region takes a named user (07 §1).
+        const sub = ctx.sub('named');
+        await ctx.service.setGrants(d, [
+          { region: IDS.locked, principal: `user:${sub}`, role: 'editor' },
+        ]);
       },
     }),
     reg({

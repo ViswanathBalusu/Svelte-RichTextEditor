@@ -39,7 +39,17 @@ export interface GuardContext {
   /** The access in force; null means no backend told the core anything, and nothing is refused. */
   access(): Access | null;
   readOnly(): boolean;
+  /**
+   * Whether only the values of form fields may change (the `fill` mode, 12 §4.2): any other
+   * change is refused as read-only, whatever the access allows.
+   */
+  valuesOnly?(): boolean;
   refused(r: Refusal): void;
+}
+
+/** Whether a change from `before` to `after` touches nothing but the values of form fields. */
+function onlyFieldValues(before: Node, after: Node): boolean {
+  return scopeDiff(before, after).changed.every((scope) => scope.startsWith('field:'));
 }
 
 /** The capabilities that let a person change a scope in some way (07 §7: edit, suggest or fill). */
@@ -292,14 +302,12 @@ export function guardPlugin(
       if (tr.getMeta(REMOTE) === true || tr.getMeta(INTERNAL) === true) return true;
       const access = ctx.access();
       const readOnly = ctx.readOnly();
-      const refusal = checkChange(
-        state.doc,
-        complete(tr.doc, state.doc),
-        tr.steps,
-        tr.docs,
-        access,
-        readOnly,
-      );
+      const completed = complete(tr.doc, state.doc);
+      const refusal =
+        checkChange(state.doc, completed, tr.steps, tr.docs, access, readOnly) ??
+        (ctx.valuesOnly?.() === true && !onlyFieldValues(state.doc, completed)
+          ? ({ reason: 'read-only', scopes: [] } as const)
+          : null);
       if (!refusal) return true;
       ctx.refused(refusal);
       return false;

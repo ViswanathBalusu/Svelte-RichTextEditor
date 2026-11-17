@@ -116,6 +116,12 @@ export interface WebhookSettings {
   maxRedirects: number;
   /** The CloudEvents `source`; null: the service identifier. */
   source: string | null;
+  /**
+   * The retry schedule of a failed delivery (PRO-071): the delay before the first retry and the
+   * growth per attempt. The window is the 24 hours of 05 §7. Absent: a failed delivery is not
+   * retried. The spec gives no figure for either, so there is no default (ADR 0216, proposed).
+   */
+  retry?: { baseMs: number; factor: number };
 }
 
 export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
@@ -176,10 +182,33 @@ function required(env: NodeJS.ProcessEnv, name: string, min: number): number {
   return n;
 }
 
+/**
+ * The retry schedule from DOCEDIT_WEBHOOK_RETRY_BASE_MS and DOCEDIT_WEBHOOK_RETRY_FACTOR: both or
+ * neither (neither: no retry). Unlike the settings above, leaving them out is allowed, because
+ * the owner has not chosen a schedule (ADR 0216).
+ */
+function retrySettings(env: NodeJS.ProcessEnv): WebhookSettings['retry'] {
+  const base = env['DOCEDIT_WEBHOOK_RETRY_BASE_MS'];
+  const factor = env['DOCEDIT_WEBHOOK_RETRY_FACTOR'];
+  const none = (v: string | undefined) => v === undefined || v === '';
+  if (none(base) && none(factor)) return undefined;
+  if (none(base) || none(factor))
+    throw new Error(
+      'DOCEDIT_WEBHOOK_RETRY_BASE_MS and DOCEDIT_WEBHOOK_RETRY_FACTOR are set together or not at all',
+    );
+  const baseMs = required(env, 'DOCEDIT_WEBHOOK_RETRY_BASE_MS', 1);
+  const f = Number(factor);
+  if (!Number.isFinite(f) || f < 1)
+    throw new Error('DOCEDIT_WEBHOOK_RETRY_FACTOR must be a number of at least 1');
+  return { baseMs, factor: f };
+}
+
 /** The webhook settings from DOCEDIT_WEBHOOK_* variables, or null when DOCEDIT_WEBHOOKS is off. */
 function webhookSettings(env: NodeJS.ProcessEnv): WebhookSettings | null {
   if (!flag(env, 'DOCEDIT_WEBHOOKS', false)) return null;
+  const retry = retrySettings(env);
   return {
+    ...(retry ? { retry } : {}),
     rejectedWindowMs: required(env, 'DOCEDIT_WEBHOOK_REJECTED_WINDOW_MS', 1),
     rejectedMax: required(env, 'DOCEDIT_WEBHOOK_REJECTED_MAX', 1),
     timeoutMs: required(env, 'DOCEDIT_WEBHOOK_TIMEOUT_MS', 1),

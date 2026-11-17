@@ -19,6 +19,7 @@
   "dependencies": {
     "@docedit/backend-dep": "workspace:*",
     "@docedit/engine": "workspace:*",
+    "@docedit/export-latex": "workspace:*",
     "@docedit/model": "workspace:*",
     "@docedit/protocol": "workspace:*",
     "@docedit/ui": "workspace:*",

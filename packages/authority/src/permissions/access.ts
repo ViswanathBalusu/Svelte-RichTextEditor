@@ -77,6 +77,7 @@ function grantMatches(
 /** The capabilities of the best matching grant: the one with the most capabilities (07 §4). */
 function bestGrant(
   region: string,
+  policy: RegionInfo['policy'],
   conn: Connection,
   perms: PermissionState,
   now: number,
@@ -86,6 +87,9 @@ function bestGrant(
     // A grant naming a role other than the four region roles is invalid (07 §2) and conveys nothing.
     if (!isRegionRole(g.role)) continue;
     if (g.region !== region || !grantMatches(g, conn, now, perms.workflowActive)) continue;
+    // `everyone` on a restricted region conveys nothing (07 §17, owner decision 12 of 2026-11-15;
+    // PRM-061). Grant validation refuses it; a stored one fails closed here.
+    if (g.principal === 'everyone' && policy === 'restricted') continue;
     const c = ROLE_CAPABILITIES[g.role].filter((x) => REGION_CAPABILITIES.includes(x));
     if (!best || c.length > best.length) best = c;
   }
@@ -140,12 +144,18 @@ export function computeAccess(
   const regionMap = new Map<string, Caps>();
   const granted = new Set<string>();
   for (const r of regions) {
-    const grant = bestGrant(r.id, conn, perms, now);
+    const grant = bestGrant(r.id, r.policy, conn, perms, now);
     if (grant) granted.add(r.id);
     regionMap.set(r.id, regionCaps(r, grant, conn, perms, now));
   }
   const fresh: RegionInfo = { id: '\u0000new', policy: 'inherit' };
-  const newRegion = regionCaps(fresh, bestGrant(fresh.id, conn, perms, now), conn, perms, now);
+  const newRegion = regionCaps(
+    fresh,
+    bestGrant(fresh.id, fresh.policy, conn, perms, now),
+    conn,
+    perms,
+    now,
+  );
 
   // Document state limit (07 §4 limit 1): view only, comment when locked, fill where a workflow allows.
   const fillAllowed =
