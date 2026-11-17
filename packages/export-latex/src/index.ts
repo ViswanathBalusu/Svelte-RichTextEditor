@@ -50,6 +50,8 @@ export type { CodeRange } from './fonts/coverage.ts';
 export { preflight } from './preflight.ts';
 export type { PreflightWarning } from './preflight.ts';
 export { texArchive, archiveReadme, tar, CLASS_LICENCE } from './archive.ts';
+export { PACKAGE_LICENCES, CLASS_LICENCE_TEXT, archiveLicenceManifest } from './licences.ts';
+export type { PackageLicence } from './licences.ts';
 export { latexWriter, cdmWriter } from './writer.ts';
 export {
   markdownWriter,

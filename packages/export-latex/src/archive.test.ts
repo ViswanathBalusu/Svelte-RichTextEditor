@@ -3,7 +3,7 @@
  * main.tex, styles.tex, docedit.cls, assets/, map.json and manifest.json, and no auxiliary file or
  * log), 2 (the README lists the fonts by hash and licence and says how to obtain them), 3 (the
  * README carries the compile restrictions: no shell escape, no network, paranoid file access and
- * LuaTeX 1.17 or later), and the first half of 4 (the class's licence is named). Not covered, and
+ * LuaTeX 1.17 or later), and the first half of 4 (the class's licence is named; the licence files
  * left unticked in the story: the licence manifest of the packages is not in the archive (it is in
  * the worker image, EXP-073), and criterion 5 needs a LuaLaTeX compile of the archive, which this
  * package does not run. The documents come from `test/docs.ts`; nothing here compiles.
