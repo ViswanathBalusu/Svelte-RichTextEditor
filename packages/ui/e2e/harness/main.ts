@@ -708,6 +708,8 @@ const harness = {
   setFeatures: (features: string[]) => need().core.features?.set(features),
   setCounts: (counts: ShellCounts) => need().core.counts?.set(counts),
   setSettings: (patch: Partial<ShellSettings>) => need().settings.set(patch),
+  /** Sets a public `--de-` property on the element that holds the shadow root, as a host page does. */
+  setHostProperty: (name: string, value: string) => host.style.setProperty(name, value),
   setLocale: (locale: string) => need().strings.setLocale(locale),
   refuse: (reason: string, scopes: string[] = []) => need().core.refuse(reason, scopes),
   setAside: (items: RecoveredItem[]) => need().core.setAside(items),
