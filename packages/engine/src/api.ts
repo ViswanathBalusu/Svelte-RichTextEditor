@@ -106,6 +106,11 @@ export interface FieldArgs {
   date?: { instant: string; timeZone: string };
   title?: string | null;
   story?: { id: string; pos: number };
+  /**
+   * True for a form field (the palette of FRW-072): `date` is then the form field kind, not the
+   * page date (proposed, ADR 0367).
+   */
+  form?: boolean;
 }
 
 /** One source of a citation (CDM-052; 03 §4.4): the optional parts are stored only when set. */

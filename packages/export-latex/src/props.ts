@@ -105,6 +105,66 @@ export function tabList(ctx: Ctx, tabs: readonly TabStop[]): number {
   return k;
 }
 
+const BORDER_SIDES = [
+  ['top', 't'],
+  ['bottom', 'b'],
+  ['left', 'l'],
+  ['right', 'r'],
+] as const;
+/** Border style codes of the class: single, double, dotted, dashed, thick. */
+const BORDER_STYLE: Readonly<Record<string, Tex>> = {
+  single: t('s'),
+  double: t('d'),
+  dotted: t('o'),
+  dashed: t('a'),
+  thick: t('k'),
+};
+
+/**
+ * The id of a paragraph border list in styles.tex (`\DEdefborders`), 0 for none (EXP-020
+ * criterion 2). Width and space are in twips, as table borders are; a border without a width is 8
+ * twips wide and one without a colour is black. Each paragraph is drawn on its own: the `between`
+ * border is not drawn, and two bordered paragraphs in a row are not joined into one box (a
+ * diagnostic says so when `between` is set).
+ */
+export function borderList(
+  ctx: Ctx,
+  borders: ParagraphProperties['borders'],
+  blockId: string | null,
+): number {
+  if (borders === null) return 0;
+  const sides = borders as Readonly<
+    Record<string, { style?: string; width?: number; color?: string | null; space?: number } | null>
+  >;
+  const between = sides['between'];
+  if (between && between.style !== undefined && between.style !== 'none')
+    warnOnce(
+      ctx,
+      'paragraph_border_between',
+      'the between border of a paragraph is not drawn; each paragraph has its own top and bottom border',
+      blockId,
+    );
+  const parts: Tex[] = [];
+  for (const [side, code] of BORDER_SIDES) {
+    const b = sides[side];
+    if (!b || b.style === undefined || b.style === 'none') continue;
+    const style = enumOf(ctx, BORDER_STYLE, b.style, t('s'), blockId, 'a border style');
+    const width = Math.max(1, Math.min(240, Math.trunc(b.width ?? 8)));
+    const space = Math.max(0, Math.min(620, Math.trunc(b.space ?? 0)));
+    const colour =
+      colourOf(ctx, typeof b.color === 'string' ? b.color : null, blockId) ?? t('000000');
+    parts.push(tex`${t(code)}:${style}:${int(width)}:${int(space)}:${colour}`);
+  }
+  if (parts.length === 0) return 0;
+  const spec = join(parts, t(';'));
+  const known = ctx.borderLists.get(spec);
+  if (known !== undefined) return known;
+  const k = ctx.borderLists.size + 1;
+  ctx.borderLists.set(spec, k);
+  ctx.styleLines.push(tex`\DEdefborders{${int(k)}}{${spec}}`);
+  return k;
+}
+
 type Props = ParagraphProperties & RunProperties;
 
 function flat(p: ResolvedParagraph): Props {
@@ -167,17 +227,12 @@ export function setters(
   if (differs('tabs')) parts.push(tex`\DEtabs{${int(tabList(ctx, v.tabs))}}`);
   if (differs('shading')) {
     const c = colourOf(ctx, v.shading?.fill, blockId);
-    if (c)
-      warnOnce(ctx, 'paragraph_shading', 'paragraph shading is not drawn yet (EXP-020)', blockId);
     parts.push(c ? tex`\DEshade{${c}}` : t('\\DEnoshade'));
   }
-  if (v.borders !== null && differs('borders'))
-    warnOnce(
-      ctx,
-      'paragraph_borders',
-      'paragraph borders are not drawn yet (EXP-020); shading is',
-      blockId,
-    );
+  if (differs('borders')) {
+    const k = borderList(ctx, v.borders, blockId);
+    parts.push(k > 0 ? tex`\DEbord{${int(k)}}` : t('\\DEnobord'));
+  }
   if (v.dir === 'rtl' && differs('dir'))
     warnOnce(
       ctx,

@@ -6,11 +6,21 @@
  * Spike scope (SPK-020): paragraphs with runs, tabs, line, page and column breaks, numbering labels,
  * fields, inline images and equations as stand-ins, footnotes, tables, figures, display equations,
  * a table of contents, regions, section breaks with their page setups, and header and footer
- * stories. Where `packages/model` does not yet hold the one implementation (the numbering algorithm
- * of 03 §7 and the run cascade, CDM-041 and CDM-043), a small local version stands in for it; the
- * spike report lists each one.
+ * stories. The cascade is the model's (`resolveParagraph`, `resolveRun`, `resolveLabelRun`;
+ * CDM-041) and the labels are the model's (`computeLabels`; CDM-042): this module computes neither.
  */
-import { computeLabels, styleTable, type StyleTable } from '@docedit/model';
+import {
+  BASE_PARAGRAPH,
+  BASE_RUN,
+  computeLabels,
+  resolveLabelRun,
+  resolveParagraph,
+  resolveRun,
+  styleTable,
+  type ResolvedParagraph,
+  type RunProperties,
+  type StyleTable,
+} from '@docedit/model';
 import { indexDefinition } from '@docedit/model/definition';
 import type { FontKey } from './measure.ts';
 
@@ -260,9 +270,8 @@ const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 const bool = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null);
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
-/** Fallbacks when no style in the cascade sets a value. */
+/** The face used when no layer of the cascade names a font (the model resolves null). */
 const FALLBACK_FAMILY = 'Noto Serif';
-const FALLBACK_SIZE = 220;
 
 type Attrs = Readonly<Record<string, unknown>>;
 
@@ -279,19 +288,7 @@ function inlineSize(node: CdmNode): number {
 
 // ---------------------------------------------------------------------------------------------
 // Numbering (03 §7). The labels come from the shared algorithm (`computeLabels`, packages/model);
-// the definitions here give a list level its indents and the run format of its label (FE-077).
-
-interface NumberingLevel {
-  format: string;
-  text: string;
-  start: number;
-  restartAfter: number | null;
-  legal: boolean;
-  indentLeft: number;
-  hanging: number;
-  bulletChar: string | null;
-  runProps: Attrs | null;
-}
+// a list level's indents and the run format of its label come from the model's cascade (FE-077).
 
 function toRoman(n: number): string {
   const table: [number, string][] = [
@@ -341,42 +338,11 @@ export function formatNumber(n: number, format: string): string {
   }
 }
 
-class Numbering {
-  private readonly defs = new Map<string, NumberingLevel[]>();
-
-  constructor(defs: readonly CdmNode[]) {
-    for (const d of defs) {
-      const id = str(d.attrs?.['id']);
-      const levels = d.attrs?.['levels'];
-      if (!id || !Array.isArray(levels)) continue;
-      this.defs.set(
-        id,
-        levels.map((l: Attrs) => ({
-          format: str(l['format']) ?? 'decimal',
-          text: str(l['text']) ?? '',
-          start: num(l['start']) ?? 1,
-          restartAfter: num(l['restartAfter']),
-          legal: bool(l['legal']) ?? false,
-          indentLeft: num(l['indentLeft']) ?? 0,
-          hanging: num(l['hanging']) ?? 0,
-          bulletChar: str(l['bulletChar']),
-          runProps: (l['runProps'] as Attrs | undefined) ?? null,
-        })),
-      );
-    }
-  }
-
-  level(numberingId: string, level: number): NumberingLevel | null {
-    return this.defs.get(numberingId)?.[level] ?? null;
-  }
-}
-
 // ---------------------------------------------------------------------------------------------
-// The formatting cascade (03 §6).
+// The formatting cascade (03 §6): the model's resolver, read into flow values.
 
 interface Context {
   readonly table: StyleTable;
-  readonly numbering: Numbering;
   readonly pageSetups: ReadonlyMap<string, CdmNode>;
   readonly notes: Map<string, FlowNote>;
   readonly headings: { block: FlowParagraph; text: string }[];
@@ -414,85 +380,95 @@ function chainValue(
   return null;
 }
 
+/** What the cascade resolved for one paragraph: every run in it starts from this. */
 interface Scope {
-  /** The paragraph's own style. */
+  /** The paragraph's own style, as named (it may not be defined). */
   readonly styleId: string;
-  /** The table style, for content inside a table. */
-  readonly tableStyle: string | null;
-  readonly numberingLevel: NumberingLevel | null;
+  /** The model's resolution of the paragraph (03 §6, layers 0 to 6). */
+  readonly resolved: ResolvedParagraph;
+}
+
+/** A paragraph with no style at all: the base values of the cascade (ADR 0032). */
+const UNSTYLED: ResolvedParagraph = Object.freeze({
+  styleId: '',
+  outlineLevel: null,
+  numbering: null,
+  level: null,
+  properties: BASE_PARAGRAPH,
+  run: BASE_RUN,
+});
+
+/**
+ * The style table the layout resolves against. The layout draws documents that were not
+ * validated, so a default paragraph style that is not defined counts as a style that sets nothing,
+ * instead of failing every paragraph.
+ */
+function tolerantTable(table: StyleTable): StyleTable {
+  const id = table.defaultParagraphStyle;
+  if (table.styles.has(id)) return table;
+  const styles = new Map(table.styles);
+  styles.set(id, Object.freeze({ id, kind: 'paragraph' }));
+  return { ...table, styles };
 }
 
 /**
- * A paragraph property, in the order of 03 §6: direct attribute; the paragraph style chain (up to,
- * not including, the default paragraph style); the numbering level; the table style; the default
- * paragraph style chain. Reading step 1 as "the default paragraph style applies first" lets a
- * table style override `Normal` for content in tables, as Word does; 03 §6 does not say so
- * explicitly, and the spike report lists the question.
+ * The model's resolution of a paragraph (CDM-041). A broken chain (a missing style, a cycle; I4 and
+ * I5 normally prevent both) must not stop the layout: the broken layer is left out, the table style
+ * first, then the paragraph's own style, and the base values are the last resort.
  */
-function paraValue(ctx: Context, scope: Scope, direct: Attrs | null, name: string): unknown {
-  const own = direct?.[name];
-  if (own !== undefined && own !== null) return own;
-  const def = ctx.table.defaultParagraphStyle;
-  const style = chainValue(ctx.table, scope.styleId, name, def);
-  if (style !== null) return style;
-  if (scope.numberingLevel) {
-    if (name === 'indentLeft') return scope.numberingLevel.indentLeft;
-    if (name === 'indentFirstLine' && scope.numberingLevel.hanging)
-      return -scope.numberingLevel.hanging;
+function scopeOf(ctx: Context, attrs: Attrs | null, tableStyle: string | null): Scope {
+  const styleId = str(attrs?.['style']) ?? ctx.table.defaultParagraphStyle;
+  const inTable = tableStyle !== null && ctx.table.styles.has(tableStyle) ? tableStyle : null;
+  const unstyled: Attrs = { ...attrs, style: null };
+  const attempts: [Attrs, string | null][] = [
+    [attrs ?? {}, inTable],
+    [attrs ?? {}, null],
+    [unstyled, inTable],
+    [unstyled, null],
+  ];
+  for (const [a, t] of attempts) {
+    const r = resolveParagraph(ctx.table, a, { tableStyle: t });
+    if (r.ok) return { styleId, resolved: r.value };
   }
-  if (scope.tableStyle) {
-    const t = chainValue(ctx.table, scope.tableStyle, name, null);
-    if (t !== null) return t;
-  }
-  return chainValue(ctx.table, def, name, null);
+  return { styleId, resolved: UNSTYLED };
 }
 
-/** A run property: direct mark; character style chain; then as for paragraphs. */
-function runValue(
-  ctx: Context,
-  scope: Scope,
-  marks: readonly CdmMark[],
-  name: string,
-  extra: Attrs | null,
-): unknown {
-  for (const m of marks) {
-    if (m.type === name) {
-      const v = m.attrs?.['value'] ?? m.attrs?.['style'];
-      if (v !== undefined && v !== null) return v;
-      if (name === 'bold' || name === 'italic' || name === 'strike') return true;
-    }
-  }
-  if (extra && extra[name] !== undefined && extra[name] !== null) return extra[name];
-  const charStyle = marks.find((m) => m.type === 'charStyle');
-  const cs = str(charStyle?.attrs?.['style']);
-  if (cs) {
-    const v = chainValue(ctx.table, cs, name, null);
-    if (v !== null) return v;
-  }
-  return paraValue(ctx, scope, null, name);
+/** The scope of a paragraph the layout generates in a named style (a caption, a footnote, an entry). */
+const styleScope = (ctx: Context, styleId: string, tableStyle: string | null): Scope =>
+  scopeOf(ctx, { style: styleId }, tableStyle);
+
+/**
+ * A run's properties from the model (layers 6 to 8). A broken character style chain leaves the
+ * character style out.
+ */
+function runOf(ctx: Context, scope: Scope, marks: readonly CdmMark[]): RunProperties {
+  const list = marks as Parameters<typeof resolveRun>[2];
+  const r = resolveRun(ctx.table, scope.resolved, list);
+  if (r.ok) return r.value;
+  const plain = resolveRun(
+    ctx.table,
+    scope.resolved,
+    list?.filter((m) => m.type !== 'charStyle'),
+  );
+  return plain.ok ? plain.value : scope.resolved.run;
 }
 
-function fontOf(
-  ctx: Context,
-  scope: Scope,
-  marks: readonly CdmMark[],
-  extra: Attrs | null = null,
-): FlowFont {
-  const family = str(runValue(ctx, scope, marks, 'fontFamily', extra)) ?? FALLBACK_FAMILY;
-  const size = num(runValue(ctx, scope, marks, 'fontSize', extra)) ?? FALLBACK_SIZE;
-  const underline = runValue(ctx, scope, marks, 'underline', extra);
-  const vert = str(runValue(ctx, scope, marks, 'vertAlign', extra));
+/** Resolved run properties as the font a measurer and a painter take. */
+function flowFont(r: RunProperties): FlowFont {
   return {
-    family,
-    sizePt: pt(size),
-    bold: bool(runValue(ctx, scope, marks, 'bold', extra)) ?? false,
-    italic: bool(runValue(ctx, scope, marks, 'italic', extra)) ?? false,
-    color: str(runValue(ctx, scope, marks, 'color', extra)),
-    underline: typeof underline === 'string' ? underline !== 'none' : underline === true,
-    strike: bool(runValue(ctx, scope, marks, 'strike', extra)) ?? false,
-    vertAlign: vert === 'super' || vert === 'sub' ? vert : null,
+    family: r.fontFamily ?? FALLBACK_FAMILY,
+    sizePt: pt(r.fontSize),
+    bold: r.bold,
+    italic: r.italic,
+    color: r.color,
+    underline: r.underline !== 'none',
+    strike: r.strike,
+    vertAlign: r.vertAlign === 'super' || r.vertAlign === 'sub' ? r.vertAlign : null,
   };
 }
+
+const fontOf = (ctx: Context, scope: Scope, marks: readonly CdmMark[]): FlowFont =>
+  flowFont(runOf(ctx, scope, marks));
 
 function alignOf(v: unknown): FlowParagraph['align'] {
   switch (v) {
@@ -560,25 +536,26 @@ interface ParagraphShape {
   lang: string | null;
 }
 
-function paragraphShape(ctx: Context, scope: Scope, direct: Attrs | null): ParagraphShape {
-  const v = (name: string): unknown => paraValue(ctx, scope, direct, name);
+/** The flow values of a resolved paragraph: the model's values, lengths in points. */
+function paragraphShape(ctx: Context, scope: Scope): ParagraphShape {
+  const p = scope.resolved.properties;
   return {
     styleId: scope.styleId,
-    lang: str(v('lang')) ?? ctx.docLang,
-    outlineLevel: num(chainValue(ctx.table, scope.styleId, 'outlineLevel', null)),
-    align: alignOf(v('align')),
-    indentLeft: pt(num(v('indentLeft')) ?? 0),
-    indentRight: pt(num(v('indentRight')) ?? 0),
-    indentFirstLine: pt(num(v('indentFirstLine')) ?? 0),
-    spaceBefore: pt(num(v('spaceBefore')) ?? 0),
-    spaceAfter: pt(num(v('spaceAfter')) ?? 0),
-    contextualSpacing: bool(v('contextualSpacing')) ?? false,
-    line: lineOf(v('lineSpacing'), v('lineRule')),
-    keepNext: bool(v('keepNext')) ?? false,
-    keepLines: bool(v('keepLines')) ?? false,
-    pageBreakBefore: bool(v('pageBreakBefore')) ?? false,
-    widowControl: bool(v('widowControl')) ?? false,
-    tabs: tabsOf(v('tabs')),
+    lang: scope.resolved.run.lang ?? ctx.docLang,
+    outlineLevel: scope.resolved.outlineLevel,
+    align: alignOf(p.align),
+    indentLeft: pt(p.indentLeft),
+    indentRight: pt(p.indentRight),
+    indentFirstLine: pt(p.indentFirstLine),
+    spaceBefore: pt(p.spaceBefore),
+    spaceAfter: pt(p.spaceAfter),
+    contextualSpacing: p.contextualSpacing,
+    line: lineOf(p.lineSpacing, p.lineRule),
+    keepNext: p.keepNext,
+    keepLines: p.keepLines,
+    pageBreakBefore: p.pageBreakBefore,
+    widowControl: p.widowControl,
+    tabs: tabsOf(p.tabs),
     markFont: fontOf(ctx, scope, []),
   };
 }
@@ -672,7 +649,7 @@ function paragraphBlocks(
     switch (node.type) {
       case 'text': {
         const font = fontOf(ctx, o.scope, marks);
-        const allCaps = runValue(ctx, o.scope, marks, 'allCaps', null) === true;
+        const allCaps = runOf(ctx, o.scope, marks).allCaps;
         const text = node.text ?? '';
         inlines.push({
           kind: 'text',
@@ -740,7 +717,12 @@ function paragraphBlocks(
           kind: 'text',
           role: 'equation',
           text: atomText(str(node.attrs?.['latex']) ?? ''),
-          font: fontOf(ctx, o.scope, marks, { italic: true }),
+          // Italic unless the run says otherwise: a mark the run carries wins.
+          font: fontOf(
+            ctx,
+            o.scope,
+            marks.some((m) => m.type === 'italic') ? marks : [...marks, { type: 'italic' }],
+          ),
           offset: at,
           size,
         });
@@ -824,8 +806,8 @@ function footnote(ctx: Context, id: string, content: readonly CdmNode[]): FlowNo
   // The mark comes from the shared algorithm. A footnote it does not number (none in a body of a
   // valid document) falls back to the count of this flow, in the format of the file.
   const label = ctx.footnoteLabels.get(id) ?? formatNumber(number, ctx.footnoteFormat);
-  const scope: Scope = { styleId: 'FootnoteText', tableStyle: null, numberingLevel: null };
-  const shape = paragraphShape(ctx, scope, null);
+  const scope = styleScope(ctx, 'FootnoteText', null);
+  const shape = paragraphShape(ctx, scope);
   const labelFont = fontOf(ctx, scope, [
     { type: 'charStyle', attrs: { style: 'FootnoteReference' } },
   ]);
@@ -879,18 +861,12 @@ function paragraphOf(
   regionId: string | null,
 ): FlowBlock[] {
   const id = str(node.attrs?.['id']) ?? 'unidentified';
-  const styleId = str(node.attrs?.['style']) ?? ctx.table.defaultParagraphStyle;
-  const numbering = (node.attrs?.['numbering'] ??
-    chainValue(ctx.table, styleId, 'numbering', null)) as Attrs | null;
-  const numberingId = str(numbering?.['numberingId']);
-  const levelIndex = num(numbering?.['level']) ?? 0;
-  const level = numberingId ? ctx.numbering.level(numberingId, levelIndex) : null;
-  const scope: Scope = { styleId, tableStyle, numberingLevel: level };
-  const shape = paragraphShape(ctx, scope, node.attrs ?? null);
+  const scope = scopeOf(ctx, node.attrs ?? null, tableStyle);
+  const shape = paragraphShape(ctx, scope);
   let label: ParagraphOptions['label'] = null;
-  if (numberingId && level) {
+  if (scope.resolved.numbering && scope.resolved.level) {
     const text = ctx.listLabels.get(id) ?? '';
-    if (text) label = { text, font: fontOf(ctx, scope, [], level.runProps) };
+    if (text) label = { text, font: flowFont(resolveLabelRun(scope.resolved)) };
   }
   const blocks = paragraphBlocks(ctx, node.content ?? [], { id, scope, shape, regionId, label });
   const first = blocks[0];
@@ -977,11 +953,7 @@ function blockOf(
   regionId: string | null,
 ): FlowBlock[] {
   const id = str(node.attrs?.['id']) ?? 'unidentified';
-  const defaultScope: Scope = {
-    styleId: ctx.table.defaultParagraphStyle,
-    tableStyle,
-    numberingLevel: null,
-  };
+  const defaultScope = scopeOf(ctx, null, tableStyle);
   switch (node.type) {
     case 'paragraph':
       return paragraphOf(ctx, node, tableStyle, regionId);
@@ -1003,12 +975,15 @@ function blockOf(
         regionId,
       };
       if (!caption) return [box];
-      const scope: Scope = { styleId: 'Caption', tableStyle, numberingLevel: null };
-      const shape = paragraphShape(ctx, scope, null);
+      const scope = styleScope(ctx, 'Caption', tableStyle);
+      const shape = paragraphShape(ctx, scope);
+      // A figure has no spacing of its own (ADR 0032; CDM-043): its caption is part of the figure,
+      // so the caption style's space after does not reach the block below it. The space before the
+      // caption stays: it lies inside the figure, between the picture and its caption.
       const blocks = paragraphBlocks(ctx, caption.content ?? [], {
         id,
         scope,
-        shape,
+        shape: { ...shape, spaceAfter: 0 },
         regionId,
         label: null,
       });
@@ -1101,7 +1076,7 @@ function fallbackParagraph(
   scope: Scope,
   regionId: string | null,
 ): FlowBlock[] {
-  const shape = paragraphShape(ctx, scope, null);
+  const shape = paragraphShape(ctx, scope);
   return paragraphBlocks(ctx, [{ type: 'text', text }], {
     id,
     scope,
@@ -1136,12 +1111,8 @@ function tocEntries(ctx: Context, node: CdmNode, regionId: string | null): FlowP
   // An empty list still occupies its place, as Word's "No entries found" does.
   const items = found.length > 0 ? found : [{ text: 'No entries found.', level: 1 }];
   return items.map((item, part) => {
-    const scope: Scope = {
-      styleId: `TOC${Math.min(9, item.level)}`,
-      tableStyle: null,
-      numberingLevel: null,
-    };
-    const shape = paragraphShape(ctx, scope, null);
+    const scope = styleScope(ctx, `TOC${Math.min(9, item.level)}`, null);
+    const shape = paragraphShape(ctx, scope);
     const font = shape.markFont;
     return {
       kind: 'paragraph',
@@ -1263,8 +1234,7 @@ export function toFlow(envelope: CdmEnvelopeLike): FlowDocument {
     if (d.type === 'page_setup') pageSetups.set(str(d.attrs?.['id']) ?? '', d);
   const labels = computeLabels(doc as unknown as Parameters<typeof computeLabels>[0]);
   const ctx: Context = {
-    table: styleTable(doc as unknown as Parameters<typeof styleTable>[0]),
-    numbering: new Numbering((defs?.content ?? []).filter((d) => d.type === 'numbering_def')),
+    table: tolerantTable(styleTable(doc as unknown as Parameters<typeof styleTable>[0])),
     pageSetups,
     notes: new Map(),
     headings: [],

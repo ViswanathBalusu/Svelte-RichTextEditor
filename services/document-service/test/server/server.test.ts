@@ -269,6 +269,10 @@ describe('the control plane tells the rooms (BE-035 criteria 4 to 6; PRO-052 cri
       expect((await rest('DELETE', `/documents/${doc}`)).status).toBe(204);
       const closed = await c.take((m) => m.t === 'ch.closed', 5000, 'ch.closed after the delete');
       expect(closed.ch).toBe(1);
+      // PRO-047 criterion 4 (the open half): a deleted document can no longer be opened.
+      const again = await c.open(2, doc);
+      expect(again.t).toBe('ch.rejected');
+      expect(again.d?.['code']).toBe('not_found');
     } finally {
       c.close();
     }

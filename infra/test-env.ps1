@@ -111,8 +111,15 @@ function ConvertTo-Milliseconds([string]$Duration) {
   throw "unsupported duration: $Duration"
 }
 
+# compose.json takes PostgreSQL, the store and the sandbox settings from compose.base.json with
+# `extends`, as the reference host's compose file does (FND-010 criterion 2).
+. (Join-Path $DefsDir 'compose-extends.ps1')
+
 function Get-Definition {
-  return Get-Content -LiteralPath $ComposeFile -Raw | ConvertFrom-Json -AsHashtable
+  $def = Read-ComposeDefinition $ComposeFile
+  # Another project name gives a second environment beside the usual one (with other ports).
+  if ($env:DOCEDIT_TEST_PROJECT) { $def['name'] = $env:DOCEDIT_TEST_PROJECT }
+  return $def
 }
 
 function Get-ContainerName([string]$Project, [string]$Service) { return "$Project-$Service" }

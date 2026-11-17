@@ -1,0 +1,212 @@
+/**
+ * Adding, changing and deleting role definitions, and listing them (FRW-074; 12 §3.1, §3.6 I13;
+ * 03 §4.1; 07 §4).
+ *
+ * - A role is a `role_def` node in the document's definitions: `id`, `name` and `color`. Adding one
+ *   is an insertion there, renaming or recolouring one is a change of one attribute, one step per
+ *   attribute. Each leaves through the commit log like any change.
+ * - A value is checked against the attribute's grammar of the CDM definition (I11) before a step
+ *   is made; a value that fails is reported by attribute and nothing changes.
+ * - A role that a field's `assignee` still names is not deleted (I13): the answer lists the
+ *   fields, so the roles manager can show them.
+ * - The definitions are the scope `defs`, which needs `structure` (07 §4). The caller passes the
+ *   region guard's answer as `writable`; where it is false the command returns `read-only`.
+ * - The document must require the feature `fields`, which `role_def` belongs to.
+ *
+ * The module reads no clock and no store. It is universal: no Node.js or browser API.
+ */
+import { CDM1 } from '@docedit/model/definition';
+import { checkGrammar } from '@docedit/model/validate';
+import type { Node } from 'prosemirror-model';
+import type { EditorState, Transaction } from 'prosemirror-state';
+
+/** The attributes of a role an author may set; `id` is fixed when the role is made. */
+export interface RoleValues {
+  readonly name?: string;
+  readonly color?: string;
+}
+
+export interface RoleProblem {
+  /** The attribute: `id`, `name` or `color`. */
+  readonly field: string;
+  readonly message: string;
+}
+
+/** A form field that names a role as its `assignee`. */
+export interface RoleFieldRef {
+  readonly id: string;
+  readonly key: string;
+  readonly label: string;
+}
+
+export interface RoleInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly color: string;
+  /** Position among the document's roles, in definition order (0 for the first). */
+  readonly order: number;
+  /** The fields assigned to the role, in document order. */
+  readonly fields: readonly RoleFieldRef[];
+}
+
+/** One change to the roles, as `DocumentCore.editRole` takes it. */
+export type RoleEdit =
+  | { readonly op: 'add'; readonly id: string; readonly values: RoleValues }
+  | { readonly op: 'update'; readonly id: string; readonly values: RoleValues }
+  | { readonly op: 'delete'; readonly id: string };
+
+export type RoleEditOutcome =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'read-only' | 'duplicate' | 'not-defined' | 'no-change' | 'no-feature';
+    }
+  | { readonly ok: false; readonly reason: 'invalid'; readonly problems: readonly RoleProblem[] }
+  | { readonly ok: false; readonly reason: 'in-use'; readonly fields: readonly RoleFieldRef[] };
+
+export interface RoleEditOptions {
+  /** Whether the region guard lets the user change the definitions at a position (07 §4). */
+  readonly writable: (pos: number) => boolean;
+  /** Whether the document requires the feature `fields`. */
+  readonly formFields: boolean;
+}
+
+const ROLE_DEF = CDM1.nodes.find((n) => n.name === 'role_def');
+
+/** The problems of an identifier and of values, by the grammars of `role_def` (I11). */
+export function roleProblems(id: string | null, values: RoleValues): RoleProblem[] {
+  const out: RoleProblem[] = [];
+  const attrs = ROLE_DEF?.attrs ?? {};
+  const check = (field: 'id' | 'name' | 'color', value: unknown): void => {
+    const grammar = attrs[field]?.grammar;
+    if (!grammar) return;
+    for (const message of checkGrammar(grammar, value as never, `/${field}`))
+      out.push({ field, message });
+  };
+  if (id !== null) check('id', id);
+  if (values.name !== undefined) check('name', values.name);
+  if (values.color !== undefined) check('color', values.color);
+  return out;
+}
+
+function findRole(doc: Node, id: string): { node: Node; pos: number } | null {
+  let found: { node: Node; pos: number } | null = null;
+  doc.firstChild?.forEach((child, offset) => {
+    if (!found && child.type.name === 'role_def' && child.attrs['id'] === id)
+      found = { node: child, pos: 1 + offset };
+  });
+  return found;
+}
+
+/** Where a new role goes: after the last role, else after the last page setup (03 §4.1). */
+function insertAt(doc: Node): number {
+  const defs = doc.firstChild;
+  if (!defs) return -1;
+  let at = -1;
+  defs.forEach((child, offset) => {
+    if (child.type.name === 'role_def' || child.type.name === 'page_setup')
+      at = 1 + offset + child.nodeSize;
+  });
+  return at;
+}
+
+/** The form fields whose `assignee` is the role `id`, in document order. */
+export function fieldsOfRole(doc: Node, id: string): RoleFieldRef[] {
+  const out: RoleFieldRef[] = [];
+  doc.descendants((node) => {
+    if (node.type.name !== 'form_field') return true;
+    if (node.attrs['assignee'] === id) {
+      const key = String(node.attrs['key'] ?? '');
+      const label = node.attrs['label'];
+      out.push({
+        id: String(node.attrs['id'] ?? ''),
+        key,
+        label: typeof label === 'string' && label !== '' ? label : key,
+      });
+    }
+    return false;
+  });
+  return out;
+}
+
+/** The roles of the document in the order of its definitions, each with the fields assigned to it. */
+export function listRoles(doc: Node): RoleInfo[] {
+  const out: RoleInfo[] = [];
+  doc.firstChild?.forEach((child) => {
+    if (child.type.name !== 'role_def') return;
+    const id = child.attrs['id'];
+    if (typeof id !== 'string') return;
+    out.push({
+      id,
+      name: String(child.attrs['name'] ?? ''),
+      color: String(child.attrs['color'] ?? ''),
+      order: out.length,
+      fields: fieldsOfRole(doc, id),
+    });
+  });
+  return out;
+}
+
+/** The least `role_<n>` that no role of the document uses. */
+export function nextRoleId(doc: Node): string {
+  const used = new Set(listRoles(doc).map((r) => r.id));
+  for (let n = 1; ; n++) {
+    const id = `role_${n}`;
+    if (!used.has(id)) return id;
+  }
+}
+
+/** Makes one change to the roles. With `dispatch` absent, only checks. */
+export function editRole(
+  state: EditorState,
+  edit: RoleEdit,
+  options: RoleEditOptions,
+  dispatch?: (tr: Transaction) => void,
+): RoleEditOutcome {
+  const type = state.schema.nodes['role_def'];
+  if (!type || !options.formFields) return { ok: false, reason: 'no-feature' };
+
+  if (edit.op === 'add') {
+    const at = insertAt(state.doc);
+    if (at < 0) return { ok: false, reason: 'not-defined' };
+    if (!options.writable(at)) return { ok: false, reason: 'read-only' };
+    const problems = roleProblems(edit.id, {
+      name: edit.values.name ?? '',
+      color: edit.values.color ?? '',
+    });
+    if (problems.length > 0) return { ok: false, reason: 'invalid', problems };
+    if (findRole(state.doc, edit.id)) return { ok: false, reason: 'duplicate' };
+    if (dispatch)
+      dispatch(
+        state.tr.insert(
+          at,
+          type.create({ id: edit.id, name: edit.values.name, color: edit.values.color }),
+        ),
+      );
+    return { ok: true };
+  }
+
+  const found = findRole(state.doc, edit.id);
+  if (!found) return { ok: false, reason: 'not-defined' };
+  if (!options.writable(found.pos)) return { ok: false, reason: 'read-only' };
+
+  if (edit.op === 'update') {
+    const problems = roleProblems(null, edit.values);
+    if (problems.length > 0) return { ok: false, reason: 'invalid', problems };
+    const changed = (['name', 'color'] as const).filter(
+      (name) => edit.values[name] !== undefined && edit.values[name] !== found.node.attrs[name],
+    );
+    if (changed.length === 0) return { ok: false, reason: 'no-change' };
+    if (dispatch) {
+      const tr = state.tr;
+      for (const name of changed) tr.setNodeAttribute(found.pos, name, edit.values[name]);
+      dispatch(tr);
+    }
+    return { ok: true };
+  }
+
+  const fields = fieldsOfRole(state.doc, edit.id);
+  if (fields.length > 0) return { ok: false, reason: 'in-use', fields };
+  if (dispatch) dispatch(state.tr.delete(found.pos, found.pos + found.node.nodeSize));
+  return { ok: true };
+}

@@ -4,6 +4,18 @@
  * the local backend and tests (01 §6).
  */
 export * from './codes.ts';
+// The entry checks of `@docedit/rules` (FRW-004), for a client that already depends on the
+// authority: the editor shows the same verdict as the completion check (ADR 0030 §6).
+export {
+  checkEntry,
+  fieldFrom,
+  isEmptyValue,
+  validateFields,
+  type EntryProblem,
+  type EntryProblemCode,
+  type FieldInfo,
+  type FieldReport,
+} from '@docedit/rules';
 export {
   ALLOWED_STEP_TYPES,
   parseSteps,

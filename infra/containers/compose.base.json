@@ -1,0 +1,45 @@
+{
+  "x-note": "Container definitions shared by the integration-test environment (infra/containers/compose.json) and the reference host's demo stack (apps/reference-host/compose.json), so that the images and their fixed settings are written once (FND-010 criterion 2). Each of those files takes a service from here with Compose's `extends` and adds what differs: credentials, ports, storage and labels. This file is not started on its own. infra/test-env.ps1 and apps/reference-host/scripts/stack.ps1 resolve `extends` with infra/containers/compose-extends.ps1, by Compose's merge rules.",
+  "services": {
+    "postgres": {
+      "x-note": "PostgreSQL 17.11 (PostgreSQL Licence), official image pinned by its multi-arch index digest (2026-11-06). The schema needs 16 or later.",
+      "image": "docker.io/library/postgres:17.11-trixie@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3",
+      "network_mode": "host",
+      "environment": {
+        "POSTGRES_DB": "postgres",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"
+      },
+      "healthcheck": {
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 90
+      }
+    },
+    "s3": {
+      "x-note": "Versity S3 Gateway v1.10.0 (Apache-2.0) over a POSIX directory, pinned by its multi-arch index digest (2026-11-06). MinIO's server is AGPL-3.0, which the licence policy denies (docs/research/2026-11-06-borrow-list.md section 15).",
+      "image": "docker.io/versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316",
+      "network_mode": "host",
+      "environment": {
+        "VGW_BACKEND": "posix",
+        "VGW_BACKEND_ARG": "/data",
+        "VGW_BACKEND_ARGS": "--versioning-dir /versions",
+        "VGW_HEALTH": "/health",
+        "VGW_QUIET": "true"
+      },
+      "healthcheck": {
+        "interval": "1s",
+        "timeout": "3s",
+        "retries": 60
+      }
+    },
+    "export-sandbox": {
+      "x-note": "The settings of the compile sandbox of 09 §9.3: no network, a read-only root, a small scratch directory, no capabilities, an unprivileged user. The image is built from services/export-worker/Containerfile; each file that extends this names the image and the build, because the tag differs. Memory, CPU and process limits are set per job by services/export-worker/src/sandbox.ts.",
+      "network_mode": "none",
+      "read_only": true,
+      "tmpfs": ["/work:rw,size=256m,mode=1777,nosuid,nodev,noexec"],
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges"],
+      "user": "10001:10001"
+    }
+  }
+}

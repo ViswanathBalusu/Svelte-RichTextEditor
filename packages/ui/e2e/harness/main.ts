@@ -742,6 +742,10 @@ const harness = {
   exportRequests: () => need().core.exports?.requests ?? [],
   exportCancelled: () => need().core.exports?.cancelled ?? [],
   failNextExport: () => void (need().core.exports!.failNext = true),
+  /** What the core's preflight reports before a job is created (EXP-003 criterion 3). */
+  setExportPreflight: (warnings: ExportJobView['diagnostics']) =>
+    void (need().core.exports!.preflightWarnings = warnings),
+  exportPreflights: () => need().core.exports?.preflights ?? [],
   updateExport: (jobId: string, patch: Partial<ExportJobView>) =>
     need().core.exports?.update(jobId, patch),
   grantSaves: () => need().core.grants?.saves ?? [],

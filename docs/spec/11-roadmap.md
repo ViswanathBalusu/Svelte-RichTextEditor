@@ -123,7 +123,7 @@ Browser text editing and input methods; typography and text layout; distributed 
 | 6 | Which market first? It sets the priority of citations, cross-references, numbering depth, review and signing | Undecided. **Decided 2026-11-06: all three candidate markets**, so citations and a bibliography enter CDM 1 (CDM-052) |
 | 7 | Names and licence of the project | Names undecided; Apache-2.0 recommended. **Licence decided 2026-11-06: Apache-2.0**; names still undecided |
 | 8 | Hosted service, self-hosted distribution, or both at first release | Both are designed for; neither is scheduled first. **Decided 2026-11-06: the default** |
-| 9 | Language of the production backend, if not Node.js | Node.js for the reference service; others through the authority service |
+| 9 | Language of the production backend, if not Node.js | Node.js for the reference service; others through the authority service. **Decided 2026-11-15: Rust or C#, Rust preferred if nothing blocks it**; the Node.js service stays as the reference |
 | 10 | Who invites and authenticates workflow participants: the host alone, or also the hosted service? | The host. **Decided 2026-11-06: the host alone** |
 | 11 | Which jurisdictions first, and who is the sealing party: the operator or each tenant? | Undecided; simple electronic signature plus seal at launch |
 | 12 | May a document reflow while fields are filled, or are fields fixed-width? | Fixed width. **Decided 2026-11-06: fixed width** |

@@ -34,8 +34,16 @@ const NOW = 1_760_000_000_000;
 
 /** 07 §4: "A grant matches when its principal is user:<sub>, group:<g> for some g in grp, everyone,
  * or a role: the user's participant holds, and it has not expired." Grants use the four region roles. */
-function matches(g: RegionGrant, conn: Connection, now: number, workflowActive: boolean): boolean {
+function matches(
+  g: RegionGrant,
+  conn: Connection,
+  now: number,
+  workflowActive: boolean,
+  policy: string,
+): boolean {
   if (!['viewer', 'commenter', 'suggester', 'editor'].includes(g.role)) return false;
+  // PRM-061: `everyone` conveys nothing on a restricted region (owner decision 12, 2026-11-15).
+  if (g.principal === 'everyone' && policy === 'restricted') return false;
   if (g.expiresAt !== null && !(now < g.expiresAt)) return false;
   return (
     g.principal === 'everyone' ||
@@ -60,7 +68,9 @@ function oracleReadsRegion(
   if (region.attrs['policy'] !== 'confidential') return true;
   if (conn.role === 'owner') return true;
   return perms.grants.some(
-    (g) => g.region === region.attrs['id'] && matches(g, conn, now, perms.workflowActive),
+    (g) =>
+      g.region === region.attrs['id'] &&
+      matches(g, conn, now, perms.workflowActive, String(region.attrs['policy'])),
   );
 }
 
@@ -71,6 +81,7 @@ function oracleReadsValue(
   perms: PermissionState,
   field: Node,
   region: string | null,
+  policy: string,
   now: number,
 ): boolean {
   if (field.attrs['sensitive'] !== true) return true;
@@ -79,16 +90,18 @@ function oracleReadsValue(
   if (typeof assignee === 'string' && conn.participantRoles.includes(assignee)) return true;
   return (
     region !== null &&
-    perms.grants.some((g) => g.region === region && matches(g, conn, now, perms.workflowActive))
+    perms.grants.some(
+      (g) => g.region === region && matches(g, conn, now, perms.workflowActive, policy),
+    )
   );
 }
 
 function oracle(conn: Connection, doc: Node, perms: PermissionState, now: number) {
   const regions: string[] = [];
   const values: string[] = [];
-  const fields = (n: Node, region: string | null) =>
+  const fields = (n: Node, region: string | null, policy = 'inherit') =>
     n.descendants((x) => {
-      if (x.type.name === 'form_field' && !oracleReadsValue(conn, perms, x, region, now))
+      if (x.type.name === 'form_field' && !oracleReadsValue(conn, perms, x, region, policy, now))
         values.push(String(x.attrs['id']));
       return true;
     });
@@ -97,7 +110,8 @@ function oracle(conn: Connection, doc: Node, perms: PermissionState, now: number
     if (top.type.name !== 'body') return;
     top.forEach((b) => {
       if (b.type.name !== 'region') return fields(b, null);
-      if (oracleReadsRegion(conn, perms, b, now)) fields(b, String(b.attrs['id']));
+      if (oracleReadsRegion(conn, perms, b, now))
+        fields(b, String(b.attrs['id']), String(b.attrs['policy']));
       else regions.push(String(b.attrs['id'])); // its values go with it
     });
   });

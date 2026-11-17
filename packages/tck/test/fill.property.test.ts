@@ -361,3 +361,170 @@ describe('a rejected fill leaves the room document unchanged (FRW-066 criterion 
     );
   });
 });
+
+describe('random bases, reconnects and failed writes through the room (FRW-066 criterion 1)', () => {
+  it('accepts from a fill-only participant nothing but the values P7 allows', () => {
+    let clock = 1_790_300_000_000;
+    let counter = 0;
+    const commitId = () => `0192f0c4-7b1e-7000-a000-${(++counter).toString(16).padStart(12, '0')}`;
+    const seen = { stored: 0, stale: 0, conflicts: 0, failed: 0, reconnects: 0, resumed: 0 };
+    const INCARNATION = 'inc-fill-bases';
+    const OP = fc.constantFrom(
+      'erin',
+      'erin',
+      'erin',
+      'tara',
+      'tara',
+      'ok',
+      'ok',
+      'failed',
+      'reconnect',
+    );
+    fc.assert(
+      fc.property(
+        fc.array(fc.record({ op: OP, behind: fc.nat(3), seed: fc.nat() }), {
+          minLength: 2,
+          maxLength: 14,
+        }),
+        (ops) => {
+          const room = new Room({
+            schema,
+            initial: start,
+            requires: ['fields'],
+            log: [],
+            perms,
+            initialRevision: 0,
+            epoch: 1,
+            incarnation: INCARNATION,
+            now: () => ++clock,
+          });
+          const conn = (sub: string) => ({ ...participant(sub), features: ['fields'] });
+          room.open('c1', conn('erin'));
+          room.open('c2', conn('tara'));
+          // The test's own record of the log, replayed from the write requests alone: the
+          // document at each stored seq, the fields each commit changed, and each commit's base.
+          const docs = new Map<number, Node>([[room.head, start]]);
+          const changed = new Map<number, string[]>();
+          const bases = new Map<string, number>();
+          const storedSeq = new Map<string, number>();
+          const erinIds: string[] = [];
+          let outstanding: Effects['write'] = null;
+
+          const submit = (channel: string, base: number, steps: unknown) => {
+            const id = commitId();
+            bases.set(id, base);
+            if (channel === 'c1') erinIds.push(id);
+            const fx = room.submit(channel, { id, base, steps, origin: 'fill' });
+            const reject = fx.send.find((o) => o.msg.t === 'sync.reject');
+            if (reject && reject.msg.t === 'sync.reject' && reject.msg.code === 'conflict')
+              seen.conflicts++;
+            if (fx.write) {
+              expect(outstanding, 'one write at a time').toBeNull();
+              outstanding = fx.write;
+            }
+          };
+
+          const complete = (status: 'ok' | 'failed') => {
+            const write = outstanding;
+            if (!write) return;
+            const head = room.head;
+            const fx = room.writeCompleted({ status });
+            outstanding = fx.write;
+            if (status === 'failed') {
+              // A failed write stores nothing: the head and the document are as before.
+              seen.failed++;
+              expect(room.head).toBe(head);
+              expect(JSON.stringify(room.document.toJSON())).toBe(
+                JSON.stringify(docs.get(head)!.toJSON()),
+              );
+              return;
+            }
+            let doc = docs.get(head)!;
+            for (const c of write.commits) {
+              const parsed = parseSteps(schema, c.steps, DEFAULT_LIMITS);
+              if (!parsed.ok) throw new Error(`a stored commit does not parse: ${c.id}`);
+              const applied = applySteps(doc, parsed.value);
+              if (!applied.ok) throw new Error(`a stored commit does not apply: ${c.id}`);
+              const after = applied.value.doc;
+              expect(
+                sameApartFromAllowedValues(doc, after),
+                `commit ${c.seq} by ${c.user} changed more than the values P7 allows: ${JSON.stringify(c.steps)}`,
+              ).toBe(true);
+              const fields = changedFields(doc, after);
+              const base = bases.get(c.id)!;
+              const since = new Set<string>();
+              for (let s = base + 1; s < c.seq; s++)
+                for (const f of changed.get(s) ?? []) since.add(f);
+              expect(
+                fields.filter((f) => since.has(f)),
+                `commit ${c.seq} overwrote a value changed after its base ${base} (P9)`,
+              ).toEqual([]);
+              if (c.user === 'erin' && base < c.seq - 1) seen.stale++;
+              seen.stored++;
+              changed.set(c.seq, fields);
+              storedSeq.set(c.id, c.seq);
+              docs.set(c.seq, after);
+              doc = after;
+            }
+            // The room's durable document is the replay of what it asked the store to write.
+            expect(JSON.stringify(room.document.toJSON())).toBe(JSON.stringify(doc.toJSON()));
+            expect(docs.has(room.head)).toBe(true);
+          };
+
+          for (const { op, behind, seed } of ops) {
+            if (op === 'erin') {
+              // A random base: the steps are built over the document the participant last saw.
+              const base = Math.max(0, room.head - behind);
+              const [steps] = fc.sample(stepArb(docs.get(base)!), { seed, numRuns: 1 });
+              submit('c1', base, steps);
+            } else if (op === 'tara') {
+              const cur = docs.get(room.head)!;
+              const field = seed % 2 === 0 ? FIELD_IDS.name : FIELD_IDS.rent;
+              submit('c2', room.head, [
+                {
+                  stepType: 'attr',
+                  pos: posBefore(cur.toJSON(), field),
+                  attr: 'value',
+                  value: String(seed % 97),
+                },
+              ]);
+            } else if (op === 'reconnect') {
+              seen.reconnects++;
+              room.close('c1');
+              const seq = Math.max(0, room.head - behind);
+              // The commit the participant believes is in flight: any one it has sent.
+              const lastErin = erinIds.length === 0 ? null : erinIds[seed % erinIds.length]!;
+              const fx = room.open('c1', conn('erin'), {
+                seq,
+                incarnation: INCARNATION,
+                inflight: lastErin,
+              });
+              const opened = fx.send.find((o) => o.msg.t === 'ch.opened');
+              expect(opened, 'the channel reopens').toBeDefined();
+              if (opened?.msg.t !== 'ch.opened') continue;
+              expect(opened.msg.head).toBe(room.head);
+              const at = lastErin === null ? undefined : storedSeq.get(lastErin);
+              if (lastErin === null) expect(opened.msg.inflight).toBeNull();
+              else if (at !== undefined) {
+                seen.resumed++;
+                expect(opened.msg.inflight).toEqual({ state: 'accepted', seq: at });
+              } else expect(opened.msg.inflight).toEqual({ state: 'unknown' });
+            } else complete(op);
+          }
+          while (outstanding) complete('ok');
+        },
+      ),
+      { numRuns: Number(process.env['FRW066_RUNS'] ?? 300) },
+    );
+    // None of the cases the criterion names is vacuous.
+    expect(seen.stored, 'commits were stored').toBeGreaterThan(10);
+    expect(seen.stale, 'fills with a base behind the head were stored').toBeGreaterThan(0);
+    expect(
+      seen.conflicts,
+      'fills of a value changed after their base were refused',
+    ).toBeGreaterThan(0);
+    expect(seen.failed, 'writes failed').toBeGreaterThan(0);
+    expect(seen.reconnects, 'the participant reconnected').toBeGreaterThan(0);
+    expect(seen.resumed, 'a reconnect resumed with a stored commit in flight').toBeGreaterThan(0);
+  });
+});

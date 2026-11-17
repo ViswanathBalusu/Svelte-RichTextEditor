@@ -77,7 +77,30 @@ export interface DocEditorEventMap {
   'de-presence': PresenceDetail;
   /** The counts of the header's buttons changed; also raised once when the editor is live (UX-014; ADR 0361). */
   'de-counts': CountsDetail;
+  /** This person changed the entry of a form field (12 §10; FRW-070). It carries no value. */
+  'de-field-change': FieldChangeDetail;
+  /** The progress the guided bar of fill mode shows changed (12 §10; FRW-070). */
+  'de-fill-progress': FillProgressDetail;
   'de-error': ErrorDetail;
+}
+
+/** `de-field-change`: the field and the state of its entry, and never the value (12 §10). */
+export interface FieldChangeDetail {
+  fieldId: string;
+  key: string;
+  /** False when the entry has a problem, or the field is required and the entry is empty. */
+  valid: boolean;
+  empty: boolean;
+}
+
+/**
+ * `de-fill-progress`: what the guided bar shows as "n of m". `total` is the required fields this
+ * participant must fill, `filled` those of them that are filled and valid. 12 §10 names the event
+ * and not its detail; these members are proposed (FRW-070 Notes).
+ */
+export interface FillProgressDetail {
+  filled: number;
+  total: number;
 }
 
 /** `de-mode-change`: `mode` is the mode in effect, `requested` the one the host or the user asked for. */
@@ -132,6 +155,8 @@ export const EVENT_NAMES: readonly DocEditorEventName[] = [
   'de-mode-change',
   'de-presence',
   'de-counts',
+  'de-field-change',
+  'de-fill-progress',
   'de-error',
 ];
 

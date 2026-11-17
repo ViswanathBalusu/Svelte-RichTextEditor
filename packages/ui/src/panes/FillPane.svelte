@@ -13,7 +13,7 @@
 <script lang="ts">
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
-  import { fieldMarker } from '../shell/fields.ts';
+  import { fieldMarker, roleIcon } from '../shell/fields.ts';
   import { fillProgress, fillReasonKey } from '../shell/fill.ts';
 
   const shell = useShell()!;
@@ -30,6 +30,16 @@
         }))
       : [],
   );
+
+  // The legend (FRW-074 criterion 2): each role once, with the shape and the name its markers use.
+  // The roles come from the fields the core lists, so a role the reader may not see is not named.
+  const legend = $derived.by(() => {
+    const seen = new Map<string, { id: string; name: string; color: string; order: number }>();
+    for (const field of summary?.fields ?? [])
+      if (field.assignee && field.role && !seen.has(field.assignee))
+        seen.set(field.assignee, { id: field.assignee, ...field.role });
+    return [...seen.values()].sort((a, b) => a.order - b.order);
+  });
 
   function go(id: string): void {
     shell.core.focusField?.(id);
@@ -90,6 +100,22 @@
               <span class="de-badge" data-state="read-only">{tr.t('field.readOnly')}</span>
             {/if}
           </button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+  {#if legend.length > 0}
+    <h3 class="de-subhead" id={`${id}-legend`}>{tr.t('roles.legend')}</h3>
+    <ul class="de-list de-role-legend" aria-labelledby={`${id}-legend`}>
+      {#each legend as role (role.id)}
+        <li data-legend-role={role.id}>
+          <span
+            class="de-role-icon"
+            data-icon={roleIcon(role.order)}
+            style:color={role.color}
+            aria-hidden="true"
+          ></span>
+          <span data-content dir="auto">{role.name}</span>
         </li>
       {/each}
     </ul>

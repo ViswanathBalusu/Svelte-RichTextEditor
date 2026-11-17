@@ -41,6 +41,9 @@ import { grantsService, regionsView } from './permissions-shell.ts';
 import type { AttachAt, EditorHandle, ReadView } from './session.ts';
 import { attachShortcuts } from './shortcuts.ts';
 import { sourcesService } from './sources.ts';
+import { fillView } from './fill.ts';
+import { rolesService } from './roles.ts';
+import { fieldPropertiesService } from './field-properties.ts';
 import { mayChange } from './status.ts';
 import { attachStyles, type StylePath } from './styles.ts';
 
@@ -209,6 +212,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     };
   });
 
+  const fill = fillView(core);
   const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;
@@ -282,7 +286,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       if (name !== 'insertField') return false;
       const kind = (args as { kind?: unknown } | undefined)?.kind;
       if (typeof kind !== 'string') return false;
-      return core.run('insertField', { field: { kind: kind as 'text' } });
+      // The palette inserts form fields: `date` is the form kind here, not the page date (ADR 0367).
+      return core.run('insertField', { field: { kind: kind as 'text', form: true } });
     },
     query: (name) => core.query(name),
     // Why a query answered false; the shell shows it as `reason.query.<code>` (FE-044 criterion 5).
@@ -307,6 +312,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
     trimmed: core.trimmed,
     // The sources pane (UX-103): the core's sources and the changes to them, as commits.
     sources: sourcesService(core),
+    // The roles manager (FRW-074): the core's roles and the changes to them, as commits.
+    roles: rolesService(core),
+    // The field properties pane (FRW-073): a field's authored attributes and the change of them.
+    fieldProperties: fieldPropertiesService(core),
+    // Fill mode (FRW-076, FRW-078): the fields without their values, for the guided bar and the
+    // fill pane, and the move of focus to a field's control.
+    fill,
+    focusField: (id) => core.focusField(id),
     status,
     pdf,
     // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
@@ -381,6 +394,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     presence: core.presence,
     // What a host-drawn header reads (UX-014 criterion 5): identifiers, a status and counts only.
     header: { mode: core.mode, presence: core.presence, counts: core.counts },
+    // What `de-field-change` and `de-fill-progress` watch (FRW-070): no value is read.
+    fill: { onFieldChange: (listener) => core.onFieldChange(listener), fill },
     // What `de-selection` and `de-command-state` watch (FE-028); read-only, no content.
     watch: {
       revision: core.revision,

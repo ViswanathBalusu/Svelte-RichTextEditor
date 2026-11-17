@@ -90,6 +90,8 @@ export interface Ctx {
   readonly styleMacros: Map<string, Tex>;
   readonly styleLines: Tex[];
   readonly tabLists: Map<string, number>;
+  /** Paragraph border lists written to styles.tex (`\DEdefborders`), by their spec (EXP-020). */
+  readonly borderLists: Map<string, number>;
   readonly styleRefs: Map<string, number>;
   readonly seqCursor: Map<string, number>;
   readonly assetFiles: Map<string, Uint8Array | null>;

@@ -334,6 +334,9 @@ importers:
       '@docedit/engine':
         specifier: workspace:*
         version: link:../engine
+      '@docedit/export-latex':
+        specifier: workspace:*
+        version: link:../export-latex
       '@docedit/model':
         specifier: workspace:*
         version: link:../model
@@ -383,6 +386,9 @@ importers:
       '@docedit/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@docedit/rules':
+        specifier: workspace:*
+        version: link:../rules
       prosemirror-commands:
         specifier: 1.7.2
         version: 1.7.2

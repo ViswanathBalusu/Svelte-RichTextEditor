@@ -6,8 +6,8 @@
  * - `review`: suggestion mode (FE-041, not built yet). Changes are allowed where the access allows
  *   `edit` or `suggest`; the server's permissions still apply.
  * - `view`: no change at all. Selection and copying are unaffected.
- * - `fill`: the body is read-only (FE-029 criterion 6). Field values follow in FRW-076 and FRW-079;
- *   until then nothing changes in this mode.
+ * - `fill`: the body is read-only (FE-029 criterion 6). The value of a form field may change where
+ *   the guard allows it (FRW-004; 12 §4.2), and nothing else: the guard's `valuesOnly`.
  *
  * Universal code: no Node.js or browser API.
  */
