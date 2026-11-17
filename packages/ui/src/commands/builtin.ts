@@ -238,6 +238,12 @@ export interface ShellCommandHost1b {
   commandSearch(): boolean;
   /** Prints the typeset PDF through the host (UX-040 criterion 3); optional, so a host without it omits the command. */
   print?(): boolean;
+  /**
+   * Moves the caret to the next or previous proofing finding (UX-041 criterion 6). Optional: the shell
+   * registers the two commands only while a proofing port is attached, so no proofing control shows
+   * without one (criterion 5).
+   */
+  proofingStep?(direction: 1 | -1): boolean;
 }
 
 /** Query names the shell answers (ShellQueries). */
@@ -532,6 +538,26 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       feature: 'exports',
       capability: 'export-pdf',
       run: () => (host.print ? host.print() : false),
+    },
+    'proofing.next': {
+      id: 'proofing.next',
+      label: 'command.proofing.next',
+      group: 'review',
+      keys: ['Alt-F7'],
+      changesContent: false,
+      capability: 'spelling-and-grammar',
+      toolbar: false,
+      run: () => (host.proofingStep ? host.proofingStep(1) : false),
+    },
+    'proofing.previous': {
+      id: 'proofing.previous',
+      label: 'command.proofing.previous',
+      group: 'review',
+      keys: ['Alt-Shift-F7'],
+      changesContent: false,
+      capability: 'spelling-and-grammar',
+      toolbar: false,
+      run: () => (host.proofingStep ? host.proofingStep(-1) : false),
     },
     'view.zoomIn': {
       id: 'view.zoomIn',

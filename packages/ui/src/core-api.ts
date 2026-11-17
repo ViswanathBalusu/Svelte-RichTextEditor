@@ -292,6 +292,34 @@ export interface ClassificationLabel {
   readonly name: string;
 }
 
+/** One proofing finding as the interface reads it (UX-041): text, kind and suggestions, no position. */
+export interface ProofingFindingView {
+  readonly id: string;
+  readonly kind: string;
+  readonly message: string;
+  /** The text the finding covers. */
+  readonly text: string;
+  readonly suggestions: readonly string[];
+  /** The scope the text is in (`body` or `region:<id>`). */
+  readonly scope: string;
+  readonly lang: string;
+}
+
+/** The proofing state the status bar and the menus read (UX-041, UX-042). */
+export interface ProofingStatus {
+  /** A proofing port is attached. Without one no proofing control is shown. */
+  readonly available: boolean;
+  readonly state: 'idle' | 'checking' | 'unavailable';
+  /** The findings shown now. */
+  readonly count: number;
+  /** The port can add, list and remove custom dictionary words. */
+  readonly dictionary: boolean;
+  /** The finding the last navigation chose. */
+  readonly current: ProofingFindingView | null;
+  /** The finding the caret is in. */
+  readonly atCaret: ProofingFindingView | null;
+}
+
 /** Counts for the status bar (UX-018). */
 export interface DocumentStats {
   /** Words in the body this reader sees; null while unknown. */
@@ -581,6 +609,20 @@ export interface CoreApi {
   readonly view?: ReadView<ViewName>;
   readonly views?: ReadView<readonly ViewName[]>;
   setView?(view: ViewName): boolean;
+
+  /**
+   * Spelling and grammar (UX-041; 13 §6.1). Absent, or `available` false, when the host gave no
+   * proofing port: no proofing control is shown then.
+   */
+  readonly proofing?: ReadView<ProofingStatus>;
+  /** Moves the caret to the next (or previous) finding, wrapping; false when there is none. */
+  proofingStep?(direction?: 1 | -1): boolean;
+  /** Applies one suggestion of a finding as an edit through the core's guards (UX-042). */
+  applyFinding?(id: string, suggestion?: number): boolean;
+  /** Hides a finding once, or everywhere for the session. */
+  ignoreFinding?(id: string, everywhere?: boolean): boolean;
+  /** Adds the finding's text to the port's custom dictionary. */
+  addFindingToDictionary?(id: string): Promise<boolean>;
 
   /** Word and page counts (UX-018). */
   readonly stats?: ReadView<DocumentStats>;

@@ -316,6 +316,24 @@ img.ProseMirror-separator {
   text-decoration-style: wavy;
 }
 
+/* Proofing findings (UX-041): an underline that is not a background colour, so it survives forced
+   colours; the finding the last navigation chose is outlined as well. */
+.de-proof-spelling {
+  text-decoration: underline wavy #d1242f;
+}
+
+.de-proof-grammar {
+  text-decoration: underline wavy #0969da;
+}
+
+.de-proof-other {
+  text-decoration: underline dotted #8250df;
+}
+
+.de-proof-current {
+  outline: 2px solid currentcolor;
+}
+
 /* Marker rule for the strict-policy checks of spike S2: shows which stylesheet path applied. */
 .de-style-probe {
   --de-style-applied: yes;
@@ -335,6 +353,10 @@ img.ProseMirror-separator {
 
   .de-find-current {
     outline: 3px solid Highlight;
+  }
+
+  .de-proof-current {
+    outline-color: Highlight;
   }
 
   /* A comment range keeps its underline under forced colours (FE-048 criterion 7). */

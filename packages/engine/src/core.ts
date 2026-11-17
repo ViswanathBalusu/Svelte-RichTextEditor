@@ -133,6 +133,14 @@ import { recordAsSuggestion } from './suggestion-edit.ts';
 import { type MarkupView, type SuggestionSpec, suggestionSpecs } from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
+import {
+  type LocatedFinding,
+  NO_PROOFING,
+  type ProofingClock,
+  ProofingController,
+  type ProofingPort,
+  type ProofingInfo,
+} from './proofing.ts';
 import { ReadValue, type Schedule, ViewHub, sameJson } from './read-value.ts';
 import {
   placeholderAt,
@@ -646,6 +654,8 @@ export class DocumentCore implements DocumentApi {
   readonly counts: ReadValue<ShellCounts>;
   readonly problem: ReadValue<CoreProblem | null>;
   readonly findState: ReadValue<FindState>;
+  /** The proofing state and findings (UX-041); `available` is false without a proofing port. */
+  readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
   readonly #comments = new CommentRanges();
@@ -677,6 +687,7 @@ export class DocumentCore implements DocumentApi {
   /** The service's last answer to a commit of ours was `unavailable` (FE-008 criterion 4; 06 §8). */
   #serviceUnavailable = false;
   #accessValue: Access | null;
+  #proofing: ProofingController | null = null;
   /** The `mode` the host set, and the one in force under the access (FE-029). */
   #requested: EditMode = 'edit';
   #effective: EditMode = 'edit';
@@ -692,6 +703,8 @@ export class DocumentCore implements DocumentApi {
   #standInHeld = false;
   #waiters: Array<{ resolve: () => void }> = [];
   #destroyed = false;
+  /** The document the attached channel serves, for the proofing port's requests. */
+  #docId = '';
   #flushTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #listeners = new Set<(tr: Transaction, state: EditorState) => void>();
   /** Remote changes that waited for a composition, for the tests of FE-034. */
@@ -763,6 +776,7 @@ export class DocumentCore implements DocumentApi {
     this.features = new ReadValue<readonly string[]>([], sameJson, hub);
     this.counts = new ReadValue<ShellCounts>({}, sameJson, hub);
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
+    this.proofing = new ReadValue<ProofingInfo>(NO_PROOFING, sameJson, hub);
     this.findState = new ReadValue<FindState>(
       { query: '', count: 0, current: null },
       sameJson,
@@ -882,7 +896,138 @@ export class DocumentCore implements DocumentApi {
       if (state.doc !== before.doc || !state.selection.eq(before.selection))
         presence.selectionChanged();
     }
+    if (state.doc !== before.doc) this.#proofing?.textChanged();
     for (const listener of this.#listeners) listener(tr, state);
+  }
+
+  // --- Proofing (UX-041, UX-042) -------------------------------------------------------------
+
+  /**
+   * Gives the core the proofing port (13 §6.1). The body is checked at once and again, a block at
+   * a time, after a pause in typing. Findings are drawn as decorations and never change the
+   * document. Without a port `proofing.get().available` is false and no control is shown. Returns
+   * the function that detaches the port.
+   */
+  attachProofing(
+    port: ProofingPort,
+    opts: { docId?: string; clock?: ProofingClock; debounceMs?: number } = {},
+  ): () => void {
+    this.#proofing?.dispose();
+    const controller = new ProofingController(
+      {
+        doc: () => this.#state.doc,
+        canView: (scope) => this.#canView(scope),
+        docId: () => opts.docId ?? this.#docId,
+        defaultLang: () => stylesOf(this.#state.doc).settings.lang,
+        changed: () => {
+          if (this.#proofing === controller) this.#publishProofing();
+        },
+      },
+      port,
+      {
+        clock: opts.clock ?? {
+          // Bound wrappers, as the sync client's clock has (browsers refuse an unbound `setTimeout`).
+          setTimeout: (fn, ms) => setTimeout(fn, ms),
+          clearTimeout: (h) => clearTimeout(h as never),
+        },
+        ...(opts.debounceMs !== undefined ? { debounceMs: opts.debounceMs } : {}),
+      },
+    );
+    this.#proofing = controller;
+    controller.start();
+    this.#publishProofing();
+    return () => {
+      if (this.#proofing !== controller) return;
+      controller.dispose();
+      this.#proofing = null;
+      this.proofing.set(NO_PROOFING);
+    };
+  }
+
+  #canView(scope: string): boolean {
+    const access = this.#accessValue;
+    return access === null || capsOf(access, depScope(scope)).includes('view');
+  }
+
+  #publishProofing(): void {
+    const p = this.#proofing;
+    if (!p || this.#destroyed) return;
+    this.proofing.set(p.info(this.#state.selection.head));
+  }
+
+  /** The findings that hold for the document now, with their positions (the view draws them). */
+  proofingFindings(): readonly LocatedFinding[] {
+    return this.#proofing?.locate() ?? [];
+  }
+
+  /** The identifier of the finding the last navigation chose, while it is shown. */
+  proofingCurrentId(): string | null {
+    return this.#proofing?.currentId() ?? null;
+  }
+
+  /**
+   * Moves the selection to the next finding after the caret (or the previous one), wrapping at the
+   * ends. False when there is none. The caret lands on the finding's text; nothing is changed.
+   */
+  proofingStep(direction: 1 | -1 = 1): boolean {
+    const p = this.#proofing;
+    if (!p) return false;
+    const sel = this.#state.selection;
+    const f = p.step(direction === 1 ? sel.to : sel.from, direction, sel.empty);
+    if (!f) return false;
+    this.dispatchTransaction(
+      this.#state.tr
+        .setSelection(TextSelection.create(this.#state.doc, f.from, f.to))
+        .scrollIntoView(),
+    );
+    this.#publishProofing();
+    return true;
+  }
+
+  /**
+   * Applies a suggestion of a finding as an ordinary edit (UX-042 criterion 2): it goes through the
+   * same guards as typing, and in suggestion mode it is recorded as a suggestion. In a scope the
+   * user may not change it is refused as any edit is (FE-036), and false is returned.
+   */
+  applyFinding(id: string, suggestion = 0): boolean {
+    const f = this.#proofing?.find(id);
+    const text = f?.suggestions[suggestion];
+    if (!f || text === undefined) return false;
+    if (!this.canEdit(f.scope)) {
+      this.#refused({ reason: this.#locked() ? 'read-only' : 'scope', scopes: [f.scope] });
+      return false;
+    }
+    const before = this.#state.doc;
+    this.dispatchTransaction(this.#state.tr.insertText(text, f.from, f.to));
+    return this.#state.doc !== before;
+  }
+
+  /** Whether a finding's suggestion can be applied now (the menu offers "apply" only then). */
+  canApplyFinding(id: string): boolean {
+    const f = this.#proofing?.find(id);
+    return f !== undefined && f !== null && f.suggestions.length > 0 && this.canEdit(f.scope);
+  }
+
+  /** Hides one finding until its text changes (UX-042 criterion 1). */
+  ignoreFinding(id: string, everywhere = false): boolean {
+    const p = this.#proofing;
+    if (!p) return false;
+    return everywhere ? p.ignoreEverywhere(id) : p.ignoreOnce(id);
+  }
+
+  /** Adds a finding's text to the port's custom dictionary and checks again (UX-042 criterion 3). */
+  addFindingToDictionary(id: string): Promise<boolean> {
+    return this.#proofing?.addToDictionary(id) ?? Promise.resolve(false);
+  }
+
+  /** The words of the custom dictionary for a language; null when the port has no dictionary. */
+  dictionaryWords(lang: string): Promise<string[] | null> {
+    return this.#proofing?.words(lang) ?? Promise.resolve(null);
+  }
+
+  /** Removes a word from the custom dictionary and checks again. */
+  removeDictionaryWord(word: string, lang: string): Promise<boolean> {
+    return this.#proofing?.removeWord(word, lang) ?? Promise.resolve(false);
   }
 
   // --- Suggestion mode (FE-041, FE-042, FE-043) ----------------------------------------------
@@ -1027,6 +1172,7 @@ export class DocumentCore implements DocumentApi {
     // Outside the check above: a change of mode alone moves suggestion mode too (FE-041).
     const scope = this.#scopeAt(state.selection.from);
     this.suggestion.set({ ...this.#suggestionIn(scope), scope });
+    this.#publishProofing();
     this.#publishSync();
   }
 
@@ -1178,6 +1324,7 @@ export class DocumentCore implements DocumentApi {
   setAccess(access: Access | null): void {
     this.#accessValue = access;
     this.permissions.set(access);
+    this.#proofing?.accessChanged();
     // `read_only` ends when an access with a newer revision grants a write capability again.
     if (
       this.#readOnly &&
@@ -2499,6 +2646,7 @@ export class DocumentCore implements DocumentApi {
 
   attach(channel: SyncChannel, opts: AttachOptions): () => void {
     if (this.#session) throw new Error('a channel is already attached');
+    this.#docId = channel.docId;
     this.#sync = { ...this.#sync, seq: opts.seq, incarnation: opts.incarnation, view: opts.view };
     const sessionOpts = {
       ...(opts.sync ? { sync: opts.sync } : {}),
@@ -2514,6 +2662,7 @@ export class DocumentCore implements DocumentApi {
     this.connection.set('online');
     if (opts.features) this.setFeatures(opts.features);
     if (opts.assets) this.#attachedAssets = opts.assets;
+    const detachProofing = opts.proofing ? this.attachProofing(opts.proofing) : null;
     if (opts.user !== undefined) this.#user = opts.user;
     const session = new SyncSession(this.#host(), channel, sessionOpts);
     this.#session = session;
@@ -2551,6 +2700,7 @@ export class DocumentCore implements DocumentApi {
     this.#publish();
     return () => {
       session.end();
+      detachProofing?.();
       this.#presenceClient?.end();
       this.#presenceClient = null;
       if (this.#session === session) {
@@ -2859,6 +3009,8 @@ export class DocumentCore implements DocumentApi {
 
   destroy(): void {
     this.#destroyed = true;
+    this.#proofing?.dispose();
+    this.#proofing = null;
     this.#session?.end();
     this.#session = null;
     if (this.#flushTimer !== null) clearTimeout(this.#flushTimer);

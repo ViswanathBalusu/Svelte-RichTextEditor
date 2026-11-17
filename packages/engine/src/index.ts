@@ -85,3 +85,11 @@ export {
   type JournalPort,
   memoryJournal,
 } from './sync/journal.ts';
+export type {
+  LocatedFinding,
+  ProofingClock,
+  ProofingFindingInfo,
+  ProofingPort,
+  ProofingInfo,
+  ProofingState,
+} from './proofing.ts';

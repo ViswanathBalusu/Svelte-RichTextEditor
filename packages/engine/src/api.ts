@@ -553,6 +553,8 @@ export interface AttachOptions {
   journal?: JournalPort;
   /** The assets port: a pasted picture is uploaded through it (FE-053; 10 §3.1). */
   assets?: AssetsPort;
+  /** The proofing port (13 §6.1; UX-041): the core checks spelling and grammar through it. */
+  proofing?: ProofingPort;
 }
 
 /** The find state: `n of m` is `current` (1-based, null before a navigation) of `count` (FE-059). */
@@ -642,11 +644,14 @@ import type { MarkupView, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
 import type { SectionWarning } from './breaks-sections.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
+import type { LocatedFinding, ProofingClock, ProofingInfo, ProofingPort } from './proofing.ts';
 
 export interface DocumentApi {
   readonly selection: ReadView<SelectionSummary>;
   /** The find state (FE-059): the query, the number of matches and the current one. */
   readonly findState: ReadView<FindState>;
+  /** Spelling and grammar (UX-041): the state and the findings shown; `available` is false without a port. */
+  readonly proofing: ReadView<ProofingInfo>;
   readonly panel: ReadView<PanelInfo | null>;
   readonly outline: ReadView<readonly OutlineItem[]>;
   /** The DEP `access` in force (`ch.opened`, then every `perm.changed`); null before any. */
@@ -741,6 +746,29 @@ export interface DocumentApi {
   replaceCurrent(text: string): ReplaceReport;
   /** Replaces every match the user may change, in one change; reports the counts (FE-060). */
   replaceAll(text: string): ReplaceReport;
+  /** Gives the core the proofing port (13 §6.1); returns the function that detaches it (UX-041). */
+  attachProofing(
+    port: ProofingPort,
+    opts?: { docId?: string; clock?: ProofingClock; debounceMs?: number },
+  ): () => void;
+  /** The findings that hold for the document now, with their positions (the view draws them). */
+  proofingFindings(): readonly LocatedFinding[];
+  /** The identifier of the finding the last navigation chose, while it is shown. */
+  proofingCurrentId(): string | null;
+  /** Moves the selection to the next (or previous) finding, wrapping; false when there is none. */
+  proofingStep(direction?: 1 | -1): boolean;
+  /** Applies one suggestion of a finding as an ordinary edit through the guards (UX-042). */
+  applyFinding(id: string, suggestion?: number): boolean;
+  /** Whether the finding has a suggestion and the user may change its scope. */
+  canApplyFinding(id: string): boolean;
+  /** Hides a finding: once (until its text changes) or everywhere (for the session). */
+  ignoreFinding(id: string, everywhere?: boolean): boolean;
+  /** Adds the finding's text to the port's custom dictionary; false where the port has none. */
+  addFindingToDictionary(id: string): Promise<boolean>;
+  /** The custom dictionary's words for a language; null where the port has no dictionary. */
+  dictionaryWords(lang: string): Promise<string[] | null>;
+  /** Removes a word from the custom dictionary. */
+  removeDictionaryWord(word: string, lang: string): Promise<boolean>;
   /** Pastes plain text at the selection, one paragraph per line (FE-052); false when refused. */
   pastePlainText(text: string): boolean;
   /** The clipboard payload of the selection (FE-050): `text/html` with the fragment, and `text/plain`. Null for an empty selection; changes nothing. */

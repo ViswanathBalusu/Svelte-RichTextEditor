@@ -293,6 +293,13 @@ export function mountEditor(options: MountOptions): MountedEditor {
     carets: core.carets,
     features: core.features,
     counts: core.counts,
+    // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
+    // port `proofing.get().available` is false and the shell shows no proofing control.
+    proofing: core.proofing,
+    proofingStep: (direction) => core.proofingStep(direction),
+    applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
+    ignoreFinding: (id, everywhere) => core.ignoreFinding(id, everywhere),
+    addFindingToDictionary: (id) => core.addFindingToDictionary(id),
     // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
     // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
     refusal: core.refusal,
