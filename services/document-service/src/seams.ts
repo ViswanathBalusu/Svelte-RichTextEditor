@@ -236,6 +236,12 @@ export interface DataPlaneSettings {
   readonly limits?: Partial<Limits>;
   /** Features announced in `welcome` and discovery (05 §1 rule 4). */
   readonly features?: readonly string[];
+  /**
+   * The CDM major versions this node lets a channel use (05 §2; 03 §11.3). A channel opens only at
+   * the version its document is stored at, so a range wider than one version lets a node serve
+   * documents at n and n+1 side by side while an operator migrates them (BE-094). Default 1 to 1.
+   */
+  readonly cdm?: { readonly min: number; readonly max: number };
   /** How long a connection may stay without `hello` (05 §5.1: 10 seconds). */
   readonly helloTimeoutMs?: number;
   /** How long a room stays open after its last channel closed (06 §2.2: 60 seconds). */
