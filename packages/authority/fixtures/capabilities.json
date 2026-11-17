@@ -1060,7 +1060,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment"],
+        "region": ["view"],
         "fill": false
       }
     },
@@ -1193,7 +1193,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view"],
         "fill": false
       }
     },
@@ -1326,7 +1326,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest", "edit"],
+        "region": ["view"],
         "fill": false
       }
     },
@@ -1484,7 +1484,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view"],
         "fill": false
       }
     },
@@ -3453,7 +3453,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view"],
+        "region": ["view", "comment"],
         "fill": false
       }
     },
@@ -3719,7 +3719,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view", "comment"],
         "fill": false
       }
     },
@@ -3852,7 +3852,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest", "edit"],
+        "region": ["view", "comment"],
         "fill": false
       }
     },
@@ -4010,7 +4010,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view", "comment"],
         "fill": false
       }
     },
@@ -5979,7 +5979,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view"],
+        "region": ["view", "comment"],
         "fill": false
       }
     },
@@ -6245,7 +6245,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view", "comment"],
         "fill": false
       }
     },
@@ -6378,7 +6378,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest", "edit"],
+        "region": ["view", "comment"],
         "fill": false
       }
     },
@@ -6536,7 +6536,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view", "comment"],
         "fill": false
       }
     },
@@ -8638,7 +8638,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment"],
+        "region": ["view"],
         "fill": true
       }
     },
@@ -8771,7 +8771,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view"],
         "fill": true
       }
     },
@@ -8904,7 +8904,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest", "edit"],
+        "region": ["view"],
         "fill": true
       }
     },
@@ -9062,7 +9062,7 @@
         "doc": ["view"],
         "defs": ["view"],
         "story": ["view"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view"],
         "fill": true
       }
     },
@@ -11031,7 +11031,7 @@
         "doc": ["view", "edit"],
         "defs": ["view", "edit"],
         "story": ["view", "edit"],
-        "region": ["view"],
+        "region": ["view", "comment"],
         "fill": true
       }
     },
@@ -11297,7 +11297,7 @@
         "doc": ["view", "edit"],
         "defs": ["view", "edit"],
         "story": ["view", "edit"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view", "comment"],
         "fill": true
       }
     },
@@ -11430,7 +11430,7 @@
         "doc": ["view", "edit"],
         "defs": ["view", "edit"],
         "story": ["view", "edit"],
-        "region": ["view", "comment", "suggest", "edit"],
+        "region": ["view", "comment"],
         "fill": true
       }
     },
@@ -11588,7 +11588,7 @@
         "doc": ["view", "edit"],
         "defs": ["view", "edit"],
         "story": ["view", "edit"],
-        "region": ["view", "comment", "suggest"],
+        "region": ["view", "comment"],
         "fill": true
       }
     },

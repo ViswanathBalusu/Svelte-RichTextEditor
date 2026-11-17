@@ -19,6 +19,7 @@ import {
   type FieldReport,
   checkEntry,
   fieldFrom,
+  isEmptyValue,
   validateFields,
 } from '@docedit/authority';
 import type { JsonValue } from '@docedit/model';
@@ -44,6 +45,65 @@ export interface FieldEntryState {
 export type EnterResult =
   | { readonly ok: true; readonly problems: readonly EntryProblem[] }
   | { readonly ok: false; readonly reason: 'no-field' | 'refused' };
+
+/**
+ * What `de-field-change` carries (12 §10; FRW-070): which field, and the state of its entry. Never
+ * the value.
+ */
+export interface FieldChange {
+  readonly fieldId: string;
+  readonly key: string;
+  /** False when the entry has a problem, or the field is required and the entry is empty. */
+  readonly valid: boolean;
+  readonly empty: boolean;
+}
+
+/** A role as a field shows it: its name, colour and place among the document's roles. */
+export interface FieldRole {
+  readonly name: string;
+  readonly color: string;
+  readonly order: number;
+}
+
+/** A form field as fill mode lists it (12 §11; FRW-076 to FRW-078). It holds no value. */
+export interface FieldStatus {
+  readonly id: string;
+  readonly key: string;
+  readonly label: string;
+  readonly required: boolean;
+  readonly filled: boolean;
+  /** Why the entry is not valid (`format`, `range` or `other`); null for a valid or empty entry. */
+  readonly invalid: 'format' | 'range' | 'other' | null;
+  /** The `role_def` the field is assigned to; null for a field only authors set. */
+  readonly assignee: string | null;
+  readonly role: FieldRole | null;
+}
+
+const FORMAT_CODES = new Set(['type', 'pattern', 'preset', 'not_an_option']);
+const RANGE_CODES = new Set(['min', 'max', 'min_length', 'max_length', 'too_large']);
+
+function invalidReason(problems: readonly EntryProblem[]): FieldStatus['invalid'] {
+  const first = problems[0];
+  if (!first) return null;
+  if (FORMAT_CODES.has(first.code)) return 'format';
+  return RANGE_CODES.has(first.code) ? 'range' : 'other';
+}
+
+/** The roles of the document by identifier, in the order of its definitions (12 §3.1). */
+export function rolesOf(doc: PMNode): Map<string, FieldRole> {
+  const roles = new Map<string, FieldRole>();
+  doc.firstChild?.forEach((child) => {
+    if (child.type.name !== 'role_def') return;
+    const { id, name, color } = child.attrs as { id?: unknown; name?: unknown; color?: unknown };
+    if (typeof id !== 'string') return;
+    roles.set(id, {
+      name: typeof name === 'string' ? name : id,
+      color: typeof color === 'string' ? color : '',
+      order: roles.size,
+    });
+  });
+  return roles;
+}
 
 export interface FieldEntryHost {
   state(): EditorState;
@@ -76,6 +136,7 @@ export function findFormField(doc: PMNode, id: string): { node: PMNode; pos: num
 export class FieldEntries {
   readonly #host: FieldEntryHost;
   readonly #kept = new Map<string, Kept>();
+  readonly #listeners = new Set<(change: FieldChange) => void>();
 
   constructor(host: FieldEntryHost) {
     this.#host = host;
@@ -140,7 +201,9 @@ export class FieldEntries {
     const info = hit ? infoOf(hit.node) : null;
     if (!hit || !info) return { ok: false, reason: 'no-field' };
     const before = storedValue(hit.node);
-    const base = this.#keptFor(id, before)?.base ?? before;
+    const keptBefore = this.#keptFor(id, before);
+    const base = keptBefore?.base ?? before;
+    const shown = keptBefore ? keptBefore.value : before;
     if (!sameJson(before, value)) {
       this.#host.dispatch(state.tr.setNodeAttribute(hit.pos, 'value', value));
       const after = findFormField(this.#host.state().doc, id);
@@ -150,7 +213,57 @@ export class FieldEntries {
     const problems = checkEntry(info, value);
     if (problems.length > 0) this.#kept.set(id, { value, base });
     else this.#kept.delete(id);
+    if (!sameJson(shown, value)) {
+      const empty = isEmptyValue(info, value);
+      const change: FieldChange = {
+        fieldId: id,
+        key: info.key,
+        valid: problems.length === 0 && !(info.required === true && empty),
+        empty,
+      };
+      for (const listener of [...this.#listeners]) listener(change);
+    }
     return { ok: true, problems };
+  }
+
+  /**
+   * Calls `listener` after each entry this person submitted that changed what the field shows
+   * (FRW-070). A change that arrives from someone else is not reported here. Returns the function
+   * that stops it.
+   */
+  onChange(listener: (change: FieldChange) => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  /** Every form field in document order with the state of its entry and its role; no value. */
+  status(): FieldStatus[] {
+    const doc = this.#host.state().doc;
+    const roles = rolesOf(doc);
+    const out: FieldStatus[] = [];
+    doc.descendants((node) => {
+      if (node.type.name !== 'form_field') return true;
+      const info = infoOf(node);
+      const id = node.attrs['id'];
+      if (!info || typeof id !== 'string') return false;
+      const stored = storedValue(node);
+      const kept = this.#keptFor(id, stored);
+      const value = kept ? kept.value : stored;
+      const label = node.attrs['label'];
+      const assignee = node.attrs['assignee'];
+      out.push({
+        id,
+        key: info.key,
+        label: typeof label === 'string' && label !== '' ? label : info.key,
+        required: info.required === true,
+        filled: !isEmptyValue(info, value),
+        invalid: invalidReason(checkEntry(info, value)),
+        assignee: typeof assignee === 'string' && assignee !== '' ? assignee : null,
+        role: typeof assignee === 'string' ? (roles.get(assignee) ?? null) : null,
+      });
+      return false;
+    });
+    return out;
   }
 
   /**

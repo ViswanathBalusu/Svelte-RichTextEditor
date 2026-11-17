@@ -64,7 +64,10 @@ export function insertField(
   options: InsertFieldOptions,
   dispatch?: (tr: Transaction) => void,
 ): FieldResult {
-  if (isFormFieldInsertKind(kind)) return insertFormField(state, kind, options, dispatch);
+  // `date` names a page field (FE-136) and a form field kind; a caller that asks for a form field
+  // says so (ADR 0367, proposed).
+  if (isFormFieldInsertKind(kind) && (kind !== 'date' || options.form === true))
+    return insertFormField(state, kind, options, dispatch);
   if (!isInsertableFieldKind(kind)) return fail('bad-kind');
   const type = state.schema.nodes['field'];
   const { $from } = state.selection;

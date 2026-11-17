@@ -12,7 +12,8 @@ Yes for R0 and R1, on all 78 corpus files, with changes to the ADR and to the mo
 
 - **R0:** 78 of 78 files. Every part of every file comes back byte-identical, and so do the compressed bytes. The writer patches every modelled part even when nothing changed, so this also shows that the patching is exact.
 - **R1:** all 263 scripted edits that applied pass (typing 60, splitting 57, deleting a block 56, restyling 59, moving a preserved atom 31). A stress test that regenerates every paragraph of every file from the model and its preserved data passes on 78 of 78.
-- **Word:** Word for Microsoft 365 (16.0 build 16.0.20527) opened 492 of 497 files without a prompt: 78 originals, 78 R0 exports, 263 R1 exports and 78 fully regenerated exports. The 5 that prompted are all `poi/deep-table-cell.docx`, a fuzzing file with 5,000 nested tables whose original already prompts. LibreOffice is not installed on the spike machine, so it was not checked.
+- **Word:** Word for Microsoft 365 (16.0 build 16.0.20527) opened 492 of 497 files without a prompt: 78 originals, 78 R0 exports, 263 R1 exports and 78 fully regenerated exports. The 5 that prompted are all `poi/deep-table-cell.docx`, a fuzzing file with 5,000 nested tables whose original already prompts.
+- **LibreOffice:** LibreOffice 26.8.3.1 (headless, 2026-11-17) loaded 505 of 511 files: the 497 files of the Word check and 14 more from the patch cases of EXP-118 and EXP-119. The 6 that did not load are `docx4j/2010-mcAlternateContent.docx` and its 5 exports; the original does not load either, so no export made it worse. See "Opening in Word and LibreOffice".
 - **`validate()`:** every imported document is valid, with `preserve` in `requires` and every asset reference checked (I4).
 
 The design holds, but four results change it:
@@ -260,7 +261,11 @@ Calibration on damaged copies of a corpus file: an attribute value Word cannot p
 
 Result: 492 of 497 without a prompt. The 5 prompts ("Word found unreadable content ... Do you want to recover the contents of this document?") are the original of `poi/deep-table-cell.docx` and its four exports. Every export of every other file opened cleanly, including those whose deletions left comments without anchors and footnotes without references, and those whose clean-up removed chart, embedding and ActiveX parts.
 
-**LibreOffice** is not installed on the spike machine (`soffice` is not on the path and not in the default install folders), so it was not checked. The criterion stays open for it.
+**LibreOffice** (2026-11-17, LibreOffice 26.8.3.1 from `C:\Program Files\LibreOffice`, on the spike machine). `scripts/libreoffice-open-check.ps1` converts every file to PDF with `soffice --headless`, in batches of 25, with a profile of its own so that no setting of the person's LibreOffice is read or changed. `node scripts/export-for-word.ts` wrote the files (the same set as for Word, plus 14 from the patch cases; 511 in all). LibreOffice has no repair prompt for .docx in headless mode: it loads the file or prints "source file could not be loaded". So "loaded and wrote a PDF" is the measurable form of "no repair prompt", and a file that LibreOffice repairs silently counts as loaded. The check is weaker than the Word check for that reason.
+
+Calibration: a copy of a corpus file whose `word/document.xml` is cut off (malformed XML) did not load, so the check sees failures. A 200-byte file that is not a package did load (LibreOffice read it as text), so a file that is not a package is not caught by this check; the corpus files are all packages.
+
+Result: 505 of 511 loaded. The 6 that did not are the original of `docx4j/2010-mcAlternateContent.docx` (an `mc:AlternateContent` test file) and its R0 export (byte-identical to the original), its regenerated export and its three R1 exports that were made (split, restyle, type). Run on the original alone, LibreOffice prints "source file could not be loaded" too, so the exports are not worse than the file they came from. The same holds for Word's 5 prompts, which are the original of `poi/deep-table-cell.docx` and its exports. Every other original and every other export loaded, including those whose clean-up removed chart, embedding and ActiveX parts. Times: 752 s for the 511 files, with other work running on the machine. The result file is `packages/export-docx/test-results/libreoffice-check-result.json` (not committed; `test-results/` is ignored).
 
 **Word-authored corpus files.** `scripts/make-word-corpus.ps1` was meant to add files authored by this Word (a table of contents, comments with replies, tracked changes, SmartArt, equations, content controls, sections). Word added every feature, but `Document.SaveAs2` then blocked with no visible prompt in any Word or sign-in window; the first probe of the day had saved. The cause was not found without changing Word's settings, so no such file is committed.
 
@@ -329,7 +334,7 @@ The prototype imports the corpus into that model: all 78 documents are valid and
 - **Editing styles, stories and definitions.** The writer patches the body, headers and footers; it refuses edited styles and new stories with a clear error.
 - **Moving preserved content to another part or document.** The writer refuses it until relationship renumbering exists (EXP-119); fragments already carry what it needs.
 - **The 1,000 commits** are a simulation of step payloads, not a replay through the authority.
-- **LibreOffice**, a table of contents, and Word-authored files, for the reasons above.
+- A table of contents, and Word-authored files, for the reasons above. LibreOffice was checked on 2026-11-17 (see "Opening in Word and LibreOffice").
 - **Hostile input** beyond a DTD, a macro-enabled file, ZIP limits and deep nesting: EXP-110.
 
 ## Recommendation

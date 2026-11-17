@@ -350,9 +350,11 @@ const NODE_ID_RE = new RegExp(NODE_ID_PATTERN);
  * The problems of a region grant, or an empty list (07 §1, §2; PRM-001). A grant names a region by
  * its node identifier, a principal of one of the four forms, one of the four region roles (so a
  * region grant never conveys `fill`, `structure` or `manage`), and an expiry in Unix milliseconds
- * or null.
+ * or null. On a `restricted` region (when `policy` says so) the principal `everyone` is refused:
+ * it would make the region behave like an `inherit` one for that role (07 §17; owner decision 12 of
+ * 2026-11-15, PRM-061).
  */
-export function validateRegionGrant(grant: unknown): string[] {
+export function validateRegionGrant(grant: unknown, policy?: RegionPolicy): string[] {
   if (typeof grant !== 'object' || grant === null) return ['a grant is an object'];
   const g = grant as Record<string, unknown>;
   const out: string[] = [];
@@ -360,6 +362,10 @@ export function validateRegionGrant(grant: unknown): string[] {
     out.push('region must be a node identifier');
   if (typeof g['principal'] !== 'string' || !parsePrincipal(g['principal']))
     out.push('principal must be user:<sub>, group:<id>, everyone or role:<id>');
+  if (g['principal'] === 'everyone' && policy === 'restricted')
+    out.push(
+      'everyone cannot be granted a role on a restricted region; name users or groups instead',
+    );
   if (!isRegionRole(g['role']))
     out.push(
       `role must be one of ${REGION_ROLES.join(', ')}; region grants never convey fill, structure or manage`,

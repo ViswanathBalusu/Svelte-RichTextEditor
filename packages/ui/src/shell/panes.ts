@@ -76,7 +76,12 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     load: () => load(import('../panes/PermissionsPane.svelte')),
     available: (core) => core.regions !== undefined,
   },
-  { id: 'fields', label: 'pane.fields', feature: 'fields' },
+  {
+    id: 'fields',
+    label: 'pane.fields',
+    load: () => load(import('../panes/FieldsPane.svelte')),
+    available: (core) => core.fieldProperties !== undefined,
+  },
   {
     id: 'checker',
     label: 'pane.checker',
@@ -88,6 +93,12 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     label: 'pane.sources',
     load: () => load(import('../panes/SourcesPane.svelte')),
     available: (core) => core.sources !== undefined,
+  },
+  {
+    id: 'roles',
+    label: 'pane.roles',
+    load: () => load(import('../panes/RolesPane.svelte')),
+    available: (core) => core.roles !== undefined,
   },
   { id: 'assistant', label: 'pane.assistant' },
   { id: 'pdf', label: 'pane.pdf', feature: 'exports' },

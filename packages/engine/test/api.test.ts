@@ -53,7 +53,21 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'checkFieldEntry'
       | 'fieldFillable'
       | 'enterFieldValue'
-      | 'validateFields';
+      | 'validateFields'
+      // FRW-070, FRW-078: the fields of fill mode without their values, and the entries a person made.
+      | 'fillFields'
+      | 'onFieldChange'
+      // FRW-074: the roles of the document and the changes to them, for the roles manager.
+      | 'roles'
+      | 'nextRoleId'
+      | 'editRole'
+      // FRW-073: the properties of a form field and the changes to them, for the properties pane.
+      | 'formFields'
+      | 'fieldProperties'
+      | 'selectedField'
+      | 'selectField'
+      | 'canEditField'
+      | 'editField';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed
@@ -67,7 +81,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // UX-008: where the shell opens a menu asked for from the keyboard.
       | 'caretRect'
       // SYN-036: the peers' carets as rectangles, which the shell draws (UX-027).
-      | 'carets';
+      | 'carets'
+      // FRW-078: the summary's link moves focus to a field's control.
+      | 'focusField';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });

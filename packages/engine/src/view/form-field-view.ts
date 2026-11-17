@@ -27,6 +27,8 @@ export interface FormFieldPort {
   check(id: string, value: JsonValue): ReadonlyArray<{ readonly message: string }>;
   enter(id: string, value: JsonValue): void;
   fillable(id: string): boolean;
+  /** The control of the field took focus: the field is the one the person selected (FRW-073). */
+  focused?(id: string): void;
 }
 
 /** The kinds drawn as a native control. */
@@ -125,6 +127,7 @@ class FormFieldView implements NodeView, Refreshable {
 
     this.#control.addEventListener('input', this.#typed);
     this.#control.addEventListener('change', this.#changed);
+    this.#control.addEventListener('focus', this.#focused);
     views.add(this);
     this.#draw();
   }
@@ -166,6 +169,10 @@ class FormFieldView implements NodeView, Refreshable {
     if (!this.#port.fillable(this.#id)) return this.#draw();
     this.#dirty = true;
     this.#showProblems(this.#port.check(this.#id, this.#entry()));
+  };
+
+  readonly #focused = (): void => {
+    this.#port.focused?.(this.#id);
   };
 
   readonly #changed = (): void => {
@@ -254,6 +261,7 @@ class FormFieldView implements NodeView, Refreshable {
     this.#views.remove(this);
     this.#control.removeEventListener('input', this.#typed);
     this.#control.removeEventListener('change', this.#changed);
+    this.#control.removeEventListener('focus', this.#focused);
   }
 }
 
