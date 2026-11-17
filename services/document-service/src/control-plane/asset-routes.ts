@@ -14,6 +14,7 @@ import {
 } from './assets.ts';
 import { connectionOn, regionInfosOfJson, requireRow } from './gate.ts';
 import { json, type Kit } from './kit.ts';
+import { admitStorage } from './live-quota-rest.ts';
 import { guard, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { projectContent, readerView } from './visibility.ts';
@@ -93,6 +94,8 @@ export function assetRoutes(k: Kit): Record<string, Handler> {
           ? { violations: [{ path: '/mime', rule: 'a type and size the asset worker accepts' }] }
           : {}),
       });
+    // BE-092 criterion 1: an upload that would take the tenant past its storage quota is refused.
+    await admitStorage(d.quotaSource, ctx.caller.tenant, body.size, (t) => reg.storedBytes(t));
     const now = d.now();
     const lifetime = d.uploadSeconds ?? 900;
     const id = uuid7(now);

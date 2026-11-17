@@ -169,12 +169,7 @@ describe.skipIf(skip !== null)(
       // Commit lists are walked and compared with the unpaged list, but the snapshot commits seeded
       // here end the page at a reset, so they give no paged items; paging over edit commits needs
       // the data plane (not walked here).
-      expect([...notServed].sort()).toEqual([
-        '/documents/{id}/history',
-        '/documents/{id}/threads',
-        '/search',
-        '/webhooks',
-      ]);
+      expect([...notServed].sort()).toEqual(['/documents/{id}/history', '/search', '/webhooks']);
     });
   },
 );

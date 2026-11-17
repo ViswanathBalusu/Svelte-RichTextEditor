@@ -323,8 +323,12 @@ class DepDataPlane implements DataPlane {
     return this.#host.readCommits(identity, doc, after, limit);
   }
 
-  notify(ref: DocRef, n: Notification, opts: { user?: string } = {}): void {
-    this.#host.notify(ref, n, opts.user);
+  notify(
+    ref: DocRef,
+    n: Notification,
+    opts: { user?: string; scopes?: readonly string[] } = {},
+  ): void {
+    this.#host.notify(ref, n, opts.user, opts.scopes);
   }
 
   /**

@@ -36,6 +36,7 @@ import {
 } from './control-plane/assets.ts';
 import { ContentReader } from './control-plane/content.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
+import { DebouncedEventSink } from './control-plane/event-throttle.ts';
 import { CompileBudget } from './control-plane/exp-009-compile-budget.ts';
 import { EXPORT_KIND, PREVIEW_KIND, exportHooks } from './control-plane/exports.ts';
 import {
@@ -559,7 +560,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
     parts.webhooks = webhooks.routes;
     parts.webhookStore = webhooks.store;
   }
-  const events: EventSink = opts.events ?? webhooks?.dispatcher ?? new MemoryEventSink();
+  const rawEvents: EventSink = opts.events ?? webhooks?.dispatcher ?? new MemoryEventSink();
+  // One debounce for every source of `dep.document.changed` (the rooms and the REST routes): at most
+  // one per document per window (BE-055 criterion 2). Other events pass through unchanged.
+  const events = new DebouncedEventSink(rawEvents, now);
 
   const fonts =
     opts.fonts ??
@@ -603,9 +607,13 @@ export async function startService(opts: StartOptions): Promise<Service> {
   const rateLimits = opts.rateLimits ?? new RateLimits(DEFAULT_RATES);
   // BE-091: the live-use quotas of the tenants (connections, commit rate) gate the data plane, and
   // their refusals are counted in this node's metrics. Absent when the node composes no quotas.
-  const liveQuotas = parts.quotas
+  // The values come from the parts' quota source when it has one, else from the administration
+  // service's cache, so that a change written through `PUT /quotas` applies to the next request
+  // (BE-091 criterion 3; docs/adr/0370-w5-BE-091-quota-cache.md).
+  const quotaSource: QuotaSource | undefined = parts.quotas ?? parts.quotaAdmin?.source;
+  const liveQuotas = quotaSource
     ? new LiveQuotas({
-        quotas: parts.quotas,
+        quotas: quotaSource,
         metrics,
         windowMs: LIVE_QUOTA_WINDOW_MS,
         countRetryMs: LIVE_QUOTA_COUNT_RETRY_MS,
@@ -624,6 +632,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
     checkpoints,
     settings: {
       viewKey,
+      ...(config.maxRebaseSteps !== null
+        ? { limits: { maxRebaseSteps: config.maxRebaseSteps } }
+        : {}),
       // 05 §1 rule 4: discovery and `welcome` announce the same features, so the session accepts
       // in `hello` and `ch.open` what discovery announces (`exports` and `assets` come from the
       // workers, as in `announced` below; U-PRO-103-119, PRO-111 criterion 6).
@@ -707,7 +718,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   if (exportHandlers[EXPORT_KIND] && !exportHandlers[PREVIEW_KIND])
     exportHandlers[PREVIEW_KIND] = exportHandlers[EXPORT_KIND]!;
   // The monthly compile-minute budget (EXP-009): every settled export and preview counts.
-  const compileBudget = new CompileBudget(parts.quotas ?? null);
+  const compileBudget = new CompileBudget(quotaSource ?? null);
   const hooks = exportHooks({
     notify,
     events,
@@ -981,6 +992,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.holds ? { holds: parts.holds } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     compileBudget,
+    ...(liveQuotas ? { liveQuotas } : {}),
+    ...(quotaSource ? { quotaSource } : {}),
+    ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
   });
 
   const ready = () => readiness(parts.pool);
@@ -1062,7 +1076,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     dataPlane,
     content,
     pool,
-    events,
+    events: rawEvents,
     webhooks: webhooks?.dispatcher ?? null,
     runner,
     runners,
@@ -1084,6 +1098,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
         await exportWorkers?.stop();
         await Promise.all(runners.map((r) => r.stop()));
         await dataPlane.close().catch(() => undefined);
+        // The last change of a burst that still waits for its window is raised before the sends drain.
+        events.close();
         // Sends already started finish; each is bounded by the egress timeout (BE-056).
         await webhooks?.dispatcher.drain().catch(() => undefined);
         server.closeAllConnections();

@@ -12,9 +12,10 @@
  *   and the reason (criterion 3). The reason is operator text: it is kept in the audit event, never
  *   in the commit, whose origin is the registry's `repair` only.
  *
- * Not built here: the approval check of an approved region for a snapshot (BE-090 criterion 2 stays
- * open until a test covers it), and a replay across a snapshot commit above the chosen checkpoint,
- * which `planRepair` refuses so that an operator repairs that case by hand.
+ * An approved region is not checked here: the room refuses a snapshot that would change one, as it
+ * refuses any commit (07 §11; test/data-plane/be-090-w5-approved-region.test.ts). Not built here: a
+ * replay across a snapshot commit above the chosen checkpoint, which `planRepair` refuses so that an
+ * operator repairs that case by hand.
  */
 import { isSnapshot } from '@docedit/authority';
 import { uuid7 } from '@docedit/model';

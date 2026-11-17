@@ -18,8 +18,9 @@
  * - the retry delay of a count quota (connections, open documents) is `countRetryMs`, which the
  *   caller must set: no default is invented.
  *
- * Not built here: the socket and REST answers (`retryAfterMs`, `Retry-After`), which read these
- * decisions, and the storage and export quotas of BE-092.
+ * The socket and REST answers (`retryAfterMs`, `Retry-After`) read these decisions in
+ * data-plane/session.ts and in the REST routes that author a commit. The storage and export quotas
+ * of BE-092 are decided elsewhere.
  */
 import type { Metrics } from './metrics.ts';
 import type { QuotaDimension, QuotaSettings } from './quotas.ts';
@@ -27,6 +28,12 @@ import type { QuotaDimension, QuotaSettings } from './quotas.ts';
 /** Where the values come from: the quota store, read at each decision. */
 export interface QuotaSource {
   get(tenant: string): QuotaSettings;
+  /**
+   * Reads the tenant's values into the source, for a source whose store answers asynchronously
+   * (PostgreSQL). Called before the first decision of a request that can wait; `get` stays
+   * synchronous.
+   */
+  load?(tenant: string): Promise<void>;
 }
 
 export const QUOTA_REFUSAL_METRIC = 'docedit_tenant_quota_refusals_total';
@@ -69,7 +76,8 @@ export interface LiveQuotaOptions {
 
 interface TenantState {
   connections: number;
-  docs: Set<string>;
+  /** The open documents of the tenant on this node, each with the number of channels holding it. */
+  docs: Map<string, number>;
   commits: number[];
   cpu: Array<{ at: number; ms: number }>;
 }
@@ -99,7 +107,7 @@ export class LiveQuotas {
   #state(tenant: string): TenantState {
     let s = this.#tenants.get(tenant);
     if (!s)
-      this.#tenants.set(tenant, (s = { connections: 0, docs: new Set(), commits: [], cpu: [] }));
+      this.#tenants.set(tenant, (s = { connections: 0, docs: new Map(), commits: [], cpu: [] }));
     return s;
   }
 
@@ -138,10 +146,18 @@ export class LiveQuotas {
     s.connections = Math.max(0, s.connections - 1);
   }
 
-  /** A document opened by a tenant (`openDocuments`). Opening one that is already open is admitted. */
+  /**
+   * A channel of a tenant on a document (`openDocuments`). Opening a document that is already open
+   * on this node is admitted and does not count twice. Each admitted channel must be released with
+   * `closeDocument`; the document stops counting when its last channel is released.
+   */
   admitDocument(tenant: string, doc: string): Admission {
     const s = this.#state(tenant);
-    if (s.docs.has(doc)) return { ok: true };
+    const held = s.docs.get(doc);
+    if (held !== undefined) {
+      s.docs.set(doc, held + 1);
+      return { ok: true };
+    }
     const limit = this.#quotas.get(tenant).openDocuments;
     if (limit !== null && s.docs.size + 1 > limit)
       return this.#refuse(tenant, {
@@ -150,12 +166,59 @@ export class LiveQuotas {
         quota: 'openDocuments',
         retryAfterMs: this.#countRetryMs,
       });
-    s.docs.add(doc);
+    s.docs.set(doc, 1);
     return { ok: true };
   }
 
   closeDocument(tenant: string, doc: string): void {
-    this.#state(tenant).docs.delete(doc);
+    const s = this.#state(tenant);
+    const held = s.docs.get(doc);
+    if (held === undefined) return;
+    if (held <= 1) s.docs.delete(doc);
+    else s.docs.set(doc, held - 1);
+  }
+
+  /** Reads the tenant's quota values into the source before a decision (see `QuotaSource.load`). */
+  async prepare(tenant: string): Promise<void> {
+    try {
+      await this.#quotas.load?.(tenant);
+    } catch {
+      // The values read last stay in force: a store that is down does not stop the work.
+    }
+  }
+
+  /**
+   * Whether a room may start work for a tenant (`roomCpuBudget`). Refused as `rate_limited` once the
+   * milliseconds spent in the window have reached the budget (04 §12: reject when the budget is
+   * spent). A budget of 0 is spent from the start.
+   */
+  admitCpu(tenant: string): Admission {
+    const now = this.#now();
+    const s = this.#state(tenant);
+    this.#prune(s, now);
+    const limit = this.#quotas.get(tenant).roomCpuBudget;
+    if (limit === null) return { ok: true };
+    const spent = s.cpu.reduce((sum, e) => sum + e.ms, 0);
+    if (spent < limit) return { ok: true };
+    const oldest = s.cpu[0]?.at ?? now;
+    return this.#refuse(tenant, {
+      ok: false,
+      code: 'rate_limited',
+      quota: 'roomCpuBudget',
+      action: 'retry',
+      retryAfterMs: Math.max(1, oldest + this.#windowMs - now),
+    });
+  }
+
+  /** Records `ms` of room CPU already spent for a tenant. It is never refused: the work is done. */
+  chargeCpu(tenant: string, ms: number): void {
+    if (!Number.isFinite(ms) || ms < 0)
+      throw new RangeError('a CPU spend is a finite number of zero or more');
+    if (ms === 0) return;
+    const now = this.#now();
+    const s = this.#state(tenant);
+    this.#prune(s, now);
+    s.cpu.push({ at: now, ms });
   }
 
   /** One commit of a tenant (`commitRate`, commits per window). */
