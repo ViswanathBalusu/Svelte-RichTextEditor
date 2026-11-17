@@ -71,10 +71,12 @@ export function lazyFeatureOf(fileName: string, moduleIds: readonly string[] = [
   if (isWasm(fileName)) return 'webassembly';
   if (/pdf\.worker/.test(fileName)) return 'pdf worker';
   if (fileName.startsWith('viewer/') || any(/\/element\/src\/pdf\//)) return 'pdf viewer';
-  if (any(/node_modules\/(katex|mathlive)\//) || any(/\/element\/src\/katex-/)) return 'math editor';
+  if (any(/node_modules\/(katex|mathlive)\//) || any(/\/element\/src\/katex-/))
+    return 'math editor';
   if (any(/\/proofing\//) || any(/node_modules\/(nspell|hunspell[^/]*)\//)) return 'proofing';
   if (any(/\/assistant\//)) return 'assistant';
-  if (/(^|\/)[A-Z][A-Za-z]*Pane-/.test(fileName) || any(/\/ui\/src\/.*Pane\.svelte/)) return 'panes';
+  if (/(^|\/)[A-Z][A-Za-z]*Pane-/.test(fileName) || any(/\/ui\/src\/.*Pane\.svelte/))
+    return 'panes';
   if (any(/\/packages\/(backend-dep|protocol)\/src\//)) return 'dep client';
   return 'other';
 }

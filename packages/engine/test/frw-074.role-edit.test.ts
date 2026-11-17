@@ -129,7 +129,11 @@ describe('the roles of a document (FRW-074)', () => {
       const c = core();
       c.setAccess(access);
       const before = JSON.stringify(c.getContent().doc);
-      const add = { op: 'add', id: 'role_1', values: { name: 'Witness', color: '#2CA02C' } } as const;
+      const add = {
+        op: 'add',
+        id: 'role_1',
+        values: { name: 'Witness', color: '#2CA02C' },
+      } as const;
       expect(c.editRole(add, true)).toEqual({ ok: false, reason: 'read-only' });
       expect(c.editRole(add)).toEqual({ ok: false, reason: 'read-only' });
       expect(c.editRole({ op: 'update', id: 'role_tenant', values: { name: 'X' } })).toEqual({

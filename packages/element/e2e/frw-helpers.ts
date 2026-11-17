@@ -70,7 +70,9 @@ export async function mountFields(
 
 /** The control of the form field with `id` in the editing surface of the editor `name`. */
 export function control(page: Page, id: string, name = 'one'): Locator {
-  return page.locator(`${editorOf(name)} .de-form-field[data-field="${id}"] .de-form-field-control`);
+  return page.locator(
+    `${editorOf(name)} .de-form-field[data-field="${id}"] .de-form-field-control`,
+  );
 }
 
 /** The confirmed document of the editor `name`: what the service has acknowledged. */

@@ -34,7 +34,10 @@ function families(value: string): string[] {
 }
 
 function cssFiles(): { name: string; text: string }[] {
-  const dirs = [new URL('../src/styles/', import.meta.url), new URL('../src/pdf/viewer/', import.meta.url)];
+  const dirs = [
+    new URL('../src/styles/', import.meta.url),
+    new URL('../src/pdf/viewer/', import.meta.url),
+  ];
   const out: { name: string; text: string }[] = [];
   for (const dir of dirs) {
     for (const name of readdirSync(dir).filter((n) => n.endsWith('.css'))) {
@@ -47,7 +50,10 @@ function cssFiles(): { name: string; text: string }[] {
 
 describe('the component CSS names no font by family (FE-061 criterion 4)', () => {
   it('has font-family declarations to check', () => {
-    const count = cssFiles().reduce((n, f) => n + [...f.text.matchAll(/font-family\s*:/g)].length, 0);
+    const count = cssFiles().reduce(
+      (n, f) => n + [...f.text.matchAll(/font-family\s*:/g)].length,
+      0,
+    );
     expect(count).toBeGreaterThan(0);
   });
 
