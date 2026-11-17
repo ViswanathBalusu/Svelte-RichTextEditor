@@ -1711,6 +1711,8 @@ As an integrating developer, I want mentions, assigned tasks and finished jobs a
 
 **Notes:** Lane PRO-071-084, 2026-11-13. Criterion 3: the export half is built and tested (`dep.export.completed.v1` and `dep.export.failed.v1` in src/control-plane/exports.ts, export-jobs.test.ts); the import half is not, because imports are refused until EXP defines them (handlers.ts, `templates and imports are not offered yet`), so no `dep.import.*` event is raised. Criteria 1 and 2 are not built: there is no thread, comment or mention code in services/document-service/src (PRO-059 and PRO-060 are unbuilt), so `dep.thread.*`, `dep.comment.*`, `dep.comment.mentioned` and `dep.task.assigned` have no raise site. Criterion 3 stays unticked as a whole for the import half.
 
+**Notes (lane w5, 2026-11-17):** Blocked; nothing new ticked. Criterion 2 is not built: services/document-service/src/control-plane/thread-routes.ts says mentions are not read yet, and no code raises dep.comment.mentioned or dep.task.assigned (only the protocol definitions name them). Criterion 3 stays unticked as a whole: the import half is still not raised, because imports are refused until EXP defines them.
+
 ## Embedding API: attributes and properties (05 §8.1)
 
 ### PRO-074 Load a document from attributes
