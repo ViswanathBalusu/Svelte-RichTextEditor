@@ -69,6 +69,11 @@ import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
 import { HoldService, MemoryHoldStore, type HoldStore } from './control-plane/holds.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
+import {
+  MemoryWorkflowResourceStore,
+  type WorkflowResourceStore,
+} from './workflow/workflow-resource.ts';
+import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import { Cursors } from './control-plane/http.ts';
 import {
@@ -185,6 +190,8 @@ export interface ServiceParts {
   retention?: RetentionService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080). Absent: the routes are not offered. */
   holds?: HoldService;
+  /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
+  workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
   quotaAdmin?: QuotaAdminService;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: none is asked. */
@@ -385,6 +392,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     audit,
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
+    workflows: new PgWorkflowResourceStore(pool, { now }),
     quotaAdmin: quotaAdminOver(
       new PgQuotaStore(pool, (tenant) =>
         // `tenants` is under row-level security, so the question runs in the tenant's own context.
@@ -428,6 +436,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     audit,
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
+    workflows: new MemoryWorkflowResourceStore(),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
       // reaches it is registered; the memory store has no other tenant table to ask.
@@ -635,6 +644,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
           config.externalWorkers
             ? ['assets']
             : []),
+          ...(parts.workflows ? ['workflow'] : []),
         ]),
       ],
       // Errors of the data plane go to the same structured log, by name only, with the tenant,
@@ -889,6 +899,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       // `exports` only when a compile worker can serve the queue (ADR 0054; `exports.states`).
       ...(exportHandlers[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
       ...(assetWorker || config.externalWorkers ? ['assets'] : []),
+      ...(parts.workflows ? ['workflow'] : []),
     ]),
   ];
 
@@ -979,6 +990,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
+    ...(parts.workflows ? { workflows: parts.workflows } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     compileBudget,
   });

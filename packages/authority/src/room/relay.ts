@@ -31,8 +31,16 @@ import type { StepJson } from '../steps.ts';
 /** The mode a relay announces (05 §3). */
 export const RELAY_MODE = 'relay' as const;
 
-/** The features a relay never announces (04 §14; 05 §3). */
-export const RELAY_EXCLUDED_FEATURES: readonly string[] = ['regions', 'suggest-enforced', 'fields'];
+/**
+ * The features a relay never announces (04 §14; 05 §3). workflow is added for FRW-025 criterion 6:
+ * the workflow resource lives with the authority (docs/adr/0371-w4-FRW-025-workflow-put.md, proposed).
+ */
+export const RELAY_EXCLUDED_FEATURES: readonly string[] = [
+  'regions',
+  'suggest-enforced',
+  'fields',
+  'workflow',
+];
 
 /** The capability announcement of a relay (05 §3). */
 export interface RelayCapabilities {

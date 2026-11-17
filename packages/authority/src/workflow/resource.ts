@@ -1,9 +1,8 @@
 /**
  * The participant list of the workflow resource, as a host or an owner writes it (12 §6.1, §7, §10;
  * FRW-025 criterion 4, FRW-026 criteria 1 and 4). Pure: `checkParticipants` says whether a list may
- * be stored, and what it stores. The endpoint, the ETag, the `name` and `auth` members of the
- * published resource schema and the second workflow check are the workflow service's (FRW-025
- * criteria 1 to 3 and 5).
+ * be stored, and what it stores. The endpoint, the ETag and the second workflow check are the
+ * workflow service's; `checkWorkflowBody` (workflow-body.ts) checks the whole body of a `PUT`.
  *
  * Decisions taken where 12 is silent are recorded in docs/adr/0248-lane-FRW-014-026.md (proposed):
  * - `order` is a safe integer of at least 1 (12 §6.1 gives equal and ascending values but no type);
@@ -27,6 +26,7 @@ export const PARTICIPANT_MEMBERS: readonly string[] = [
   'order',
   'sub',
   'name',
+  'auth',
 ];
 
 const KIND_SET: ReadonlySet<string> = new Set(PARTICIPANT_KINDS);
@@ -43,7 +43,8 @@ export type ParticipantProblemReason =
   | 'invalid_kind'
   | 'invalid_order'
   | 'invalid_sub'
-  | 'invalid_name';
+  | 'invalid_name'
+  | 'invalid_auth';
 
 /** One refusal: the position of the participant in the list (-1 for the list itself) and the member. */
 export interface ParticipantProblem {
@@ -60,6 +61,8 @@ export interface ParticipantDraft {
   readonly order: number;
   readonly sub?: string;
   readonly name?: string;
+  /** The authentication a participant must pass: the methods named in `require` (12 §6.1, §7). */
+  readonly auth?: { readonly require?: readonly string[] };
 }
 
 export type ParticipantCheck =
@@ -124,6 +127,20 @@ function checkOne(
   const name = raw['name'];
   if (name !== undefined && !isNonEmptyString(name)) fail('name', 'invalid_name');
 
+  const auth = raw['auth'];
+  let authOk: ParticipantDraft['auth'] | undefined;
+  if (auth !== undefined) {
+    const req = isObj(auth) ? auth['require'] : undefined;
+    if (
+      !isObj(auth) ||
+      Object.keys(auth).some((m) => m !== 'require') ||
+      (req !== undefined &&
+        (!Array.isArray(req) || !req.every(isNonEmptyString) || new Set(req).size !== req.length))
+    )
+      fail('auth', 'invalid_auth');
+    else authOk = req === undefined ? {} : { require: [...(req as string[])] };
+  }
+
   if (problems.length > 0 || !isNonEmptyString(id) || !rolesOk || !isParticipantKind(kind)) {
     return { problems, draft: null };
   }
@@ -135,6 +152,7 @@ function checkOne(
     order,
     ...(typeof sub === 'string' ? { sub } : {}),
     ...(typeof name === 'string' ? { name } : {}),
+    ...(authOk !== undefined ? { auth: authOk } : {}),
   };
   return { problems, draft };
 }
