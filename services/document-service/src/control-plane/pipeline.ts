@@ -42,7 +42,7 @@ import {
 import { ApiError, isApiError, type RestCode } from './problems.ts';
 import { Router, type OperationDef } from './router.ts';
 import type { TenantRegistry } from './tenants.ts';
-import { API_KEY_PREFIX, isOpaqueId, SERVICE_JWT_TYPE, type TokenService } from './tokens.ts';
+import { API_KEY_PREFIX, isOpaqueId, SERVICE_JWT_TYPE, type TokenVerifier } from './tokens.ts';
 import type { UserDirectory } from './users.ts';
 import { decodeJws } from './jwt.ts';
 
@@ -92,7 +92,7 @@ export type Handler = (ctx: Ctx) => Promise<Reply>;
 export type PlainHandler = (req: IncomingMessage, url: URL) => Promise<Reply>;
 
 export interface PipelineOptions {
-  tokens: TokenService;
+  tokens: TokenVerifier;
   registry: TenantRegistry;
   users: UserDirectory;
   handlers: Readonly<Record<string, Handler>>;

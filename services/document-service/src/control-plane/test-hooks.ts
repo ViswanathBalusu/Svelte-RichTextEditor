@@ -22,7 +22,7 @@ import type { DataPlane } from '../seams.ts';
 import { readJsonBody } from './http.ts';
 import type { PlainHandler, Reply } from './pipeline.ts';
 import { ApiError, isApiError, problemOf } from './problems.ts';
-import type { TokenService } from './tokens.ts';
+import type { TokenVerifier } from './tokens.ts';
 
 /** The timers test mode shortens (BE-079 criterion 2), all settings, in ms unless named. */
 export interface TestTimers {
@@ -60,7 +60,7 @@ const reply = (status: number, body: unknown): Reply => ({
 
 /** The handler of every path under `/_test/`. */
 export function testHooks(opts: {
-  tokens: TokenService;
+  tokens: TokenVerifier;
   dataPlane: DataPlane;
   timers: TestTimers;
   logger: Logger;

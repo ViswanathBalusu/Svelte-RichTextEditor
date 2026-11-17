@@ -3,6 +3,7 @@
  * (row-level security; BE-011), and the helpers that tell a definite failure from an unknown one.
  */
 import pg from 'pg';
+import { assertUuid, isUuid } from './ids.ts';
 
 export type Pool = pg.Pool;
 export type PoolClient = pg.PoolClient;
@@ -29,16 +30,8 @@ export function createPool(config: pg.PoolConfig): pg.Pool {
   return pool;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
-export function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && UUID.test(value);
-}
-
-export function assertUuid(value: unknown, what: string): asserts value is string {
-  if (!isUuid(value))
-    throw new TypeError(`${what} must be a lower-case UUID, got ${String(value)}`);
-}
+// The identifier checks live in ids.ts, which needs no driver; they stay exported from here too.
+export { assertUuid, isUuid };
 
 /**
  * Starts a transaction in which row-level security sees only `tenant`'s rows. The tenant is set

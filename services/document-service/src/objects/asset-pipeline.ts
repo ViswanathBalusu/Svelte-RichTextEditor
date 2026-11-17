@@ -26,7 +26,7 @@ import {
 import type { AssetRegistry, AssetUploads } from '../control-plane/assets.ts';
 import type { NotifyFn } from '../control-plane/exports.ts';
 import { JobFailure, type JobHandler } from '../control-plane/jobs/runner.ts';
-import type { AssetStore } from './checkpoints.ts';
+import type { AssetStore } from '../storage/types.ts';
 import type { S3Settings } from './s3.ts';
 import { ObjectExistsError, type ObjectStore } from './store.ts';
 

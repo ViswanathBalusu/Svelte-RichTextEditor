@@ -9,13 +9,13 @@
  * validation data), which need the completion log, two compiling workers and the signing service.
  */
 import { randomUUID } from 'node:crypto';
-import { AssetStore, MemoryObjectStore, ObjectExistsError } from '@docedit/document-service';
+import { ObjectAssetStore, MemoryObjectStore, ObjectExistsError } from '@docedit/document-service';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 describe('SEC-042 criterion 3: a second write to the key of a sealed PDF is refused', () => {
   it('refuses the second write with ObjectExistsError and keeps the first bytes', async () => {
-    const assets = new AssetStore(new MemoryObjectStore());
+    const assets = new ObjectAssetStore(new MemoryObjectStore());
     const tenant = randomUUID();
     const doc = randomUUID();
     const workflow = randomUUID();
@@ -35,7 +35,7 @@ describe('SEC-042 criterion 3: a second write to the key of a sealed PDF is refu
         fc.uint8Array({ minLength: 1, maxLength: 512 }),
         fc.uint8Array({ minLength: 1, maxLength: 512 }),
         async (a, b) => {
-          const assets = new AssetStore(new MemoryObjectStore());
+          const assets = new ObjectAssetStore(new MemoryObjectStore());
           const tenant = randomUUID();
           const doc = randomUUID();
           const workflow = randomUUID();
@@ -51,7 +51,7 @@ describe('SEC-042 criterion 3: a second write to the key of a sealed PDF is refu
   });
 
   it('control: the refusal is by key, so another workflow or another tenant may hold its own sealed PDF', async () => {
-    const assets = new AssetStore(new MemoryObjectStore());
+    const assets = new ObjectAssetStore(new MemoryObjectStore());
     const tenant = randomUUID();
     const other = randomUUID();
     const doc = randomUUID();

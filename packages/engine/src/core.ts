@@ -67,6 +67,7 @@ import type {
   ModeState,
   OutlineItem,
   PanelInfo,
+  PeerSelectionInfo,
   PresencePeerInfo,
   RecoveredEdits,
   RecoveredItem,
@@ -90,6 +91,15 @@ import { createVariantStory } from './header-footer.ts';
 import { type CitationItemInput, insertCitation } from './citation-insert.ts';
 import { addLink, followInternalLink, insertBookmark } from './links-bookmarks.ts';
 import { type PageSetupChanges, setPageSetup } from './page-setup-commands.ts';
+import { deleteSource } from './source-delete.ts';
+import {
+  type SourceEdit,
+  type SourceEditOutcome,
+  type SourceInfo,
+  addSource,
+  listSources,
+  updateSource,
+} from './source-edit.ts';
 import {
   type SectionWarning,
   insertBreak,
@@ -630,6 +640,8 @@ export class DocumentCore implements DocumentApi {
   readonly recovered: ReadValue<RecoveredEdits>;
   readonly syncSummary: ReadValue<SyncSummary>;
   readonly presence: ReadValue<readonly PresencePeerInfo[]>;
+  /** The peers of `presence` with their positions in the visible document (SYN-036). */
+  readonly peerSelections: ReadValue<readonly PeerSelectionInfo[]>;
   readonly features: ReadValue<readonly string[]>;
   readonly counts: ReadValue<ShellCounts>;
   readonly problem: ReadValue<CoreProblem | null>;
@@ -747,6 +759,7 @@ export class DocumentCore implements DocumentApi {
       hub,
     );
     this.presence = new ReadValue<readonly PresencePeerInfo[]>([], sameJson, hub);
+    this.peerSelections = new ReadValue<readonly PeerSelectionInfo[]>([], sameJson, hub);
     this.features = new ReadValue<readonly string[]>([], sameJson, hub);
     this.counts = new ReadValue<ShellCounts>({}, sameJson, hub);
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
@@ -1746,6 +1759,34 @@ export class DocumentCore implements DocumentApi {
     return sectionWarnings(this.#state.doc);
   }
 
+  /** The document's sources in the order of its definitions, each with where it is cited (UX-103). */
+  sources(): SourceInfo[] {
+    return listSources(this.#state.doc);
+  }
+
+  /**
+   * Adds, changes or deletes a source definition (UX-103; CDM-052). The change is a transaction on
+   * the definitions, so it passes the region guard (`defs` needs `structure`, 07 §4) and leaves as a
+   * commit like any other. A cited source is not deleted (I4): the answer names where it is cited.
+   * With `check`, only says whether the change would be made.
+   */
+  editSource(edit: SourceEdit, check = false): SourceEditOutcome {
+    if (this.#locked()) return { ok: false, reason: 'read-only' };
+    const state = this.#state;
+    const writable = (pos: number): boolean => this.canEdit(this.#scopeIn(state.doc, pos));
+    const dispatch = check ? undefined : this.dispatch;
+    let outcome: SourceEditOutcome;
+    if (edit.op === 'add') outcome = addSource(state, edit.id, edit.values, { writable }, dispatch);
+    else if (edit.op === 'update')
+      outcome = updateSource(state, edit.id, edit.values, { writable }, dispatch);
+    else if (!this.canEdit('defs')) outcome = { ok: false, reason: 'read-only' };
+    else outcome = deleteSource(state, edit.id, dispatch);
+    // The guard has the last word: a transaction it refused leaves the document as it was.
+    if (outcome.ok && !check && this.#state.doc.eq(state.doc))
+      return { ok: false, reason: 'read-only' };
+    return outcome;
+  }
+
   /**
    * Sets the client's copy of a thread's range, as the service reports it at `seq` (FE-048). The
    * range is drawn at once and mapped through every later change.
@@ -2491,6 +2532,7 @@ export class DocumentCore implements DocumentApi {
             return { anchor, head, scope: core.#mainScope() };
           },
           setPeers: (peers) => core.presence.set(peers),
+          setSelections: (peers) => core.peerSelections.set(peers),
           visibleDoc: () => core.#state.doc,
         },
         {
@@ -2516,6 +2558,7 @@ export class DocumentCore implements DocumentApi {
         this.#attachedAssets = null;
         this.connection.set('detached');
         this.presence.set([]);
+        this.peerSelections.set([]);
         this.#publishSync();
       }
     };

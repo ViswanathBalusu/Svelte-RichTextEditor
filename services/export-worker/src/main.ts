@@ -14,7 +14,7 @@
  * or the sandbox cannot run (Podman missing, image not built, limits not applicable, host mounts).
  */
 import {
-  AssetStore,
+  ObjectAssetStore,
   configFromEnv,
   createLogger,
   createPool,
@@ -65,7 +65,7 @@ const worker = createExportWorker({
       documents: new PgDocumentStore(pool),
       chainHeadAt: (ref, seq) => logs.chainHeadAt(ref, seq),
     },
-    outputs: new AssetStore(objects),
+    outputs: new ObjectAssetStore(objects),
     fonts: () => imageFontManifest(IMAGE),
     // EXP-047 criterion 2: every face of the manifest must be a file of the image under its hash,
     // or the job fails with font_file_missing or font_file_mismatch before it converts.

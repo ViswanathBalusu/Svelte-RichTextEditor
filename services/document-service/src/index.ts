@@ -94,7 +94,9 @@ export {
   type ObjectStore,
 } from './objects/store.ts';
 export { S3ObjectStore, type S3Settings } from './objects/s3.ts';
-export { ObjectCheckpointStore, AssetStore } from './objects/checkpoints.ts';
+export { ObjectCheckpointStore, ObjectAssetStore } from './objects/checkpoints.ts';
+export { ADAPTER_INTERFACES } from './adapters.ts';
+export type { AssetStore, Queue, TokenVerifier } from './adapters.ts';
 
 // The control plane's phase 1b (packet C; ADR 0054): job kinds and priorities of exports and
 // previews, idempotency keys, assets, the scheduler, metrics, test mode.

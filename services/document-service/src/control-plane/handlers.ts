@@ -35,7 +35,7 @@ import type {
   TokenRequest,
   UpdateDocumentRequest,
 } from '@docedit/protocol';
-import { diffPermissions } from '../storage/grant-store.ts';
+import { diffPermissions } from '../storage/permission-change.ts';
 import type { DocumentRecord } from '../storage/types.ts';
 import { assetReferences } from './assets.ts';
 import { assetRoutes } from './asset-routes.ts';

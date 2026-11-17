@@ -83,6 +83,12 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     load: () => load(import('../panes/CheckerPane.svelte')),
     available: (core) => core.getContent !== undefined,
   },
+  {
+    id: 'sources',
+    label: 'pane.sources',
+    load: () => load(import('../panes/SourcesPane.svelte')),
+    available: (core) => core.sources !== undefined,
+  },
   { id: 'assistant', label: 'pane.assistant' },
   { id: 'pdf', label: 'pane.pdf', feature: 'exports' },
   {

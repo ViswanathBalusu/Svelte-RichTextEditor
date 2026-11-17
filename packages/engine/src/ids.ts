@@ -9,7 +9,11 @@
  * - when two nodes share an `id` (a split copies the attributes), the node at the original position
  *   keeps it, except that a split at the start of a paragraph leaves the original empty: then the
  *   part that keeps the content keeps the identifier and the new empty part gets the fresh one;
- * - copies made by pasting or duplicating get fresh identifiers (the parse rules never read them).
+ * - copies made by pasting or duplicating get fresh identifiers (the parse rules never read them);
+ * - a copied form field whose `key` another field of the document holds gets a key of its own in the
+ *   same transaction, so I13 holds at the end of the commit (FRW-002 criterion 4; the rule is proposed
+ *   in ADR 0366): `<key>_<n>` for the least `n` from 2 that no field uses. A field that is moved (cut
+ *   and pasted) meets no other holder of its key and keeps it.
  *
  * Remote transactions are left alone: the authority has already checked I2 for them.
  */
@@ -41,6 +45,22 @@ export interface IdentifierOptions {
   types: ReadonlySet<string>;
   /** Identifier source; defaults to 16 random URL-safe Base64 characters (03 §9). */
   generate?: () => string;
+}
+
+/** The longest field key the CDM allows (`form_field.key`, 128 characters). */
+const MAX_FIELD_KEY = 128;
+
+/**
+ * The key a copied field gets when its own is taken (ADR 0366, proposed): `<key>_<n>` for the least
+ * `n` from 2 that is not in `used`. The suffix extends the last segment of the key, so the result
+ * keeps the key grammar; a key too long for the suffix is shortened to make room.
+ */
+export function copiedFieldKey(key: string, used: ReadonlySet<string>): string {
+  for (let n = 2; ; n++) {
+    const suffix = `_${n}`;
+    const next = key.slice(0, MAX_FIELD_KEY - suffix.length) + suffix;
+    if (!used.has(next)) return next;
+  }
 }
 
 /** The node types of a definition that declare an `id`. */
@@ -289,9 +309,10 @@ export function fillIdentifiers(
     const keep = keeper(id, list, oldPositions, mapping);
     for (const o of list) if (o !== keep) fresh.push(o);
   }
-  if (fresh.length === 0) return null;
-
   const tr = newState.tr;
+  const rekeyed = rekeyCopiedFields(tr, oldState, newState, fresh);
+  if (fresh.length === 0 && rekeyed === 0) return null;
+
   for (const o of fresh) {
     let id = generate();
     while (byId.has(id)) id = generate();
@@ -300,9 +321,53 @@ export function fillIdentifiers(
     tr.setNodeAttribute(o.pos, 'id', id);
   }
   // The guard checked the change this completes; identifiers never change which scopes it touches.
-  return tr.setMeta(identifierKey, fresh.length).setMeta(INTERNAL, true);
+  return tr.setMeta(identifierKey, fresh.length + rekeyed).setMeta(INTERNAL, true);
 }
 
+/**
+ * Gives each form field that `trs` brought into the document, and whose key another field holds, a
+ * key of its own (I13; ADR 0366, proposed). A field that was in the old document under the same
+ * identifier is never given another key. Returns how many keys were set on `tr`.
+ */
+function rekeyCopiedFields(
+  tr: Transaction,
+  oldState: EditorState,
+  newState: EditorState,
+  fresh: readonly Occurrence[],
+): number {
+  const fields: Occurrence[] = [];
+  const holders = new Map<string, number>();
+  newState.doc.descendants((node, pos) => {
+    if (node.type.name !== 'form_field') return true;
+    fields.push({ pos, node });
+    const key = node.attrs['key'];
+    if (typeof key === 'string') holders.set(key, (holders.get(key) ?? 0) + 1);
+    return true;
+  });
+  if (![...holders.values()].some((n) => n > 1)) return 0;
+  const before = new Set<string>();
+  oldState.doc.descendants((node) => {
+    const id = node.type.name === 'form_field' ? node.attrs['id'] : null;
+    if (typeof id === 'string') before.add(id);
+    return true;
+  });
+  const refilled = new Set(fresh.map((o) => o.pos));
+  const used = new Set(holders.keys());
+  let count = 0;
+  for (const o of fields) {
+    const id = o.node.attrs['id'];
+    const key = o.node.attrs['key'];
+    const introduced = typeof id !== 'string' || !before.has(id) || refilled.has(o.pos);
+    if (!introduced || typeof key !== 'string' || (holders.get(key) ?? 0) < 2) continue;
+    holders.set(key, (holders.get(key) ?? 0) - 1);
+    const next = copiedFieldKey(key, used);
+    used.add(next);
+    // AttrStep: positions do not move.
+    tr.setNodeAttribute(o.pos, 'key', next);
+    count++;
+  }
+  return count;
+}
 /** The plugin. Install it on the main editor; sub-editors forward their steps to it (FE-056). */
 export function identifierPlugin(options: IdentifierOptions): Plugin {
   return new Plugin({

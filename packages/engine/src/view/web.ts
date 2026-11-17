@@ -17,16 +17,18 @@ import {
 } from 'prosemirror-state';
 import { Mapping } from 'prosemirror-transform';
 import { EditorView } from 'prosemirror-view';
-import type { CoreLabels } from '../api.ts';
+import type { CoreLabels, PeerCaretInfo } from '../api.ts';
 import { type ClipboardPayload, fragmentFromHtml } from '../clipboard.ts';
 import { CDM_VERSION, type CoreConfig, DocumentCore } from '../core.ts';
 import { insertLineBreak, noNestedFootnote, oneParagraphLimit } from '../footnote.ts';
 import { coreKeys } from '../keys.ts';
 import { commentDecorations } from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
+import { ReadValue, sameJson } from '../read-value.ts';
 import { FIND_CURRENT_CLASS, findDecorations } from '../search-highlight.ts';
 import { SubEditor, type SubEditorTarget } from '../subeditor.ts';
 import { cssomMarkViews, type SelectionShim, shimShadowSelection } from '../view-support.ts';
+import { bibliographyPlugin, bibliographyView } from './bibliography-view.ts';
 import { footnoteNumbers, footnoteRefView } from './footnote-view.ts';
 import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
@@ -44,6 +46,8 @@ function viewPlugins(schema: Schema): Plugin[] {
     listSemanticsPlugin(),
     // FE-131 criterion 1: the borders and shading a table takes from its table style.
     tableStylePlugin(),
+    // FE-140 criterion 2: the generated entries of each bibliography.
+    bibliographyPlugin(),
     // FE-053 criterion 3: draws the core's pending picture placeholders (the core keeps only state).
     picturePlaceholderView(),
   ];
@@ -201,8 +205,60 @@ export class EditorCore extends DocumentCore {
     };
   }
 
+  /**
+   * The other sessions' carets and selections as rectangles relative to the element the body view
+   * is mounted in (SYN-036 criterion 5; ui `CoreApi.carets`, UX-027). The positions are those of
+   * `peerSelections`: confirmed positions mapped through this reader's own steps, so each lies in
+   * the document this view shows. Empty while no body view is mounted.
+   */
+  readonly carets: ReadValue<readonly PeerCaretInfo[]>;
+
+  /** Measures the peers' carets in the mounted body view. */
+  #drawCarets(): void {
+    const view = this.#view;
+    const peers = this.peerSelections.get();
+    if (!view || peers.length === 0) {
+      this.carets.set([]);
+      return;
+    }
+    const origin = view.dom.getBoundingClientRect();
+    const rect = (r: { left: number; top: number; right: number; bottom: number }) => ({
+      x: r.left - origin.left,
+      y: r.top - origin.top,
+      width: r.right - r.left,
+      height: r.bottom - r.top,
+    });
+    const size = view.state.doc.content.size;
+    const out: PeerCaretInfo[] = [];
+    for (const p of peers) {
+      const { session, user, name, status } = p;
+      let caret: PeerCaretInfo['caret'] = null;
+      let selection: PeerCaretInfo['selection'] = [];
+      // A position outside the document the view holds is never measured: nothing is drawn.
+      if (p.head >= 0 && p.head <= size && p.anchor >= 0 && p.anchor <= size) {
+        try {
+          caret = rect(view.coordsAtPos(p.head));
+          if (p.anchor !== p.head) {
+            const from = view.domAtPos(Math.min(p.anchor, p.head));
+            const to = view.domAtPos(Math.max(p.anchor, p.head));
+            const range = view.dom.ownerDocument.createRange();
+            range.setStart(from.node, from.offset);
+            range.setEnd(to.node, to.offset);
+            selection = [...range.getClientRects()].map(rect);
+          }
+        } catch {
+          caret = null;
+          selection = [];
+        }
+      }
+      out.push({ session, user, name, status, caret, selection });
+    }
+    this.carets.set(out);
+  }
+
   constructor(config: CoreConfig) {
     super(config, viewPlugins);
+    this.carets = new ReadValue<readonly PeerCaretInfo[]>([], sameJson, config.schedule);
     this.#selectionShim = config.selectionShim ?? 'instance';
     this.#fontAlias = config.fontAlias;
     webViews.set(this, { view: () => this.#view, sub: () => this.#sub });
@@ -265,6 +321,7 @@ export class EditorCore extends DocumentCore {
         nodeViews: {
           footnote: footnoteRefView((id) => this.openFootnote(id)),
           table_cell: tableCellView,
+          bibliography: bibliographyView,
         },
         markViews: cssomMarkViews(this.#fontAlias),
         attributes: this.#bodyAttributes(),
@@ -329,6 +386,12 @@ export class EditorCore extends DocumentCore {
         v.dom.querySelector(`.${FIND_CURRENT_CLASS}`)?.scrollIntoView({ block: 'nearest' });
       }
     });
+    // The peers' carets are measured again when their positions change and when the window is resized.
+    const redraw = () => this.#drawCarets();
+    const uncarets = this.peerSelections.subscribe(redraw);
+    const win = target.ownerDocument.defaultView;
+    win?.addEventListener('resize', redraw);
+    this.#drawCarets();
     // A change of the document's base direction (FE-111) is applied to the surface at once.
     const undirection = this.direction.subscribe(() =>
       this.#view?.setProps({ attributes: this.#bodyAttributes() }),
@@ -353,14 +416,19 @@ export class EditorCore extends DocumentCore {
       unfind();
       unthread();
       undirection();
+      uncarets();
+      win?.removeEventListener('resize', redraw);
       target.removeEventListener('compositionend', ended);
       view.destroy();
       if (this.#view === view) this.#view = null;
+      this.#drawCarets();
     };
   }
 
   #update(state: EditorState, transactions: readonly Transaction[]): void {
     this.#view?.updateState(state);
+    // The layout may have moved: the peers' carets are measured in the new state.
+    this.#drawCarets();
     const sub = this.#sub;
     if (!sub) return;
     if (transactions.length === 0) {

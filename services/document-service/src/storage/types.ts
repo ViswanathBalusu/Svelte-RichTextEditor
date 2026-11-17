@@ -294,6 +294,33 @@ export interface CheckpointStore {
   setAside?(ref: DocRef, aboveSeq: number): Promise<number[]>;
 }
 
+/**
+ * Assets, export outputs and sealed PDFs of a tenant, in object storage (`AssetStore`, 06 §4.2,
+ * §4.4, §14; BE-002, BE-003). The implementation over an `ObjectStore` is `ObjectAssetStore`
+ * (src/objects/checkpoints.ts).
+ */
+export interface AssetStore {
+  /** An upload before validation (06 §4.4). */
+  putQuarantined(tenant: string, asset: string, bytes: Uint8Array): Promise<void>;
+  getQuarantined(tenant: string, asset: string): Promise<Uint8Array | null>;
+  /** A final asset: the store computes the SHA-256 and writes the content-addressed object. */
+  putFinal(tenant: string, bytes: Uint8Array, contentType: string): Promise<string>;
+  getFinal(tenant: string, sha256: string): Promise<Uint8Array | null>;
+  /** An output of an export job, under the job's prefix. */
+  putExport(
+    tenant: string,
+    job: string,
+    name: string,
+    bytes: Uint8Array,
+    contentType: string,
+  ): Promise<void>;
+  /** A sealed PDF: written once; a second write is refused with `ObjectExistsError`. */
+  putSealed(tenant: string, doc: string, workflow: string, bytes: Uint8Array): Promise<void>;
+  getSealed(tenant: string, doc: string, workflow: string): Promise<Uint8Array | null>;
+  /** A short-lived URL of an object of `tenant`, after the caller's permission check (10 §3.7). */
+  signedUrl(tenant: string, key: string, expiresAt: number): string;
+}
+
 // --- Ports added by packet A, phase 1b (06 §4.1, §14). Implementations: src/data-plane/pg/ and
 // src/data-plane/memory-ports.ts. ---------------------------------------------------------------
 
