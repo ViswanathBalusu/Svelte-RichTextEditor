@@ -77,6 +77,8 @@ export type { ClipboardInput } from './clipboard.ts';
 export { ReadValue, ViewHub, type ReadView, type Schedule } from './read-value.ts';
 export { editingSchema, definitionFor, headingLevel, type FootnoteModel } from './schema.ts';
 export type { SelectionShim } from './view-support.ts';
+export { imageSource, RASTER_IMAGE_TYPES } from './image-source.ts';
+export type { AssetImage, AssetImageLookup } from './image-source.ts';
 export type { Clock, ConnectionStatus } from './sync/session.ts';
 export type { Discarded } from './sync/state.ts';
 export {

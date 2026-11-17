@@ -21,6 +21,8 @@ import type { CoreLabels, PeerCaretInfo } from '../api.ts';
 import { type ClipboardPayload, fragmentFromHtml } from '../clipboard.ts';
 import { CDM_VERSION, type CoreConfig, DocumentCore } from '../core.ts';
 import { insertLineBreak, noNestedFootnote, oneParagraphLimit } from '../footnote.ts';
+import type { AssetImageLookup } from '../image-source.ts';
+import { imageView } from './image-view.ts';
 import { coreKeys } from '../keys.ts';
 import { commentDecorations } from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
@@ -149,6 +151,7 @@ export class EditorCore extends DocumentCore {
 
   readonly #selectionShim: SelectionShim;
   readonly #fontAlias: ((family: string) => string | undefined) | undefined;
+  readonly #assetImage: AssetImageLookup | undefined;
   #shimResult: 'native' | 'instance' | 'none' | null = null;
   /** The blocks before which a page guide is drawn (FE-068); empty when guides are off. */
   #pageGuides: ReadonlySet<string> = new Set();
@@ -261,6 +264,7 @@ export class EditorCore extends DocumentCore {
     this.carets = new ReadValue<readonly PeerCaretInfo[]>([], sameJson, config.schedule);
     this.#selectionShim = config.selectionShim ?? 'instance';
     this.#fontAlias = config.fontAlias;
+    this.#assetImage = config.assetImage;
     webViews.set(this, { view: () => this.#view, sub: () => this.#sub });
   }
 
@@ -322,6 +326,7 @@ export class EditorCore extends DocumentCore {
           footnote: footnoteRefView((id) => this.openFootnote(id)),
           table_cell: tableCellView,
           bibliography: bibliographyView,
+          image: imageView(this.#assetImage),
         },
         markViews: cssomMarkViews(this.#fontAlias),
         attributes: this.#bodyAttributes(),

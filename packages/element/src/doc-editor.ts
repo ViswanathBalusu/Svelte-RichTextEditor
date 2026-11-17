@@ -42,6 +42,8 @@ import { headerSnapshot, type HeaderSnapshot } from './header-events.ts';
 import { INTERNALS } from './internals.ts';
 import { Announcer } from './announcer.ts';
 import { mountLiveRegion, type LiveRegion } from './live-region.ts';
+import type { AssetImageLookup } from '@docedit/engine';
+import { assetImageLookup } from './assets.ts';
 import { Session } from './session.ts';
 import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
@@ -618,6 +620,13 @@ export class DocEditorElement extends Base {
     });
   }
 
+  #assetImage(docId: string): { assetImage?: AssetImageLookup } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.assets || !backend.features.has('assets')) return {};
+    return { assetImage: assetImageLookup(backend.assets, docId) };
+  }
+
   async #mount(
     content: Content,
     docId: string,
@@ -634,6 +643,8 @@ export class DocEditorElement extends Base {
       config: this.#config,
       // The manifest's family lookup (FE-062 criterion 1), when the session read one.
       ...(fontAlias ? { fontAlias } : {}),
+      // Pictures are drawn from the signed URLs of the assets port, when the backend has one (FE-067).
+      ...this.#assetImage(docId),
       viewerUrl: this.#config.pdfViewerUrl ?? new URL(VIEWER_PAGE, import.meta.url).href,
       resolveUsers: () => this.#resolveUsers,
       // The host's directory search and the document it is asked about (PRO-080 criterion 2).

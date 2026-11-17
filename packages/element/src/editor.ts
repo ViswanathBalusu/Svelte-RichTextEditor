@@ -8,7 +8,12 @@
  * (02 §4). The shell reaches the core only through `CoreApi`; this file is the one place where the
  * element meets the core's API and the shell's props, so a change in either is adapted here.
  */
-import { EditorCore, type ConnectionState, type EditMode } from '@docedit/engine';
+import {
+  type AssetImageLookup,
+  EditorCore,
+  type ConnectionState,
+  type EditMode,
+} from '@docedit/engine';
 import {
   PortError,
   type Access,
@@ -69,6 +74,8 @@ export interface MountOptions {
   permissions?: PermissionsPort | null;
   /** The manifest's family-to-alias lookup (FE-062 criterion 1); absent when none was read. */
   fontAlias?: (family: string) => string | undefined;
+  /** The signed URL of an asset, for the web view's pictures (FE-067 criterion 3); absent without assets. */
+  assetImage?: AssetImageLookup;
   /** The shell's attribute-driven settings (`toolbar`, `locale`). */
   settings: SettingsStore;
   /** The `mode` the host asked for (05 §8.1); the core applies the most restrictive one allowed. */
@@ -193,6 +200,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     deferRemoteWhileComposing: config.deferRemoteWhileComposing,
     mode: options.mode,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    ...(options.assetImage ? { assetImage: options.assetImage } : {}),
   });
   const stylePath = attachStyles(root, {
     nonce: config.styleNonce,

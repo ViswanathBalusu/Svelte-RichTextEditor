@@ -16,6 +16,7 @@
  */
 import { type StepJson, stepsToJson } from '@docedit/authority';
 import type { RemoteCommit } from '@docedit/protocol';
+import type { AssetImageLookup } from './image-source.ts';
 import type { Access, SyncChannel } from '@docedit/protocol';
 import { LOCATOR_LABELS, mayOpen, supportedFeatures } from '@docedit/model/definition';
 import { toggleMark } from 'prosemirror-commands';
@@ -263,6 +264,12 @@ export interface CoreConfig {
    * family mark with the alias it returns; a family it does not know keeps its name. Read at each draw.
    */
   fontAlias?: (family: string) => string | undefined;
+  /**
+   * The signed URL and content type of an asset, for the web view's pictures (FE-067 criterion 3).
+   * The view draws a picture only from an `http` or `https` URL of a raster type; without this
+   * lookup, or for any other answer, it draws no picture. Read when a picture is drawn.
+   */
+  assetImage?: AssetImageLookup;
 }
 
 /** A document the core cannot open (03 §2, §11.1): the codes are DEP's (05 §5.8). */
