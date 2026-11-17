@@ -25,7 +25,9 @@ describe('UX-084 GET /v1/search', () => {
     index.indexCheckpoint({ tenant, doc, seq, visibility: 'full', content: para(text) });
 
   beforeAll(async () => {
-    h = await startHarness('memory', { parts: { search: index } });
+    h = await startHarness('memory', {
+      parts: { search: { search: async (t, q, o) => index.search(t, q, o) } },
+    });
     a = await h.createDocument({ externalId: 'cat-a' });
     b = await h.createDocument({ externalId: 'cat-b' });
     c = await h.createDocument({}); // No external identifier.
