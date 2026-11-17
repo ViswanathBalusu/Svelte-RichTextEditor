@@ -3,10 +3,8 @@
 // Test values only. The commit that moves the text is appended through the log store, as a room
 // would append it; the harness runs no room. The rows are the `threads` table of migration 0050.
 //
-// Not claimed here: the rebase window's refusal (PRO-059 criterion 2 for a base beyond the window;
-// the window is DEFAULT_LIMITS.maxRebaseSteps, too large to reach in a test), a range in a scope
-// where the caller lacks `comment` after mapping (criterion 3, as a per-region role is not set up
-// here), and `?seq` (criterion 4).
+// The rebase window's refusal, a range in a scope without `comment` after mapping, and `?seq` are in
+// pro-059-window-scope-seq.test.ts.
 import { uuid7 } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -96,13 +94,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           body: { target: { range: { from: p, to: p + 5, baseSeq: head } }, comment },
         });
         expect(made.status, made.text).toBe(201);
-        expect(made.json.target).toEqual({ range: { from: p, to: p + 5 } });
+        // The range carries the seq it refers to as `baseSeq` (`RangeTarget`).
+        expect(made.json.target).toEqual({ range: { from: p, to: p + 5, baseSeq: head } });
         expect(made.headers.get('etag')).toBe(`"${made.json.id}:open:"`);
         const got = await h.call('GET', `/v1/threads/${made.json.id}`, {
           token: as(doc, 'viewer', 'vw-1'),
         });
         expect(got.status).toBe(200);
-        expect(got.json.target).toEqual({ range: { from: p, to: p + 5 } });
+        expect(got.json.target).toEqual({ range: { from: p, to: p + 5, baseSeq: head } });
         expect(
           h.stub.notices.some(
             (n) =>
@@ -127,7 +126,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           body: { target: { range: { from: p, to: p + 5, baseSeq: base } }, comment },
         });
         expect(made.status, made.text).toBe(201);
-        expect(made.json.target).toEqual({ range: { from: p + 2, to: p + 7 } });
+        expect(made.json.target).toEqual({ range: { from: p + 2, to: p + 7, baseSeq: head } });
         expect(head).toBeGreaterThan(base);
       },
     );

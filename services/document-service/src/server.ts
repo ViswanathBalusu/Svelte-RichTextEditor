@@ -632,6 +632,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
     checkpoints,
     settings: {
       viewKey,
+      ...(config.maxRebaseSteps !== null
+        ? { limits: { maxRebaseSteps: config.maxRebaseSteps } }
+        : {}),
       // 05 §1 rule 4: discovery and `welcome` announce the same features, so the session accepts
       // in `hello` and `ch.open` what discovery announces (`exports` and `assets` come from the
       // workers, as in `announced` below; U-PRO-103-119, PRO-111 criterion 6).
@@ -991,6 +994,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     compileBudget,
     ...(liveQuotas ? { liveQuotas } : {}),
     ...(quotaSource ? { quotaSource } : {}),
+    ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
   });
 
   const ready = () => readiness(parts.pool);

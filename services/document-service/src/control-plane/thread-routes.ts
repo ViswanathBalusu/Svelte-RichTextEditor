@@ -42,7 +42,7 @@ import { cdmSchema } from '@docedit/model/prosemirror';
 import type { StoredComment, StoredTarget, StoredThread } from '../storage/thread-store.ts';
 import type { DocRef } from '../storage/types.ts';
 import { accessOf, connectionOn, regionInfosOfJson } from './gate.ts';
-import { checkIfMatch } from './http.ts';
+import { checkIfMatch, pageLimit, seqParam } from './http.ts';
 import { json, type Kit } from './kit.ts';
 import type { Ctx, Handler, Reply } from './pipeline.ts';
 import { ApiError } from './problems.ts';
@@ -61,8 +61,18 @@ interface UpdateThreadBody {
 }
 
 /** The thread as the REST surface shows it: the `Thread` of 05 section 6.2. */
-function threadBody(t: StoredThread) {
-  const target = 'range' in t.target ? { range: t.target.range } : { block: t.target.block };
+function threadBody(t: StoredThread, at?: { range: { from: number; to: number }; seq: number }) {
+  // A range target carries the seq it refers to as `baseSeq` (`RangeTarget`, 05 section 6.2).
+  const target =
+    'range' in t.target
+      ? {
+          range: {
+            from: (at?.range ?? t.target.range).from,
+            to: (at?.range ?? t.target.range).to,
+            baseSeq: at?.seq ?? t.rangeSeq ?? 0,
+          },
+        }
+      : { block: t.target.block };
   return { id: t.id, state: t.state, assignee: t.assignee, target };
 }
 
@@ -258,7 +268,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('validation_failed', 'the baseSeq is above the head', {
         violations: [{ path: '/target/range/baseSeq', rule: `at most ${headSeq}` }],
       });
-    const window = DEFAULT_LIMITS.maxRebaseSteps;
+    const window = d.rebaseWindow ?? DEFAULT_LIMITS.maxRebaseSteps;
     if (headSeq - range.baseSeq > window)
       throw new ApiError('validation_failed', 'the baseSeq is outside the rebase window', {
         violations: [{ path: '/target/range/baseSeq', rule: `within ${window} steps of the head` }],
@@ -322,6 +332,68 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       data: { state: 'open', seq: head.seq },
     });
     return json(201, threadBody(thread), { ETag: threadTag(thread), 'Cache-Control': 'no-store' });
+  };
+
+  /**
+   * `GET /documents/{id}/threads?seq=` (05 section 6.2; PRO-059 criterion 4): the threads the
+   * caller may read, with each range mapped from the seq it was made at to `seq` (the head when
+   * absent) through the commits between them (SYN-032). A thread made after `seq` did not exist at
+   * it and is left out. A range whose text was deleted by then comes back empty (`from` equals
+   * `to`), which a client shows as detached. Threads in a region the caller cannot see are left
+   * out, as in `getThread`.
+   */
+  const listThreads: Handler = async (ctx): Promise<Reply> => {
+    const doc = ctx.params['id']!;
+    const s = store();
+    await liveDocument(ctx, doc);
+    if (ctx.caller.kind === 'user' && ctx.caller.identity!.docs[doc] === undefined)
+      throw new ApiError('not_found', 'no such document');
+    const ref = refOf(ctx, doc);
+    const head = await d.logs.head(ref);
+    const asked = seqParam(ctx.url, 'seq');
+    const seq = asked ?? head.seq;
+    if (seq > head.seq)
+      throw new ApiError('validation_failed', `seq is beyond the head (${head.seq})`, {
+        violations: [{ path: 'seq', rule: 'at most the head' }],
+      });
+    const limit = pageLimit(ctx.url);
+    const cursor = ctx.url.searchParams.get('cursor');
+    const after = cursor !== null ? d.cursors.open(`threads/${doc}`, cursor) : undefined;
+    const page = await s.list(ref, { ...(after !== undefined ? { after } : {}), limit });
+
+    // The commits the ranges are mapped through: from the oldest range seq on this page.
+    const from = Math.min(
+      seq,
+      ...page.flatMap((t) => (t.rangeSeq !== null && 'range' in t.target ? [t.rangeSeq] : [])),
+    );
+    const commits = from < seq ? await d.logs.read(ref, from + 1, seq) : [];
+    const schema = cdmSchema();
+
+    const items: ReturnType<typeof threadBody>[] = [];
+    for (const t of page) {
+      if ((await contextOf(ctx, t)).hidden) continue;
+      if (!('range' in t.target) || t.rangeSeq === null) {
+        items.push(threadBody(t));
+        continue;
+      }
+      if (t.rangeSeq > seq) continue;
+      const through = commits
+        .filter((c) => c.seq > t.rangeSeq! && c.seq <= seq)
+        .map((c) => ({ kind: c.kind, steps: 'steps' in c ? c.steps : [] }));
+      const [mapped] = mapRangesThrough([t.target.range], through, schema);
+      items.push(threadBody(t, { range: { from: mapped!.from, to: mapped!.to }, seq }));
+    }
+    const last = page[page.length - 1];
+    return json(
+      200,
+      {
+        items,
+        nextCursor:
+          page.length === limit && last ? d.cursors.issue(`threads/${doc}`, last.id) : null,
+        seq,
+      },
+      { 'Cache-Control': 'private, no-cache' },
+    );
   };
 
   const getThread: Handler = async (ctx): Promise<Reply> => {
@@ -465,6 +537,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
   };
 
   return {
+    listThreads,
     createThread,
     getThread,
     deleteThread,

@@ -93,6 +93,8 @@ export interface HandlerDeps {
   uploads?: AssetUploads | null;
   /** Lifetime of a pre-signed upload, seconds (a setting). */
   uploadSeconds?: number;
+  /** The rebase window in steps that a thread's `baseSeq` must be within; absent: the protocol default. */
+  rebaseWindow?: number;
   /** The font set (PRO-067, BE-047). */
   fonts?: () => FontCatalogue;
   /** Previews, caches and tenant caps (BE-050, BE-051, EXP-006, EXP-007). */
