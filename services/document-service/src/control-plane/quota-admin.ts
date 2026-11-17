@@ -15,6 +15,7 @@
 import { createHash } from 'node:crypto';
 import { uuid7 } from '@docedit/model';
 import type { AuditStore } from '../storage/types.ts';
+import type { QuotaSource } from './live-quotas.ts';
 import { ApiError } from './problems.ts';
 import {
   isQuotaDimension,
@@ -64,20 +65,100 @@ export function checkQuotaUpdate(value: unknown): Partial<Record<QuotaDimension,
   return out;
 }
 
+/**
+ * How long a node trusts the values it read, in milliseconds. A change written through this node
+ * applies at once (write-through); a change another node wrote reaches this one within this time
+ * (BE-091 criterion 3). A setting of this
+ * lane, not a spec figure; see docs/adr/0370-w5-BE-091-quota-cache.md.
+ */
+export const QUOTA_CACHE_TTL_MS = 5_000;
+
+function noQuotas(): QuotaSettings {
+  const out = {} as Record<QuotaDimension, number | null>;
+  for (const d of QUOTA_DIMENSIONS) out[d] = null;
+  return out;
+}
+
+/**
+ * The synchronous view of the stored quota values that the live-use gate reads at each decision
+ * (live-quotas.ts). A store that answers at once (memory) is read directly. A store that answers
+ * later (PostgreSQL) is read into a cache by `load`, which the gate calls before it decides at a
+ * `hello` or a REST request, and which a stale entry starts in the background. Until a tenant has
+ * been read, its values read as no quota.
+ */
+export class CachedQuotaSource implements QuotaSource {
+  readonly #store: QuotaAdminStore;
+  readonly #now: () => number;
+  readonly #ttlMs: number;
+  readonly #entries = new Map<string, { settings: QuotaSettings; at: number }>();
+  readonly #loading = new Map<string, Promise<void>>();
+
+  constructor(store: QuotaAdminStore, now: () => number, ttlMs: number = QUOTA_CACHE_TTL_MS) {
+    this.#store = store;
+    this.#now = now;
+    this.#ttlMs = ttlMs;
+  }
+
+  /** Records values just read or written, so that the next decision uses them. */
+  put(tenant: string, settings: QuotaSettings): void {
+    this.#entries.set(tenant, { settings, at: this.#now() });
+  }
+
+  get(tenant: string): QuotaSettings {
+    const e = this.#entries.get(tenant);
+    if (e && this.#now() - e.at < this.#ttlMs) return e.settings;
+    // Stale or unknown. A read already under way is waited for by the caller of `load`; the values
+    // read last stay in force meanwhile (none read yet: no quota).
+    if (this.#loading.has(tenant)) return e?.settings ?? noQuotas();
+    // A store that answers at once is read now; one that answers later is read in the background.
+    const direct = this.#store.get(tenant);
+    if (!(direct instanceof Promise)) {
+      this.put(tenant, direct);
+      return direct;
+    }
+    this.#track(tenant, direct);
+    return e?.settings ?? noQuotas();
+  }
+
+  #track(tenant: string, read: Promise<QuotaSettings>): Promise<void> {
+    const p = read
+      .then((s) => this.put(tenant, s))
+      .catch(() => undefined)
+      .finally(() => this.#loading.delete(tenant));
+    this.#loading.set(tenant, p);
+    return p;
+  }
+
+  /** Reads the tenant's values from the store into the cache. Reads of one tenant do not overlap; fresh values are kept. */
+  async load(tenant: string): Promise<void> {
+    const e = this.#entries.get(tenant);
+    if (e && this.#now() - e.at < this.#ttlMs) return;
+    const running = this.#loading.get(tenant);
+    if (running) return await running;
+    const read = this.#store.get(tenant);
+    if (!(read instanceof Promise)) return this.put(tenant, read);
+    await this.#track(tenant, read);
+  }
+}
 export class QuotaAdminService {
   readonly #store: QuotaAdminStore;
   readonly #audit: AuditStore;
   readonly #now: () => number;
+  /** The values as the live-use gate reads them; kept current by every read and write here. */
+  readonly source: CachedQuotaSource;
 
   constructor(deps: QuotaAdminDeps) {
     this.#store = deps.store;
     this.#audit = deps.audit;
     this.#now = deps.now;
+    this.source = new CachedQuotaSource(deps.store, deps.now);
   }
 
   /** The tenant's quota values; null for each dimension with no value. */
   async get(tenant: string): Promise<QuotaSettings> {
-    return await this.#store.get(tenant);
+    const settings = await this.#store.get(tenant);
+    this.source.put(tenant, settings);
+    return settings;
   }
 
   /**

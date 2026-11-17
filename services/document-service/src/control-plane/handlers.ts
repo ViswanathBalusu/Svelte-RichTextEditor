@@ -55,6 +55,7 @@ import { minVisibleSeqOf, refuseBelowGate, regionInfosOfJson } from './gate.ts';
 import { checkIfMatch, ifMatchTags, pageLimit, seqParam } from './http.ts';
 import { createKit, json, notModified, type HandlerDeps, type Kit } from './kit.ts';
 import { guard, type Ctx, type Handler } from './pipeline.ts';
+import { admitRestCommit } from './live-quota-rest.ts';
 import { ApiError } from './problems.ts';
 import { projectRegionTitle, readerView } from './visibility.ts';
 import { quotaRoutes } from './quota-admin-routes.ts';
@@ -696,6 +697,8 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     const apply = d.dataPlane?.replaceContent?.bind(d.dataPlane);
     if (!apply)
       throw new ApiError('not_found', 'this server does not replace content yet (BE-037)');
+    // BE-091: the replacement is a commit, so it counts against the tenant's live-use quotas.
+    await admitRestCommit(d.liveQuotas, ctx.caller.tenant);
     const ref = refOf(ctx, doc);
     const current = await d.content.read(ref, { conn: null });
     checkIfMatch(ctx.req, current.etag);

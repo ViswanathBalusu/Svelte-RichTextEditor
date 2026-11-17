@@ -26,6 +26,7 @@ import { regionNodeOf } from './content.ts';
 import { minVisibleSeqOf, regionInfosOfJson } from './gate.ts';
 import { json, type Kit } from './kit.ts';
 import { guard, type Ctx, type Handler } from './pipeline.ts';
+import { admitRestCommit } from './live-quota-rest.ts';
 import { ApiError } from './problems.ts';
 import type { JsonEnvelope } from '@docedit/model';
 
@@ -74,6 +75,8 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
     const apply = d.dataPlane?.replaceContent?.bind(d.dataPlane);
     if (!apply)
       throw new ApiError('not_found', 'this server does not replace content yet (BE-037)');
+    // BE-091: the restore is a commit, so it counts against the tenant's live-use quotas.
+    await admitRestCommit(d.liveQuotas, ctx.caller.tenant);
 
     const ref = refOf(ctx, doc);
     const head = await d.logs.head(ref);
