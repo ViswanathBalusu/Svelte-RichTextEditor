@@ -791,6 +791,11 @@ export class DocEditorElement extends Base {
       access: session?.access ?? null,
       printPdf: (url) => printPdfAtUrl(url, this.#root),
       onError: (detail) => this.#emit('de-error', detail),
+      // The job's reports reach the host as `de-export-*` events, as for `requestExport` (FE-073
+      // criterion 4): a failed job raises `de-export-failed` and then `de-error`. A replaced session raises nothing.
+      onExportEvent: (event) => {
+        if (this.#session === session) this.#emit(event.name, event.detail);
+      },
     });
   }
 
