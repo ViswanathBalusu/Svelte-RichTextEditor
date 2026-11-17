@@ -14,7 +14,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
-    "word-check": "node scripts/export-for-word.ts && powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/word-open-check.ps1 -Dir test-results/word-check -Result test-results/word-check-result.json"
+    "word-check": "node scripts/export-for-word.ts && powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/word-open-check.ps1 -Dir test-results/word-check -Result test-results/word-check-result.json",
+    "libreoffice-check": "node scripts/export-for-word.ts && pwsh -NoProfile -File scripts/libreoffice-open-check.ps1 -Dir test-results/word-check -Result test-results/libreoffice-check-result.json -Calibrate"
   },
   "dependencies": {
     "@docedit/model": "workspace:*",

@@ -59,7 +59,7 @@ For a connection with document role `R`, user `sub` and groups `grp`, the capabi
 | `region:<id>` with policy `restricted` | The capabilities of the best matching region grant. With no matching grant: those of `R` limited to `view` and `comment`. An `owner` always has all four |
 | `field:<id>` | 12, section 4 |
 
-A grant matches when its principal is `user:<sub>`, `group:<g>` for some `g` in `grp`, `everyone`, or a `role:` the user's participant holds, and it has not expired. The best match is the one with the most capabilities.
+A grant matches when its principal is `user:<sub>`, `group:<g>` for some `g` in `grp`, `everyone`, or a `role:` the user's participant holds, and it has not expired. The best match is the one with the most capabilities. The principal `everyone` is not allowed on a `restricted` region: a grant of that form is refused with `validation_failed`, the permissions pane does not offer it, and a stored one conveys nothing. Granted on an `inherit` region it matches every connection. (Owner decision 12 of 2026-11-15, `docs/owner-decisions-2026-11-15.md`; PRM-061; ADR 0146.)
 
 Then apply these limits, in order:
 
@@ -218,5 +218,4 @@ Word's protection is advisory: the file format specification says it is not a se
 - The exact P4 rules for suggested block-level changes beyond paragraphs and whole table rows need a precise specification and property tests before the `perm-suggest` profile can exist.
 - A user who may edit only regions cannot add a landscape page or a new style. Whether some of `structure` should be grantable per region is open.
 - A per-region size quota would stop a region-only editor from filling a document to its size limit.
-- Whether `everyone` should be allowed on restricted regions.
 - A policy engine (for example OpenFGA or SpiceDB) can replace the grants tables behind `GrantStore` when groups nest or grants need conditions. Nothing in the protocol changes.

@@ -9,6 +9,7 @@
  * ADR 0052. "Core" here is whatever the element passes as `core`: the editing core's views, and
  * the backend's ports adapted by the element (exports, grants, regions).
  */
+import type { FieldDraft } from './shell/field-properties.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -639,6 +640,10 @@ export interface CoreApi {
   readonly history?: HistoryPort;
   /** The sources the document cites (UX-103; CDM-052). Absent: the sources pane is not offered. */
   readonly sources?: SourcesService;
+  /** The roles fields are assigned to (FRW-074). Absent: the roles manager is not offered. */
+  readonly roles?: RolesService;
+  /** The properties of form fields (FRW-073). Absent: the field properties pane is not offered. */
+  readonly fieldProperties?: FieldPropertiesService;
 }
 
 /** A person of a source: family and given name, or one literal name (CSL). */
@@ -689,6 +694,75 @@ export interface SourcesService {
   canCite(): boolean;
   /** Inserts a citation of the source at the caret; false where it cannot. */
   cite(id: string): boolean;
+}
+
+export type FieldChangeResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'read-only' | 'not-found' | 'no-change' | 'invalid';
+      /** For `invalid`: the properties whose value is refused; empty when the core names none. */
+      readonly properties?: readonly string[];
+    };
+
+/**
+ * The properties of the document's form fields and the changes an author may make to them
+ * (FRW-073; 12 §3.2). A change is a commit of attribute changes through the log; it needs `edit`
+ * where the field is, which `canChange` reports.
+ */
+export interface FieldPropertiesService {
+  /** The form fields of the document in order; labels and keys are document content. */
+  readonly fields: ReadView<
+    readonly { readonly id: string; readonly key: string; readonly label: string }[]
+  >;
+  /** The field the person selected in the document, or null. */
+  readonly selected: ReadView<string | null>;
+  /** The field's properties as they are now; null when the field is gone. */
+  read(id: string): FieldDraft | null;
+  /** Whether this person may change the field's properties now. */
+  canChange(id: string): boolean;
+  /** The workflow's state when the document is in one (`sent`, `in_progress`, ...); else null. */
+  workflow?(): string | null;
+  apply(id: string, patch: Partial<FieldDraft>): FieldChangeResult;
+}
+
+/** A role of the document as the roles manager and the legend show it (FRW-074; 12 §3.1). */
+export interface RoleSummary {
+  readonly id: string;
+  /** The role's name: document content. */
+  readonly name: string;
+  readonly color: string;
+  /** Position among the document's roles, in definition order; the icon is derived from it. */
+  readonly order: number;
+  /** The fields assigned to the role, in document order; labels are document content. */
+  readonly fields: readonly { readonly id: string; readonly label: string }[];
+}
+
+export type RoleChangeResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason:
+        'read-only' | 'duplicate' | 'not-defined' | 'no-change' | 'no-feature' | 'invalid' | 'in-use';
+      /** For `invalid`: the attributes (`name`, `color`) whose value is refused. */
+      readonly fields?: readonly string[];
+    };
+
+/**
+ * The roles of the document and the changes an author may make to them (FRW-074). A change is a
+ * commit to the role definition through the log; it needs `structure` (07 §4), which `canChange`
+ * reports. A role that fields are assigned to is not deleted (I13): `remove` answers `in-use`, and
+ * the role's `fields` are the references to show.
+ */
+export interface RolesService {
+  readonly list: ReadView<readonly RoleSummary[]>;
+  readonly canChange: ReadView<boolean>;
+  add(values: { readonly name: string; readonly color: string }): RoleChangeResult;
+  update(
+    id: string,
+    values: { readonly name?: string; readonly color?: string },
+  ): RoleChangeResult;
+  remove(id: string): RoleChangeResult;
 }
 
 /** One group of editing sessions, or one named version, as the history pane lists it (HIS-008). */

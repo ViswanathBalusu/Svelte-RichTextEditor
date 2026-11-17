@@ -563,7 +563,11 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     // The regions of the content at the head; a grant on any other region is refused (PRM-018).
     const head = await d.logs.head(ref);
     const full = await d.content.rebuild(ref, head.incarnation, head.seq);
-    const regions = new Set(regionsOfJson(full.doc).map((r) => r.id));
+    const regionList = regionsOfJson(full.doc);
+    const regions = new Set(regionList.map((r) => r.id));
+    const restricted = new Set(
+      regionList.filter((r) => r.policy === 'restricted').map((r) => r.id),
+    );
     const seen = new Set<string>();
     const wanted: RegionGrant[] = [];
     for (const [i, g] of body.grants.entries()) {
@@ -578,6 +582,21 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
         throw new ApiError('validation_failed', `no region ${g.region} at the head`, {
           violations: [{ path: `${at}/region`, rule: 'a region of the document (07 §3)' }],
         });
+      // `everyone` on a restricted region is forbidden (07 §17; owner decision 12 of 2026-11-15;
+      // PRM-061). It would make the region behave like an `inherit` one for that role.
+      if (g.principal === 'everyone' && restricted.has(g.region))
+        throw new ApiError(
+          'validation_failed',
+          'everyone cannot hold a role on a restricted region',
+          {
+            violations: [
+              {
+                path: `${at}/principal`,
+                rule: 'a restricted region is granted to users and groups, not to everyone (07 §1)',
+              },
+            ],
+          },
+        );
       const key = `${g.region}\u0000${g.principal}`;
       if (seen.has(key))
         throw new ApiError('validation_failed', 'two grants for one region and principal', {

@@ -22,7 +22,12 @@ import {
 } from '@docedit/authority';
 import type { RemoteCommit } from '@docedit/protocol';
 import type { Access, SyncChannel } from '@docedit/protocol';
-import { LOCATOR_LABELS, mayOpen, supportedFeatures } from '@docedit/model/definition';
+import {
+  FIELD_LIMITS,
+  LOCATOR_LABELS,
+  mayOpen,
+  supportedFeatures,
+} from '@docedit/model/definition';
 import { toggleMark } from 'prosemirror-commands';
 import { keymap } from 'prosemirror-keymap';
 import {
@@ -44,6 +49,7 @@ import {
 import {
   type Command,
   EditorState,
+  NodeSelection,
   Plugin,
   TextSelection,
   type Transaction,
@@ -98,6 +104,14 @@ import { addLink, followInternalLink, insertBookmark } from './links-bookmarks.t
 import { type PageSetupChanges, setPageSetup } from './page-setup-commands.ts';
 import { deleteSource } from './source-delete.ts';
 import {
+  type RoleEdit,
+  type RoleEditOutcome,
+  type RoleInfo,
+  editRole,
+  listRoles,
+  nextRoleId,
+} from './role-edit.ts';
+import {
   type SourceEdit,
   type SourceEditOutcome,
   type SourceInfo,
@@ -112,6 +126,7 @@ import {
   sectionWarnings,
 } from './breaks-sections.ts';
 import { type InsertFieldOptions, insertField, insertSymbol, insertToc } from './fields-toc.ts';
+import { formFieldCount } from './frw-072-form-fields.ts';
 import { insertCaption, insertReference } from './captions-refs.ts';
 import { referenceGuardPlugin } from './referenced-targets.ts';
 import { setEquationLatex } from './equation-commands.ts';
@@ -129,7 +144,22 @@ import {
   picturePlaceholderPlugin,
   removePlaceholder,
 } from './picture-placeholder.ts';
-import { type EnterResult, FieldEntries, type FieldEntryState } from './field-entries.ts';
+import {
+  type EnterResult,
+  type FieldChange,
+  FieldEntries,
+  type FieldEntryState,
+  type FieldStatus,
+  findFormField,
+} from './field-entries.ts';
+import {
+  type FieldEditOutcome,
+  type FieldPatch,
+  type FieldProperties,
+  editField,
+  fieldProperties,
+  listFormFields,
+} from './field-edit.ts';
 import { type Refusal, canWrite, capsOf, checkChange, depScope, guardPlugin } from './guard.ts';
 import { idTypesOf, identifierPlugin } from './ids.ts';
 import { type Internals, register } from './internals.ts';
@@ -499,6 +529,7 @@ function fieldOptions(
     ...(field.format !== undefined ? { format: field.format } : {}),
     ...(field.date !== undefined ? { date: field.date } : {}),
     ...(field.title !== undefined ? { title: field.title } : {}),
+    ...(field.form === true ? { form: true } : {}),
   };
 }
 
@@ -691,6 +722,8 @@ export class DocumentCore implements DocumentApi {
     state: () => this.#state,
     dispatch: (tr) => this.dispatchTransaction(tr),
   });
+  /** The form field whose control last took focus (FRW-073). */
+  #activeField: string | null = null;
   #readOnly = false;
   #readOnlyRev = -1;
   #refusals = 0;
@@ -1120,6 +1153,12 @@ export class DocumentCore implements DocumentApi {
    * `blocks` for a selection that is not whole blocks of the body. Null otherwise.
    */
   queryReason(name: string): string | null {
+    if (name === 'canInsertField') {
+      // The document limit of form fields (I15; FRW-072 criterion 4), which the shell states as
+      // `reason.query.fieldLimit`. Other refusals have no code here.
+      if (this.queryCommand('insertField', { field: { kind: 'text' } }).enabled) return null;
+      return formFieldCount(this.#state) >= FIELD_LIMITS.fields ? 'fieldLimit' : null;
+    }
     if (name !== 'canMarkRegion') return null;
     const state = this.queryCommand('markRegion', { title: REGION_QUERY_TITLE });
     if (state.enabled) return null;
@@ -1334,6 +1373,22 @@ export class DocumentCore implements DocumentApi {
    */
   validateFields(): FieldReport[] {
     return this.#fieldEntries.validate();
+  }
+
+  /**
+   * Every form field in document order with the state of its entry and its role, and no value:
+   * what the guided bar and the summary of fill mode count (12 §11; FRW-076, FRW-078).
+   */
+  fillFields(): FieldStatus[] {
+    return this.#fieldEntries.status();
+  }
+
+  /**
+   * Calls `listener` after each entry this person submitted that changed what a field shows, with
+   * the field and the state of the entry and never the value (`de-field-change`, 12 §10; FRW-070).
+   */
+  onFieldChange(listener: (change: FieldChange) => void): () => void {
+    return this.#fieldEntries.onChange(listener);
   }
 
   canEdit(scope: string): boolean {
@@ -1837,6 +1892,112 @@ export class DocumentCore implements DocumentApi {
       outcome = updateSource(state, edit.id, edit.values, { writable }, dispatch);
     else if (!this.canEdit('defs')) outcome = { ok: false, reason: 'read-only' };
     else outcome = deleteSource(state, edit.id, dispatch);
+    // The guard has the last word: a transaction it refused leaves the document as it was.
+    if (outcome.ok && !check && this.#state.doc.eq(state.doc))
+      return { ok: false, reason: 'read-only' };
+    return outcome;
+  }
+
+  /** The form fields of the document in order: identifier, key and label (FRW-073). */
+  formFields(): Array<{ id: string; key: string; label: string }> {
+    return listFormFields(this.#state.doc);
+  }
+
+  /** The authored properties of the form field `id`, or null when it is gone (FRW-073). */
+  fieldProperties(id: string): FieldProperties | null {
+    return fieldProperties(this.#state.doc, id);
+  }
+
+  /**
+   * The form field the person selected: the one a node selection holds, else the one whose control
+   * last took focus (the view says so with `selectField`), while it is still in the document.
+   */
+  selectedField(): string | null {
+    const selection = this.#state.selection;
+    if (selection instanceof NodeSelection && selection.node.type.name === 'form_field') {
+      const id = selection.node.attrs['id'];
+      if (typeof id === 'string') return id;
+    }
+    const active = this.#activeField;
+    return active !== null && findFormField(this.#state.doc, active) ? active : null;
+  }
+
+  /** Records that the control of the form field `id` took focus (FRW-073). */
+  selectField(id: string): void {
+    if (this.#activeField === id) return;
+    this.#activeField = id;
+    this.revision.set(this.revision.get() + 1);
+  }
+
+  /**
+   * Whether this person may change the properties of the form field `id` now: the document is not
+   * locked, the scope the field is in gives `edit`, and suggestion mode is off there (a change of
+   * an attribute cannot be recorded as a suggestion).
+   */
+  canEditField(id: string): boolean {
+    if (this.#locked()) return false;
+    const hit = findFormField(this.#state.doc, id);
+    if (!hit) return false;
+    const scope = this.#scopeIn(this.#state.doc, hit.pos);
+    return this.canEdit(scope) && !this.#suggestionIn(scope).on;
+  }
+
+  /**
+   * Changes properties of the form field `id` (FRW-073; 12 §3.2): one transaction of `attr` steps,
+   * so it passes the region guard, leaves as a commit and is undone in one step. With `check`, only
+   * says whether the change would be made.
+   */
+  editField(id: string, patch: FieldPatch, check = false): FieldEditOutcome {
+    if (!this.canEditField(id))
+      return {
+        ok: false,
+        reason: findFormField(this.#state.doc, id) ? 'read-only' : 'not-found',
+      };
+    const state = this.#state;
+    const outcome = editField(
+      state,
+      id,
+      patch,
+      {
+        writable: (pos) => this.canEdit(this.#scopeIn(state.doc, pos)),
+        requires: this.#requires,
+      },
+      check ? undefined : this.dispatch,
+    );
+    // The guard has the last word: a transaction it refused leaves the document as it was.
+    if (outcome.ok && !check && this.#state.doc.eq(state.doc))
+      return { ok: false, reason: 'read-only' };
+    return outcome;
+  }
+
+  /** The document's roles in the order of its definitions, each with its fields (FRW-074). */
+  roles(): RoleInfo[] {
+    return listRoles(this.#state.doc);
+  }
+
+  /** An identifier for a new role that no role of the document uses (FRW-074). */
+  nextRoleId(): string {
+    return nextRoleId(this.#state.doc);
+  }
+
+  /**
+   * Adds, renames, recolours or deletes a role definition (FRW-074; 12 §3.1). The change is a
+   * transaction on the definitions, so it passes the region guard (`defs` needs `structure`, 07 §4)
+   * and leaves as a commit like any other. A role that a field is assigned to is not deleted
+   * (I13): the answer lists those fields. With `check`, only says whether the change would be made.
+   */
+  editRole(edit: RoleEdit, check = false): RoleEditOutcome {
+    if (this.#locked()) return { ok: false, reason: 'read-only' };
+    const state = this.#state;
+    const outcome = editRole(
+      state,
+      edit,
+      {
+        writable: (pos) => this.canEdit(this.#scopeIn(state.doc, pos)),
+        formFields: this.#requires.includes('fields'),
+      },
+      check ? undefined : this.dispatch,
+    );
     // The guard has the last word: a transaction it refused leaves the document as it was.
     if (outcome.ok && !check && this.#state.doc.eq(state.doc))
       return { ok: false, reason: 'read-only' };

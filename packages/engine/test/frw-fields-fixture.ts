@@ -5,7 +5,6 @@
  */
 import type { Access } from '@docedit/protocol';
 import { contractDocument } from '@docedit/protocol/contract';
-import type { CdmEnvelope } from '../src/api.ts';
 
 export const FIELD_IDS = {
   amount: 'fAmount000000001',
@@ -22,7 +21,7 @@ const field = (id: string, key: string, kind: string, assignee: string, extra: J
   attrs: { id, key, kind, label: key, assignee, value: null, ...extra },
 });
 
-export function fieldsDocument(): CdmEnvelope {
+export function fieldsDocument(): ReturnType<typeof contractDocument> {
   const envelope = contractDocument() as unknown as {
     requires: string[];
     doc: { content: Array<{ type: string; content: J[] }> };
@@ -63,7 +62,7 @@ export function fieldsDocument(): CdmEnvelope {
       },
     ],
   });
-  return envelope as unknown as CdmEnvelope;
+  return envelope as unknown as ReturnType<typeof contractDocument>;
 }
 
 /** A participant who may only fill, holding `roles` (12 §4.1). */

@@ -288,6 +288,24 @@ export class EditorCore extends DocumentCore {
    * there when it is asked for from the keyboard (UX-008; ui `CoreApi.caretRect`). Null while no
    * view is mounted, or when the browser gives no position for the caret.
    */
+  /**
+   * Moves focus to the control of the form field `id` and scrolls it into view (12 §11; FRW-078
+   * criterion 2; ui `CoreApi.focusField`). False when no view is mounted, or the document has no
+   * such field, or the field has no control (a kind drawn as text).
+   */
+  focusField(id: string): boolean {
+    const fields = this.#view?.dom.querySelectorAll<HTMLElement>('.de-form-field') ?? [];
+    for (const field of fields) {
+      if (field.getAttribute('data-field') !== id) continue;
+      const control = field.querySelector<HTMLElement>('.de-form-field-control');
+      if (!control) return false;
+      control.scrollIntoView({ block: 'nearest' });
+      control.focus();
+      return true;
+    }
+    return false;
+  }
+
   caretRect(): { x: number; y: number; width: number; height: number } | null {
     const view = this.#sub?.view.hasFocus() ? this.#sub.view : this.#view;
     if (!view) return null;
@@ -333,6 +351,7 @@ export class EditorCore extends DocumentCore {
                 this.enterFieldValue(id, value);
               },
               fillable: (id) => this.fieldFillable(id),
+              focused: (id) => this.selectField(id),
             },
             this.#fieldViews,
           ),

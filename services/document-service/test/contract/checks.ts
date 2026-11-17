@@ -339,6 +339,28 @@ export const LOG_STORE_CHECKS: Check[] = [
       assert.equal((await h.grants.current(ref)).revision, 2);
       // The history still says what was in force at revision 2.
       assert.deepStrictEqual(await h.grants.at(ref, 2), rev2);
+      // PRM-002 criterion 1: a change that fails part-way writes none of its rows and no
+      // revision. This one changes the document state and puts a valid grant, then reaches the
+      // retired region; the store must show neither of the first two (07 §9).
+      const before = await h.grants.current(ref);
+      const historyBefore = await h.grants.history(ref);
+      await assert.rejects(
+        h.grants.change(
+          ref,
+          {
+            documentState: 'locked',
+            putGrants: [
+              { region: TERMS, principal: 'user:dave', role: 'editor', expiresAt: null },
+              { region: LEGAL, principal: 'user:carol', role: 'editor', expiresAt: null },
+            ],
+          },
+          { actor: 'u-owner' },
+        ),
+        RetiredRegionError,
+      );
+      assert.deepStrictEqual(await h.grants.current(ref), before);
+      assert.deepStrictEqual(await h.grants.history(ref), historyBefore);
+      assert.equal((await h.docs.get(ref))?.state, before.documentState);
     },
   },
 ];
