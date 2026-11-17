@@ -1310,6 +1310,8 @@ As an integrating developer, I want forks to go through my backend, so that my a
 
 **Notes:** Pitfall decision of the review (section 4): service credential only. Lane PRO-057-070 (2026-11-13): criterion 3 stays open, because `de-fork-request` is raised by the component (the UI lane), which is not built here. Lane V-PRO-052-068, 2026-11-13: `packages/element/src/events.ts` has no `de-fork-request` entry yet, and no editor action raises one (docs/adr/0312-lane-V-PRO-052-068.md, section 10). Criterion 4 stays open: only a service credential may call the route, and a service credential passes every visibility gate, so there is no caller below the gate to refuse.
 
+**Notes (lane w5, 2026-11-17):** Blocked; nothing new ticked. de-fork-request is defined in packages/protocol and named in packages/element/src/events.ts, but no editor action raises it, and the editor has no copy action to activate. Criterion 3 needs that action (the editor UI lane). Criterion 4 is unchanged: a service credential passes every visibility gate, so there is no caller below the gate to refuse.
+
 ### PRO-058 Track what changed since the last visit
 
 | Type | Phase | Size | Priority | Persona |
