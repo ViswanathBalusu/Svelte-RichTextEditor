@@ -735,6 +735,8 @@ export interface DocumentApi {
   /** Opens the story's panel. Returns false, and opens nothing, when the user may not change the story (07 §7). */
   openStory(id: string): boolean;
   closePanel(): void;
+  /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
+  selectBlock(id: string): boolean;
   focus(): void;
   destroy(): void;
 

@@ -51,6 +51,7 @@ import {
   EditorState,
   NodeSelection,
   Plugin,
+  Selection,
   TextSelection,
   type Transaction,
 } from 'prosemirror-state';
@@ -2903,6 +2904,40 @@ export class DocumentCore implements DocumentApi {
     this.panel.set(null);
     this.revision.set(this.revision.get() + 1);
     this.focus();
+  }
+
+  /**
+   * Puts the caret at the start of the block with this identifier, or selects it when it holds no
+   * text, and scrolls it into view (UX-067 criterion 1; the checker, the outline and the export
+   * diagnostics use it). False, and nothing changes, when there is no such block in the body or a
+   * region, when it is in a header, a footer or a footnote (those have their own panels), or when
+   * the reader may not view its scope.
+   */
+  selectBlock(id: string): boolean {
+    const doc = this.#state.doc;
+    let at = -1;
+    doc.descendants((node, pos) => {
+      if (at >= 0) return false;
+      const type = node.type.name;
+      if (type === 'defs' || type === 'story' || type === 'footnote') return false;
+      if (node.isBlock && node.attrs['id'] === id) at = pos;
+      return at < 0;
+    });
+    if (at < 0) return false;
+    if (!this.#canView(this.#scopeIn(doc, at))) return false;
+    const node = doc.nodeAt(at)!;
+    let selection: Selection | null = null;
+    if (node.isTextblock) selection = TextSelection.create(doc, at + 1);
+    else {
+      const inside = Selection.findFrom(doc.resolve(at + 1), 1, true);
+      if (inside && inside.from < at + node.nodeSize) selection = inside;
+      else if (NodeSelection.isSelectable(node)) selection = NodeSelection.create(doc, at);
+    }
+    if (selection === null) return false;
+    // The view scrolls relative to the DOM selection, which is in the editor only once it has focus.
+    this.focus();
+    this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
+    return true;
   }
 
   focus(): void {
