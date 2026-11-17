@@ -46,7 +46,14 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'suspendSync'
       | 'resumeSync'
       // SYN-036: the peers of `presence` with their positions in the visible document.
-      | 'peerSelections';
+      | 'peerSelections'
+      // FRW-004: the entries of form fields, for the field controls of the web view. The fill
+      // methods of the embedding API (12 §10) are FRW-069's and are not on the document API yet.
+      | 'fieldEntry'
+      | 'checkFieldEntry'
+      | 'fieldFillable'
+      | 'enterFieldValue'
+      | 'validateFields';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed

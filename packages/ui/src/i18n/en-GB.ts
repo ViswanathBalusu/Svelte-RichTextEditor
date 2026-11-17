@@ -569,6 +569,11 @@ export const EN_GB = {
   'export.diagnostic.changed': 'Changed since this export',
   'export.diagnostic.moved':
     'The editor has moved to that part. It has changed since this export, so the problem may no longer be there.',
+  'export.preflight.title': 'Check before you export',
+  'export.preflight.hint':
+    'These parts may not typeset well. Nothing has been exported yet: you can continue, or stop and fix them first.',
+  'export.preflight.continue': 'Continue',
+  'export.preflight.cancel': 'Do not export',
   'export.failed.start': 'The export could not be started.',
   // Client export filters of extensions (UX-055). The format's label is the extension's own text.
   'export.filter.noExport': 'Your access does not allow export.',

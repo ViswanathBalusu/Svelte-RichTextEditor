@@ -30,6 +30,7 @@ import { SubEditor, type SubEditorTarget } from '../subeditor.ts';
 import { cssomMarkViews, type SelectionShim, shimShadowSelection } from '../view-support.ts';
 import { bibliographyPlugin, bibliographyView } from './bibliography-view.ts';
 import { footnoteNumbers, footnoteRefView } from './footnote-view.ts';
+import { FormFieldViews, fieldView, formFieldView } from './form-field-view.ts';
 import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
@@ -153,6 +154,8 @@ export class EditorCore extends DocumentCore {
   /** The blocks before which a page guide is drawn (FE-068); empty when guides are off. */
   #pageGuides: ReadonlySet<string> = new Set();
   #view: EditorView | null = null;
+  /** The live form field controls and mirrors of the body view (FRW-004, FRW-006). */
+  readonly #fieldViews = new FormFieldViews();
   #sub: SubEditor | null = null;
   #subKind: SubEditorTarget['kind'] | null = null;
   #labels: CoreLabels = DEFAULT_LABELS;
@@ -322,6 +325,19 @@ export class EditorCore extends DocumentCore {
           footnote: footnoteRefView((id) => this.openFootnote(id)),
           table_cell: tableCellView,
           bibliography: bibliographyView,
+          // FRW-004, FRW-006: a native control for a form field, and a mirror that follows its target.
+          form_field: formFieldView(
+            {
+              entry: (id) => this.fieldEntry(id),
+              check: (id, value) => this.checkFieldEntry(id, value),
+              enter: (id, value) => {
+                this.enterFieldValue(id, value);
+              },
+              fillable: (id) => this.fieldFillable(id),
+            },
+            this.#fieldViews,
+          ),
+          field: fieldView(this.#fieldViews),
         },
         markViews: cssomMarkViews(this.#fontAlias),
         attributes: this.#bodyAttributes(),
@@ -408,6 +424,7 @@ export class EditorCore extends DocumentCore {
       // `editable` is read again by setProps; the open sub-editor follows the same lock (FE-029).
       lockChanged: () => {
         this.#view?.setProps({});
+        if (this.#view) this.#fieldViews.refresh(this.#view.state.doc);
         this.#sub?.view.setProps({});
       },
     });
@@ -426,7 +443,10 @@ export class EditorCore extends DocumentCore {
   }
 
   #update(state: EditorState, transactions: readonly Transaction[]): void {
+    const before = this.#view?.state.doc;
     this.#view?.updateState(state);
+    // Mirrors follow their target fields, and a control follows its entry (FRW-004, FRW-006).
+    if (before !== state.doc) this.#fieldViews.refresh(state.doc);
     // The layout may have moved: the peers' carets are measured in the new state.
     this.#drawCarets();
     const sub = this.#sub;

@@ -20,7 +20,7 @@
  */
 import { utf8Length } from '../codec/frame.ts';
 import { ShapeValidator } from '../codec/validate.ts';
-import { DEP1 } from '../definition/index.ts';
+import { DEP1_WIRE } from '../definition/wire.ts';
 import type {
   Access,
   Ack,
@@ -118,7 +118,7 @@ interface Sent {
   at: number;
 }
 
-const validator = new ShapeValidator(DEP1);
+const validator = new ShapeValidator(DEP1_WIRE);
 
 /** JSON with sorted keys, for comparing access objects. */
 function canonical(v: unknown): string {
@@ -201,8 +201,8 @@ export class ClientChannel {
   constructor(opts: ChannelOptions) {
     this.doc = opts.doc;
     this.ids = opts.ids;
-    this.engine = opts.engine ?? DEP1.engines[0]!;
-    this.cdm = opts.cdm ?? DEP1.cdm.max;
+    this.engine = opts.engine ?? DEP1_WIRE.engines[0]!;
+    this.cdm = opts.cdm ?? DEP1_WIRE.cdm.max;
     this.answerTimeoutMs = opts.answerTimeoutMs ?? DEFAULT_ANSWER_TIMEOUT_MS;
     this.commitLimits = { ...(opts.limits ?? DEFAULT_COMMIT_LIMITS) };
   }
