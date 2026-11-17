@@ -163,9 +163,20 @@ export class PgSearchIndex {
        )
        SELECT doc, seq::text AS seq, score::text AS score
        FROM best
+       WHERE $6::numeric IS NULL
+          OR score < $6::numeric
+          OR (score = $6::numeric AND doc COLLATE "C" > $7::text COLLATE "C")
        ORDER BY score DESC, doc COLLATE "C" ASC
        LIMIT $5`,
-      [tenant, terms, classes, terms.length, query.limit],
+      [
+        tenant,
+        terms,
+        classes,
+        terms.length,
+        query.limit,
+        query.after?.score ?? null,
+        query.after?.doc ?? null,
+      ],
     );
     return r.rows.map((row) => ({
       doc: row.doc,
