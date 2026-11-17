@@ -1333,6 +1333,8 @@ As an author, I want to see what other people changed since I last looked, so th
 
 **Notes:** Lane V-PRO-052-068 (2026-11-13): criterion 3 stays open. The activity lists changes by others (not the caller's own; control commits are left out), but comment activity has no source until threads (PRO-059) exist. The reply shape is a proposal (`Activity` is a placeholder in `spec/dep`; docs/adr/0312-lane-V-PRO-052-068.md). Lane U-PRO-052-068, 2026-11-13: criterion 3 is blocked by a design question, not by code: a comment has no `seq`, and the activity is keyed by `seq` (docs/adr/0312-lane-U-PRO-052-068.md, section 7). Lane PRO-057-070, 2026-11-13: no read-marker store and no `activity` route exist in `services/document-service/src/control-plane` (`history-routes.ts` states that both are outside that module). No criterion is ticked.
 
+**Notes (lane w5, 2026-11-17):** Blocked; nothing new ticked. Criterion 3 needs comment activity in GET /documents/{id}/activity. services/document-service/src/control-plane/activity-route.ts lists only changes by others and leaves comments out, because a comment has no seq yet (docs/adr/0312-lane-U-PRO-052-068.md, section 7). That design question has to be decided before the criterion can be met.
+
 ## Control plane: comments (05 §6.2)
 
 ### PRO-059 Start a comment thread on a range or a block
