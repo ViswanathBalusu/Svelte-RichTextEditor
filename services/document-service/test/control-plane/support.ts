@@ -162,6 +162,8 @@ export async function startHarness(
     rateLimits?: StartOptions['rateLimits'];
     /** The real data plane (BE-079 idle test) instead of the stub; the stub is the default. */
     realDataPlane?: boolean;
+    /** Overrides of the composed webhook dispatcher (`config.webhooks` set); its dispatcher is the sink. */
+    webhooks?: StartOptions['webhooks'];
   } = {},
 ): Promise<Harness> {
   let offset = 0;
@@ -187,7 +189,9 @@ export async function startHarness(
     startService({
       config,
       parts,
-      events,
+      // With `config.webhooks` the composed dispatcher is the sink, and the two are exclusive.
+      ...(config.webhooks ? {} : { events }),
+      ...(opts.webhooks ? { webhooks: opts.webhooks } : {}),
       now,
       signing: signingKey(undefined, 'service-test'),
       ...(opts.realDataPlane
