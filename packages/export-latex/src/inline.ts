@@ -257,6 +257,15 @@ function placeholderAtom(st: InlineState, label: string): Tex {
   return atom(st, tex`\DEph{${pdfString(label)}}`);
 }
 
+/** Inline atoms that markup colours and underlines or strikes through as it does text (EXP-083). */
+const MARKED_ATOMS: ReadonlySet<string> = new Set([
+  'image',
+  'equation',
+  'field',
+  'citation',
+  'form_field',
+]);
+
 export function inlineTex(ctx: Ctx, nodes: readonly J[] | undefined, st: InlineState): Tex[] {
   const out: Tex[] = [];
   for (const n of nodes ?? []) {
@@ -264,6 +273,7 @@ export function inlineTex(ctx: Ctx, nodes: readonly J[] | undefined, st: InlineS
       st.off += 1;
       continue;
     }
+    const first = out.length;
     switch (n.type) {
       case 'text': {
         const r = runTex(ctx, n, st);
@@ -357,6 +367,9 @@ export function inlineTex(ctx: Ctx, nodes: readonly J[] | undefined, st: InlineS
         );
         out.push(placeholderAtom(st, `[${n.type}]`));
     }
+    if (MARKED_ATOMS.has(n.type) && ctx.o.suggestions === 'markup')
+      for (let i = first; i < out.length; i++)
+        out[i] = markupRun(ctx, runMarks(n.marks, st.blockMarks), out[i]!);
   }
   return out;
 }

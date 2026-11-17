@@ -21,6 +21,7 @@ import {
   CLASS_VERSION,
   bundleAltTextReport,
   cdmWriter,
+  htmlText,
   texArchive,
   type Diagnostic,
   type FontManifest,
@@ -41,6 +42,14 @@ import { chainHeadOf, contentAt, documentLang, type ContentStores } from './cont
 import { diagnostic, LOG_LIMITS, parseLog, type ParsedLog } from './diagnostics.ts';
 import type { FontFileCheck } from './font-files.ts';
 import { buildLayout, parseRawLayout, validateLayout, type LayoutJson } from './layout.ts';
+import {
+  compileBoth,
+  comparePair,
+  pinProblem,
+  readSealingPin,
+  type PairOutcome,
+  type SealingPin,
+} from './exp-079-pair.ts';
 import { limitDiagnostic, limitMessage, limitReached } from './outcome.ts';
 import { formatJobDate, planJob, type JobPlan } from './profile.ts';
 import {
@@ -139,6 +148,9 @@ export interface ExportHandlerDeps {
 /** The file of the `cdm` target under the job's prefix (EXP-086). */
 export const CDM_OUTPUT_FILE = 'output.json';
 
+/** The file of the `html` target under the job's prefix (EXP-087; docs/adr/0371-w2-exp-087-html-job.md). */
+export const HTML_OUTPUT_FILE = 'output.html';
+
 /** The file of the `tex` target under the job's prefix: the bundle as one archive (EXP-085). */
 export const TEX_OUTPUT_FILE = 'source.tar';
 
@@ -153,6 +165,8 @@ interface Payload {
   options: unknown;
   hiddenRegions: string[];
   hiddenValues: string[];
+  /** The pin of a sealing export (EXP-079): compiled twice and compared. Null: an ordinary export. */
+  sealing: SealingPin | null;
 }
 
 function readPayload(job: JobRecord): Payload {
@@ -176,7 +190,14 @@ function readPayload(job: JobRecord): Payload {
     (p['hiddenValues'] !== undefined && !strings(p['hiddenValues']))
   )
     throw new JobFailure('internal', 'the job payload is not one the control plane writes');
+  const sealing = readSealingPin(p['sealing']);
+  if (sealing === 'invalid')
+    throw new JobFailure(
+      'internal',
+      'the sealing pin of the job is not one the control plane writes',
+    );
   return {
+    sealing,
     doc: p['doc'],
     target: p['target'],
     seq: p['seq'],
@@ -245,10 +266,15 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     const tenant = job.tenant;
     const payload = readPayload(job);
     m.target = payload.target.slice(0, 20);
-    if (payload.target !== 'pdf' && payload.target !== 'cdm' && payload.target !== 'tex')
+    if (
+      payload.target !== 'pdf' &&
+      payload.target !== 'cdm' &&
+      payload.target !== 'tex' &&
+      payload.target !== 'html'
+    )
       throw new JobFailure(
         'validation_failed',
-        `this worker exports pdf, tex and cdm, not ${payload.target.slice(0, 20)}`,
+        `this worker exports pdf, tex, cdm and html, not ${payload.target.slice(0, 20)}`,
       );
     // The control plane keys cached results by the class version (EXP-006): a worker with another
     // class leaves the job to one that has it.
@@ -308,6 +334,64 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         chainHead: cdmChainHead,
       };
       return cdmOut as unknown as Record<string, unknown>;
+    }
+
+    // The HTML target (09 §11; EXP-087): the direct writer reads the projected envelope. It needs no
+    // font and no sandbox. The writer's diagnostics are the job's, so a construct HTML cannot
+    // express is named in the result (criterion 4). The worker reads no picture bytes, so every
+    // picture is written as its alternative text with `image_asset_missing`; the packaging of
+    // pictures (criterion 6) waits for that read.
+    if (payload.target === 'html') {
+      const htmlContent = await contentAt(
+        deps.stores,
+        { tenant, doc: payload.doc },
+        payload.incarnation,
+        payload.seq,
+      );
+      stopIfCancelled(ctx);
+      const htmlEnvelope = projectedEnvelope(htmlContent.envelope, payload);
+      const htmlPlan = planJob(payload.options, documentLang(htmlEnvelope));
+      if (!htmlPlan.ok)
+        throw failed(
+          'validation_failed',
+          'an export option cannot be honoured',
+          htmlPlan.diagnostics,
+        );
+      const htmlChainHead = await chainHeadOf(
+        deps.stores,
+        { tenant, doc: payload.doc },
+        payload.seq,
+      );
+      const html = htmlText(htmlEnvelope, {
+        suggestions: htmlPlan.plan.suggestions,
+        ...(htmlContent.title !== null ? { title: htmlContent.title } : {}),
+      });
+      const htmlDiagnostics: Diagnostic[] = [...htmlPlan.plan.diagnostics, ...html.diagnostics];
+      if (!html.ok)
+        throw failed(
+          'unsupported_feature',
+          'the writer cannot write this document',
+          htmlDiagnostics,
+        );
+      stopIfCancelled(ctx);
+      await ctx.report('converting', 50);
+      await deps.outputs.putExport(
+        tenant,
+        job.id,
+        HTML_OUTPUT_FILE,
+        html.bytes,
+        'text/html; charset=utf-8',
+      );
+      const htmlOut: ExportOutputs = {
+        output: HTML_OUTPUT_FILE,
+        pages: null,
+        layout: null,
+        converged: null,
+        log: null,
+        diagnostics: dedupe(htmlDiagnostics),
+        chainHead: htmlChainHead,
+      };
+      return htmlOut as unknown as Record<string, unknown>;
     }
 
     const t0 = now();
@@ -400,26 +484,56 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       };
       return texOut as unknown as Record<string, unknown>;
     }
+    // A sealing export is pinned to the state the workflow completed at (EXP-079 criterion 2): a
+    // bundle of another seq or chain head is refused before anything is compiled.
+    if (payload.sealing) {
+      const mismatch = pinProblem(bundle.manifest, payload.sealing);
+      if (mismatch)
+        throw failed('validation_failed', 'the bundle does not match the sealing pin', [
+          ...diagnostics,
+          diagnostic('seal_pin_mismatch', null, mismatch),
+        ]);
+    }
     deps.beforeCompile?.(bundle.files, seal, job);
     stopIfCancelled(ctx);
     await ctx.report('compiling', 20);
 
     const sourceDateEpoch = Math.floor(job.createdAt / 1000);
-    const r = await compile(
-      { ...bundle.files, ...assets },
-      {
-        image,
-        minPasses: plan.minPasses,
-        maxPasses: plan.maxPasses,
-        sourceDateEpoch,
-        signal: ctx.signal,
-        ...(deps.limits ? { limits: deps.limits } : {}),
-      },
-    );
-    const passMs = r.passes.map((p) => p.ms);
-    m.sandboxMs = Math.round(r.wallMs);
+    const compileOptions: SandboxOptions = {
+      image,
+      minPasses: plan.minPasses,
+      maxPasses: plan.maxPasses,
+      sourceDateEpoch,
+      signal: ctx.signal,
+      ...(deps.limits ? { limits: deps.limits } : {}),
+    };
+    // A sealing export is compiled twice, each in its own sandbox, and the two PDFs are compared
+    // (EXP-079 criterion 1). `r` is the first compile, or the second when only that one failed, so the
+    // checks below treat a failed compile of either as they do for an ordinary export.
+    let r: CompileResult;
+    let pair: PairOutcome | null = null;
+    let wallMs: number;
+    let allPasses: CompileResult['passes'];
+    if (payload.sealing) {
+      const [first, second] = await compileBoth(
+        { ...bundle.files, ...assets },
+        compileOptions,
+        compile,
+      );
+      pair = comparePair(first, second);
+      r = first.ok && !second.ok ? second : first;
+      wallMs = first.wallMs + second.wallMs;
+      allPasses = [...first.passes, ...second.passes];
+    } else {
+      r = await compile({ ...bundle.files, ...assets }, compileOptions);
+      wallMs = r.wallMs;
+      allPasses = r.passes;
+    }
+    const passMs = allPasses.map((p) => p.ms);
+    // Both compiles of a sealing export are counted, as the sandbox time they took.
+    m.sandboxMs = Math.round(wallMs);
     m.passMs = passMs;
-    m.sandboxOverheadMs = Math.max(0, Math.round(r.wallMs - passMs.reduce((a, b) => a + b, 0)));
+    m.sandboxOverheadMs = Math.max(0, Math.round(wallMs - passMs.reduce((a, b) => a + b, 0)));
     stopIfCancelled(ctx);
     await ctx.report('compiling', 85);
 
@@ -438,6 +552,13 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         throw failed('unavailable', 'the sandbox did not run the compile', diagnostics, true);
       throw failed('validation_failed', 'the document did not compile', diagnostics);
     }
+    // Two compiles that differ seal nothing (EXP-079 criterion 4): no output is stored, so there is
+    // no PDF to seal, and the job fails with a diagnostic that names both hashes.
+    if (pair && !pair.ok)
+      throw failed('internal', 'the two compiles for sealing differ; nothing is sealed', [
+        ...diagnostics,
+        diagnostic('seal_pair_differs', null, pair.diagnostic),
+      ]);
     let layout: LayoutJson | null = null;
     if (r.layoutRaw !== null) {
       try {
@@ -506,6 +627,17 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         options: bundle.manifest.options,
       },
       image: { name: image, id: await (deps.imageId ?? readImageId)(image) },
+      // The pin and the hashes of both compiles of a sealing export (EXP-079 criterion 3).
+      ...(pair?.ok && payload.sealing
+        ? {
+            sealing: {
+              completedSeq: payload.sealing.completedSeq,
+              chainHead: payload.sealing.chainHead,
+              pdfSha256: pair.hashes,
+              compileMs: pair.compileMs,
+            },
+          }
+        : {}),
       passes: r.passes,
       converged,
       limits: r.limits,
@@ -530,7 +662,11 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     );
     m.storeMs = now() - t4;
 
-    const out: ExportOutputs & { manifest: string; metrics: ExportMetrics } = {
+    const out: ExportOutputs & {
+      manifest: string;
+      metrics: ExportMetrics;
+      sealing?: { pdfSha256: { a: string; b: string }; compileMs: readonly [number, number] };
+    } = {
       output: OUTPUT_FILES.pdf,
       pages,
       layout: layoutBytes ? OUTPUT_FILES.layout : null,
@@ -542,6 +678,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       imagesWithoutAlt,
       manifest: OUTPUT_FILES.manifest,
       metrics: m,
+      ...(pair?.ok ? { sealing: { pdfSha256: pair.hashes, compileMs: pair.compileMs } } : {}),
     };
     return out as unknown as Record<string, unknown>;
   };

@@ -504,6 +504,31 @@ export interface CoreProblem {
   fatal: boolean;
 }
 
+/** An equation of the document as the math editor takes it (FE-070): where it is and its source. */
+export interface EquationTarget {
+  /** The node's position in the document. */
+  pos: number;
+  latex: string;
+  /** True for a display `equation_block`, false for an inline `equation`. */
+  display: boolean;
+}
+
+/** A request to open the math editor on an equation (FE-070): `n` counts requests. */
+export interface EquationRequest extends EquationTarget {
+  n: number;
+}
+
+/**
+ * What confirming an equation came to (FE-070). A refusal changed nothing: `reason` is the
+ * command's (`too-long`, `too-deep`, `read-only`, `suggestion`, `not-equation`). `rejected` means
+ * the document service did not accept the commit (the math gate, I8; 09 §6.3) and the change was
+ * taken back: `message` is the service's. `confirmed` is false when the commit was made but the
+ * service had not answered in time.
+ */
+export type EquationConfirmation =
+  | { readonly ok: true; readonly confirmed: boolean }
+  | { readonly ok: false; readonly reason: string; readonly message?: string };
+
 /** The sync client's state as plain data (FE-033 criterion 7). */
 export interface SyncSummary {
   seq: number;
@@ -558,6 +583,8 @@ export interface AttachOptions {
   journal?: JournalPort;
   /** The assets port: a pasted picture is uploaded through it (FE-053; 10 §3.1). */
   assets?: AssetsPort;
+  /** The proofing port (13 §6.1; UX-041): the core checks spelling and grammar through it. */
+  proofing?: ProofingPort;
 }
 
 /** The find state: `n of m` is `current` (1-based, null before a navigation) of `count` (FE-059). */
@@ -615,6 +642,8 @@ export interface ModeState {
 }
 
 export type { CdmFragment, CdmJsonNode } from './cdm-fragment.ts';
+export type * from './extension-api-types.ts';
+import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
 
 /**
  * The outcome of `insertContent` (FE-027). `unsupported`: another CDM version, or features the
@@ -647,11 +676,15 @@ import type { MarkupView, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
 import type { SectionWarning } from './breaks-sections.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
+import type { LocatedFinding, ProofingClock, ProofingInfo, ProofingPort } from './proofing.ts';
+import type { AssistantRequest, HostAttachment } from './assistant-context.ts';
 
 export interface DocumentApi {
   readonly selection: ReadView<SelectionSummary>;
   /** The find state (FE-059): the query, the number of matches and the current one. */
   readonly findState: ReadView<FindState>;
+  /** Spelling and grammar (UX-041): the state and the findings shown; `available` is false without a port. */
+  readonly proofing: ReadView<ProofingInfo>;
   readonly panel: ReadView<PanelInfo | null>;
   readonly outline: ReadView<readonly OutlineItem[]>;
   /** The DEP `access` in force (`ch.opened`, then every `perm.changed`); null before any. */
@@ -727,6 +760,8 @@ export interface DocumentApi {
   /** Opens the story's panel. Returns false, and opens nothing, when the user may not change the story (07 §7). */
   openStory(id: string): boolean;
   closePanel(): void;
+  /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
+  selectBlock(id: string): boolean;
   focus(): void;
   destroy(): void;
 
@@ -746,6 +781,35 @@ export interface DocumentApi {
   replaceCurrent(text: string): ReplaceReport;
   /** Replaces every match the user may change, in one change; reports the counts (FE-060). */
   replaceAll(text: string): ReplaceReport;
+  /** The request for the assistant port: selection, surrounding blocks, outline and host attachments (UX-047). */
+  assistantRequest(
+    task: AssistantRequest['task'],
+    prompt: string,
+    attachments?: readonly HostAttachment[],
+  ): AssistantRequest & { readonly omitted: number };
+  /** Gives the core the proofing port (13 §6.1); returns the function that detaches it (UX-041). */
+  attachProofing(
+    port: ProofingPort,
+    opts?: { docId?: string; clock?: ProofingClock; debounceMs?: number },
+  ): () => void;
+  /** The findings that hold for the document now, with their positions (the view draws them). */
+  proofingFindings(): readonly LocatedFinding[];
+  /** The identifier of the finding the last navigation chose, while it is shown. */
+  proofingCurrentId(): string | null;
+  /** Moves the selection to the next (or previous) finding, wrapping; false when there is none. */
+  proofingStep(direction?: 1 | -1): boolean;
+  /** Applies one suggestion of a finding as an ordinary edit through the guards (UX-042). */
+  applyFinding(id: string, suggestion?: number): boolean;
+  /** Whether the finding has a suggestion and the user may change its scope. */
+  canApplyFinding(id: string): boolean;
+  /** Hides a finding: once (until its text changes) or everywhere (for the session). */
+  ignoreFinding(id: string, everywhere?: boolean): boolean;
+  /** Adds the finding's text to the port's custom dictionary; false where the port has none. */
+  addFindingToDictionary(id: string): Promise<boolean>;
+  /** The custom dictionary's words for a language; null where the port has no dictionary. */
+  dictionaryWords(lang: string): Promise<string[] | null>;
+  /** Removes a word from the custom dictionary. */
+  removeDictionaryWord(word: string, lang: string): Promise<boolean>;
   /** Pastes plain text at the selection, one paragraph per line (FE-052); false when refused. */
   pastePlainText(text: string): boolean;
   /** The clipboard payload of the selection (FE-050): `text/html` with the fragment, and `text/plain`. Null for an empty selection; changes nothing. */
@@ -770,6 +834,12 @@ export interface DocumentApi {
     target?: SuggestionTarget,
     author?: string,
   ): SuggestionReport;
+
+  /**
+   * The range-based API for one extension (UX-053; 13 §7.1): ranges held and mapped, reads, writes
+   * through the guards of typing, and events delivered after the change. See extension-api-types.ts.
+   */
+  extensionApi(options: ExtensionApiOptions): ExtensionDocumentApi;
 
   /** The decorations of the markup view `view` for the current document, as plain specs (FE-046). */
   markupDecorations(view: MarkupView): SuggestionSpec[];

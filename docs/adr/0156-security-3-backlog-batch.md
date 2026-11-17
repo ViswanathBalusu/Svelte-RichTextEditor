@@ -54,12 +54,18 @@ Facts the records rely on, all from the spec:
 - Caches hold decrypted content only in a process that already has the key. Shared caches must be keyed per document, or switched off for tenants on per-document keys.
 - Backups age out on their own schedule (08 §13). Destroying a key makes a backup unreadable before it ages out. The documentation has to state both.
 
-**Sealing party (decision 11, undecided).** Both branches are given, and the record does not choose one.
+**Sealing party (decision 11, answered 2026-11-15).** The owner decided (docs/owner-decisions-2026-11-15.md, decision 14): the operator seals by default, and a tenant's own key and certificate are used where the tenant supplies them. This record follows that answer. The jurisdictions (decision 13) are both the European Union and the United States from the start; they do not change the custody design.
 
-- If the operator seals: the signing key sits in the operator's key service, and the signing service is the operator's.
-- If each tenant seals: a signing key sits in the tenant's own key service or is customer-held, and the signing service refers to it through a per-tenant key reference. Workers do not change.
+What changes for the signing service (lane w3, 2026-11-17, proposed wording of the consequence, not a further owner decision):
 
-**Status of the criteria.** Criteria 1 and 2 are met by this record. Criterion 3 stays open until decision 11 is made. Criterion 4 (BE-041 and the signing stories are updated) stays open until the record is accepted, and it is a change to other epics that this batch does not make.
+- The signing service resolves a signing key per tenant. If the tenant has supplied no key and certificate, it uses the operator's key, held in the operator's key service (an HSM where the platform offers one). If the tenant has supplied one, it uses the tenant's, through a per-tenant key reference that names the key service or the customer-held key and the certificate chain.
+- The choice is made per tenant, not per document, and is recorded in the tenant's configuration. The seal's evidence names which key sealed (key identifier and certificate), so a relying party can tell an operator seal from a tenant seal.
+- A tenant key is used only through the signing service, as in the signing-key rule above. The signing service never exports it, and the audit event of each signing operation carries the key identifier and the actor (see Audit).
+- Loading a tenant's key and certificate is a tenant administration action: it needs a check of the certificate chain and its validity period before it is accepted, and the old reference stays readable so that earlier seals remain verifiable. This record does not decide the checks' details; the signing stories do.
+- Workers (LaTeX, asset) do not change.
+- Seal levels are decision 15 (PAdES B-LT in phase 2, B-LTA in phase 4) and belong to SPK-021 and the signing stories, not to this record.
+
+**Status of the criteria.** Criteria 1, 2 and 3 are met by this record. Criterion 4 (BE-041 and the signing stories are updated) stays open: it applies when the owner accepts the key custody record as a whole, which the 2026-11-15 answers do not cover (they settle only the sealing party), and it is a change to other epics that this batch does not make.
 
 ## SEC-061: abuse handling for hosted mode
 
@@ -89,7 +95,7 @@ This policy applies only if the owner chooses hosted mode (SEC-061 is `cond`). 1
 
 1. Owner: accept or change option A for SEC-063.
 2. Owner: decide what the search index holds for per-document keys (SEC-062).
-3. Owner: decision 11, the sealing party (SEC-062 criterion 3).
+3. Decision 11, the sealing party: answered on 2026-11-15 (decision 14 of docs/owner-decisions-2026-11-15.md), applied above.
 4. Owner: accept the abuse policy, including which of abuse lock or legal hold wins (SEC-061), and who the second approver is.
 5. Owner: whether the two-person rule for key recovery applies (SEC-062).
 

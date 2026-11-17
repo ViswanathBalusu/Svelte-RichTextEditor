@@ -146,7 +146,7 @@ export function settingsFrom(s: DataPlaneSettings = {}): Settings {
     features: s.features ?? DEFAULT_FEATURES,
     versions: ['1.0'],
     engines: ['pm-steps/1'],
-    cdm: { min: 1, max: 1 },
+    cdm: s.cdm ?? { min: 1, max: 1 },
     helloTimeoutMs: s.helloTimeoutMs ?? 10_000,
     roomIdleMs: s.roomIdleMs ?? 60_000,
     authExpiringMs: 60_000,

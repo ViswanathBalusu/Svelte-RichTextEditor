@@ -16,7 +16,13 @@
  * Which picture types the service accepts is its own rule; this module does not filter by type.
  */
 import type { AssetsPort as BackendAssetsPort } from '@docedit/protocol';
-import type { AssetsPort, PastedImage, UploadOutcome } from '@docedit/engine';
+import type {
+  AssetImage,
+  AssetImageLookup,
+  AssetsPort,
+  PastedImage,
+  UploadOutcome,
+} from '@docedit/engine';
 
 /** Twips per CSS pixel at 96 pixels to the inch. */
 export const TWIPS_PER_PIXEL = 15;
@@ -85,6 +91,36 @@ export function displayTwips(
   return {
     widthTwips: Math.max(1, Math.min(IMAGE_SIDE_MAX_TWIPS, Math.round(w * scale))),
     heightTwips: Math.max(1, Math.min(IMAGE_SIDE_MAX_TWIPS, Math.round(h * scale))),
+  };
+}
+
+/**
+ * The lookup the web view draws pictures with (FE-067 criterion 3): the signed URL and content type
+ * of an asset, from `POST /documents/{id}/assets/resolve`. Each asset is asked once while its URL
+ * is valid; a refusal or a failure answers `undefined` and is asked again at the next draw. The URL
+ * is checked by the view (`imageSource` in the engine), not here.
+ */
+export function assetImageLookup(
+  port: BackendAssetsPort,
+  docId: string,
+  now: () => number = Date.now,
+): AssetImageLookup {
+  const cache = new Map<string, { until: number; answer: Promise<AssetImage | undefined> }>();
+  return (assetId) => {
+    const hit = cache.get(assetId);
+    if (hit && hit.until > now()) return hit.answer;
+    const answer = port
+      .resolve(docId, [assetId])
+      .then((body) => {
+        const found = body.assets.find((a) => a.asset === assetId);
+        if (!found) return undefined;
+        // Keep the answer until a minute before the URL expires; an unreadable date is not kept.
+        const expires = Date.parse(found.expiresAt);
+        cache.set(assetId, { until: Number.isNaN(expires) ? 0 : expires - 60_000, answer });
+        return { url: found.url, contentType: found.contentType };
+      })
+      .catch(() => undefined);
+    return answer;
   };
 }
 

@@ -44,6 +44,8 @@ import type {
   ThreadSummary,
   ThreadsService,
   ViewName,
+  ProofingFindingView,
+  ProofingStatus,
 } from '../../src/core-api.ts';
 
 /** `shared`: every view of the core notifies in one frame pass, as the engine does. */
@@ -123,6 +125,8 @@ export interface FakeCoreOptions {
   direction?: 'ltr' | 'rtl';
   /** The document's classification label; absent: no `classification` view (UX-085). */
   classification?: ClassificationLabel | null;
+  /** A proofing port is attached (UX-041): the `proofing` view and its actions; absent: none. */
+  proofing?: ProofingStatus;
   /** Offer the comment threads port (UX-028); absent: no `threads`. */
   threads?: boolean;
 }
@@ -347,6 +351,9 @@ export class FakeCore implements CoreApi {
   readonly recovered?: Value<RecoveredEdits>;
   readonly direction?: Value<'ltr' | 'rtl'>;
   readonly classification?: Value<ClassificationLabel | null>;
+  /** Spelling and grammar (UX-041, UX-042), with `proofing`; every action is recorded in `proofingCalls`. */
+  readonly proofing?: Value<ProofingStatus>;
+  readonly proofingCalls: string[] = [];
   // Phase 1b (ADR 0052), with `extended`.
   readonly commandNames?: readonly string[];
   readonly queryNames?: readonly string[];
@@ -411,6 +418,7 @@ export class FakeCore implements CoreApi {
     if (options.direction) this.direction = new Value(options.direction, notify);
     if (options.classification !== undefined)
       this.classification = new Value(options.classification, notify);
+    if (options.proofing) this.proofing = new Value(options.proofing, notify);
     if (options.threads) this.threads = new FakeThreads();
     if (!options.extended) {
       // Like the core of phase 1a: none of the members of phase 1b.
@@ -681,6 +689,36 @@ export class FakeCore implements CoreApi {
   }
 
   /** The region guard refused a local change (the core's `refusal` view). */
+  /** The findings `proofingStep` moves between, in document order (UX-041). */
+  proofingFindings: ProofingFindingView[] = [];
+
+  proofingStep(direction: 1 | -1 = 1): boolean {
+    this.proofingCalls.push(`step:${String(direction)}`);
+    const n = this.proofingFindings.length;
+    if (!this.proofing || n === 0) return false;
+    const at = this.proofingFindings.findIndex((f) => f.id === this.proofing?.get().current?.id);
+    const next =
+      this.proofingFindings[at < 0 ? (direction === 1 ? 0 : n - 1) : (at + direction + n) % n] ??
+      null;
+    this.proofing.set({ ...this.proofing.get(), current: next, atCaret: next });
+    return true;
+  }
+
+  applyFinding(id: string, suggestion = 0): boolean {
+    this.proofingCalls.push(`apply:${id}:${String(suggestion)}`);
+    return true;
+  }
+
+  ignoreFinding(id: string, everywhere = false): boolean {
+    this.proofingCalls.push(`${everywhere ? 'ignore-all' : 'ignore-once'}:${id}`);
+    return true;
+  }
+
+  addFindingToDictionary(id: string): Promise<boolean> {
+    this.proofingCalls.push(`add-word:${id}`);
+    return Promise.resolve(true);
+  }
+
   refuse(reason: string, scopes: readonly string[] = []): void {
     const n = (this.refusal?.get()?.n ?? 0) + 1;
     this.refusal?.set({ n, reason, scopes: [...scopes] });

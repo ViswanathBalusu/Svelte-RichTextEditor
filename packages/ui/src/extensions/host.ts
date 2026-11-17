@@ -34,7 +34,8 @@ export type ExtensionReason =
   | 'duplicate-id'
   | 'unsupported-api-version'
   | 'activation-failed'
-  | 'removal-failed';
+  | 'removal-failed'
+  | 'handler-failed';
 
 export interface ExtensionReport {
   /** The manifest identifier when it is valid, else the position in the array (`#1`, `#2`...). */

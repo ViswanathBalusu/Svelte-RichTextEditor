@@ -8,7 +8,7 @@
  * (`seq`, and the hash-chain head once the caller supplies it). Other event types pass through.
  *
  * The caller drives time: `offer(event, now)` on each change and `flush(now)` on a timer, so that the
- * tests need no real clock. Nothing here is wired into the handlers yet (see PRO-072's Notes).
+ * tests need no real clock. `DebouncedEventSink` adds the timer for the running service.
  */
 import type { DepEvent, EventSink } from './events.ts';
 
@@ -62,5 +62,55 @@ export class DocumentChangeDebounce {
   /** Changes waiting for a flush, for tests and for a shutdown that must not drop the last one. */
   get waiting(): number {
     return this.#pending.size;
+  }
+}
+
+/**
+ * An `EventSink` in front of another, with the debounce above and its own flush timer (BE-055
+ * criterion 2). One instance is shared by everything that raises `dep.document.changed.v1` (the
+ * rooms and the REST routes), so a document has one window, not one per source. The timer is
+ * unreferenced and armed only while a change waits; `close` raises what waits and stops it.
+ */
+export class DebouncedEventSink implements EventSink {
+  readonly #debounce: DocumentChangeDebounce;
+  readonly #now: () => number;
+  readonly #windowMs: number;
+  #timer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(sink: EventSink, now: () => number, windowMs: number = CHANGE_WINDOW_MS) {
+    this.#debounce = new DocumentChangeDebounce(sink, windowMs);
+    this.#now = now;
+    this.#windowMs = windowMs;
+  }
+
+  emit(event: DepEvent): void {
+    this.#debounce.offer(event, this.#now());
+    this.#arm();
+  }
+
+  /** Raises the changes whose windows have ended; for tests that drive time themselves. */
+  flush(): void {
+    this.#debounce.flush(this.#now());
+  }
+
+  get waiting(): number {
+    return this.#debounce.waiting;
+  }
+
+  /** Stops the timer. A change still waiting is raised now, so the last state of a burst is kept. */
+  close(): void {
+    if (this.#timer !== null) clearTimeout(this.#timer);
+    this.#timer = null;
+    this.#debounce.flush(this.#now() + this.#windowMs);
+  }
+
+  #arm(): void {
+    if (this.#timer !== null || this.#debounce.waiting === 0) return;
+    this.#timer = setTimeout(() => {
+      this.#timer = null;
+      this.#debounce.flush(this.#now());
+      this.#arm();
+    }, this.#windowMs);
+    this.#timer.unref?.();
   }
 }

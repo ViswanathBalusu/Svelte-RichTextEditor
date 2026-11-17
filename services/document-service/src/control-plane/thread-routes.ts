@@ -26,7 +26,9 @@
  *   credential writes no comment and edits none, but may delete one, as it may delete a thread.
  * - a thread's state notice and webhook: `resolved` and `reopened` have both; an assignee change
  *   has only the `thread.updated` notice, since webhooks have no `thread.updated` (gaps.ts).
- * - mentions (PRO-060 criterion 4, the `dep.comment.mentioned` webhook) are not read yet.
+ * - mentions (PRO-060 criterion 4): the mention nodes of a new comment, and of the first comment of
+ *   a new thread, raise `dep.comment.mentioned` once for each distinct principal (mentions.ts,
+ *   docs/adr/0375-w5-PRO-060-comment-mentions.md). An edit of a comment raises none.
  */
 import {
   authoriseComment,
@@ -42,8 +44,9 @@ import { cdmSchema } from '@docedit/model/prosemirror';
 import type { StoredComment, StoredTarget, StoredThread } from '../storage/thread-store.ts';
 import type { DocRef } from '../storage/types.ts';
 import { accessOf, connectionOn, regionInfosOfJson } from './gate.ts';
-import { checkIfMatch } from './http.ts';
+import { checkIfMatch, pageLimit, seqParam } from './http.ts';
 import { json, type Kit } from './kit.ts';
+import { mentionsOf } from './mentions.ts';
 import type { Ctx, Handler, Reply } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { readerView } from './visibility.ts';
@@ -61,8 +64,18 @@ interface UpdateThreadBody {
 }
 
 /** The thread as the REST surface shows it: the `Thread` of 05 section 6.2. */
-function threadBody(t: StoredThread) {
-  const target = 'range' in t.target ? { range: t.target.range } : { block: t.target.block };
+function threadBody(t: StoredThread, at?: { range: { from: number; to: number }; seq: number }) {
+  // A range target carries the seq it refers to as `baseSeq` (`RangeTarget`, 05 section 6.2).
+  const target =
+    'range' in t.target
+      ? {
+          range: {
+            from: (at?.range ?? t.target.range).from,
+            to: (at?.range ?? t.target.range).to,
+            baseSeq: at?.seq ?? t.rangeSeq ?? 0,
+          },
+        }
+      : { block: t.target.block };
   return { id: t.id, state: t.state, assignee: t.assignee, target };
 }
 
@@ -258,7 +271,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('validation_failed', 'the baseSeq is above the head', {
         violations: [{ path: '/target/range/baseSeq', rule: `at most ${headSeq}` }],
       });
-    const window = DEFAULT_LIMITS.maxRebaseSteps;
+    const window = d.rebaseWindow ?? DEFAULT_LIMITS.maxRebaseSteps;
     if (headSeq - range.baseSeq > window)
       throw new ApiError('validation_failed', 'the baseSeq is outside the rebase window', {
         violations: [{ path: '/target/range/baseSeq', rule: `within ${window} steps of the head` }],
@@ -277,6 +290,23 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       target: { range: { from: mapped.from, to: mapped.to } },
       rangeSeq: headSeq,
     };
+  };
+
+  /**
+   * `dep.comment.mentioned` once for each distinct principal a comment body mentions (PRO-060
+   * criterion 4; 13 §5): the host sends the notification. The data names the principal as the
+   * mention node holds it, `user:<sub>` or `group:<id>`.
+   */
+  const raiseMentions = (
+    ctx: Ctx,
+    doc: string,
+    comment: string,
+    thread: string,
+    body: unknown,
+    seq: number,
+  ): void => {
+    for (const principal of mentionsOf(body))
+      emit(ctx, 'dep.comment.mentioned', doc, { comment, thread, principal, seq });
   };
 
   const createThread: Handler = async (ctx): Promise<Reply> => {
@@ -316,12 +346,98 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       },
     });
     emit(ctx, 'dep.thread.created', doc, { thread: thread.id, seq: head.seq });
-    k.notify()?.(ref, {
-      type: 'thread.created',
-      resource: `/threads/${thread.id}`,
-      data: { state: 'open', seq: head.seq },
-    });
+    raiseMentions(ctx, doc, thread.comments[0]?.id ?? '', thread.id, body.comment, head.seq);
+    const told = await eventOf(ctx.caller.tenant, thread);
+    k.notify()?.(
+      ref,
+      { type: 'thread.created', resource: `/threads/${thread.id}`, data: told.data },
+      { scopes: told.scopes },
+    );
     return json(201, threadBody(thread), { ETag: threadTag(thread), 'Cache-Control': 'no-store' });
+  };
+
+  /**
+   * What a thread event tells a channel (PRO-036 criterion 2; SYN-032): the thread's state, the
+   * head `seq`, and for a range thread its range at that `seq`, mapped from the seq it was made
+   * at, so that the client can place the decoration without a fetch. A block thread names its
+   * block. The scopes go with the notice, so that a region the reader cannot see is not announced.
+   */
+  const eventOf = async (
+    tenant: string,
+    t: StoredThread,
+  ): Promise<{ data: Record<string, unknown>; scopes: string[] }> => {
+    const ref: DocRef = { tenant, doc: t.docId };
+    const head = await d.logs.head(ref);
+    const data: Record<string, unknown> = { state: t.state, seq: head.seq };
+    if ('range' in t.target && t.rangeSeq !== null) {
+      const between = t.rangeSeq < head.seq ? await d.logs.read(ref, t.rangeSeq + 1, head.seq) : [];
+      const through = between.map((c) => ({ kind: c.kind, steps: 'steps' in c ? c.steps : [] }));
+      const [mapped] = mapRangesThrough([t.target.range], through, cdmSchema());
+      data['range'] = { from: mapped!.from, to: mapped!.to };
+    } else if ('block' in t.target) data['block'] = t.target.block;
+    return { data, scopes: scopesOf(t) };
+  };
+
+  /**
+   * `GET /documents/{id}/threads?seq=` (05 section 6.2; PRO-059 criterion 4): the threads the
+   * caller may read, with each range mapped from the seq it was made at to `seq` (the head when
+   * absent) through the commits between them (SYN-032). A thread made after `seq` did not exist at
+   * it and is left out. A range whose text was deleted by then comes back empty (`from` equals
+   * `to`), which a client shows as detached. Threads in a region the caller cannot see are left
+   * out, as in `getThread`.
+   */
+  const listThreads: Handler = async (ctx): Promise<Reply> => {
+    const doc = ctx.params['id']!;
+    const s = store();
+    await liveDocument(ctx, doc);
+    if (ctx.caller.kind === 'user' && ctx.caller.identity!.docs[doc] === undefined)
+      throw new ApiError('not_found', 'no such document');
+    const ref = refOf(ctx, doc);
+    const head = await d.logs.head(ref);
+    const asked = seqParam(ctx.url, 'seq');
+    const seq = asked ?? head.seq;
+    if (seq > head.seq)
+      throw new ApiError('validation_failed', `seq is beyond the head (${head.seq})`, {
+        violations: [{ path: 'seq', rule: 'at most the head' }],
+      });
+    const limit = pageLimit(ctx.url);
+    const cursor = ctx.url.searchParams.get('cursor');
+    const after = cursor !== null ? d.cursors.open(`threads/${doc}`, cursor) : undefined;
+    const page = await s.list(ref, { ...(after !== undefined ? { after } : {}), limit });
+
+    // The commits the ranges are mapped through: from the oldest range seq on this page.
+    const from = Math.min(
+      seq,
+      ...page.flatMap((t) => (t.rangeSeq !== null && 'range' in t.target ? [t.rangeSeq] : [])),
+    );
+    const commits = from < seq ? await d.logs.read(ref, from + 1, seq) : [];
+    const schema = cdmSchema();
+
+    const items: ReturnType<typeof threadBody>[] = [];
+    for (const t of page) {
+      if ((await contextOf(ctx, t)).hidden) continue;
+      if (!('range' in t.target) || t.rangeSeq === null) {
+        items.push(threadBody(t));
+        continue;
+      }
+      if (t.rangeSeq > seq) continue;
+      const through = commits
+        .filter((c) => c.seq > t.rangeSeq! && c.seq <= seq)
+        .map((c) => ({ kind: c.kind, steps: 'steps' in c ? c.steps : [] }));
+      const [mapped] = mapRangesThrough([t.target.range], through, schema);
+      items.push(threadBody(t, { range: { from: mapped!.from, to: mapped!.to }, seq }));
+    }
+    const last = page[page.length - 1];
+    return json(
+      200,
+      {
+        items,
+        nextCursor:
+          page.length === limit && last ? d.cursors.issue(`threads/${doc}`, last.id) : null,
+        seq,
+      },
+      { 'Cache-Control': 'private, no-cache' },
+    );
   };
 
   const getThread: Handler = async (ctx): Promise<Reply> => {
@@ -340,9 +456,11 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       thread: t.id,
       seq: (await d.logs.head(refOf(ctx, t.docId))).seq,
     });
+    const told = await eventOf(ctx.caller.tenant, t);
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
-      { type: 'thread.deleted', resource: `/threads/${t.id}`, data: {} },
+      { type: 'thread.deleted', resource: `/threads/${t.id}`, data: told.data },
+      { scopes: told.scopes },
     );
     return { status: 204, headers: { 'Cache-Control': 'no-store' } };
   };
@@ -386,14 +504,25 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
         thread: t.id,
         seq: (await d.logs.head(refOf(ctx, t.docId))).seq,
       });
-      k.notify()?.(scope, {
-        type: state === 'resolved' ? 'thread.resolved' : 'thread.reopened',
-        resource: `/threads/${t.id}`,
-        data: { state: updated.state },
-      });
+      const told = await eventOf(ctx.caller.tenant, updated);
+      k.notify()?.(
+        scope,
+        {
+          type: state === 'resolved' ? 'thread.resolved' : 'thread.reopened',
+          resource: `/threads/${t.id}`,
+          data: told.data,
+        },
+        { scopes: told.scopes },
+      );
     }
-    if (changesAssignee)
-      k.notify()?.(scope, { type: 'thread.updated', resource: `/threads/${t.id}`, data: {} });
+    if (changesAssignee) {
+      const told = await eventOf(ctx.caller.tenant, updated);
+      k.notify()?.(
+        scope,
+        { type: 'thread.updated', resource: `/threads/${t.id}`, data: told.data },
+        { scopes: told.scopes },
+      );
+    }
     return json(200, threadBody(updated), {
       ETag: threadTag(updated),
       'Cache-Control': 'no-store',
@@ -416,14 +545,13 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     };
     const added = await store().addComment(ctx.caller.tenant, t.id, comment);
     if (!added) throw new ApiError('not_found', 'no such thread');
-    emit(ctx, 'dep.comment.created', t.docId, {
-      comment: comment.id,
-      thread: t.id,
-      seq: (await d.logs.head(refOf(ctx, t.docId))).seq,
-    });
+    const seq = (await d.logs.head(refOf(ctx, t.docId))).seq;
+    emit(ctx, 'dep.comment.created', t.docId, { comment: comment.id, thread: t.id, seq });
+    raiseMentions(ctx, t.docId, comment.id, t.id, comment.body, seq);
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
       { type: 'comment.created', resource: `/comments/${comment.id}`, data: { thread: t.id } },
+      { scopes: scopesOf(t) },
     );
     return json(201, commentBody(comment), {
       ETag: commentTag(comment),
@@ -442,6 +570,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
       { type: 'comment.updated', resource: `/comments/${c.id}`, data: { thread: t.id } },
+      { scopes: scopesOf(t) },
     );
     return json(200, commentBody(updated), {
       ETag: commentTag(updated),
@@ -460,11 +589,13 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
       { type: 'comment.deleted', resource: `/comments/${c.id}`, data: { thread: t.id } },
+      { scopes: scopesOf(t) },
     );
     return { status: 204, headers: { 'Cache-Control': 'no-store' } };
   };
 
   return {
+    listThreads,
     createThread,
     getThread,
     deleteThread,

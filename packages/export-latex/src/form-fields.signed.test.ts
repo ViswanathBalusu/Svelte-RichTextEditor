@@ -1,10 +1,8 @@
 /**
- * EXP-034 criteria 3 and 4 (Node.js only): a formula field prints its stored value, and an empty
- * signature field prints a labelled empty box of the field's width. The tests read main.tex of the
- * converter's bundle through `blockLines`; nothing compiles here. Criterion 1 (the signature picture
- * from the asset) and criterion 2 (the signing date in the workflow's time zone) are not covered:
- * the converter prints a signature as a `form_value_not_printed` warning, and a date as its stored
- * string (see the story's Notes in docs/stories/EXP-export.md).
+ * EXP-034 criteria 2 to 4 (Node.js only): a dateSigned field prints the date the server stored, a
+ * formula field prints its stored value, and an empty signature field prints a labelled empty box of
+ * the field's width. The tests read main.tex of the converter's bundle through `blockLines`; nothing
+ * compiles here. Criterion 1 (the signature picture) is in `exp-034-signature.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
 import { blockLines, doc, nid, para, run, type J } from '../test/docs.ts';
@@ -43,6 +41,38 @@ describe('EXP-034 criterion 3: a formula field prints its stored value', () => {
     const f = fieldLine(blockLines(b, idOfPara(p)));
     expect(f).toContain(`\\DEff{1}{${BOX}}{${kvValue('Total')}}{${text('')}}`);
     expect(b.diagnostics.some((d) => d.code === 'form_value_not_printed')).toBe(false);
+  });
+});
+
+describe('EXP-034 criterion 2: a dateSigned field prints the date the server stored', () => {
+  const dated = (value: string | null, attrs: J = {}): J =>
+    para('Signed on ', {}, [field('on', 'dateSigned', { label: 'Signed on', value, ...attrs })]);
+
+  it('prints the stored date as it is, whatever time zone or instant the job names', async () => {
+    const p = dated('2026-12-31');
+    // A job time zone far from UTC must not move the stored date: the server already set it in the workflow's zone.
+    const b = await run(doc([p]), {
+      instant: '2026-12-31T23:30:00.000Z',
+      timeZone: 'Pacific/Kiritimati',
+    });
+    const f = fieldLine(blockLines(b, idOfPara(p)));
+    expect(f).toContain(`\\DEff{1}{${BOX}}{${kvValue('Signed on')}}{${text('2026-12-31')}}`);
+    expect(b.diagnostics.some((d) => d.code === 'form_value_not_printed')).toBe(false);
+  });
+
+  it('prints no date when none is stored: neither the instant of the job nor a client date is used', async () => {
+    const p = dated(null);
+    const b = await run(doc([p]), { instant: '2026-06-01T10:00:00.000Z', timeZone: 'UTC' });
+    const f = fieldLine(blockLines(b, idOfPara(p)));
+    expect(f).toContain(`{${text('')}}`);
+    expect(f).not.toContain('2026');
+  });
+
+  it('does not reformat the stored date with a date pattern of the field', async () => {
+    const p = dated('2026-11-06', { format: { datePattern: 'dd MMMM yyyy' } });
+    const b = await run(doc([p]));
+    const f = fieldLine(blockLines(b, idOfPara(p)));
+    expect(f).toContain(`{${text('2026-11-06')}}`);
   });
 });
 

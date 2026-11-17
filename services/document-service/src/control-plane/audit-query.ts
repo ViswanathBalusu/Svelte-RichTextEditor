@@ -10,11 +10,10 @@
  * The route `getAudit` is in `audit-routes.ts`: it reads the URL's query (`auditParamsOf`) and
  * calls `AuditQueryService.query` with the caller the pipeline verified.
  *
- * Not built here, and kept out on purpose:
- * - the events of 07 section 14 that nothing records yet (lease breaks, session revocations,
- *   restores, workflow transitions, region state changes): the audit trail holds what the writers
- *   record today, so the query is complete only for those;
- * - an audit record for each administration action (UX-076 to UX-080), which needs those APIs.
+ * The events of 07 section 14 are recorded as `grants.changed` (grants, region states, leases and
+ * their breaks, document state, workflow transitions), `session.revoke`, `document.restored` and
+ * `commit.rejected` (UX-081 criterion 1). Not built here, and kept out on purpose: an audit record
+ * for each administration action that has no write route yet (keys, origins, fonts).
  *
  * Decisions taken here (the spec leaves them open; see docs/adr/0237-lane-UX-079-091.md):
  * - the default page size is 50 when `limit` is absent; the maximum is 200 (UX-081 criterion 2);
