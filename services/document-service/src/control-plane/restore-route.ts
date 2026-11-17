@@ -21,7 +21,7 @@
  * The response is `{ seq, toSeq, preRestoreSeq }`. The schema names `RestoreResult` as a
  * placeholder, so the members are a decision of this lane (docs/adr/0358-lane-V-HIS-017-032.md).
  */
-import { canonicalize } from '@docedit/model';
+import { canonicalize, uuid7 } from '@docedit/model';
 import { regionNodeOf } from './content.ts';
 import { minVisibleSeqOf, regionInfosOfJson } from './gate.ts';
 import { json, type Kit } from './kit.ts';
@@ -147,6 +147,19 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
     const chainHead = (await d.logs.state?.(ref))?.chainHead ?? null;
     emit(ctx, 'dep.document.changed', doc, { seq, ...(chainHead !== null ? { chainHead } : {}) });
     emit(ctx, 'dep.version.restored', doc, { seq });
+    // A restore is on the audit trail (07 section 14; UX-081 criterion 1): who, which document and
+    // the sequence numbers. No content is recorded.
+    await d.audit?.record([
+      {
+        id: uuid7(),
+        tenant: ctx.caller.tenant,
+        doc,
+        actor,
+        kind: 'document.restored',
+        data: { scopes: ['doc'], toSeq: body.toSeq, seq, preRestoreSeq: head.seq },
+        at: d.now(),
+      },
+    ]);
     return json(200, { seq, toSeq: body.toSeq, preRestoreSeq: head.seq });
   };
 
