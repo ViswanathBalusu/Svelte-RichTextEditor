@@ -4,10 +4,9 @@
  * `min`, `max`, `minLength`, `maxLength`, `pattern` and `preset`. The editor, the authority and the
  * completion check use these functions, so the checks have one implementation.
  */
-import { UUID7_PATTERN, isDecimalString, type JsonValue } from '@docedit/model';
+import { fieldValueProblem, type JsonValue } from '@docedit/model';
 import { compare, parseDecimal } from './decimal.ts';
-import { isCalendarDate } from './dates.ts';
-import { codePointLength, isObject, utf8Length } from './json.ts';
+import { codePointLength, isObject } from './json.ts';
 import { LIMITS } from './limits.ts';
 import { compilePattern, matchPattern, type Pattern, type PatternProblem } from './pattern.ts';
 
@@ -113,12 +112,27 @@ export interface EntryProblem {
   rule?: string;
 }
 
-const uuidRe = new RegExp(UUID7_PATTERN);
-const SIGNATURE_MODES = ['typed', 'drawn', 'uploaded'];
+/** What to tell the person who typed a value of the wrong type, by kind (FRW-004). */
+const TYPE_MESSAGE: Record<FieldKind, string> = {
+  text: 'enter text',
+  formula: 'a formula value is a string',
+  number: 'enter a number such as 12.50',
+  date: 'enter a date as YYYY-MM-DD',
+  dateSigned: 'enter a date as YYYY-MM-DD',
+  checkbox: 'a checkbox is true or false',
+  choice: 'choose one of the options',
+  signature: 'a signature is { asset, mode } with mode typed, drawn or uploaded',
+  initials: 'a signature is { asset, mode } with mode typed, drawn or uploaded',
+  attachment: 'the attachment kind holds no value in version 1',
+};
 
 /**
  * Invariant I15's type check (12 §3.3): does a value have the type of its kind? Null means empty
  * for every kind. Returns the problem, or null when the value is acceptable.
+ *
+ * The verdict is `fieldValueProblem` of `@docedit/model`, the one function that `model.validate()`
+ * and the authority's fill check also call (FRW-015 criterion 5). This function adds the codes
+ * and the messages for a person, and the check of a signature image against the attached assets.
  */
 export function checkFieldValue(
   field: Pick<FieldInfo, 'kind' | 'options'>,
@@ -126,50 +140,28 @@ export function checkFieldValue(
   context: { attachedAssets?: ReadonlySet<string> } = {},
 ): EntryProblem | null {
   if (value === null || value === undefined) return null;
-  const bad = (message: string): EntryProblem => ({ code: 'type', message });
-  switch (field.kind) {
-    case 'text':
-    case 'formula':
-      if (typeof value !== 'string')
-        return bad(field.kind === 'text' ? 'enter text' : 'a formula value is a string');
-      if (utf8Length(value) > LIMITS.valueBytes)
-        return {
-          code: 'too_large',
-          message: `the value is longer than ${LIMITS.valueBytes} bytes`,
-        };
-      return null;
-    case 'number':
-      return isDecimalString(value) ? null : bad('enter a number such as 12.50');
-    case 'date':
-    case 'dateSigned':
-      return isCalendarDate(value) ? null : bad('enter a date as YYYY-MM-DD');
-    case 'checkbox':
-      return typeof value === 'boolean' ? null : bad('a checkbox is true or false');
-    case 'choice':
-      if (typeof value !== 'string') return bad('choose one of the options');
-      return (field.options ?? []).includes(value)
-        ? null
-        : { code: 'not_an_option', message: 'choose one of the options' };
-    case 'signature':
-    case 'initials': {
-      if (
-        !isObject(value) ||
-        Object.keys(value).length !== 2 ||
-        typeof value['asset'] !== 'string' ||
-        !uuidRe.test(value['asset']) ||
-        !SIGNATURE_MODES.includes(String(value['mode']))
-      )
-        return bad('a signature is { asset, mode } with mode typed, drawn or uploaded');
-      if (context.attachedAssets && !context.attachedAssets.has(value['asset']))
-        return {
-          code: 'not_attached',
-          message: 'the signature image is not attached to this document',
-        };
-      return null;
-    }
-    case 'attachment':
-      return { code: 'reserved_kind', message: 'the attachment kind holds no value in version 1' };
+  if (field.kind === 'attachment')
+    return { code: 'reserved_kind', message: TYPE_MESSAGE.attachment };
+  const options = (field.options ?? []).map((id) => ({ id }));
+  const problem = fieldValueProblem(field.kind, value, { options });
+  if (problem !== null) {
+    if (problem.kind === 'size')
+      return { code: 'too_large', message: `the value is longer than ${LIMITS.valueBytes} bytes` };
+    if (field.kind === 'choice' && typeof value === 'string')
+      return { code: 'not_an_option', message: TYPE_MESSAGE.choice };
+    return { code: 'type', message: TYPE_MESSAGE[field.kind] };
   }
+  if (
+    (field.kind === 'signature' || field.kind === 'initials') &&
+    context.attachedAssets &&
+    isObject(value) &&
+    !context.attachedAssets.has(String(value['asset']))
+  )
+    return {
+      code: 'not_attached',
+      message: 'the signature image is not attached to this document',
+    };
+  return null;
 }
 
 /** Empty: null, the empty string for `text` and `formula`, false for `checkbox` (ADR 0030 §1). */
