@@ -2,9 +2,9 @@
  * Suggestions in output (09 §10). The job's `suggestions` option prints the document as if every
  * suggestion were accepted (`accept`) or none (`reject`), or keeps every suggestion visible as
  * markup (`markup`, EXP-083): insertions are blue and underlined, deletions red and struck through,
- * so the two differ by a cue that is not colour. Markup covers text runs and the runs of a paragraph
- * with a suggestion (EXP-083 criterion 3, paragraphs only); a table, a row or an atom with a
- * suggestion is printed as it is. A document with suggestions
+ * so the two differ by a cue that is not colour. Markup covers text runs, the runs of a paragraph
+ * with a suggestion, the paragraphs of a row or table with one, and inline atoms with a mark
+ * (EXP-083 criterion 3). A document with suggestions
  * and no option is refused by the service with `pending_suggestions` (EXP-082); the converter
  * reports the same code as an error and prints the text as if all suggestions were rejected, so
  * that no unreviewed text reaches a PDF.
@@ -111,7 +111,7 @@ function holderOf(parents: readonly (string | null)[]): string | null {
 export function settleSuggestions(doc: J, mode: Suggestions | null, diagnostics: Diagnostic[]): J {
   const revert = mode === null || mode === 'reject';
   const reported = new Set<string>();
-  const visit = (node: J, parents: (string | null)[]): J => {
+  const visit = (node: J, parents: (string | null)[], inherited: readonly Mark[]): J => {
     let marks = node.marks;
     let attrs = node.attrs;
     if (marks && marks.length > 0) {
@@ -154,7 +154,16 @@ export function settleSuggestions(doc: J, mode: Suggestions | null, diagnostics:
       }
     }
     const id = typeof attrs?.['id'] === 'string' ? (attrs['id'] as string) : null;
-    const content = node.content?.map((c) => visit(c, [...parents, id]));
+    // Markup shows a row or a table suggestion on every paragraph inside it (EXP-083 criterion 3).
+    let below = inherited;
+    if (mode === 'markup' && (node.type === 'table_row' || node.type === 'table'))
+      below = [...inherited, ...(marks ?? []).filter((m) => m.type === 'ins' || m.type === 'del')];
+    if (mode === 'markup' && node.type === 'paragraph' && inherited.length > 0) {
+      const have = (marks ?? []).map((m) => m.type);
+      const extra = inherited.filter((m) => !have.includes(m.type));
+      if (extra.length > 0) marks = [...(marks ?? []), ...extra];
+    }
+    const content = node.content?.map((c) => visit(c, [...parents, id], below));
     const changed =
       marks !== node.marks ||
       attrs !== node.attrs ||
@@ -169,5 +178,5 @@ export function settleSuggestions(doc: J, mode: Suggestions | null, diagnostics:
     if (content) out.content = content;
     return out;
   };
-  return visit(doc, []);
+  return visit(doc, [], []);
 }
