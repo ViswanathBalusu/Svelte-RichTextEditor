@@ -14,7 +14,7 @@
  *   --de-border               #d0d7de     lines and borders
  *   --de-focus                #0969da     focus outline
  *   --de-font-ui              system-ui, sans-serif
- *   --de-font-document        'Noto Serif', Georgia, serif
+ *   --de-font-document        Georgia, serif (the editor's fonts are reached by hash alias only)
  *   --de-link                 #0969da     footnote references and links
  *   --de-region               #8250df     a region's rule and title
  *   --de-region-background    #fbefff     a region's background
@@ -155,7 +155,7 @@ img.ProseMirror-separator {
 /* Document content. */
 .de-editing-surface {
   outline: none;
-  font-family: var(--de-font-document, 'Noto Serif', Georgia, serif);
+  font-family: var(--de-font-document, Georgia, serif);
   line-height: 1.4;
   min-height: 6rem;
 }
@@ -262,7 +262,7 @@ img.ProseMirror-separator {
   padding: 0.5rem;
   border: 1px solid var(--de-border, #d0d7de);
   outline: none;
-  font-family: var(--de-font-document, 'Noto Serif', Georgia, serif);
+  font-family: var(--de-font-document, Georgia, serif);
 }
 
 .de-sub-editor:focus-visible {
