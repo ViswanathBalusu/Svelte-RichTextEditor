@@ -116,6 +116,8 @@ interface SessionChannel {
   /** The features the client announced for this channel (03 §11.1). */
   features: readonly string[];
   span: OpenSpan | null;
+  /** Whether the channel holds the open-documents quota of its tenant (BE-091), to release once. */
+  docHeld: boolean;
 }
 
 /** Frames of one message, sent as one unit (05 §4: the chunks of a message are consecutive). */
@@ -408,9 +410,13 @@ export class Session {
   #commitRefused(m: { t: string; id?: string; ch?: number; d?: unknown }): boolean {
     const quotas = this.#deps.quotas;
     if (!quotas || !this.#identity) return false;
-    const adm = quotas.admitCommit(this.#identity.tenant);
+    // The room CPU budget first: a spent budget refuses without counting a commit (04 §12).
+    const cpu = quotas.admitCpu(this.#identity.tenant);
+    const adm = cpu.ok ? quotas.admitCommit(this.#identity.tenant) : cpu;
     if (adm.ok) return false;
-    const message = 'the commit-rate quota of the tenant is reached';
+    const message = cpu.ok
+      ? 'the commit-rate quota of the tenant is reached'
+      : 'the room CPU budget of the tenant is spent';
     const c = m.ch !== undefined ? this.#channels.get(m.ch) : undefined;
     if (c?.room && m.id !== undefined) {
       const d = m.d as { id?: unknown } | undefined;
@@ -420,7 +426,7 @@ export class Session {
         ch: c.ch,
         d: {
           id: typeof d?.id === 'string' ? d.id : '',
-          code: 'quota_exceeded',
+          code: adm.code,
           message,
           action: 'retry',
           head: c.room.head,
@@ -434,7 +440,7 @@ export class Session {
       ...(m.id !== undefined ? { re: m.id } : {}),
       ...(m.ch !== undefined ? { ch: m.ch } : {}),
       d: {
-        code: 'quota_exceeded',
+        code: adm.code,
         message,
         retryable: true,
         retryAfterMs: adm.retryAfterMs,
@@ -492,6 +498,10 @@ export class Session {
       return this.#fatal('token_expired', 'the token has expired', m.id);
     if (!(await this.#originAllowed(identity.tenant)))
       return this.#fatal('forbidden', 'the origin is not allowed for this tenant', m.id);
+    if (this.#isClosed()) return;
+    // BE-091: the tenant's current quota values are read first (a store may answer later), then
+    // the tenant's connection quota is checked before the session is open.
+    await this.#deps.quotas?.prepare?.(identity.tenant);
     if (this.#isClosed()) return;
     // BE-091: the tenant's connection quota is checked before the session is open. A refused hello
     // is answered with `quota_exceeded` and `retryAfterMs`, and the connection closes.
@@ -731,6 +741,24 @@ export class Session {
     }
     const role = roleIn(identity, d.doc);
     if (!role) return reject('forbidden', 'the token gives no role in this document');
+    // BE-091: the tenant's open-documents quota. A refusal is an `error` answering the `ch.open`
+    // (05 §5.2 lists `error` among its replies), not a `ch.rejected`, whose codes do not include it.
+    const docAdmitted = this.#deps.quotas?.admitDocument(identity.tenant, d.doc) ?? {
+      ok: true as const,
+    };
+    if (!docAdmitted.ok)
+      return this.#send({
+        t: 'error',
+        re: m.id,
+        ch: m.ch,
+        d: {
+          code: 'quota_exceeded',
+          message: 'the tenant has reached its open-documents quota',
+          retryable: true,
+          retryAfterMs: docAdmitted.retryAfterMs,
+          fatal: false,
+        },
+      });
     const c: SessionChannel = {
       ch: m.ch,
       doc: d.doc,
@@ -750,6 +778,7 @@ export class Session {
         session: this.id,
         ch: m.ch,
       }),
+      docHeld: this.#deps.quotas !== undefined,
     };
     this.#channels.set(m.ch, c);
     const ref = { tenant: identity.tenant, doc: d.doc };
@@ -781,6 +810,7 @@ export class Session {
       if (own) this.#armChannelToken(c, identity.expiresAt);
     } catch (e) {
       if (this.#channels.get(m.ch) === c) this.#channels.delete(m.ch);
+      this.#releaseDocument(c);
       if (!(e instanceof Refusal)) this.#report(e, 'ch.open', d.doc);
       const r =
         e instanceof Refusal ? e : new Refusal('unavailable', 'the document could not be opened');
@@ -835,8 +865,16 @@ export class Session {
     this.#send({ t: 'ch.closed', ch: c.ch, d });
   }
 
+  /** Gives back the open-documents quota a channel holds (BE-091); once per channel. */
+  #releaseDocument(c: SessionChannel): void {
+    if (!c.docHeld) return;
+    c.docHeld = false;
+    this.#deps.quotas?.closeDocument(c.identity.tenant, c.doc);
+  }
+
   #forget(c: SessionChannel): void {
     if (this.#channels.get(c.ch) === c) this.#channels.delete(c.ch);
+    this.#releaseDocument(c);
     if (c.expiry) clearTimeout(c.expiry);
     c.expiry = null;
     c.span?.end({ outcome: 'closed' });
@@ -847,7 +885,11 @@ export class Session {
     const c = this.#channels.get(m.ch);
     if (!c || c.state !== 'open' || !c.room)
       return this.#error('bad_message', `channel ${m.ch} is not open`, m.id, m.ch);
+    // BE-091: the synchronous work of the room on this commit is the CPU charged to the tenant.
+    const quotas = this.#deps.quotas;
+    const started = performance.now();
     c.room.submit(c.key, m.d, m.id);
+    if (quotas) quotas.chargeCpu(c.identity.tenant, performance.now() - started);
   }
 
   #presence(m: PresenceUpdateMessage): void {
@@ -1048,6 +1090,7 @@ export class Session {
     for (const c of channels) {
       if (c.expiry) clearTimeout(c.expiry);
       c.span?.end({ outcome: 'ended' });
+      this.#releaseDocument(c);
       c.room?.close(c.key);
     }
     this.#span?.end({ channels: channels.length });

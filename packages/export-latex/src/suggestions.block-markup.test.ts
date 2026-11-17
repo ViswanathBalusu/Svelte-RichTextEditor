@@ -1,8 +1,8 @@
 /**
  * Block suggestions shown as markup (Node.js only): EXP-083 criterion 3, for paragraphs. A paragraph
  * whose paragraph mark is `ins` or `del` has its text runs marked in markup mode as if each run
- * carried the mark; a run's own mark of the same type is not added twice. Tables and table rows are
- * not marked yet (criterion 3 stays open). The tests read main.tex; nothing is compiled.
+ * carried the mark; a run's own mark of the same type is not added twice. Rows, tables and atoms are in
+ * exp-083-rows-atoms.test.ts. The tests read main.tex; nothing is compiled.
  */
 import { describe, expect, it } from 'vitest';
 import { doc, para, run } from '../test/docs.ts';

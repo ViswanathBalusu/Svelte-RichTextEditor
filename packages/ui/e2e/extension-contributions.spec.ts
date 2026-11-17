@@ -60,3 +60,25 @@ test.describe('extension panels and status-bar items (UX-052)', () => {
     expect(await axe(page)).toEqual([]);
   });
 });
+
+test.describe('an extension panel and the public properties (UX-052 criterion 5)', () => {
+  test('reads the host page’s --de- properties through the shadow root', async ({ page }) => {
+    const h = await open(page, { extensionContributions: true });
+    await focusSurface(page);
+    expect(await h.openExtensionPane()).toBe(true);
+    const content = page.locator('[data-extension-pane]');
+    await expect(content).toBeVisible();
+    await h.setHostProperty('--de-text', 'rgb(1, 2, 3)');
+    await h.setHostProperty('--de-surface', 'rgb(250, 240, 230)');
+    const style = await content.evaluate((node) => {
+      const s = getComputedStyle(node);
+      return { color: s.color, background: s.backgroundColor };
+    });
+    expect(style).toEqual({ color: 'rgb(1, 2, 3)', background: 'rgb(250, 240, 230)' });
+    // The same panel keeps the shell's own default where the host sets nothing.
+    await h.setHostProperty('--de-text', '');
+    await h.setHostProperty('--de-surface', '');
+    const plain = await content.evaluate((node) => getComputedStyle(node).color);
+    expect(plain).not.toBe('rgb(1, 2, 3)');
+  });
+});

@@ -18,16 +18,20 @@
   import { live } from '../live.ts';
   import { boundKeys } from '../shortcuts/table.ts';
   import { contextMenuGroups, placeMenu } from '../shell/toolbar-groups.ts';
+  import type { ProofingFindingView } from '../core-api.ts';
+  import { offeredFindingActions } from '../proofing/finding-actions.ts';
 
   interface Props {
     /** Where it opened, in viewport coordinates. */
     point: { x: number; y: number };
     targets: readonly ContextTarget[];
+    /** The proofing finding the menu opened on, if any (UX-042): its actions come first. */
+    finding?: ProofingFindingView | null;
     /** Closes the menu; `restore` puts focus back in the editing surface. */
     onClose: (restore: boolean) => void;
   }
 
-  let { point, targets, onClose }: Props = $props();
+  let { point, targets, finding = null, onClose }: Props = $props();
 
   const shell = useShell()!;
   const snapshot = live(shell.registry.view);
@@ -37,6 +41,29 @@
 
   const groups = $derived(contextMenuGroups(snapshot.current.commands, targets));
   const items: CommandView[] = $derived(groups.flatMap((g) => g.commands));
+
+  // The actions on a finding (UX-042): what the author may do at its scope, from the capabilities
+  // there and the mode in effect. "Apply" is not offered where the author may not change text, and
+  // the dictionary action only where the proofing port keeps a dictionary.
+  const accessNow = shell.core.access ? live(shell.core.access) : null;
+  const modeNow = shell.core.mode ? live(shell.core.mode) : null;
+  const proofingNow = shell.core.proofing ? live(shell.core.proofing) : null;
+  const findingActions = $derived(
+    finding === null
+      ? []
+      : offeredFindingActions({
+          caps: accessNow?.current.caps ?? ['view'],
+          mode: modeNow?.current ?? 'edit',
+          hasSuggestion: finding.suggestions.length > 0,
+          dictionaries: proofingNow?.current.dictionary ?? false,
+        }),
+  );
+  const applyOffered = $derived(findingActions.some((a) => a.action === 'apply'));
+  const otherActions = $derived(findingActions.filter((a) => a.action !== 'apply'));
+  /** How many finding items come before the registry's commands in the menu. */
+  const findingItemCount = $derived(
+    (applyOffered && finding ? finding.suggestions.length : 0) + otherActions.length,
+  );
 
   let menu: HTMLElement | undefined = $state();
   let index = $state(0);
@@ -97,7 +124,7 @@
     if (event.key === 'ArrowDown') focusItem(index + 1);
     else if (event.key === 'ArrowUp') focusItem(index - 1);
     else if (event.key === 'Home') focusItem(0);
-    else if (event.key === 'End') focusItem(items.length - 1);
+    else if (event.key === 'End') focusItem(itemsIn().length - 1);
     else if (event.key === 'Escape') onClose(true);
     else if (event.key === 'Tab') onClose(true);
     else return;
@@ -123,6 +150,26 @@
     });
   });
 
+  function runFinding(
+    action: 'apply' | 'ignore-once' | 'ignore-everywhere' | 'add-to-dictionary',
+    suggestion = 0,
+  ): void {
+    if (finding === null) return;
+    if (action === 'apply') {
+      const text = finding.suggestions[suggestion] ?? '';
+      if (shell.core.applyFinding?.(finding.id, suggestion))
+        shell.announceText(tr.t('proofing.applied', { suggestion: text }));
+    } else if (action === 'add-to-dictionary') {
+      void shell.core.addFindingToDictionary?.(finding.id).then((done) => {
+        if (done) shell.announceText(tr.t('proofing.wordAdded'));
+      });
+    } else {
+      shell.core.ignoreFinding?.(finding.id, action === 'ignore-everywhere');
+      shell.announceText(tr.t('proofing.ignored'));
+    }
+    onClose(true);
+  }
+
   function reasonId(item: CommandView): string {
     return `${id}-reason-${item.id.replace(/\W/g, '-')}`;
   }
@@ -143,8 +190,42 @@
   style:inset-block-start={`${placement.blockStart}px`}
   onkeydown={onKeydown}
 >
+  {#if finding && findingItemCount > 0}
+    {#if applyOffered}
+      {#each finding.suggestions as suggestion, i (i)}
+        <button
+          type="button"
+          class="de-menu-item"
+          data-menu-item
+          data-finding-action="apply"
+          role="menuitem"
+          tabindex={index === i ? 0 : -1}
+          onclick={() => runFinding('apply', i)}
+          >{tr.t('menu.proofing.apply', { suggestion })}</button
+        >
+      {/each}
+    {/if}
+    {#each otherActions as action, k (action.action)}
+      <button
+        type="button"
+        class="de-menu-item"
+        data-menu-item
+        data-finding-action={action.action}
+        role="menuitem"
+        tabindex={index === (applyOffered ? finding.suggestions.length : 0) + k ? 0 : -1}
+        onclick={() => runFinding(action.action)}
+        >{tr.t(
+          action.action === 'ignore-once'
+            ? 'menu.proofing.ignoreOnce'
+            : action.action === 'ignore-everywhere'
+              ? 'menu.proofing.ignoreAll'
+              : 'menu.proofing.addWord',
+        )}</button
+      >
+    {/each}
+  {/if}
   {#each groups as group, g (group.name)}
-    {#if g > 0}
+    {#if g > 0 || findingItemCount > 0}
       <div class="de-menu-separator" role="separator"></div>
     {/if}
     {#each group.commands as item (item.id)}
@@ -154,7 +235,7 @@
         data-menu-item
         data-command-id={item.id}
         role={item.active === null ? 'menuitem' : 'menuitemcheckbox'}
-        tabindex={items.indexOf(item) === index ? 0 : -1}
+        tabindex={findingItemCount + items.indexOf(item) === index ? 0 : -1}
         aria-checked={item.active === null ? undefined : item.active}
         aria-disabled={item.enabled ? undefined : 'true'}
         aria-describedby={item.enabled ? undefined : reasonId(item)}

@@ -170,8 +170,48 @@ describe('live-use quota decisions', () => {
       code: 'quota_exceeded',
       quota: 'openDocuments',
     });
+    // Two channels hold doc-a: it stops counting when the last one is released.
+    q.closeDocument('t1', 'doc-a');
+    expect(q.admitDocument('t1', 'doc-b').ok).toBe(false);
     q.closeDocument('t1', 'doc-a');
     expect(q.admitDocument('t1', 'doc-b').ok).toBe(true);
+  });
+
+  it('keeps the open documents of one tenant apart from another tenant', () => {
+    const { store, q } = setup();
+    store.set('t1', 'openDocuments', 1);
+    expect(q.admitDocument('t1', 'doc-a').ok).toBe(true);
+    expect(q.admitDocument('t1', 'doc-b').ok).toBe(false);
+    for (const d of ['doc-a', 'doc-b', 'doc-c']) expect(q.admitDocument('t2', d).ok).toBe(true);
+  });
+
+  it('refuses room work as rate_limited once the CPU spent in the window reaches the budget, and admits it again when the window passes', () => {
+    const { store, q, at } = setup();
+    store.set('t1', 'roomCpuBudget', 10);
+    at(0);
+    expect(q.admitCpu('t1').ok).toBe(true);
+    q.chargeCpu('t1', 6);
+    expect(q.admitCpu('t1').ok).toBe(true);
+    q.chargeCpu('t1', 6);
+    at(100);
+    expect(q.admitCpu('t1')).toMatchObject({
+      ok: false,
+      code: 'rate_limited',
+      action: 'retry',
+      quota: 'roomCpuBudget',
+      retryAfterMs: WINDOW - 100,
+    });
+    // Another tenant is not charged for it.
+    expect(q.admitCpu('t2').ok).toBe(true);
+    at(WINDOW + 1);
+    expect(q.admitCpu('t1').ok).toBe(true);
+  });
+
+  it('treats a CPU budget of 0 as spent and no budget as unlimited', () => {
+    const { store, q } = setup();
+    expect(q.admitCpu('t1').ok).toBe(true);
+    store.set('t1', 'roomCpuBudget', 0);
+    expect(q.admitCpu('t1').ok).toBe(false);
   });
 
   it('counts each refusal per tenant and quota in the metrics, with no document content in the labels', () => {

@@ -30,6 +30,7 @@ import { imageView } from './image-view.ts';
 import { coreKeys } from '../keys.ts';
 import { commentDecorations } from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
+import { proofingDecorations } from '../proofing-decorations.ts';
 import { ReadValue, sameJson } from '../read-value.ts';
 import { FIND_CURRENT_CLASS, findDecorations } from '../search-highlight.ts';
 import { SubEditor, type SubEditorTarget } from '../subeditor.ts';
@@ -438,7 +439,15 @@ export class EditorCore extends DocumentCore {
           return findDecorations(state.doc, { query: f.query, current: f.current })
             .add(state.doc, suggestionDecorations(state.doc, 'all').find())
             .add(state.doc, commentDecorations(state.doc, this.threadRanges.get()).find())
-            .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find());
+            .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
+            .add(
+              state.doc,
+              proofingDecorations(
+                state.doc,
+                this.proofingFindings(),
+                this.proofingCurrentId(),
+              ).find(),
+            );
         },
       },
     );
@@ -448,6 +457,8 @@ export class EditorCore extends DocumentCore {
     // A change of the find state redraws the highlights at once (the view is not told by a transaction).
     // A change of a thread's range redraws its decoration at once (FE-048).
     const unthread = this.threadRanges.subscribe(() => this.#view?.setProps({}));
+    // A result of the proofing port, or a navigation, draws the findings again (UX-041).
+    const unproof = this.proofing.subscribe(() => this.#view?.setProps({}));
     const unfind = this.findState.subscribe(() => {
       const v = this.#view;
       if (!v) return;
@@ -489,6 +500,7 @@ export class EditorCore extends DocumentCore {
       remove();
       unfind();
       unthread();
+      unproof();
       undirection();
       uncarets();
       win?.removeEventListener('resize', redraw);

@@ -4,13 +4,14 @@
 // are inside the subset, and the bounds the rules share with the CDM grammar are equal to it.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { JsonValue } from '@docedit/model';
+import { fieldValueProblem, type JsonValue } from '@docedit/model';
 import { validate } from '@docedit/model/validate';
 import { describe, expect, it } from 'vitest';
 import { patternLengthBound, ruleAttributeBounds } from '../src/cdm.ts';
 import { evaluateRules } from '../src/evaluate.ts';
 import {
   type FieldInfo,
+  FIELD_KINDS,
   type FieldKind,
   PRESETS,
   PRESET_NAMES,
@@ -95,10 +96,6 @@ const SAMPLES: Array<[FieldKind, JsonValue]> = [
 
 describe('field values (I15)', () => {
   it('gives the same verdict as model.validate() for every kind', () => {
-    // Three known differences are left out and reported: the model refuses dates before the year
-    // 0100 (it reads them through Date.UTC, which maps the years 0 to 99 to 1900 to 1999); it does
-    // not apply the 4 KiB limit to formula strings; and it accepts number values longer than the
-    // 64 characters of the model's own isDecimalString.
     for (const [kind, value] of SAMPLES)
       expect(
         checkFieldValue({ kind, options: ['yes', 'no'] }, value) !== null,
@@ -106,6 +103,32 @@ describe('field values (I15)', () => {
       ).toBe(modelRefuses(kind, value));
     for (const v of [null] as const)
       for (const [kind] of SAMPLES) expect(checkFieldValue({ kind }, v)).toBeNull();
+  });
+
+  it('has one implementation of the verdict: it is the one of @docedit/model (FRW-015 criterion 5)', () => {
+    const edge: JsonValue[] = [
+      '0001-01-01',
+      '0099-12-31',
+      '2023-02-29',
+      '1'.repeat(64),
+      '1'.repeat(65),
+      'x'.repeat(4096),
+      'x'.repeat(4097),
+      12,
+      false,
+      [],
+      {},
+      SIGNED,
+      { ...SIGNED, mode: 'carved' },
+    ];
+    for (const kind of FIELD_KINDS)
+      for (const value of edge) {
+        const options = [{ id: 'yes' }, { id: 'no' }];
+        const model = fieldValueProblem(kind, value, { options });
+        const rules = checkFieldValue({ kind, options: ['yes', 'no'] }, value);
+        // The attachment kind is reserved in rules for any value; the model reports its own type problem.
+        expect(rules === null, `${kind} ${JSON.stringify(value).slice(0, 30)}`).toBe(model === null);
+      }
   });
 
   it('checks a signature image against the attached assets when they are given', () => {

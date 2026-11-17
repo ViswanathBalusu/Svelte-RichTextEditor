@@ -170,6 +170,22 @@ export {
   type HookQueueOptions,
   type HookQueueStats,
 } from './extensions/hooks.ts';
+export type {
+  CdmFragment as ExtCdmFragment,
+  ExtBlock,
+  ExtComment,
+  ExtEventMap,
+  ExtEventName,
+  ExtMarkRun,
+  ExtOrigin,
+  ExtRange,
+  ExtRangeState,
+  ExtSuggestion,
+  ExtWriteFailure,
+  ExtWriteResult,
+  ExtensionApiOptions,
+  ExtensionDocumentApi,
+} from './extensions/document-api.ts';
 export {
   FilterRegistrationError,
   FilterRegistry,

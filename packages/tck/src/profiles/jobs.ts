@@ -306,12 +306,12 @@ export const EXPORTS: ProfileDef = {
 const SHORT_LIVED_MS = 15 * 60_000;
 
 /** A valid PNG of one grey pixel. */
-const PNG = Buffer.from(
+export const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
   'base64',
 );
 
-async function upload(
+export async function upload(
   ctx: ScenarioContext,
   token: string,
   doc: string,
@@ -359,7 +359,7 @@ async function upload(
  * Lane U-PRO-103-119 (PRO-114 leftover): a run on a heavily loaded host may need longer, so the
  * budget can be raised with DOCEDIT_TCK_ASSET_WAIT_MS (milliseconds); the default is unchanged.
  */
-const ASSET_EVENT_WAIT_MS = (() => {
+export const ASSET_EVENT_WAIT_MS = (() => {
   const raw = process.env['DOCEDIT_TCK_ASSET_WAIT_MS'];
   const n = raw === undefined ? NaN : Number(raw);
   return Number.isFinite(n) && n > 0 ? n : 150_000;
@@ -372,7 +372,7 @@ const REFRESH_EVERY_MS = 25_000;
  * (05 §3.1 `auth.refresh`). The check runs in a sandbox and can outlast one token, which would close
  * the connection (4401) before the event arrives. Returns the last token, for the calls that follow.
  */
-async function awaitAssetEvent(
+export async function awaitAssetEvent(
   ctx: ScenarioContext,
   m: Member,
   doc: string,

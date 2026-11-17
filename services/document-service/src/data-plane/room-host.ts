@@ -731,9 +731,22 @@ ecentHead, keeping one entry older than the window. */
    * Tells the channels that something changed (05 §5.6; PRO-035): all of them, or only those of
    * `user` (a surrogate), for example the requester of an export job.
    */
-  notify(n: Notification, user?: string): void {
-    for (const ch of this.#channels.values())
-      if (user === undefined || ch.conn.sub === user) ch.port.event(n);
+  notify(n: Notification, user?: string, scopes?: readonly string[]): void {
+    // A notice about a region is not sent to a channel whose reader cannot see that region
+    // (ADR 0019; PRO-036 criterion 6): a thread there, or a comment, must not reach it.
+    const regions = (scopes ?? []).filter((s) => s.startsWith('region:')).map((s) => s.slice(7));
+    for (const ch of this.#channels.values()) {
+      if (user !== undefined && ch.conn.sub !== user) continue;
+      if (regions.length > 0) {
+        const hidden = this.#deps.tokens.hidden(
+          ch.conn,
+          this.#gateway.fullHead,
+          this.#room.permissions,
+        );
+        if (regions.some((r) => hidden.regions.has(r))) continue;
+      }
+      ch.port.event(n);
+    }
   }
 
   /** The channels of a user, for revocation (05 §3.3). */
@@ -1167,9 +1180,36 @@ ecentHead, keeping one entry older than the window. */
     return this.#deps.logs.append(this.ref, req, options);
   }
 
+  /**
+   * BE-055 criterion 2: a stored commit raises `dep.document.changed.v1` with the sequence number and
+   * the hash-chain head the log holds (05 §7; PRO-069 criterion 3). The sink debounces it, at most one
+   * per document per window. The head is read from the log after the write, so `seq` and `chainHead`
+   * come from the same state. A log without a head state, or a document with no chain head, raises
+   * nothing: the envelope refuses the event without a head.
+   */
+  #raiseChanged(): void {
+    const sink = this.#deps.events;
+    const state = this.#deps.logs.state?.bind(this.#deps.logs);
+    if (!sink || !state) return;
+    void state(this.ref).then(
+      (head) => {
+        if (head.chainHead === null) return;
+        sink.emit({
+          type: 'dep.document.changed.v1',
+          tenant: this.ref.tenant,
+          subject: this.ref.doc,
+          data: { seq: head.seq, chainHead: head.chainHead },
+          time: this.#deps.now(),
+        });
+      },
+      (e: unknown) => this.#report(e, 'change event'),
+    );
+  }
+
   #written(req: WriteRequest, result: WriteResult): void {
     this.#writing = null;
     this.#settleWrite();
+    if (result.status === 'ok') this.#raiseChanged();
     if (req.snapshot && result.status !== 'ok' && result.status !== 'unknown')
       this.#snapshots.delete(req.snapshot.id);
     if (this.#stopped) return;
@@ -1821,8 +1861,8 @@ export class RoomHost {
   }
 
   /** A notification for the open channels of a document (05 §5.6; PRO-035). */
-  notify(ref: DocRef, n: Notification, user?: string): void {
-    this.get(ref)?.notify(n, user);
+  notify(ref: DocRef, n: Notification, user?: string, scopes?: readonly string[]): void {
+    this.get(ref)?.notify(n, user, scopes);
   }
 
   // --- Server-authored operations (04 §10; SYN-031; BE-023, BE-037, BE-039) ---------------------

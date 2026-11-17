@@ -49,8 +49,14 @@
   import { provideShell } from './context.ts';
   import type { FilterRegistry } from './extensions/filters.ts';
   import type { StatusItemRegistry } from './extensions/contributions.ts';
-  import { connectHooks, type ExtensionHooks, type HookQueueStats } from './extensions/hooks.ts';
+  import {
+    afterPaint,
+    connectHooks,
+    type ExtensionHooks,
+    type HookQueueStats,
+  } from './extensions/hooks.ts';
   import { ExtensionHost, type ExtensionReport } from './extensions/host.ts';
+  import type { ExtensionDocumentApi } from './extensions/document-api.ts';
   import type {
     AccessSummary,
     CommentAnchor,
@@ -59,12 +65,14 @@
     EditorMode,
     OutlineItem,
     PaneName,
+    ProofingFindingView,
     ReadView,
     ResolveUsers,
     SearchPrincipals,
     ViewName,
   } from './core-api.ts';
   import type { StringKey } from './i18n/en-GB.ts';
+  import { findingSentence } from './proofing/present.ts';
   import { Strings } from './i18n/strings.ts';
   import type { MessageParams } from './i18n/types.ts';
   import { live } from './live.ts';
@@ -126,6 +134,11 @@
     statusItems?: StatusItemRegistry;
     /** Receives each problem with a host extension (UX-050); the element raises it as `de-error`. */
     onExtensionError?: (report: ExtensionReport) => void;
+    /**
+     * Gives each extension the range-based document API (UX-053) when the core offers it. `maxRanges` is
+     * the most ranges one extension holds; the spec gives no number, so the host sets it (ADR 0136).
+     */
+    documentApi?: { maxRanges: number };
   }
 
   let props: Props = $props();
@@ -617,16 +630,37 @@
   // commands go with it when it is removed (UX-051). A problem is reported and never stops the shell.
   interface ExtensionApi {
     registerCommand(entry: Parameters<CommandRegistry['register']>[0]): void;
+    /** The range-based document API, or null when the core or the host does not offer it (UX-053). */
+    readonly document: ExtensionDocumentApi | null;
   }
   const extensionHost = untrack(
     () =>
       new ExtensionHost<ExtensionApi>({
         apiVersions: ['1'],
-        createApi: (_id, track) => ({
-          registerCommand(entry) {
-            track(registry.register(entry));
-          },
-        }),
+        createApi: (id, track) => {
+          const options = props.documentApi;
+          const docApi =
+            options && core.extensionApi
+              ? core.extensionApi({
+                  maxRanges: options.maxRanges,
+                  later: afterPaint,
+                  onError: (error, event) =>
+                    props.onExtensionError?.({
+                      extension: id,
+                      reason: 'handler-failed',
+                      message: `${event}: ${error instanceof Error ? error.message : String(error)}`,
+                      fatal: false,
+                    }),
+                })
+              : null;
+          if (docApi) track(() => docApi.dispose());
+          return {
+            document: docApi,
+            registerCommand(entry) {
+              track(registry.register(entry));
+            },
+          };
+        },
         onError: (report) => props.onExtensionError?.(report),
       }),
   );
@@ -733,6 +767,16 @@
       commandSearchOpen = true;
       return true;
     },
+    // Moves the caret to the next or previous finding and says what it is (UX-041 criterion 6).
+    proofingStep: (direction) => {
+      if (!core.proofingStep?.(direction)) {
+        announce('proofing.none');
+        return false;
+      }
+      const current = core.proofing?.get().current ?? null;
+      if (current) void say(findingSentence(current, (key, params) => tr.t(key, params)));
+      return true;
+    },
   });
 
   const unregister: Array<() => void> = [];
@@ -770,6 +814,29 @@
     add(host1b['format.language']);
     add(host1b['insert.region']);
     if (core.threads) add(host1b['review.comment']);
+    // The proofing commands exist only while a proofing port is attached (UX-041 criterion 5).
+    const proofing = core.proofing;
+    if (proofing) {
+      let held: Array<() => void> = [];
+      const sync = () => {
+        const attached = proofing.get().available;
+        if (attached && held.length === 0) {
+          for (const id of ['proofing.next', 'proofing.previous']) {
+            const entry = host1b[id];
+            if (entry && registry.backs(entry)) held.push(registry.register(entry));
+          }
+        } else if (!attached && held.length > 0) {
+          for (const off of held) off();
+          held = [];
+        }
+      };
+      sync();
+      const stop = proofing.subscribe(sync);
+      unregister.push(() => {
+        stop();
+        for (const off of held) off();
+      });
+    }
     if (core.exports || (props.filters && core.getContent)) add(host1b['document.export']);
     if (props.onPrintRequest && core.exports) add(host1b['document.print']);
     add(host1b['view.zoomIn']);
@@ -872,9 +939,12 @@
   }
 
   // The context menu (UX-008): at the pointer, or at the caret from the keyboard.
-  let menu = $state.raw<{ point: { x: number; y: number }; targets: ContextTarget[] } | null>(
-    null,
-  );
+  let menu = $state.raw<{
+    point: { x: number; y: number };
+    targets: ContextTarget[];
+    /** The proofing finding at the caret when the menu opened (UX-042). */
+    finding: ProofingFindingView | null;
+  } | null>(null);
   let pageEl: HTMLElement | undefined = $state();
 
   // The mini toolbar (UX-010): near a selection the user may change; hidden by Escape, and again
@@ -894,8 +964,10 @@
 
   function menuFor(point: { x: number; y: number }): boolean {
     const targets = contextTargets(core.selection.get().contexts);
-    if (contextMenuGroups(registry.view.get().commands, targets).length === 0) return false;
-    menu = { point, targets };
+    const finding = core.proofing?.get().atCaret ?? null;
+    if (finding === null && contextMenuGroups(registry.view.get().commands, targets).length === 0)
+      return false;
+    menu = { point, targets, finding };
     return true;
   }
 
@@ -918,7 +990,11 @@
     // Shift with the context click leaves the browser's own menu (ADR 0052).
     if (event.shiftKey) return;
     const targets = contextTargets(core.selection.get().contexts);
-    if (contextMenuGroups(registry.view.get().commands, targets).length === 0) return;
+    // A click on a proofing finding opens the menu even where no command is listed (UX-042).
+    const onFinding = event
+      .composedPath()
+      .some((n) => n instanceof HTMLElement && n.dataset['deFinding'] !== undefined);
+    if (!onFinding && contextMenuGroups(registry.view.get().commands, targets).length === 0) return;
     event.preventDefault();
     const fromKeyboard = event.clientX === 0 && event.clientY === 0;
     const point = fromKeyboard ? caretPoint() : { x: event.clientX, y: event.clientY };
@@ -1154,7 +1230,12 @@
     statusItems={props.statusItems}
   />
   {#if menu}
-    <ContextMenu point={menu.point} targets={menu.targets} onClose={closeMenu} />
+    <ContextMenu
+      point={menu.point}
+      targets={menu.targets}
+      finding={menu.finding}
+      onClose={closeMenu}
+    />
   {/if}
   {#if commandSearchOpen}
     <CommandSearch onClose={closeCommandSearch} />

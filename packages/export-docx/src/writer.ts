@@ -132,7 +132,17 @@ export interface WriteOptions {
   counterEffects?: ReadonlyMap<string, CounterEffect> | Readonly<Record<string, CounterEffect>>;
   /** Comment threads, each anchored to a paragraph, written as Word comments (EXP-093, writer-comments.ts). */
   comments?: readonly CommentThread[];
+  /**
+   * The math gate of EXP-049, injected by the caller as the authority's room is: the reason an
+   * equation is refused, or null when it passes. A refused equation is written as a visible
+   * placeholder and named in the warnings with its block identifier, and the rest of the document
+   * is written as usual (EXP-096, as EXP-051 does for the PDF). Without it no equation is checked.
+   */
+  mathGate?: (latex: string) => string | null;
 }
+
+/** The text that stands in for an equation that fails the math gate. */
+export const MATH_PLACEHOLDER = '[equation not exported]';
 
 export interface WriteResult {
   bytes: Uint8Array;
@@ -349,6 +359,16 @@ class DirectWriter {
       storyForRel: () => null,
       relForStory: (id) => this.storyRel.get(id) ?? null,
     };
+  }
+
+  /** Whether the injected math gate refuses the equation; if so, the warning names the block (EXP-096). */
+  refusedByGate(latex: string, block: string): boolean {
+    const reason = this.opts.mathGate?.(latex) ?? null;
+    if (reason === null) return false;
+    this.warn(
+      `an equation that fails the math gate is replaced by a placeholder (block ${block}: ${reason})`,
+    );
+    return true;
   }
 
   warn(message: string): void {
@@ -729,10 +749,17 @@ class DirectWriter {
       case 'figure':
         return this.figureXml(n, pc, cx);
       case 'equation_block': {
+        const id = String(n.attrs?.['id']);
+        if (this.refusedByGate(String(n.attrs?.['latex'] ?? ''), id))
+          return el(
+            'w:p',
+            {},
+            el('w:pPr', {}, el('w:jc', { 'w:val': 'center' })),
+            el('w:r', {}, textElement('w:t', MATH_PLACEHOLDER)),
+          );
         this.warn(
           'an equation is written as its LaTeX source: Office math needs the converter of EXP-054',
         );
-        const id = String(n.attrs?.['id']);
         const label = this.labels.equations.get(id);
         const bookmark =
           typeof n.attrs?.['label'] === 'string'
@@ -1405,6 +1432,8 @@ class DirectWriter {
       case 'form_field':
         return this.formFieldXml(node, rPr());
       case 'equation':
+        if (this.refusedByGate(String(a['latex'] ?? ''), cx.seqBlock ?? 'unknown'))
+          return el('w:r', {}, rPr(), textElement(inDel ? 'w:delText' : 'w:t', MATH_PLACEHOLDER));
         this.warn(
           'an equation is written as its LaTeX source: Office math needs the converter of EXP-054',
         );

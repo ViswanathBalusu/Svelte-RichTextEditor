@@ -94,6 +94,11 @@ export interface AssetRegistry {
   expiredUploads(tenant: string, before: number, limit: number): Promise<AssetRecord[]>;
   remove(tenant: string, id: string): Promise<boolean>;
   /**
+   * The bytes a tenant's assets hold against its storage quota (BE-092): the stored size of a ready
+   * asset, the declared size of one still being uploaded or processed, and nothing for a failed one.
+   */
+  storedBytes(tenant: string): Promise<number>;
+  /**
    * Ready assets settled before `before` that no `doc_assets` row attaches (BE-046 criterion 1).
    * The in-memory registry keeps no attachments and so reports none (it never removes a ready asset).
    */
@@ -194,6 +199,15 @@ export class MemoryAssetRegistry implements AssetRegistry {
       .filter((r) => r.tenant === tenant && r.state === 'quarantined' && r.uploadExpiresAt < before)
       .slice(0, limit)
       .map(clone);
+  }
+
+  async storedBytes(tenant: string): Promise<number> {
+    let n = 0;
+    for (const r of this.#rows.values()) {
+      if (r.tenant !== tenant || r.state === 'failed') continue;
+      n += r.state === 'ready' ? (r.bytes ?? r.declaredBytes) : r.declaredBytes;
+    }
+    return n;
   }
 
   async remove(tenant: string, id: string): Promise<boolean> {
@@ -323,6 +337,24 @@ export class PgAssetRegistry implements AssetRegistry {
       async (c) => {
         const r = await c.query<Row>('SELECT * FROM assets WHERE id = ANY ($1::uuid[])', [uuids]);
         return r.rows.map(toRecord);
+      },
+      { readOnly: true },
+    );
+  }
+
+  storedBytes(tenant: string): Promise<number> {
+    return inTenant(
+      this.#pool,
+      tenant,
+      async (c) => {
+        const r = await c.query<{ n: string }>(
+          `SELECT COALESCE(SUM(CASE WHEN state = 'failed' THEN 0
+                                    WHEN state = 'ready' THEN COALESCE(bytes, declared_bytes)
+                                    ELSE declared_bytes END), 0)::text AS n
+             FROM assets WHERE tenant_id = $1`,
+          [tenant],
+        );
+        return Number(r.rows[0]?.n ?? '0');
       },
       { readOnly: true },
     );

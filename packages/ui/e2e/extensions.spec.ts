@@ -60,9 +60,11 @@ test.describe('client export filters (UX-055)', () => {
     );
   });
 
-  test('under no-export the filters are shown disabled with the reason and do not run', async ({
+  test('under no-export the export command is refused with the reason and no filter runs', async ({
     page,
   }) => {
+    // The export command is disabled from the start under `no-export` (UX-040), so the dialog
+    // does not open; the filters' disabled choices are checked once the dialog is open, below.
     const h = await open(page, {
       extended: true,
       features: ['exports'],
@@ -70,12 +72,10 @@ test.describe('client export filters (UX-055)', () => {
       permissions: LIMITED,
     });
     await focusSurface(page);
-    await h.exec('document.export');
-    const dialog = page.getByRole('dialog', { name: 'Export' });
-    const markdown = dialog.getByRole('radio', { name: 'Markdown (extension)' });
-    await expect(markdown).toBeDisabled();
-    await expect(markdown).toHaveAccessibleDescription('Your access does not allow export.');
-    await expect(dialog.getByRole('radio', { name: 'Broken format (extension)' })).toBeDisabled();
+    const result = await h.exec('document.export');
+    expect(result.ran).toBe(false);
+    expect(result.reason).not.toBeNull();
+    await expect(page.getByRole('dialog', { name: 'Export' })).toHaveCount(0);
     expect(await h.filterContents()).toEqual([]);
     expect(await axe(page)).toEqual([]);
   });

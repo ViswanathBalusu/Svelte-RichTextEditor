@@ -271,6 +271,22 @@ export class PgJobQueue implements JobQueue {
     }));
   }
 
+  activeCount(tenant: string, kind: string): Promise<number> {
+    return inTenant(
+      this.#pool,
+      tenant,
+      async (c) => {
+        const r = await c.query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM jobs
+            WHERE tenant_id = $1 AND kind = $2 AND state IN ('queued', 'running')`,
+          [tenant, kind],
+        );
+        return Number(r.rows[0]?.n ?? '0');
+      },
+      { readOnly: true },
+    );
+  }
+
   setLimit(tenant: string, kind: string, maxRunning: number | null): Promise<void> {
     checkLimit(kind, maxRunning);
     return inTenant(this.#pool, tenant, async (c) => {

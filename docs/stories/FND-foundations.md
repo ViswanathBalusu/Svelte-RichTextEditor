@@ -311,6 +311,8 @@ As an integrating developer, I want the specification, the integration guide and
 - [ ] The integration guide (content owned by UX) is part of the site.
 - [ ] Each release has its own version of the site, and the latest is the default.
 
+**Notes (lane w5, 2026-11-17):** Blocked; nothing ticked. Criterion 1 needs a Markdown renderer and a generator of API documentation (typedoc or similar). Neither is in the repository or in the root devDependencies, and this lane may not add one. The choice of a Markdown renderer is still an open question in docs/owner-decisions-2026-11-15.md (third-party libraries). needsDependency: a Markdown renderer and an API documentation generator. Criterion 2: the integration guide exists (apps/reference-host/docs/integration-guide.md), but it cannot be published without the site. Criterion 3: the release pipeline of FND-012 (scripts/release) does not yet build a site per release.
+
 ### FND-014 Requirements traceability
 
 | Type | Phase | Size | Priority | Persona |

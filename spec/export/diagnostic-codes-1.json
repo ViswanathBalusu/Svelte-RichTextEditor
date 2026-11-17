@@ -129,6 +129,16 @@
       "message": "Page references did not settle within the pass limit; page numbers may be wrong."
     },
     {
+      "code": "seal_pair_differs",
+      "severity": "error",
+      "message": "The two compiles for sealing did not give the same PDF; nothing is sealed."
+    },
+    {
+      "code": "seal_pin_mismatch",
+      "severity": "error",
+      "message": "The bundle is not the state the sealing export is pinned to; nothing was compiled."
+    },
+    {
       "code": "suggestions_unsupported",
       "severity": "error",
       "message": "Documents with unresolved suggestions cannot be exported yet."

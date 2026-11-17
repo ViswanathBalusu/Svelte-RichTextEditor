@@ -143,6 +143,8 @@ export interface JobQueue {
   depth(): Promise<QueueDepth[]>;
   /** Sets a tenant's limit of running jobs for a kind, or clears it with null (EXP-007). */
   setLimit(tenant: string, kind: string, maxRunning: number | null): Promise<void>;
+  /** The tenant's jobs of `kind` that are queued or running (BE-092: export concurrency). */
+  activeCount(tenant: string, kind: string): Promise<number>;
 }
 
 /** Defaults of the queue, settings rather than measurements (ADR 0036). */
@@ -401,6 +403,14 @@ export class MemoryJobQueue implements JobQueue {
     return [...out.values()].sort((a, b) =>
       a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.priority - b.priority,
     );
+  }
+
+  async activeCount(tenant: string, kind: string): Promise<number> {
+    let n = 0;
+    for (const j of this.#jobs.values())
+      if (j.tenant === tenant && j.kind === kind && (j.state === 'queued' || j.state === 'running'))
+        n++;
+    return n;
   }
 
   async setLimit(tenant: string, kind: string, maxRunning: number | null): Promise<void> {
