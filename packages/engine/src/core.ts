@@ -852,7 +852,12 @@ export class DocumentCore implements DocumentApi {
       for (const t of transactions)
         if (t.docChanged && t.getMeta(REMOTE) !== true && !recordedInHistory(t, tr))
           this.#historyAligned = false;
-      this.#sync = local(this.#sync, queued, state.doc);
+      // Undo and redo go out as commits of their own, with origin `undo` or `redo` (FE-049).
+      const historyMeta = isHistoryTransaction(tr)
+        ? (tr.getMeta('history$') as { redo?: boolean } | undefined)
+        : undefined;
+      const origin = historyMeta === undefined ? undefined : historyMeta.redo ? 'redo' : 'undo';
+      this.#sync = local(this.#sync, queued, state.doc, origin);
       this.#session?.localEdit();
     }
     // The comment ranges follow every change, local or remote, with the authority's mapping (FE-048).

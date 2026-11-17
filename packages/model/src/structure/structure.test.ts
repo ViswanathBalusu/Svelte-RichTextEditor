@@ -101,7 +101,9 @@ describe('pasted definitions (CDM-023)', () => {
     expect(r.mapped).toEqual(['numHave']);
     expect(r.definitions).toEqual([{ type: 'numbering_def', attrs: { id: 'numNew', levels } }]);
     expect(r.dropped).toEqual([]);
-    expect(r.content.map((p) => p.attrs!['numbering'].numberingId)).toEqual(['numHave', 'numNew']);
+    expect(
+      r.content.map((p) => (p.attrs!['numbering'] as { numberingId: string }).numberingId),
+    ).toEqual(['numHave', 'numNew']);
   });
 
   it('leaves no unresolved style, basedOn, next or numbering reference and no duplicate identifier', () => {

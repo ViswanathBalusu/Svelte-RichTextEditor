@@ -14,7 +14,13 @@ import { internals } from '../src/testing.ts';
 import { STYLE_IDS, styledDocument } from './fixtures.ts';
 import { microtask, posOf } from './support.ts';
 
-type Json = { type: string; attrs?: Record<string, unknown>; content?: Json[]; text?: string };
+type Json = {
+  type: string;
+  attrs?: Record<string, unknown>;
+  content?: Json[];
+  text?: string;
+  marks?: { type: string; attrs?: Record<string, unknown> }[];
+};
 
 const level = { format: 'decimal', text: '%1.', start: 1 };
 
