@@ -99,6 +99,7 @@ import type { NodeLease } from './lease.ts';
 import type { Metrics } from './metrics.ts';
 import { PresenceRelay } from './presence.ts';
 import type { Settings } from './settings.ts';
+import { admissionFor } from './sec-028-admission.ts';
 import { BroadcastWindow } from './syn-041-coalescing.ts';
 import type { Base, Encoded } from './tasks.ts';
 import type { OpenSpan, TraceContext, Tracer } from './tracing.ts';
@@ -360,6 +361,7 @@ export class HostedRoom {
       if (!s) throw new Error(`the content of snapshot commit ${c.seq} was not loaded`);
       return s.doc;
     };
+    const admission = admissionFor(deps.settings, init.ref.tenant, deps.now());
     this.#room = new Room({
       schema: schemaOf(),
       initial: init.initial,
@@ -378,6 +380,9 @@ export class HostedRoom {
       // passes the same gate as the converter, so `\def` or `\input` is refused with `invalid_op`
       // before it is stored, not only when a document is exported.
       mathGate: mathGateReason,
+      // Admission control (04 §12; SYN-037; SEC-028): a commit whose connection or tenant budget
+      // is spent is refused `rate_limited` before any deduplication, rebase or apply work.
+      ...(admission ? { admission } : {}),
       limits: {
         maxStepsPerCommit: limits.maxStepsPerCommit,
         maxCommitBytes: limits.maxCommitBytes,

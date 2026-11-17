@@ -277,6 +277,15 @@ export interface HarnessOptions {
   webhooks?: NonNullable<Parameters<typeof startService>[0]['webhooks']>;
   /** Finished request spans (SEC-047 criterion 1, traces): a test records them here. */
   onSpan?: NonNullable<Parameters<typeof startService>[0]['onSpan']>;
+  /**
+   * Called each time the data plane asks for a token to be verified (SEC-018 criterion 1): a test
+   * counts the verification work a flood costs. The real verifier still runs.
+   */
+  onVerify?: () => void;
+  /** Job handlers in process (SEC-007): with an `export` handler the service announces `exports`. */
+  jobHandlers?: NonNullable<Parameters<typeof startService>[0]['jobHandlers']>;
+  /** The asset worker in process (SEC-007): with it the service announces `assets`. */
+  assetWorker?: NonNullable<Parameters<typeof startService>[0]['assetWorker']>;
 }
 
 type StartOptionsRateLimits = NonNullable<Parameters<typeof startService>[0]['rateLimits']>;
@@ -306,16 +315,28 @@ export async function startHarness(storage: Storage, opts: HarnessOptions = {}):
       ...(opts.rateLimits ? { rateLimits: opts.rateLimits } : {}),
       ...(opts.events ? { events: opts.events } : {}),
       ...(opts.webhooks ? { webhooks: opts.webhooks } : {}),
-      ...(opts.dataPlane
+      ...(opts.dataPlane || opts.onVerify
         ? {
-            createDataPlane: (deps: Parameters<typeof defaultDataPlane>[0]) =>
-              defaultDataPlane({
+            createDataPlane: (deps: Parameters<typeof defaultDataPlane>[0]) => {
+              const verify = deps.verify as (...args: unknown[]) => unknown;
+              return defaultDataPlane({
                 ...deps,
-                settings: { ...deps.settings, ...opts.dataPlane },
-              } as Parameters<typeof defaultDataPlane>[0]),
+                ...(opts.onVerify
+                  ? {
+                      verify: (...args: unknown[]) => {
+                        opts.onVerify?.();
+                        return verify(...args);
+                      },
+                    }
+                  : {}),
+                settings: { ...deps.settings, ...(opts.dataPlane ?? {}) },
+              } as Parameters<typeof defaultDataPlane>[0]);
+            },
           }
         : {}),
       ...(opts.onSpan ? { onSpan: opts.onSpan } : {}),
+      ...(opts.jobHandlers ? { jobHandlers: opts.jobHandlers } : {}),
+      ...(opts.assetWorker ? { assetWorker: opts.assetWorker } : {}),
       logger,
       now,
     });

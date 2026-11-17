@@ -45,6 +45,21 @@ export class PresenceRelay {
     this.#limits = limits;
   }
 
+  /**
+   * What the relay holds now (SEC-018 criterion 3): one entry for each joined channel, and the
+   * UTF-8 size of every presence state it keeps (the last relayed one and the one waiting for the
+   * next slot). Each state is at most `presenceBytes`, so the total is at most twice that for each
+   * channel, however many updates arrived.
+   */
+  get held(): { entries: number; stateBytes: number } {
+    let stateBytes = 0;
+    for (const e of this.#entries.values()) {
+      if (e.peer) stateBytes += utf8Length(JSON.stringify(e.peer.state));
+      if (e.pending) stateBytes += utf8Length(JSON.stringify(e.pending.state));
+    }
+    return { entries: this.#entries.size, stateBytes };
+  }
+
   /** A channel joined: it learns the peers of its class that have published a state. */
   join(key: string, member: PresenceMember): void {
     this.#entries.set(key, { member, peer: null, lastSent: 0, pending: null, timer: null });
