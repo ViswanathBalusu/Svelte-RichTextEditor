@@ -21,6 +21,11 @@
       "minLength": 1,
       "description": "URL of the PDF viewer's page (FE-071). Default: viewer/pdf-viewer.html next to the module. Absent by default; an empty string counts as absent."
     },
+    "katexFontsUrl": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The directory, ending in a slash, that the host serves KaTeX's .woff2 files from (FE-069). The editor registers them under hash aliases. Absent by default: no KaTeX font is registered; an empty string counts as absent."
+    },
     "selectionShim": {
       "type": "string",
       "enum": ["instance", "library"],

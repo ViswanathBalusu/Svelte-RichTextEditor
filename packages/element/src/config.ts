@@ -11,6 +11,12 @@ export interface DocEditorConfig {
   /** URL of the PDF viewer's page (FE-071). Default: `viewer/pdf-viewer.html` next to the module. */
   pdfViewerUrl?: string;
   /**
+   * The directory, ending in /, that the host serves KaTeX's .woff2 files from (FE-069 criterion 3).
+   * The editor registers them under hash aliases. Absent by default: no KaTeX font is registered and
+   * equations are drawn with the page's fallback fonts. The editor has no default location.
+   */
+  katexFontsUrl?: string;
+  /**
    * Where the shadow root's `getSelection` comes from (02 §8; spike S1 §4.7). `instance` (default)
    * defines it on the editor's own root; `library` lets ProseMirror patch `ShadowRoot.prototype`.
    */
@@ -29,6 +35,7 @@ export interface NormalConfig {
   styleNonce: string | null;
   graceMs: number;
   pdfViewerUrl: string | null;
+  katexFontsUrl: string | null;
   selectionShim: 'instance' | 'library';
   footnoteModel: 'inline' | 'paragraph';
   deferRemoteWhileComposing: boolean;
@@ -52,6 +59,7 @@ export function normaliseConfig(value: unknown): NormalConfig {
     graceMs:
       typeof grace === 'number' && Number.isFinite(grace) && grace >= 0 ? grace : DEFAULT_GRACE_MS,
     pdfViewerUrl: text(v['pdfViewerUrl']),
+    katexFontsUrl: text(v['katexFontsUrl']),
     selectionShim: v['selectionShim'] === 'library' ? 'library' : 'instance',
     // The CDM's footnote content is `paragraph+` (CDM-001); `inline` is the spike's option A.
     footnoteModel: v['footnoteModel'] === 'inline' ? 'inline' : 'paragraph',

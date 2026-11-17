@@ -16,6 +16,7 @@
  */
 import { type StepJson, stepsToJson } from '@docedit/authority';
 import type { RemoteCommit } from '@docedit/protocol';
+import type { EquationDrawer } from './equation-draw.ts';
 import type { AssetImageLookup } from './image-source.ts';
 import type { Access, SyncChannel } from '@docedit/protocol';
 import { LOCATOR_LABELS, mayOpen, supportedFeatures } from '@docedit/model/definition';
@@ -270,6 +271,8 @@ export interface CoreConfig {
    * lookup, or for any other answer, it draws no picture. Read when a picture is drawn.
    */
   assetImage?: AssetImageLookup;
+  /** Draws equations in the web view (FE-069); absent, the LaTeX source is shown as text. */
+  drawEquation?: EquationDrawer;
 }
 
 /** A document the core cannot open (03 §2, §11.1): the codes are DEP's (05 §5.8). */

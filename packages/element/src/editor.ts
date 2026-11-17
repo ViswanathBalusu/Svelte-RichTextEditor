@@ -13,6 +13,7 @@ import {
   EditorCore,
   type ConnectionState,
   type EditMode,
+  type EquationDrawer,
 } from '@docedit/engine';
 import {
   PortError,
@@ -76,6 +77,8 @@ export interface MountOptions {
   fontAlias?: (family: string) => string | undefined;
   /** The signed URL of an asset, for the web view's pictures (FE-067 criterion 3); absent without assets. */
   assetImage?: AssetImageLookup;
+  /** Draws equations in the web view (FE-069); absent, the LaTeX source is shown as text. */
+  drawEquation?: EquationDrawer;
   /** The shell's attribute-driven settings (`toolbar`, `locale`). */
   settings: SettingsStore;
   /** The `mode` the host asked for (05 §8.1); the core applies the most restrictive one allowed. */
@@ -201,6 +204,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     mode: options.mode,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
     ...(options.assetImage ? { assetImage: options.assetImage } : {}),
+    ...(options.drawEquation ? { drawEquation: options.drawEquation } : {}),
   });
   const stylePath = attachStyles(root, {
     nonce: config.styleNonce,

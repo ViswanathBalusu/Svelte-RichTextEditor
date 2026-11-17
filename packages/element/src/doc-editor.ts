@@ -44,6 +44,7 @@ import { Announcer } from './announcer.ts';
 import { mountLiveRegion, type LiveRegion } from './live-region.ts';
 import type { AssetImageLookup } from '@docedit/engine';
 import { assetImageLookup } from './assets.ts';
+import { equationDrawer } from './equation-drawer.ts';
 import { Session } from './session.ts';
 import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
@@ -645,6 +646,8 @@ export class DocEditorElement extends Base {
       ...(fontAlias ? { fontAlias } : {}),
       // Pictures are drawn from the signed URLs of the assets port, when the backend has one (FE-067).
       ...this.#assetImage(docId),
+      // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
+      drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       viewerUrl: this.#config.pdfViewerUrl ?? new URL(VIEWER_PAGE, import.meta.url).href,
       resolveUsers: () => this.#resolveUsers,
       // The host's directory search and the document it is asked about (PRO-080 criterion 2).

@@ -79,6 +79,7 @@ export { editingSchema, definitionFor, headingLevel, type FootnoteModel } from '
 export type { SelectionShim } from './view-support.ts';
 export { imageSource, RASTER_IMAGE_TYPES } from './image-source.ts';
 export type { AssetImage, AssetImageLookup } from './image-source.ts';
+export type { EquationDrawer } from './equation-draw.ts';
 export type { Clock, ConnectionStatus } from './sync/session.ts';
 export type { Discarded } from './sync/state.ts';
 export {
