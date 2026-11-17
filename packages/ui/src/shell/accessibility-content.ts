@@ -221,6 +221,12 @@ export function checkViewOfContent(content: unknown): ContentView {
         if (caption) paragraph(id, 'Caption', {}, childrenOf(caption), at);
         return;
       }
+      case 'extension_block': {
+        // A fallback picture is a picture: its alternative text is the fallback text (UX-058 criterion 4).
+        if (id !== null && str(attrs['fallbackAsset']) !== null)
+          add({ kind: 'image', id, altText: str(attrs['fallbackText']) }, at.scope);
+        return;
+      }
       case 'table': {
         if (id === null) return;
         const headerRows = typeof attrs['headerRows'] === 'number' ? attrs['headerRows'] : 0;
@@ -239,8 +245,8 @@ export function checkViewOfContent(content: unknown): ContentView {
         return;
       }
       default:
-        // Section breaks, equations, tables of contents, bibliographies, extension and preserved
-        // blocks carry nothing the five rules read.
+        // Section breaks, equations, tables of contents, bibliographies and preserved blocks carry
+        // nothing the five rules read.
         return;
     }
   };

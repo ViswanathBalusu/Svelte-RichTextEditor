@@ -25,6 +25,12 @@ UX-053 asks for a range-based API with events, with the same guards as typing an
 12. **`requires` follows locally.** After a successful insertion the core adds `extensions` to its own `requires`, as the room does when it accepts the first block (03 §11.1). It is not taken back if the room refuses the commit.
 13. **Accessible name.** The `extension_block` DOM output is `role="group"` with `aria-label="Content from extension <id>"`. The words are English in the schema, as the other labels there are; translation is open.
 
+## Added for UX-058 (fallback when the extension is missing)
+
+14. **Every custom block is shown as its fallback for now.** No extension can register a block renderer yet, so the schema's DOM output is the fallback view: a named group, the notice "This content comes from an extension that is not available.", the fallback picture and the fallback text as an ordinary paragraph. When a renderer can be registered, the view draws an available block itself and uses this output only for the unavailable case.
+15. **The fallback picture's alternative text is the fallback text.** 03 gives `extension_block` no `alt` attribute. A block with a picture and no text has none, and the accessibility checker flags it (an `image` of kind `alt-text`).
+16. **Availability is by extension identifier only**, as ADR 0136 already proposes: a node has no version attribute.
+
 ## Not decided
 
 - Whether the origin of an extension's commit is a new hint (point 5).

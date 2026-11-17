@@ -288,12 +288,20 @@ describe('UX-056 criterion 6: the block is an atom with an accessible name', () 
     const made = api.insertExtensionBlock(before(), DRAFT);
     const id = made.ok ? made.id : '';
     const node = state().doc.nodeAt(posOf(state().doc, id))!;
-    const spec = node.type.spec.toDOM!(node) as unknown as [string, Record<string, string>, string];
+    const spec = node.type.spec.toDOM!(node) as unknown as [
+      string,
+      Record<string, string>,
+      ...unknown[],
+    ];
     expect(spec[0]).toBe('div');
     expect(spec[1]).toMatchObject({
       role: 'group',
       'aria-label': 'Content from extension com.example.chart',
     });
-    expect(spec[2]).toBe('A chart of three values');
+    expect(spec.slice(2)).toContainEqual([
+      'p',
+      { class: 'de-extension-text' },
+      'A chart of three values',
+    ]);
   });
 });
