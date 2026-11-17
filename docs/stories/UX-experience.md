@@ -808,7 +808,7 @@ As a commenter, I want to react to a comment, so that I can acknowledge it witho
 - [ ] Given the backend does not announce reaction support, when comments render, then no reaction control is offered.
 - [ ] Given a keyboard and a screen reader, when a reaction control is used, then it has a name, a pressed state and a count.
 
-**Notes:** 05 has no resource, feature name or event for reactions and does not say which reactions exist. Blocked until PRO defines them. Who may react is not specified; `comment` is assumed (inferred).
+**Notes:** 05 has no resource, feature name or event for reactions and does not say which reactions exist. Blocked until PRO defines them. Who may react is not specified; `comment` is assumed (inferred). Lane w3 (2026-11-17): re-checked; docs/spec has no reactions resource, event or feature name (a search finds the word only in 11 and 13), so nothing is built and no criterion is ticked. Status blocked.
 
 ### UX-034 Link to a comment
 
