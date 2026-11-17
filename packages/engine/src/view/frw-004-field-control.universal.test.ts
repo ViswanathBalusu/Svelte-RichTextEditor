@@ -34,10 +34,10 @@ function mounted(config: Partial<ConstructorParameters<typeof EditorCore>[0]> = 
     if (commit) el.dispatchEvent(new Event('change', { bubbles: true }));
     return el;
   };
-  /** The message a control is described by, or null. */
+  /** The message that describes a control (its alert sibling), or null. */
   const message = (el: HTMLElement): HTMLElement | null => {
-    const id = el.getAttribute('aria-describedby');
-    return id === null ? null : host.querySelector<HTMLElement>(`#${id}`);
+    if (!el.hasAttribute('aria-description')) return null;
+    return el.parentElement?.querySelector<HTMLElement>('[role="alert"]') ?? null;
   };
   return {
     core,
@@ -103,7 +103,7 @@ describe.skipIf(!isBrowser)(
         m.enter(FIELD_IDS.amount, '-1');
         const el = m.enter(FIELD_IDS.amount, entry);
         expect(el.hasAttribute('aria-invalid')).toBe(false);
-        expect(el.hasAttribute('aria-describedby')).toBe(false);
+        expect(el.hasAttribute('aria-description')).toBe(false);
         expect(
           m.host.querySelector(`[data-field="${FIELD_IDS.amount}"] [role="alert"]`),
         ).toHaveProperty('hidden', true);

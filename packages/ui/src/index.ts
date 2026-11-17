@@ -146,7 +146,8 @@ export {
   type ToolbarMode,
 } from './shell/settings.ts';
 export type { PageTheme, ThemeSetting } from './shell/theme.ts';
-export type { FieldDraft, FieldOption } from './shell/field-properties.ts';export {
+export type { FieldDraft, FieldOption } from './shell/field-properties.ts';
+export {
   BUILT_IN_PANES,
   PaneRegistry,
   type PaneDescriptor,

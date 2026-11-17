@@ -380,8 +380,7 @@ export const EN_GB = {
   'pane.roles': 'Roles',
   'roles.label': 'Roles of this document',
   'roles.empty': 'This document has no roles.',
-  'roles.readOnly':
-    'Changing the roles needs permission to change the structure of the document.',
+  'roles.readOnly': 'Changing the roles needs permission to change the structure of the document.',
   'roles.noFields': 'No field is assigned to this role.',
   'roles.fieldCount': {
     one: '{count} field is assigned to this role.',
@@ -412,8 +411,7 @@ export const EN_GB = {
   'roles.error.noChange': 'Nothing was changed.',
   'roles.error.noFeature': 'This document does not use fields, so it has no roles.',
   'roles.error.invalid': 'Some values are not valid. Check the marked fields.',
-  'roles.error.inUse':
-    'Fields are still assigned to this role, so it cannot be deleted. They are:',
+  'roles.error.inUse': 'Fields are still assigned to this role, so it cannot be deleted. They are:',
   'roles.legend': 'Roles',
   'announce.roles.added': 'Role added.',
   'announce.roles.changed': 'Role changed.',

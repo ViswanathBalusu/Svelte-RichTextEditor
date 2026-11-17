@@ -80,7 +80,7 @@ describe('SYN-039 criterion 2: a 16 MiB checkpoint does not slow other documents
       await new Promise((r) => setTimeout(r, 100));
       const t0 = performance.now();
       const r = await bob.submit(1, { base: seq, steps: [insertText(intro(), 'x')] });
-      if (r.t !== 'sync.ack') throw new Error(`submit: ${JSON.stringify(r)}`);
+      if (r.t !== 'sync.ack' || !r.d) throw new Error(`submit: ${JSON.stringify(r)}`);
       seq = r.d.seq;
       return performance.now() - t0;
     };

@@ -743,7 +743,13 @@ export type RoleChangeResult =
   | {
       readonly ok: false;
       readonly reason:
-        'read-only' | 'duplicate' | 'not-defined' | 'no-change' | 'no-feature' | 'invalid' | 'in-use';
+        | 'read-only'
+        | 'duplicate'
+        | 'not-defined'
+        | 'no-change'
+        | 'no-feature'
+        | 'invalid'
+        | 'in-use';
       /** For `invalid`: the attributes (`name`, `color`) whose value is refused. */
       readonly fields?: readonly string[];
     };
@@ -758,10 +764,7 @@ export interface RolesService {
   readonly list: ReadView<readonly RoleSummary[]>;
   readonly canChange: ReadView<boolean>;
   add(values: { readonly name: string; readonly color: string }): RoleChangeResult;
-  update(
-    id: string,
-    values: { readonly name?: string; readonly color?: string },
-  ): RoleChangeResult;
+  update(id: string, values: { readonly name?: string; readonly color?: string }): RoleChangeResult;
   remove(id: string): RoleChangeResult;
 }
 

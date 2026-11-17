@@ -188,14 +188,17 @@ class FormFieldView implements NodeView, Refreshable {
     const c = this.#control;
     if (problems.length === 0) {
       c.removeAttribute('aria-invalid');
-      c.removeAttribute('aria-describedby');
+      c.removeAttribute('aria-description');
       this.#message.textContent = '';
       this.#message.hidden = true;
       return;
     }
     c.setAttribute('aria-invalid', 'true');
-    c.setAttribute('aria-describedby', this.#message.id);
-    this.#message.textContent = problems.map((p) => p.message).join('; ');
+    // The message is also the control's description, as text and not as an ID reference: a
+    // reference set from script escapes the lint of FE-108, and the alert is announced anyway.
+    const text = problems.map((p) => p.message).join('; ');
+    c.setAttribute('aria-description', text);
+    this.#message.textContent = text;
     this.#message.hidden = false;
   }
 
