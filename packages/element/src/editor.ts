@@ -50,6 +50,7 @@ import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
 import { fieldPropertiesService } from './field-properties.ts';
+import { mathEditorService } from './math-editor.ts';
 import { mayChange } from './status.ts';
 import { attachStyles, type StylePath } from './styles.ts';
 
@@ -82,6 +83,8 @@ export interface MountOptions {
   assetImage?: AssetImageLookup;
   /** Draws equations in the web view (FE-069); absent, the LaTeX source is shown as text. */
   drawEquation?: EquationDrawer;
+  /** The directory the math fonts are served from (`config.katexFontsUrl`), for the math editor (FE-070). */
+  mathFontsUrl?: string | null;
   /** The shell's attribute-driven settings (`toolbar`, `locale`). */
   settings: SettingsStore;
   /** The `mode` the host asked for (05 §8.1); the core applies the most restrictive one allowed. */
@@ -321,6 +324,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     roles: rolesService(core),
     // The field properties pane (FRW-073): a field's authored attributes and the change of them.
     fieldProperties: fieldPropertiesService(core),
+    // The math editor (FE-070): the selected equation, its limits and its confirmation; MathLive loads on first use.
+    mathEditor: mathEditorService(core, { fontsUrl: options.mathFontsUrl }),
     // Fill mode (FRW-076, FRW-078): the fields without their values, for the guided bar and the
     // fill pane, and the move of focus to a field's control.
     fill,

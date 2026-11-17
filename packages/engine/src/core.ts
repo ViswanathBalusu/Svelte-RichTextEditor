@@ -74,6 +74,9 @@ import type {
   CoreQueryName,
   DocumentApi,
   EditMode,
+  EquationConfirmation,
+  EquationRequest,
+  EquationTarget,
   FindResult,
   FindState,
   InsertResult,
@@ -131,7 +134,13 @@ import { type InsertFieldOptions, insertField, insertSymbol, insertToc } from '.
 import { formFieldCount } from './frw-072-form-fields.ts';
 import { insertCaption, insertReference } from './captions-refs.ts';
 import { referenceGuardPlugin } from './referenced-targets.ts';
-import { setEquationLatex } from './equation-commands.ts';
+import {
+  EQUATION_NODES,
+  LATEX_MAX_CODE_POINTS,
+  MATH_NESTING_MAX,
+  latexRefusal,
+  setEquationLatex,
+} from './equation-commands.ts';
 import { isValueFormat, valueFormatCommand } from './formatting-values.ts';
 import { LIST_COMMANDS, listCommand } from './list-commands.ts';
 import {
@@ -692,6 +701,8 @@ export class DocumentCore implements DocumentApi {
   readonly features: ReadValue<readonly string[]>;
   readonly counts: ReadValue<ShellCounts>;
   readonly problem: ReadValue<CoreProblem | null>;
+  /** The last request to open the math editor on an equation (FE-070); the shell opens it. */
+  readonly equationRequest: ReadValue<EquationRequest | null>;
   readonly findState: ReadValue<FindState>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
@@ -699,6 +710,7 @@ export class DocumentCore implements DocumentApi {
   #commentSeq = 0;
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
   #problems = 0;
+  #equationRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
   #find: { query: string; matches: SearchMatch[]; current: number | null } = {
     query: '',
@@ -817,6 +829,7 @@ export class DocumentCore implements DocumentApi {
     this.features = new ReadValue<readonly string[]>([], sameJson, hub);
     this.counts = new ReadValue<ShellCounts>({}, sameJson, hub);
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
+    this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
     this.findState = new ReadValue<FindState>(
       { query: '', count: 0, current: null },
       sameJson,
@@ -1942,6 +1955,98 @@ export class DocumentCore implements DocumentApi {
     if (this.#activeField === id) return;
     this.#activeField = id;
     this.revision.set(this.revision.get() + 1);
+  }
+
+  /** The limits of an equation's source (I7; 09 §6.3): code points, and levels of braces. */
+  readonly equationLimits = { length: LATEX_MAX_CODE_POINTS, depth: MATH_NESTING_MAX } as const;
+
+  /** The limit a source breaks, or null: what `confirmEquation` would refuse it for. */
+  checkEquationSource(latex: string): 'too-long' | 'too-deep' | null {
+    return latexRefusal(latex);
+  }
+
+  /** The equation at `pos` as the math editor takes it; null when that is not an equation. */
+  equationAt(pos: number): EquationTarget | null {
+    if (!Number.isInteger(pos) || pos < 0 || pos >= this.#state.doc.content.size) return null;
+    const node = this.#state.doc.nodeAt(pos);
+    if (!node || !EQUATION_NODES.has(node.type.name)) return null;
+    const latex = node.attrs['latex'];
+    return { pos, latex: typeof latex === 'string' ? latex : '', display: node.isBlock };
+  }
+
+  /** The equation the person selected (a node selection holds it), or null (FE-070). */
+  selectedEquation(): EquationTarget | null {
+    const selection = this.#state.selection;
+    return selection instanceof NodeSelection ? this.equationAt(selection.from) : null;
+  }
+
+  /**
+   * Selects the equation at `pos` (a node selection), as the math editor does when it closes: a
+   * rejection with the action `reload` replaces the document and its selection, and focus is to
+   * return to the equation (FE-070 criterion 6). False when there is no equation at `pos`.
+   */
+  selectEquation(pos: number): boolean {
+    if (!this.equationAt(pos)) return false;
+    if (this.selectedEquation()?.pos !== pos)
+      this.dispatchTransaction(
+        this.#state.tr.setSelection(NodeSelection.create(this.#state.doc, pos)),
+      );
+    return true;
+  }
+
+  /**
+   * Asks the shell to open the math editor on the equation at `pos` (default: the selected one),
+   * as a double click or Enter on it does. False when there is no equation there.
+   */
+  requestEquationEdit(pos?: number): boolean {
+    const target = pos === undefined ? this.selectedEquation() : this.equationAt(pos);
+    if (!target) return false;
+    this.equationRequest.set({ ...target, n: ++this.#equationRequests });
+    return true;
+  }
+
+  /**
+   * Whether this person may change the equation at `pos` now, and why not when they may not
+   * (`read-only` in a locked document or a scope without `edit`, `suggestion` where suggestion mode
+   * is on; the equation's own source is what is checked, so a limit is not the reason).
+   */
+  equationAccess(pos: number): { readonly canEdit: boolean; readonly reason?: string } {
+    const target = this.equationAt(pos);
+    if (!target) return { canEdit: false, reason: 'not-equation' };
+    const state = this.queryCommand('setEquationLatex', {
+      equation: { pos, latex: target.latex },
+    });
+    if (state.enabled) return { canEdit: true };
+    return { canEdit: false, reason: state.reason ?? 'read-only' };
+  }
+
+  /**
+   * Confirms an equation's new source (FE-070): the change is one commit (`setEquationLatex`), and
+   * the answer waits for the document service to accept or reject it, so that a rejection by the
+   * math gate (I8) is told to the person who typed the source. A source the command refuses
+   * changes nothing. A rejected commit is taken back by the sync client (the equation keeps its old
+   * source); `message` is the service's reason. With no answer within `timeoutMs` (default 15 s)
+   * the change stays queued and `confirmed` is false.
+   */
+  async confirmEquation(
+    pos: number,
+    latex: string,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<EquationConfirmation> {
+    const args = { equation: { pos, latex } };
+    const state = this.queryCommand('setEquationLatex', args);
+    if (!state.enabled) return { ok: false, reason: state.reason ?? 'read-only' };
+    const before = this.#problems;
+    if (!this.exec('setEquationLatex', args)) return { ok: false, reason: 'read-only' };
+    try {
+      await this.flush({ timeoutMs: options.timeoutMs ?? 15_000 });
+    } catch {
+      return { ok: true, confirmed: false };
+    }
+    const problem = this.problem.get();
+    if (problem && this.#problems > before && !problem.fatal)
+      return { ok: false, reason: 'rejected', message: problem.message };
+    return { ok: true, confirmed: true };
   }
 
   /**

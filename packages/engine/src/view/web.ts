@@ -11,6 +11,7 @@ import type { Schema } from 'prosemirror-model';
 import {
   type Command,
   type EditorState,
+  NodeSelection,
   type Plugin,
   Selection,
   type Transaction,
@@ -23,6 +24,7 @@ import { CDM_VERSION, type CoreConfig, DocumentCore } from '../core.ts';
 import { insertLineBreak, noNestedFootnote, oneParagraphLimit } from '../footnote.ts';
 import type { AssetImageLookup } from '../image-source.ts';
 import type { EquationDrawer } from '../equation-draw.ts';
+import { EQUATION_NODES } from '../equation-commands.ts';
 import { equationBlockView, equationNumbersPlugin, equationView } from './equation-view.ts';
 import { imageView } from './image-view.ts';
 import { coreKeys } from '../keys.ts';
@@ -373,8 +375,31 @@ export class EditorCore extends DocumentCore {
         },
         markViews: cssomMarkViews(this.#fontAlias),
         attributes: this.#bodyAttributes(),
+        // An equation opens in the math editor on a double click or on Enter while it is selected
+        // (FE-070); the shell reads the request (`equationRequest`). Nothing is opened here.
+        handleDoubleClickOn: (_view, _pos, node, nodePos) =>
+          EQUATION_NODES.has(node.type.name) && this.requestEquationEdit(nodePos),
         // Copy and cut are the core's (FE-050, FE-055): the browser's own copy would write ProseMirror's format.
         handleDOMEvents: {
+          // Enter on a selected equation opens the math editor (FE-070). A DOM handler, not `handleKeyDown`,
+          // so that a read-only view opens it too (ProseMirror runs `handleKeyDown` only in editable views).
+          keydown: (view, event) => {
+            const { selection } = view.state;
+            if (
+              event.key !== 'Enter' ||
+              event.shiftKey ||
+              event.ctrlKey ||
+              event.altKey ||
+              event.metaKey ||
+              event.isComposing ||
+              !(selection instanceof NodeSelection) ||
+              !EQUATION_NODES.has(selection.node.type.name) ||
+              !this.requestEquationEdit(selection.from)
+            )
+              return false;
+            event.preventDefault();
+            return true;
+          },
           // Paste is taken here, not by `handlePaste`: ProseMirror parses the clipboard's HTML before it calls
           // `handlePaste`, and under Trusted Types that parse uses ProseMirror's own policy, which a host may
           // refuse (FE-054 criterion 5). Read-only views keep ProseMirror's handling, which does nothing there.

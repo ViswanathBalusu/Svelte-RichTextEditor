@@ -1236,6 +1236,35 @@
   transform: rotate(45deg);
 }
 
+/* The math editor (FE-070): the visual field and the LaTeX source. */
+.de-math-field {
+  min-block-size: 3em;
+  padding: 0.4em;
+  border: 1px solid var(--_de-border-strong);
+  border-radius: var(--_de-radius);
+  background: var(--_de-surface);
+  color: var(--_de-text);
+  font-size: 1.25em;
+}
+
+.de-math-field > math-field {
+  display: block;
+  inline-size: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+
+.de-math-field:focus-within {
+  outline: 2px solid var(--_de-focus);
+  outline-offset: 1px;
+}
+
+.de-math-source {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  resize: none;
+}
+
 /* Forced colours: system colours, and every state keeps a shape or a word (02 §3; UX-062). */
 @media (forced-colors: active) {
   .de-avatar {

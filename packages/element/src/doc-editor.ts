@@ -648,6 +648,7 @@ export class DocEditorElement extends Base {
       ...this.#assetImage(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
+      mathFontsUrl: this.#config.katexFontsUrl,
       viewerUrl: this.#config.pdfViewerUrl ?? new URL(VIEWER_PAGE, import.meta.url).href,
       resolveUsers: () => this.#resolveUsers,
       // The host's directory search and the document it is asked about (PRO-080 criterion 2).

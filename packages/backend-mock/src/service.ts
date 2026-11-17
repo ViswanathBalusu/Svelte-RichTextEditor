@@ -22,6 +22,11 @@ export interface MockServiceOptions {
   presence?: boolean;
   /** Limits announced in `welcome` (05 §5.1); the defaults are those of 04 where it names one. */
   limits?: Partial<Limits>;
+  /**
+   * The math gate (09 §6.3; I8): the reason a LaTeX source is refused, or null. Absent, the mock
+   * accepts any source, as before. The host of the document service passes the converter's gate.
+   */
+  mathGate?: (latex: string, display: boolean) => string | null;
 }
 
 export interface MockUser {
@@ -43,6 +48,7 @@ export class MockService implements BackendHost {
   readonly limits: Limits;
   readonly features: readonly string[];
   readonly presence: boolean;
+  private readonly mathGate: MockServiceOptions['mathGate'];
   private readonly baseNow: () => number;
   private clockOffset = 0;
   private readonly docs = new Map<string, MockDocument>();
@@ -54,6 +60,7 @@ export class MockService implements BackendHost {
   constructor(opts: MockServiceOptions = {}) {
     this.baseNow = opts.now ?? (() => Date.now());
     this.presence = opts.presence ?? true;
+    this.mathGate = opts.mathGate;
     this.limits = {
       // 131,072 is the value of the example in 05 §5.9 and 16 an assumption: 05 names no defaults (G18).
       maxMessageBytes: 131_072,
@@ -102,6 +109,7 @@ export class MockService implements BackendHost {
         now: () => this.now(),
         limits: this.limits,
         presence: this.presence,
+        ...(this.mathGate ? { mathGate: this.mathGate } : {}),
       }),
     );
     return id;
