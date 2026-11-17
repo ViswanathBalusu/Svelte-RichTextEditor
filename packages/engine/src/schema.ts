@@ -276,7 +276,16 @@ const NODE_RENDERING: Record<string, Partial<NodeSpec>> = {
   toc: { toDOM: () => ['div', { class: 'de-toc' }, 'Table of contents'] },
   bibliography: { toDOM: () => ['div', { class: 'de-bibliography' }, 'Bibliography'] },
   extension_block: {
-    toDOM: (node) => ['div', { class: 'de-extension' }, String(node.attrs['fallbackText'] ?? '')],
+    // A group with a name (UX-056 criterion 6); the fallback text inside is read as ordinary text.
+    toDOM: (node) => [
+      'div',
+      {
+        class: 'de-extension',
+        role: 'group',
+        'aria-label': `Content from extension ${String(node.attrs['extension'])}`,
+      },
+      String(node.attrs['fallbackText'] ?? ''),
+    ],
   },
   preserved_block: {
     toDOM: (node) => preservedDOM('div', node),

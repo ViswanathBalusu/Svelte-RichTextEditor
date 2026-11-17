@@ -119,6 +119,35 @@ export interface ExtensionApiOptions {
   readonly onError?: (error: unknown, event: ExtEventName) => void;
 }
 
+/** A custom block an extension offers (03 §4.3; 13 §7.3). The payload is JSON the editor never interprets. */
+export interface ExtBlockDraft {
+  /** The extension's identifier. */
+  readonly extension: string;
+  readonly payload: unknown;
+  /** The identifier of a fallback picture asset, or null. */
+  readonly fallbackAsset?: string | null;
+  /** The fallback text, or null. A block needs at least one of the two fallbacks (I12). */
+  readonly fallbackText?: string | null;
+}
+
+/** A change to a block an extension owns; what is left out stays as it is. */
+export interface ExtBlockChange {
+  readonly payload?: unknown;
+  readonly fallbackAsset?: string | null;
+  readonly fallbackText?: string | null;
+}
+
+/**
+ * Why a custom block was not written: the reasons of `ExtWriteResult`, and the ones that are
+ * checked before anything is sent (`no_extension`, `no_fallback`, `payload_too_large`, `payload_not_json`).
+ */
+export type ExtBlockFailure =
+  ExtWriteFailure | 'no_extension' | 'no_fallback' | 'payload_too_large' | 'payload_not_json';
+
+export type ExtBlockResult =
+  | { readonly ok: true; readonly id: string }
+  | { readonly ok: false; readonly reason: ExtBlockFailure; readonly message: string };
+
 export interface ExtensionDocumentApi {
   /** Holds a range. Throws a RangeError for positions outside the document or when `maxRanges` are held. */
   range(from: number, to: number): ExtRange;
@@ -143,6 +172,18 @@ export interface ExtensionDocumentApi {
   replaceRange(range: ExtRange, text: string): ExtWriteResult;
   deleteRange(range: ExtRange): ExtWriteResult;
   setMark(range: ExtRange, type: string, attrs?: Readonly<Record<string, unknown>>): ExtWriteResult;
+
+  /**
+   * Inserts a custom block (`extension_block`, 03 §4.3) in place of the range, through the same guards
+   * as typing. A block with neither fallback, or a payload over 16 KiB, is refused before anything is
+   * sent. The block gets a new identifier, which the result carries.
+   */
+  insertExtensionBlock(at: ExtRange, draft: ExtBlockDraft): ExtBlockResult;
+  /**
+   * Changes the payload or a fallback of a custom block, as an ordinary change of the block's scope:
+   * the same guards, the same commit, the same history as an edit of the text. The same checks apply.
+   */
+  updateExtensionBlock(id: string, change: ExtBlockChange): ExtBlockResult;
 
   /**
    * Subscribes to an event. Delivery is asynchronous and never inside the transaction. Changes made

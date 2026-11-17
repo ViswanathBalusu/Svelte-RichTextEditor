@@ -22,6 +22,7 @@
  * blocks and suggestions is one pass over the document per delivery. No measurement has been taken.
  */
 import type { Mark, Node as PMNode } from 'prosemirror-model';
+import { canonicalize, utf8 } from '@docedit/model';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { CdmFragment } from './cdm-fragment.ts';
 import type { InsertResult } from './api.ts';
@@ -29,6 +30,9 @@ import { REMOTE } from './meta.ts';
 import { nextFrame } from './read-value.ts';
 import type {
   ExtBlock,
+  ExtBlockChange,
+  ExtBlockDraft,
+  ExtBlockResult,
   ExtComment,
   ExtEventMap,
   ExtEventName,
@@ -56,6 +60,10 @@ export interface ExtensionApiHost {
   /** Inserts a fragment in place of `from` to `to` through the guards (the core's `insertContent` for a range). */
   insertFragment(fragment: CdmFragment, from: number, to: number): InsertResult;
   /** The client's copy of each thread's range, mapped through every change. */
+  /** A fresh node identifier (03 §9). */
+  newId(): string;
+  /** Adds a feature to this copy's `requires`, as the room does when the first block of a kind arrives (03 §11.1). */
+  requireFeature(feature: string): void;
   /** Called once when the API is disposed. */
   disposed?(): void;
   threads(): readonly {
@@ -299,6 +307,83 @@ export class ExtensionApi implements ExtensionDocumentApi {
       return { ok: false, reason: 'invalid', message: describe(error) };
     }
     return this.#apply(state.tr.addMark(held.from, held.to, mark));
+  }
+
+  insertExtensionBlock(at: ExtRange, draft: ExtBlockDraft): ExtBlockResult {
+    const problem = checkBlock(
+      draft.extension,
+      draft.payload,
+      draft.fallbackAsset,
+      draft.fallbackText,
+    );
+    if (problem) return problem;
+    const held = this.#writable(at);
+    if ('ok' in held) return held as ExtBlockResult;
+    const state = this.#host.state();
+    const type = state.schema.nodes['extension_block'];
+    if (!type)
+      return { ok: false, reason: 'unsupported', message: 'this build has no custom blocks' };
+    const id = this.#host.newId();
+    let node: PMNode;
+    try {
+      node = type.create({
+        id,
+        extension: draft.extension,
+        payload: draft.payload ?? null,
+        fallbackAsset: blank(draft.fallbackAsset) ? null : draft.fallbackAsset,
+        fallbackText: blank(draft.fallbackText) ? null : draft.fallbackText,
+      });
+    } catch (error) {
+      return { ok: false, reason: 'invalid', message: describe(error) };
+    }
+    const result = this.#apply(state.tr.replaceRangeWith(held.from, held.to, node));
+    if (!result.ok) return result;
+    // The room adds `extensions` to `requires` with the first block (03 §11.1); this copy follows.
+    this.#host.requireFeature('extensions');
+    return { ok: true, id };
+  }
+
+  updateExtensionBlock(id: string, change: ExtBlockChange): ExtBlockResult {
+    if (this.#disposed) return { ok: false, reason: 'invalid', message: 'the API was disposed' };
+    const state = this.#host.state();
+    let found: { node: PMNode; pos: number } | null = null;
+    state.doc.descendants((node, pos) => {
+      if (found) return false;
+      if (node.type.name === 'extension_block' && node.attrs['id'] === id) found = { node, pos };
+      return found === null;
+    });
+    const hit = found as { node: PMNode; pos: number } | null;
+    if (!hit || !this.#host.canView(state.doc, hit.pos))
+      return { ok: false, reason: 'invalid', message: 'there is no such custom block' };
+    const attrs = hit.node.attrs;
+    const next = {
+      payload: 'payload' in change ? change.payload : attrs['payload'],
+      fallbackAsset: 'fallbackAsset' in change ? change.fallbackAsset : attrs['fallbackAsset'],
+      fallbackText: 'fallbackText' in change ? change.fallbackText : attrs['fallbackText'],
+    };
+    const problem = checkBlock(
+      String(attrs['extension']),
+      next.payload,
+      next.fallbackAsset as string | null | undefined,
+      next.fallbackText as string | null | undefined,
+    );
+    if (problem) return problem;
+    if (!this.#host.canEdit(state.doc, hit.pos))
+      return {
+        ok: false,
+        reason: 'permission_denied',
+        message: 'the user may not change this part of the document',
+      };
+    const tr = state.tr;
+    for (const key of ['payload', 'fallbackAsset', 'fallbackText'] as const) {
+      if (!(key in change)) continue;
+      const value =
+        key === 'payload' ? (change.payload ?? null) : blank(change[key]) ? null : change[key];
+      tr.setNodeAttribute(hit.pos, key, value);
+    }
+    if (!tr.docChanged) return { ok: true, id };
+    const result = this.#apply(tr);
+    return result.ok ? { ok: true, id } : result;
   }
 
   // --- Events --------------------------------------------------------------------------------
@@ -581,6 +666,52 @@ export class ExtensionApi implements ExtensionDocumentApi {
       if (this.#host.canView(doc, Math.min(t.from, doc.content.size))) out.set(t.id, t.detached);
     return out;
   }
+}
+
+/** The most bytes a custom block's payload may hold: 16 KiB (03 §4.3; I12). */
+const BLOCK_PAYLOAD_LIMIT_BYTES = 16384;
+
+const blank = (v: string | null | undefined): boolean =>
+  v === null || v === undefined || v.trim() === '';
+
+/**
+ * The checks that refuse a custom block before it is sent (UX-056 criteria 1 and 2): an extension
+ * name, a payload that is JSON and at most 16 KiB (the canonical form's UTF-8 bytes, as the
+ * authority measures it), and at least one fallback. Null when the block may go on.
+ */
+function checkBlock(
+  extension: string,
+  payload: unknown,
+  asset: string | null | undefined,
+  text: string | null | undefined,
+): {
+  ok: false;
+  reason: 'no_extension' | 'no_fallback' | 'payload_too_large' | 'payload_not_json';
+  message: string;
+} | null {
+  if (typeof extension !== 'string' || extension.trim() === '')
+    return { ok: false, reason: 'no_extension', message: 'the block has no extension identifier' };
+  let bytes: number;
+  try {
+    const json = JSON.stringify(payload ?? null);
+    if (json === undefined) throw new Error('no JSON form');
+    bytes = utf8(canonicalize(JSON.parse(json))).length;
+  } catch {
+    return { ok: false, reason: 'payload_not_json', message: 'the payload is not JSON' };
+  }
+  if (blank(asset) && blank(text))
+    return {
+      ok: false,
+      reason: 'no_fallback',
+      message: 'the block needs a fallback picture or fallback text',
+    };
+  if (bytes > BLOCK_PAYLOAD_LIMIT_BYTES)
+    return {
+      ok: false,
+      reason: 'payload_too_large',
+      message: `the payload is ${bytes} bytes; the limit is ${BLOCK_PAYLOAD_LIMIT_BYTES}`,
+    };
+  return null;
 }
 
 function rawText(doc: PMNode, from: number, to: number): string {

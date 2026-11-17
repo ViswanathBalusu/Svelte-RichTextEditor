@@ -19,6 +19,12 @@ UX-053 asks for a range-based API with events, with the same guards as typing an
 9. **Hidden content.** Reads and events leave out any block, text, mark, suggestion or thread in a scope the reader may not view (ADR 0019).
 10. **Block identity.** A "block" is any node with an `id` attribute that is a block, outside the definitions. A container is reported as changed when anything inside it changed.
 
+## Added for UX-056 (custom blocks)
+
+11. **Two more calls.** `insertExtensionBlock(at, draft)` and `updateExtensionBlock(id, change)` write an `extension_block` and change its payload or fallback through the same path as the other writes. They are refused before anything is sent for no extension name, no fallback (text or asset, blank counts as none), a payload with no JSON form, or a payload over 16384 bytes of canonical JSON (03 §4.3; the model's measure).
+12. **`requires` follows locally.** After a successful insertion the core adds `extensions` to its own `requires`, as the room does when it accepts the first block (03 §11.1). It is not taken back if the room refuses the commit.
+13. **Accessible name.** The `extension_block` DOM output is `role="group"` with `aria-label="Content from extension <id>"`. The words are English in the schema, as the other labels there are; translation is open.
+
 ## Not decided
 
 - Whether the origin of an extension's commit is a new hint (point 5).

@@ -2861,6 +2861,10 @@ export class DocumentCore implements DocumentApi {
         },
         insertFragment: (fragment, from, to) => this.#insertFragment(fragment, from, to),
         threads: () => this.#comments.ids().map((id) => ({ id, ...this.#comments.get(id)! })),
+        newId: () => this.#newId(),
+        requireFeature: (feature) => {
+          if (!this.#requires.includes(feature)) this.#requires.push(feature);
+        },
         disposed: () => this.#extApis.delete(api),
       },
       options,
