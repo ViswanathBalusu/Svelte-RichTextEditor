@@ -104,6 +104,23 @@ export async function mountEditor(
   ).toBeVisible();
 }
 
+/**
+ * Runs a toolbar command by its `data-command` name. A command the toolbar has no room for is in
+ * its "More" menu (the shell lays the toolbar out by width, and a backend with more features
+ * offers more commands), so the menu is opened and the same command is chosen there.
+ */
+export async function clickToolbarCommand(page: Page, command: string): Promise<void> {
+  const direct = page.locator(`doc-editor button[data-command="${command}"]`);
+  await direct.waitFor({ state: 'attached' });
+  if (await direct.isVisible()) {
+    await direct.click();
+    return;
+  }
+  const id = await direct.getAttribute('data-command-id');
+  await page.locator('doc-editor [data-command-id="toolbar.more"]').click();
+  await page.locator(`doc-editor [data-menu-item][data-command-id="${id}"]`).click();
+}
+
 /** Text of the body of the editor named `name`, through the spike harness. */
 export function bodyText(page: Page, name = 'one'): Promise<string> {
   return page.evaluate(async (n) => {

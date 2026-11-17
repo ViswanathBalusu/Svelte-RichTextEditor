@@ -7,6 +7,7 @@
  * Prepares FE-014, FE-016, FE-017, FE-069, FE-070, FE-071, FE-125.
  */
 import { type Page, expect, test } from '@playwright/test';
+import { clickToolbarCommand } from './embed-helpers.ts';
 import { SPIKE_IDS, openPanel, record, runId } from './helpers.ts';
 import {
   collect,
@@ -82,14 +83,7 @@ async function exercise(page: Page, feature: string, run: string): Promise<unkno
       return { handled, after: await h.nodeText(SPIKE_IDS.after) };
     }
     case 'pane': {
-      // The outline command sits in the toolbar row at a wide width and in its "More" menu at a
-      // narrow one; either way the pane's chunk is loaded on demand.
-      const inRow = page.locator('doc-editor button[data-command="outline"]');
-      if (await inRow.isVisible()) await inRow.click();
-      else {
-        await page.locator('doc-editor [data-command-id="toolbar.more"]').click();
-        await page.locator('doc-editor [role="menu"] [data-command-id="view.outline"]').click();
-      }
+      await clickToolbarCommand(page, 'outline');
       await page.locator('doc-editor .de-outline').waitFor();
       return { outline: await page.locator('doc-editor .de-outline').innerText() };
     }

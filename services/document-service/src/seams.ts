@@ -219,6 +219,17 @@ export interface UserLookup {
   surrogateOf(tenant: string, sub: string): Promise<string>;
 }
 
+/**
+ * What an error of the data plane belongs to, for the log (06 §11; BE-088 criterion 1). Identifiers
+ * only. A member is absent where it does not apply: an error of a room has no single session, and
+ * an error of a socket before `hello` has no tenant.
+ */
+export interface ErrorContext {
+  readonly tenant?: string;
+  readonly doc?: string;
+  readonly session?: string;
+}
+
 /** Settings of the data plane (05 §5.1; 06 §2.2). Every member is optional. Added by packet A1. */
 export interface DataPlaneSettings {
   /** Limits announced in `welcome` and enforced (05 §5.1). */
@@ -234,8 +245,12 @@ export interface DataPlaneSettings {
    * must share it; without it each process draws its own, so a failover forces readers to reload.
    */
   readonly viewKey?: Uint8Array;
-  /** Called with errors the data plane could not answer on the wire (default: console.error). */
-  readonly onError?: (error: unknown, where: string) => void;
+  /**
+   * Called with errors the data plane could not answer on the wire (default: console.error).
+   * `context` names the tenant, document and session the error belongs to, where it has one
+   * (BE-088 criterion 1).
+   */
+  readonly onError?: (error: unknown, where: string, context?: ErrorContext) => void;
   /** Whether `permessage-deflate` may be negotiated (05 §4: optional, off by default). */
   readonly compression?: boolean;
   /**

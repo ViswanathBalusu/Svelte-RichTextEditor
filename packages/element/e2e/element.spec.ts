@@ -6,7 +6,14 @@
  */
 import { type Page, expect, test } from '@playwright/test';
 import { EMBEDDING_VERSION, RELEASE } from '../src/version.ts';
-import { bodyText, events, mountEditor, openEmbed, openLib } from './embed-helpers.ts';
+import {
+  bodyText,
+  clickToolbarCommand,
+  events,
+  mountEditor,
+  openEmbed,
+  openLib,
+} from './embed-helpers.ts';
 
 const editor = (name = 'one') => `doc-editor[data-test="${name}"]`;
 
@@ -200,7 +207,7 @@ test.describe('FE-002 lazy chunks of the library build', () => {
       lib.every((p) => p.startsWith('/lib/doc-editor.js') || p.startsWith('/lib/chunks/')),
     ).toBe(true);
     // A pane loads on demand.
-    await page.locator('doc-editor [data-command="outline"]').click();
+    await clickToolbarCommand(page, 'outline');
     await expect
       .poll(() => requested.some((p) => /\/lib\/chunks\/OutlinePane-/.test(p)))
       .toBe(true);

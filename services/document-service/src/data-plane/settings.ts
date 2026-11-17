@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { DEFAULT_LIMITS } from '@docedit/authority';
 import { supportedFeatures } from '@docedit/model/definition';
 import type { Limits } from '@docedit/protocol';
-import type { DataPlaneSettings, RateSettings, Span } from '../seams.ts';
+import type { DataPlaneSettings, ErrorContext, RateSettings, Span } from '../seams.ts';
 import type { CoalescingSettings } from './syn-041-coalescing.ts';
 
 export interface CheckpointSettings {
@@ -56,7 +56,7 @@ export interface Settings {
   readonly maxFrameBytes: number;
   /** The key of the view tokens (ADR 0019 change 1; PRO-130). */
   readonly viewKey: Uint8Array;
-  readonly onError: (error: unknown, where: string) => void;
+  readonly onError: (error: unknown, where: string, context?: ErrorContext) => void;
   /** Whether `permessage-deflate` may be negotiated (05 §4: off by default). */
   readonly compression: boolean;
   /** Whether rooms announce expiries of grants and leases by a timer (PRO-033). */

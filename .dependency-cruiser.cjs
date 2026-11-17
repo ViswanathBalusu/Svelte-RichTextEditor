@@ -4,6 +4,10 @@
  *
  * Browser-only and Node.js-only globals in the universal packages are caught by the TypeScript
  * configuration instead (lib ES2023 and types [] in tsconfig.base.json), because they are not imports.
+ *
+ * 02 §5.1 and ADR 0003 also forbid a ProseMirror type in the public types of the document API. That
+ * is a property of types, not of imports, so the type checker tests it:
+ * packages/engine/test/fnd-004-w5-api-surface.test.ts (run by `pnpm test`).
  */
 const universal =
   '^packages/(model|authority|rules|layout|protocol|backend-mock|backend-dep|export-latex|export-docx|corpus|history)/';

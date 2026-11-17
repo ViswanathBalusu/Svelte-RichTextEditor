@@ -242,7 +242,8 @@ export class OutboxDelivery {
         this.stats.retried++;
         await this.#store.unlock(item, this.#node).catch(() => undefined);
         span.end({ outcome: 'retry' });
-        if (!(e instanceof DataPlaneError)) this.#settings.onError(e, `outbox ${item.id}`);
+        if (!(e instanceof DataPlaneError))
+          this.#settings.onError(e, `outbox ${item.id}`, { tenant: item.tenant, doc: item.doc });
         return {
           state: 'failed',
           code: 'unavailable',
@@ -274,7 +275,7 @@ export class OutboxDelivery {
     try {
       await this.#store.settle(item, this.#node, state, result);
     } catch (e) {
-      this.#settings.onError(e, `outbox ${item.id}`);
+      this.#settings.onError(e, `outbox ${item.id}`, { tenant: item.tenant, doc: item.doc });
     }
   }
 
