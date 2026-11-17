@@ -65,49 +65,76 @@ function seqParam(ctx: Ctx, name: string, required: boolean): number | undefined
 }
 
 /** The problem a refusal of `@docedit/history` names. */
-function problemOf(e: HistoryError): ApiError {
+export function problemOf(e: HistoryError): ApiError {
   return new ApiError(e.code, e.reason);
 }
 
+/** Everything the history routes read before they look at a `seq` (also used by the restore route). */
+export async function historyViewOf(k: Kit, ctx: Ctx, doc: string) {
+  const { d } = k;
+  const record = await k.liveDocument(ctx, doc);
+  const ref = k.refOf(ctx, doc);
+  const head = await d.logs.head(ref);
+  const full = await d.content.rebuild(ref, head.incarnation, head.seq);
+  const perms = await d.grants.current(ref);
+  const min = await minVisibleSeqOf({
+    caller: ctx.caller,
+    ref,
+    record,
+    head: head.seq,
+    regions: regionInfosOfJson(full.doc),
+    perms,
+    logs: d.logs,
+    now: d.now(),
+  });
+  const named = new Set<number>(
+    d.versions ? (await d.versions.list(ref, { kind: 'named' })).map((v) => v.seq) : [],
+  );
+  const gate: HistoryGate = { min, head: head.seq, named: (s) => named.has(s) };
+  const conn = connectionOn(ctx.caller, doc);
+  /** What the caller's current access hides in any of the documents (ADR 0019; HIS-046). */
+  const hiddenIn = (...docs: JsonNode[]) =>
+    unionHidden(...docs.map((j) => readerView(d.views, conn, j, perms).hidden));
+  return { record, ref, head, headDoc: full.doc, full, perms, gate, conn, hiddenIn };
+}
+
+/** Refuses a `seq` above the head or below the gate before any rebuild work. */
+export function checkSeq(seq: number, gate: HistoryGate): void {
+  if (seq > gate.head)
+    throw new ApiError('not_found', `no version at seq ${seq} (head ${gate.head})`);
+  if (!stateVisible(gate.min, seq, gate.head, gate.named))
+    throw new ApiError('forbidden', `seq ${seq} is below your visibility gate (07 §8)`);
+}
+
+/** The `sub` of every user a comparison names, for the wire (G11). */
+export async function nameUsers(k: Kit, ctx: Ctx, c: Comparison): Promise<Comparison> {
+  const users = new Set<string>();
+  for (const ch of c.changes) {
+    if (ch.user) users.add(ch.user);
+    for (const s of ch.spans ?? []) {
+      if (s.user) users.add(s.user);
+      if (s.restoredBy) users.add(s.restoredBy);
+    }
+  }
+  const name = await k.subsOf(ctx.caller.tenant, [...users]);
+  const rename = (ch: Change): Change => {
+    const out: Change = { ...ch };
+    if (ch.user) out.user = name(ch.user);
+    if (ch.spans)
+      out.spans = ch.spans.map((s) => ({
+        ...s,
+        ...(s.user ? { user: name(s.user) } : {}),
+        ...(s.restoredBy ? { restoredBy: name(s.restoredBy) } : {}),
+      }));
+    return out;
+  };
+  return { ...c, changes: c.changes.map(rename) };
+}
+
 export function historyReadRoutes(k: Kit): Record<string, Handler> {
-  const { d, refOf, liveDocument } = k;
+  const { d } = k;
   const schema = cdmSchema();
-
-  /** Everything both routes read before they look at a `seq`. */
-  const viewOf = async (ctx: Ctx, doc: string) => {
-    const record = await liveDocument(ctx, doc);
-    const ref = refOf(ctx, doc);
-    const head = await d.logs.head(ref);
-    const full = await d.content.rebuild(ref, head.incarnation, head.seq);
-    const perms = await d.grants.current(ref);
-    const min = await minVisibleSeqOf({
-      caller: ctx.caller,
-      ref,
-      record,
-      head: head.seq,
-      regions: regionInfosOfJson(full.doc),
-      perms,
-      logs: d.logs,
-      now: d.now(),
-    });
-    const named = new Set<number>(
-      d.versions ? (await d.versions.list(ref, { kind: 'named' })).map((v) => v.seq) : [],
-    );
-    const gate: HistoryGate = { min, head: head.seq, named: (s) => named.has(s) };
-    const conn = connectionOn(ctx.caller, doc);
-    /** What the caller's current access hides in any of the documents (ADR 0019; HIS-046). */
-    const hiddenIn = (...docs: JsonNode[]) =>
-      unionHidden(...docs.map((j) => readerView(d.views, conn, j, perms).hidden));
-    return { record, ref, head, headDoc: full.doc, gate, hiddenIn };
-  };
-
-  /** Refuses a `seq` above the head or below the gate before any rebuild work. */
-  const checkSeq = (seq: number, gate: HistoryGate): void => {
-    if (seq > gate.head)
-      throw new ApiError('not_found', `no version at seq ${seq} (head ${gate.head})`);
-    if (!stateVisible(gate.min, seq, gate.head, gate.named))
-      throw new ApiError('forbidden', `seq ${seq} is below your visibility gate (07 §8)`);
-  };
+  const viewOf = (ctx: Ctx, doc: string) => historyViewOf(k, ctx, doc);
 
   const contentAt = async (ref: DocRef, incarnation: string, seq: number, head: Head) =>
     seq === head.seq ? head.doc : (await d.content.rebuild(ref, incarnation, seq)).doc;
@@ -139,31 +166,6 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
     });
     if (!r.ok) throw new ApiError('internal', r.reason);
     return r.map;
-  };
-
-  /** The `sub` of every user a comparison names, for the wire (G11). */
-  const named = async (ctx: Ctx, c: Comparison): Promise<Comparison> => {
-    const users = new Set<string>();
-    for (const ch of c.changes) {
-      if (ch.user) users.add(ch.user);
-      for (const s of ch.spans ?? []) {
-        if (s.user) users.add(s.user);
-        if (s.restoredBy) users.add(s.restoredBy);
-      }
-    }
-    const name = await k.subsOf(ctx.caller.tenant, [...users]);
-    const rename = (ch: Change): Change => {
-      const out: Change = { ...ch };
-      if (ch.user) out.user = name(ch.user);
-      if (ch.spans)
-        out.spans = ch.spans.map((s) => ({
-          ...s,
-          ...(s.user ? { user: name(s.user) } : {}),
-          ...(s.restoredBy ? { restoredBy: name(s.restoredBy) } : {}),
-        }));
-      return out;
-    };
-    return { ...c, changes: c.changes.map(rename) };
   };
 
   const getDiff: Handler = async (ctx) => {
@@ -215,7 +217,9 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
       r = compare(request, { ...source, attribution: () => map }, ctxOf);
     }
     if (!r.ok) throw problemOf(r);
-    return json(200, await named(ctx, r.comparison), { 'Cache-Control': 'private, no-cache' });
+    return json(200, await nameUsers(k, ctx, r.comparison), {
+      'Cache-Control': 'private, no-cache',
+    });
   };
 
   const getAttribution: Handler = async (ctx) => {
