@@ -645,6 +645,7 @@ import type { ThreadRange } from './comment-ranges.ts';
 import type { SectionWarning } from './breaks-sections.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
 import type { LocatedFinding, ProofingClock, ProofingInfo, ProofingPort } from './proofing.ts';
+import type { AssistantRequest, HostAttachment } from './assistant-context.ts';
 
 export interface DocumentApi {
   readonly selection: ReadView<SelectionSummary>;
@@ -746,6 +747,12 @@ export interface DocumentApi {
   replaceCurrent(text: string): ReplaceReport;
   /** Replaces every match the user may change, in one change; reports the counts (FE-060). */
   replaceAll(text: string): ReplaceReport;
+  /** The request for the assistant port: selection, surrounding blocks, outline and host attachments (UX-047). */
+  assistantRequest(
+    task: AssistantRequest['task'],
+    prompt: string,
+    attachments?: readonly HostAttachment[],
+  ): AssistantRequest & { readonly omitted: number };
   /** Gives the core the proofing port (13 §6.1); returns the function that detaches it (UX-041). */
   attachProofing(
     port: ProofingPort,

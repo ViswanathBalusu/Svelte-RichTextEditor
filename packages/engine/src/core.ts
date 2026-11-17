@@ -134,6 +134,11 @@ import { type MarkupView, type SuggestionSpec, suggestionSpecs } from './suggest
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
 import {
+  type AssistantRequest,
+  type HostAttachment,
+  assembleAssistantContext,
+} from './assistant-context.ts';
+import {
   type LocatedFinding,
   NO_PROOFING,
   type ProofingClock,
@@ -898,6 +903,29 @@ export class DocumentCore implements DocumentApi {
     }
     if (state.doc !== before.doc) this.#proofing?.textChanged();
     for (const listener of this.#listeners) listener(tr, state);
+  }
+
+  // --- Assistant request (UX-047) ------------------------------------------------------------
+
+  /**
+   * The request the assistant port is sent (13 §6.2): the selection, the blocks around it and the
+   * outline, from scopes the reader may view, and the host's attachments. Nothing else of the core is
+   * read, so no token, profile or hidden text can reach the request. `omitted` counts what was left out.
+   */
+  assistantRequest(
+    task: AssistantRequest['task'],
+    prompt: string,
+    attachments: readonly HostAttachment[] = [],
+  ): AssistantRequest & { readonly omitted: number } {
+    const sel = this.#state.selection;
+    const { context, omitted } = assembleAssistantContext(
+      this.#state.doc,
+      { from: sel.from, to: sel.to },
+      (scope) => this.#canView(scope),
+      this.outline.get(),
+      attachments,
+    );
+    return { docId: this.#docId, task, prompt, context, omitted };
   }
 
   // --- Proofing (UX-041, UX-042) -------------------------------------------------------------

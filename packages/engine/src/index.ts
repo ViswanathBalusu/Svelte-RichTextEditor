@@ -93,3 +93,9 @@ export type {
   ProofingInfo,
   ProofingState,
 } from './proofing.ts';
+export type {
+  AssistantRequest,
+  AssistantRequestContext,
+  AttachmentOut,
+  HostAttachment,
+} from './assistant-context.ts';
