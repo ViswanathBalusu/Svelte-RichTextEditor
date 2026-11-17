@@ -1625,7 +1625,7 @@ export interface Operations {
     method: "GET";
     path: "/documents/{id}/attribution";
     params: { id: string };
-    query: { region?: string };
+    query: { region?: string; seq?: number; blocks?: string };
     body: never;
     response: Attribution;
   };

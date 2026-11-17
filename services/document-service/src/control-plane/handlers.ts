@@ -44,6 +44,7 @@ import { commitRoutes } from './commit-routes.ts';
 import { emptyDocument, regionNodeOf, regionsOfJson } from './content.ts';
 import { exportRoutes } from './export-routes.ts';
 import { fieldRoutes } from './field-routes.ts';
+import { historyReadRoutes } from './history-reads.ts';
 import { historyRoutes } from './history-routes.ts';
 import { activityRoutes } from './activity-route.ts';
 import { restoreRoutes } from './restore-route.ts';
@@ -770,6 +771,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...fieldRoutes(k),
     ...commitRoutes(k),
     ...historyRoutes(k),
+    ...historyReadRoutes(k),
     ...restoreRoutes(k),
     ...activityRoutes(k),
     ...threadRoutes(k),

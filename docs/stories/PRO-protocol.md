@@ -1262,12 +1262,16 @@ As an author, I want to compare two versions and see who wrote which passage, so
 
 **Acceptance criteria**
 
-- [ ] Given a caller with `view`, when `GET /documents/{id}/diff` is called with `fromSeq` and `toSeq`, optionally `region` and `granularity` of `word` or `char`, then it returns the comparison between those versions.
-- [ ] Given a caller with `view`, when `GET /documents/{id}/attribution` is called for a region or a block range, then it returns who wrote which spans (HIS-014, HIS-015).
-- [ ] Given a `fromSeq` or `toSeq` below the caller's visibility gate, when either route is called, then it is refused.
-- [ ] Given a `granularity` other than `word` or `char`, when `diff` is called, then it fails with `validation_failed`.
+- [x] Given a caller with `view`, when `GET /documents/{id}/diff` is called with `fromSeq` and `toSeq`, optionally `region` and `granularity` of `word` or `char`, then it returns the comparison between those versions.
+- [x] Given a caller with `view`, when `GET /documents/{id}/attribution` is called for a region or a block range, then it returns who wrote which spans (HIS-014, HIS-015).
+- [x] Given a `fromSeq` or `toSeq` below the caller's visibility gate, when either route is called, then it is refused.
+- [x] Given a `granularity` other than `word` or `char`, when `diff` is called, then it fails with `validation_failed`.
 
-**Notes:** Lane PRO-043-056, round 3: not started; no criterion ticked. The comparison engine exists (`compare()` in `packages/history/src/compare.ts`, with the gate and the hidden set), and the operation is defined as `getDiff` in `packages/protocol/src/definition/resources.ts`. It is blocked: `services/document-service/package.json` does not depend on `@docedit/history`, and adding it is a package.json change for the main session. Attribution (`GET /documents/{id}/attribution`) has no engine wiring either.
+**Evidence (lane w5, 2026-11-17):** `services/document-service/test/control-plane/pro-055-diff-attribution.test.ts` (HTTP over the harness, memory and PostgreSQL; `pnpm exec vitest run --project node <file>`: 16 passed, 0 skipped). Criterion 1: after three commits by bob, alice and bob, `diff` from 0 to 3 gives method `steps` and a `modified` change whose insert spans name those users and `seq` values; `granularity=char` and a `region` are accepted and echoed. Criterion 2: `attribution` at the head gives bob 3, alice 2, bob 1 and then the creator's seq 0 for the first block; `seq=2`, `blocks=` and `region=` narrow it; an unknown region, block or a `seq` above the head is 404. Criterion 3: a viewer (history visibility `editors`) gets 403 for `diff` from seq 1 and `attribution` at `seq=1`, and 200 at the head. Criterion 4: `granularity=line` is 400 `validation_failed`. The routes are `src/control-plane/history-reads.ts`; the decisions are in docs/adr/0373-w5-PRO-055-history-reads.md (proposed): `seq` and `blocks` are new query members of `getAttribution` (spec regenerated), the attribution map is replayed from the creator's seq 0 content.
+
+**Notes (earlier lanes, now out of date):** PRO-043-056 round 3 found the routes blocked on `@docedit/history` missing from `services/document-service/package.json`; the dependency is present now. Restricted-reader projection of `diff` and `attribution` (ADR 0019) is done by the algorithms with the reader's hidden set and is covered by HIS-046 in `packages/history`; it is not re-tested over HTTP here. A restore does not keep the original authors in the route (ADR 0373 decision 2).
+
+**Notes (older):** Lane PRO-043-056, round 3: not started; no criterion ticked. The comparison engine exists (`compare()` in `packages/history/src/compare.ts`, with the gate and the hidden set), and the operation is defined as `getDiff` in `packages/protocol/src/definition/resources.ts`. It is blocked: `services/document-service/package.json` does not depend on `@docedit/history`, and adding it is a package.json change for the main session. Attribution (`GET /documents/{id}/attribution`) has no engine wiring either.
 
 ### PRO-056 Restore a document or a region
 
