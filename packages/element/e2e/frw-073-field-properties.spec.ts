@@ -33,8 +33,9 @@ const confirmedSeq = (page: Page): Promise<number> =>
         };
       }
     ).__embed;
-    return e.internals(document.querySelector('doc-editor[data-test="one"]')!).editor.core
-      .confirmedSeq.get();
+    return e
+      .internals(document.querySelector('doc-editor[data-test="one"]')!)
+      .editor.core.confirmedSeq.get();
   });
 
 /** Opens the pane as its command does. */
@@ -134,9 +135,7 @@ test.describe('FRW-073 the field properties pane', () => {
     await page.keyboard.press('Enter');
 
     // Criterion 3: the change is stored as one commit of attribute changes.
-    await expect
-      .poll(async () => (await attrs(page, FIELD_IDS.name))['label'])
-      .toBe('Full name');
+    await expect.poll(async () => (await attrs(page, FIELD_IDS.name))['label']).toBe('Full name');
     expect(await attrs(page, FIELD_IDS.name)).toMatchObject({
       key: 'tenant.name',
       label: 'Full name',
@@ -215,7 +214,8 @@ test.describe('FRW-073 the field properties pane', () => {
     await expect(pane.locator('[data-status="read-only"]')).toHaveText(
       'These properties cannot be changed now.',
     );
-    for (const label of LABELS) await expect(pane.getByLabel(label, { exact: true })).toBeDisabled();
+    for (const label of LABELS)
+      await expect(pane.getByLabel(label, { exact: true })).toBeDisabled();
     await expect(pane.getByRole('button', { name: 'Apply' })).toBeDisabled();
     // The properties are still shown.
     await expect(pane.getByLabel('Key', { exact: true })).toHaveValue('tenant.amount');

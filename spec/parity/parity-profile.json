@@ -1508,6 +1508,14 @@
       "capability": "citations"
     },
     {
+      "id": "view.fieldProperties",
+      "capability": "fields-and-forms"
+    },
+    {
+      "id": "view.roles",
+      "capability": "fields-and-forms"
+    },
+    {
       "id": "view.fillSummary",
       "capability": "fields-and-forms"
     },

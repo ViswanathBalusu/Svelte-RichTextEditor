@@ -13,6 +13,21 @@ import {
   type FontFaceSetLike,
 } from './font-registration.ts';
 
+/** What the loaders read: the manifest of the backend's fonts port. */
+export type ManifestSource = Pick<FontsPort, 'manifest'>;
+
+/**
+ * The port's manifest, read once: the registration and the family lookup of one session share the
+ * answer (and its failure), so a session asks the service for the manifest once.
+ */
+export function readOnce<T extends ManifestSource>(port: T): T {
+  let answer: ReturnType<ManifestSource['manifest']> | null = null;
+  // Derived from the port, so its other members still answer; only the manifest is replaced.
+  return Object.create(port, {
+    manifest: { value: () => (answer ??= port.manifest()) },
+  }) as T;
+}
+
 /** Where faces are registered: the page's font set and the FontFace constructor of that page. */
 export interface PageFonts {
   readonly set: FontFaceSetLike;
@@ -50,7 +65,7 @@ export function pageFonts(): PageFonts | null {
  * @returns the alias of each file, in manifest order; empty when there is no page.
  */
 export async function registerManifestFonts(
-  port: FontsPort,
+  port: ManifestSource,
   target: PageFonts | null = pageFonts(),
 ): Promise<string[]> {
   if (!target) return [];
@@ -64,7 +79,7 @@ export async function registerManifestFonts(
  * read gives a lookup that knows no family, so the editor keeps its fallback fonts.
  */
 export async function manifestFamilyLookup(
-  port: FontsPort,
+  port: ManifestSource,
 ): Promise<(family: string) => string | undefined> {
   try {
     const manifest = await port.manifest();

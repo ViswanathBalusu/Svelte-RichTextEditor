@@ -90,6 +90,14 @@ export const CODES = {
     severity: 'error',
     message: 'The bundle did not come from the converter and was not compiled.',
   },
+  seal_pin_mismatch: {
+    severity: 'error',
+    message: 'The bundle is not the state the sealing export is pinned to; nothing was compiled.',
+  },
+  seal_pair_differs: {
+    severity: 'error',
+    message: 'The two compiles for sealing did not give the same PDF; nothing is sealed.',
+  },
 } as const satisfies Record<string, { severity: Severity; message: string }>;
 
 export type Code = keyof typeof CODES;

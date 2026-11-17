@@ -31,6 +31,13 @@ describe('the manifest family lookup (FE-062 criterion 1)', () => {
   it('gives the hash alias of the file that serves a family, and nothing for another family', async () => {
     const lookup = await manifestFamilyLookup(port(manifest));
     expect(lookup('Noto Serif')).toBe(fontAlias(HASH));
+    // A family with no entry takes the manifest's default family (FE-062 criterion 3).
+    expect(lookup('Aptos')).toBe(fontAlias(HASH));
+  });
+
+  it('gives nothing for an unknown family when the manifest has no default family', async () => {
+    const lookup = await manifestFamilyLookup(port({ ...manifest, defaultFamily: null }));
+    expect(lookup('Noto Serif')).toBe(fontAlias(HASH));
     expect(lookup('Aptos')).toBeUndefined();
   });
 

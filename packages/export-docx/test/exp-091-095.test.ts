@@ -228,6 +228,39 @@ describe('the direct DOCX writer: rows, pictures, captions, suggestions and form
     expect(textOf(captions[1]!)).toBe(`Figure ${expectedSecond}: the second`);
   });
 
+  it('writes an inline picture at its size with its alternative text, and the alignment of its paragraph (EXP-091)', async () => {
+    const env = newDocument();
+    const assets = new AssetStore();
+    const png = await assets.add(PNG, 'image/png', 'image');
+    bodyOf(env).content = [
+      p(
+        [
+          t('Before '),
+          {
+            type: 'image',
+            attrs: { asset: png, width: 1440, height: 720, alt: 'Inline & <small>' },
+          },
+          t(' after'),
+        ],
+        { align: 'center' },
+      ),
+    ];
+    const out = await writeDocx(env, assets);
+    const body = xml(partsOf(out.bytes).get('word/document.xml')!);
+    const para = all(body, 'p')[0]!;
+    // The picture shares the paragraph with its text: it is inline, not anchored.
+    expect(all(para, 'inline').length).toBe(1);
+    expect(all(para, 'anchor').length).toBe(0);
+    expect(textOf(para)).toBe('Before  after');
+    // Size in EMU is the size in twips times 635; the alternative text is read back unescaped.
+    const extent = all(para, 'extent')[0]!;
+    expect(att(extent, 'cx')).toBe(String(1440 * 635));
+    expect(att(extent, 'cy')).toBe(String(720 * 635));
+    expect(att(all(para, 'docPr')[0], 'descr')).toBe('Inline & <small>');
+    // The model's inline image has no `align` (03 §4.4); its place on the line is its paragraph's.
+    expect(att(kid(kid(para, 'pPr'), 'jc'), 'val')).toBe('center');
+  });
+
   it('writes a whole-table suggestion as a tracked change on every row, with the commit date (EXP-093)', async () => {
     const env = newDocument();
     const cells = (s: string): JsonNode[] => [cell([p([t(s)])]), cell([p([t(`${s} 2`)])])];

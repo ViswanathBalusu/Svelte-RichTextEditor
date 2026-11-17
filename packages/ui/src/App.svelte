@@ -60,6 +60,7 @@
   import type {
     AccessSummary,
     CommentAnchor,
+    EquationRef,
     CoreApi,
     EditorMode,
     OutlineItem,
@@ -263,6 +264,7 @@
   let pane = $state.raw<{ id: string; component: PaneComponent } | null>(null);
   let paneFailed = $state(false);
   let paneEl: HTMLElement | undefined = $state();
+  let tabOriginEl: HTMLElement | undefined = $state();
   let paneReturn: HTMLElement | null = null;
   let shellEl: HTMLElement | undefined = $state();
   const loadedPanes = new Map<string, PaneComponent>();
@@ -480,7 +482,21 @@
   }
 
   // Dialogs of the shell.
-  let dialog = $state<'language' | 'region' | 'export' | 'comment' | null>(null);
+  let dialog = $state<'language' | 'region' | 'export' | 'comment' | 'math' | null>(null);
+  // The equation the math editor is open on (FE-070): taken when the request arrives.
+  let equation = $state.raw<EquationRef | null>(null);
+  if (core.mathEditor) {
+    const editor = core.mathEditor;
+    let seen = editor.request.get()?.n ?? 0;
+    const stop = editor.request.subscribe(() => {
+      const request = editor.request.get();
+      if (!request || request.n === seen) return;
+      seen = request.n;
+      equation = { pos: request.pos, latex: request.latex, display: request.display };
+      dialog = 'math';
+    });
+    onDestroy(stop);
+  }
   // Their code is one chunk, requested the first time a dialog opens (13 §9; FE-002).
   // A type query, not an import: a static import here could pull the chunk into the first load.
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -508,6 +524,22 @@
     dialog = null;
     commentAnchor = null;
     announce('announce.comment.created');
+  }
+
+  // Closes the math editor (FE-070). Focus goes back to the editing surface, which collapses its
+  // selection to the start; the equation is selected again once that has happened.
+  function closeMath(): void {
+    const pos = equation?.pos;
+    dialog = null;
+    equation = null;
+    const editor = core.mathEditor;
+    if (pos === undefined || !editor) return;
+    void tick().then(() =>
+      requestAnimationFrame(() => {
+        editor.select(pos);
+        core.focus();
+      }),
+    );
   }
 
   function applyLanguage(lang: string | null): void {
@@ -1023,12 +1055,19 @@
         // FE-103: Escape leaves the editing surface. Focus is taken off it, so Tab goes on to the
         // next control in page order and Shift+Tab back to the previous one.
         // UX-010: Escape first hides the mini toolbar, and leaves the text on the next press.
+        // A dialog is closed by Escape itself (the native cancel); the shell does not take the key (FE-070).
+        if (key === 'Escape' && event.composedPath().some((n) => n instanceof HTMLDialogElement))
+          return false;
         if (key === 'Escape' && miniShown) {
           miniDismissed = true;
           return true;
         }
         if (key === 'Escape' && inPage(event)) {
-          activeElement()?.blur();
+          // Focus moves to a place just after the surface, not to nothing: with no focus WebKit starts
+          // the next Tab at the first control of the page. Tab then goes to the next control and
+          // Shift+Tab to the surface's predecessor in page order.
+          if (tabOriginEl) tabOriginEl.focus();
+          else activeElement()?.blur();
           return true;
         }
         return false;
@@ -1131,6 +1170,8 @@
           <Carets carets={core.carets} />
         {/if}
       </div>
+      <!-- Where focus waits after Escape leaves the editing surface (FE-103): the next Tab goes on from here. -->
+      <span class="de-tab-origin" tabindex="-1" bind:this={tabOriginEl}></span>
     </div>
     {#if panel.current}
       <aside
@@ -1206,8 +1247,19 @@
     <MiniToolbar anchor={miniAnchor} />
   {/if}
   {#if dialogs}
-    {@const { LanguageDialog, RegionDialog, CommentBox, ExportDialog } = dialogs}
-    {#if dialog === 'language'}
+    {@const { LanguageDialog, RegionDialog, CommentBox, ExportDialog, MathEditorDialog } = dialogs}
+    {#if dialog === 'math' && core.mathEditor && equation}
+      <MathEditorDialog
+        editor={core.mathEditor}
+        {equation}
+        onApplied={() => {
+          closeMath();
+          announce('announce.equation.set');
+        }}
+        onRejected={() => announce('announce.equation.rejected')}
+        onClose={closeMath}
+      />
+    {:else if dialog === 'language'}
       <LanguageDialog
         initial={selection.current.lang ?? null}
         onApply={applyLanguage}

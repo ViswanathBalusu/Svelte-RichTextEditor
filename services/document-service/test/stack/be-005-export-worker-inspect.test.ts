@@ -57,7 +57,19 @@ const env = readEnv(envPath);
 const compose = JSON.parse(readFileSync(composePath, 'utf8')) as {
   services: Record<string, ComposeService>;
 };
-const service = compose.services['export-worker'];
+// FND-010 criterion 2: the sandbox settings are in compose.base.json and the service extends them.
+// The members this test reads are scalars and lists the extending service does not set, so a
+// shallow merge, the extended service first, gives what infra/compose-extends.ps1 resolves.
+const local = compose.services['export-worker'];
+const baseFile = (local as { extends?: { file: string; service: string } } | undefined)?.extends;
+const base = baseFile
+  ? (
+      JSON.parse(readFileSync(new URL(baseFile.file, composePath), 'utf8')) as {
+        services: Record<string, ComposeService>;
+      }
+    ).services[baseFile.service]
+  : undefined;
+const service = local === undefined ? undefined : { ...base, ...local };
 
 function podman(args: string[]): string {
   return execFileSync(cli, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
