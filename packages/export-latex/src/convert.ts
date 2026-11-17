@@ -19,6 +19,7 @@ import {
 import type { Bundle, BundleManifest, ConvertOptions, Diagnostic, SourceMap } from './bundle.ts';
 import { bundleHashInput, canonicalJson } from './bundle-hash.ts';
 import { block, closeLists, flowBlocks, newFlow } from './blocks.ts';
+import { settleSuggestions } from './suggestions.ts';
 import { computeCitations } from './citations.ts';
 import {
   attr,
@@ -147,7 +148,7 @@ export async function convert(envelope: CdmEnvelope, options: ConvertOptions): P
         message: `the document requires "${feature}", which this converter cannot read (03 §2)`,
       });
   }
-  const doc = envelope.doc as unknown as J;
+  const doc = settleSuggestions(envelope.doc as unknown as J, o.suggestions, diagnostics);
   const table = styleTable(doc as unknown as TreeNode);
   const labels = computeLabels(doc as unknown as TreeNode, {
     table,

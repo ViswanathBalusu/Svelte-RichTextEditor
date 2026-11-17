@@ -26,6 +26,7 @@ import {
 import type { Diagnostic } from './bundle.ts';
 import type { J, Mark } from './context.ts';
 import { url } from './emit.ts';
+import { settleSuggestions } from './suggestions.ts';
 import type { DocumentWriter, WriterInput } from './writer.ts';
 
 export interface MarkdownOptions {
@@ -658,7 +659,8 @@ export function markdownText(
   options: MarkdownOptions = {},
   assets: Readonly<Record<string, unknown>> = {},
 ): MarkdownOutput {
-  const doc = envelope.doc as unknown as J;
+  const settled: Diagnostic[] = [];
+  const doc = settleSuggestions(envelope.doc as unknown as J, options.suggestions ?? null, settled);
   const table = styleTable(doc as unknown as TreeNode);
   const labels = computeLabels(doc as unknown as TreeNode, { table });
   const ctx: Ctx = {
@@ -666,7 +668,7 @@ export function markdownText(
     labels,
     mode: options.suggestions ?? null,
     assets,
-    diagnostics: [],
+    diagnostics: settled,
     warned: new Set(),
     footnotes: [],
     pictures: new Map(),

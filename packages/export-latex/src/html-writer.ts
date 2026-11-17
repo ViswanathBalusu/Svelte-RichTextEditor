@@ -35,6 +35,7 @@ import {
 import type { Diagnostic } from './bundle.ts';
 import type { J } from './context.ts';
 import { url } from './emit.ts';
+import { settleSuggestions } from './suggestions.ts';
 import {
   destinationOf,
   note,
@@ -709,7 +710,8 @@ export function htmlText(
   options: HtmlOptions = {},
   assets: Readonly<Record<string, unknown>> = {},
 ): HtmlOutput {
-  const doc = envelope.doc as unknown as J;
+  const settled: Diagnostic[] = [];
+  const doc = settleSuggestions(envelope.doc as unknown as J, options.suggestions ?? null, settled);
   const table = styleTable(doc as unknown as TreeNode);
   const labels = computeLabels(doc as unknown as TreeNode, { table });
   const base = resolveParagraph(table, {}, {});
@@ -720,7 +722,7 @@ export function htmlText(
     paragraph: { current: base.value, base: base.value },
     mode: options.suggestions ?? null,
     assets,
-    diagnostics: [],
+    diagnostics: settled,
     warned: new Set(),
     footnotes: [],
     pictures: new Map(),
