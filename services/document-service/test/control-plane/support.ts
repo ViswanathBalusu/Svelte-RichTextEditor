@@ -40,6 +40,8 @@ export interface Notice {
   doc?: string | null;
   /** For `notify`: the notification (05 §5.6). */
   notification?: Notification;
+  /** For `notify`: the scopes the notification is about, when the sender named them. */
+  scopes?: readonly string[];
 }
 
 /** A data plane that records the control plane's notifications (BE-026 is the real side). */
@@ -62,12 +64,17 @@ export class StubDataPlane implements DataPlane {
   /** Set by a test to stand in for the data plane's pages of the log (BE-038). */
   readCommits?: NonNullable<DataPlane['readCommits']>;
   /** Records the notifications the control plane sends to channels (05 §5.6; PRO-035). */
-  notify(ref: DocRef, notification: Notification, opts?: { user?: string }): void {
+  notify(
+    ref: DocRef,
+    notification: Notification,
+    opts?: { user?: string; scopes?: readonly string[] },
+  ): void {
     this.notices.push({
       kind: 'notify',
       ref,
       notification,
       ...(opts?.user ? { user: opts.user } : {}),
+      ...(opts?.scopes ? { scopes: opts.scopes } : {}),
     });
   }
   sessionsRevoked(_tenant: string, user: string, doc: string | null): void {

@@ -385,7 +385,7 @@ export interface DataPlane extends RoomNotifier {
    * Tells the open channels of a document that a resource changed (05 §5.6; PRO-035): every
    * channel, or only those of `user` (a surrogate), for example the requester of an export job.
    */
-  notify?(ref: DocRef, n: Notification, opts?: { user?: string }): void;
+  notify?(ref: DocRef, n: Notification, opts?: { user?: string; scopes?: readonly string[] }): void;
   /**
    * Drains the node (06 §2.2 step 5; BE-022): no new connections or channels, writes in flight
    * finish and are answered, rooms are checkpointed and released, then `goaway` and 4503.

@@ -731,9 +731,22 @@ ecentHead, keeping one entry older than the window. */
    * Tells the channels that something changed (05 §5.6; PRO-035): all of them, or only those of
    * `user` (a surrogate), for example the requester of an export job.
    */
-  notify(n: Notification, user?: string): void {
-    for (const ch of this.#channels.values())
-      if (user === undefined || ch.conn.sub === user) ch.port.event(n);
+  notify(n: Notification, user?: string, scopes?: readonly string[]): void {
+    // A notice about a region is not sent to a channel whose reader cannot see that region
+    // (ADR 0019; PRO-036 criterion 6): a thread there, or a comment, must not reach it.
+    const regions = (scopes ?? []).filter((s) => s.startsWith('region:')).map((s) => s.slice(7));
+    for (const ch of this.#channels.values()) {
+      if (user !== undefined && ch.conn.sub !== user) continue;
+      if (regions.length > 0) {
+        const hidden = this.#deps.tokens.hidden(
+          ch.conn,
+          this.#gateway.fullHead,
+          this.#room.permissions,
+        );
+        if (regions.some((r) => hidden.regions.has(r))) continue;
+      }
+      ch.port.event(n);
+    }
   }
 
   /** The channels of a user, for revocation (05 §3.3). */
@@ -1848,8 +1861,8 @@ export class RoomHost {
   }
 
   /** A notification for the open channels of a document (05 §5.6; PRO-035). */
-  notify(ref: DocRef, n: Notification, user?: string): void {
-    this.get(ref)?.notify(n, user);
+  notify(ref: DocRef, n: Notification, user?: string, scopes?: readonly string[]): void {
+    this.get(ref)?.notify(n, user, scopes);
   }
 
   // --- Server-authored operations (04 §10; SYN-031; BE-023, BE-037, BE-039) ---------------------

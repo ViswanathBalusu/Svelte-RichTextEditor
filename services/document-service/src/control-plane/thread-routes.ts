@@ -326,12 +326,35 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       },
     });
     emit(ctx, 'dep.thread.created', doc, { thread: thread.id, seq: head.seq });
-    k.notify()?.(ref, {
-      type: 'thread.created',
-      resource: `/threads/${thread.id}`,
-      data: { state: 'open', seq: head.seq },
-    });
+    const told = await eventOf(ctx.caller.tenant, thread);
+    k.notify()?.(
+      ref,
+      { type: 'thread.created', resource: `/threads/${thread.id}`, data: told.data },
+      { scopes: told.scopes },
+    );
     return json(201, threadBody(thread), { ETag: threadTag(thread), 'Cache-Control': 'no-store' });
+  };
+
+  /**
+   * What a thread event tells a channel (PRO-036 criterion 2; SYN-032): the thread's state, the
+   * head `seq`, and for a range thread its range at that `seq`, mapped from the seq it was made
+   * at, so that the client can place the decoration without a fetch. A block thread names its
+   * block. The scopes go with the notice, so that a region the reader cannot see is not announced.
+   */
+  const eventOf = async (
+    tenant: string,
+    t: StoredThread,
+  ): Promise<{ data: Record<string, unknown>; scopes: string[] }> => {
+    const ref: DocRef = { tenant, doc: t.docId };
+    const head = await d.logs.head(ref);
+    const data: Record<string, unknown> = { state: t.state, seq: head.seq };
+    if ('range' in t.target && t.rangeSeq !== null) {
+      const between = t.rangeSeq < head.seq ? await d.logs.read(ref, t.rangeSeq + 1, head.seq) : [];
+      const through = between.map((c) => ({ kind: c.kind, steps: 'steps' in c ? c.steps : [] }));
+      const [mapped] = mapRangesThrough([t.target.range], through, cdmSchema());
+      data['range'] = { from: mapped!.from, to: mapped!.to };
+    } else if ('block' in t.target) data['block'] = t.target.block;
+    return { data, scopes: scopesOf(t) };
   };
 
   /**
@@ -412,9 +435,11 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       thread: t.id,
       seq: (await d.logs.head(refOf(ctx, t.docId))).seq,
     });
+    const told = await eventOf(ctx.caller.tenant, t);
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
-      { type: 'thread.deleted', resource: `/threads/${t.id}`, data: {} },
+      { type: 'thread.deleted', resource: `/threads/${t.id}`, data: told.data },
+      { scopes: told.scopes },
     );
     return { status: 204, headers: { 'Cache-Control': 'no-store' } };
   };
@@ -458,14 +483,25 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
         thread: t.id,
         seq: (await d.logs.head(refOf(ctx, t.docId))).seq,
       });
-      k.notify()?.(scope, {
-        type: state === 'resolved' ? 'thread.resolved' : 'thread.reopened',
-        resource: `/threads/${t.id}`,
-        data: { state: updated.state },
-      });
+      const told = await eventOf(ctx.caller.tenant, updated);
+      k.notify()?.(
+        scope,
+        {
+          type: state === 'resolved' ? 'thread.resolved' : 'thread.reopened',
+          resource: `/threads/${t.id}`,
+          data: told.data,
+        },
+        { scopes: told.scopes },
+      );
     }
-    if (changesAssignee)
-      k.notify()?.(scope, { type: 'thread.updated', resource: `/threads/${t.id}`, data: {} });
+    if (changesAssignee) {
+      const told = await eventOf(ctx.caller.tenant, updated);
+      k.notify()?.(
+        scope,
+        { type: 'thread.updated', resource: `/threads/${t.id}`, data: told.data },
+        { scopes: told.scopes },
+      );
+    }
     return json(200, threadBody(updated), {
       ETag: threadTag(updated),
       'Cache-Control': 'no-store',
@@ -496,6 +532,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
       { type: 'comment.created', resource: `/comments/${comment.id}`, data: { thread: t.id } },
+      { scopes: scopesOf(t) },
     );
     return json(201, commentBody(comment), {
       ETag: commentTag(comment),
@@ -514,6 +551,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
       { type: 'comment.updated', resource: `/comments/${c.id}`, data: { thread: t.id } },
+      { scopes: scopesOf(t) },
     );
     return json(200, commentBody(updated), {
       ETag: commentTag(updated),
@@ -532,6 +570,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
     k.notify()?.(
       { tenant: ctx.caller.tenant, doc: t.docId },
       { type: 'comment.deleted', resource: `/comments/${c.id}`, data: { thread: t.id } },
+      { scopes: scopesOf(t) },
     );
     return { status: 204, headers: { 'Cache-Control': 'no-store' } };
   };

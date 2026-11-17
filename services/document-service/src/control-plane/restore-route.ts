@@ -150,6 +150,12 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
     const chainHead = (await d.logs.state?.(ref))?.chainHead ?? null;
     emit(ctx, 'dep.document.changed', doc, { seq, ...(chainHead !== null ? { chainHead } : {}) });
     emit(ctx, 'dep.version.restored', doc, { seq });
+    // The channels hear of it as `version.restored`, besides the `sync.reset` of the snapshot (PRO-036).
+    k.notify()?.(ref, {
+      type: 'version.restored',
+      resource: `/documents/${doc}/versions`,
+      data: { seq, toSeq: body.toSeq },
+    });
     return json(200, { seq, toSeq: body.toSeq, preRestoreSeq: head.seq });
   };
 
