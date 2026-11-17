@@ -20,6 +20,7 @@ import type {
   ErrorCode,
   Limits,
   PresencePort,
+  ProofingPort,
   Resume,
   SyncChannel,
   SyncPort,
@@ -73,6 +74,8 @@ export interface AttachAt {
   features?: readonly string[];
   /** Uploads pasted pictures through the backend's assets port (FE-053; assets.ts). */
   assets?: PictureAssetsPort;
+  /** The backend's proofing port, when it has one (13 §6.1; UX-041). It has no feature name (G06). */
+  proofing?: ProofingPort;
 }
 
 /** What the session needs from the mounted editor (the editing core and the shell). */
@@ -315,6 +318,7 @@ export class Session {
         at.presence = this.#presencePort(backend.presence);
       if (backend.assets && backend.features.has('assets'))
         at.assets = pictureAssets(backend.assets, this.docId);
+      if (backend.proofing) at.proofing = backend.proofing;
       at.features = [...backend.features];
       this.#channel = channel;
       this.#detach = editor.attach(channel, at);

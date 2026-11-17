@@ -12,6 +12,8 @@ Keys are given for Windows and Linux, with the Apple form after the slash where 
 | `format.bold` | Ctrl+B / Cmd+B | Ctrl+B / Cmd+B | none | none listed | none listed | not checked | none listed |
 | `format.italic` | Ctrl+I / Cmd+I | Ctrl+I / Cmd+I | none | none listed | none listed | not checked | none listed |
 | `format.painter` | Ctrl+Shift+C / Shift+Cmd+C | Ctrl+Shift+C / Shift+Cmd+C | Ctrl+Alt+Shift+C / Alt+Shift+Cmd+C | none listed | Shift+Cmd+C: “Open Developer tools” (macOS); use the alternative | not checked | none listed |
+| `proofing.next` | Alt+F7 | Alt+F7 | none | none listed | none listed | not checked | none listed |
+| `proofing.previous` | none | Alt+Shift+F7 | none | none listed | none listed | not checked | none listed |
 | `view.commandSearch` | Alt+Q | Alt+Q | none | none listed | none listed | not checked | none listed |
 | `view.find` | Ctrl+F / Cmd+F | Ctrl+F / Cmd+F | none | Ctrl+F: “Open the Find Bar to search the current page” (Windows, Linux); the editor takes it only inside the editor | Ctrl+F: “Open find on page” (Windows, Linux); the editor takes it only inside the editor | not checked | Cmd+F: “Search the current web page” (macOS); the editor takes it only inside the editor |
 | `shell.nextLandmark` | Ctrl+F6 | Ctrl+F6 | Alt+F6 | Ctrl+F6: “Skip to web contents” (Windows, Linux); use the alternative | Ctrl+F6: “Move focus to the web content pane” (Windows, Linux); use the alternative | not checked | none listed |

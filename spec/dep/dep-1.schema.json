@@ -3196,6 +3196,74 @@
         "origins"
       ]
     },
+    "KeyRegistration": {
+      "title": "KeyRegistration",
+      "description": "The public key a tenant administrator registers (UX-077; 05 section 3.2).",
+      "$comment": "05 §3.2; 13 §10",
+      "type": "object",
+      "properties": {
+        "kid": {
+          "description": "The key identifier, unique within the tenant.",
+          "type": "string",
+          "minLength": 1
+        },
+        "use": {
+          "description": "user keys verify user tokens; service keys verify service credentials.",
+          "type": "string",
+          "enum": [
+            "user",
+            "service"
+          ]
+        },
+        "alg": {
+          "description": "The algorithm the key verifies; symmetric and other algorithms are refused.",
+          "type": "string",
+          "enum": [
+            "ES256",
+            "EdDSA",
+            "RS256"
+          ]
+        },
+        "jwk": {
+          "description": "The public key as a JWK. A key with private members is refused.",
+          "type": "object",
+          "properties": {}
+        },
+        "issuer": {
+          "description": "The iss the key verifies, or null for any.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kid",
+        "use",
+        "alg",
+        "jwk"
+      ]
+    },
+    "OriginRegistration": {
+      "title": "OriginRegistration",
+      "description": "An origin a tenant administrator allows (UX-077; 05 section 4).",
+      "$comment": "05 §4; 13 §10",
+      "type": "object",
+      "properties": {
+        "origin": {
+          "description": "An origin: scheme, host and optional port.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "origin"
+      ]
+    },
     "QuotaSettings": {
       "title": "QuotaSettings",
       "description": "The quota values of a tenant; a dimension is null when no value is set (UX-078; 06 section 12).",

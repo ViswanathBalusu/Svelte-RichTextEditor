@@ -108,7 +108,9 @@ describe('a grant change and its audit row share one transaction (BE-014 criteri
     expect(actors).toEqual(['alice']);
     expect(kinds).toEqual(['grants.changed']);
     const payload = JSON.parse(data![0]!) as Record<string, unknown>;
-    expect(Object.keys(payload).sort()).toEqual(['rev', 'scopes']);
+    // A workflow transition also carries the flag it set (UX-081 criterion 1).
+    expect(Object.keys(payload).sort()).toEqual(['rev', 'scopes', 'workflowActive']);
+    expect(payload['workflowActive']).toBe(true);
     expect(payload['rev']).toBe(2);
     const at = Date.parse(ats![0]!);
     expect(at).toBeGreaterThanOrEqual(before);

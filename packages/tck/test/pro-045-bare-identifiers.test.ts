@@ -38,7 +38,13 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
     const left = DEP1.operations
       .filter((o) => o.path.includes('{') && !isBareIdentifierOperation(o))
       .filter((o) => !o.path.startsWith('/documents/{id}'));
-    expect(left.map((o) => o.path.split('/')[1])).toEqual(['webhooks', 'webhooks', 'webhooks']);
+    expect(left.map((o) => o.path.split('/')[1])).toEqual([
+      'webhooks',
+      'webhooks',
+      'webhooks',
+      'keys',
+      'origins',
+    ]);
     for (const o of left) expect(o.security).toEqual(['service']);
   });
 

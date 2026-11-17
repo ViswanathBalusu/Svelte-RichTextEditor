@@ -4696,6 +4696,75 @@
         "x-dep-spec": "05 §4; 13 §10",
         "x-dep-owner": "UX",
         "x-dep-requires": "Service credential"
+      },
+      "post": {
+        "operationId": "addTenantOrigin",
+        "summary": "Allows an origin for the tenant; audited (UX-077).",
+        "description": "Allows an origin for the tenant; audited (UX-077). Requires: Service credential (07 §12). Specified in 05 §4; 13 §10.",
+        "tags": [
+          "origins"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OriginRegistration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OriginRegistration"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §4; 13 §10",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Service credential",
+        "x-dep-codes": [
+          "idempotency_mismatch"
+        ]
       }
     },
     "/keys": {
@@ -4749,6 +4818,200 @@
           }
         },
         "x-dep-spec": "05 §3.2; 13 §10",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Service credential"
+      },
+      "post": {
+        "operationId": "registerTenantKey",
+        "summary": "Registers a public key for the tenant; audited (UX-077).",
+        "description": "Registers a public key for the tenant; audited (UX-077). Requires: Service credential (07 §12). Specified in 05 §3.2; 13 §10.",
+        "tags": [
+          "keys"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyRegistration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantKeyView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §3.2; 13 §10",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Service credential",
+        "x-dep-codes": [
+          "idempotency_mismatch",
+          "conflict"
+        ]
+      }
+    },
+    "/keys/{kid}": {
+      "delete": {
+        "operationId": "removeTenantKey",
+        "summary": "Removes a registered key; tokens it signed are refused at once; audited (UX-077).",
+        "description": "Removes a registered key; tokens it signed are refused at once; audited (UX-077). Requires: Service credential (07 §12). Specified in 05 §3.2; 13 §10.",
+        "tags": [
+          "keys"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The key identifier.",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "The key identifier."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchOptional"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §3.2; 13 §10",
+        "x-dep-owner": "UX",
+        "x-dep-requires": "Service credential"
+      }
+    },
+    "/origins/{origin}": {
+      "delete": {
+        "operationId": "removeTenantOrigin",
+        "summary": "Removes an allowed origin; the origin is percent-encoded in the path; audited (UX-077).",
+        "description": "Removes an allowed origin; the origin is percent-encoded in the path; audited (UX-077). Requires: Service credential (07 §12). Specified in 05 §4; 13 §10.",
+        "tags": [
+          "origins"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The origin, percent-encoded.",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "The origin, percent-encoded."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchOptional"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §4; 13 §10",
         "x-dep-owner": "UX",
         "x-dep-requires": "Service credential"
       }
@@ -10260,6 +10523,74 @@
         },
         "required": [
           "origins"
+        ]
+      },
+      "KeyRegistration": {
+        "title": "KeyRegistration",
+        "description": "The public key a tenant administrator registers (UX-077; 05 section 3.2).",
+        "$comment": "05 §3.2; 13 §10",
+        "type": "object",
+        "properties": {
+          "kid": {
+            "description": "The key identifier, unique within the tenant.",
+            "type": "string",
+            "minLength": 1
+          },
+          "use": {
+            "description": "user keys verify user tokens; service keys verify service credentials.",
+            "type": "string",
+            "enum": [
+              "user",
+              "service"
+            ]
+          },
+          "alg": {
+            "description": "The algorithm the key verifies; symmetric and other algorithms are refused.",
+            "type": "string",
+            "enum": [
+              "ES256",
+              "EdDSA",
+              "RS256"
+            ]
+          },
+          "jwk": {
+            "description": "The public key as a JWK. A key with private members is refused.",
+            "type": "object",
+            "properties": {}
+          },
+          "issuer": {
+            "description": "The iss the key verifies, or null for any.",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kid",
+          "use",
+          "alg",
+          "jwk"
+        ]
+      },
+      "OriginRegistration": {
+        "title": "OriginRegistration",
+        "description": "An origin a tenant administrator allows (UX-077; 05 section 4).",
+        "$comment": "05 §4; 13 §10",
+        "type": "object",
+        "properties": {
+          "origin": {
+            "description": "An origin: scheme, host and optional port.",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "origin"
         ]
       },
       "QuotaSettings": {

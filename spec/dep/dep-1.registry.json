@@ -1157,6 +1157,62 @@
       "owner": "UX"
     },
     {
+      "operationId": "registerTenantKey",
+      "method": "POST",
+      "path": "/keys",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §3.2; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "removeTenantKey",
+      "method": "DELETE",
+      "path": "/keys/{kid}",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §3.2; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "addTenantOrigin",
+      "method": "POST",
+      "path": "/origins",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "201",
+      "spec": "05 §4; 13 §10",
+      "owner": "UX"
+    },
+    {
+      "operationId": "removeTenantOrigin",
+      "method": "DELETE",
+      "path": "/origins/{origin}",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "optional",
+      "idempotencyKey": false,
+      "success": "204",
+      "spec": "05 §4; 13 §10",
+      "owner": "UX"
+    },
+    {
       "operationId": "getTenantQuotas",
       "method": "GET",
       "path": "/quotas",

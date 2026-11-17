@@ -221,6 +221,62 @@
       }
     },
     {
+      "id": "proofing.next",
+      "kind": "command",
+      "conventional": [
+        "Alt-F7"
+      ],
+      "keys": [
+        "Alt-F7"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
+      "id": "proofing.previous",
+      "kind": "command",
+      "conventional": [],
+      "keys": [
+        "Alt-Shift-F7"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
       "id": "view.commandSearch",
       "kind": "command",
       "conventional": [

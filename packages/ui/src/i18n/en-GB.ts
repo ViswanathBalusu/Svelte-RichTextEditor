@@ -816,6 +816,33 @@ export const EN_GB = {
   'surface.body': 'Document',
   'surface.footnote': 'Footnote text',
   'surface.story': 'Header',
+
+  // Spelling and grammar findings (UX-041, UX-042; 13 §6.1). Shown only with a proofing port.
+  'command.proofing.next': 'Next spelling or grammar issue',
+  'command.proofing.previous': 'Previous spelling or grammar issue',
+  'status.proofing.label': 'Spelling and grammar',
+  'status.proofing.checking': 'Checking spelling and grammar',
+  'status.proofing.unavailable': 'Spelling and grammar check is not available',
+  'status.proofing.none': 'No spelling or grammar issues',
+  'status.proofing.count': {
+    one: '{count} spelling or grammar issue',
+    other: '{count} spelling or grammar issues',
+  },
+  'proofing.kind.spelling': 'Spelling',
+  'proofing.kind.grammar': 'Grammar',
+  'proofing.kind.other': 'Issue',
+  'proofing.finding': '{kind}: {text}. {message}',
+  'proofing.finding.suggestions': 'Suggestions: {suggestions}.',
+  'proofing.finding.nosuggestions': 'No suggestions.',
+  'proofing.none': 'No spelling or grammar issues to move to',
+  'menu.proofing.label': 'Spelling and grammar',
+  'menu.proofing.apply': 'Change to {suggestion}',
+  'menu.proofing.ignoreOnce': 'Ignore once',
+  'menu.proofing.ignoreAll': 'Ignore all',
+  'menu.proofing.addWord': 'Add to dictionary',
+  'proofing.applied': 'Changed to {suggestion}',
+  'proofing.ignored': 'Ignored',
+  'proofing.wordAdded': 'Added to the dictionary',
 } as const satisfies StringTable;
 
 export type StringKey = keyof typeof EN_GB;

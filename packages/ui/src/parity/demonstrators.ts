@@ -18,7 +18,8 @@ const DEMONSTRATOR_ENTRIES: ReadonlyArray<readonly [string, Demonstrator]> = [
     'spelling-and-grammar',
     {
       state: 'none',
-      reason: 'no proofing port or reference service ships; UX-041 to UX-043 are not built',
+      reason:
+        'the proofing port is wired (UX-041, UX-042) but no reference proofing service ships; UX-043 is a spike',
     },
   ],
   [

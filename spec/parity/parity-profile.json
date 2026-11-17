@@ -1548,6 +1548,14 @@
       "capability": "export-pdf"
     },
     {
+      "id": "proofing.next",
+      "capability": "spelling-and-grammar"
+    },
+    {
+      "id": "proofing.previous",
+      "capability": "spelling-and-grammar"
+    },
+    {
       "id": "view.zoomIn",
       "capability": "zoom"
     },
