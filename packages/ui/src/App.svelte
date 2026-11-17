@@ -251,6 +251,7 @@
   let pane = $state.raw<{ id: string; component: PaneComponent } | null>(null);
   let paneFailed = $state(false);
   let paneEl: HTMLElement | undefined = $state();
+  let tabOriginEl: HTMLElement | undefined = $state();
   let paneReturn: HTMLElement | null = null;
   let shellEl: HTMLElement | undefined = $state();
   const loadedPanes = new Map<string, PaneComponent>();
@@ -986,7 +987,11 @@
           return true;
         }
         if (key === 'Escape' && inPage(event)) {
-          activeElement()?.blur();
+          // Focus moves to a place just after the surface, not to nothing: with no focus WebKit starts
+          // the next Tab at the first control of the page. Tab then goes to the next control and
+          // Shift+Tab to the surface's predecessor in page order.
+          if (tabOriginEl) tabOriginEl.focus();
+          else activeElement()?.blur();
           return true;
         }
         return false;
@@ -1089,6 +1094,8 @@
           <Carets carets={core.carets} />
         {/if}
       </div>
+      <!-- Where focus waits after Escape leaves the editing surface (FE-103): the next Tab goes on from here. -->
+      <span class="de-tab-origin" tabindex="-1" bind:this={tabOriginEl}></span>
     </div>
     {#if panel.current}
       <aside

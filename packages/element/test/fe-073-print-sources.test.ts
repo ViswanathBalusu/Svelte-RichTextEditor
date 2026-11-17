@@ -26,7 +26,7 @@ function printCalls(): string[] {
   for (const root of ROOTS)
     for (const file of sources(root)) {
       const lines = readFileSync(file, 'utf8').split('\n');
-      lines.forEach((line, i) => {
+      lines.forEach((line) => {
         const code = line.trim();
         if (code.startsWith('*') || code.startsWith('//') || code.startsWith('/*')) return;
         if (/(^|[^A-Za-z0-9_$])print\s*\(/.test(code))

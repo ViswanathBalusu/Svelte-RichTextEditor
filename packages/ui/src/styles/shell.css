@@ -139,7 +139,8 @@
 }
 
 /* Visually hidden, still read by assistive technology. */
-.de-visually-hidden {
+.de-visually-hidden,
+.de-tab-origin {
   position: absolute;
   inline-size: 1px;
   block-size: 1px;
