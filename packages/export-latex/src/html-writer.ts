@@ -507,7 +507,14 @@ function cellHtml(ctx: Ctx, cell: J): string {
     if (c.type === 'paragraph') {
       if (visibility(ctx, c.marks, id) === 'hide') continue;
       const body = paragraphBody(ctx, c, id);
-      if (body !== '') parts.push(`<p${alignClass(ctx, c.attrs, id)}>${body}</p>`);
+      // A numbered paragraph in a cell keeps its label (CDM-042): the label of `computeLabels`.
+      const label = id !== null ? ctx.labels.lists.get(id) : undefined;
+      const prefix =
+        label !== undefined && label.kind !== 'none'
+          ? `<span class="de-label">${escapeHtml(label.text)}</span> `
+          : '';
+      if (body !== '' || prefix !== '')
+        parts.push(`<p${alignClass(ctx, c.attrs, id)}>${prefix}${body}</p>`);
     } else if (c.type === 'figure') parts.push(figureHtml(ctx, c));
     else if (c.type === 'equation_block') parts.push(equationHtml(ctx, c));
     else

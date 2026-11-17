@@ -14,7 +14,7 @@ const fixtures = join(root, 'packages/model/fixtures/semantics');
 const record = readFileSync(join(root, 'docs/adr/0361-w1-CDM-005-fixture-review.md'), 'utf8');
 
 const expected: Readonly<Record<string, { readonly layout: State; readonly latex: State }>> = {
-  'cascade.json': { layout: 'gap', latex: 'run' },
+  'cascade.json': { layout: 'run', latex: 'run' },
   'date-fields.json': { layout: 'gap', latex: 'gap' },
   'header-growth.json': { layout: 'run', latex: 'run' },
   'line-spacing.json': { layout: 'run', latex: 'gap' },

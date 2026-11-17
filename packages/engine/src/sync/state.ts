@@ -200,9 +200,37 @@ export function settled(s: SyncState): boolean {
 // ---------------------------------------------------------------------------------------------
 // Local edits and sending (04 §8 "Local edit"; SYN-018)
 
-/** Appends local steps; `doc` is the visible document after them. */
-export function local(s: SyncState, steps: readonly Step[], doc: Node): SyncState {
+/**
+ * The origin a queued step was made with (FE-049: `undo` or `redo`). A step carries it by identity;
+ * a rebase makes a new step and `carryOrigins` copies the tag. A step with no tag has no origin
+ * hint. The tag is not persisted: steps restored from the journal are sent without a hint.
+ */
+const stepOrigins = new WeakMap<Step, Origin>();
+
+/** The origin the step was queued with, if any. */
+export function stepOrigin(step: Step): Origin | undefined {
+  return stepOrigins.get(step);
+}
+
+/** Copies the origin tags of `before` onto the steps a rebase made from them (`positions`, as `rebaseOver`). */
+function carryOrigins(
+  before: readonly Step[],
+  positions: readonly number[],
+  steps: readonly Step[],
+): void {
+  positions.forEach((p, i) => {
+    const origin = p >= 0 ? stepOrigins.get(before[i]!) : undefined;
+    if (origin !== undefined) stepOrigins.set(steps[p]!, origin);
+  });
+}
+
+/**
+ * Appends local steps; `doc` is the visible document after them. `origin` is the commit origin
+ * hint of these steps (04 §3.1), kept per step so that a commit never mixes origins (FE-049).
+ */
+export function local(s: SyncState, steps: readonly Step[], doc: Node, origin?: Origin): SyncState {
   if (steps.length === 0) return s;
+  if (origin !== undefined) for (const step of steps) stepOrigins.set(step, origin);
   return { ...s, queue: [...s.queue, ...steps], visible: doc };
 }
 
@@ -238,10 +266,15 @@ export function takeCommit(
   const state: SyncState = s.waitForHead !== null ? { ...s, waitForHead: null } : s;
   if (state.queue.length === 0) return null;
   const json = stepsToJson(state.queue);
+  // Unless the caller names one, the commit takes the origin of its first step and ends where the
+  // origin changes, so an undo is its own commit with origin `undo` (FE-049).
+  const own = origin === undefined;
+  if (own) origin = stepOrigin(state.queue[0]!);
   // The serialised commit is the envelope with an empty step list plus each step and a comma.
   let size = bytes({ id, base: state.seq, steps: [], ...(origin ? { origin } : {}) });
   let n = 0;
   while (n < json.length && n < limits.maxStepsPerCommit) {
+    if (own && n > 0 && stepOrigin(state.queue[n]!) !== origin) break;
     const add = bytes(json[n]) + (n > 0 ? 1 : 0);
     if (n > 0 && size + add > limits.maxCommitBytes) break;
     size += add;
@@ -437,6 +470,7 @@ function rebaseLocal(
   const rr = rebaseOver(before, mapsOf(over), next, 'drop');
   if (!rr.ok) throw new Error('a rebase in drop mode cannot fail');
   const { steps, positions, dropped, doc } = rr.value;
+  carryOrigins(before, positions, steps);
   const pick = (from: number, to: number) =>
     positions
       .slice(from, to)
@@ -487,6 +521,7 @@ function confirm(s: SyncState, seq: number, given: readonly Step[]): Moved {
   const rr = rebaseOver(s.queue, over, next, 'drop');
   if (!rr.ok) throw new Error('a rebase in drop mode cannot fail');
   const { steps, positions, dropped, doc } = rr.value;
+  carryOrigins(s.queue, positions, steps);
   const items = discard(
     s,
     dropped.map((i) => s.queue[i]!),
@@ -603,6 +638,7 @@ function dropInflight(
   const rr = rebaseOver(s.queue, inverseMapsOf(inf.local), s.confirmed, 'drop');
   if (!rr.ok) throw new Error('a rebase in drop mode cannot fail');
   const { steps, positions, dropped, doc } = rr.value;
+  carryOrigins(s.queue, positions, steps);
   const items = [
     ...lost,
     ...discard(
