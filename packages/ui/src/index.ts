@@ -146,7 +146,8 @@ export {
   type ToolbarMode,
 } from './shell/settings.ts';
 export type { PageTheme, ThemeSetting } from './shell/theme.ts';
-export type { FieldDraft, FieldOption } from './shell/field-properties.ts';export {
+export type { FieldDraft, FieldOption } from './shell/field-properties.ts';
+export {
   BUILT_IN_PANES,
   PaneRegistry,
   type PaneDescriptor,
@@ -163,6 +164,22 @@ export {
   type HookQueueOptions,
   type HookQueueStats,
 } from './extensions/hooks.ts';
+export type {
+  CdmFragment as ExtCdmFragment,
+  ExtBlock,
+  ExtComment,
+  ExtEventMap,
+  ExtEventName,
+  ExtMarkRun,
+  ExtOrigin,
+  ExtRange,
+  ExtRangeState,
+  ExtSuggestion,
+  ExtWriteFailure,
+  ExtWriteResult,
+  ExtensionApiOptions,
+  ExtensionDocumentApi,
+} from './extensions/document-api.ts';
 export {
   FilterRegistrationError,
   FilterRegistry,

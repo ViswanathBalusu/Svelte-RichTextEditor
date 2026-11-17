@@ -617,6 +617,8 @@ export interface ModeState {
 }
 
 export type { CdmFragment, CdmJsonNode } from './cdm-fragment.ts';
+export type * from './extension-api-types.ts';
+import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
 
 /**
  * The outcome of `insertContent` (FE-027). `unsupported`: another CDM version, or features the
@@ -805,6 +807,12 @@ export interface DocumentApi {
     target?: SuggestionTarget,
     author?: string,
   ): SuggestionReport;
+
+  /**
+   * The range-based API for one extension (UX-053; 13 §7.1): ranges held and mapped, reads, writes
+   * through the guards of typing, and events delivered after the change. See extension-api-types.ts.
+   */
+  extensionApi(options: ExtensionApiOptions): ExtensionDocumentApi;
 
   /** The decorations of the markup view `view` for the current document, as plain specs (FE-046). */
   markupDecorations(view: MarkupView): SuggestionSpec[];

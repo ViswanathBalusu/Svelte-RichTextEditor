@@ -9,6 +9,7 @@
  * ADR 0052. "Core" here is whatever the element passes as `core`: the editing core's views, and
  * the backend's ports adapted by the element (exports, grants, regions).
  */
+import type { ExtensionApiOptions, ExtensionDocumentApi } from './extensions/document-api.ts';
 import type { FieldDraft } from './shell/field-properties.ts';
 
 export interface ReadView<T> {
@@ -674,6 +675,8 @@ export interface CoreApi {
    * client export filters of extensions (UX-055; 13 §7.1). Never hidden content (ADR 0019).
    */
   getContent?(): unknown;
+  /** The range-based document API for one extension (UX-053; 13 section 7.1). Absent: extensions get none. */
+  extensionApi?(options: ExtensionApiOptions): ExtensionDocumentApi;
   /** Region grants (PRM-035), when the backend announces `regions`. */
   readonly grants?: GrantsService;
   /** Fill mode for this participant (FRW-076), or null outside fill mode. */
@@ -793,7 +796,13 @@ export type RoleChangeResult =
   | {
       readonly ok: false;
       readonly reason:
-        'read-only' | 'duplicate' | 'not-defined' | 'no-change' | 'no-feature' | 'invalid' | 'in-use';
+        | 'read-only'
+        | 'duplicate'
+        | 'not-defined'
+        | 'no-change'
+        | 'no-feature'
+        | 'invalid'
+        | 'in-use';
       /** For `invalid`: the attributes (`name`, `color`) whose value is refused. */
       readonly fields?: readonly string[];
     };
@@ -808,10 +817,7 @@ export interface RolesService {
   readonly list: ReadView<readonly RoleSummary[]>;
   readonly canChange: ReadView<boolean>;
   add(values: { readonly name: string; readonly color: string }): RoleChangeResult;
-  update(
-    id: string,
-    values: { readonly name?: string; readonly color?: string },
-  ): RoleChangeResult;
+  update(id: string, values: { readonly name?: string; readonly color?: string }): RoleChangeResult;
   remove(id: string): RoleChangeResult;
 }
 

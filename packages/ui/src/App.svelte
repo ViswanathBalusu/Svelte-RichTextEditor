@@ -49,8 +49,14 @@
   import { provideShell } from './context.ts';
   import type { FilterRegistry } from './extensions/filters.ts';
   import type { StatusItemRegistry } from './extensions/contributions.ts';
-  import { connectHooks, type ExtensionHooks, type HookQueueStats } from './extensions/hooks.ts';
+  import {
+    afterPaint,
+    connectHooks,
+    type ExtensionHooks,
+    type HookQueueStats,
+  } from './extensions/hooks.ts';
   import { ExtensionHost, type ExtensionReport } from './extensions/host.ts';
+  import type { ExtensionDocumentApi } from './extensions/document-api.ts';
   import type {
     AccessSummary,
     CommentAnchor,
@@ -127,6 +133,11 @@
     statusItems?: StatusItemRegistry;
     /** Receives each problem with a host extension (UX-050); the element raises it as `de-error`. */
     onExtensionError?: (report: ExtensionReport) => void;
+    /**
+     * Gives each extension the range-based document API (UX-053) when the core offers it. `maxRanges` is
+     * the most ranges one extension holds; the spec gives no number, so the host sets it (ADR 0136).
+     */
+    documentApi?: { maxRanges: number };
   }
 
   let props: Props = $props();
@@ -587,16 +598,37 @@
   // commands go with it when it is removed (UX-051). A problem is reported and never stops the shell.
   interface ExtensionApi {
     registerCommand(entry: Parameters<CommandRegistry['register']>[0]): void;
+    /** The range-based document API, or null when the core or the host does not offer it (UX-053). */
+    readonly document: ExtensionDocumentApi | null;
   }
   const extensionHost = untrack(
     () =>
       new ExtensionHost<ExtensionApi>({
         apiVersions: ['1'],
-        createApi: (_id, track) => ({
-          registerCommand(entry) {
-            track(registry.register(entry));
-          },
-        }),
+        createApi: (id, track) => {
+          const options = props.documentApi;
+          const docApi =
+            options && core.extensionApi
+              ? core.extensionApi({
+                  maxRanges: options.maxRanges,
+                  later: afterPaint,
+                  onError: (error, event) =>
+                    props.onExtensionError?.({
+                      extension: id,
+                      reason: 'handler-failed',
+                      message: `${event}: ${error instanceof Error ? error.message : String(error)}`,
+                      fatal: false,
+                    }),
+                })
+              : null;
+          if (docApi) track(() => docApi.dispose());
+          return {
+            document: docApi,
+            registerCommand(entry) {
+              track(registry.register(entry));
+            },
+          };
+        },
         onError: (report) => props.onExtensionError?.(report),
       }),
   );

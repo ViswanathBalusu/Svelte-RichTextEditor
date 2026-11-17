@@ -165,6 +165,8 @@ import { idTypesOf, identifierPlugin } from './ids.ts';
 import { type Internals, register } from './internals.ts';
 import { INTERNAL, REMOTE, SUGGESTED } from './meta.ts';
 import { scopeDiff } from './scope-diff.ts';
+import { ExtensionApi } from './extension-api.ts';
+import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
 import { recordAsSuggestion } from './suggestion-edit.ts';
 import { type MarkupView, type SuggestionSpec, suggestionSpecs } from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
@@ -756,6 +758,8 @@ export class DocumentCore implements DocumentApi {
   #docId = '';
   #flushTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #listeners = new Set<(tr: Transaction, state: EditorState) => void>();
+  /** The extensions' document APIs (UX-053), told of every change and of the service's thread ranges. */
+  readonly #extApis = new Set<ExtensionApi>();
   /** Remote changes that waited for a composition, for the tests of FE-034. */
   #deferrals = 0;
   /** Identifiers for the nodes an authoring command creates (03 §9). */
@@ -944,6 +948,7 @@ export class DocumentCore implements DocumentApi {
         if (t.docChanged) this.#comments.apply(t.mapping.maps, ++this.#commentSeq);
       this.#publishThreadRanges();
     }
+    for (const api of this.#extApis) api.applied(transactions, tr);
     for (const b of this.#bridges) b.update(state, transactions);
     this.#publish();
     const presence = this.#presenceClient;
@@ -2029,8 +2034,13 @@ export class DocumentCore implements DocumentApi {
   }
 
   #selectionEditable(): boolean {
-    if (this.#locked()) return false;
     const { from, to } = this.#state.selection;
+    return this.#spanEditable(from, to);
+  }
+
+  /** Whether the user may change the scopes at both ends of a span, and the document is not locked. */
+  #spanEditable(from: number, to: number): boolean {
+    if (this.#locked()) return false;
     return this.canEdit(this.#scopeAt(from)) && this.canEdit(this.#scopeAt(to));
   }
 
@@ -2190,12 +2200,14 @@ export class DocumentCore implements DocumentApi {
    */
   setThreadRange(threadId: string, range: { from: number; to: number }, seq: number): void {
     this.#comments.set(threadId, range, seq);
+    for (const api of this.#extApis) api.commentNoted(threadId);
     this.#publishThreadRanges();
   }
 
   /** Removes a thread's range (the thread was deleted) (FE-048). */
   removeThreadRange(threadId: string): void {
     this.#comments.remove(threadId);
+    for (const api of this.#extApis) api.commentNoted(threadId);
     this.#publishThreadRanges();
   }
 
@@ -2749,12 +2761,17 @@ export class DocumentCore implements DocumentApi {
    * take, and a selection the user may not change, change nothing and say why.
    */
   insertContent(fragment: CdmFragment): InsertResult {
+    const { from, to } = this.#state.selection;
+    return this.#insertFragment(fragment, from, to);
+  }
+
+  /** `insertContent` for any span: the extension API's `insertBlocks` (UX-053) calls it with a held range. */
+  #insertFragment(fragment: CdmFragment, from: number, to: number): InsertResult {
     const problem = fragmentProblem(fragment, CDM_VERSION, this.#requires);
     if (problem) return { ok: false, ...problem };
     if (fragment.content.length === 0) return { ok: true };
     const state = this.#state;
-    const { from, to } = state.selection;
-    if (!this.#selectionEditable()) {
+    if (!this.#spanEditable(from, to)) {
       const scopes = [...new Set([this.#scopeAt(from), this.#scopeAt(to)])];
       const reason = this.#locked() ? 'read-only' : 'scope';
       this.#refused({ reason, scopes });
@@ -2821,6 +2838,35 @@ export class DocumentCore implements DocumentApi {
           : 'the change did not apply',
       ...(this.#refusals > refusals && refusal ? { refusal: refusal.reason } : {}),
     };
+  }
+
+  /**
+   * The range-based API for one extension (UX-053; 13 §7.1). Each call gives an API of its own, with
+   * its own held ranges and subscriptions. Its writes go through the core dispatch, so they meet
+   * the guards and suggestion mode as typing does. It ends with dispose() or when the core is destroyed.
+   */
+  extensionApi(options: ExtensionApiOptions): ExtensionDocumentApi {
+    const api: ExtensionApi = new ExtensionApi(
+      {
+        state: () => this.#state,
+        seq: () => this.#sync.seq,
+        canView: (doc, pos) => this.#canView(this.#scopeIn(doc, pos)),
+        canEdit: (doc, pos) => !this.#locked() && this.canEdit(this.#scopeIn(doc, pos)),
+        dispatch: (tr) => {
+          const before = this.#state.doc;
+          const refusals = this.#refusals;
+          this.dispatchTransaction(tr);
+          const refused = this.#refusals > refusals ? this.refusal.get() : null;
+          return { changed: this.#state.doc !== before, refusal: refused ? refused.reason : null };
+        },
+        insertFragment: (fragment, from, to) => this.#insertFragment(fragment, from, to),
+        threads: () => this.#comments.ids().map((id) => ({ id, ...this.#comments.get(id)! })),
+        disposed: () => this.#extApis.delete(api),
+      },
+      options,
+    );
+    this.#extApis.add(api);
+    return api;
   }
 
   // --- Panels (sub-editors) ------------------------------------------------------------------
@@ -3259,6 +3305,7 @@ export class DocumentCore implements DocumentApi {
 
   destroy(): void {
     this.#destroyed = true;
+    for (const api of [...this.#extApis]) api.dispose();
     this.#proofing?.dispose();
     this.#proofing = null;
     this.#session?.end();
