@@ -1,8 +1,9 @@
 /**
  * Paragraph styles from the formatting cascade (Node.js only): EXP-020 criteria 1, 3, 4 and 5.
- * Criterion 2 (borders and shading drawn around and behind a paragraph) is not built: the class
- * does not draw paragraph borders yet, and it warns about shading (props.ts). Nothing compiles here:
- * the tests read main.tex, styles.tex and the diagnostics of the converter's bundle.
+ * Criterion 2 (borders and shading drawn around and behind a paragraph) is tested in
+ * `exp-020-borders-shading.test.ts` and, on the compiled PDF, in
+ * `exp-020-borders-shading.compile.test.ts`. Nothing compiles here: the tests read main.tex,
+ * styles.tex and the diagnostics of the converter's bundle.
  *
  * Paragraph attributes set paragraph-level setters (`\DEal`, `\DEil`, ...). Font size and family
  * are run properties: a text run takes them from a mark, and they print in its `\DEfont` macro.

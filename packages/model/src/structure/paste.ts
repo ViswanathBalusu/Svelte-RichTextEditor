@@ -8,6 +8,9 @@
  * a brought definition with a new identifier is added, and a reference that resolves neither in
  * the target nor among the added definitions is dropped (a style becomes null, which means the
  * default style; a character style mark or a cited source is removed).
+ *
+ * The engine's `buildFragment` (`packages/engine/src/content.ts`) is the caller: every paste and
+ * every `insertContent` goes through it.
  */
 import type { JsonMark, JsonNode } from '../canonical/canonical-form.ts';
 import type { JsonValue } from '../definition/grammar.ts';
@@ -36,6 +39,12 @@ export interface PasteResult {
 export interface PasteOptions {
   /** Gives every node of the pasted content a fresh identifier (03 §9: copies get fresh ones). */
   newId?: () => string;
+  /**
+   * The definition types the pasted fragment can carry; all four when absent. A reference to a
+   * definition of a type left out is not checked and stays as it is: a fragment that cannot bring
+   * a `role_def` says nothing about whether its roles exist.
+   */
+  types?: ReadonlySet<'style_def' | 'numbering_def' | 'source_def' | 'role_def'>;
 }
 
 interface Known {
@@ -78,14 +87,21 @@ export function mapPastedDefinitions(
   pasted: PasteInput,
   opts: PasteOptions = {},
 ): PasteResult {
+  const carries = (type: string): boolean =>
+    opts.types === undefined || (opts.types as ReadonlySet<string>).has(type);
   const have = known(definitionsOf(target));
   const mapped: string[] = [];
   const dropped: string[] = [];
   const added: JsonNode[] = [];
+  // A definition brought twice is added once: the first one stands (I2).
+  const brought = new Set<string>();
   for (const d of pasted.definitions) {
-    if (!DEFINITION_TYPES.has(d.type)) continue;
+    if (!DEFINITION_TYPES.has(d.type) || !carries(d.type)) continue;
     const id = d.attrs?.['id'];
     if (typeof id !== 'string') continue;
+    const key = `${d.type}:${id}`;
+    if (brought.has(key)) continue;
+    brought.add(key);
     const exists =
       (d.type === 'style_def' && have.styles.has(id)) ||
       (d.type === 'numbering_def' && have.numberings.has(id)) ||
@@ -96,7 +112,9 @@ export function mapPastedDefinitions(
   }
   const all = known([...definitionsOf(target), ...added]);
   const style = (id: unknown, kind: string): boolean =>
-    typeof id === 'string' && all.styles.get(id) === kind;
+    !carries('style_def') || (typeof id === 'string' && all.styles.get(id) === kind);
+  const numbering = (value: Record<string, JsonValue>): boolean =>
+    !carries('numbering_def') || all.numberings.has(String(value['numberingId']));
   const drop = (what: string) => dropped.push(what);
 
   // References between added definitions must resolve too.
@@ -112,7 +130,7 @@ export function mapPastedDefinitions(
       drop(`next:${String(a['next'])}`);
       a['next'] = null;
     }
-    if (isObject(a['numbering']) && !all.numberings.has(String(a['numbering']['numberingId']))) {
+    if (isObject(a['numbering']) && !numbering(a['numbering'])) {
       drop(`numbering:${String(a['numbering']['numberingId'])}`);
       a['numbering'] = null;
     }
@@ -139,10 +157,7 @@ export function mapPastedDefinitions(
           drop(`style:${String(a['style'])}`);
           a['style'] = null;
         }
-        if (
-          isObject(a['numbering']) &&
-          !all.numberings.has(String(a['numbering']['numberingId']))
-        ) {
+        if (isObject(a['numbering']) && !numbering(a['numbering'])) {
           drop(`numbering:${String(a['numbering']['numberingId'])}`);
           a['numbering'] = null;
         }
@@ -156,7 +171,7 @@ export function mapPastedDefinitions(
         drop(`style:${String(a['style'])}`);
         a['style'] = null;
       }
-      if (node.type === 'citation' && Array.isArray(a['items'])) {
+      if (node.type === 'citation' && carries('source_def') && Array.isArray(a['items'])) {
         const items = a['items'].filter((it) => {
           const ok =
             isObject(it) && typeof it['source'] === 'string' && all.sources.has(it['source']);
@@ -168,6 +183,7 @@ export function mapPastedDefinitions(
       }
       if (
         node.type === 'form_field' &&
+        carries('role_def') &&
         typeof a['assignee'] === 'string' &&
         !all.roles.has(a['assignee'])
       ) {

@@ -20,6 +20,7 @@ export {
   type DepDefinition,
   type DepExtension,
 } from './definition/index.ts';
+export { DEP1_WIRE, type WireDefinition } from './definition/wire.ts';
 export * from './codec/index.ts';
 export type {
   Body,

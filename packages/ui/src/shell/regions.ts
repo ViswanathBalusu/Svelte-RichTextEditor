@@ -98,3 +98,18 @@ export function scopeAnnouncement(
     ? tr.t('announce.region.readOnlyTitled', { title: region.title, who })
     : tr.t('announce.region.readOnly', { who }).trim();
 }
+
+/**
+ * The candidates the permissions pane offers for a grant (07 §1, §7). The pane offers users and
+ * groups. On a `restricted` region it never offers `everyone`, even if the host's directory
+ * returns it: grant validation refuses it (PRM-061; owner decision 12 of 2026-11-15).
+ */
+export function grantableCandidates<T extends { principal: unknown }>(
+  found: readonly T[],
+  policy: 'inherit' | 'restricted' | 'confidential' | undefined,
+): Array<T & { principal: string }> {
+  return found.filter(
+    (p): p is T & { principal: string } =>
+      typeof p?.principal === 'string' && !(policy === 'restricted' && p.principal === 'everyone'),
+  );
+}

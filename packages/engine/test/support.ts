@@ -57,6 +57,8 @@ export const traffic = {
   opens: new Map<string, number>(),
   resets: 0,
   commits: 0,
+  /** Each commit a client submitted: its origin hint and step count (FE-049). */
+  submitted: [] as { origin: string | undefined; steps: number }[],
   clear(): void {
     this.acks = 0;
     this.rebasedAcks = 0;
@@ -64,6 +66,7 @@ export const traffic = {
     this.opens.clear();
     this.resets = 0;
     this.commits = 0;
+    this.submitted.length = 0;
   },
 };
 
@@ -79,8 +82,9 @@ export function counted(channel: SyncChannel): SyncChannel {
     get opened() {
       return channel.opened;
     },
-    submit: (commit) =>
-      channel.submit(commit).then(
+    submit: (commit) => {
+      traffic.submitted.push({ origin: commit.origin, steps: commit.steps.length });
+      return channel.submit(commit).then(
         (ack) => {
           traffic.acks++;
           if (ack.rebased) traffic.rebasedAcks++;
@@ -91,7 +95,8 @@ export function counted(channel: SyncChannel): SyncChannel {
           bump(traffic.rejects, typeof code === 'string' ? code : 'other');
           throw e;
         },
-      ),
+      );
+    },
     onCommits: (cb) =>
       channel.onCommits((commits) => {
         traffic.commits += commits.length;

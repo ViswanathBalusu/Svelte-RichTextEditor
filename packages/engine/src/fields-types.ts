@@ -15,6 +15,8 @@ export type FieldRefusal =
   | 'no-date-source'
   | 'bad-date'
   | 'no-feature'
+  /** The document already holds the largest number of form fields it may (I15; FRW-072). */
+  | 'field-limit'
   | 'read-only';
 
 export type FieldResult =
@@ -30,5 +32,10 @@ export interface InsertFieldOptions {
   readonly title?: string | null;
   /** For a form field kind (frw-072-form-fields.ts): true when the document requires `fields`. */
   readonly formFields?: boolean;
+  /**
+   * True when the caller asks for a form field (the palette of FRW-072). It tells the form kind
+   * `date` from the page date of FE-136, which has the same name (proposed, ADR 0367).
+   */
+  readonly form?: boolean;
   readonly writable: (pos: number) => boolean;
 }

@@ -28,6 +28,12 @@ export interface MockUser {
   sub: string;
   name?: string;
   groups?: readonly string[];
+  /**
+   * The role placeholders the user may fill, and whether their participant is active (12 §4.1).
+   * A stand-in of the mock: the token claim that carries them outside a workflow is not named in
+   * 05 §3.1 (FRW-083), so the mock takes them from the user it is given.
+   */
+  fill?: { readonly roles: readonly string[]; readonly active?: boolean };
 }
 
 /** 15 minutes: the longest lifetime 05 §3.1 allows. */
@@ -168,6 +174,8 @@ export class MockService implements BackendHost {
       exp: iat + TOKEN_LIFETIME_MS,
     };
     if (user.name !== undefined) token.name = user.name;
+    if (user.fill !== undefined)
+      token.fill = { roles: [...user.fill.roles], active: user.fill.active ?? true };
     return token;
   }
 

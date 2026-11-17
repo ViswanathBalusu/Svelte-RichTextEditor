@@ -8,6 +8,7 @@
  */
 import { utf8 } from '@docedit/model';
 import type { Bundle } from './bundle.ts';
+import { archiveLicenceManifest, CLASS_LICENCE_TEXT } from './licences.ts';
 
 /** The licence of the house class: the project's licence, chosen by the owner (SPK-007). */
 export const CLASS_LICENCE = 'Apache-2.0';
@@ -39,9 +40,11 @@ export function archiveReadme(bundle: Bundle): string {
     '  DOCEDIT_FONT_PATH=/path/to/fonts/ SOURCE_DATE_EPOCH=0 FORCE_SOURCE_DATE=1 \\',
     '    lualatex --no-shell-escape --interaction=nonstopmode --halt-on-error main.tex',
     '',
-    'The class and Lua files (docedit.cls, docedit.lua) are licensed under Apache-2.0. The class',
-    'loads only TeX Live packages, under the LaTeX Project Public Licence and compatible licences;',
-    'their licence manifest is part of the export worker image (EXP-073).',
+    'Licences. The class and Lua files (docedit.cls, docedit.lua) are licensed under Apache-2.0,',
+    'copyright 2026 the project authors; the licence text is LICENCE.txt. licences.json is the',
+    'licence manifest of the TeX Live packages the class relies on: each package it loads by name,',
+    'and the ones tagging and font loading bring in, with the licence the TeX Catalogue records.',
+    'The packages those load in turn are in the licence manifest of the export worker image.',
     '',
   ].join('\n');
 }
@@ -98,5 +101,7 @@ export function texArchive(bundle: Bundle): Uint8Array {
   for (const [name, text] of Object.entries(bundle.files)) files.set(name, utf8(text));
   for (const [name, bytes] of Object.entries(bundle.assets)) files.set(name, bytes);
   files.set('README.txt', utf8(archiveReadme(bundle)));
+  files.set('LICENCE.txt', utf8(CLASS_LICENCE_TEXT));
+  files.set('licences.json', utf8(archiveLicenceManifest(CLASS_LICENCE)));
   return tar(files);
 }

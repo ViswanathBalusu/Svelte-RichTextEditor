@@ -89,6 +89,8 @@ export interface Settings {
   readonly onSpan: ((span: Span) => void) | undefined;
   /** Broadcast coalescing (SYN-041): off when absent; no default threshold or window is set. */
   readonly coalescing?: CoalescingSettings | undefined;
+  /** CPU budgets of admission control (04 §12; SYN-037; SEC-028): off when absent. */
+  readonly admission?: DataPlaneSettings['admission'] | undefined;
 }
 
 /** 05 §5.9's example for `maxMessageBytes`; 16 channels as in the mock backend (G18). */
@@ -191,5 +193,6 @@ export function settingsFrom(s: DataPlaneSettings = {}): Settings {
     testMode: s.testMode ?? false,
     onSpan: s.onSpan,
     ...(s.coalescing ? { coalescing: s.coalescing } : {}),
+    ...(s.admission ? { admission: s.admission } : {}),
   };
 }

@@ -2,9 +2,8 @@
  * Version and feature negotiation (05 §1 rules 1, 2, 4 and 5, §2; PRO-005, PRO-006), shared by
  * every DEP client so that they all choose the same way.
  */
-import { DEP1 } from '../definition/index.ts';
+import { DEP1_WIRE, type WireDefinition } from '../definition/wire.ts';
 import { PROTOCOL_VERSION } from '../definition/common.ts';
-import type { DepDefinition } from '../definition/extension.ts';
 import type { CdmRange, Discovery, ErrorCode } from '../generated/types.ts';
 
 /** Experimental feature and message names start with `x-` (05 §1 rule 5). */
@@ -67,7 +66,7 @@ export interface ClientCapabilities {
 }
 
 /** The client capabilities of this package: DEP 1.0, the engines and the CDM range of the definition. */
-export function clientCapabilities(def: DepDefinition = DEP1): ClientCapabilities {
+export function clientCapabilities(def: WireDefinition = DEP1_WIRE): ClientCapabilities {
   return { versions: [def.version], engines: [...def.engines], cdm: { ...def.cdm } };
 }
 
@@ -79,7 +78,7 @@ export function clientCapabilities(def: DepDefinition = DEP1): ClientCapabilitie
  */
 export function relayForbiddenAnnounced(
   d: Pick<Discovery, 'features'> & { mode?: Discovery['mode'] },
-  def: DepDefinition = DEP1,
+  def: WireDefinition = DEP1_WIRE,
 ): string[] {
   if (d.mode !== 'relay') return [];
   const forbidden = new Set(def.features.filter((f) => f.relayForbidden).map((f) => f.name));
@@ -96,7 +95,7 @@ export function relayForbiddenAnnounced(
 export function checkDiscovery(
   d: Discovery,
   client: ClientCapabilities = clientCapabilities(),
-  def: DepDefinition = DEP1,
+  def: WireDefinition = DEP1_WIRE,
 ): { code: ErrorCode; message: string } | null {
   if (chooseVersion(client.versions, d.versions) === null)
     return {
@@ -134,7 +133,7 @@ export function chooseCdm(server: CdmRange, client: CdmRange): number | null {
  * namespace; `cdmFeatures` are the CDM's names, which must be registered in it exactly once.
  */
 export function featureNamespaceProblems(
-  def: DepDefinition,
+  def: WireDefinition,
   cdmFeatures: readonly string[] = [],
 ): string[] {
   const problems: string[] = [];

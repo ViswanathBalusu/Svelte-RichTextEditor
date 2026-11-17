@@ -306,6 +306,16 @@ export interface DataPlaneSettings {
    * milliseconds and the channel count from which a room holds its commits. Off when absent.
    */
   readonly coalescing?: { readonly windowMs: number; readonly minSubscribers: number };
+  /**
+   * The CPU budgets of admission control (04 §12; SYN-037; SEC-028): each connection's budget in
+   * a room and, when given, one budget per tenant shared by the tenant's rooms on the node. In the
+   * cost units of `defaultCost` of `@docedit/authority`. Off when absent: the spec gives no
+   * figure, and SYN-038 calibrates them.
+   */
+  readonly admission?: {
+    readonly connection: { readonly capacity: number; readonly refillPerSecond: number };
+    readonly tenant?: { readonly capacity: number; readonly refillPerSecond: number };
+  };
 }
 
 /**

@@ -168,6 +168,8 @@ export function regionCaps(
     // 07 §2: region grants use the four region roles; any other grant conveys nothing.
     if (!['viewer', 'commenter', 'suggester', 'editor'].includes(g.role)) continue;
     if (g.expiresAt !== null && now >= g.expiresAt) continue;
+    // PRM-061: `everyone` conveys nothing on a restricted region (owner decision 12, 2026-11-15).
+    if (g.principal === 'everyone' && policy === 'restricted') continue;
     const match =
       g.principal === 'everyone' ||
       g.principal === `user:${conn.sub}` ||

@@ -12,7 +12,7 @@ No measurement was taken for this record. "Run" means that a test file of the pa
 
 | Fixture file | Layout engine (`packages/layout`) | LaTeX export (`packages/export-latex`) |
 |---|---|---|
-| `cascade.json` | Gap. No test runs it. `flow.ts` reads styles through `styleTable` and does not call `resolveParagraph` or `resolveRun` | Run: `src/cdm-041-cascade-fixtures.test.ts` |
+| `cascade.json` | Run since 2026-11-15 (CDM-041): `src/cdm-041-cascade-fixtures.test.ts`; `flow.ts` now calls `resolveParagraph`, `resolveRun` and `resolveLabelRun` | Run: `src/cdm-041-cascade-fixtures.test.ts` |
 | `numbering-lists.json` | Run: `src/numbering-labels.test.ts`. Labels come from `computeLabels` | Gap. Not run. `convert.ts` calls `computeLabels` and `counterEffects`, so the labels are the shared ones, but no test proves it against the fixture |
 | `numbering-footnotes.json` | Run: `src/footnote-labels.test.ts` | Gap. Not run. Marks come from `computeLabels` |
 | `numbering-sequences.json` | Gap. Not run. A `seq` field with no cached text shows the stand-in `1` (`fieldText` in `flow.ts`) | Gap. Not run. Uses `computeLabels` |
