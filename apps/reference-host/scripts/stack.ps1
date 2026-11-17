@@ -125,7 +125,11 @@ function ConvertTo-Milliseconds([string]$Duration) {
   throw "unsupported duration: $Duration"
 }
 
-function Get-Definition { return Get-Content -LiteralPath $ComposeFile -Raw | ConvertFrom-Json -AsHashtable }
+# compose.json takes PostgreSQL, the store and the sandbox settings from the integration-test
+# environment's definitions with `extends` (infra/containers/compose.base.json; FND-010 criterion 2).
+. (Join-Path $RepoDir 'infra\containers\compose-extends.ps1')
+
+function Get-Definition { return Read-ComposeDefinition $ComposeFile }
 
 $Def = Get-Definition
 $Project = if ($Settings['DOCEDIT_DEMO_PROJECT']) { $Settings['DOCEDIT_DEMO_PROJECT'] } else { $Def['name'] }

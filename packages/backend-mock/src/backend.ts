@@ -33,6 +33,8 @@ export interface MockToken {
   name?: string;
   grp: readonly string[];
   docs: Readonly<Record<string, DocRole>>;
+  /** The roles the user may fill (the mock's stand-in for a fill claim; see `MockUser.fill`). */
+  fill?: { readonly roles: readonly string[]; readonly active: boolean };
   /** Unix milliseconds on the service clock. */
   iat: number;
   exp: number;
@@ -271,8 +273,8 @@ export class MockBackend implements Backend {
       session: this.current!.session,
       role,
       groups: this.token!.grp,
-      participantRoles: [],
-      participantActive: false,
+      participantRoles: this.token!.fill?.roles ?? [],
+      participantActive: this.token!.fill?.active ?? false,
     };
     const channel = d.open(conn, this.current!.user, resume, {
       access: (a) => this.portDelivery.push(`access:${docId}`, a),

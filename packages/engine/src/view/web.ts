@@ -34,6 +34,7 @@ import { SubEditor, type SubEditorTarget } from '../subeditor.ts';
 import { cssomMarkViews, type SelectionShim, shimShadowSelection } from '../view-support.ts';
 import { bibliographyPlugin, bibliographyView } from './bibliography-view.ts';
 import { footnoteNumbers, footnoteRefView } from './footnote-view.ts';
+import { FormFieldViews, fieldView, formFieldView } from './form-field-view.ts';
 import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
@@ -161,6 +162,8 @@ export class EditorCore extends DocumentCore {
   /** The blocks before which a page guide is drawn (FE-068); empty when guides are off. */
   #pageGuides: ReadonlySet<string> = new Set();
   #view: EditorView | null = null;
+  /** The live form field controls and mirrors of the body view (FRW-004, FRW-006). */
+  readonly #fieldViews = new FormFieldViews();
   #sub: SubEditor | null = null;
   #subKind: SubEditorTarget['kind'] | null = null;
   #labels: CoreLabels = DEFAULT_LABELS;
@@ -295,6 +298,24 @@ export class EditorCore extends DocumentCore {
    * there when it is asked for from the keyboard (UX-008; ui `CoreApi.caretRect`). Null while no
    * view is mounted, or when the browser gives no position for the caret.
    */
+  /**
+   * Moves focus to the control of the form field `id` and scrolls it into view (12 §11; FRW-078
+   * criterion 2; ui `CoreApi.focusField`). False when no view is mounted, or the document has no
+   * such field, or the field has no control (a kind drawn as text).
+   */
+  focusField(id: string): boolean {
+    const fields = this.#view?.dom.querySelectorAll<HTMLElement>('.de-form-field') ?? [];
+    for (const field of fields) {
+      if (field.getAttribute('data-field') !== id) continue;
+      const control = field.querySelector<HTMLElement>('.de-form-field-control');
+      if (!control) return false;
+      control.scrollIntoView({ block: 'nearest' });
+      control.focus();
+      return true;
+    }
+    return false;
+  }
+
   caretRect(): { x: number; y: number; width: number; height: number } | null {
     const view = this.#sub?.view.hasFocus() ? this.#sub.view : this.#view;
     if (!view) return null;
@@ -331,6 +352,20 @@ export class EditorCore extends DocumentCore {
         nodeViews: {
           footnote: footnoteRefView((id) => this.openFootnote(id)),
           table_cell: tableCellView,
+          // FRW-004, FRW-006: a native control for a form field, and a mirror that follows its target.
+          form_field: formFieldView(
+            {
+              entry: (id) => this.fieldEntry(id),
+              check: (id, value) => this.checkFieldEntry(id, value),
+              enter: (id, value) => {
+                this.enterFieldValue(id, value);
+              },
+              fillable: (id) => this.fieldFillable(id),
+              focused: (id) => this.selectField(id),
+            },
+            this.#fieldViews,
+          ),
+          field: fieldView(this.#fieldViews),
           bibliography: bibliographyView,
           image: imageView(this.#assetImage),
           equation: equationView(this.#drawEquation),
@@ -421,6 +456,7 @@ export class EditorCore extends DocumentCore {
       // `editable` is read again by setProps; the open sub-editor follows the same lock (FE-029).
       lockChanged: () => {
         this.#view?.setProps({});
+        if (this.#view) this.#fieldViews.refresh(this.#view.state.doc);
         this.#sub?.view.setProps({});
       },
     });
@@ -439,7 +475,10 @@ export class EditorCore extends DocumentCore {
   }
 
   #update(state: EditorState, transactions: readonly Transaction[]): void {
+    const before = this.#view?.state.doc;
     this.#view?.updateState(state);
+    // Mirrors follow their target fields, and a control follows its entry (FRW-004, FRW-006).
+    if (before !== state.doc) this.#fieldViews.refresh(state.doc);
     // The layout may have moved: the peers' carets are measured in the new state.
     this.#drawCarets();
     const sub = this.#sub;

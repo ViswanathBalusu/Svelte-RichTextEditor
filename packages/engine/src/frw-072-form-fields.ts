@@ -1,9 +1,11 @@
 /**
  * Inserts a form field of a phase 1b kind at the caret (FRW-072 criterion 1; 12 §3.2, §11).
  *
- * - The kinds are `text`, `number`, `checkbox` and `choice`. `date` is not one of them: the `date`
- *   field of the insert command is the page date (FE-136), so a form date needs a decision the
- *   spec does not make (lane V-FRW-055-072, ADR 0342).
+ * - The kinds are the five of phase 1b: `text`, `number`, `date`, `checkbox` and `choice`. `date`
+ *   is also the name of the page date (FE-136), so `insertField` sends `date` here only when the
+ *   caller asks for a form field (`form`; proposed in ADR 0367, which follows ADR 0342 item 2).
+ * - A document holds at most `FIELD_LIMITS.fields` form fields (I15): at the limit the insert is
+ *   refused with `field-limit`, before the authority would refuse the commit.
  * - The field goes in a body paragraph or a table cell. Form fields are not allowed in headers,
  *   footers or footnotes (I10), so a caret in a sub-editor is refused.
  * - The document must require the feature `fields` (the caller says so with `formFields`).
@@ -14,11 +16,12 @@
  *
  * The module reads no clock and no store. It is universal: no Node.js or browser API.
  */
+import { FIELD_LIMITS } from '@docedit/model/definition';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { FieldResult, InsertFieldOptions } from './fields-types.ts';
 
 /** The form field kinds this command inserts in phase 1b. */
-export const FORM_FIELD_INSERT_KINDS = ['text', 'number', 'checkbox', 'choice'] as const;
+export const FORM_FIELD_INSERT_KINDS = ['text', 'number', 'date', 'checkbox', 'choice'] as const;
 export type FormFieldInsertKind = (typeof FORM_FIELD_INSERT_KINDS)[number];
 
 /** Whether `kind` is a form field kind this command inserts. */
@@ -45,8 +48,19 @@ export function nextFormFieldKey(
   }
 }
 
-const fail = (reason: 'bad-kind' | 'no-feature' | 'not-here' | 'not-in-body' | 'read-only') =>
-  ({ ok: false, reason }) as const;
+/** The number of form fields in the document. */
+export function formFieldCount(state: EditorState): number {
+  let count = 0;
+  state.doc.descendants((node) => {
+    if (node.type.name === 'form_field') count += 1;
+    return true;
+  });
+  return count;
+}
+
+const fail = (
+  reason: 'bad-kind' | 'no-feature' | 'not-here' | 'not-in-body' | 'field-limit' | 'read-only',
+) => ({ ok: false, reason }) as const;
 
 /**
  * Inserts a form field of `kind` at the caret, replacing a selection. Nothing changes on a refusal.
@@ -69,6 +83,7 @@ export function insertFormField(
   for (let d = $from.depth; d >= 0; d--) chain.push($from.node(d).type.name);
   if (chain.includes('story') || !chain.includes('body')) return fail('not-in-body');
   if (!options.writable($from.pos)) return fail('read-only');
+  if (formFieldCount(state) >= FIELD_LIMITS.fields) return fail('field-limit');
 
   if (dispatch) {
     const { key, n } = nextFormFieldKey(state, kind);

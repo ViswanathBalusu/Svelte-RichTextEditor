@@ -127,7 +127,7 @@ import {
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
-import type { CreateDataPlane, DataPlane, Span } from './seams.ts';
+import type { CreateDataPlane, DataPlane, ErrorContext, Span } from './seams.ts';
 import { createPool, inTenant, isUuid, sqlState, type Pool } from './storage/db.ts';
 import { PgDocumentStore } from './storage/document-store.ts';
 import { PgGrantStore } from './storage/grant-store.ts';
@@ -637,9 +637,17 @@ export async function startService(opts: StartOptions): Promise<Service> {
             : []),
         ]),
       ],
-      // Errors of the data plane go to the same structured log, by name only (BE-088).
-      onError: (e: unknown, where: string) =>
-        logger.error({ event: 'data-plane.error', message: where, ...errorFields(e) }),
+      // Errors of the data plane go to the same structured log, by name only, with the tenant,
+      // document and session they belong to (BE-088 criteria 1 and 2).
+      onError: (e: unknown, where: string, context?: ErrorContext) =>
+        logger.error({
+          event: 'data-plane.error',
+          message: where,
+          ...(context?.tenant !== undefined ? { tenant: context.tenant } : {}),
+          ...(context?.doc !== undefined ? { doc: context.doc } : {}),
+          ...(context?.session !== undefined ? { session: context.session } : {}),
+          ...errorFields(e),
+        }),
       // This process serves `GET /documents/{id}/commits` (commit-routes.ts; BE-038).
       commitsResource: true,
       // The data plane's spans go to the same sink as the REST spans (PRO-044 criterion 1, 4).

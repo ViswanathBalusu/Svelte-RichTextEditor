@@ -56,6 +56,20 @@
         "docedit.cls": "48856599ae2cc26879587f4291c8da965a80d94c927c5166f8a34d95c31e7367",
         "docedit.lua": "fc1d567cf8ba944aa4880b63515f444ff84084f390aab30fe79d66d5f82e3ee7"
       }
+    },
+    {
+      "version": "0.2.8",
+      "files": {
+        "docedit.cls": "9a0de897c23043377072755f5a1201801f4529867e1e783dbc15d595976db4b2",
+        "docedit.lua": "ab468b85ea09bff0538db4860d4aad1733ac898dc11f9e6ecd0a5ec344d72117"
+      }
+    },
+    {
+      "version": "0.2.9",
+      "files": {
+        "docedit.cls": "50a4180974588c8f6b589aa01c2ca3c4218cc7b80fe157496722880be055ee55",
+        "docedit.lua": "ab468b85ea09bff0538db4860d4aad1733ac898dc11f9e6ecd0a5ec344d72117"
+      }
     }
   ]
 }

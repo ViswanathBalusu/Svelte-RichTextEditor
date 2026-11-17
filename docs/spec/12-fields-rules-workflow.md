@@ -112,7 +112,7 @@ These extend 07, section 5. They are checked on the outcome of a commit, as all 
 
 | ID | Rule |
 |---|---|
-| P7 | Where a user has `fill` but not `edit`, the only difference a commit may make is to the `value` attribute of `form_field` nodes for which all of these hold: the field's `assignee` is one of the participant's roles; the participant is active in the workflow; the field's kind is not `signature`, `initials`, `dateSigned` or `formula`; the field is visible and enabled under the rules; the new value has the right type for its kind. A wrongly typed value is rejected with `field_invalid`; anything else with `permission_denied` |
+| P7 | Where a user has `fill` but not `edit`, the only difference a commit may make is to the `value` attribute of `form_field` nodes for which all of these hold: the field's `assignee` is one of the participant's roles; the participant is active (in a workflow, or, without one, while the document is not locked: section 13); the field's kind is not `signature`, `initials`, `dateSigned` or `formula`; the field is visible and enabled under the rules; the new value has the right type for its kind. A wrongly typed value is rejected with `field_invalid`; anything else with `permission_denied` |
 | P8 | Values of `signature`, `initials`, `dateSigned` and `formula` fields change only through server-authored commits (origins `sign` and `rules`) |
 | P9 | A fill commit is exclusive per field. If any commit accepted after the commit's `base` changed the same field, the commit is rejected with `conflict` and the client shows the other value. Values are not merged |
 
@@ -290,6 +290,15 @@ The document service sends no e-mail and no text messages. It raises webhooks (`
 | 3 | Fields in the page view; field rectangles in `layout.json` used for visible signature appearances |
 | 4 | Long-term validation and re-time-stamping; templates and bulk send; routing rules; signature provider adapter |
 
+### Form mode without a workflow (phase 1b)
+
+Decided by the owner on 2026-11-15 (`docs/owner-decisions-2026-11-15.md`, decision 5): form mode without a workflow is the first slice and stays in phase 1b. The stories FRW-001 to FRW-011, FRW-060, FRW-061, FRW-065 to FRW-067, FRW-069, FRW-070, FRW-072 to FRW-074, FRW-076 to FRW-080 and EXP-033 stay in 1b. In that mode:
+
+- **Fill roles** come from a token claim that lists role placeholders. Its name is configurable per tenant; `wfr` is the default (05, section 3.1).
+- **"Active"**: `access.fill.active` is true and a participant is active while the document is not locked. On a locked document the limit of 07, section 4 applies.
+- **Finish and `completeFilling()`** are configurable per document, with a tenant default. The default validates the fields and raises events only. The other setting also makes that person's fields read-only. The names of the document setting and of the tenant default are fixed when FRW builds them.
+- **Authoring**: fields are authored in 1b through the editor (the palette and the properties panel, FRW-072 to FRW-074), not through the API alone.
+
 Out of scope: native advanced or qualified signatures, identity verification, notary and witness roles, payments, sending e-mail or text messages, packets of several documents, repeating sections, signing uploaded PDFs. Read restrictions per field are in scope since 2026-11-06 (ADR 0019).
 
 ## 14. Pitfalls this design is built around
@@ -314,7 +323,7 @@ Out of scope: native advanced or qualified signatures, identity verification, no
 
 1. Does the host alone deliver invitations and authenticate participants, or must the hosted service also send messages and host a signing page? Decided on 2026-11-06: the host alone (SPK-010).
 2. Which jurisdictions come first, and is a simple signature with a seal enough at launch? Who is the sealing party: the operator or each tenant?
-3. Is form mode without a workflow acceptable as the first slice?
+3. Is form mode without a workflow acceptable as the first slice? Decided yes on 2026-11-15 (FRW-083); see section 13.
 4. Must some values be hidden from other participants? Decided yes on 2026-11-06 (SPK-005); ADR 0019 proposes the design.
 5. Are repeating line items with totals needed early?
 6. Are packets of several documents needed?

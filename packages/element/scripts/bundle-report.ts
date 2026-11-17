@@ -4,6 +4,10 @@
  * is the entry, the editor chunk it loads with the first document, and the chunks both import
  * statically. Budget: at most 300 KB compressed (13 §9, a target), counted as 300,000 bytes of
  * gzip; the build fails above it. FND-008 owns the gate in CI; this is the package's own check.
+ *
+ * FND-008 also asks for every lazy file by feature (`lazy`, `lazyByFeature`) and for a build that
+ * fails when a WebAssembly module is in the first interactive set or is inlined as base64 in any
+ * chunk (`wasmViolations`; ADR 0016).
  */
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -27,7 +31,83 @@ export interface Size {
   brotli: number;
 }
 
+/** A file the bundler emitted that is not a chunk: a WebAssembly module, a worker, a font. */
+export interface AssetInfo {
+  fileName: string;
+  source: string | Uint8Array;
+}
+
+/**
+ * The lazy features FND-008 names, in the order of the story, and the rest. A feature with no file
+ * is still in `lazyByFeature`, with zero files, so that the report says the build has none.
+ */
+export const LAZY_FEATURES = [
+  'pdf viewer',
+  'pdf worker',
+  'math editor',
+  'panes',
+  'proofing',
+  'assistant',
+  'webassembly',
+  'dep client',
+  'other',
+] as const;
+export type LazyFeature = (typeof LAZY_FEATURES)[number];
+
+export interface LazyFile {
+  file: string;
+  feature: LazyFeature;
+  size: Size;
+}
+
 export const BUDGET_GZIP_BYTES = 300_000;
+
+const isWasm = (name: string) => /\.wasm(\?.*)?$/.test(name);
+
+/** The feature a lazy file belongs to, from its name and the modules in it. */
+export function lazyFeatureOf(fileName: string, moduleIds: readonly string[] = []): LazyFeature {
+  const ids = moduleIds.map((id) => id.replaceAll('\\', '/'));
+  const any = (test: RegExp) => ids.some((id) => test.test(id));
+  if (isWasm(fileName)) return 'webassembly';
+  if (/pdf\.worker/.test(fileName)) return 'pdf worker';
+  if (fileName.startsWith('viewer/') || any(/\/element\/src\/pdf\//)) return 'pdf viewer';
+  if (any(/node_modules\/(katex|mathlive)\//) || any(/\/element\/src\/katex-/)) return 'math editor';
+  if (any(/\/proofing\//) || any(/node_modules\/(nspell|hunspell[^/]*)\//)) return 'proofing';
+  if (any(/\/assistant\//)) return 'assistant';
+  if (/(^|\/)[A-Z][A-Za-z]*Pane-/.test(fileName) || any(/\/ui\/src\/.*Pane\.svelte/)) return 'panes';
+  if (any(/\/packages\/(backend-dep|protocol)\/src\//)) return 'dep client';
+  return 'other';
+}
+
+/**
+ * A WebAssembly module as base64 starts with the bytes `\0asm` and the version, which encode to
+ * this text. It is looked for at the start of a string literal or of a data URI's payload only:
+ * the same letters can occur by chance inside other base64 data (a font, for one).
+ */
+const INLINED_WASM = /data:application\/wasm|(?:["'`]|base64,)AGFzbQEAAAA/;
+
+/**
+ * Why the build must fail for WebAssembly (FND-008 criterion 3; ADR 0016): a module in the first
+ * interactive set, or one inlined as base64 in any chunk. Empty when there is none.
+ */
+export function wasmViolations(
+  chunks: readonly ChunkInfo[],
+  firstInteractive: ReadonlySet<string>,
+): string[] {
+  const out: string[] = [];
+  for (const chunk of chunks) {
+    if (firstInteractive.has(chunk.fileName)) {
+      for (const id of chunk.moduleIds)
+        if (isWasm(id))
+          out.push(
+            `${chunk.fileName} is needed for the first interactive editor and holds the WebAssembly module ${id.replaceAll('\\', '/')}`,
+          );
+    }
+    if (INLINED_WASM.test(chunk.code))
+      out.push(`${chunk.fileName} holds a WebAssembly module inlined as base64`);
+  }
+  return out;
+}
 
 export function sizeOf(data: string | Buffer): Size {
   const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
@@ -140,10 +220,23 @@ export interface Report {
   firstInteractiveWithDep: { files: string[]; size: Size } | null;
   chunks: Array<{ file: string; kind: string; size: Size; contents: string[] }>;
   viewer: Array<{ file: string; size: Size }>;
+  /**
+   * Every file the first interactive editor does not need (FND-008 criterion 2): the lazy and
+   * shared chunks, the assets, and the viewer frame's files with pdf.js's WebAssembly modules.
+   */
+  lazy: LazyFile[];
+  /** `lazy` summed by feature; every feature of `LAZY_FEATURES` is present. */
+  lazyByFeature: Array<{ feature: LazyFeature; files: number; size: Size }>;
+  /** Empty, or why the build fails for WebAssembly (FND-008 criterion 3). */
+  wasmViolations: string[];
   withinBudget: boolean;
 }
 
-export function bundleReport(chunks: readonly ChunkInfo[], viewerDir: string | null): Report {
+export function bundleReport(
+  chunks: readonly ChunkInfo[],
+  viewerDir: string | null,
+  assets: readonly AssetInfo[] = [],
+): Report {
   const byName = new Map(chunks.map((c) => [c.fileName, c]));
   const entry = chunks.find((c) => c.isEntry);
   if (!entry) throw new Error('no entry chunk in the build');
@@ -183,6 +276,9 @@ export function bundleReport(chunks: readonly ChunkInfo[], viewerDir: string | n
       contents: contents(c),
     })),
     viewer: [],
+    lazy: [],
+    lazyByFeature: [],
+    wasmViolations: wasmViolations(chunks, withDep ?? first),
     withinBudget: Math.max(size.gzip, withDep ? total(withDep).gzip : 0) <= BUDGET_GZIP_BYTES,
   };
   if (viewerDir) {
@@ -193,10 +289,41 @@ export function bundleReport(chunks: readonly ChunkInfo[], viewerDir: string | n
       });
     for (const file of walk(viewerDir)) {
       const rel = relative(viewerDir, file).replaceAll('\\', '/');
-      if (rel.startsWith('pdfjs/') || rel.endsWith('.map')) continue;
-      report.viewer.push({ file: `viewer/${rel}`, size: sizeOf(readFileSync(file)) });
+      if (rel.endsWith('.map')) continue;
+      const entryOf = { file: `viewer/${rel}`, size: sizeOf(readFileSync(file)) };
+      // pdf.js's character maps and standard fonts are data, fetched one at a time, and are not
+      // listed; its WebAssembly modules are (ADR 0016).
+      if (rel.startsWith('pdfjs/')) {
+        if (isWasm(rel)) report.lazy.push({ ...entryOf, feature: 'webassembly' });
+        continue;
+      }
+      report.viewer.push(entryOf);
+      report.lazy.push({ ...entryOf, feature: lazyFeatureOf(entryOf.file) });
     }
   }
+  for (const c of chunks)
+    if (!first.has(c.fileName))
+      report.lazy.push({
+        file: c.fileName,
+        feature: lazyFeatureOf(c.fileName, c.moduleIds),
+        size: sizeOf(c.code),
+      });
+  for (const a of assets)
+    if (!a.fileName.endsWith('.map'))
+      report.lazy.push({
+        file: a.fileName,
+        feature: lazyFeatureOf(a.fileName),
+        size: sizeOf(typeof a.source === 'string' ? a.source : Buffer.from(a.source)),
+      });
+  report.lazy.sort(
+    (a, b) =>
+      LAZY_FEATURES.indexOf(a.feature) - LAZY_FEATURES.indexOf(b.feature) ||
+      a.file.localeCompare(b.file),
+  );
+  report.lazyByFeature = LAZY_FEATURES.map((feature) => {
+    const files = report.lazy.filter((f) => f.feature === feature);
+    return { feature, files: files.length, size: files.reduce((s, f) => add(s, f.size), ZERO) };
+  });
   return report;
 }
 
@@ -227,6 +354,12 @@ export function printReport(report: Report): void {
     console.log(
       `${p.package.padEnd(46)}${kb(p.rendered).padStart(10)}${`~${kb(p.gzipEstimate)}`.padStart(11)}${`${(p.share * 100).toFixed(1)} %`.padStart(11)}`,
     );
+  console.log('lazy files by feature (FND-008)');
+  for (const f of report.lazyByFeature)
+    console.log(
+      `${f.feature.padEnd(46)}${`${f.files} files`.padEnd(19)}${kb(f.size.raw).padStart(10)}${kb(f.size.gzip).padStart(11)}${kb(f.size.brotli).padStart(11)}`,
+    );
+  for (const v of report.wasmViolations) console.log(`WebAssembly: ${v}`);
   console.log(
     `budget ${kb(report.budgetGzipBytes)} gzip: ${report.withinBudget ? 'within' : 'EXCEEDED'}`,
   );

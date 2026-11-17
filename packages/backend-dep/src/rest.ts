@@ -6,10 +6,16 @@
  * Responses are validated against the definition's shapes, which never reject unknown members
  * (05 §1 rule 3; PRO-005).
  */
-import { DEP1, PortError, ShapeValidator, definition, type ErrorCode } from '@docedit/protocol';
+import {
+  DEP1_WIRE,
+  PortError,
+  ShapeValidator,
+  definition,
+  type ErrorCode,
+} from '@docedit/protocol';
 import type { Platform, ResponseLike } from './platform.ts';
 
-const validator = new ShapeValidator(DEP1);
+const validator = new ShapeValidator(DEP1_WIRE);
 const CODES: ReadonlySet<string> = new Set(definition.ERROR_CODES);
 const AUTH: ReadonlySet<string> = new Set(['unauthenticated', 'token_expired', 'revoked']);
 

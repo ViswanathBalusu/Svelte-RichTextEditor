@@ -47,6 +47,7 @@ import {
 import { ChangeReporter, StatusReporter, type Scheduler } from './status.ts';
 import { SelectionEvents, type SelectionWatch } from './selection-events.ts';
 import { HeaderEvents, type HeaderWatch } from './header-events.ts';
+import { FillEvents, type FillWatch } from './fill.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -114,6 +115,8 @@ export interface EditorHandle {
   readonly watch?: SelectionWatch;
   /** What `de-mode-change`, `de-presence` and `de-counts` watch (UX-014; ADR 0361); absent in stand-in editors. */
   readonly header?: HeaderWatch;
+  /** What `de-field-change` and `de-fill-progress` watch (FRW-070); absent in stand-in editors. */
+  readonly fill?: FillWatch;
 }
 
 export interface SessionHost {
@@ -397,6 +400,15 @@ export class Session {
         counts: (detail) => this.#emit('de-counts', detail),
       });
       this.#unsubscribe.push(header.start());
+    }
+    // `de-field-change` and `de-fill-progress` (12 §10; FRW-070): an entry this person made, and
+    // the count the guided bar shows. Torn down with the other subscriptions at close().
+    if (editor.fill) {
+      const fill = new FillEvents(editor.fill, {
+        fieldChange: (detail) => this.#emit('de-field-change', detail),
+        fillProgress: (detail) => this.#emit('de-fill-progress', detail),
+      });
+      this.#unsubscribe.push(fill.start());
     }
     const confirmed = editor.confirmedSeq;
     if (confirmed) {

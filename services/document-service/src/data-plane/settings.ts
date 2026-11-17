@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { DEFAULT_LIMITS } from '@docedit/authority';
 import { supportedFeatures } from '@docedit/model/definition';
 import type { Limits } from '@docedit/protocol';
-import type { DataPlaneSettings, RateSettings, Span } from '../seams.ts';
+import type { DataPlaneSettings, ErrorContext, RateSettings, Span } from '../seams.ts';
 import type { CoalescingSettings } from './syn-041-coalescing.ts';
 
 export interface CheckpointSettings {
@@ -56,7 +56,7 @@ export interface Settings {
   readonly maxFrameBytes: number;
   /** The key of the view tokens (ADR 0019 change 1; PRO-130). */
   readonly viewKey: Uint8Array;
-  readonly onError: (error: unknown, where: string) => void;
+  readonly onError: (error: unknown, where: string, context?: ErrorContext) => void;
   /** Whether `permessage-deflate` may be negotiated (05 §4: off by default). */
   readonly compression: boolean;
   /** Whether rooms announce expiries of grants and leases by a timer (PRO-033). */
@@ -89,6 +89,8 @@ export interface Settings {
   readonly onSpan: ((span: Span) => void) | undefined;
   /** Broadcast coalescing (SYN-041): off when absent; no default threshold or window is set. */
   readonly coalescing?: CoalescingSettings | undefined;
+  /** CPU budgets of admission control (04 §12; SYN-037; SEC-028): off when absent. */
+  readonly admission?: DataPlaneSettings['admission'] | undefined;
 }
 
 /** 05 §5.9's example for `maxMessageBytes`; 16 channels as in the mock backend (G18). */
@@ -191,5 +193,6 @@ export function settingsFrom(s: DataPlaneSettings = {}): Settings {
     testMode: s.testMode ?? false,
     onSpan: s.onSpan,
     ...(s.coalescing ? { coalescing: s.coalescing } : {}),
+    ...(s.admission ? { admission: s.admission } : {}),
   };
 }

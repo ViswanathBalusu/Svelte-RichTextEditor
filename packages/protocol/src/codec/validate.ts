@@ -13,7 +13,7 @@ import {
   UUID7_PATTERN,
   isTimestamp,
 } from '@docedit/model';
-import type { DepDefinition } from '../definition/extension.ts';
+import type { WireDefinition } from '../definition/wire.ts';
 import { SAFE_MAX, type Prop, type Shape, type StringShape } from '../definition/shapes.ts';
 import { NAME_PATTERN, SCOPE_PATTERN, VERSION_PATTERN } from '../generate/json-schema.ts';
 
@@ -49,7 +49,7 @@ export class ShapeValidator {
   private readonly patterns = new Map<string, RegExp>();
   private readonly limit: number;
 
-  constructor(def: DepDefinition, opts: { maxViolations?: number } = {}) {
+  constructor(def: Pick<WireDefinition, 'shapes'>, opts: { maxViolations?: number } = {}) {
     this.named = new Map(def.shapes.map((s) => [s.name, s.shape]));
     this.limit = opts.maxViolations ?? 16;
   }

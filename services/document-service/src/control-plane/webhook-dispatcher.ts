@@ -24,9 +24,10 @@
  *   retried. The base delay and the factor are not stated by the spec: the caller supplies them.
  *
  * Persistence: the delivery rows sit behind `DeliveryStore`; only the in-memory store is built. A
- * PostgreSQL table for deliveries is not built. No composition passes a retry policy yet, so the
- * running service does not retry. This module is universal in spirit but uses `node:crypto` through
- * `webhook-signing.ts` and `webhook-envelope.ts`.
+ * PostgreSQL table for deliveries is not built.
+ * `composeWebhooks` passes a retry policy when the settings give a schedule (PRO-071). This module
+ * is universal in spirit but uses `node:crypto` through `webhook-signing.ts` and
+ * `webhook-envelope.ts`.
  */
 import { randomUUID } from 'node:crypto';
 import { uuid7 } from '@docedit/model';
@@ -133,10 +134,11 @@ const TRANSIENT_REASONS: ReadonlySet<string> = new Set([
 
 export type DispatcherLogEntry =
   | { event: 'raised'; eventType: string; deliveries: number }
-  | { event: 'suppressed'; eventType: string; reason: 'throttled' }
-  | { event: 'envelope_refused'; eventType: string; reason: 'envelope' }
+  | { event: 'suppressed'; tenant: string; eventType: string; reason: 'throttled' }
+  | { event: 'envelope_refused'; tenant: string; eventType: string; reason: 'envelope' }
   | {
       event: 'attempt';
+      tenant: string;
       delivery: string;
       subscription: string;
       eventType: string;
@@ -226,7 +228,12 @@ export class WebhookDispatcher implements EventSink {
   /** Creates one delivery row per matching subscription and starts its send. Resolves to the rows. */
   async raise(event: DepEvent): Promise<string[]> {
     if (event.type === COMMIT_REJECTED && !this.#admit(event.tenant)) {
-      this.#log({ event: 'suppressed', eventType: event.type, reason: 'throttled' });
+      this.#log({
+        event: 'suppressed',
+        tenant: event.tenant,
+        eventType: event.type,
+        reason: 'throttled',
+      });
       return [];
     }
     let body: string;
@@ -236,7 +243,12 @@ export class WebhookDispatcher implements EventSink {
       body = JSON.stringify(cloud);
       eventId = cloud.id;
     } catch {
-      this.#log({ event: 'envelope_refused', eventType: event.type, reason: 'envelope' });
+      this.#log({
+        event: 'envelope_refused',
+        tenant: event.tenant,
+        eventType: event.type,
+        reason: 'envelope',
+      });
       return [];
     }
     const subs = (await this.#subs.list(event.tenant)).filter((s) => s.events.includes(event.type));
@@ -383,6 +395,7 @@ export class WebhookDispatcher implements EventSink {
     await this.#rows.update(row);
     this.#log({
       event: 'attempt',
+      tenant: row.tenant,
       delivery: row.id,
       subscription: row.subscription,
       eventType: row.eventType,

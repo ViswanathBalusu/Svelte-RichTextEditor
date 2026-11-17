@@ -293,7 +293,7 @@ test.describe('the permissions pane (PRM-032, PRM-035, PRM-036)', () => {
     );
     const restricted = pane.getByRole('radio', { name: 'Only the people named here' });
     await expect(restricted).toHaveAccessibleDescription(
-      'Only the people given a role here, and document owners, can edit this region. Other document editors can view and comment.',
+      'Only the people given a role here, and document owners, can edit this region. Other document editors can view and comment. A role cannot be given to everyone on a region like this.',
     );
     await restricted.check();
     expect(await h.named()).toEqual([['setRegionPolicy', { region: 'r2', policy: 'restricted' }]]);

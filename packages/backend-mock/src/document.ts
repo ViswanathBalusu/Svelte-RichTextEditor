@@ -440,10 +440,22 @@ export class MockDocument implements ChannelHost {
   updateGrants(patch: GrantsPatch, ifMatch: string): Tagged<Grants> {
     if (ifMatch !== '*' && ifMatch !== this.grants().etag)
       throw new PortError('precondition_failed', 'the grants changed since they were read');
-    if (patch.grants)
+    if (patch.grants) {
+      // `everyone` on a restricted region is forbidden (07 §17; owner decision 12, 2026-11-15; PRM-061).
+      const restricted = new Set(
+        this.regions()
+          .filter((r) => r.policy === 'restricted')
+          .map((r) => r.id),
+      );
+      if (patch.grants.some((g) => g.principal === 'everyone' && restricted.has(g.region)))
+        throw new PortError(
+          'validation_failed',
+          'everyone cannot hold a role on a restricted region',
+        );
       this.setGrants(
         patch.grants.map((g) => ({ region: g.region, principal: g.principal, role: g.role })),
       );
+    }
     return this.grants();
   }
 

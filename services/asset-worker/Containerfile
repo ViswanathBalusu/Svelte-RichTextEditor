@@ -31,6 +31,9 @@ ENV NODE_ENV=production \
 COPY package.json /opt/docedit/package.json
 COPY node_modules/ /opt/docedit/node_modules/
 COPY sandbox/ /opt/docedit/sandbox/
+# The project's NOTICE and the notices of the decoders above, written by the build script from the
+# packages it copied (FND-011 criterion 3).
+COPY NOTICE THIRD-PARTY-NOTICES.md /opt/docedit/
 RUN set -eu; \
     chown -R 0:0 /opt/docedit; \
     chmod -R a+rX,go-w /opt/docedit; \

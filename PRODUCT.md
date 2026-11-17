@@ -84,6 +84,8 @@ That combination is the position. Pagination is not a differentiator, because ev
   - The first release serves all three candidate markets (agreements and forms, controlled documents, academic and technical writing), so citations and a bibliography are in CDM 1.
   - The project licence is Apache-2.0.
   - The host alone invites and authenticates workflow participants.
+- **Decided by the owner on 2026-11-15** (`docs/owner-decisions-2026-11-15.md`):
+  - The production backend is written in Rust or C#, and Rust is preferred if nothing blocks it (SPK-009). The Node.js service stays as the reference service. A backend in another language reaches the authority, the rules and the model through the authority service (05, section 10), so ADR 0016 stands: the authority, the rules and the model stay in TypeScript whatever the backend language.
 - **Undecided** (`docs/spec/11-roadmap.md` section 10): the project's names; whether the page view must reproduce Word's pagination for imported documents (at the page-view gate); jurisdictions and the sealing party; whether the first customers need the editable page view.
 
 ## Brand Commitments

@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-15 v0.2.7 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-15 v0.2.9 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -97,6 +97,9 @@
 \newattribute\DE@attr@tabs % the paragraph's tab list (\DEdeftabs)
 \newattribute\DE@attr@indl % left indent, scaled points
 \newattribute\DE@attr@indf % first-line indent, scaled points
+\newattribute\DE@attr@indr % right indent, scaled points
+\newattribute\DE@attr@shade % paragraph shading: the colour plus one, 0 for none (EXP-020)
+\newattribute\DE@attr@bord % the paragraph's border list (\DEdefborders), 0 for none
 \newattribute\DE@attr@tab  % a tab
 \newattribute\DE@attr@field % a flattened form field: its number in map.json (EXP-058)
 \newdimen\DE@labelT
@@ -117,6 +120,9 @@
     tabs = luatexbase.registernumber("DE@attr@tabs"),
     indl = luatexbase.registernumber("DE@attr@indl"),
     indf = luatexbase.registernumber("DE@attr@indf"),
+    indr = luatexbase.registernumber("DE@attr@indr"),
+    shade = luatexbase.registernumber("DE@attr@shade"),
+    bord = luatexbase.registernumber("DE@attr@bord"),
     tab = luatexbase.registernumber("DE@attr@tab"),
     field = luatexbase.registernumber("DE@attr@field"),
   }, \the\DE@layoutlevel)
@@ -263,7 +269,7 @@
 \newcommand*\DE@defaults{%
   \DE@fam=\DE@deffam\relax \DE@size=11bp \DE@bf=0 \DE@it=0 \DE@sc=0 \def\DE@color{}%
   \DE@lsrule=0 \DE@lsval=1000 \DE@align=1 \DE@plh=300 \DE@pld=47 \DE@tabs=0
-  \DE@indL=0pt \DE@indR=0pt \DE@indF=0pt \DE@widows=1 \DE@keeplines=0 }
+  \DE@indL=0pt \DE@indR=0pt \DE@indF=0pt \DE@widows=1 \DE@keeplines=0 \DE@shadev=0 \DE@bord=0 }
 \newcommand*\DEfam[1]{\DE@fam=#1\relax}
 \newcommand*\DEsz[1]{\DE@size=#1\relax}
 \newcommand*\DElh[2]{\DE@plh=#1\relax \DE@pld=#2\relax}
@@ -284,9 +290,14 @@
 \newcommand*\DEwc[1]{\DE@widows=#1\relax}
 \newcommand*\DEkl[1]{\DE@keeplines=#1\relax}
 \newcommand*\DEtabs[1]{\DE@tabs=#1\relax}
-% Paragraph shading is not drawn yet (EXP-020); the converter reports it.
-\newcommand*\DEshade[1]{}
-\newcommand*\DEnoshade{}
+% Paragraph shading and borders (EXP-020), drawn line by line in docedit.lua. \DEshade{RRGGBB};
+% \DEbord{k} names a border list defined by \DEdefborders{k}{side:style:width:space:RRGGBB;...}.
+\newcount\DE@shadev \newcount\DE@bord
+\newcommand*\DEshade[1]{\DE@shadev=\directlua{docedit.shade("#1")}\relax}
+\newcommand*\DEnoshade{\DE@shadev=0 }
+\newcommand*\DEbord[1]{\DE@bord=#1\relax}
+\newcommand*\DEnobord{\DE@bord=0 }
+\newcommand*\DEdefborders[2]{\directlua{docedit.defborders(#1, "#2")}}
 
 \newcommand*\DE@selectfont{%
   \csname DE@fam@\the\DE@fam\endcsname
@@ -315,7 +326,8 @@
   \ifnum\DE@keeplines=1 \interlinepenalty=10000 \else \interlinepenalty=0 \fi
   \DE@attr@lsr=\DE@lsrule \DE@attr@lsv=\DE@lsval \DE@attr@plh=\DE@plh \DE@attr@pld=\DE@pld
   \DE@attr@rlh=\DE@plh \DE@attr@rld=\DE@pld \DE@attr@tabs=\DE@tabs
-  \DE@attr@indl=\DE@indL \DE@attr@indf=\DE@indF\relax}
+  \DE@attr@indl=\DE@indL \DE@attr@indf=\DE@indF \DE@attr@indr=\DE@indR
+  \DE@attr@shade=\DE@shadev \DE@attr@bord=\DE@bord\relax}
 
 % A text run: \DEr{offset}{escaped text}. The offset is the UTF-16 position in the block (09 §7.1).
 \protected\def\DEr#1#2{{\DE@attr@run=#1\relax #2}}
@@ -537,6 +549,7 @@
   \par\begingroup\DE@attr@block=#1\relax\DE@attr@area=1\relax\DE@defaults\DE@apply
   \abovedisplayskip=\z@ \belowdisplayskip=\z@ \abovedisplayshortskip=\z@ \belowdisplayshortskip=\z@
   \prevdepth=-1000pt
+  \gdef\DE@mathsrc{#4}%
   \noindent#2%
   \if\relax\detokenize{#3}\relax \begin{equation*}\DE@clipmath{#4}\end{equation*}%
   \else \begin{equation*}\DE@clipmath{#4}\tag{#3}\end{equation*}\fi
@@ -555,7 +568,30 @@
 \newcommand\DE@clipmath[1]{\setbox\DE@cbox=\hbox{$\displaystyle#1$}\DE@clipout}
 % Inline equations are not clipped yet (EXP-052 criterion 5, Notes): a box around them stops the
 % line breaker from breaking inside an equation, and it moves the line-start offsets of EXP-055.
-\newcommand\DEmath[1]{$#1$}
+\newcommand\DEmath[1]{\gdef\DE@mathsrc{#1}$#1$}
+% Tagged equations are a Formula element whose alternative text is the equation's LaTeX source, as
+% the converter wrote it (ADR 0369, EXP-112 criterion 5). latex-lab's own plug would wrap the source
+% in "LaTeX formula starts ... ends" and keep the class's \DE@clipmath in it, so the class has its
+% own plug for the `math/content` socket of latex-lab-math: the alternative text is \DE@mathsrc
+% (set by \DEmath and \DEeq), and the TeX source is still the associated file.
+\def\DE@mathsrc{}
+\ExplSyntaxOn
+\AtBeginDocument
+  {
+    \cs_if_exist:NT \l__math_content_alt_tl
+      {
+        \NewTaggingSocketPlug { math/content } { docedit }
+          {
+            \tl_set:Ne \l__math_content_alt_tl { \exp_args:No \detokenize \DE@mathsrc }
+            \tl_set:Ne \l__math_content_AF_source_tl { \l__math_texsource_template_tl }
+            \tl_set:Nn \l__math_content_AF_mathml_tl { }
+            \tl_set:Nn \l__math_content_actual_tl { }
+          }
+        \AssignTaggingSocketPlug { math/content } { docedit }
+        \tagpdfsetup { math/alt/use }
+      }
+  }
+\ExplSyntaxOff
 
 % Pictures (EXP-028): \DEimg{file}{width}{height}{height in twips}{alt}. The height counts as a
 % run of its own in the line height (ADR 0032 §4).
@@ -613,14 +649,18 @@
 % \DEfieldno{k}: the field box that follows is reported in layout.json under number k (EXP-058).
 % Used inside a group, so the attribute ends with the field.
 \newcommand\DEfieldno[1]{\DE@attr@field=#1\relax}
+% The value is set inside the span, so its marked content belongs to the span that carries the
+% label and not to the paragraph around it (EXP-111 criterion 6).
 \newcommand\DEff[4]{%
-  \setbox\DE@ffbox\hbox{#4}%
-  \ifdim#2>\z@
-    \ifdim\wd\DE@ffbox>#2\relax
+  \ifnum#1=1 \DE@tagalt{#3}{\DE@ffset{#2}{#4}}\else\DE@ffset{#2}{#4}\fi}
+\newcommand\DE@ffset[2]{%
+  \setbox\DE@ffbox\hbox{#2}%
+  \ifdim#1>\z@
+    \ifdim\wd\DE@ffbox>#1\relax
       \typeout{docedit-warning: field_too_wide block \the\DE@attr@block}%
     \fi
   \fi
-  \ifnum#1=1 \DE@tagalt{#3}{\DE@ffshow{#2}}\else\DE@ffshow{#2}\fi}
+  \DE@ffshow{#1}}
 \newcommand\DE@ffshow[1]{\ifdim#1>\z@\hbox to#1{\unhbox\DE@ffbox\hss}\else\box\DE@ffbox\fi}
 
 % Table of contents and lists of captions (EXP-023): \DEtoc{n}{min level}{max level};

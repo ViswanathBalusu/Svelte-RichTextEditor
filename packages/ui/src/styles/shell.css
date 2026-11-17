@@ -1095,6 +1095,15 @@
   border-block-end: 1px solid var(--_de-border);
 }
 
+/* The roles manager and the legend (FRW-074): shape, name and the shape's name on one line. */
+.de-roles-name,
+.de-role-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0;
+}
+
 /* Role markers (FRW-074, FRW-077): the role's colour and a shape, never colour alone. */
 .de-role-icon {
   display: inline-block;

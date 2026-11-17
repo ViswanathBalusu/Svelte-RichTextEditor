@@ -140,7 +140,18 @@ describe('dependency-cruiser refuses forbidden imports (FND-004)', () => {
   );
   file('packages/painter/src/index.ts', 'export const painter = 1;\n');
   file('packages/ui/src/index.ts', "import 'prosemirror-model';\nexport const ui = 1;\n");
+  // The real case (FND-004 criterion 2): `ui` and `element` do not depend on ProseMirror, so such
+  // an import cannot be resolved from them. `prosemirror-state` is not installed in this probe
+  // workspace either, and the rules must still report it.
+  file(
+    'packages/ui/src/unresolved.ts',
+    "import { Plugin } from 'prosemirror-state';\nexport const x = Plugin;\n",
+  );
   file('packages/element/src/index.ts', 'export const element = 1;\n');
+  file(
+    'packages/element/src/unresolved.ts',
+    "import type { EditorState } from 'prosemirror-state';\nexport type X = EditorState;\n",
+  );
   file(
     'services/demo/src/probe.ts',
     "import '../../../packages/ui/src/index.ts';\nimport '../../../packages/element/src/index.ts';\n",
@@ -168,6 +179,8 @@ describe('dependency-cruiser refuses forbidden imports (FND-004)', () => {
         'universal-no-dom-packages packages/layout/src/probe.ts -> node_modules/prosemirror-view/index.js',
         'universal-no-dom-packages packages/layout/src/probe.ts -> packages/painter/src/index.ts',
         'ui-no-prosemirror packages/ui/src/index.ts -> node_modules/prosemirror-model/index.js',
+        'ui-no-prosemirror packages/ui/src/unresolved.ts -> prosemirror-state',
+        'hosts-no-prosemirror packages/element/src/unresolved.ts -> prosemirror-state',
         'services-no-ui services/demo/src/probe.ts -> packages/ui/src/index.ts',
         'services-no-ui services/demo/src/probe.ts -> packages/element/src/index.ts',
       ].sort(),

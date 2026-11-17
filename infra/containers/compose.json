@@ -1,16 +1,13 @@
 {
-  "x-note": "Integration-test environment (FND-010): PostgreSQL, an S3-compatible store and the export worker image. JSON is valid YAML, so `podman compose -f infra/containers/compose.json --env-file infra/containers/.env.example ...` reads this file, and infra/test-env.ps1 starts the same definitions with `podman run` (Compose cannot disable cgroups, which the WSL Podman machine needs). Everything uses host networking and binds 127.0.0.1 only; data lives on tmpfs, so every start is clean. Credentials come from .env.example and are test values.",
+  "x-note": "Integration-test environment (FND-010): PostgreSQL, an S3-compatible store and the export worker image. JSON is valid YAML, so `podman compose -f infra/containers/compose.json --env-file infra/containers/.env.example ...` reads this file, and infra/test-env.ps1 starts the same definitions with `podman run` (Compose cannot disable cgroups, which the WSL Podman machine needs). Everything uses host networking and binds 127.0.0.1 only; data lives on tmpfs, so every start is clean. Credentials come from .env.example and are test values. PostgreSQL, the store and the sandbox settings extend infra/containers/compose.base.json, which the reference host's demo stack extends too (FND-010 criterion 2).",
   "name": "docedit-test",
   "services": {
     "postgres": {
-      "x-note": "PostgreSQL 17.11 (PostgreSQL Licence), official image pinned by its multi-arch index digest (2026-11-06). The schema needs 16 or later.",
-      "image": "docker.io/library/postgres:17.11-trixie@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3",
-      "network_mode": "host",
+      "x-note": "PostgreSQL, as compose.base.json defines it, with its data on tmpfs.",
+      "extends": { "file": "./compose.base.json", "service": "postgres" },
       "environment": {
         "POSTGRES_USER": "${DOCEDIT_PG_ADMIN_USER}",
-        "POSTGRES_PASSWORD": "${DOCEDIT_PG_ADMIN_PASSWORD}",
-        "POSTGRES_DB": "postgres",
-        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"
+        "POSTGRES_PASSWORD": "${DOCEDIT_PG_ADMIN_PASSWORD}"
       },
       "command": [
         "postgres",
@@ -36,25 +33,16 @@
           "${DOCEDIT_PG_PORT}",
           "-U",
           "${DOCEDIT_PG_ADMIN_USER}"
-        ],
-        "interval": "1s",
-        "timeout": "3s",
-        "retries": 90
+        ]
       },
       "labels": { "org.docedit.env": "test" }
     },
     "s3": {
-      "x-note": "Versity S3 Gateway v1.10.0 (Apache-2.0) over a POSIX directory, pinned by its multi-arch index digest (2026-11-06). MinIO's server is AGPL-3.0, which the licence policy denies (docs/research/2026-11-06-borrow-list.md section 15).",
-      "image": "docker.io/versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316",
-      "network_mode": "host",
+      "x-note": "The S3-compatible store, as compose.base.json defines it, with its data on tmpfs.",
+      "extends": { "file": "./compose.base.json", "service": "s3" },
       "environment": {
-        "VGW_BACKEND": "posix",
-        "VGW_BACKEND_ARG": "/data",
-        "VGW_BACKEND_ARGS": "--versioning-dir /versions",
         "VGW_PORT": "127.0.0.1:${DOCEDIT_S3_PORT}",
         "VGW_REGION": "${DOCEDIT_S3_REGION}",
-        "VGW_HEALTH": "/health",
-        "VGW_QUIET": "true",
         "ROOT_ACCESS_KEY": "${DOCEDIT_S3_ACCESS_KEY}",
         "ROOT_SECRET_KEY": "${DOCEDIT_S3_SECRET_KEY}"
       },
@@ -67,27 +55,19 @@
           "-O",
           "/dev/null",
           "http://127.0.0.1:${DOCEDIT_S3_PORT}/health"
-        ],
-        "interval": "1s",
-        "timeout": "3s",
-        "retries": 60
+        ]
       },
       "labels": { "org.docedit.env": "test" }
     },
     "export-worker": {
       "x-note": "The sandboxed compile worker of 09 §9.3, built from services/export-worker/Containerfile (owned by the export work; referenced, not copied). One container per job: a tar of the bundle on standard input, a tar of the outputs on standard output, no network. Memory, CPU and process limits are set per job by services/export-worker/src/sandbox.ts.",
+      "extends": { "file": "./compose.base.json", "service": "export-sandbox" },
       "profiles": ["export"],
       "image": "${DOCEDIT_EXPORT_IMAGE}",
       "build": {
         "context": "../../services/export-worker/image",
         "dockerfile": "../Containerfile"
       },
-      "network_mode": "none",
-      "read_only": true,
-      "tmpfs": ["/work:rw,size=256m,mode=1777,nosuid,nodev,noexec"],
-      "cap_drop": ["ALL"],
-      "security_opt": ["no-new-privileges"],
-      "user": "10001:10001",
       "stdin_open": true,
       "labels": { "org.docedit.env": "test" }
     }
