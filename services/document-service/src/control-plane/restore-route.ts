@@ -27,7 +27,7 @@
  */
 import type { Connection } from '@docedit/authority';
 import { planRestore } from '@docedit/history';
-import { canonicalize } from '@docedit/model';
+import { canonicalize, uuid7 } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { regionNodeOf } from './content.ts';
 import { accessOf, minVisibleSeqOf, regionInfosOfJson, requireRow } from './gate.ts';
@@ -126,6 +126,24 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       resource: `/documents/${doc}/versions`,
       data: { seq, toSeq, ...(region !== undefined ? { region } : {}) },
     });
+    // A restore is on the audit trail (07 section 14; UX-081 criterion 1): who, which document and
+    // the sequence numbers. No content is recorded.
+    await d.audit?.record([
+      {
+        id: uuid7(),
+        tenant: ctx.caller.tenant,
+        doc,
+        actor,
+        kind: 'document.restored',
+        data: {
+          scopes: region !== undefined ? [region] : ['doc'],
+          toSeq,
+          seq,
+          preRestoreSeq: headSeq,
+        },
+        at: d.now(),
+      },
+    ]);
     return json(200, {
       seq,
       toSeq,

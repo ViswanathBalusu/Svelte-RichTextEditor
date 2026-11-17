@@ -71,7 +71,8 @@ describe('the container definitions are shared, not duplicated (FND-010 criterio
       if (key === 'x-note') continue;
       if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
         const own = (svc[key] ?? {}) as Record<string, unknown>;
-        for (const inner of Object.keys(value)) expect(own, `${key}.${inner}`).not.toHaveProperty(inner);
+        for (const inner of Object.keys(value))
+          expect(own, `${key}.${inner}`).not.toHaveProperty(inner);
       } else {
         expect(svc, key).not.toHaveProperty(key);
       }
@@ -104,7 +105,10 @@ describe('the container definitions are shared, not duplicated (FND-010 criterio
         expect(Array.isArray(svc.healthcheck!['test'])).toBe(true);
       }
     }
-    expect(test['postgres']!.environment).toHaveProperty('POSTGRES_USER', '${DOCEDIT_PG_ADMIN_USER}');
+    expect(test['postgres']!.environment).toHaveProperty(
+      'POSTGRES_USER',
+      '${DOCEDIT_PG_ADMIN_USER}',
+    );
     expect(demo['postgres']!.environment).toHaveProperty(
       'POSTGRES_USER',
       '${DOCEDIT_DEMO_PG_ADMIN_USER}',

@@ -15,6 +15,7 @@ import {
   Room,
   regionInfos,
   type Connection,
+  type Effects,
 } from '@docedit/authority';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import fc from 'fast-check';
@@ -408,7 +409,7 @@ describe('random bases, reconnects and failed writes through the room (FRW-066 c
           const bases = new Map<string, number>();
           const storedSeq = new Map<string, number>();
           const erinIds: string[] = [];
-          let outstanding: Effects['write'] = null;
+          let outstanding: ReturnType<Room['submit']>['write'] = null;
 
           const submit = (channel: string, base: number, steps: unknown) => {
             const id = commitId();

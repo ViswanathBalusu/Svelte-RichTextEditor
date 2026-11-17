@@ -21,6 +21,8 @@ import type {
   ExportTarget,
   FillSummary,
   PeerCaret,
+  ProofingFindingView,
+  ProofingStatus,
   PresencePeer,
   PrincipalInfo,
   RecoveredItem,
@@ -128,6 +130,8 @@ export interface MountOptions {
   carets?: PeerCaret[];
   /** The document's base direction (`settings.dir`), as the core's `direction` view (UX-065). */
   direction?: 'ltr' | 'rtl';
+  /** A proofing port is attached (UX-041): the findings the harness steps through are `proofingFindings`. */
+  proofing?: { status: ProofingStatus; findings: ProofingFindingView[] };
   /** The document's classification label, as the core's `classification` view (UX-085). */
   classification?: ClassificationLabel | null;
   /** The host's directory search: `host` (the list above) or `none`. */
@@ -515,6 +519,7 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.carets ? { carets: options.carets } : {}),
     ...(options.direction ? { direction: options.direction } : {}),
     ...(options.classification !== undefined ? { classification: options.classification } : {}),
+    ...(options.proofing ? { proofing: options.proofing.status } : {}),
     outline: [
       { id: 'h1', level: 1, text: 'Scope' },
       { id: 'h2', level: 2, text: 'Terms' },
@@ -522,6 +527,7 @@ function mountShell(options: MountOptions = {}): void {
       { id: 'h4', level: 1, text: 'Annex' },
     ],
   });
+  if (options.proofing) core.proofingFindings = options.proofing.findings;
   if (options.selection) core.selection.set({ ...core.selection.get(), ...options.selection });
   if (options.history)
     Object.assign(core, {
@@ -702,6 +708,8 @@ const harness = {
   setFeatures: (features: string[]) => need().core.features?.set(features),
   setCounts: (counts: ShellCounts) => need().core.counts?.set(counts),
   setSettings: (patch: Partial<ShellSettings>) => need().settings.set(patch),
+  /** Sets a public `--de-` property on the element that holds the shadow root, as a host page does. */
+  setHostProperty: (name: string, value: string) => host.style.setProperty(name, value),
   setLocale: (locale: string) => need().strings.setLocale(locale),
   refuse: (reason: string, scopes: string[] = []) => need().core.refuse(reason, scopes),
   setAside: (items: RecoveredItem[]) => need().core.setAside(items),
@@ -717,6 +725,10 @@ const harness = {
   setDirection: (dir: 'ltr' | 'rtl') => need().core.direction?.set(dir),
   /** As the core does when `document.updated` brings a new label (UX-085). */
   setClassification: (label: ClassificationLabel | null) => need().core.classification?.set(label),
+  /** As the core does when its proofing state changes (UX-041). */
+  setProofing: (status: ProofingStatus) => need().core.proofing?.set(status),
+  /** What the shell asked the proofing port to do, in order (UX-041, UX-042). */
+  proofingCalls: (): string[] => [...need().core.proofingCalls],
   setOutline: (items: Array<{ id: string; level: number; text: string }>) =>
     need().core.outline.set(items),
   setPanel: (kind: 'footnote' | 'story' | null) =>

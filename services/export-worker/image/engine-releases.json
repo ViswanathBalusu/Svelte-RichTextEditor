@@ -1,0 +1,10 @@
+{
+  "//": "Append-only ledger of the TeX Live base image of the export worker (EXP-078 criterion 1). A TeX Live upgrade is a class version change (09 section 9.4, ADR 0007): the FROM line of ../Containerfile changes only together with a new entry here, whose classVersion is a class release of packages/export-latex/class/releases.json that is later than the entry before it. Never edit or remove an entry. Checked by src/exp-078-engine-ledger.test.ts. The first entry is the oldest class release of the ledger of class releases; the history before it is not kept.",
+  "engines": [
+    {
+      "classVersion": "0.2.0",
+      "texlive": "2026",
+      "baseImage": "docker.io/texlive/texlive:latest@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e"
+    }
+  ]
+}

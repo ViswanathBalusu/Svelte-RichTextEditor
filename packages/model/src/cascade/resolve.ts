@@ -226,6 +226,12 @@ interface Layered {
 }
 
 const STYLE_KEYS: readonly (keyof Values)[] = [...PARAGRAPH_PROPERTIES, ...RUN_PROPERTIES];
+/**
+ * What a table style gives the paragraphs in its cells. Its `borders` are the table's borders (see
+ * table-format.ts), not paragraph borders: a cell paragraph that took them would be drawn in a box
+ * of its own inside the cell's.
+ */
+const TABLE_STYLE_KEYS: readonly (keyof Values)[] = STYLE_KEYS.filter((k) => k !== 'borders');
 const DIRECT_KEYS: readonly (keyof ParagraphProperties)[] = PARAGRAPH_PROPERTIES;
 
 const layeredCache = new WeakMap<StyleTable, Map<string, CascadeResult<Layered>>>();
@@ -319,7 +325,7 @@ function computeLayered(
       if (applied.has(id)) continue;
       applied.add(id);
       const style = table.styles.get(id);
-      overlay(into, trace, style, STYLE_KEYS, layer);
+      overlay(into, trace, style, layer === 'table style' ? TABLE_STYLE_KEYS : STYLE_KEYS, layer);
       numbering = asNumbering(style?.['numbering']) ?? numbering;
     }
   };

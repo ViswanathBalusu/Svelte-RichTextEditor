@@ -11,6 +11,7 @@ import type { Schema } from 'prosemirror-model';
 import {
   type Command,
   type EditorState,
+  NodeSelection,
   type Plugin,
   Selection,
   type Transaction,
@@ -21,9 +22,15 @@ import type { CoreLabels, PeerCaretInfo } from '../api.ts';
 import { type ClipboardPayload, fragmentFromHtml } from '../clipboard.ts';
 import { CDM_VERSION, type CoreConfig, DocumentCore } from '../core.ts';
 import { insertLineBreak, noNestedFootnote, oneParagraphLimit } from '../footnote.ts';
+import type { AssetImageLookup } from '../image-source.ts';
+import type { EquationDrawer } from '../equation-draw.ts';
+import { EQUATION_NODES } from '../equation-commands.ts';
+import { equationBlockView, equationNumbersPlugin, equationView } from './equation-view.ts';
+import { imageView } from './image-view.ts';
 import { coreKeys } from '../keys.ts';
 import { commentDecorations } from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
+import { proofingDecorations } from '../proofing-decorations.ts';
 import { ReadValue, sameJson } from '../read-value.ts';
 import { FIND_CURRENT_CLASS, findDecorations } from '../search-highlight.ts';
 import { SubEditor, type SubEditorTarget } from '../subeditor.ts';
@@ -45,6 +52,8 @@ function viewPlugins(schema: Schema): Plugin[] {
     dropCursor(),
     footnoteNumbers(),
     listSemanticsPlugin(),
+    // FE-069 criterion 5: the numbers of numbered equation blocks, from the shared labels.
+    equationNumbersPlugin(),
     // FE-131 criterion 1: the borders and shading a table takes from its table style.
     tableStylePlugin(),
     // FE-140 criterion 2: the generated entries of each bibliography.
@@ -150,6 +159,8 @@ export class EditorCore extends DocumentCore {
 
   readonly #selectionShim: SelectionShim;
   readonly #fontAlias: ((family: string) => string | undefined) | undefined;
+  readonly #assetImage: AssetImageLookup | undefined;
+  readonly #drawEquation: EquationDrawer | undefined;
   #shimResult: 'native' | 'instance' | 'none' | null = null;
   /** The blocks before which a page guide is drawn (FE-068); empty when guides are off. */
   #pageGuides: ReadonlySet<string> = new Set();
@@ -264,6 +275,8 @@ export class EditorCore extends DocumentCore {
     this.carets = new ReadValue<readonly PeerCaretInfo[]>([], sameJson, config.schedule);
     this.#selectionShim = config.selectionShim ?? 'instance';
     this.#fontAlias = config.fontAlias;
+    this.#assetImage = config.assetImage;
+    this.#drawEquation = config.drawEquation;
     webViews.set(this, { view: () => this.#view, sub: () => this.#sub });
   }
 
@@ -357,11 +370,37 @@ export class EditorCore extends DocumentCore {
           ),
           field: fieldView(this.#fieldViews),
           bibliography: bibliographyView,
+          image: imageView(this.#assetImage),
+          equation: equationView(this.#drawEquation),
+          equation_block: equationBlockView(this.#drawEquation),
         },
         markViews: cssomMarkViews(this.#fontAlias),
         attributes: this.#bodyAttributes(),
+        // An equation opens in the math editor on a double click or on Enter while it is selected
+        // (FE-070); the shell reads the request (`equationRequest`). Nothing is opened here.
+        handleDoubleClickOn: (_view, _pos, node, nodePos) =>
+          EQUATION_NODES.has(node.type.name) && this.requestEquationEdit(nodePos),
         // Copy and cut are the core's (FE-050, FE-055): the browser's own copy would write ProseMirror's format.
         handleDOMEvents: {
+          // Enter on a selected equation opens the math editor (FE-070). A DOM handler, not `handleKeyDown`,
+          // so that a read-only view opens it too (ProseMirror runs `handleKeyDown` only in editable views).
+          keydown: (view, event) => {
+            const { selection } = view.state;
+            if (
+              event.key !== 'Enter' ||
+              event.shiftKey ||
+              event.ctrlKey ||
+              event.altKey ||
+              event.metaKey ||
+              event.isComposing ||
+              !(selection instanceof NodeSelection) ||
+              !EQUATION_NODES.has(selection.node.type.name) ||
+              !this.requestEquationEdit(selection.from)
+            )
+              return false;
+            event.preventDefault();
+            return true;
+          },
           // Paste is taken here, not by `handlePaste`: ProseMirror parses the clipboard's HTML before it calls
           // `handlePaste`, and under Trusted Types that parse uses ProseMirror's own policy, which a host may
           // refuse (FE-054 criterion 5). Read-only views keep ProseMirror's handling, which does nothing there.
@@ -400,7 +439,15 @@ export class EditorCore extends DocumentCore {
           return findDecorations(state.doc, { query: f.query, current: f.current })
             .add(state.doc, suggestionDecorations(state.doc, 'all').find())
             .add(state.doc, commentDecorations(state.doc, this.threadRanges.get()).find())
-            .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find());
+            .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
+            .add(
+              state.doc,
+              proofingDecorations(
+                state.doc,
+                this.proofingFindings(),
+                this.proofingCurrentId(),
+              ).find(),
+            );
         },
       },
     );
@@ -410,6 +457,8 @@ export class EditorCore extends DocumentCore {
     // A change of the find state redraws the highlights at once (the view is not told by a transaction).
     // A change of a thread's range redraws its decoration at once (FE-048).
     const unthread = this.threadRanges.subscribe(() => this.#view?.setProps({}));
+    // A result of the proofing port, or a navigation, draws the findings again (UX-041).
+    const unproof = this.proofing.subscribe(() => this.#view?.setProps({}));
     const unfind = this.findState.subscribe(() => {
       const v = this.#view;
       if (!v) return;
@@ -451,6 +500,7 @@ export class EditorCore extends DocumentCore {
       remove();
       unfind();
       unthread();
+      unproof();
       undirection();
       uncarets();
       win?.removeEventListener('resize', redraw);

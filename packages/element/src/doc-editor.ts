@@ -42,6 +42,9 @@ import { headerSnapshot, type HeaderSnapshot } from './header-events.ts';
 import { INTERNALS } from './internals.ts';
 import { Announcer } from './announcer.ts';
 import { mountLiveRegion, type LiveRegion } from './live-region.ts';
+import type { AssetImageLookup } from '@docedit/engine';
+import { assetImageLookup } from './assets.ts';
+import { equationDrawer } from './equation-drawer.ts';
 import { Session } from './session.ts';
 import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
@@ -442,8 +445,12 @@ export class DocEditorElement extends Base {
       current.docId === docId &&
       this.#sessionKey === source.key &&
       current.phase !== 'closed'
-    )
+    ) {
+      // Back from the read view: the same core is shown again (FE-065 criterion 3).
+      this.#setEditorHidden(false);
+      if (this.#mounted !== null) this.#showWebLabel();
       return;
+    }
     this.#reload = false;
     void current?.close();
     const session: Session = new Session({
@@ -506,13 +513,27 @@ export class DocEditorElement extends Base {
       !this.#reload
     )
       return;
+    const reload = this.#reload;
     this.#reload = false;
     this.#closeReadView();
     this.#hideWebLabel();
     const current = this.#session;
-    this.#session = null;
-    this.#sessionKey = null;
-    void current?.close();
+    if (
+      current &&
+      !reload &&
+      current.docId === docId &&
+      this.#sessionKey === source.key &&
+      current.phase !== 'closed'
+    ) {
+      // The session stays open behind the read view, so that a return to the web view finds the
+      // same editing core and no unconfirmed work is lost (FE-065 criterion 3; ADR 0304 item 1,
+      // option a, proposed default).
+      this.#setEditorHidden(true);
+    } else {
+      this.#session = null;
+      this.#sessionKey = null;
+      void current?.close();
+    }
     const token = {};
     this.#readToken = token;
     this.#readViewOf = { docId, key: source.key };
@@ -562,6 +583,18 @@ export class DocEditorElement extends Base {
     this.#webLabel = label;
   }
 
+  /**
+   * Hides or shows the editing shell without unmounting it (FE-065 criterion 3). The rule is set
+   * through the style object, which a strict `style-src` policy allows (FE-017).
+   */
+  #setEditorHidden(hidden: boolean): void {
+    const shell = this.#root.querySelector<HTMLElement>('.de-shell');
+    if (shell === null) return;
+    if (hidden) shell.style.setProperty('display', 'none', 'important');
+    else shell.style.removeProperty('display');
+    shell.toggleAttribute('inert', hidden);
+  }
+
   #hideWebLabel(): void {
     this.#webLabel?.remove();
     this.#webLabel = null;
@@ -588,6 +621,13 @@ export class DocEditorElement extends Base {
     });
   }
 
+  #assetImage(docId: string): { assetImage?: AssetImageLookup } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.assets || !backend.features.has('assets')) return {};
+    return { assetImage: assetImageLookup(backend.assets, docId) };
+  }
+
   async #mount(
     content: Content,
     docId: string,
@@ -604,6 +644,11 @@ export class DocEditorElement extends Base {
       config: this.#config,
       // The manifest's family lookup (FE-062 criterion 1), when the session read one.
       ...(fontAlias ? { fontAlias } : {}),
+      // Pictures are drawn from the signed URLs of the assets port, when the backend has one (FE-067).
+      ...this.#assetImage(docId),
+      // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
+      drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
+      mathFontsUrl: this.#config.katexFontsUrl,
       viewerUrl: this.#config.pdfViewerUrl ?? new URL(VIEWER_PAGE, import.meta.url).href,
       resolveUsers: () => this.#resolveUsers,
       // The host's directory search and the document it is asked about (PRO-080 criterion 2).
@@ -645,7 +690,9 @@ export class DocEditorElement extends Base {
         }),
     });
     this.#mounted = mounted;
-    this.#showWebLabel();
+    // A shell that mounts while the read view is shown stays hidden until the view returns.
+    if (this.#readViewOf !== null) this.#setEditorHidden(true);
+    else this.#showWebLabel();
     this.#applyPageGuides();
     return mounted;
   }
@@ -744,6 +791,11 @@ export class DocEditorElement extends Base {
       access: session?.access ?? null,
       printPdf: (url) => printPdfAtUrl(url, this.#root),
       onError: (detail) => this.#emit('de-error', detail),
+      // The job's reports reach the host as `de-export-*` events, as for `requestExport` (FE-073
+      // criterion 4): a failed job raises `de-export-failed` and then `de-error`. A replaced session raises nothing.
+      onExportEvent: (event) => {
+        if (this.#session === session) this.#emit(event.name, event.detail);
+      },
     });
   }
 

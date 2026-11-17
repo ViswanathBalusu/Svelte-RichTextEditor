@@ -24,6 +24,7 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
   // and `minVisibleSeqOf`, and refuse with `checkSeq` or `planRestore`.
   'GET /documents/{id}/diff': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
   'GET /documents/{id}/attribution': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
+  'POST /documents/{id}/versions': { file: 'control-plane/versions-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/restore': { file: 'control-plane/restore-route.ts', gate: CONTROL_GATE },
 };
 
@@ -34,7 +35,6 @@ const OPEN: Record<string, { file: string; reason: string }> = {
     reason: 'the fork applies no gate to atSeq (PRM-042 criterion 4)',
   },
   'GET /documents/{id}/history': { file: '', reason: 'route not built (HIS-026, phase 2)' },
-  'POST /documents/{id}/versions': { file: '', reason: 'route not built (HIS-026, phase 2)' },
   'GET /documents/{id}/threads': { file: '', reason: 'route not built (PRM-042 criterion 1)' },
 };
 

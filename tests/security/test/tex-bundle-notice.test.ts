@@ -95,6 +95,13 @@ describe('SEC-036 criterion 6: the tex bundle carries the same-restrictions noti
 
   it('the bundle files are in the archive beside the README, so the notice travels with them', () => {
     const entries = readTar(texArchive(bundleWith(1, null)));
-    expect([...entries.keys()].sort()).toEqual(['README.txt', 'main.tex', 'manifest.json']);
+    // EXP-085 adds the licence text and the licence list of the class files beside them.
+    expect([...entries.keys()].sort()).toEqual([
+      'LICENCE.txt',
+      'README.txt',
+      'licences.json',
+      'main.tex',
+      'manifest.json',
+    ]);
   });
 });
