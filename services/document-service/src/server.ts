@@ -990,6 +990,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     compileBudget,
     ...(liveQuotas ? { liveQuotas } : {}),
+    ...(quotaSource ? { quotaSource } : {}),
   });
 
   const ready = () => readiness(parts.pool);

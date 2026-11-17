@@ -43,7 +43,7 @@ import type { QuotaAdminService } from './quota-admin.ts';
 import type { TenantRegistry } from './tenants.ts';
 import type { SearchHit, SearchQuery } from './search-index.ts';
 import type { CompileBudget } from './exp-009-compile-budget.ts';
-import type { LiveQuotas } from './live-quotas.ts';
+import type { LiveQuotas, QuotaSource } from './live-quotas.ts';
 import type { PolicyHookGate } from './policy-hook-client.ts';
 import type { JobQueue } from './jobs/queue.ts';
 import type { TenantMeter } from './metrics.ts';
@@ -135,6 +135,8 @@ export interface HandlerDeps {
   compileBudget?: CompileBudget;
   /** The live-use quotas of the node; the REST routes that author a commit ask it (BE-091). */
   liveQuotas?: LiveQuotas;
+  /** The tenants' quota values, for the storage and export quotas (BE-092). Absent: none apply. */
+  quotaSource?: QuotaSource;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: no hook is asked. */
   policyHook?: PolicyHookGate;
 }
