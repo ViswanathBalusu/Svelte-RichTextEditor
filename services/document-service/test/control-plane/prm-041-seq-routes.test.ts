@@ -20,6 +20,8 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
   'GET /documents/{id}/commits': { file: 'control-plane/commit-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/exports': { file: 'control-plane/export-routes.ts', gate: CONTROL_GATE },
   'GET /documents/{id}/field-values': { file: 'control-plane/field-routes.ts', gate: CONTROL_GATE },
+  'POST /documents/{id}/versions': { file: 'control-plane/versions-routes.ts', gate: CONTROL_GATE },
+  'POST /documents/{id}/restore': { file: 'control-plane/restore-route.ts', gate: CONTROL_GATE },
 };
 
 /** Gated inputs that are not gated yet, or whose route is not built; each with its reason. */
@@ -30,11 +32,6 @@ const OPEN: Record<string, { file: string; reason: string }> = {
   },
   'GET /documents/{id}/diff': { file: '', reason: 'route not built (HIS-026, phase 2)' },
   'GET /documents/{id}/history': { file: '', reason: 'route not built (HIS-026, phase 2)' },
-  'POST /documents/{id}/versions': { file: '', reason: 'route not built (HIS-026, phase 2)' },
-  'POST /documents/{id}/restore': {
-    file: '',
-    reason: 'route not built (FRW, PRM-049 criterion 5)',
-  },
   'GET /documents/{id}/threads': { file: '', reason: 'route not built (PRM-042 criterion 1)' },
   'GET /documents/{id}/attribution': { file: '', reason: 'route not built (PRM-042 criterion 2)' },
 };
