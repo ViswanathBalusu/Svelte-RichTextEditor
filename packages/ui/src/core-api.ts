@@ -128,7 +128,8 @@ export interface ShellCounts {
 /**
  * The last local change the region guard refused (FE-036; the core's `refusal` view). `n` counts
  * refusals, so the same reason twice is two notices. `reason` is the guard's code: `scope`,
- * `structure`, `manage`, `read-only`, `placeholder`, `redacted`, `identifier`, `step`, `invariant`;
+ * `structure`, `manage`, `read-only`, `placeholder`, `redacted`, `identifier`, `step`, `invariant`,
+ * `referenced` (a cross-reference still names what was deleted; `count` is the number of references);
  * the shell explains an unknown code in general words. `scopes` are DEP scope identifiers; the shell
  * never shows them, so a notice names nothing the reader cannot see (ADR 0019).
  */
@@ -241,7 +242,9 @@ export type CoreQueryName1b =
  * - `insertField`: `{ kind }` (FRW-072);
  * - `insertRecovered`, `discardRecovered`: `{ id }`, the item's `id` or its index as a string
  *   (UX-017);
- * - `finishFill`: none (FRW-076).
+ * - `finishFill`: none (FRW-076);
+ * - `showReferences`: none; moves the selection to a cross-reference that blocked the last refused
+ *   deletion, the next at each call (FE-133 criterion 5).
  */
 export type CoreCommandName =
   | 'copyFormat'
@@ -255,7 +258,8 @@ export type CoreCommandName =
   | 'insertField'
   | 'insertRecovered'
   | 'discardRecovered'
-  | 'finishFill';
+  | 'finishFill'
+  | 'showReferences';
 
 /** Modes of 05 §8.1 and 13 §3. */
 export type EditorMode = 'edit' | 'review' | 'view' | 'fill';

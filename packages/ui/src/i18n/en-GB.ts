@@ -200,6 +200,14 @@ export const EN_GB = {
   'notice.refused.other': 'That change was not made.',
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',
+  // A deletion refused because a cross-reference still names its target (I4; FE-133). The count is
+  // the number of references; the sentence names neither the target nor the references.
+  'notice.refused.referenced': {
+    one: 'That change was not made: a cross-reference still points to what you tried to delete.',
+    other:
+      'That change was not made: {count} cross-references still point to what you tried to delete.',
+  },
+  'notice.action.showReferences': 'Show references',
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {

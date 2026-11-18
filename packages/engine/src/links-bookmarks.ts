@@ -6,12 +6,15 @@
  * - A bookmark is an `anchor` atom with a name, unique in the document. The name follows the CDM's
  *   bookmark pattern; the uniqueness check is case-sensitive, because the CDM states no case rule
  *   (recorded in the epic's notes as a proposed decision, not decided here).
- * - Following an in-document link to a bookmark moves the caret to that bookmark. Links to headings
- *   are not covered here (no heading target is defined by the CDM yet).
+ * - Following an in-document link to a bookmark moves the caret to that bookmark. A target that is
+ *   no bookmark name but the identifier of a heading moves the caret to the start of the heading
+ *   (the CDM's pattern allows it; the reading is proposed in ADR 0377).
  */
 import { LINK_HREF_PATTERN } from '@docedit/model/definition';
+import { outlineLevelOf } from '@docedit/model';
 import type { Node } from 'prosemirror-model';
 import { TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
+import { stylesOf } from './styles.ts';
 
 /** The bookmark name pattern of the CDM (cdm1.ts, `anchor.name`). */
 export const BOOKMARK_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,39}$/;
@@ -120,11 +123,43 @@ export function followInternalLink(
   dispatch?: (tr: Transaction) => void,
 ): FollowResult {
   if (!href.startsWith('#')) return 'not-internal';
-  const pos = bookmarkPositions(state.doc).get(href.slice(1));
-  if (pos === undefined) return 'no-target';
+  const target = href.slice(1);
+  const pos = bookmarkPositions(state.doc).get(target);
+  if (pos !== undefined) {
+    if (dispatch) {
+      const tr = state.tr.setSelection(TextSelection.create(state.doc, pos));
+      dispatch(tr.scrollIntoView());
+    }
+    return 'moved';
+  }
+  // No bookmark of that name: the target may be the identifier of a heading (ADR 0377).
+  const heading = headingPosition(state.doc, target);
+  if (heading === null) return 'no-target';
   if (dispatch) {
-    const tr = state.tr.setSelection(TextSelection.create(state.doc, pos));
+    const tr = state.tr.setSelection(TextSelection.create(state.doc, heading + 1));
     dispatch(tr.scrollIntoView());
   }
   return 'moved';
+}
+
+/**
+ * The position of the heading paragraph whose identifier is `id`, in the body or a region (not in
+ * the definitions, a story or a footnote), or null. A heading is a paragraph whose style has an
+ * outline level through the cascade (03 §4.3), as the outline counts it.
+ */
+export function headingPosition(doc: Node, id: string): number | null {
+  const table = stylesOf(doc);
+  let found: number | null = null;
+  doc.descendants((node, pos) => {
+    if (found !== null) return false;
+    const type = node.type.name;
+    if (type === 'defs' || type === 'story' || type === 'footnote') return false;
+    if (type === 'paragraph' && node.attrs['id'] === id) {
+      const style = node.attrs['style'];
+      if (typeof style === 'string' && outlineLevelOf(table, { style }) !== null) found = pos;
+      return false;
+    }
+    return true;
+  });
+  return found;
 }

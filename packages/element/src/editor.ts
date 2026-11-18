@@ -294,8 +294,17 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
     // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
     // `nextEditableRegion` takes no arguments and moves the caret (PRM-027).
-    commandNames: ['insertField', 'setRegionPolicy', 'markRegion', 'nextEditableRegion'],
+    // `showReferences` takes no arguments and selects a cross-reference that blocked the last
+    // refused deletion (FE-133 criterion 5).
+    commandNames: [
+      'insertField',
+      'setRegionPolicy',
+      'markRegion',
+      'nextEditableRegion',
+      'showReferences',
+    ],
     runNamed: (name, args) => {
+      if (name === 'showReferences') return core.showReferences();
       if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
       if (name === 'markRegion') {
         const title = (args as { title?: unknown } | undefined)?.title;
