@@ -6,7 +6,13 @@
  * A database that cannot be opened (no IndexedDB, a private window, blocked site data) gives no
  * journal: `openIdbJournal` rejects, and the caller carries on without one.
  */
-import type { Discarded, JournalContents, JournalEntry, JournalPort } from '@docedit/engine';
+import type {
+  Discarded,
+  JournalContents,
+  JournalEntry,
+  JournalPort,
+  QueueAt,
+} from '@docedit/engine';
 
 /** The database name: one per origin, shared by every document the origin edits. */
 export const JOURNAL_DB_NAME = 'docedit-journal';
@@ -66,10 +72,15 @@ export async function openIdbJournal(
       t.objectStore(COMMITS).delete([docId, id]);
       await done(t);
     },
-    async setQueue(docId: string, steps: readonly unknown[]) {
+    async setQueue(docId: string, steps: readonly unknown[], at?: QueueAt) {
       const t = db.transaction(QUEUES, 'readwrite');
       if (steps.length === 0) t.objectStore(QUEUES).delete(docId);
-      else t.objectStore(QUEUES).put({ docId, steps: JSON.parse(JSON.stringify(steps)) });
+      else
+        t.objectStore(QUEUES).put({
+          docId,
+          steps: JSON.parse(JSON.stringify(steps)),
+          ...(at ? { at: { seq: at.seq, incarnation: at.incarnation } } : {}),
+        });
       await done(t);
     },
     async read(docId: string): Promise<JournalContents> {
@@ -78,9 +89,9 @@ export async function openIdbJournal(
       const queue = request(t.objectStore(QUEUES).get(docId));
       await done(t);
       const rows = (await commits) as JournalEntry[];
-      const q = (await queue) as { steps: Steps } | undefined;
+      const q = (await queue) as { steps: Steps; at?: QueueAt } | undefined;
       // The key range sorts by identifier: UUID version 7 identifiers sort in the order they were made.
-      return { commits: rows, queue: q?.steps ?? [] };
+      return { commits: rows, queue: q?.steps ?? [], ...(q?.at ? { queueAt: q.at } : {}) };
     },
     async setRecovered(docId: string, items: readonly Discarded[]) {
       const t = db.transaction(RECOVERED, 'readwrite');

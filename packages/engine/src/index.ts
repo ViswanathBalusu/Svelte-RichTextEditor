@@ -101,8 +101,10 @@ export {
   type JournalContents,
   type JournalEntry,
   type JournalPort,
+  type QueueAt,
   memoryJournal,
 } from './sync/journal.ts';
+export { type RestorePlan, readRestorePlan, restoreBase } from './sync/restore.ts';
 export type {
   LocatedFinding,
   ProofingClock,

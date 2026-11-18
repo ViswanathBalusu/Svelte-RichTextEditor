@@ -21,6 +21,7 @@ import type { ReadView } from './read-value.ts';
 import type { TrimReport } from './trim.ts';
 import type { Clock } from './sync/session.ts';
 import type { JournalPort } from './sync/journal.ts';
+import type { RestorePlan } from './sync/restore.ts';
 
 /** A CDM document as stored and transferred (03 §2). */
 export interface CdmEnvelope {
@@ -297,6 +298,8 @@ export interface SelectionSummary {
   /** The paragraph style at the selection, or null when the selected paragraphs differ. */
   style: string | null;
   marks: string[];
+  /** The language mark at the selection (a BCP 47 tag), or null for the document's default (UX-018). */
+  lang?: string | null;
 }
 
 /** The shape of the `de-selection` detail (05 §8.1): a DEP scope identifier and a block. */
@@ -599,6 +602,13 @@ export interface AttachOptions {
   features?: readonly string[];
   /** The recovery journal (FE-008): commits are written here before they are sent. */
   journal?: JournalPort;
+  /**
+   * Unconfirmed work an earlier visit left in the journal (FE-009; `readRestorePlan`). The content
+   * the core holds must be the document at `restoreBase(restore).seq`, and the channel must have
+   * been opened with a resume at that `seq` naming the commit as in flight. The core puts the work
+   * back as the in-flight commit and the queue; what does not apply is kept as recovered edits.
+   */
+  restore?: RestorePlan;
   /** The assets port: a pasted picture is uploaded through it (FE-053; 10 §3.1). */
   assets?: AssetsPort;
   /** The proofing port (13 §6.1; UX-041): the core checks spelling and grammar through it. */

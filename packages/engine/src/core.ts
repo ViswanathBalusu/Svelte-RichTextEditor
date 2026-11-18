@@ -57,7 +57,7 @@ import {
   TextSelection,
   type Transaction,
 } from 'prosemirror-state';
-import { type Step, replaceStep } from 'prosemirror-transform';
+import { Step, replaceStep } from 'prosemirror-transform';
 import { type JsonValue, nodeId } from '@docedit/model';
 import type {
   AccessLimit,
@@ -144,6 +144,7 @@ import {
 } from './equation-commands.ts';
 import { isValueFormat, valueFormatCommand } from './formatting-values.ts';
 import { LIST_COMMANDS, listCommand } from './list-commands.ts';
+import { countBodyWords, WordCounter } from './word-count.ts';
 import { type FormatSnapshot, paintMarks, paintParagraphs, takeFormat } from './format-painter.ts';
 import {
   type AssetsPort,
@@ -267,11 +268,13 @@ import {
   type SyncState,
   type Transition,
   initialState,
+  insertedText,
   local,
   receiveCommits,
   settled,
   unconfirmed,
 } from './sync/state.ts';
+import type { RestorePlan } from './sync/restore.ts';
 import type { SelectionShim } from './view-support.ts';
 import { CDM1 } from '@docedit/model/definition';
 
@@ -400,6 +403,8 @@ export interface ViewBridge {
    * end), with no new state: the view reads `editable` again (FE-029).
    */
   lockChanged?(locked: boolean): void;
+  /** The access changed: what a view shows of the fields a person may fill is drawn again (FRW-076). */
+  accessChanged?(): void;
   /**
    * The main-document position of the caret when this view's sub-editor has focus, or null (FE-026
    * criterion 3). `selectionScope()` reports the scope of that position.
@@ -714,6 +719,14 @@ export class DocumentCore implements DocumentApi {
   readonly commands: ReadValue<Readonly<Record<CommandName, CommandState>>>;
   readonly revision: ReadValue<number>;
   readonly direction: ReadValue<'ltr' | 'rtl'>;
+  /** The document's default language, a BCP 47 tag, or null when it sets none (UX-018). */
+  readonly language: ReadValue<string | null>;
+  /** The words in the body; null until the first count, which is made off the typing path (UX-018). */
+  readonly words: ReadValue<number | null>;
+  readonly #words = new WordCounter(
+    () => countBodyWords(this.#state.doc),
+    (n) => this.words.set(n),
+  );
   readonly refusal: ReadValue<RefusalNotice | null>;
   readonly mode: ReadValue<ModeState>;
   /** Suggestion mode at the caret, and why (FE-041 criterion 5). */
@@ -845,6 +858,8 @@ export class DocumentCore implements DocumentApi {
     );
     this.revision = new ReadValue<number>(0, Object.is, hub);
     this.direction = new ReadValue<'ltr' | 'rtl'>('ltr', Object.is, hub);
+    this.language = new ReadValue<string | null>(null, Object.is, hub);
+    this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.#requested = config.mode ?? 'edit';
     this.#accessValue = config.access ?? null;
@@ -1285,6 +1300,9 @@ export class DocumentCore implements DocumentApi {
       if (!last || last.doc !== state.doc) {
         this.outline.set(outlineOf(state.doc));
         this.direction.set(stylesOf(state.doc).settings.dir);
+        this.language.set(stylesOf(state.doc).settings.lang ?? null);
+        // The count is made later, off the typing path (UX-018 criterion 1).
+        this.#words.changed();
       }
       const commands = {} as Record<CommandName, CommandState>;
       for (const name of COMMANDS) commands[name] = this.queryCommand(name);
@@ -1445,12 +1463,14 @@ export class DocumentCore implements DocumentApi {
       .filter((m) => m.attrs['value'] !== false)
       .map((m) => m.type.name)
       .sort();
+    const lang = marksAt(state).find((m) => m.type.name === 'lang')?.attrs['value'];
     return {
       empty,
       scope: r ? 'region' : 'body',
       region: title,
       style: currentStyle(state),
       marks: [...new Set(marks)],
+      lang: typeof lang === 'string' ? lang : null,
     };
   }
 
@@ -1518,6 +1538,7 @@ export class DocumentCore implements DocumentApi {
       this.#readOnly = false;
     this.#refreshMode();
     this.#publish();
+    for (const b of this.#bridges) b.accessChanged?.();
   }
 
   #setReadOnly(on: boolean): void {
@@ -3233,6 +3254,78 @@ export class DocumentCore implements DocumentApi {
 
   // --- Sync (FE-033) -------------------------------------------------------------------------
 
+  /**
+   * Puts the journal's unconfirmed work back on the document the core holds (FE-009; sync/restore.ts).
+   * The commit becomes the in-flight commit under its own identifier, and the queue is queued again.
+   * Work that does not apply to the document, or was made on another one, is returned to be set
+   * aside as recovered edits; it is never applied at positions it was not made for.
+   */
+  #restoreUnconfirmed(plan: RestorePlan): Discarded[] {
+    const schema = this.#schema;
+    const here = this.#sync.seq;
+    const failed: Discarded[] = [];
+    const parse = (json: readonly StepJson[]): Step[] | null => {
+      const out: Step[] = [];
+      for (const j of json) {
+        try {
+          out.push(Step.fromJSON(schema, j));
+        } catch {
+          return null;
+        }
+      }
+      return out;
+    };
+    const setAside = (json: readonly StepJson[], steps: Step[] | null, commit: string | null) =>
+      failed.push({
+        reason: 'stale',
+        commit,
+        steps: [...json],
+        text: steps ? insertedText(steps) : '',
+        seq: here,
+      });
+    // The steps go through the ordinary local path, without the guard (the server decides again) and
+    // out of the undo history; one transaction, or none when any step fails.
+    const applyAll = (steps: readonly Step[]): boolean => {
+      const tr = this.#state.tr;
+      for (const step of steps) if (tr.maybeStep(step).failed) return false;
+      this.dispatchTransaction(tr.setMeta(INTERNAL, true).setMeta('addToHistory', false));
+      return true;
+    };
+
+    const entry = plan.entry;
+    let inflightBack = false;
+    if (entry) {
+      // The text of work that is set aside is read from the steps, which parse without a document.
+      const steps = parse(entry.steps);
+      if (entry.base === here && steps && steps.length > 0 && applyAll(steps)) {
+        const queued = this.#sync.queue;
+        this.#sync = {
+          ...this.#sync,
+          queue: [],
+          inflight: {
+            id: entry.id,
+            base: entry.base,
+            sent: steps,
+            json: [...entry.steps],
+            local: queued,
+            origin: entry.origin,
+            resend: false,
+          },
+        };
+        inflightBack = true;
+      } else setAside(entry.steps, steps, entry.id);
+    }
+    if (plan.queue.length > 0) {
+      const madeOn = plan.queueAt?.seq;
+      const fits = entry ? inflightBack && madeOn === entry.base : madeOn === here;
+      const steps = parse(plan.queue);
+      if (!(fits && steps && steps.length > 0 && applyAll(steps)))
+        setAside(plan.queue, steps, null);
+    }
+    this.#publishSync();
+    return failed;
+  }
+
   attach(channel: SyncChannel, opts: AttachOptions): () => void {
     if (this.#session) throw new Error('a channel is already attached');
     this.#docId = channel.docId;
@@ -3253,8 +3346,12 @@ export class DocumentCore implements DocumentApi {
     if (opts.assets) this.#attachedAssets = opts.assets;
     const detachProofing = opts.proofing ? this.attachProofing(opts.proofing) : null;
     if (opts.user !== undefined) this.#user = opts.user;
+    // Work the journal kept from an earlier visit goes back on the document before the session
+    // starts, so that the session sees it as its own in-flight commit and queue (FE-009).
+    const notRestored = opts.restore ? this.#restoreUnconfirmed(opts.restore) : [];
     const session = new SyncSession(this.#host(), channel, sessionOpts);
     this.#session = session;
+    session.setAside(notRestored);
     if (opts.presence) {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const core = this;
@@ -3608,6 +3705,7 @@ export class DocumentCore implements DocumentApi {
     this.#session = null;
     if (this.#flushTimer !== null) clearTimeout(this.#flushTimer);
     this.#flushTimer = null;
+    this.#words.stop();
     this.#listeners.clear();
     this.#bridges.clear();
   }

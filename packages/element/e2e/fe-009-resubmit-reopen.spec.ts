@@ -1,21 +1,22 @@
 /**
- * FE-009 criterion 1 (lane V-FE-001-016): journalled work is resubmitted, in its original form, when
- * the document is opened again.
+ * FE-009 in a browser (lane V-FE-001-016, then lane w1): work that was not confirmed when a visit
+ * ended is sent again on the next visit, through the element with its default IndexedDB journal and
+ * backend-mock in the page.
  *
- * Ada types into `<doc-editor>` on the embed page (the element built from source, its default
- * IndexedDB journal, backend-mock in the page). In the first tab the channel's `submit` never
- * reaches the service, so the commit is journalled and unconfirmed. The tab is killed (Chromium and
- * Edge: renderer crash through CDP `Page.crash`; Firefox and WebKit: page closed without
- * `beforeunload`). A new tab of the same browser context opens the same document identifier with
- * the real channel. Once the journal empties, the typed text is in the service's document exactly
- * once.
+ * 1. Criterion 1: Ada types, and the channel's `submit` never reaches the service, so the commit is
+ *    journalled and unconfirmed. The element is destroyed (the journal stays in IndexedDB) and a new
+ *    element opens the same document on the same service with the real channel. The journal
+ *    empties, and the typed text is in the service's document exactly once.
+ * 2. Criterion 4: the same, but the first tab is killed (Chromium and Edge: renderer crash through
+ *    CDP `Page.crash`; Firefox and WebKit: page closed without `beforeunload`) and the second tab
+ *    has a service of its own, whose log has another incarnation. The server answers `reload`, the
+ *    work is not sent, and it is kept as recovered edits.
  *
- * Not covered here: criterion 2 (a commit the server stored before the kill, whose acknowledgement
- * was lost). The embed's service is held by each page, so a second tab does not see the first tab's
- * stored commits; that case needs a service shared between tabs. Criteria 3 to 6 are not covered.
+ * The embed's service is held by each page, so two tabs never share a log. A commit the server stored
+ * before the kill (criterion 2) is covered at the engine level (packages/engine/test/fe-009-resubmit.test.ts).
  *
  * Run from the repository root with
- * `DOCEDIT_DEMO_PORT=57003 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-009-resubmit-reopen.spec.ts --trace=off`
+ * `pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-009-resubmit-reopen.spec.ts --trace=off`
  * (Chromium, Edge, Firefox and WebKit).
  */
 import { type Page, expect, test } from '@playwright/test';
@@ -50,9 +51,14 @@ interface Embed {
  * document), and mounts an editor for Ada on it. With `hold`, the channel's `submit` never reaches
  * the service, so Ada's commit stays unconfirmed.
  */
-async function openDocument(page: Page, docId: string, hold: boolean): Promise<void> {
+async function openDocument(
+  page: Page,
+  docId: string,
+  hold: boolean,
+  create = true,
+): Promise<void> {
   await page.evaluate(
-    async ({ docId, hold }) => {
+    async ({ docId, hold, create }) => {
       const e = (window as unknown as { __embed: Embed }).__embed;
       type Port = {
         connect(): Promise<void>;
@@ -61,19 +67,21 @@ async function openDocument(page: Page, docId: string, hold: boolean): Promise<v
           open(id: string, opts: unknown): Promise<{ submit(c: unknown): Promise<unknown> }>;
         };
       };
-      const reader = e.service.backend(
-        { sub: 'olga', name: 'Olga' },
-        { [e.docId]: 'owner' },
-      ) as Port;
-      await reader.connect();
-      const source = await reader.sync.loadContent(e.docId);
-      e.service.createDocument(
-        { cdm: source.cdm, requires: source.requires, doc: source.doc },
-        {
-          id: docId,
-          grants: [{ region: e.SPIKE_IDS.region, principal: 'user:ada', role: 'editor' }],
-        },
-      );
+      if (create) {
+        const reader = e.service.backend(
+          { sub: 'olga', name: 'Olga' },
+          { [e.docId]: 'owner' },
+        ) as Port;
+        await reader.connect();
+        const source = await reader.sync.loadContent(e.docId);
+        e.service.createDocument(
+          { cdm: source.cdm, requires: source.requires, doc: source.doc },
+          {
+            id: docId,
+            grants: [{ region: e.SPIKE_IDS.region, principal: 'user:ada', role: 'editor' }],
+          },
+        );
+      }
       const backend = e.service.backend({ sub: 'ada', name: 'Ada' }, { [docId]: 'editor' }) as Port;
       if (hold) {
         const open = backend.sync.open.bind(backend.sync);
@@ -103,7 +111,7 @@ async function openDocument(page: Page, docId: string, hold: boolean): Promise<v
       document.getElementById('mount')!.append(el);
       await ready;
     },
-    { docId, hold },
+    { docId, hold, create },
   );
   await expect(page.locator('doc-editor[data-test="fe009"] .de-editing-surface')).toBeVisible();
 }
@@ -180,12 +188,59 @@ async function killTab(page: Page, browserName: string): Promise<string> {
 
 const occurrences = (s: string, needle: string) => s.split(needle).length - 1;
 
-// Marked fixme (lane V-FE-001-016, 2026-11-13): run against the engine as it stands, the reopened
-// tab does not resubmit the journalled commit. The sync session never reads the journal on open
-// (`journal.read` is not called in packages/engine/src/sync/session.ts), so the journal keeps the
-// commit and the queue, and the service never receives the text. Running it proves the gap; it
-// passes once the resubmission of FE-009 is built.
-test.fixme('FE-009: journalled work is resubmitted once when the document is opened again', async ({
+/** Types the text at the end of the last paragraph of the editor. */
+async function typeAtEnd(page: Page): Promise<void> {
+  await page
+    .locator('doc-editor[data-test="fe009"] .de-editing-surface p', { hasText: 'Last paragraph.' })
+    .click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(TYPED);
+}
+
+interface Hooks {
+  internals(el: Element): {
+    editor: { core: { recovered: { get(): { count: number; items: Array<{ text: string }> } } } };
+  };
+}
+
+test('FE-009 criterion 1: journalled work is resubmitted once when the document is opened again', async ({
+  page,
+}) => {
+  const docId = uuid7();
+  await openEmbed(page);
+  await openDocument(page, docId, true);
+  await typeAtEnd(page);
+  await expect.poll(async () => journalled(await readJournal(page, docId))).toBe(TYPED);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __fe009Sends: number }).__fe009Sends))
+    .toBeGreaterThan(0);
+  expect((await readJournal(page, docId)).commits.length).toBeGreaterThan(0);
+  expect(occurrences(await storedText(page, docId), TYPED)).toBe(0);
+
+  // The visit ends: the element is destroyed, and the commit stays in IndexedDB.
+  await page.evaluate(() => {
+    const el = document.querySelector('doc-editor[data-test="fe009"]') as HTMLElement & {
+      destroy(): void;
+    };
+    el.destroy();
+    el.remove();
+  });
+  expect((await readJournal(page, docId)).commits.length).toBeGreaterThan(0);
+
+  // The next visit: a new element on the same document and service, with the real channel.
+  await openDocument(page, docId, false, false);
+  // The typed text is back in the editor at once, and the journal empties when the commit is
+  // acknowledged.
+  await expect(page.locator('doc-editor[data-test="fe009"] .de-editing-surface')).toContainText(
+    TYPED.trim(),
+  );
+  await expect.poll(async () => (await readJournal(page, docId)).commits.length).toBe(0);
+  await expect.poll(async () => journalled(await readJournal(page, docId))).toBe('');
+  // The service's document holds the typed text once, not zero or two times.
+  await expect.poll(async () => occurrences(await storedText(page, docId), TYPED)).toBe(1);
+});
+
+test('FE-009 criterion 4: after a killed tab, a log of another incarnation sets the work aside', async ({
   page,
   context,
   browserName,
@@ -193,30 +248,33 @@ test.fixme('FE-009: journalled work is resubmitted once when the document is ope
   const docId = uuid7();
   await openEmbed(page);
   await openDocument(page, docId, true);
-
-  await page
-    .locator('doc-editor[data-test="fe009"] .de-editing-surface p', { hasText: 'Last paragraph.' })
-    .click();
-  await page.keyboard.press('End');
-  await page.keyboard.type(TYPED);
+  await typeAtEnd(page);
   await expect.poll(async () => journalled(await readJournal(page, docId))).toBe(TYPED);
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __fe009Sends: number }).__fe009Sends))
     .toBeGreaterThan(0);
-  const before = await readJournal(page, docId);
-  expect(before.commits.length).toBeGreaterThan(0);
-  expect(occurrences(await storedText(page, docId), TYPED)).toBe(0);
 
   const how = await killTab(page, browserName);
   test.info().annotations.push({ type: 'kill', description: how });
 
+  // The new tab has a service of its own: the same document identifier, another log.
   const again = await context.newPage();
   await openEmbed(again);
   await openDocument(again, docId, false);
 
-  // The journal empties once the resubmitted commit is acknowledged.
-  await expect.poll(async () => journalled(await readJournal(again, docId))).toBe('');
+  // The work is not sent: it is kept as recovered edits, and the journal's commit is gone.
+  await expect
+    .poll(() =>
+      again.evaluate(() => {
+        const e = (window as unknown as { __embed: Hooks }).__embed;
+        const el = document.querySelector('doc-editor[data-test="fe009"]')!;
+        return e
+          .internals(el)
+          .editor.core.recovered.get()
+          .items.map((i) => i.text);
+      }),
+    )
+    .toEqual([TYPED]);
   await expect.poll(async () => (await readJournal(again, docId)).commits.length).toBe(0);
-  // The service's document holds the typed text once, not zero or two times.
-  await expect.poll(async () => occurrences(await storedText(again, docId), TYPED)).toBe(1);
+  expect(occurrences(await storedText(again, docId), TYPED)).toBe(0);
 });

@@ -7,7 +7,7 @@
  * `imageFonts()` does. The binary comes from `DOCEDIT_LUALATEX` (default `lualatex` on the PATH);
  * the tests skip when it cannot be started.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -139,6 +139,65 @@ export function compileLocal(bundle: Bundle, name: string): LocalCompiled {
     ok: ok && existsSync(pdfPath),
     pdf: existsSync(pdfPath) ? new Uint8Array(readFileSync(pdfPath)) : null,
     log,
+    layout: existsSync(layoutPath) ? readFileSync(layoutPath, 'utf8') : null,
+    dir,
+  };
+}
+
+/**
+ * The same as `compileLocal`, without blocking the test process, so a test can compile several
+ * documents at once (EXP-115). It runs the two passes one after the other for each bundle.
+ */
+export async function compileLocalAsync(bundle: Bundle, name: string): Promise<LocalCompiled> {
+  const dir = mkdtempSync(join(tmpdir(), `docedit-exp-115-${name.replace(/[^a-z0-9-]/gi, '-')}-`));
+  for (const [file, text] of Object.entries(bundle.files)) {
+    mkdirSync(dirname(join(dir, file)), { recursive: true });
+    writeFileSync(join(dir, file), text);
+  }
+  for (const [file, bytes] of Object.entries(bundle.assets)) {
+    mkdirSync(dirname(join(dir, file)), { recursive: true });
+    writeFileSync(join(dir, file), bytes);
+  }
+  const env = {
+    ...process.env,
+    SOURCE_DATE_EPOCH: '1788000000',
+    FORCE_SOURCE_DATE: '1',
+    DOCEDIT_FONT_PATH: `${FONT_DIR.replace(/\\/g, '/')}`,
+    DOCEDIT_MAX_PAGES: '200',
+    max_print_line: '1048576',
+  };
+  let ok = true;
+  for (let pass = 0; pass < 2 && ok; pass++) {
+    ok = await new Promise<boolean>((resolve) => {
+      const child = spawn(
+        LUALATEX,
+        [
+          '--interaction=nonstopmode',
+          '--halt-on-error',
+          '--no-shell-escape',
+          '--file-line-error',
+          'main.tex',
+        ],
+        { cwd: dir, env, windowsHide: true, stdio: 'ignore' },
+      );
+      const timer = setTimeout(() => child.kill(), 300_000);
+      child.on('error', () => {
+        clearTimeout(timer);
+        resolve(false);
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        resolve(code === 0);
+      });
+    });
+  }
+  const pdfPath = join(dir, 'main.pdf');
+  const layoutPath = join(dir, 'main.layout');
+  const logPath = join(dir, 'main.log');
+  return {
+    ok: ok && existsSync(pdfPath),
+    pdf: existsSync(pdfPath) ? new Uint8Array(readFileSync(pdfPath)) : null,
+    log: existsSync(logPath) ? readFileSync(logPath, 'utf8') : '',
     layout: existsSync(layoutPath) ? readFileSync(layoutPath, 'utf8') : null,
     dir,
   };

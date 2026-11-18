@@ -231,10 +231,10 @@ test('FE-011: a page hidden with unconfirmed work keeps it in the journal and af
   const how = await killTab(page, browserName);
   test.info().annotations.push({ type: 'kill', description: how });
 
+  // A new tab reads the journal before any editor opens the document: opening it sends the work
+  // again or sets it aside (FE-009; see fe-009-resubmit-reopen.spec.ts).
   const again = await context.newPage();
   await openEmbed(again);
-  await openDocument(again, docId);
-  await again.waitForTimeout(300);
   const after = await readJournal(again, docId);
   expect(journalled(after)).toBe(TYPED);
 });
