@@ -57,7 +57,9 @@ const values = async (page: Page): Promise<Record<string, unknown>> =>
 const caret = (page: Page): Promise<string> =>
   page.evaluate((sel) => {
     const root = document.querySelector(sel)!.shadowRoot!;
-    const s = root.getSelection?.() ?? document.getSelection();
+    // Chromium gives a shadow root its own selection; the other engines use the document's.
+    const own = (root as unknown as { getSelection?: () => Selection | null }).getSelection;
+    const s = own?.call(root) ?? document.getSelection();
     return `${s?.anchorNode?.textContent ?? ''}|${s?.anchorOffset ?? -1}`;
   }, EDITOR);
 
