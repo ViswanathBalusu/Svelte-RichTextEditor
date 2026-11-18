@@ -32,6 +32,7 @@ export const PURGE_TABLES: readonly string[] = [
   'workflow_sealed_pdf',
   'workflow_renewal_state',
   'workflow_reminders',
+  'document_templates',
   'workflow_access_codes',
   'workflow_resource',
   'document_revocations',

@@ -41,6 +41,7 @@ const ROUTED = [
   'retention',
   'holds',
   'workflows',
+  'templates',
   'reminders',
   'evidence',
   'accessCodes',

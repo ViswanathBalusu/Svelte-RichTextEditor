@@ -5885,6 +5885,236 @@
         ]
       }
     },
+    "/templates": {
+      "get": {
+        "operationId": "listTemplates",
+        "summary": "The templates of the tenant, oldest first (12 §9; FRW-062).",
+        "description": "The templates of the tenant, oldest first (12 §9; FRW-062). Only when the server announces the feature `workflow`. Specified in 12 §9, §10.",
+        "tags": [
+          "templates"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Success. No status code is defined for this route yet.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Template"
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Opaque cursor of the next page; null on the last page (D14)."
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor"
+                  ],
+                  "$comment": "05 §6.1; gaps: G55; decisions: D14"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §9, §10",
+        "x-dep-owner": "FRW",
+        "x-dep-feature": "workflow",
+        "x-dep-gaps": [
+          "G96"
+        ]
+      },
+      "post": {
+        "operationId": "createTemplate",
+        "summary": "Marks a document as a template (12 §9; FRW-062).",
+        "description": "Marks a document as a template (12 §9; FRW-062). Only when the server announces the feature `workflow`. Specified in 12 §9, §10.",
+        "tags": [
+          "templates"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §9, §10",
+        "x-dep-owner": "FRW",
+        "x-dep-feature": "workflow",
+        "x-dep-codes": [
+          "conflict"
+        ],
+        "x-dep-gaps": [
+          "G96"
+        ]
+      }
+    },
+    "/templates/{tid}": {
+      "get": {
+        "operationId": "getTemplate",
+        "summary": "One template (12 §9; FRW-062).",
+        "description": "One template (12 §9; FRW-062). Only when the server announces the feature `workflow`. Specified in 12 §9, §10.",
+        "tags": [
+          "templates"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Thread identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Thread identifier."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Success. No status code is defined for this route yet.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §9, §10",
+        "x-dep-owner": "FRW",
+        "x-dep-feature": "workflow",
+        "x-dep-gaps": [
+          "G96"
+        ]
+      }
+    },
     "/documents/{id}/field-values": {
       "get": {
         "operationId": "getFieldValues",
@@ -10034,10 +10264,81 @@
             ]
           },
           "template": {
-            "description": "A template to instantiate (12 §9). Refused with `validation_failed` until templates exist (FRW).",
+            "description": "A template (`POST /templates`) to instantiate (12 §9; FRW-062): the new document is a fork of the template document at `templateSeq`.",
             "type": "string",
             "format": "uuid",
             "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "templateSeq": {
+            "description": "With `template`: the seq of the template document to fork at, pinned and recorded. Default: the head.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "participants": {
+            "description": "With `template`: participants bound to the roles of the template. They are stored as the draft workflow of the new document.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "roles": {
+                  "description": "The `role_def` identifiers of the template that the person holds.",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "filler",
+                    "signer",
+                    "approver",
+                    "cc"
+                  ]
+                },
+                "order": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sub": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "auth": {
+                  "type": "object",
+                  "properties": {
+                    "require": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "roles",
+                "kind",
+                "order"
+              ]
+            }
+          },
+          "values": {
+            "description": "With `template`: values to prefill by field key, in the same call. All or none are applied.",
+            "type": "object",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "import": {
             "description": "An asset to import. Refused with `validation_failed` until imports exist (EXP).",
@@ -10141,6 +10442,26 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          },
+          "template": {
+            "description": "Only in the answer to `POST /documents` with `template`: the template and the pinned seq the document was forked at (FRW-062).",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "id",
+              "seq"
+            ]
           }
         },
         "required": [
@@ -12190,6 +12511,64 @@
           "state",
           "rev",
           "participants"
+        ]
+      },
+      "Template": {
+        "title": "Template",
+        "description": "A template: a document with role placeholders, fields and rules, and no participants (12 §9; FRW-062). The members are the lane's proposal (docs/adr/0406-w4-FRW-062-templates.md).",
+        "$comment": "12 §9, §10; gaps: G96",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "document": {
+            "description": "The document that is the template.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          }
+        },
+        "required": [
+          "id",
+          "document",
+          "name",
+          "createdAt"
+        ]
+      },
+      "TemplateCreate": {
+        "title": "TemplateCreate",
+        "description": "The body of `POST /templates` (12 §9; FRW-062).",
+        "$comment": "12 §9, §10; gaps: G96",
+        "type": "object",
+        "properties": {
+          "document": {
+            "description": "The document to mark as a template.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "document",
+          "name"
         ]
       },
       "WorkflowReason": {

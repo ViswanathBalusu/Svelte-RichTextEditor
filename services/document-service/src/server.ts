@@ -96,6 +96,8 @@ import {
   type WorkflowResourceStore,
 } from './workflow/workflow-resource.ts';
 import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
+import { MemoryTemplateStore, type TemplateStore } from './workflow/template-store.ts';
+import { PgTemplateStore } from './workflow/template-store-pg.ts';
 import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-store.ts';
 import { PgReminderStore } from './workflow/reminder-store-pg.ts';
 import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
@@ -280,6 +282,8 @@ export interface ServiceParts {
   documentKeys?: DocumentKeys;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
+  /** The templates of /templates (FRW-062). Absent: the routes are not offered. */
+  templates?: TemplateStore;
   /** The count of scheduled reminders raised per participant (FRW-034). Absent: none are raised. */
   reminders?: ReminderStore;
   /** The workflow evidence ledger (FRW-041): evidence in its own workflow table, hashes for the chain. */
@@ -548,6 +552,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
     workflows: new PgWorkflowResourceStore(pool, { now }),
+    templates: new PgTemplateStore(pool),
     reminders: new PgReminderStore(pool),
     evidence: new PgEvidenceLedger(pool, { now }),
     accessCodes: new PgAccessCodeStore(pool),
@@ -596,6 +601,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
     workflows: new MemoryWorkflowResourceStore(),
+    templates: new MemoryTemplateStore(),
     reminders: new MemoryReminderStore(),
     evidence: new MemoryEvidenceLedger(now),
     sealedPdfs: new MemorySealedPdfStore(),
@@ -1446,6 +1452,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(erasures ? { erasures } : {}),
     ...(tombstones ? { tombstones } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
+    ...(parts.templates ? { templates: parts.templates } : {}),
     ...(parts.accessCodes ? { accessCodes: parts.accessCodes } : {}),
     ...(parts.consentTexts ? { consentTexts: parts.consentTexts } : {}),
     ...(parts.evidence ? { evidence: parts.evidence } : {}),

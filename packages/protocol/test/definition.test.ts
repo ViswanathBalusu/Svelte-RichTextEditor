@@ -236,6 +236,10 @@ const OTHER_ROUTES = [
   'POST /users/erase',
   // HIS-040 (08 §13): the tombstone of one commit payload, service credential only.
   'POST /documents/{id}/commits/{seq}/tombstone',
+  // FRW-062 (12 §9): templates, service credential only.
+  'POST /templates',
+  'GET /templates',
+  'GET /templates/{tid}',
 ];
 
 describe('the DEP definition', () => {
@@ -320,6 +324,9 @@ describe('the DEP definition', () => {
         'GET /holds',
         'POST /users/erase',
         'POST /documents/{id}/commits/{seq}/tombstone',
+        'POST /templates',
+        'GET /templates',
+        'GET /templates/{tid}',
         'GET /quotas',
         'PUT /quotas',
         'GET /origins',

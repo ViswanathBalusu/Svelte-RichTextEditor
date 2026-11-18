@@ -46,6 +46,7 @@ describe('the table of routes addressed by a bare identifier (PRO-045 criterion 
       'webhooks',
       'keys',
       'origins',
+      'templates',
     ]);
     for (const o of left) expect(o.security).toEqual(['service']);
   });

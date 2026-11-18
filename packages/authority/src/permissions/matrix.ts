@@ -200,6 +200,10 @@ export const MATRIX: readonly MatrixRow[] = [
       'POST /users/erase',
       // Replacing one commit's payload with a tombstone (08 §13; HIS-040): a service credential.
       'POST /documents/{id}/commits/{seq}/tombstone',
+      // Templates (12 §9; FRW-062): marked, listed and read with a service credential.
+      'POST /templates',
+      'GET /templates',
+      'GET /templates/{tid}',
       // Tenant quotas (06 §12; UX-078 criterion 1): read and set with a service credential.
       'GET /quotas',
       'PUT /quotas',

@@ -64,6 +64,7 @@ import type { ConsentTextStore } from '../workflow/consent-service.ts';
 import type { EvidenceLedger } from '../workflow/evidence-ledger.ts';
 import type { SealedPdfStore } from '../workflow/sealed-store.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
+import type { TemplateStore } from '../workflow/template-store.ts';
 
 export interface HandlerDeps {
   documents: DocumentStore;
@@ -163,6 +164,8 @@ export interface HandlerDeps {
   quotaAdmin?: QuotaAdminService;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: not offered. */
   workflows?: WorkflowResourceStore;
+  /** The templates of /templates (FRW-062). Absent: not offered. */
+  templates?: TemplateStore;
   /** The registered access codes of workflow participants (FRW-039). Absent: not offered. */
   accessCodes?: AccessCodeStore;
   /** The consent texts of the tenants (FRW-044). Absent: the consent route is not offered. */
