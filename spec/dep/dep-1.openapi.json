@@ -673,6 +673,9 @@
             "$ref": "#/components/parameters/IfMatch"
           },
           {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
             "$ref": "#/components/parameters/DepActor"
           },
           {
@@ -714,6 +717,9 @@
         "x-dep-spec": "05 §6.2; 04 §3.2",
         "x-dep-owner": "PRO",
         "x-dep-requires": "Service credential",
+        "x-dep-codes": [
+          "idempotency_mismatch"
+        ],
         "x-dep-gaps": [
           "G62"
         ],
@@ -3346,7 +3352,7 @@
       "post": {
         "operationId": "resolveAssets",
         "summary": "Returns short-lived signed URLs, because an `<img>` cannot send a bearer token.",
-        "description": "Returns short-lived signed URLs, because an `<img>` cannot send a bearer token. Requires: view on a document the asset is attached to (07 §12). Only when the server announces the feature `assets`. Specified in 05 §6.2.",
+        "description": "Returns short-lived signed URLs, because an `<img>` cannot send a bearer token. Requires: view on a document the asset is attached to; the uploader's own ready upload before a commit references it (07 §12). Only when the server announces the feature `assets`. Specified in 05 §6.2.",
         "tags": [
           "assets"
         ],
@@ -3419,7 +3425,7 @@
         },
         "x-dep-spec": "05 §6.2",
         "x-dep-owner": "PRO",
-        "x-dep-requires": "view on a document the asset is attached to",
+        "x-dep-requires": "view on a document the asset is attached to; the uploader's own ready upload before a commit references it",
         "x-dep-feature": "assets",
         "x-dep-gaps": [
           "G72",
@@ -4956,6 +4962,284 @@
         },
         "x-dep-spec": "08 §11; 13 §10",
         "x-dep-owner": "UX",
+        "x-dep-requires": "Service credential"
+      }
+    },
+    "/history-visibility": {
+      "get": {
+        "operationId": "getTenantHistoryVisibility",
+        "summary": "The tenant history visibility setting; editors when none is set (HIS-025).",
+        "description": "The tenant history visibility setting; editors when none is set (HIS-025). Requires: Service credential (07 §12). Specified in 08 §9; 13 §10.",
+        "tags": [
+          "history-visibility"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryVisibilitySetting"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §9; 13 §10",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "Service credential"
+      },
+      "put": {
+        "operationId": "setTenantHistoryVisibility",
+        "summary": "Sets the tenant history visibility setting; audited (HIS-025).",
+        "description": "Sets the tenant history visibility setting; audited (HIS-025). Requires: Service credential (07 §12). Specified in 08 §9; 13 §10.",
+        "tags": [
+          "history-visibility"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoryVisibilitySetting"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryVisibilitySetting"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §9; 13 §10",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "Service credential"
+      }
+    },
+    "/documents/{id}/history-visibility": {
+      "get": {
+        "operationId": "getDocumentHistoryVisibility",
+        "summary": "A document history visibility setting and the effective setting that applies (HIS-025).",
+        "description": "A document history visibility setting and the effective setting that applies (HIS-025). Requires: Service credential (07 §12). Specified in 08 §9; 13 §10.",
+        "tags": [
+          "history"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryVisibilityView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §9; 13 §10",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "Service credential"
+      },
+      "put": {
+        "operationId": "setDocumentHistoryVisibility",
+        "summary": "Sets the history visibility of one document; audited (HIS-025).",
+        "description": "Sets the history visibility of one document; audited (HIS-025). Requires: Service credential (07 §12). Specified in 08 §9; 13 §10.",
+        "tags": [
+          "history"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoryVisibilitySetting"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryVisibilityView"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §9; 13 §10",
+        "x-dep-owner": "HIS",
         "x-dep-requires": "Service credential"
       }
     },
@@ -11529,10 +11813,12 @@
             ]
           },
           "locale": {
+            "description": "Default: the document's language (`settings.lang`), else `en-GB`. The job records the value it used.",
             "type": "string",
             "pattern": "^(?:(?:[A-Za-z]{2,3}(?:-[A-Za-z]{3}){0,3}|[A-Za-z]{4,8})(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?(?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*(?:-[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+)*(?:-[Xx](?:-[A-Za-z0-9]{1,8})+)?|[Xx](?:-[A-Za-z0-9]{1,8})+)$"
           },
           "timeZone": {
+            "description": "An IANA zone name. Default `UTC`. The job records the value it used.",
             "type": "string"
           },
           "certificate": {
@@ -11948,6 +12234,73 @@
         },
         "required": [
           "policy",
+          "effective",
+          "source"
+        ]
+      },
+      "HistoryVisibilitySetting": {
+        "title": "HistoryVisibilitySetting",
+        "description": "A history visibility setting (08 section 9; HIS-025).",
+        "$comment": "08 §9; 13 §10",
+        "type": "object",
+        "properties": {
+          "setting": {
+            "description": "editors: people with edit somewhere see full history and the rest named versions only (the default). all: everyone with view sees full history. since_access: history from the state current when the person was given access.",
+            "type": "string",
+            "enum": [
+              "editors",
+              "all",
+              "since_access"
+            ]
+          }
+        },
+        "required": [
+          "setting"
+        ]
+      },
+      "HistoryVisibilityView": {
+        "title": "HistoryVisibilityView",
+        "description": "A document history visibility setting with the effective one (HIS-025).",
+        "$comment": "08 §9; 13 §10",
+        "type": "object",
+        "properties": {
+          "setting": {
+            "description": "The setting the document carries, or null when it carries none.",
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "editors",
+                  "all",
+                  "since_access"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective": {
+            "description": "The setting that applies: the document setting, else the tenant setting, else editors.",
+            "type": "string",
+            "enum": [
+              "editors",
+              "all",
+              "since_access"
+            ]
+          },
+          "source": {
+            "description": "Where the effective setting comes from.",
+            "type": "string",
+            "enum": [
+              "document",
+              "tenant",
+              "default"
+            ]
+          }
+        },
+        "required": [
+          "setting",
           "effective",
           "source"
         ]

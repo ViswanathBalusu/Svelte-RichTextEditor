@@ -38,7 +38,6 @@ import {
   join,
   kvValue,
   lit,
-  pdfHexString,
   pdfString,
   tex,
   text,
@@ -183,7 +182,7 @@ function linkWrap(ctx: Ctx, marks: readonly Mark[] | undefined, st: InlineState,
   if (!href) return body;
   const u = url(href);
   const title = str(link?.attrs?.['title']);
-  const contents = title ? pdfHexString(title) : EMPTY;
+  const contents = title ? pdfString(title) : EMPTY;
   if (u.kind === 'external') return tex`\DEhref{${u.tex}}{${contents}}{${body}}`;
   if (u.kind === 'internal') {
     const a = ctx.anchors.get(u.name);

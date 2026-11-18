@@ -154,7 +154,7 @@ Pasted text is attributed to the person who pasted it. When a restore brings bac
 
 - **Restore** always moves forward. The service records a `pre-restore` version first and a `restore` version after.
 - **Restoring a whole document** is a snapshot commit: clients reload. It requires `manage` and is refused while a workflow is active.
-- **Restoring one region** computes steps from the current region to the target content: blocks are aligned by identifier, unchanged blocks are left alone, changed blocks are replaced, missing blocks are inserted and extra blocks are removed. Comment ranges and attribution in unchanged blocks survive. If the steps would be too large for a commit, the restore falls back to a snapshot commit.
+- **Restoring one region** computes steps from the current region to the target content: blocks are aligned by identifier, unchanged blocks are left alone, changed blocks are replaced, missing blocks are inserted and extra blocks are removed. Comment ranges and attribution in unchanged blocks survive. If the steps would be too large for one commit, the restore is split into several linked commits: consecutive commits of origin `restore` by the same person, each checked against the head the one before made, between the `pre-restore` and the `restore` version (owner decision 36; ADR 0408). A single block too large for a commit is refused with `too_large`.
 - The room re-checks the permission rules of 07, section 13, when it applies a restore, not only when the request arrives.
 - A restored block gets a new identifier if its old identifier is in use elsewhere in the current document.
 - A `dryRun` returns the comparison a restore would produce.
@@ -170,7 +170,15 @@ Old versions can contain text that was deleted before a person was given access.
 | `all` | Everyone with `view` sees full history |
 | `since_access` | A person sees history from the time in their token's `access_since` claim. It needs the host to supply that claim, because document-level access lives in the host |
 
-The setting is enforced by one gate on every place a sequence number can be supplied, including channel resume (07, section 8).
+The setting is enforced by one gate on every place a sequence number can be supplied, including channel resume (07, section 8). The gate is a number, `minVisibleSeq(user)`, per user and moment:
+
+| Setting | `minVisibleSeq(user)` |
+|---|---|
+| `editors` | 0 for a person who holds `edit` somewhere in the document through their role or a grant; otherwise the head |
+| `all` | 0 |
+| `since_access` | The last commit stored at or before the token's `access_since` claim, so that the state current at that moment is visible. Without the claim it is the head: the gate fails closed, for editors too |
+
+"`edit` somewhere" counts the role and matching grants only, not the temporary limits of 07, section 4: a lock, an approval or a lease does not take history away from an editor. A document's setting wins over the tenant's, the tenant's is the default for documents without one, and without either the setting is `editors`. Only tenant administrators change either, through the administration API. A change applies at once, history already written included (owner decision 140; ADR 0034).
 
 ## 10. Changes since last visit
 
@@ -185,7 +193,7 @@ The component stores a read marker (`seq`) per user and document when the user h
 
 ## 12. Tamper evidence
 
-The hash chain makes silent edits to stored history detectable, including by the operator, if the chain head is anchored outside the operator's control. The service therefore publishes the chain head in the `dep.document.changed` webhook and in every export manifest, so a host can anchor it itself, and periodically writes signed, time-stamped heads to write-once storage. Verification is a command-line tool and an audit export.
+The hash chain makes silent edits to stored history detectable, including by the operator, if the chain head is anchored outside the operator's control. The service therefore publishes the chain head in the `dep.document.changed` webhook and in every export manifest, so a host can anchor it itself, and periodically writes signed, time-stamped heads to write-once storage. It also publishes a salted periodic root over a tenant's heads to a public transparency log, so that a relying party can check history against a party that is neither the operator nor the host (owner decision 143; ADR 0409). The public entry holds no document, tenant or user identifier. Verification is a command-line tool and an audit export.
 
 ## 13. Privacy
 

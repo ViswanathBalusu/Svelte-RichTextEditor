@@ -148,9 +148,17 @@ function headOf(n: Node, rejects: Rejects): Head {
     }
     attrs['suggest'] = stay.length ? stay : null;
   }
-  const marks: unknown[] = formatting
-    ? [...formatting, ...kept.filter((m) => SUGGESTION.has(m.type.name)).map((m) => m.toJSON())]
-    : kept.map((m) => m.toJSON());
+  // A `fmt` that is not rejected stands for a change of formatting that this rejection leaves in
+  // place, and every `fmt` of a run records the baseline, not the run's marks before its own change
+  // (owner decision 79; ADR 0378). Taking one user's `fmt` back then cannot restore the run's
+  // formatting before that user's change, so the run's formatting is left out of a comparison that
+  // keeps another user's `fmt`. The baseline (every `fmt` rejected) still compares it.
+  const keptFmt = kept.some((m) => m.type.name === 'fmt');
+  const marks: unknown[] = keptFmt
+    ? kept.filter((m) => SUGGESTION.has(m.type.name)).map((m) => m.toJSON())
+    : formatting
+      ? [...formatting, ...kept.filter((m) => SUGGESTION.has(m.type.name)).map((m) => m.toJSON())]
+      : kept.map((m) => m.toJSON());
   if (attrs && n.type.name === 'form_field')
     for (const a of FILL_ATTRIBUTES) Reflect.deleteProperty(attrs, a);
   const json: JsonNode = { type: n.type.name };

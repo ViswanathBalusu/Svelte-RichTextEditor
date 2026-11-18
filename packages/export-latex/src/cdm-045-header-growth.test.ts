@@ -30,6 +30,7 @@ interface Frame {
     readonly top?: number;
     readonly height?: number;
     readonly headerPushes?: boolean;
+    readonly startsOnPage?: number;
   };
 }
 
@@ -59,8 +60,7 @@ const FRAMES = (headerGrowth as unknown as { frames: Frame[] }).frames.filter(
 );
 
 /**
- * Whether the frame leaves the body no room (`height` 0). ADR 0032 §6 gives the frame's `top` and
- * leaves the rest to pagination: no line fits, so TeX ships page 1 with an empty body and sets the
+ * Whether the frame leaves the body no room (`height` 0). Owner decision 77: the body starts on the next page, as TeX does. No line fits, so TeX ships page 1 with an empty body and sets the
  * first line on page 2, at the same frame top. For these frames the test reads the body start on
  * the first page that has one and checks that it is a later page; the frame top is checked as for
  * the others. The layout side does not run these frames (`expected.height !== 0`).
@@ -157,9 +157,9 @@ describe.skipIf(!ready)('CDM-045 criterion 3, LaTeX side: header-growth.json bod
       const c = compileLocal(bundle, frame.id);
       if (!c.ok) throw new Error(`the compile failed (${c.dir}):\n${c.log.slice(-1500)}`);
       const start = bodyStart(c.layout, noRoom(frame));
-      // With room for the body it starts on page 1; with none, pagination moves it to a later page.
-      if (noRoom(frame)) expect(start.page).toBeGreaterThan(0);
-      else expect(start.page).toBe(0);
+      // With room for the body it starts on page 1; with none, page 1 is empty and it starts on
+      // page 2 (owner decision 77; the fixture's `startsOnPage`).
+      expect(start.page + 1).toBe(frame.expected.startsOnPage ?? 1);
       const measured = (start.y - reference) / SP_PER_TWIP;
       const expected = frame.expected.top! - marginTop;
       expect(Math.abs(measured - expected)).toBeLessThanOrEqual(TOL_TWIPS);

@@ -119,6 +119,8 @@ test.describe('landmarks by keyboard (UX-023)', () => {
   test('names every landmark, and keeps labels in the same root', async ({ page }) => {
     const h = await open(page, { extended: true, styles: [] });
     await h.exec('view.styles');
+    // The pane renders in a later frame; count the landmarks only once it is there.
+    await expect(page.locator('[data-landmark="pane"]')).toHaveCount(1);
     const landmarks = await page.evaluate(() => {
       const root = document.getElementById('host')!.shadowRoot!;
       return [...root.querySelectorAll('[data-landmark]')].map((el) => ({

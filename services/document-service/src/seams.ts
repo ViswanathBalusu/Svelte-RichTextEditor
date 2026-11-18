@@ -405,6 +405,12 @@ export interface DataPlaneSettings {
   readonly workers?: number;
   /** Longest a worker task may run. */
   readonly workerTimeoutMs?: number;
+  /**
+   * A checkpoint of this many stored (compressed) bytes or more is parsed and checked in a worker
+   * when a room opens, and built on the main thread a slice at a time (BE-019 criterion 5). Default
+   * 262,144, a choice and not a measurement; 0 sends every checkpoint, `Infinity` none.
+   */
+  readonly openInWorkerBytes?: number;
   /** Outbox delivery (BE-039). */
   readonly outbox?: {
     readonly pollMs?: number;

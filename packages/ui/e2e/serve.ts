@@ -54,8 +54,17 @@ const server = createServer((req, res) => {
     'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
     'cache-control': 'no-store',
   };
-  if (extname(file) === '.html' && url.searchParams.get('csp') !== 'off')
-    headers['content-security-policy'] = STRICT_POLICY;
+  if (url.pathname === '/sandbox-frame.html') {
+    // The page of a sandboxed extension's frame (UX-060): opaque origin, no network, its own scripts.
+    headers['content-security-policy'] =
+      "sandbox allow-scripts; default-src 'none'; script-src 'self'";
+  } else if (extname(file) === '.html' && url.searchParams.get('csp') !== 'off') {
+    // `?frame-src=self` lets one page embed frames of its own origin, for the sandboxed panel (UX-060).
+    headers['content-security-policy'] =
+      url.searchParams.get('frame-src') === 'self'
+        ? STRICT_POLICY.replace("frame-src 'none'", "frame-src 'self'")
+        : STRICT_POLICY;
+  }
   res.writeHead(200, headers);
   createReadStream(file).pipe(res);
 });

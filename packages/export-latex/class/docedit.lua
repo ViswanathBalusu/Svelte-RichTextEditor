@@ -75,6 +75,7 @@ local GLUE_LEADERS     = subtype_number("glue", "leaders")
 local GLUE_USER        = subtype_number("glue", "userskip")
 local DISC_EXPLICIT    = subtype_number("disc", "explicit")
 local HLIST_LINE       = subtype_number("hlist", "line")
+local HLIST_INDENT     = subtype_number("hlist", "indent")
 local MATH_BEGIN       = subtype_number("math", "beginmath")
 
 -- Attribute register numbers, set by init().
@@ -99,6 +100,24 @@ end
 -- Characters of catcode 12 (space 10): inert in every context, including \pdfstringdef.
 function docedit.str(hex)
   tex.sprint(-2, decode(hex))
+end
+
+-- The same text for the contexts that turn a title into a PDF string (bookmarks, link contents,
+-- metadata). hyperref reads a catcode-12 backslash there as the start of an escape and garbles the
+-- rest of the string, so a backslash is written as \textbackslash, which every such context knows.
+function docedit.strexp(hex)
+  local s = decode(hex)
+  local pos = 1
+  while true do
+    local i = s:find("\\", pos, true)
+    if not i then
+      tex.sprint(-2, s:sub(pos))
+      return
+    end
+    tex.sprint(-2, s:sub(pos, i - 1))
+    tex.sprint("\\textbackslash ")
+    pos = i + 1
+  end
 end
 
 -- Sets \DE@altlabel globally to the decoded text, as catcode-12 characters: the alternative text
@@ -429,7 +448,9 @@ local function tallest_run(head)
         if d > md then md = d end
       end
     else
-      local lh = has_attribute(n, A.rlh)
+      -- The paragraph indent box carries the paragraph's own font attributes. It is not a run, so it
+      -- must not lift the first line (ADR 0032 §4; EXP-021): an empty line falls back to the paragraph.
+      local lh = not (id == HLIST and getsubtype(n) == HLIST_INDENT) and has_attribute(n, A.rlh)
       if lh and (id == GLYPH or id == HLIST or id == VLIST or id == RULE) and lh > tallest then
         tallest, descent = lh, has_attribute(n, A.rld) or 0
       end

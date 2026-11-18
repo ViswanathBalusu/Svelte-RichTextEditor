@@ -62,7 +62,18 @@ export type CompleteFillingOutcome =
   | { readonly ok: true; readonly result: unknown }
   | { readonly ok: false; readonly failures: readonly FillFailure[] };
 
+/** The workflow state and the participant's own status, as the port last reported them. */
+export interface WorkflowStatusView {
+  get(): {
+    readonly state: string;
+    readonly participant?: { readonly id: string; readonly state: string } | undefined;
+  } | null;
+  subscribe(listener: () => void): () => void;
+}
+
 export interface FillActions {
+  /** What `wf.changed` last said (FRW-035): the guided bar reads it. */
+  readonly status: WorkflowStatusView;
   completeFilling(): Promise<CompleteFillingOutcome>;
   decline(reason: string): Promise<unknown>;
   /** Stops following the workflow. */
@@ -81,8 +92,11 @@ export function fillActionsService(
 ): FillActions {
   let status: Status | null = null;
   let raised = false;
+  const listeners = new Set<() => void>();
   const apply = (next: Status): void => {
+    const changed = JSON.stringify(next) !== JSON.stringify(status);
     status = next;
+    if (changed) for (const listener of [...listeners]) listener();
     if (next.state === 'completed' && !raised) {
       raised = true;
       onWorkflowComplete();
@@ -112,6 +126,13 @@ export function fillActionsService(
   }
 
   return {
+    status: {
+      get: () => status,
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
     async completeFilling() {
       const { act, docId, participant } = active();
       const failures = core.validateFields();
@@ -132,6 +153,7 @@ export function fillActionsService(
     },
     dispose() {
       stop?.();
+      listeners.clear();
     },
   };
 }

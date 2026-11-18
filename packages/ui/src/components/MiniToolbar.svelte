@@ -7,6 +7,7 @@
   allow is listed disabled with its reason (UX-004); it runs nothing.
 -->
 <script lang="ts">
+  import { tick, untrack } from 'svelte';
   import { miniToolbarItems } from '../commands/mini-toolbar.ts';
   import type { CommandView } from '../commands/types.ts';
   import { useShell } from '../context.ts';
@@ -25,6 +26,35 @@
   const tr = $derived(shell.strings.current);
   const items: CommandView[] = $derived(miniToolbarItems(snapshot.current.commands, false));
 
+  // The toolbar is shown in the top layer, so `fixed` is measured against the viewport even inside
+  // the element's `contain: content` host. Without the Popover API it is placed against its
+  // containing block, which containment moves: the offset is measured once and taken out.
+  let offset = $state({ x: 0, y: 0 });
+  const ABOVE_GAP = 44;
+
+  function show(node: HTMLElement) {
+    const popover = node as HTMLElement & { showPopover?: () => void; hidePopover?: () => void };
+    if (typeof popover.showPopover === 'function') popover.showPopover();
+    else node.removeAttribute('popover');
+    void tick().then(() => {
+      const a = untrack(() => anchor);
+      const rtl = getComputedStyle(node).direction === 'rtl';
+      const at = node.getBoundingClientRect();
+      const intendedX = Math.max(0, a.x);
+      const intendedY = Math.max(0, a.y - ABOVE_GAP);
+      const dx = rtl ? at.right - (innerWidth - intendedX) : at.left - intendedX;
+      const dy = at.top - intendedY;
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) offset = { x: rtl ? -dx : dx, y: dy };
+    });
+    return () => {
+      try {
+        popover.hidePopover?.();
+      } catch {
+        // Already hidden.
+      }
+    };
+  }
+
   function run(item: CommandView): void {
     const result = shell.registry.exec(item.id);
     if (!result.ran && !item.enabled && item.reasonKey) shell.announceText(tr.text(item.reasonKey));
@@ -33,14 +63,16 @@
 
 {#if items.length > 0}
   <div
+    {@attach show}
     class="de-mini-toolbar"
+    popover="manual"
     role="toolbar"
     aria-label={tr.t('toolbar.mini.label')}
     data-mini-toolbar
     lang={tr.locale}
     dir={tr.dir}
-    style:inset-inline-start={`${Math.max(0, anchor.x)}px`}
-    style:inset-block-start={`${Math.max(0, anchor.y - 44)}px`}
+    style:inset-inline-start={`${Math.max(0, anchor.x) - offset.x}px`}
+    style:inset-block-start={`${Math.max(0, anchor.y - ABOVE_GAP) - offset.y}px`}
     onmousedown={(event) => event.preventDefault()}
   >
     {#each items as item (item.id)}

@@ -83,6 +83,15 @@ export interface LogStore {
    */
   attachedAssets?(ref: DocRef): Promise<ReadonlyMap<string, number>>;
   /**
+   * Attaches assets to a document outside a commit (`doc_assets` rows, kept if they exist): a fork
+   * attaches the assets its content references, with `seq` 0, so that they resolve (HIS-022, I4).
+   * Optional: test doubles may omit it.
+   */
+  attachAssets?(
+    ref: DocRef,
+    attachments: ReadonlyArray<{ asset: string; seq: number }>,
+  ): Promise<void>;
+  /**
    * The commits whose scopes include `scope`, newest first, behind the caller's gate (HIS-016;
    * `field:<id>` answers "who filled this field"). Optional: test doubles may omit it.
    */
@@ -317,6 +326,15 @@ export interface CheckpointStore {
   putEncoded?(ref: DocRef, seq: number, bytes: Uint8Array): Promise<void>;
   /** The stored bytes of the checkpoint at exactly `seq`, or null. */
   getEncoded?(ref: DocRef, seq: number): Promise<Uint8Array | null>;
+  /**
+   * Stores the side object of the checkpoint at `seq`: the comment ranges at that `seq` and the
+   * attribution map, as `encodeSide` writes them (06 §2.2 step 3, §4.2, §8 `{seq}.side.json.zst`;
+   * SYN-032 criterion 6, owner decision 81; HIS-014, ADR 0377). It is written before the
+   * checkpoint, and set aside with it.
+   */
+  putSide?(ref: DocRef, seq: number, bytes: Uint8Array): Promise<void>;
+  /** The stored bytes of the side object of the checkpoint at exactly `seq`, or null. */
+  getSide?(ref: DocRef, seq: number): Promise<Uint8Array | null>;
   /**
    * Sets aside every checkpoint above `aboveSeq`, so that `get` and `latest` no longer return it
    * (a log rewound by a database recovery; BE-078). Returns the sequence numbers set aside.

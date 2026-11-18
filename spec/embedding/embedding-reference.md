@@ -67,6 +67,7 @@ Raised on the element as `CustomEvent`s that bubble and are composed; `detail` i
 | `de-recovered-edits` | `{ count: number }` | Rejected or unsent content was set aside; `count` is the number of pieces (05 §8.1). |
 | `de-share-request` | `{ docId: string }` | The owner asked for sharing, which the host owns (PRO-089; 13 §5). Identifiers only: the host opens its own dialog, and the editor shows none of its own. Nothing listens and nothing breaks when the host has no listener. |
 | `de-access-request` | `{ docId: string; scope: string }` | A reader asked for access to hidden content (UX-104, ADR 0019). `scope` is the DEP scope identifier of the placeholder. The host decides who answers; the editor sends nothing itself. |
+| `de-fork-request` | `{ docId: string; atSeq: number }` | The user chose to copy a version into a new document (HIS-022; 05 §8.1). Fork is a service-credential operation, so the editor only asks: the host calls `POST /documents/{id}/fork` with `atSeq`. Identifiers and a `seq` only, no content. |
 | `de-export-progress` | `{ jobId: string; state: string; progress: number \| null }` | An export job reports its state (PRO-086): identifiers and job state only, no content. |
 | `de-export-completed` | `{ jobId: string; state: string; progress: number \| null }` | The export job completed (PRO-086). Same detail as `de-export-progress`. |
 | `de-export-failed` | `{ jobId: string; state: string; progress: number \| null }` | The export job failed or was cancelled (PRO-086). Same detail as `de-export-progress`. |

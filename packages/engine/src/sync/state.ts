@@ -74,6 +74,11 @@ export interface Discarded {
    */
   readonly fields?: readonly string[];
   /**
+   * For a rejection that named the rule that stopped it (05 §5.3 `rule`; 12 §5.3): the identifier of
+   * the `rule_def`, for the editor to explain in the rule's words (FRW-023 criterion 5).
+   */
+  readonly rule?: string;
+  /**
    * The DEP scope the first step was made in (`body`, `region:<id>`, `defs`, `story:<id>`): the place
    * the work was meant for (FE-010 criterion 6). Absent when it could not be found, and for items
    * written to a journal before this field existed.
@@ -343,7 +348,7 @@ function discard(
   steps: readonly Step[],
   reason: string,
   commit: string | null,
-  why?: Pick<Discarded, 'scopes' | 'change' | 'fields'>,
+  why?: Pick<Discarded, 'scopes' | 'change' | 'fields' | 'rule'>,
 ): Discarded[] {
   if (steps.length === 0) return [];
   const region = regionOfFirst(s, steps);
@@ -684,7 +689,7 @@ export function receiveAck(s: SyncState, ack: Ack, schema: Schema): Transition {
 function dropInflight(
   s: SyncState,
   reason: string,
-  why?: Pick<Discarded, 'scopes' | 'change' | 'fields'>,
+  why?: Pick<Discarded, 'scopes' | 'change' | 'fields' | 'rule'>,
 ): Moved {
   const inf = s.inflight!;
   const nInf = inf.local.length;
@@ -757,12 +762,16 @@ export function receiveReject(s: SyncState, reject: SyncReject): Transition {
         reject.code === 'conflict'
           ? (reject.scopes ?? []).filter((x) => x.startsWith('field:')).map((x) => x.slice(6))
           : [];
-      const why =
+      const base =
         reject.code === 'permission_denied'
           ? { scopes: [...(reject.scopes ?? [])], change: s.permissionChange ?? null }
           : fieldIds.length > 0
             ? { fields: fieldIds }
             : undefined;
+      // The rule the server named (12 §5.3) goes with the work that was set aside, so that the editor
+      // can explain it in the rule's words (FRW-023 criterion 5).
+      const why =
+        reject.rule !== undefined && reject.rule !== '' ? { ...base, rule: reject.rule } : base;
       const t = transition(s, dropInflight(s, reject.code, why));
       const actions: Action[] = [...t.actions];
       if (reject.code === 'permission_denied')

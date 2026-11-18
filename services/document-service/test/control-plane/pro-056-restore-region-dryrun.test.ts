@@ -180,7 +180,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
-      'restores one region as a snapshot commit, keeps the rest and the grants, and sends the events (criteria 3, 4, 5)',
+      'restores one region as a steps commit, keeps the rest and the grants, and sends the events (criteria 3, 4, 5)',
       async () => {
         const grantsBefore = (await h.parts.grants.current(ref)).revision;
         // The grant changes made above may have left a control commit; the head is read, not assumed.
@@ -196,14 +196,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // The region has its text of seq 0; the other region keeps the text of seq 2.
         expect(textOf(now.doc, 'pOpen00000000001')).toBe('Open v0');
         expect(textOf(now.doc, 'pLegal0000000001')).toBe('Liability v2');
-        // A snapshot commit with reason restore; the earlier commits are untouched.
+        // A steps commit of origin restore (HIS-018, ADR 0408), not a snapshot; the earlier commits
+        // are untouched.
         const [commit] = await h.parts.logs.read(ref, seq, seq);
-        expect(commit).toMatchObject({
-          seq,
-          kind: 'snapshot',
-          origin: 'restore',
-          snapshot: { reason: 'restore' },
-        });
+        expect(commit).toMatchObject({ seq, kind: 'steps', origin: 'restore' });
+        expect(commit).not.toHaveProperty('snapshot');
         expect((await h.parts.logs.read(ref, 1, 2)).map((c) => c.seq)).toEqual([1, 2]);
         expect(
           (await h.parts.versions!.list(ref, { kind: 'pre-restore' })).map((v) => v.seq),

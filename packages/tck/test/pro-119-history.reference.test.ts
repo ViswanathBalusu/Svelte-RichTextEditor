@@ -35,16 +35,6 @@ describe.skipIf(skip)('history profile against the reference service (PRO-119)',
   const outcome = (id: string) =>
     report.profiles.flatMap((p) => p.scenarios).find((x) => x.id === id);
 
-  // The reference service attributes the whole document to the user who restores a region (ADR
-  // 0373: it keeps no saved attribution maps), so the kit's attribution scenario fails against it.
-  // The test says so, and turns red when the service keeps the authors, so that PRO-119 criterion 3
-  // can then be ticked.
-  it('history.restore.region-attribution: fails until the service keeps the authors of untouched blocks', () => {
-    const s = outcome('history.restore.region-attribution');
-    expect(s?.outcome, JSON.stringify(s)).toBe('failed');
-    expect(JSON.stringify(s?.failure)).toContain('the authors of the intro are as they were');
-  });
-
   it('runs the profile for a server that announces history', () => {
     const p = report.profiles.find((x) => x.id === 'history');
     expect(p?.outcome, p?.reason ?? '').not.toBe('skipped');
@@ -62,6 +52,10 @@ describe.skipIf(skip)('history profile against the reference service (PRO-119)',
     ],
     ['history.restore.dry-run', 'a dry run stores nothing (criterion 3)'],
     ['history.restore.region', 'a region restore keeps the rest and not the grants (criterion 3)'],
+    [
+      'history.restore.region-attribution',
+      'a region restore keeps the authors of the blocks it does not touch (criterion 3, HIS-018)',
+    ],
     ['history.read-marker.forward-only', 'a read marker moved backwards stays (criterion 4)'],
   ])('%s: %s', (id) => {
     const s = outcome(id);

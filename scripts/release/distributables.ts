@@ -36,6 +36,11 @@ export interface Distributable {
    * service's bill. False for a sandbox image whose code runs elsewhere (the export worker's).
    */
   serviceInImage?: boolean;
+  /**
+   * Service: the build context already writes NOTICE and THIRD-PARTY-NOTICES.md into the image
+   * (the asset worker's does), so the release adds no notices layer (scripts/release/image-notices.ts).
+   */
+  noticesInContext?: boolean;
 }
 
 export const DISTRIBUTABLES: readonly Distributable[] = [
@@ -77,6 +82,7 @@ export const DISTRIBUTABLES: readonly Distributable[] = [
     // Only the sandbox and its three decoders go into the context (BE-043; ADR 0043).
     stage: { module: 'services/asset-worker/scripts/build-image.ts', export: 'stageContext' },
     image: 'docedit-asset-worker',
+    noticesInContext: true,
   },
 ];
 

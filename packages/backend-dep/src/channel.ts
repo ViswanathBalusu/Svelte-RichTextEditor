@@ -37,6 +37,11 @@ export interface ChannelHost {
   accessChanged(channel: DepChannel, access: Access): void;
   /** `presence.state`, for PresencePort. */
   peers(channel: DepChannel, peers: Extract<ChannelEffect, { kind: 'presence' }>['peers']): void;
+  /** `ch.opened.workflow` and `wf.changed`, for the workflow port (FRW-035). */
+  workflow(
+    channel: DepChannel,
+    status: Extract<ChannelEffect, { kind: 'workflow' }>['status'],
+  ): void;
   /** The channel ended. */
   ended(channel: DepChannel): void;
 }
@@ -166,7 +171,8 @@ export class DepChannel implements SyncChannel {
           this.host.peers(this, e.peers);
           break;
         case 'workflow':
-          // The workflow port reports `wf.changed` (D20); `backend-dep` offers no workflow port yet.
+          // The workflow port reports `wf.changed` and the object of `ch.opened` (D20; FRW-035).
+          this.host.workflow(this, e.status);
           break;
         case 'state':
           if (e.state.status === 'closed') {

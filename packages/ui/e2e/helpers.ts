@@ -37,7 +37,8 @@ export function harness(page: Page): Remote<Harness> {
 }
 
 export async function open(page: Page, options: MountOptions = {}): Promise<Remote<Harness>> {
-  await page.goto('/');
+  // The sandboxed panel (UX-060) needs `frame-src 'self'`; every other page keeps `'none'`.
+  await page.goto(options.sandboxPanel ? '/?frame-src=self' : '/');
   await page.waitForFunction(() => 'harness' in window);
   const h = harness(page);
   await h.mount(options);

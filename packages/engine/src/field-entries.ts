@@ -122,15 +122,27 @@ const storedValue = (node: PMNode): JsonValue => (node.attrs['value'] ?? null) a
 const infoOf = (node: PMNode): FieldInfo | null =>
   fieldFrom(node.attrs as Record<string, JsonValue>);
 
-/** The form field with `id` in `doc`, with its position. */
+/** The form fields of a document by identifier, with their positions; one walk for each document. */
+const fieldIndexes = new WeakMap<PMNode, Map<string, { node: PMNode; pos: number }>>();
+
+/**
+ * The form field with `id` in `doc`, with its position (the first, in document order). The fields
+ * of a document are found in one walk, however many are asked for, so that drawing 2,000 fields
+ * does not walk the document 2,000 times (FRW-023 criterion 6).
+ */
 export function findFormField(doc: PMNode, id: string): { node: PMNode; pos: number } | null {
-  let hit: { node: PMNode; pos: number } | null = null;
-  doc.descendants((node, pos) => {
-    if (hit) return false;
-    if (node.type.name === 'form_field' && node.attrs['id'] === id) hit = { node, pos };
-    return !hit;
-  });
-  return hit;
+  let index = fieldIndexes.get(doc);
+  if (index === undefined) {
+    const found = new Map<string, { node: PMNode; pos: number }>();
+    doc.descendants((node, pos) => {
+      if (node.type.name !== 'form_field') return true;
+      const fieldId = node.attrs['id'];
+      if (typeof fieldId === 'string' && !found.has(fieldId)) found.set(fieldId, { node, pos });
+      return false;
+    });
+    fieldIndexes.set(doc, (index = found));
+  }
+  return index.get(id) ?? null;
 }
 
 export class FieldEntries {
