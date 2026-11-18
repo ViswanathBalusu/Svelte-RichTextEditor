@@ -22,11 +22,11 @@ interface JsonNode {
 const mark = (type: 'ins' | 'del', id: string) => ({ type, attrs: { id, user: 'alice' } });
 const run = (text: string, marks?: JsonNode['marks']): JsonNode =>
   marks ? { type: 'text', text, marks } : { type: 'text', text };
-const paragraph = (id: string, content: JsonNode[], marks?: JsonNode['marks']): JsonNode => ({
+/** A paragraph; its suggestions are in the `suggest` attribute (03 §5; owner decision 92). */
+const paragraph = (id: string, content: JsonNode[], suggest?: JsonNode['marks']): JsonNode => ({
   type: 'paragraph',
-  attrs: { id },
+  attrs: suggest ? { id, suggest } : { id },
   content,
-  ...(marks ? { marks } : {}),
 });
 
 function find(n: JsonNode, id: string): JsonNode | null {
