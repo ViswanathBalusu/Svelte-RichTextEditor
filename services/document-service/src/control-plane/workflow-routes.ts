@@ -36,6 +36,7 @@ import {
   verifyParticipantCode,
   type AccessCodeProblem,
 } from '../workflow/access-code-service.ts';
+import { acceptConsent, type ConsentProblem } from '../workflow/consent-service.ts';
 import { recordOf } from '../workflow/record.ts';
 import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
@@ -577,12 +578,101 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     });
   };
 
+  /** The answer to a problem of the consent step. */
+  const consentProblem = (doc: string, p: ConsentProblem): ApiError => {
+    switch (p.code) {
+      case 'not_found':
+        return new ApiError('not_found', `document ${doc} has no such participant`);
+      case 'invalid_state':
+        return new ApiError('conflict', `the workflow is ${p.state}`);
+      case 'no_consent':
+        return new ApiError('conflict', 'the workflow names no consent text');
+      case 'not_applicable':
+        return new ApiError('conflict', `a participant of kind ${p.kind} accepts no consent text`);
+      case 'awaiting_code':
+        return new ApiError('conflict', 'the participant has not yet given their access code');
+      case 'text_missing':
+        return new ApiError(
+          'conflict',
+          'the service holds no text for the consent the workflow names',
+        );
+    }
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/participants/{pid}/consent` (12 §7, §8.1 step 1; FRW-044; method
+   * and prefix assumed, G95; ADR 0395, proposed). The caller is the participant: a user whose token
+   * binds to `pid`. The body is empty or `{}`: the text, its version and its hash are the service's,
+   * so a body that carries any member, a hash included, is `validation_failed`. The answer is the
+   * acceptance as recorded: the text identifier, the version, the hash the service computed and the
+   * server time.
+   */
+  const consentRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const pid = ctx.params['pid']!;
+    if (!d.consentTexts || !d.evidence || !d.workflows)
+      throw new ApiError('not_found', 'this server keeps no consent texts');
+    const body = (await ctx.body()) as Record<string, unknown> | null | undefined;
+    if (body !== null && body !== undefined) {
+      if (typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length > 0)
+        throw new ApiError(
+          'validation_failed',
+          'the consent request has no body: the service holds the text',
+          {
+            violations: [{ path: '/', rule: 'an empty body' }],
+          },
+        );
+    }
+    const identity = ctx.caller.identity;
+    await liveDocument(ctx, doc);
+    const current = await store().read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (!current.participants.some((p) => p.id === pid))
+      throw new ApiError('not_found', `document ${doc} has no such participant`);
+    if (ctx.caller.kind !== 'user' || identity === null || identity.docs[doc] === undefined)
+      throw new ApiError('forbidden', 'only the participant accepts the consent');
+    const bound = bindParticipant(
+      {
+        sub: identity.sub,
+        ...(identity.asserted?.wfp !== undefined ? { wfp: identity.asserted.wfp } : {}),
+      },
+      recordOf(current),
+    );
+    if (!bound.ok || bound.participant.id !== pid)
+      throw new ApiError('forbidden', 'the token is not bound to this participant');
+    const agent = ctx.req.headers['user-agent'];
+    const out = await acceptConsent(
+      { workflows: d.workflows, evidence: d.evidence, texts: d.consentTexts, now: d.now },
+      {
+        ref: k.refOf(ctx, doc),
+        participant: pid,
+        facts: {
+          address: ctx.req.socket.remoteAddress ?? null,
+          userAgent: typeof agent === 'string' && agent.length > 0 ? agent.slice(0, 512) : null,
+          amr: identity.asserted?.amr ?? null,
+        },
+      },
+    );
+    if (!out.ok) throw consentProblem(doc, out.problem);
+    return json(
+      200,
+      {
+        textId: out.accepted.textId,
+        version: out.accepted.version,
+        hash: out.accepted.hash,
+        acceptedAt: new Date(out.accepted.atMs).toISOString(),
+      },
+      { 'Cache-Control': 'private, no-store' },
+    );
+  };
+
   return {
     getWorkflow,
     putWorkflow,
     sendWorkflow: sendWorkflowRoute,
     remindWorkflow: remindWorkflowRoute,
     participantVerify: verifyAccessCodeRoute,
+    participantConsent: consentRoute,
     registerAccessCode: registerAccessCodeRoute,
     voidWorkflow: voidWorkflowRoute,
     participantDecline: declineRoute,

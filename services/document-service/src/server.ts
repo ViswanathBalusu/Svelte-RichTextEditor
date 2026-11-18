@@ -101,6 +101,7 @@ import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-l
 import { PgEvidenceLedger } from './workflow/evidence-ledger-pg.ts';
 import { MemoryAccessCodeStore, type AccessCodeStore } from './workflow/access-code-store.ts';
 import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
+import type { ConsentTextStore } from './workflow/consent-service.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
 import { recordParticipantOpened } from './workflow/participant-view.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
@@ -274,6 +275,8 @@ export interface ServiceParts {
   evidence?: EvidenceLedger;
   /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
   accessCodes?: AccessCodeStore;
+  /** The consent texts of the tenants (FRW-044). Absent: the consent route is not offered. */
+  consentTexts?: ConsentTextStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
   quotaAdmin?: QuotaAdminService;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: none is asked. */
@@ -1364,6 +1367,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(tombstones ? { tombstones } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
     ...(parts.accessCodes ? { accessCodes: parts.accessCodes } : {}),
+    ...(parts.consentTexts ? { consentTexts: parts.consentTexts } : {}),
     ...(parts.evidence ? { evidence: parts.evidence } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),
