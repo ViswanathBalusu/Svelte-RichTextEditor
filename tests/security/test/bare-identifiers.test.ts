@@ -157,17 +157,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     t()(
-      'a foreign export and a missing one differ today: 403 against 404 (open question, pinned)',
+      'a foreign export and a missing one both answer 404 (owner decision 57, BE-032)',
       async () => {
-        // Whether a refused request must look like a missing one is the open question on
-        // `forbidden` and `not_found` (SEC-016 criterion 4; the register of open questions in the
-        // epic). No spec default decides it, so this test pins the current answer. A decision changes
-        // these expectations on purpose; it is not an assertion that the difference is correct.
+        // Owner decision 57: a resource the caller may not see answers not_found, so that its
+        // existence is not confirmed. A foreign export looks like a missing one.
         const missing = randomUUID();
         for (const method of ['GET', 'DELETE'] as const) {
           const foreign = await h.call(method, `/v1/exports/${jidB}`, { token: tokenA });
           const absent = await h.call(method, `/v1/exports/${missing}`, { token: tokenA });
-          expect(foreign.status, `${method} foreign`).toBe(403);
+          expect(foreign.status, `${method} foreign`).toBe(404);
           expect(absent.status, `${method} missing`).toBe(404);
         }
       },

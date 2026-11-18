@@ -234,7 +234,8 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
         if (settled.state === 'pending')
           throw new ApiError('unavailable', `the restore was not delivered in time (${progress})`);
         // Only control commits came in: the content is as planned, so try again from the new head.
-        const since = result?.code === 'conflict' && attempt < 3 ? await d.logs.read(ref, expected + 1) : [];
+        const since =
+          result?.code === 'conflict' && attempt < 3 ? await d.logs.read(ref, expected + 1) : [];
         if (since.length > 0 && since.every((c) => c.kind === 'control')) {
           moved += since.length;
           continue;
