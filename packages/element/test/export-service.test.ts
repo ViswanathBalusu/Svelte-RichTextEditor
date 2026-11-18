@@ -53,6 +53,31 @@ describe('the export service of the element (UX-101)', () => {
     expect(EXPORT_TARGETS.slice(0, 2)).toEqual(['pdf', 'tex']);
   });
 
+  it('offers the targets the deployment announced, the PDF and the LaTeX bundle first (criterion 1)', () => {
+    const announcing = (announced: readonly string[] | null): ExportSource => {
+      const { port } = reportingPort([wireJob()]);
+      port.targets = () => announced;
+      return sourceOf(port);
+    };
+    const offered = (announced: readonly string[] | null) =>
+      exportService({ source: () => announcing(announced) }).targets.get();
+    // Two deployments with different lists give different dialogs.
+    expect(offered(['pdf'])).toEqual(['pdf']);
+    expect(offered(['tex', 'pdf'])).toEqual(['pdf', 'tex']);
+    expect(offered(['docx', 'tex', 'pdf', 'html'])).toEqual(['pdf', 'tex', 'docx', 'html']);
+    // A target the dialog has no name for is not offered; a list with none known offers none.
+    expect(offered(['pdf', 'rtf'])).toEqual(['pdf']);
+    expect(offered(['rtf'])).toEqual([]);
+    // A deployment that does not say gets the fixed list, as does a stand-in port without the method.
+    expect(offered(null)).toEqual(EXPORT_TARGETS);
+    expect(
+      exportService({ source: () => sourceOf(reportingPort([wireJob()]).port) }).targets.get(),
+    ).toEqual(EXPORT_TARGETS);
+    // Read again with the same list, the same array comes back, so a reader sees no change.
+    const service = exportService({ source: () => announcing(['pdf', 'tex']) });
+    expect(service.targets.get()).toBe(service.targets.get());
+  });
+
   it('sends the target and the options of EXP-005 as given, and follows the job to its end', async () => {
     const done = wireJob({
       state: 'completed',

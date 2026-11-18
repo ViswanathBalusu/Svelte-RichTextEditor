@@ -118,6 +118,11 @@ export interface ExportsPort {
     body: Body<'createExport'>,
     opts?: { idempotencyKey?: string; onProgress?: (job: W.ExportJob) => void },
   ): Promise<W.ExportJob>;
+  /**
+   * The export targets the deployment announced in its discovery document (`exportTargets`, 05 §2;
+   * UX-101), or null when it does not say. Absent on a port that has no discovery (a stand-in).
+   */
+  targets?(): readonly string[] | null;
   /** `GET /exports/{jid}`. */
   get(jobId: string): Promise<Tagged<W.ExportJob>>;
   /** `DELETE /exports/{jid}`. */

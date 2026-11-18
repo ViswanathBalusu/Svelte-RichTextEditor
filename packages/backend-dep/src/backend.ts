@@ -329,6 +329,8 @@ export class DepBackend implements Backend {
       fetch: this.p.fetch,
       notices: { add: (cb) => this.notices.add(cb) },
       clock: { set: (fn, ms) => this.timers.set(fn, ms), clear: (key) => this.timers.clear(key) },
+      // The export targets of the discovery document, once it has been read (UX-101).
+      exportTargets: () => this.discovery?.exportTargets ?? null,
     });
     this.fonts = this.files.fonts;
     this.review = createReviewPorts({
