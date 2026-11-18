@@ -140,12 +140,13 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
-      'tells a restricted reader of the commit log to reload, without content',
+      'serves a restricted reader of the commit log the page of its class, without hidden content (BE-098 criterion 1)',
       async () => {
         const reader = h.userToken({ [doc]: 'editor' });
         const r = await h.call('GET', `/v1/documents/${doc}/commits?after=0`, { token: reader });
         expect(r.text).not.toContain(HIDDEN_TEXT);
-        expect(isReloadRefusal(r), `${r.status} ${r.text}`).toBe(true);
+        expect(r.status, r.text).toBe(200);
+        expect(r.json.view).toEqual(expect.any(String));
       },
     );
   });

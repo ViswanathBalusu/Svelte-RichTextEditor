@@ -5,16 +5,17 @@
  *   0. the base values below, with `settings.dir` and `settings.lang`;
  *   1. the default paragraph style, through its `basedOn` chain;
  *   2. the table style, for content inside a table;
- *   3. the numbering level's paragraph properties (`indentLeft`, and `hanging` as a negative
- *      `indentFirstLine`), for numbered paragraphs;
- *   4. the paragraph style chain, from the root of `basedOn` to the style itself;
+ *   3. the paragraph style chain, from the root of `basedOn` to the style itself;
+ *   4. the numbering level's paragraph properties (`indentLeft`, and `hanging` as a negative
+ *      `indentFirstLine`), for numbered paragraphs: Word's order, so a level's indent overrides
+ *      the paragraph style's (owner decision 9, 2026-11-15);
  *   5. direct paragraph attributes;
  *   6. for runs: the run properties of the resolved paragraph (layers 0 to 4);
  *   7. the character style chain of the `charStyle` mark;
  *   8. direct marks; a toggle mark with `value: false` switches the property off.
  *
  * A style contributes once, at the first layer that reaches it: a style that the default
- * paragraph style's chain already applied in layer 1 is not applied again in layers 2 or 4. A null
+ * paragraph style's chain already applied in layer 1 is not applied again in layers 2 or 3. A null
  * value means "not set here; inherit" and is skipped. Properties are resolved one by one; `tabs`,
  * `borders`, `shading` and `numbering` are whole values, so the last layer that sets one gives all
  * of it. The decisions are recorded in docs/adr/0032-layout-semantics.md.
@@ -189,7 +190,7 @@ export interface ResolvedParagraph {
   readonly styleId: string;
   /** 1 to 9 for a heading (through the paragraph style chain), else null. */
   readonly outlineLevel: number | null;
-  /** The numbering that applies: the paragraph's own, else its styles' (layers 1, 2 and 4). */
+  /** The numbering that applies: the paragraph's own, else its styles' (layers 1, 2 and 3). */
   readonly numbering: NumberingRef | null;
   /** The numbering level object, when the numbering resolves to one. */
   readonly level: Attrs | null;
@@ -216,11 +217,11 @@ type Values = Mutable<ParagraphProperties & RunProperties>;
 interface Layered {
   /** Layers 0 to 2 applied. */
   readonly low: Readonly<Values>;
-  /** Layer 4 alone: only the properties its styles set. */
+  /** Layer 3 alone: only the properties its styles set. */
   readonly high: Readonly<Partial<Values>>;
   readonly lowTrace: Readonly<Record<string, Layer>>;
   readonly highTrace: Readonly<Record<string, Layer>>;
-  /** The style-level numbering (layers 1, 2 and 4), or null. */
+  /** The style-level numbering (layers 1, 2 and 3), or null. */
   readonly numbering: NumberingRef | null;
   readonly outlineLevel: number | null;
 }
@@ -277,7 +278,7 @@ function asNumbering(value: unknown): NumberingRef | null {
   return { numberingId, level, listId };
 }
 
-/** Layers 0, 1, 2 and 4 for a style in a table style, cached per table. */
+/** Layers 0, 1, 2 and 3 for a style in a table style, cached per table. */
 function layered(
   table: StyleTable,
   styleId: string,
@@ -354,7 +355,7 @@ export function numberingLevel(table: StyleTable, numbering: NumberingRef | null
 
 /**
  * The numbering that applies to a paragraph: its own `numbering`, else the last one its styles set
- * in layers 1, 2 and 4. Cheaper than `resolveParagraph` when only the list membership is needed.
+ * in layers 1, 2 and 3. Cheaper than `resolveParagraph` when only the list membership is needed.
  */
 export function paragraphNumbering(
   table: StyleTable,
@@ -401,9 +402,12 @@ export function resolveParagraph(
 
   const v: Values = { ...l.low };
   const t: Record<string, Layer> = trace ? { ...l.lowTrace } : {};
+  Object.assign(v, l.high);
+  if (trace) Object.assign(t, l.highTrace);
   if (level) {
-    // Layer 3: the level's indents. Its `align` places the label and its `runProps` format the
-    // label only (ADR 0032), so neither is a paragraph property.
+    // Layer 4: the level's indents, after the paragraph style (Word's order, owner decision 9 of
+    // 2026-11-15). Its `align` places the label and its `runProps` format the label only
+    // (ADR 0032), so neither is a paragraph property.
     if (typeof level['indentLeft'] === 'number') {
       v.indentLeft = level['indentLeft'];
       t['indentLeft'] = 'numbering level';
@@ -413,8 +417,6 @@ export function resolveParagraph(
       t['indentFirstLine'] = 'numbering level';
     }
   }
-  Object.assign(v, l.high);
-  if (trace) Object.assign(t, l.highTrace);
   if (direct) overlay(v, t, paragraphAttrs, DIRECT_KEYS, 'direct');
   if (Array.isArray(v.tabs)) v.tabs = sortTabs(v.tabs);
 

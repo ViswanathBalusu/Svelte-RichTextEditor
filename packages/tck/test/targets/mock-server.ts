@@ -433,6 +433,36 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
     }
     if (rest === 'regions' && method === 'GET')
       return { status: 200, body: page(url, doc.regions()) };
+    // Fields (12 §10; FRW-067 criterion 2): the mock derives them from the document it runs.
+    if (rest === 'fields' && method === 'GET')
+      return { status: 200, body: page(url, doc.fieldList()) };
+    if (rest === 'field-values' && method === 'GET') {
+      const seq = url.searchParams.get('seq');
+      const read = doc.fieldValues(
+        seq === null ? undefined : Number(seq),
+        url.searchParams.getAll('key'),
+      );
+      return {
+        status: 200,
+        body: { values: read.value.values, seq: read.value.seq },
+        headers: { etag: read.etag },
+      };
+    }
+    if (rest === 'field-values' && method === 'PATCH') {
+      manage(r);
+      needMatch(doc.fieldValues().etag);
+      const values = (body as { values?: Record<string, unknown> } | undefined)?.values;
+      if (typeof values !== 'object' || values === null)
+        throw new Problem('validation_failed', 'values is an object of values by key', {
+          violations: [{ path: '/values', rule: 'an object' }],
+        });
+      const out = doc.prefill(values, '*');
+      return {
+        status: 200,
+        body: { values: out.value.values, seq: doc.head },
+        headers: { etag: out.etag },
+      };
+    }
     if (rest === 'grants' && method === 'GET') {
       manage(r);
       const g = doc.grants();
@@ -528,7 +558,7 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
             e instanceof Problem
               ? e
               : isPortError(e)
-                ? new Problem(e.code, e.message)
+                ? new Problem(e.code, e.message, e.details ?? {})
                 : new Problem('internal', String(e));
           const status = (p.extra['status'] as number | undefined) ?? STATUS.get(p.code) ?? 500;
           const { status: _s, ...extra } = p.extra;

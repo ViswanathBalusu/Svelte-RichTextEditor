@@ -431,6 +431,8 @@ export type CoreQueryName =
   | 'canInsertField'
   // PRM-033 and FE-044 criterion 5: the selection's whole body blocks may become a region.
   | 'canMarkRegion'
+  // PRM-027: a region after the caret, in document order, where the user may edit.
+  | 'hasNextEditableRegion'
   // UX-009: the selection has formatting to take; formatting was taken and may be put here.
   | 'canCopyFormat'
   | 'canPasteFormat';
@@ -444,7 +446,9 @@ export type ConnectionState = 'detached' | 'online' | 'reconnecting' | 'offline'
  * placeholder or redacted value of a projection (ADR 0019), an invariant the change would break
  * (`invariant`, I10: a footnote inside a footnote or a caption), a step type the authority never
  * accepts (`step`, 04 §4), or a change suggestion mode cannot record as suggestions (`suggestion`:
- * a block change, FE-044, or no user identity to name in the marks; FE-041, FE-042).
+ * a block change, FE-044, or no user identity to name in the marks; FE-041, FE-042), or a deletion of
+ * a bookmark, caption or equation that a cross-reference still names (`referenced`, I4; FE-133
+ * criterion 5: `count` is the number of references, and `showReferences` moves the caret to them).
  */
 export type RefusalReason =
   | 'scope'
@@ -457,7 +461,8 @@ export type RefusalReason =
   | 'step'
   | 'no-copy'
   | 'no-print'
-  | 'suggestion';
+  | 'suggestion'
+  | 'referenced';
 
 /** The last local change the region guard refused (FE-036): `n` counts refusals. */
 export interface RefusalNotice {
@@ -494,6 +499,11 @@ export interface RecoveredItem {
   changedBy?: string | null;
   /** When that control commit was stored (its `serverTime`), or null when unknown. */
   changedAt?: string | null;
+  /**
+   * For a `conflict` rejection that named fields: their identifiers, which someone else changed
+   * first (12 §4.2, P9; FRW-010 criterion 5). Absent for any other reason.
+   */
+  fields?: string[];
 }
 
 /** Work set aside so far: `de-recovered-edits` carries `count` (05 §8.1). */
@@ -772,6 +782,11 @@ export interface DocumentApi {
   closePanel(): void;
   /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
   selectBlock(id: string): boolean;
+  /**
+   * After a deletion was refused with reason `referenced`, selects one of the cross-references that
+   * name the target, the next at each call (FE-133 criterion 5); false when there is none to show.
+   */
+  showReferences(): boolean;
   focus(): void;
   destroy(): void;
 

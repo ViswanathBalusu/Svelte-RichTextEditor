@@ -128,7 +128,8 @@ export interface ShellCounts {
 /**
  * The last local change the region guard refused (FE-036; the core's `refusal` view). `n` counts
  * refusals, so the same reason twice is two notices. `reason` is the guard's code: `scope`,
- * `structure`, `manage`, `read-only`, `placeholder`, `redacted`, `identifier`, `step`, `invariant`;
+ * `structure`, `manage`, `read-only`, `placeholder`, `redacted`, `identifier`, `step`, `invariant`,
+ * `referenced` (a cross-reference still names what was deleted; `count` is the number of references);
  * the shell explains an unknown code in general words. `scopes` are DEP scope identifiers; the shell
  * never shows them, so a notice names nothing the reader cannot see (ADR 0019).
  */
@@ -172,6 +173,8 @@ export interface RecoveredItem {
   readonly scopes?: readonly string[];
   /** When the permissions changed (an ISO 8601 time), when known (07 §9; PRM-024). */
   readonly changedAt?: string | null;
+  /** For a `conflict` that named fields: their identifiers, changed by someone else first (FRW-010). */
+  readonly fields?: readonly string[];
 }
 
 /** Work set aside so far; `de-recovered-edits` carries `count` (05 §8.1). */
@@ -237,11 +240,15 @@ export type CoreQueryName1b =
  * - `markRegion`: `{ title }`; the core wraps the selected blocks in a region with policy
  *   `inherit` (PRM-033);
  * - `setRegionPolicy`: `{ region, policy }`, `inherit` or `restricted` (PRM-036);
+ * - `renameRegion`: `{ region, title }`; the core refuses it without `structure` and `edit` in the
+ *   region (PRM-034);
  * - `nextEditableRegion`: none (PRM-027);
  * - `insertField`: `{ kind }` (FRW-072);
  * - `insertRecovered`, `discardRecovered`: `{ id }`, the item's `id` or its index as a string
  *   (UX-017);
- * - `finishFill`: none (FRW-076).
+ * - `finishFill`: none (FRW-076);
+ * - `showReferences`: none; moves the selection to a cross-reference that blocked the last refused
+ *   deletion, the next at each call (FE-133 criterion 5).
  */
 export type CoreCommandName =
   | 'copyFormat'
@@ -251,11 +258,13 @@ export type CoreCommandName =
   | 'setLanguage'
   | 'markRegion'
   | 'setRegionPolicy'
+  | 'renameRegion'
   | 'nextEditableRegion'
   | 'insertField'
   | 'insertRecovered'
   | 'discardRecovered'
-  | 'finishFill';
+  | 'finishFill'
+  | 'showReferences';
 
 /** Modes of 05 §8.1 and 13 §3. */
 export type EditorMode = 'edit' | 'review' | 'view' | 'fill';
@@ -911,6 +920,8 @@ export type HistoryPaneItem =
       readonly authors: readonly string[];
       readonly changes: number;
       readonly origins: readonly string[];
+      /** The last `seq` of the group: the state a reader opens (HIS-010); absent when the host gives none. */
+      readonly toSeq?: number;
     }
   | {
       readonly kind: 'version';
@@ -921,6 +932,26 @@ export type HistoryPaneItem =
       readonly time: string;
       readonly seq: number;
     };
+
+/**
+ * An old version opened as a second, read-only editor state (HIS-010; 08 §5). It is never connected to the live
+ * channel, and no command can submit a commit from it. The pane draws it with `mount` and says so in its name.
+ */
+export interface HistoryVersionView {
+  readonly seq: number;
+  /** When the version was made (ISO 8601). */
+  readonly time: string;
+  /** The version's name; null for a state that was not named. */
+  readonly name: string | null;
+  /** Draws the version in `target`; returns the function that removes it. */
+  mount(target: HTMLElement): () => void;
+  /** Releases the state. Called once, when the user leaves the version. */
+  close(): void;
+}
+
+export type HistoryVersionOpen =
+  | { readonly ok: true; readonly view: HistoryVersionView }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'not_found' | 'failed' };
 
 /** What the pane asks for: the filters of HIS-009 criterion 2 and an opaque cursor. */
 export interface HistoryPaneQuery {
@@ -937,6 +968,15 @@ export interface HistoryPaneResult {
   /** True for a reader who sees named versions only (HIS-024); the pane then says why. */
   readonly namedOnly: boolean;
 }
+
+/** What the user typed to name a version (HIS-006): a name and an optional note, both plain text. */
+export interface HistoryVersionInput {
+  readonly name: string;
+  readonly note: string | null;
+}
+
+export type HistoryVersionResult =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'forbidden' | 'failed' };
 
 /** A choice the filters offer: a region, a field or a person (HIS-009 criterion 2). */
 export interface HistoryChoice {
@@ -957,6 +997,26 @@ export interface HistoryChoices {
 export interface HistoryPort {
   list(query: HistoryPaneQuery): Promise<HistoryPaneResult>;
   choices(): Promise<HistoryChoices>;
+  /**
+   * Names the current state of the document (HIS-006; `POST /versions`). Present only when the
+   * host lets this user name versions (`edit` somewhere in the document, 07 §12); the command to
+   * name a version is offered only then. The service's refusal comes back as `forbidden`.
+   */
+  createVersion?(input: HistoryVersionInput): Promise<HistoryVersionResult>;
+  /**
+   * Opens the document at `seq` as a read-only state (HIS-010; a pinned read, never the live channel).
+   * Present only when the host can read old content. A version below the user's gate comes back as
+   * `forbidden`; the list never offers one (HIS-024).
+   */
+  openVersion?(
+    seq: number,
+    label: { time: string; name: string | null },
+  ): Promise<HistoryVersionOpen>;
+  /**
+   * Called by the host when the list may have changed (a version was named, for instance); the
+   * pane then asks again. Returns the function that stops the calls.
+   */
+  onChange?(listener: () => void): () => void;
   /** The host's directory (UX-025); null for an identifier the host does not know, such as an erased person. */
   readonly resolveUsers?: ResolveUsers;
 }

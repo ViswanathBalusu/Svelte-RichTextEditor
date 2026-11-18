@@ -2,8 +2,9 @@
 // written to the outbox, the request carries the preconditions the authorisation relied on (grants
 // revision, head, document state and workflow state), which the room re-checks when it applies the
 // commit (room.ts `preconditionFailure`; PostgreSQL run in data-plane/be-039-outbox-room.test.ts).
-// Memory storage only. The deterministic commit identifier is not covered here: it is still
-// `uuid7` of the request time (see the story Notes), so criterion 3 stays unticked.
+// Memory storage only. The same prefill sent twice against the same head is one item with one
+// deterministic commit identifier (lane w9; ADR 0377, proposed).
+import { isUuid7 } from '@docedit/model';
 import { describe, expect, it } from 'vitest';
 import { MemoryOutbox } from '../data-plane/memory-ports.ts';
 import {
@@ -35,6 +36,7 @@ function prefillDocument(): Record<string, unknown> {
 
 interface QueuedPrefill {
   kind: string;
+  commitId: string;
   request: {
     origin: string;
     base: number;
@@ -83,6 +85,44 @@ describe('prefill outbox request carries its preconditions (SYN-030 criterion 3,
       });
       expect(typeof request.preconditions!.revision).toBe('number');
       expect(request.preconditions!.documentState).toBeDefined();
+    } finally {
+      await h.close();
+    }
+  });
+});
+
+describe('prefill commit identifier is derived from the request (SYN-030 criterion 3)', () => {
+  it('stores one item for the same prefill sent twice, and another for other values or another head', async () => {
+    const outbox = new MemoryOutbox();
+    const h: Harness = await startHarness('memory', {
+      config: { outboxWaitMs: 20 },
+      parts: { outbox },
+    });
+    try {
+      const doc = await h.createDocument({ content: prefillDocument() });
+      const service = h.serviceJwt();
+      const editor = h.userToken({ [doc]: 'editor' });
+      const read = await h.call('GET', `/v1/documents/${doc}/field-values`, { token: editor });
+      const etag = read.headers.get('etag')!;
+      const send = (name: string) =>
+        h.call('PATCH', `/v1/documents/${doc}/field-values`, {
+          token: service,
+          body: { values: { 'tenant.name': name } },
+          headers: { 'if-match': etag },
+        });
+      expect((await send('Ada')).status).toBe(202);
+      expect((await send('Ada')).status).toBe(202);
+      expect((await send('Grace')).status).toBe(202);
+
+      const claimed = (await outbox.claim(
+        'syn-030-id-test',
+        60_000,
+        10,
+      )) as unknown as QueuedPrefill[];
+      // The retry of the first request did not add an item; the other values did.
+      expect(claimed).toHaveLength(2);
+      for (const item of claimed) expect(isUuid7(item.commitId)).toBe(true);
+      expect(new Set(claimed.map((c) => c.commitId)).size).toBe(2);
     } finally {
       await h.close();
     }

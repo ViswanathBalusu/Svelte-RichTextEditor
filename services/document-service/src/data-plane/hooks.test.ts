@@ -68,7 +68,7 @@ async function chainOf(memory: MemoryStore, ref: DocRef): Promise<string | null>
 }
 
 describe('fault hooks on the real data plane (BE-079)', () => {
-  it('fails the next write before its insert: the commit is rejected as retryable, nothing is stored, and the next write succeeds', async () => {
+  it('fails the next write before its insert: the commit is rejected as retryable, nothing is stored, and the next write succeeds [neg:code unavailable]', async () => {
     const { p, memory, hooks } = await testPlane();
     const doc = await p.createDocument();
     const ref = p.ref(doc);

@@ -32,7 +32,7 @@ As a maintainer, I want a reproducible Rust build that produces the kernel as an
 - [ ] The kernel depends on no system library and no browser font stack: fonts arrive only from the manifest (WASM-005).
 - [ ] The repository layout of 01 §6 is updated with the folder that holds the crates.
 
-**Notes:** C-RUST, phase 3. Not needed if S10 recommends harfbuzzjs alone, which ships as a package.
+**Notes:** C-RUST, phase 3. Not needed if S10 recommends harfbuzzjs alone, which ships as a package. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold. S10 (SPK-023, done) recommends harfbuzzjs with line breaking in TypeScript, because the Rust module gave no material gain and cost 2.1 times the download, a second toolchain and 21 crates (ADR 0016, "Result of S10"). C-WASM itself waits on the page-view gate (SPK-013), which the owner has not held. The spike crate `packages/perf/wasm/text-kernel/` is measurement code, not the kernel package of this story, and no production Rust workspace was created. The story reopens if the gate says yes and a later measurement changes S10's answer.
 
 ### WASM-002 Load WebAssembly modules on demand inside the element
 
@@ -53,7 +53,7 @@ As an integrating developer, I want the kernel downloaded and compiled only when
 - [ ] The directives a host must allow for the module, as recorded by S2, appear in the integration guide.
 - [ ] Load time and load failures are reported through the component's diagnostic events.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold yet, because the page-view gate (SPK-013) is not held and the owner decides it from customer evidence. S5 did choose measurement from the font files, so the module would be harfbuzzjs's WebAssembly build (ADR 0016, "Result of S10"). The dependencies are largely built (FE-076 6 of 7 ticked, PRO-087 all ticked), so they do not block it. What blocks it is that no page view or read-only painter exists to request a module: every criterion asks for a loader in the element that fetches, compiles and reports on a module, and with nothing to load that loader would be scaffolding built ahead of the gate. S2's directives are recorded in the S2 report (SPK-015) for the integration guide when this story runs.
 
 ### WASM-003 Keep editing when the host blocks WebAssembly
 
@@ -72,7 +72,7 @@ As an author on a site with a strict security policy, I want the editor to keep 
 - [ ] Given the same failure, then an event tells the host which feature degraded and which directive was missing, so the integrating developer can fix the policy.
 - [ ] Given a page whose policy lacks `'wasm-unsafe-eval'`, when the Playwright suite runs, then editing, saving, collaboration and the typeset PDF in the read view all pass.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold, because the page-view gate (SPK-013) is not held. The owner has not decided it, and `docs/owner-decisions-2026-11-15.md` does not list it. The story also depends on WASM-002, which is blocked for the same reason. No page view or read-only painter exists to fall back from, so the fallback paths and the event would be built against nothing.
 
 ### WASM-004 A layout worker that hosts the kernel
 
@@ -92,7 +92,7 @@ As a maintainer, I want the kernel to run in its own worker with a narrow, batch
 - [ ] Given the element suspends, the worker stops; given it is destroyed, the worker and its memory are released; given it resumes, the kernel is re-created on first use (02 §2.1).
 - [ ] Given the kernel traps, the error is caught and logged, the view falls back as in WASM-003, and no document state is lost, because the document lives in the editing core on the main thread.
 
-**Notes:** C-WASM, phase 3. Answers the open issue of 02 §15 for the page view only.
+**Notes:** C-WASM, phase 3. Answers the open issue of 02 §15 for the page view only. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold yet (the page-view gate, SPK-013, is not held), and the story depends on WASM-002, which is itself blocked, so there is no module for a worker to host. S10 chose harfbuzzjs with line breaking in TypeScript (ADR 0016, "Result of S10"), so the kernel is not Rust. The S10 prototype in `packages/perf/src/kernel/` ran in a layout worker as a measurement only; it is not the editor's worker. Building the worker, batching and lifecycle handling now would be a host with no guest.
 
 ## Text kernel
 
@@ -114,7 +114,7 @@ As a maintainer, I want the kernel to shape with exactly the font files the edit
 - [ ] Given a later font load, the font epoch advances and the kernel's caches for affected aliases are invalidated (02 §6).
 - [ ] A tenant's own fonts load the same way and only for that tenant's documents.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold yet (the page-view gate, SPK-013, is not held), and the story depends on WASM-004 (the layout worker that hosts the kernel), which is blocked for that reason. There is no kernel instance in the editor to load faces into, so the manifest loader, the hash check, the memory report and the epoch invalidation would have no caller. S5 and S10 did decide that measurement is from the font files with harfbuzzjs (ADR 0016, "Result of S10"), so the story is ready to be built once the gate says yes. Nothing here needs an owner decision beyond that gate.
 
 ### WASM-006 Shaping and measurement behind the measurement interface
 
@@ -135,7 +135,7 @@ As a maintainer, I want the kernel to implement the measurement interface the la
 - [ ] Given the half-pixel harness of 02 §9.3, painted line widths match computed widths in every supported browser.
 - [ ] Measuring a typical paragraph stays within the kernel's share of the typing budget that S10 set (target).
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold yet (the page-view gate, SPK-013, is not held), and the story depends on WASM-005, which is blocked for that reason. Every criterion needs the kernel to shape manifest font files in the editor: the two-provider run of the layout test suite, the documented advance unit, the cache keyed by font epoch, the half-pixel harness against painted widths in four browsers, and the share of the typing budget. None of these can be met by a mock, and a provider with no font loader and no worker would be scaffolding. The S10 prototype in `packages/perf/src/kernel/` is measurement code and is not the editor's provider; its measurements (SPK-023) stay the evidence for the budget. The engine is harfbuzzjs (ADR 0016, "Result of S10"), so this story does not wait on a Rust build.
 
 ### WASM-007 Unicode segmentation in the kernel
 
@@ -155,7 +155,7 @@ As a maintainer, I want line-break opportunities and grapheme clusters computed 
 - [ ] The same segmentation is callable from TypeScript tests, so the layout engine and the kernel can be checked against each other.
 - [ ] Data for scripts the corpus does not use does not count against the module's size budget (WASM-012).
 
-**Notes:** C-RUST, phase 3.
+**Notes:** C-RUST, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold. S10 (SPK-023) recommends harfbuzzjs with segmentation and line breaking in TypeScript, and the Rust module gave no material gain (ADR 0016, "Result of S10"). The story also depends on WASM-001, the Rust workspace, which is blocked for the same reason. Every criterion says "in the kernel", and the kernel crate does not exist. The segmentation that S10 chose stays in TypeScript and belongs to the FE stories (FE-080, FE-096), not here. A UAX #14 library is on the owner's list of new third-party libraries still to be decided (`docs/owner-decisions-2026-11-15.md`, last paragraph), so adding one for this story would decide that silently. The story reopens if a later measurement changes S10's answer.
 
 ### WASM-008 First-fit line breaking in the kernel
 
@@ -176,7 +176,7 @@ As a maintainer, I want the kernel to break a whole paragraph into lines in one 
 - [ ] Re-breaking an edited paragraph reuses cached shaping for runs that did not change.
 - [ ] Golden tests in Node.js lock the line breaks of the shared corpus.
 
-**Notes:** C-RUST, phase 3. Knuth and Plass's algorithm is not in scope: 09 §7 says TeX's paragraph builder is not rebuilt in the browser (assessment §5).
+**Notes:** C-RUST, phase 3. Knuth and Plass's algorithm is not in scope: 09 §7 says TeX's paragraph builder is not rebuilt in the browser (assessment §5). Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold. S10 (SPK-023) chose first-fit line breaking in TypeScript, and both prototypes gave identical breaks and widths (ADR 0016, "Result of S10"), so a Rust line breaker has no reason to exist. The story also depends on WASM-006 and WASM-007, which are blocked. Line breaking in TypeScript belongs to the layout engine's own stories (FE-076, FE-081); the S10 prototype in `packages/perf/src/kernel/` is measurement code and its golden results are not the shared-corpus golden tests of the last criterion.
 
 ### WASM-009 Hyphenation with TeX patterns
 
@@ -196,7 +196,7 @@ As an author who turns hyphenation on, I want the page view to hyphenate with th
 - [ ] Every bundled pattern file's licence is recorded in the borrow list; a language whose patterns are not permissively licensed is not bundled.
 - [ ] Given a language without patterns, its text is not hyphenated and nothing fails.
 
-**Notes:** C-RUST, phase 3.
+**Notes:** C-RUST, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold (S10 chose harfbuzzjs with line breaking in TypeScript, ADR 0016, "Result of S10"), and the story depends on WASM-008, which is blocked. Hyphenation needs a line breaker that calls it, and none exists in the kernel. The borrow list (SPK-026, `docs/research/2026-11-06-borrow-list.md`) already records hyphenation patterns per language with their licences, which is the input the fourth criterion needs when a pattern file is bundled. EXP-015 (the PDF side's hyphenation settings) is the other half; the match with the house class's minimum counts waits on both. Bundling pattern data with no consumer would add size to a module that does not exist.
 
 ## Verification and budgets
 
@@ -216,7 +216,7 @@ As a maintainer, I want the same kernel artefact to run in Node.js, so that layo
 - [ ] Golden outputs recorded in Node.js (advances, segmentation, line starts) are the reference for the cross-browser suite (WASM-011).
 - [ ] In Node.js the kernel loads the manifest's font files by path and hash.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold (SPK-013 is not held, see WASM-003). The story depends on WASM-006, which is blocked for the same reason, so there is no kernel artefact to run in Node.js. The S10 prototypes under `packages/perf/` are measurement code (see WASM-001), not the kernel this story loads, and their outputs are not the golden reference of WASM-011.
 
 ### WASM-011 Identical results in every browser
 
@@ -234,7 +234,7 @@ As an editor working with collaborators in other browsers, I want the page view 
 - [ ] Given two collaborators in different browsers editing one document in the page view, then both see the same line breaks before the next compile.
 - [ ] The suite runs on every change to the kernel or its dependencies, and on every Unicode or font update.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold (SPK-013 is not held, see WASM-003). The story depends on WASM-010, which is blocked because there is no kernel to run in Node.js, so there are no golden outputs to compare against. The shared corpus (`packages/corpus`) exists, but a cross-browser run would test prototypes, not a shipped kernel. A page view to compare between two collaborators does not exist either. It reopens if SPK-013 says yes.
 
 ### WASM-012 Size, memory and time budgets for the kernel
 
@@ -254,7 +254,7 @@ As a maintainer, I want the kernel held to budgets in CI, so that it never quiet
 - [ ] Kernel time per keystroke in a 100-page document is measured against the share of the 16 ms budget that S10 set.
 - [ ] A regression beyond the agreed tolerance fails the scheduled run.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold (SPK-013 is not held, see WASM-003). The budgets are for a module the project may never ship. S10's figures are for prototypes (ADR 0016, "Result of S10"), and a budget set from them would fix numbers for an artefact that does not exist. The story depends on FND-007 and FND-008, which are outside this lane. It reopens if SPK-013 says yes.
 
 ### WASM-013 Rust supply chain and licences
 
@@ -273,7 +273,7 @@ As a maintainer, I want Rust dependencies held to the same rules as npm dependen
 - [ ] The element's software bill of materials lists the crates compiled into the module.
 - [ ] Dependencies are pinned by lockfile, and updates are reviewed changes.
 
-**Notes:** C-RUST, phase 3.
+**Notes:** C-RUST, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold, because C-WASM does not hold (SPK-013 is not held) and S10 recommended harfbuzzjs, not a Rust module (ADR 0016, "Result of S10"). The story depends on WASM-001, the Rust workspace, which is blocked for the same reason. There are no crates to list, no build to check and no bill of materials. The spike crate under `packages/perf/wasm/text-kernel/` is measurement code and is not the kernel this story documents.
 
 ### WASM-014 Contributor guide for the kernel
 
@@ -291,7 +291,7 @@ As a maintainer, I want the kernel's boundary and build documented, so that the 
 - [ ] It states what belongs in the kernel (shaping, segmentation, line breaking, hyphenation) and what stays in TypeScript (pagination, the layout tree, the painter).
 - [ ] A contributor without a Rust toolchain can run the whole layout test suite against the published kernel package.
 
-**Notes:** C-RUST, phase 3.
+**Notes:** C-RUST, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold (see WASM-013 and WASM-001). A guide for the kernel's build and boundary would describe a kernel the project does not ship. The third criterion needs a published kernel package, which does not exist. The guide reopens if SPK-013 says yes and a later measurement changes S10's answer.
 
 ## Reach (phase 4)
 
@@ -312,7 +312,7 @@ As an author who writes in a right-to-left or complex script, I want the page vi
 - [ ] Caret positions and selections in mixed-direction lines map to logical offsets consistently with the layout tree.
 - [ ] The work follows the plan that 02 §11 requires; this story does not decide that plan.
 
-**Notes:** C-RUST, phase 4 (right-to-left and complex-script content are phase 4 in 11 §7).
+**Notes:** C-RUST, phase 4 (right-to-left and complex-script content are phase 4 in 11 §7). Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold (see WASM-013). S10 recommended harfbuzzjs with line breaking in TypeScript (ADR 0016, "Result of S10"), so there is no Rust kernel to add UAX #9 reordering or shaping to. The story depends on WASM-008 (blocked for the same reason) and FE-112, which depends on SPK-013 (not held). Criterion 4 asks that the work follow the 02 §11 plan, and this story does not decide that plan. Any bidirectional or shaping work on the TypeScript and harfbuzzjs path is a different story.
 
 ### WASM-016 Line-breaking rules for East Asian and South-East Asian scripts
 
@@ -330,7 +330,7 @@ As an author who writes in Chinese, Japanese, Thai or a related script, I want l
 - [ ] Thai, Lao, Khmer and Burmese text breaks at word boundaries found with dictionary data, loaded only when a document uses the script.
 - [ ] The module's size budget (WASM-012) holds for documents that do not use these scripts.
 
-**Notes:** C-RUST, phase 4.
+**Notes:** C-RUST, phase 4. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold (see WASM-013). The story depends on WASM-007 (blocked, no Rust kernel) and FE-112 (which depends on SPK-013, not held). The 02 §11 plan that criterion 1 refers to is not selected here, and dictionary data for Thai, Lao, Khmer and Burmese would need a library choice that is still open (new third-party libraries, `docs/owner-decisions-2026-11-15.md`). The size budget of criterion 3 depends on WASM-012, which is blocked.
 
 ## Coverage
 

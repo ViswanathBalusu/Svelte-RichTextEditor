@@ -2,7 +2,7 @@
  * SEC-064 criterion 3 — a new endpoint or message type cannot ship without a decision about its
  * read projection (ADR 0019; the pattern of SEC-060). Two gates:
  *
- * - Endpoints: the leak sweep of `read-restrictions.test.ts` calls every operation of the protocol
+ * - Endpoints (the second describe below): the leak sweep of `read-restrictions.test.ts` calls every operation of the protocol
  *   definition (`DEP1.operations`) as a reader without access, so a new endpoint is swept by
  *   construction. The sweep is the only place that calls them; nothing is excluded from it.
  * - Messages: every server-to-client (and both-direction) message type of `DEP1.messages` must have
@@ -21,6 +21,8 @@ import { describe, expect, it } from 'vitest';
 type Entry = { kind: 'exercised'; test: string } | { kind: 'no-content' | 'gap'; reason: string };
 
 const SWEEP = 'read-restrictions.test.ts';
+const SURFACES = 'sec-064-w8-surfaces.test.ts';
+const FAULTS = 'sec-064-w8-faults.test.ts';
 
 const MESSAGE_REVIEW: Record<string, Entry> = {
   welcome: { kind: 'no-content', reason: 'handshake: versions, features and limits' },
@@ -41,7 +43,7 @@ const MESSAGE_REVIEW: Record<string, Entry> = {
   },
   'ch.opened': { kind: 'exercised', test: SWEEP },
   'ch.rejected': { kind: 'no-content', reason: 'refusal with a code; no document data' },
-  'ch.closed': { kind: 'gap', reason: 'close on revocation is not asserted by name' },
+  'ch.closed': { kind: 'exercised', test: FAULTS },
   'sync.ack': { kind: 'exercised', test: SWEEP },
   'sync.reject': { kind: 'exercised', test: SWEEP },
   'sync.commit': { kind: 'exercised', test: SWEEP },
@@ -51,12 +53,9 @@ const MESSAGE_REVIEW: Record<string, Entry> = {
     reason: 'reset of a stream carries a fresh document; not exercised',
   },
   'sync.check': { kind: 'gap', reason: 'consistency check of the view; not exercised' },
-  'presence.state': {
-    kind: 'gap',
-    reason: 'presence within the view class (ADR 0019); not exercised',
-  },
+  'presence.state': { kind: 'exercised', test: SURFACES },
   'perm.changed': { kind: 'gap', reason: 'permission change notice; not exercised by name' },
-  event: { kind: 'gap', reason: 'document events; not exercised' },
+  event: { kind: 'exercised', test: SURFACES },
   'wf.changed': { kind: 'gap', reason: 'workflow change notice (12); not exercised' },
 };
 
@@ -86,10 +85,105 @@ describe('SEC-064 criterion 3: every server message has a read-projection decisi
     }
   });
 
-  it('records every gap with its reason, so the open ones are visible', () => {
+  // The gaps that exist today. A type that is not in this list cannot be added as a gap: a new
+  // message type has to be exercised or to carry no content, so it ships with a projection test.
+  // The list can only shrink.
+  const KNOWN_GAPS = [
+    'error',
+    'chunk',
+    'sync.caughtUp',
+    'sync.reset',
+    'sync.check',
+    'perm.changed',
+    'wf.changed',
+  ];
+
+  it('records every gap with its reason, and allows no new gap (a new type must be tested)', () => {
     const gaps = Object.entries(MESSAGE_REVIEW).filter(([, e]) => e.kind === 'gap');
     for (const [, e] of gaps) expect(e.kind === 'gap' ? e.reason : '').not.toBe('');
-    // The count is reported for the story; it is not a pass condition.
-    console.info(`SEC-064 read-projection gaps: ${gaps.map(([t]) => t).join(', ')}`);
+    const added = gaps.map(([t]) => t).filter((t) => !KNOWN_GAPS.includes(t));
+    expect(added, 'gaps that are not in the list of known gaps').toEqual([]);
+    const closed = KNOWN_GAPS.filter((t) => MESSAGE_REVIEW[t]?.kind !== 'gap');
+    expect(closed, 'known gaps that are now closed: remove them from KNOWN_GAPS').toEqual([]);
+  });
+});
+
+/**
+ * Endpoints: every operation a user token may call and that reads (GET) is named here with where
+ * its answer is scanned for canaries. `read-restrictions.test.ts` calls every operation of the
+ * definition once, as a reader without access (so a new endpoint is called by construction), but
+ * with absent identifiers and without the query its route needs. An endpoint that is only covered
+ * by that call is `swept`; a new one cannot be added as `swept`: it needs a call with its
+ * parameters in a test that names its path.
+ */
+type EndpointEntry = { kind: 'exercised'; test: string; path: string } | { kind: 'swept' };
+
+const SURFACES_FILE = 'sec-064-w8-surfaces.test.ts';
+const ENDPOINT_REVIEW: Record<string, EndpointEntry> = {
+  getDocument: { kind: 'swept' },
+  getContent: { kind: 'exercised', test: SURFACES_FILE, path: '/content?seq=' },
+  listCommits: { kind: 'exercised', test: SURFACES_FILE, path: '/commits?after=0' },
+  listRegions: { kind: 'exercised', test: SURFACES_FILE, path: '/regions' },
+  getGrants: { kind: 'exercised', test: SURFACES_FILE, path: '/grants' },
+  listHistory: { kind: 'exercised', test: SURFACES_FILE, path: '/history?region=' },
+  listVersions: { kind: 'exercised', test: SURFACES_FILE, path: '/versions' },
+  getDiff: { kind: 'exercised', test: SURFACES_FILE, path: '/diff?fromSeq=' },
+  getAttribution: { kind: 'exercised', test: SURFACES_FILE, path: '/attribution?region=' },
+  getActivity: { kind: 'exercised', test: SURFACES_FILE, path: '/activity' },
+  listThreads: { kind: 'exercised', test: SURFACES_FILE, path: '/threads?seq=' },
+  getThread: { kind: 'exercised', test: SURFACES_FILE, path: '/threads/${thread}' },
+  getExport: { kind: 'exercised', test: SURFACES_FILE, path: '/exports/' },
+  getImport: { kind: 'swept' },
+  getFonts: { kind: 'swept' },
+  listFields: { kind: 'exercised', test: SURFACES_FILE, path: '/fields' },
+  getFieldValues: { kind: 'exercised', test: SURFACES_FILE, path: '/field-values?seq=' },
+  getWorkflow: { kind: 'swept' },
+  getWorkflowEvidence: { kind: 'swept' },
+  getWorkflowFinal: { kind: 'swept' },
+};
+const KNOWN_SWEPT = [
+  'getDocument',
+  'getImport',
+  'getFonts',
+  'getWorkflow',
+  'getWorkflowEvidence',
+  'getWorkflowFinal',
+];
+
+describe('SEC-064 criterion 3: every read endpoint has a read-projection decision', () => {
+  const reads = DEP1.operations.filter(
+    (o) => o.method === 'GET' && (o.security as readonly string[]).includes('user'),
+  );
+
+  it('no read endpoint is missing from the review (a new endpoint fails here)', () => {
+    const missing = reads.map((o) => o.operationId).filter((id) => !(id in ENDPOINT_REVIEW));
+    expect(missing, 'read endpoints without a read-projection entry').toEqual([]);
+  });
+
+  it('no review entry names an endpoint the definition does not have', () => {
+    const ids = reads.map((o) => o.operationId as string);
+    expect(Object.keys(ENDPOINT_REVIEW).filter((id) => !ids.includes(id))).toEqual([]);
+  });
+
+  it('every exercised endpoint has its path in the test that scans its answer', () => {
+    const text = (file: string) => readFileSync(`${testDir}${file}`, 'utf8');
+    for (const [id, e] of Object.entries(ENDPOINT_REVIEW)) {
+      if (e.kind !== 'exercised') continue;
+      expect(text(e.test), `${e.test} calls ${id} (${e.path})`).toContain(e.path);
+    }
+  });
+
+  it('allows no new swept-only endpoint', () => {
+    const swept = Object.entries(ENDPOINT_REVIEW)
+      .filter(([, e]) => e.kind === 'swept')
+      .map(([id]) => id);
+    expect(swept.filter((id) => !KNOWN_SWEPT.includes(id))).toEqual([]);
+    expect(KNOWN_SWEPT.filter((id) => !swept.includes(id))).toEqual([]);
+  });
+
+  it('is shown to fail: an endpoint that is not reviewed is reported', () => {
+    const reviewed = new Set(Object.keys(ENDPOINT_REVIEW));
+    const withNew = [...reads.map((o) => o.operationId as string), 'getNewThing'];
+    expect(withNew.filter((id) => !reviewed.has(id))).toEqual(['getNewThing']);
   });
 });

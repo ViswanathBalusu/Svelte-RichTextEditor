@@ -40,7 +40,7 @@ import { emit, type DocEditorEventMap, type DocEditorEventName } from './events.
 import type { StatusDetail } from './events.ts';
 import { headerSnapshot, type HeaderSnapshot } from './header-events.ts';
 import { INTERNALS } from './internals.ts';
-import { Announcer } from './announcer.ts';
+import { Announcer, DEFAULT_SETTLE_MS } from './announcer.ts';
 import { mountLiveRegion, type LiveRegion } from './live-region.ts';
 import type { AssetImageLookup } from '@docedit/engine';
 import { assetImageLookup } from './assets.ts';
@@ -492,6 +492,10 @@ export class DocEditorElement extends Base {
       // The property as it is when a name is needed: a host may set it after loading (PRO-080).
       resolveUsers: (ids) => this.#resolveUsers?.(ids) ?? Promise.resolve(ids.map(() => null)),
       initialSync: 'saved',
+      // Typing flips the save state at every commit; only a state that holds is said (criterion 7).
+      settleMs: DEFAULT_SETTLE_MS,
+      // The shell's catalogue, once the shell exists: the locale and the host's strings apply.
+      translate: (key, params) => this.#mounted?.text(key, params) ?? null,
     });
   }
 

@@ -9,6 +9,12 @@
  *   document at the 16 MiB limit of invariant I7 (no target in the spec), with the elapsed time and
  *   peak memory; also on `pages-100`, `pages-300` and `pages-1000`.
  *
+ * - CDM-042 criterion 7: `computeLabels` of the document after one paragraph of it was edited, on
+ *   `pages-100`, `pages-300` and `pages-1000`, against the typing budget of 13 §9 (16 ms at the
+ *   median and 50 ms at the 95th percentile for the whole keystroke to paint, of which the labels
+ *   are a part). It is the whole-document computation, run with the style table of the unedited
+ *   document (a typed word changes no style) and again with a table built for each edit.
+ *
  * Each document is measured in a fresh child process, so that its peak resident memory
  * (`process.resourceUsage().maxRSS`) belongs to that document alone; the canonical form and hash
  * run in a `worker_threads` worker inside it. The 16 MiB document is `pages-1000` with its body's
@@ -18,7 +24,15 @@
  * Usage: node scripts/model-costs.ts   (from packages/perf)
  */
 import { corpusStamp, loadDocument } from '@docedit/corpus';
-import { canonicalText, sha256HexBytes, type JsonEnvelope, type JsonNode } from '@docedit/model';
+import {
+  canonicalText,
+  computeLabels,
+  sha256HexBytes,
+  styleTable,
+  type JsonEnvelope,
+  type JsonNode,
+  type TreeNode,
+} from '@docedit/model';
 import { validate } from '@docedit/model/validate';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -61,13 +75,13 @@ async function atTheLimit(): Promise<JsonEnvelope> {
 }
 
 /** The document after a typical single-paragraph commit: a word typed into one paragraph. */
-function afterCommit(env: JsonEnvelope): JsonEnvelope {
+function afterCommit(env: JsonEnvelope, at = 0.5): JsonEnvelope {
   const copy = structuredClone(env);
   const body = copy.doc.content!.find((n) => n.type === 'body')!;
   const paragraphs = (body.content ?? []).filter(
     (n) => n.type === 'paragraph' && n.content?.some((c) => c.type === 'text'),
   );
-  const t = paragraphs[Math.floor(paragraphs.length / 2)]!.content!.find(
+  const t = paragraphs[Math.floor(paragraphs.length * at)]!.content!.find(
     (c) => c.type === 'text',
   ) as JsonNode & { text: string };
   t.text = `${t.text.slice(0, 10)}typed ${t.text.slice(10)}`;
@@ -129,6 +143,32 @@ async function child(name: string): Promise<void> {
     }
     validation = { runs, wallMs: summarise(wall), cpuMs: summarise(cpu), violations };
   }
+  let labels: unknown = null;
+  if (loaded) {
+    // One edit per sample, at a different paragraph each time; the clone is not timed.
+    const runs = name === 'pages-100' ? 60 : 20;
+    const table = styleTable(env.doc as unknown as TreeNode);
+    const edited = Array.from({ length: runs }, (_, i) => afterCommit(env, (i + 0.5) / runs));
+    computeLabels(edited[0]!.doc as unknown as TreeNode, { table }); // warm-up
+    const reuse: number[] = [];
+    const rebuilt: number[] = [];
+    let count = 0;
+    for (const e of edited) {
+      const doc = e.doc as unknown as TreeNode;
+      const t0 = performance.now();
+      count = computeLabels(doc, { table }).lists.size;
+      reuse.push(performance.now() - t0);
+      const t1 = performance.now();
+      computeLabels(doc);
+      rebuilt.push(performance.now() - t1);
+    }
+    labels = {
+      runs,
+      numberedParagraphs: count,
+      withStyleTableMs: summarise(reuse),
+      withNewStyleTableMs: summarise(rebuilt),
+    };
+  }
   const text = JSON.stringify(env);
   const rssBefore = process.resourceUsage().maxRSS / 1024;
   const t0 = performance.now();
@@ -147,6 +187,7 @@ async function child(name: string): Promise<void> {
       document: name,
       jsonBytes: encoder.encode(text).length,
       validate: validation,
+      labels,
       canonical: { ...result, workerWallMs, peakRssBeforeMB: rssBefore, peakRssAfterMB: rssAfter },
     }),
   );
@@ -178,6 +219,7 @@ else {
   };
   writeFileSync(
     join(pkg, `test-results/model/${id}.json`),
-    `${JSON.stringify({ schema: 'docedit-perf-model/1', runId: id, machine, corpus: corpusStamp(), results }, null, 2)}\n`,
+    `${JSON.stringify({ schema: 'docedit-perf-model/1', runId: id, machine, corpus: corpusStamp(), results }, null, 2)}
+`,
   );
 }

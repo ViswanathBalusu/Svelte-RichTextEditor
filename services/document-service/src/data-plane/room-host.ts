@@ -34,6 +34,7 @@ import {
   SERVER_SESSION,
   isSnapshot,
   project,
+  projectCommitPage,
   projectionSchema,
   regionPolicyOf,
   rejectionAudit,
@@ -697,6 +698,7 @@ ecentHead, keeping one entry older than the window. */
     if (opened.catchUp === 'stream' && resume)
       this.#deps.metrics.catchUpCommits.observe({ tenant }, Math.max(0, first.head - resume.seq));
     port.opened(opened);
+    this.#raiseSession('joined', ch);
     this.#presence.join(key, {
       session: port.session,
       user: port.user,
@@ -709,7 +711,9 @@ ecentHead, keeping one entry older than the window. */
 
   /** The client closed the channel, or its connection went away. */
   close(key: string): void {
+    const gone = this.#channels.get(key);
     if (!this.#channels.delete(key)) return;
+    if (gone) this.#raiseSession('left', gone);
     this.#bridge.detach(key);
     this.#window?.drop(key);
     this.#presence.leave(key);
@@ -1019,7 +1023,7 @@ ecentHead, keeping one entry older than the window. */
           break;
         }
         case 'ch.closed':
-          this.#channels.delete(o.channel);
+          if (this.#channels.delete(o.channel)) this.#raiseSession('left', ch);
           this.#presence.leave(o.channel);
           ch.port.closed(e.d, o.cause);
           if (this.#channels.size === 0) this.#armIdle();
@@ -1269,7 +1273,25 @@ ecentHead, keeping one entry older than the window. */
     const channels = [...this.#channels.values()];
     this.#channels.clear();
     this.#finish('stopped');
-    for (const ch of channels) ch.port.closed(d, 'stopped');
+    for (const ch of channels) {
+      this.#raiseSession('left', ch);
+      ch.port.closed(d, 'stopped');
+    }
+  }
+
+  /**
+   * `dep.session.joined` and `dep.session.left` (PRO-072 criterion 4; 05 §7): one event for each
+   * channel that opens or closes, with the session and the head. Content and identities are not in
+   * the data (ADR 0376).
+   */
+  #raiseSession(kind: 'joined' | 'left', ch: HostedChannel): void {
+    this.#deps.events?.emit({
+      type: `dep.session.${kind}.v1`,
+      tenant: this.ref.tenant,
+      subject: this.ref.doc,
+      data: { seq: this.#room.head, session: ch.port.session },
+      time: this.#deps.now(),
+    });
   }
 
   #settleWrite(): void {
@@ -1588,7 +1610,10 @@ ecentHead, keeping one entry older than the window. */
       const channels = [...this.#channels.values()];
       this.#channels.clear();
       this.#finish('stopped');
-      for (const ch of channels) ch.port.closed(d, 'stopped');
+      for (const ch of channels) {
+        this.#raiseSession('left', ch);
+        ch.port.closed(d, 'stopped');
+      }
     }
     await this.#idleWrites();
     if (release) await this.#release();
@@ -1612,7 +1637,10 @@ ecentHead, keeping one entry older than the window. */
     this.#channels.clear();
     this.#deps.metrics.roomsClosed.inc({ tenant: this.ref.tenant, reason: 'fenced' });
     this.#finish('fenced');
-    for (const ch of channels) ch.port.closed(d, 'stopped');
+    for (const ch of channels) {
+      this.#raiseSession('left', ch);
+      ch.port.closed(d, 'stopped');
+    }
   }
 }
 
@@ -2063,8 +2091,8 @@ export class RoomHost {
    * A page of the commit log after `after` (05 §6.2 `/commits`; BE-038): ascending, at most
    * `limit`, from at or above the reader's visibility gate only (HIS-024: a run of commits). A page
    * ends before a snapshot commit; one that would start with it is `conflict` (the client reloads,
-   * decision D122). A reader whose class hides content is refused: the resource does not serve a
-   * class's steps (ADR 0034 §1).
+   * decision D122). A reader whose class hides content gets the steps of its class and the view
+   * token (BE-098; ADR 0019 item 2); the page of a reader of the full class carries no token.
    */
   async readCommits(
     identity: VerifiedIdentity,
@@ -2129,11 +2157,6 @@ export class RoomHost {
           hides = d.restricted && !hidesNothing(d.tokens.hidden(conn, headDoc, stored));
         }
       }
-      if (hides)
-        throw new DataPlaneError(
-          'forbidden',
-          'the commits resource serves only the full view; reload instead',
-        );
       if (!rangeAllowed(gate, after))
         throw new DataPlaneError('forbidden', 'the history before your access is not visible');
       const to = Math.min(head.seq, after + limit);
@@ -2144,16 +2167,30 @@ export class RoomHost {
           'conflict',
           'a snapshot commit follows; reload the content instead',
         );
-      const page = cut > 0 ? commits.slice(0, cut) : commits;
+      const storedPage = (cut > 0 ? commits.slice(0, cut) : commits) as Exclude<
+        LogCommit,
+        SnapshotCommit
+      >[];
+      // A reader whose class hides content gets the steps of its class, mapped from the full
+      // commits (BE-098; ADR 0019 item 2), under the permission state in storage, as a content
+      // read does: the class is derived from the head document.
+      let page: Exclude<LogCommit, SnapshotCommit>[] = storedPage;
+      let view: string | undefined;
+      if (hides) {
+        const atHead = await this.#materialise(ref, head.seq);
+        const headDoc = schemaOf().nodeFromJSON(atHead.doc);
+        const hidden = d.tokens.hidden(conn, headDoc, stored);
+        const before = after === head.seq ? atHead.doc : (await this.#materialise(ref, after)).doc;
+        page = projectCommitPage(schemaOf(), schemaOf().nodeFromJSON(before), hidden, storedPage);
+        view = d.tokens.tokenFor(hidden);
+      }
       const users = [...new Set(page.map((c) => c.user))].filter((u) => u !== 'system');
       const subs =
         d.users && users.length
           ? await d.users.subsOf(ref.tenant, users)
           : new Map<string, string>();
       const items = page.map((c) =>
-        toRemoteCommit(c as Exclude<LogCommit, SnapshotCommit>, 0, (u) =>
-          d.users ? (subs.get(u) ?? u) : u,
-        ),
+        toRemoteCommit(c, 0, (u) => (d.users ? (subs.get(u) ?? u) : u)),
       );
       const last = items.length ? items[items.length - 1]!.seq : after;
       return {
@@ -2161,6 +2198,7 @@ export class RoomHost {
         next: last < head.seq ? last : null,
         head: head.seq,
         incarnation: head.incarnation,
+        ...(view !== undefined ? { view } : {}),
       };
     } catch (e) {
       throw this.#readError(e, `commits of ${doc}`, { tenant: identity.tenant, doc });

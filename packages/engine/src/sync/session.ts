@@ -446,9 +446,10 @@ export class SyncSession {
       case 'opened': {
         const o = input.opened;
         this.#setAccess(o.access);
-        if (o.catchUp !== 'stream') {
-          // `page` would read the missing commits over REST; no port member does that, so the
-          // session reloads instead (ADR 0038).
+        if (o.catchUp === 'reload') {
+          // `page` is not here: the channel reads the missing commits over REST itself and delivers
+          // them in order like a stream, with the state `live` after the last (SYN-028 criterion 4;
+          // `SyncChannel`, `backend-dep` PRO-026), so the session treats it as `stream`.
           this.#inputs.splice(1, 0, {
             t: 'reload',
             reason: `catch-up ${o.catchUp}`,

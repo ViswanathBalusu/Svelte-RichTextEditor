@@ -149,6 +149,12 @@ export interface MountedEditor extends EditorHandle {
   openPane(id: string): Promise<boolean>;
   /** Replaces the host's string replacements while the shell is mounted (UX-063, UX-064). */
   setStrings(overrides: StringOverrides): void;
+  /**
+   * A message of the shell's catalogue in the locale in use, with the host's replacements applied
+   * (UX-064); null for a key the catalogue does not have. The announcer reads its sentences here
+   * (FE-107 criterion 6).
+   */
+  text(key: string, params: Readonly<Record<string, string | number>>): string | null;
   /** Brings the host's extensions in line with the list the element holds (UX-050). */
   setExtensions(list: readonly unknown[]): void;
 }
@@ -309,12 +315,20 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // `copyFormat` and `pasteFormat` are the format painter's (UX-009); `insertRecovered` and
     // `discardRecovered` take `{ id }` and are the recovered edits pane's (UX-017); `setLanguage`
     // takes `{ lang }` (UX-018).
+    // `renameRegion` takes the permissions pane's `{ region, title }` (PRM-034); the engine refuses it
+    // without `structure` and `edit` in the region.
     // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
     // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
+    // `nextEditableRegion` takes no arguments and moves the caret (PRM-027).
+    // `showReferences` takes no arguments and selects a cross-reference that blocked the last
+    // refused deletion (FE-133 criterion 5).
     commandNames: [
       'insertField',
       'setRegionPolicy',
+      'renameRegion',
       'markRegion',
+      'nextEditableRegion',
+      'showReferences',
       'copyFormat',
       'pasteFormat',
       'insertRecovered',
@@ -322,6 +336,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       'setLanguage',
     ],
     runNamed: (name, args) => {
+      if (name === 'showReferences') return core.showReferences();
+      if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
       // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
       // puts it on the selection through the guards; neither takes an argument.
       if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
@@ -342,6 +358,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
         const title = (args as { title?: unknown } | undefined)?.title;
         if (typeof title !== 'string') return false;
         return core.run('markRegion', { title });
+      }
+      if (name === 'renameRegion') {
+        const a = args as { region?: unknown; title?: unknown } | undefined;
+        if (typeof a?.region !== 'string' || typeof a.title !== 'string') return false;
+        return core.run('renameRegion', { region: a.region, title: a.title });
       }
       if (name === 'setRegionPolicy') {
         const a = args as { region?: unknown; policy?: unknown } | undefined;
@@ -398,7 +419,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,
     ...(port?.regions
-      ? { regions: regionsView(port.regions.bind(port), options.docId, [core.permissions]) }
+      ? {
+          regions: regionsView(port.regions.bind(port), options.docId, [
+            core.permissions,
+            core.regionTitles,
+          ]),
+        }
       : {}),
     ...(port?.grants && port.updateGrants
       ? {
@@ -515,6 +541,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     setStrings(overrides: StringOverrides) {
       strings.setOverrides(overrides);
+    },
+    text(key, params) {
+      return strings.current.has(key) ? strings.current.text(key, params) : null;
     },
     setExtensions(list: readonly unknown[]) {
       app.setExtensions(list);

@@ -190,6 +190,7 @@ export {
   HISTORY_VISIBILITIES,
   editsSomewhere,
   minVisibleSeq,
+  minVisibleSeqAsync,
   rangeVisible,
   stateVisible,
   type GateInput,
@@ -419,6 +420,16 @@ export {
   type ParticipantProblem,
   type ParticipantProblemReason,
 } from './workflow/resource.ts';
+// The body of `PUT /documents/{id}/workflow` (FRW-025).
+export {
+  checkWorkflowBody,
+  DEFAULT_TIME_ZONE,
+  SERVER_OWNED_MEMBERS,
+  type WorkflowBodyCheck,
+  type WorkflowBodyProblem,
+  type WorkflowInput,
+  type WorkflowMembers,
+} from './workflow/workflow-body.ts';
 
 // Read restrictions by projection (ADR 0019, proposed; spike S12).
 export {
@@ -439,6 +450,7 @@ export {
   type Span,
   type StepRoute,
 } from './projection/projection.ts';
+export { projectCommitPage, visibleScopes } from './projection/page.ts';
 export {
   ProjectionGateway,
   viewToken,

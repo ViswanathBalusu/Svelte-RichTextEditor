@@ -1255,7 +1255,7 @@ export const OPERATIONS: readonly OperationDef[] = [
     requires: 'view and the history-visibility gate (07 §8)',
     query: {
       region: opt(nodeId()),
-      seq: opt(seq(), 'The version asked about; the head when omitted.'),
+      atSeq: opt(seq(), 'The version asked about; the head when omitted.'),
       blocks: opt(text(), 'Block identifiers, separated by commas (a block range).'),
     },
     success: ok(ref('Attribution')),

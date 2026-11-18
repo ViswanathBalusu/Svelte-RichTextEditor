@@ -45,3 +45,19 @@ test.describe('recovered edits are announced (UX-017 criterion 6)', () => {
     expect(announced.filter((t) => KEPT.test(t)).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+test.describe('a fill that lost to another change of the field (FRW-010 criterion 5)', () => {
+  test('is announced as a field changed by someone else, with the current value shown', async ({
+    page,
+  }) => {
+    const h = await open(page, { extended: true });
+    const live = page.locator('.de-shell [role="status"]').first();
+    await h.setAside([
+      { id: 'c1', reason: 'conflict', commit: 'x', text: '', seq: 6, fields: ['f1'] },
+    ]);
+    await expect(live).toContainText(/changed by someone else/i);
+    await expect(live).toContainText(/current value/i);
+    // The words name no field and no value (ADR 0019).
+    await expect(live).not.toContainText(/f1/);
+  });
+});

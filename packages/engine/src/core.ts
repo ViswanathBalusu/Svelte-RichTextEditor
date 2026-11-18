@@ -134,7 +134,7 @@ import {
 import { type InsertFieldOptions, insertField, insertSymbol, insertToc } from './fields-toc.ts';
 import { formFieldCount } from './frw-072-form-fields.ts';
 import { insertCaption, insertReference } from './captions-refs.ts';
-import { referenceGuardPlugin } from './referenced-targets.ts';
+import { referenceGuardPlugin, referencePositions } from './referenced-targets.ts';
 import {
   EQUATION_NODES,
   LATEX_MAX_CODE_POINTS,
@@ -203,11 +203,12 @@ import {
   placeholderAt,
   regionAt,
   regionClamp,
+  regionTitleKey,
   regionParagraphs,
   withParagraphsAfterRegions,
 } from './regions.ts';
 import { nextEditableRegion } from './region-navigation.ts';
-import { markRegion } from './prm-033-mark-region.ts';
+import { atRegionLimit, markRegion, selectionHoldsRegion } from './prm-033-mark-region.ts';
 import { setRegionPolicy } from './prm-036-region-policy.ts';
 import { renameRegion } from './prm-034-rename-region.ts';
 import {
@@ -428,6 +429,7 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'hasHeader',
   'canInsertField',
   'canMarkRegion',
+  'hasNextEditableRegion',
   'canCopyFormat',
   'canPasteFormat',
 ];
@@ -702,6 +704,12 @@ export class DocumentCore implements DocumentApi {
   readonly access: ReadValue<AccessSummary>;
   readonly saveState: ReadValue<SaveState>;
   readonly confirmedSeq: ReadValue<number>;
+  /**
+   * The titles of the regions in the confirmed document, as one string that changes when a region is
+   * renamed, added or removed there (PRM-034 criterion 1). The element re-reads the region list when it
+   * changes, so a rename reaches the permissions pane and the lock indicators of everyone.
+   */
+  readonly regionTitles: ReadValue<string>;
   readonly connection: ReadValue<ConnectionState>;
   readonly status: ReadValue<StatusSummary>;
   readonly commands: ReadValue<Readonly<Record<CommandName, CommandState>>>;
@@ -754,6 +762,8 @@ export class DocumentCore implements DocumentApi {
   readonly #schema: Schema;
   #state: EditorState;
   #sync: SyncState;
+  /** The confirmed document `regionTitles` was last computed from. */
+  #titledDoc: PMNode | null = null;
   /**
    * Whether the last items of the undo history are the unconfirmed steps, one item per step, so that
    * a rebuild may rebase the history through its pairing (remote.ts). Undo and redo, local steps the
@@ -782,6 +792,9 @@ export class DocumentCore implements DocumentApi {
   #readOnly = false;
   #readOnlyRev = -1;
   #refusals = 0;
+  /** The targets of the last deletion refused because a reference names them (FE-133). */
+  #referencedTargets: string[] = [];
+  #referenceCursor = 0;
   #trims = 0;
   #target: { kind: 'footnote' | 'story'; id: string } | null = null;
   readonly #bridges = new Set<ViewBridge>();
@@ -827,6 +840,7 @@ export class DocumentCore implements DocumentApi {
     );
     this.saveState = new ReadValue<SaveState>('saved', Object.is, hub);
     this.confirmedSeq = new ReadValue<number>(0, Object.is, hub);
+    this.regionTitles = new ReadValue<string>('', Object.is, hub);
     this.connection = new ReadValue<ConnectionState>('detached', Object.is, hub);
     this.status = new ReadValue<StatusSummary>(
       { connection: 'offline', sync: 'saved' },
@@ -908,7 +922,7 @@ export class DocumentCore implements DocumentApi {
         },
         withParagraphsAfterRegions,
       ),
-      referenceGuardPlugin(),
+      referenceGuardPlugin((targets) => this.#referenceRefused(targets)),
       identifierPlugin(ids),
       trimPlugin((scope) => canWrite(this.#accessValue, this.#locked(), scope)),
       regionParagraphs(),
@@ -1367,6 +1381,8 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('insertField', { field: { kind: 'text' } }).enabled;
       case 'canMarkRegion':
         return this.queryCommand('markRegion', { title: REGION_QUERY_TITLE }).enabled;
+      case 'hasNextEditableRegion':
+        return this.queryCommand('nextEditableRegion').enabled;
       case 'canCopyFormat':
         return this.queryCommand('copyFormat').enabled;
       case 'canPasteFormat':
@@ -1397,13 +1413,19 @@ export class DocumentCore implements DocumentApi {
     if (this.#locked()) return 'locked';
     const { from, to } = this.#state.selection;
     if (this.#scopeAt(from) !== 'body' || this.#scopeAt(to) !== 'body') return 'nested';
+    if (selectionHoldsRegion(this.#state)) return 'nested';
     if (!this.canEdit('body') || !this.canEdit('doc')) return 'structure';
+    if (atRegionLimit(this.#state)) return 'limit';
     return 'blocks';
   }
 
   #publishSync(): void {
     const s = this.#sync;
     this.confirmedSeq.set(s.seq);
+    if (s.confirmed !== this.#titledDoc) {
+      this.#titledDoc = s.confirmed;
+      this.regionTitles.set(regionTitleKey(s.confirmed));
+    }
     this.syncSummary.set({
       seq: s.seq,
       incarnation: s.incarnation,
@@ -1458,6 +1480,44 @@ export class DocumentCore implements DocumentApi {
       scopes: [...r.scopes],
       ...(r.count === undefined ? {} : { count: r.count }),
     });
+  }
+
+  /**
+   * A deletion was refused because a cross-reference still names its target (I4; FE-133 criterion
+   * 5). The targets are kept for `showReferences`; the notice carries only the count of references.
+   */
+  #referenceRefused(targets: readonly string[]): void {
+    this.#referencedTargets = [...targets];
+    this.#referenceCursor = 0;
+    this.#refused({
+      reason: 'referenced',
+      scopes: [],
+      count: referencePositions(this.#state.doc, targets).length,
+    });
+  }
+
+  /**
+   * Moves the selection to a reference that blocked the last refused deletion, the next one at each
+   * call and the first again after the last (FE-133 criterion 5). References the reader may not
+   * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
+   * no reference is left to show.
+   */
+  showReferences(): boolean {
+    if (this.#referencedTargets.length === 0) return false;
+    const doc = this.#state.doc;
+    const shown = referencePositions(doc, this.#referencedTargets).filter((pos) =>
+      this.#canView(this.#scopeIn(doc, pos)),
+    );
+    if (shown.length === 0) return false;
+    const pos = shown[this.#referenceCursor % shown.length]!;
+    this.#referenceCursor = (this.#referenceCursor + 1) % shown.length;
+    const node = doc.nodeAt(pos)!;
+    const selection = NodeSelection.isSelectable(node)
+      ? NodeSelection.create(doc, pos)
+      : TextSelection.near(doc.resolve(pos));
+    this.focus();
+    this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
+    return true;
   }
 
   setAccess(access: Access | null): void {
@@ -2497,6 +2557,15 @@ export class DocumentCore implements DocumentApi {
         ? { enabled: false, active: false }
         : { enabled: false, active: false, reason };
     }
+    if (name === 'renameRegion' && args?.region !== undefined) {
+      // A rename says why it is unavailable (PRM-034 criterion 5): a lock first, then the rights
+      // `region.retitle` needs, `structure` and `edit` in the region (07 §2).
+      if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      const permitted =
+        (this.#accessValue?.caps.includes('structure') ?? false) &&
+        this.canEdit(`region:${args.region}`);
+      if (!permitted) return { enabled: false, active: false, reason: 'no-access' };
+    }
     const command = this.#command(name, args);
     const applicable = command !== null && command(state);
     let enabled = applicable && this.#allowed(name);
@@ -3338,6 +3407,7 @@ export class DocumentCore implements DocumentApi {
             text: i.text,
             seq: i.seq,
             ...this.#rejectionWords(i),
+            ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
           })),
         ];
         this.recovered.set({ count: items.length, items });

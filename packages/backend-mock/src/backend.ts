@@ -13,6 +13,7 @@ import {
   type Content,
   type DocRole,
   type ErrorCode,
+  type FieldsPort,
   type PermissionsPort,
   type PresencePeers,
   type PresencePort,
@@ -77,6 +78,7 @@ export class MockBackend implements Backend {
   readonly sync: SyncPort;
   readonly permissions: PermissionsPort;
   readonly presence?: PresencePort;
+  readonly fields?: FieldsPort;
 
   private readonly host: BackendHost;
   private readonly tokenSource: () => Promise<MockToken>;
@@ -132,6 +134,33 @@ export class MockBackend implements Backend {
         return d.setRegionState(regionId, state);
       },
     };
+    if (host.features.includes('fields'))
+      this.fields = {
+        fields: async (docId, query) => {
+          const all = this.doc(docId).fieldList();
+          const start = query?.cursor === undefined ? 0 : Number(query.cursor);
+          if (!Number.isSafeInteger(start) || start < 0)
+            throw new PortError('validation_failed', 'an unknown cursor');
+          const limit = query?.limit ?? 100;
+          const items = all.slice(start, start + limit);
+          return {
+            items,
+            nextCursor: start + limit < all.length ? String(start + limit) : null,
+          };
+        },
+        values: async (docId, seq) => {
+          const { value, etag } = this.doc(docId).fieldValues(seq);
+          return { value: { values: value.values }, etag };
+        },
+        prefill: async (docId, values, o) => {
+          const d = this.doc(docId);
+          this.requireManage(docId);
+          return d.prefill(values.values, o.ifMatch);
+        },
+        sign: async () => {
+          throw new PortError('unsupported_feature', 'the mock backend does not offer `sign`');
+        },
+      };
     if (host.presence)
       this.presence = {
         update: (docId, update) => {

@@ -661,8 +661,9 @@
 }
 
 .de-check input {
-  inline-size: 1.1em;
-  block-size: 1.1em;
+  /* At least 24 by 24 CSS pixels (WCAG 2.2, 2.5.8; FE-104). */
+  inline-size: max(1.1em, 24px);
+  block-size: max(1.1em, 24px);
   margin: 0;
 }
 
@@ -1463,4 +1464,11 @@
 .de-history-filters select {
   font: inherit;
   min-block-size: 24px;
+}
+
+/* Focus is as visible on the filter lists as on every other control (HIS-009 criterion 5). */
+.de-comments-filters select:focus-visible,
+.de-history-filters select:focus-visible {
+  outline: 2px solid var(--_de-focus);
+  outline-offset: 1px;
 }

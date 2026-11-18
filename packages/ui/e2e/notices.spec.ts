@@ -45,6 +45,27 @@ test.describe('notices for changes that did not happen', () => {
     await expect(notice).toHaveCount(0);
   });
 
+  test('a deletion a cross-reference names is explained and offers to show the references (FE-133)', async ({
+    page,
+  }) => {
+    // The extended core has the named commands of phase 1b, `showReferences` among them.
+    const h = await open(page, { extended: true });
+    const notice = page.locator('.de-status [data-status="notice"]');
+    await h.refuse('referenced', [], 2);
+    await expect(notice).toContainText(
+      'That change was not made: 2 cross-references still point to what you tried to delete.',
+    );
+    await expect(page.locator('.de-shell > [role="status"]')).toHaveText(
+      /2 cross-references still point/,
+    );
+    expect(await axe(page)).toEqual([]);
+    await notice.getByRole('button', { name: 'Show references' }).click();
+    expect(await h.named()).toContainEqual(['showReferences', null]);
+    // Another refusal has no such button.
+    await h.refuse('scope', ['body']);
+    await expect(notice.getByRole('button', { name: 'Show references' })).toHaveCount(0);
+  });
+
   test('a rejected commit is shown with the number of changes kept', async ({ page }) => {
     const h = await open(page);
     await h.setAside([

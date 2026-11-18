@@ -66,7 +66,10 @@ test('FE-103: reach the surface, type, format, comment and change the mode witho
   const post = box.getByRole('button', { name: 'Post' });
   for (
     let i = 0;
-    i < 8 && !(await post.evaluate((el) => el === el.getRootNode().activeElement));
+    i < 8 &&
+    !(await post.evaluate(
+      (el) => el === (el.getRootNode() as Document | ShadowRoot).activeElement,
+    ));
     i++
   )
     await page.keyboard.press('Tab');

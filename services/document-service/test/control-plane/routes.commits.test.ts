@@ -37,12 +37,18 @@ function inside(doc: unknown, id: string): number {
   return at;
 }
 
-async function append(h: Harness, doc: string, user: string, texts: string[]): Promise<number> {
+async function append(
+  h: Harness,
+  doc: string,
+  user: string,
+  texts: string[],
+  target: { id: string; scopes: string[] } = { id: INTRO, scopes: ['body'] },
+): Promise<number> {
   const ref: DocRef = { tenant: h.tenant, doc };
   const epoch = await h.parts.ownership.claim(ref, 'test-node');
   const head = await h.parts.logs.head(ref);
   const perms = await h.parts.grants.current(ref);
-  const pos = inside(documentWithRegions()['doc'], INTRO);
+  const pos = inside(documentWithRegions()['doc'], target.id);
   const commits = texts.map((t, i): StoredCommit => ({
     seq: head.seq + 1 + i,
     id: uuid7(),
@@ -54,7 +60,7 @@ async function append(h: Harness, doc: string, user: string, texts: string[]): P
     session: 'session-test',
     time: h.now(),
     origin: 'input',
-    scopes: ['body'],
+    scopes: target.scopes,
     revision: perms.revision,
     cdm: 1,
     engine: 'pm-steps/1',
@@ -165,21 +171,37 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
-      'serves no page to a reader whose class hides content: such a reader reloads (ADR 0019; BE-098 criterion 1)',
+      "serves a reader whose class hides content the steps of the class, with the class's view token (ADR 0019; BE-098 criterion 1)",
       async () => {
         const doc = await h.createDocument({ content: documentWithRegions() });
+        // One commit inside the hidden region, then one in the introduction.
+        await append(h, doc, 'u-test', ['SECRETTEXT'], {
+          id: 'pLegal0000000001',
+          scopes: [`region:${LEGAL}`],
+        });
         await append(h, doc, 'u-test', ['a']);
         const editor = h.userToken({ [doc]: 'editor' });
         const r = await h.call('GET', `/v1/documents/${doc}/commits?after=0`, { token: editor });
-        expect(r.status).toBe(503);
-        expect(r.json.code).toBe('unavailable');
+        expect(r.status).toBe(200);
+        expect(r.headers.get('cache-control')).toBe('private, no-cache');
+        expect(r.json.items.map((c: { seq: number }) => c.seq)).toEqual([1, 2]);
+        // The commit that changed only the hidden region reaches the reader empty and unscoped.
+        expect(r.json.items[0].steps).toEqual([]);
+        expect(r.json.items[1].steps).toHaveLength(1);
+        expect(r.text).not.toContain('SECRETTEXT');
         expect(r.text).not.toContain('Liability');
+        expect(r.text).not.toContain(LEGAL);
         const owner = h.userToken({ [doc]: 'owner' });
         const full = await h.call('GET', `/v1/documents/${doc}/commits?after=0`, { token: owner });
         expect(full.status).toBe(200);
-        const content = await h.call('GET', `/v1/documents/${doc}/content`, { token: owner });
-        // The page carries the view token of the full class, which the content read names too.
-        expect(full.json.view).toBe(content.json.view);
+        expect(full.text).toContain('SECRETTEXT');
+        const ownerContent = await h.call('GET', `/v1/documents/${doc}/content`, { token: owner });
+        // The owner's page carries the view token of the full class, which the content read names too.
+        expect(full.json.view).toBe(ownerContent.json.view);
+        // The editor's page carries the token of the editor's class, as the editor's content read does.
+        const content = await h.call('GET', `/v1/documents/${doc}/content`, { token: editor });
+        expect(r.json.view).toBe(content.json.view);
+        expect(r.json.view).not.toBe(full.json.view);
       },
     );
 

@@ -49,6 +49,7 @@ import {
   type Harness,
   type Storage,
 } from './support/harness.ts';
+import { keyPair } from './support/jws.ts';
 import { WireClient } from './support/wire.ts';
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -84,7 +85,7 @@ const operations: Operation[] = Object.entries(openapi['paths'] as Json).flatMap
 const withIdentifier = operations.filter((o) => o.params.length > 0);
 
 /** The path parameters the suite has an identifier of tenant B for. */
-const KNOWN_PARAMS = ['id', 'rid', 'tid', 'cid', 'aid', 'jid', 'pid', 'fid'];
+const KNOWN_PARAMS = ['id', 'rid', 'tid', 'cid', 'aid', 'jid', 'pid', 'fid', 'kid', 'origin'];
 
 /** Client messages that take an identifier, and those that do not (05 §5). */
 const WITH_IDENTIFIER = [
@@ -98,30 +99,28 @@ const WITH_IDENTIFIER = [
 const WITHOUT_IDENTIFIER = ['hello', 'ping', 'pong', 'error'];
 
 /**
- * Operations of the OpenAPI document that the document service has no handler for in this build:
- * tenant B itself gets 404 "this server does not offer the route". The refusal of tenant A on them
- * shows only that nothing answers. The control test fails as soon as one of them gets a handler,
- * and the operation then joins the sweep as a real target.
+ * Operations of the OpenAPI document for which tenant B has no object in this scenario, so that
+ * tenant B itself gets 404 and the detail below. The refusal of tenant A on them shows only that
+ * nothing answers. The control test fails as soon as one of them gets an object of B, or a handler
+ * with another answer, and the operation then joins the sweep as a real target.
+ *
+ * - NOT_OFFERED: the document service has no handler for the operation in this build;
+ * - the other details: the handler exists, but this scenario composes no importer (EXP-098), so B
+ *   has no import job. The tenant scope of the job lookup is proven in EXP-098's own tests.
  */
 const NOT_OFFERED = 'this server does not offer the route';
 const NOT_FOUND_FOR_OWNER: Record<string, string> = {
-  listHistory: 'history list: no handler in the document service',
-  getDiff: 'comparison: no handler in the document service',
-  getAttribution: 'attribution: no handler in the document service',
-  listThreads: 'thread list: no handler in the document service',
-  createImport: 'imports: no handler in the document service',
-  getImport: 'imports: no handler in the document service',
-  getWorkflow: 'workflow: no handler in the document service',
-  putWorkflow: 'workflow: no handler in the document service',
-  getWorkflowEvidence: 'workflow: no handler in the document service',
-  getWorkflowFinal: 'workflow: no handler in the document service',
-  participantConsent: 'workflow: no handler in the document service',
-  participantVerify: 'workflow: no handler in the document service',
-  participantComplete: 'workflow: no handler in the document service',
-  participantDecline: 'workflow: no handler in the document service',
-  signField: 'workflow: no handler in the document service',
+  listHistory: NOT_OFFERED,
+  createImport: 'this server does not import Word files',
+  getImport: 'no import job',
+  getWorkflowEvidence: NOT_OFFERED,
+  getWorkflowFinal: NOT_OFFERED,
+  participantConsent: NOT_OFFERED,
+  participantVerify: NOT_OFFERED,
+  participantComplete: NOT_OFFERED,
+  participantDecline: NOT_OFFERED,
+  signField: NOT_OFFERED,
 };
-
 /** A body the route would accept from the object's own tenant, where the route takes one. */
 function bodyFor(operationId: string): unknown {
   const bodies: Record<string, unknown> = {
@@ -145,7 +144,14 @@ function bodyFor(operationId: string): unknown {
     setDocumentRetention: { mode: 'inherit' },
     placeHold: { reason: 'sweep' },
     prefillFieldValues: { values: {} },
-    putWorkflow: { participants: [] },
+    // The published schema's required members; doc is not the path's, which the route refuses.
+    putWorkflow: {
+      id: '0190a000-0000-7000-8000-000000000002',
+      doc: '0190a000-0000-7000-8000-000000000003',
+      state: 'draft',
+      rev: 1,
+      participants: [],
+    },
     participantConsent: {},
     participantVerify: {},
     participantComplete: {},
@@ -170,22 +176,25 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ? op.template.startsWith('/webhooks/')
             ? 'webhook'
             : 'doc'
-          : param === 'jid'
-            ? op.template.startsWith('/imports/')
-              ? 'import'
-              : 'export'
-            : param;
+          : param === 'kid' || param === 'origin'
+            ? param
+            : param === 'jid'
+              ? op.template.startsWith('/imports/')
+                ? 'import'
+                : 'export'
+              : param;
       const value = ids[key];
       if (!value) throw new Error(`no identifier of tenant B for {${param}} of ${op.operationId}`);
       return value;
     };
     const pathOf = (op: Operation): string =>
-      '/v1' + op.template.replace(/\{(\w+)\}/g, (_m, p: string) => identifier(op, p));
+      '/v1' +
+      op.template.replace(/\{(\w+)\}/g, (_m, p: string) => encodeURIComponent(identifier(op, p)));
     const query = (op: Operation): string =>
       op.operationId === 'getAttribution'
-        ? '?atSeq=0'
+        ? '?seq=0'
         : op.operationId === 'getDiff'
-          ? '?from=0&to=1'
+          ? '?fromSeq=0&toSeq=0'
           : '';
     const call = (op: Operation, token: string): Promise<CallResult> => {
       const body = bodyFor(op.operationId);
@@ -210,9 +219,13 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const webhook = await asB('GET', `/v1/webhooks/${ids['webhook']}`);
       const holds = await asB('GET', '/v1/holds');
       const job = await asB('GET', `/v1/exports/${ids['export']}`);
-      for (const r of [doc, content, grants, thread, versions, webhook, holds, job])
+      const keys = await asB('GET', '/v1/keys');
+      const origins = await asB('GET', '/v1/origins');
+      for (const r of [doc, content, grants, thread, versions, webhook, holds, job, keys, origins])
         expect(r.status, r.text.slice(0, 200)).toBe(200);
       return {
+        keys: keys.json,
+        origins: origins.json,
         doc: doc.json,
         content: content.json,
         grants: grants.json,
@@ -228,7 +241,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     const expectNothingOfB = (r: Pick<CallResult, 'text'>, what: string, sent = '') => {
       for (const secret of [CANARY_TITLE, CANARY_THREAD, CANARY_TEXT, B_HOOK, h.b.id])
         expect(r.text, `${what} must not carry "${secret}"`).not.toContain(secret);
-      for (const key of ['tid', 'cid', 'webhook', 'export', 'aid'])
+      for (const key of ['tid', 'cid', 'webhook', 'export', 'aid', 'kid'])
         // An identifier the caller sent may come back in the refusal; one it did not send may not.
         if (ids[key] && !sent.includes(ids[key]))
           expect(r.text, `${what} must not carry B's ${key}`).not.toContain(ids[key]);
@@ -284,8 +297,37 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       ids['webhook'] = made('webhook', hook, hook.json?.id);
       const hold = await asB('POST', `/v1/documents/${ids['doc']}/holds`, { reason: 'sweep' });
       made('hold', hold, hold.json?.id);
+      // B's workflow, so that the control reads and replaces an object of its own (FRW-025).
+      const workflow = await h.call('PUT', `/v1/documents/${ids['doc']}/workflow`, {
+        token: ownerB,
+        headers: { 'If-Match': '"0"' },
+        body: { ...(bodyFor('putWorkflow') as object), doc: ids['doc'] },
+      });
+      made('workflow', workflow, workflow.json?.id);
+      // B registers a key and an origin of its own (UX-077), so that the sweep has them to attack.
+      const key = keyPair('EdDSA');
+      const registered = await asB('POST', '/v1/keys', {
+        kid: `b-extra-${uuid7()}`,
+        use: 'user',
+        alg: key.alg,
+        jwk: key.jwk,
+      });
+      ids['kid'] = made('key', registered, registered.json?.kid);
+      const origin = await asB('POST', '/v1/origins', { origin: 'https://b-extra.example.test' });
+      ids['origin'] = made('origin', origin, origin.json?.origin);
       // B has no import job, workflow participant or form field in this scenario; the identifiers
       // are well-formed ones that name nothing (see NOT_FOUND_FOR_OWNER).
+      // B's own key and origin for the registry routes (UX-077). The key identifier carries no part
+      // of B's tenant identifier, which a refusal must never show.
+      ids['kid'] = `sweep-key-${uuid7()}`;
+      await h.parts.registry.addKey(h.b.id, {
+        kid: ids['kid'],
+        use: 'user',
+        alg: 'EdDSA',
+        jwk: keyPair('EdDSA').jwk,
+      });
+      ids['origin'] = 'https://sweep-b.example.test';
+      await h.parts.registry.addOrigin(h.b.id, ids['origin']);
       ids['import'] = uuid7();
       ids['pid'] = 'participant-1';
       ids['fid'] = 'ffField000000001';
@@ -516,7 +558,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ).toBe(true);
           // Not a missing object of B: the service has no handler for the operation at all.
           expect(
-            results.some((r) => r.json?.detail === NOT_OFFERED),
+            results.some((r) =>
+              String(r.json?.detail ?? '').includes(
+                NOT_FOUND_FOR_OWNER[op.operationId] ?? NOT_OFFERED,
+              ),
+            ),
             what,
           ).toBe(true);
           notFound.push(op.operationId);

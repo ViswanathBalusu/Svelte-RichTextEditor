@@ -83,7 +83,7 @@ export const SEQ_INPUTS: readonly SeqInput[] = [
     where: 'POST /documents/{id}/exports',
     field: 'body.seq',
     rule: 'state',
-    note: 'the control plane (visibleFrom in handlers.ts) until it calls this gate',
+    note: 'the control plane: export-routes.ts calls minVisibleSeqOf and refuseBelowGate',
   },
   {
     where: 'POST /documents/{id}/versions',
@@ -143,7 +143,7 @@ export const SEQ_INPUTS: readonly SeqInput[] = [
     where: 'GET /documents/{id}/attribution',
     field: 'query.atSeq',
     rule: 'state',
-    note: 'phase 2 (HIS-026): the attribution map at a visible state; the definition has no atSeq member yet (gap G68), see the walk test',
+    note: 'phase 2 (HIS-026): the attribution map at a visible state; the member is `atSeq` in the definition since PRO-055 (ADR 0373)',
   },
   {
     where: 'POST /documents/{id}/fork',

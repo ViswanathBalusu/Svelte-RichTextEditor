@@ -156,6 +156,8 @@ test.describe('FE-071 the PDF viewer', () => {
     const frame = viewerFrame(page)!;
     await frame.locator('canvas.page').click({ position: { x: 100, y: 85 } });
     await frame.locator('canvas.page').click({ position: { x: 100, y: 145 } });
+    // The URI link (SEC-036): the page is 200 points high, so this lies inside its rectangle.
+    await frame.locator('canvas.page').click({ position: { x: 100, y: 45 } });
     await page.waitForTimeout(500);
     const log = (await (await request.get(`/__log?since=0`)).json()) as Array<{ path: string }>;
     expect(log.filter((e) => e.path === '/pwned')).toEqual([]);

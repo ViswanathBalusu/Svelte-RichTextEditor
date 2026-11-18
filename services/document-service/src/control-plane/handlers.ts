@@ -44,8 +44,10 @@ import { commitRoutes } from './commit-routes.ts';
 import { emptyDocument, regionNodeOf, regionsOfJson } from './content.ts';
 import { exportRoutes } from './export-routes.ts';
 import { fieldRoutes } from './field-routes.ts';
+import { workflowRoutes } from './workflow-routes.ts';
 import { historyReadRoutes } from './history-reads.ts';
 import { historyRoutes } from './history-routes.ts';
+import { importRoutes } from './imports.ts';
 import { activityRoutes } from './activity-route.ts';
 import { restoreRoutes } from './restore-route.ts';
 import { threadRoutes } from './thread-routes.ts';
@@ -767,6 +769,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     setRegionState,
     replaceContent,
     ...exportRoutes(k),
+    ...importRoutes(k),
     ...assetRoutes(k),
     ...fieldRoutes(k),
     ...commitRoutes(k),
@@ -784,6 +787,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...registryRoutes(k),
     ...holdRoutes(k),
     ...searchRoutes(k),
+    ...workflowRoutes(k),
     getFonts,
   };
 }

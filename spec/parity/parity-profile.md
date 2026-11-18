@@ -133,6 +133,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `format.applyFormat` | format-painter |
 | `format.language` | character-and-paragraph-formatting |
 | `insert.region` | regions-and-permissions |
+| `history.nameVersion` | version-history |
 | `review.comment` | comments |
 | `document.export` | export-pdf |
 | `document.print` | export-pdf |

@@ -88,6 +88,11 @@ export interface ExportPolicy {
   classVersion: string;
   /** Running jobs of a kind per tenant when the tenant has no limit of its own; null: none. */
   tenantConcurrency: number | null;
+  /**
+   * The key of the queue proof (EXP-067 criterion 4): when set, every job of an export carries a
+   * keyed hash that a worker with the same key checks. Absent: no proof is written.
+   */
+  proofKey?: string;
 }
 
 /** The request key of an export (EXP-006): equal keys give equal bundles. */
