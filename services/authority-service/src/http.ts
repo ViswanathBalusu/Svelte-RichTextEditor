@@ -17,6 +17,7 @@
  * `GET /v1/authority/health` (the process is up) and `GET /v1/authority/ready` (it can serve).
  */
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { canonicalize } from '@docedit/model';
 import { capabilities } from './capabilities.ts';
@@ -40,6 +41,8 @@ export const STATUS: Readonly<Record<ServiceErrorCode, number>> = {
   migration_failed: 422,
   invalid_rules: 422,
   budget_exceeded: 422,
+  storage_unavailable: 503,
+  unauthorized: 401,
 };
 
 export const API = '/v1/authority';
@@ -164,7 +167,7 @@ export async function route(routes: Routes, req: HttpRequest): Promise<HttpRespo
       if (method !== 'POST') return methodNotAllowed('POST');
       const parsed = parseBody(req.contentType, req.body);
       if (!parsed.ok) return problem(parsed.error);
-      const r = service.evaluateRules(stateId, parsed.value ?? {});
+      const r = await service.evaluateRules(stateId, parsed.value ?? {});
       return r.ok ? json(200, r.evaluation) : problem(r.error);
     }
   }
@@ -199,6 +202,21 @@ export interface ServerOptions extends Routes {
   port?: number;
   /** The largest body accepted, in bytes. */
   maxBody?: number;
+  /**
+   * A bearer token that every call but the probes must carry. The interface is server to server;
+   * without a token it relies on the network (bind it to a private interface).
+   */
+  token?: string;
+}
+
+/** Whether the request is allowed: no token is set, a probe, or the right bearer token. */
+export function authorised(token: string | undefined, path: string, header: string): boolean {
+  if (token === undefined || path === `${API}/health` || path === `${API}/ready`) return true;
+  const given = /^Bearer (.+)$/.exec(header)?.[1];
+  if (given === undefined) return false;
+  const a = createHash('sha256').update(given).digest();
+  const b = createHash('sha256').update(token).digest();
+  return timingSafeEqual(a, b);
 }
 
 export const DEFAULT_MAX_BODY = 64 * 1024 * 1024;
@@ -229,8 +247,15 @@ export async function listen(options: ServerOptions): Promise<RunningServer> {
       try {
         const url = new URL(req.url ?? '/', 'http://authority.invalid');
         const body = req.method === 'GET' ? '' : await readBody(req, max);
-        response =
-          body === null
+        response = !authorised(options.token, url.pathname, req.headers.authorization ?? '')
+          ? {
+              ...problem({ code: 'unauthorized', message: 'a bearer token is required' }),
+              headers: {
+                'content-type': 'application/problem+json',
+                'www-authenticate': 'Bearer',
+              },
+            }
+          : body === null
             ? {
                 ...problem({ code: 'invalid_request', message: 'the body is too large' }),
                 status: 413,
