@@ -42,6 +42,44 @@ export interface GateInput {
 }
 
 /**
+ * The search of `since_access`: the last commit stored at or before `since`. Commit times come
+ * from the room's clock and are taken as non-decreasing, so it is a binary search. It is written
+ * once, as a generator that asks for the time of one commit at a time, so that a caller with the
+ * times in memory (`minVisibleSeq`) and a caller that reads them from storage
+ * (`minVisibleSeqAsync`) run the same rule.
+ */
+function* sinceAccessSearch(
+  floor: number,
+  head: number,
+  since: number,
+): Generator<number, number, number | undefined> {
+  let lo = floor + 1;
+  let hi = head;
+  let found = floor;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const t = yield mid;
+    if (t !== undefined && t <= since) {
+      found = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  return found;
+}
+
+/** The part of the rule that needs no commit times, or null when `since_access` needs them. */
+function decided(g: Omit<GateInput, 'timeOf'>): number | null {
+  switch (g.setting) {
+    case 'all':
+      return 0;
+    case 'editors':
+      return g.editsSomewhere ? 0 : g.head;
+    case 'since_access':
+      return g.accessSince === undefined || !Number.isFinite(g.accessSince) ? g.head : null;
+  }
+}
+
+/**
  * 07 §8's `minVisibleSeq(user)`.
  *
  * - `all`: 0, everyone with `view` sees full history.
@@ -51,31 +89,24 @@ export interface GateInput {
  *   current at that moment is visible. Without the claim the gate fails closed at the head.
  */
 export function minVisibleSeq(g: GateInput): number {
-  switch (g.setting) {
-    case 'all':
-      return 0;
-    case 'editors':
-      return g.editsSomewhere ? 0 : g.head;
-    case 'since_access': {
-      const since = g.accessSince;
-      if (since === undefined || !Number.isFinite(since)) return g.head;
-      const floor = g.floor ?? 0;
-      // Commit times come from the room's clock and are taken as non-decreasing: binary search for
-      // the last commit at or before `since`.
-      let lo = floor + 1;
-      let hi = g.head;
-      let found = floor;
-      while (lo <= hi) {
-        const mid = (lo + hi) >>> 1;
-        const t = g.timeOf(mid);
-        if (t !== undefined && t <= since) {
-          found = mid;
-          lo = mid + 1;
-        } else hi = mid - 1;
-      }
-      return found;
-    }
-  }
+  const d = decided(g);
+  if (d !== null) return d;
+  const search = sinceAccessSearch(g.floor ?? 0, g.head, g.accessSince!);
+  let step = search.next();
+  while (!step.done) step = search.next(g.timeOf(step.value));
+  return step.value;
+}
+
+/** `minVisibleSeq` for a caller that reads commit times from storage: the same rule, awaited. */
+export async function minVisibleSeqAsync(
+  g: Omit<GateInput, 'timeOf'> & { timeOf: (seq: number) => Promise<number | undefined> },
+): Promise<number> {
+  const d = decided(g);
+  if (d !== null) return d;
+  const search = sinceAccessSearch(g.floor ?? 0, g.head, g.accessSince!);
+  let step = search.next();
+  while (!step.done) step = search.next(await g.timeOf(step.value));
+  return step.value;
 }
 
 /** Whether the content at `seq` is visible: at or above the gate, the head, or a named version. */

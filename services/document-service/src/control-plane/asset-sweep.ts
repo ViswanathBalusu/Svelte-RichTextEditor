@@ -11,8 +11,8 @@
  * Orphan ready assets (BE-046 criterion 1) are removed when `orphanRetentionMs` is set; they are
  * found through the `doc_assets` table (migration 0064), so an attached asset is never selected.
  * Attachments written by the persist path (BE-044) are not built yet, so the composition leaves the
- * retention unset. Legal holds (criterion 4) need the hold store of HIS-031.
- * The scheduler's `deletes` flag makes the task skip a tenant that `onHold` reports.
+ * retention unset. Legal holds (criterion 4): the assets of a held document are kept. The
+ * scheduler hands the task the tenant's held documents (`scope.held`, BE-052).
  */
 import type { AssetRegistry } from './assets.ts';
 import type { ScheduledTask } from './scheduler.ts';
@@ -44,9 +44,13 @@ export async function sweepAbandonedUploads(
   o: AbandonedUploadsOptions,
   tenant: string,
   now: number,
+  heldNow?: ReadonlySet<string>,
 ): Promise<number> {
   const expired = await o.assets.expiredUploads(tenant, now, o.batch ?? 100);
-  const held = o.heldDocuments ? await o.heldDocuments(tenant) : new Set<string>();
+  // The scheduler reads the held documents before the run and passes them (BE-052 criterion 4);
+  // the task's own source, if any, adds to them.
+  const own = o.heldDocuments ? await o.heldDocuments(tenant) : new Set<string>();
+  const held: ReadonlySet<string> = heldNow?.size ? new Set([...heldNow, ...own]) : own;
   const objects = new TenantObjects(o.objects, tenant);
   let removed = 0;
   for (const a of expired) {
@@ -90,6 +94,6 @@ export function abandonedUploadsTask(o: AbandonedUploadsOptions): ScheduledTask 
     name: ABANDONED_UPLOADS_TASK,
     everyMs: 3_600_000,
     deletes: true,
-    forTenant: (tenant, now) => sweepAbandonedUploads(o, tenant, now),
+    forTenant: (tenant, now, scope) => sweepAbandonedUploads(o, tenant, now, scope.held),
   };
 }

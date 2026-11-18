@@ -19,6 +19,7 @@ import { startService } from '../server.ts';
 import { objectKeys } from '../objects/store.ts';
 import type { DocRef } from '../storage/types.ts';
 import { PREVIEW_KIND, exportRequestKey } from './exports.ts';
+import { checkQueueProof, QUEUE_PROOF_MEMBER } from './job-proof.ts';
 import { signJws } from './jwt.ts';
 import { JobFailure, type JobHandler } from './jobs/runner.ts';
 import { MemoryJobQueue } from './jobs/queue.ts';
@@ -472,6 +473,68 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           const hit = await post(doc, editor, options);
           expect(hit.json.state).toBe('completed');
           expect(ran.length).toBe(before + 1);
+        } finally {
+          await other.close();
+        }
+      },
+    );
+
+    it.skipIf(skip || storage !== 'memory')(
+      'writes the queue proof into the payload of every job when a proof key is set (EXP-067 criterion 4)',
+      async () => {
+        const key = 'p'.repeat(40);
+        const doc = await h.createDocument({ content: documentWithRegions() });
+        const other = await startService({
+          config: {
+            ...configFromEnv({}),
+            port: 0,
+            workers: 1,
+            jobIdleMs: 20,
+            jobLeaseMs: 2000,
+            exportProofKey: key,
+          },
+          parts: h.parts,
+          createDataPlane: () => new StubDataPlane(),
+          jobHandlers: { export: exportHandler },
+          signing: signingKey(undefined, 'service-test'),
+          now: () => h.now(),
+        });
+        try {
+          const iat = Math.floor(h.now() / 1000);
+          const token = signJws(
+            { alg: h.host.alg, typ: 'JWT', kid: h.host.kid },
+            {
+              iss: 'https://host.example.test',
+              aud: other.url,
+              iat,
+              exp: iat + 600,
+              jti: uuid7(),
+              tid: h.tenant,
+              sub: 'alice',
+              docs: { [doc]: 'editor' },
+            },
+            h.host.privateKey,
+          );
+          const res = await fetch(`${other.url}/v1/documents/${doc}/exports`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target: 'pdf', options: { profile: 'final' } }),
+          });
+          expect(res.status).toBe(202);
+          const id = ((await res.json()) as { id: string }).id;
+          const job = (await h.parts.queue.get(h.tenant, id))!;
+          const subject = {
+            tenant: job.tenant,
+            kind: job.kind,
+            doc: job.doc,
+            cacheKey: job.cacheKey,
+          };
+          expect(typeof job.payload[QUEUE_PROOF_MEMBER]).toBe('string');
+          expect(checkQueueProof(key, subject, job.payload)).toBe(true);
+          // Another key, another document, or a changed payload does not verify.
+          expect(checkQueueProof('q'.repeat(40), subject, job.payload)).toBe(false);
+          expect(checkQueueProof(key, { ...subject, doc: uuid7() }, job.payload)).toBe(false);
+          expect(checkQueueProof(key, subject, { ...job.payload, seq: 99 })).toBe(false);
         } finally {
           await other.close();
         }

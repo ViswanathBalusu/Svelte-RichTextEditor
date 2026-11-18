@@ -82,7 +82,7 @@ describe('room', () => {
     ).toBe(true);
   });
 
-  it('refuses a second submission on a channel while one is in flight (busy)', () => {
+  it('refuses a second submission on a channel while one is in flight (busy) [neg:code busy]', () => {
     const r = room();
     r.open('c1', USERS.carol);
     r.submit('c1', { id: id(), base: 0, steps: insert() });

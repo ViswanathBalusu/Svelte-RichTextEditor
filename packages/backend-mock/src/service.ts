@@ -76,9 +76,15 @@ export class MockService implements BackendHost {
       catchUpBytes: 5 * 1024 * 1024,
       ...opts.limits,
     };
-    // The authority enforces regions and suggestions (07 §5); `fields` needs the fields port, which
-    // the mock does not offer, so it is not announced (FRW-065).
-    this.features = ['regions', 'suggest-enforced', ...(this.presence ? ['presence'] : [])];
+    // The authority enforces regions, suggestions and the field invariants (07 §5; 12 §3). The mock
+    // offers the fields port (list, values, prefill) and announces `fields` (FRW-065, FRW-067). It has
+    // no workflow, so a fill by a participant needs the `fill` of a `MockUser`.
+    this.features = [
+      'regions',
+      'suggest-enforced',
+      'fields',
+      ...(this.presence ? ['presence'] : []),
+    ];
   }
 
   now(): number {

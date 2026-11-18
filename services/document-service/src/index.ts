@@ -108,6 +108,7 @@ export {
   exportRequestKey,
   type ExportPolicy,
 } from './control-plane/exports.ts';
+export { checkQueueProof, withQueueProof, QUEUE_PROOF_MEMBER } from './control-plane/job-proof.ts';
 export type { ClaimOptions, QueueDepth } from './control-plane/jobs/queue.ts';
 export type { JobHooks, JobOutcome } from './control-plane/jobs/runner.ts';
 export {

@@ -20,6 +20,7 @@ import {
 import { minVisibleSeqOf, refuseBelowGate, regionInfosOfJson } from './gate.ts';
 import { checkIfMatch } from './http.ts';
 import type { JobRecord } from './jobs/queue.ts';
+import { withQueueProof } from './job-proof.ts';
 import { json, type Kit } from './kit.ts';
 import { admitExportConcurrency } from './live-quota-rest.ts';
 import { capabilitiesOn, guard, roleOn, type Ctx, type Handler } from './pipeline.ts';
@@ -37,6 +38,16 @@ export const EXPORT_POLICY_DEFAULTS: ExportPolicy = {
 export function exportRoutes(k: Kit): Record<string, Handler> {
   const { d, rest, refOf, liveDocument } = k;
   const policy = d.exportPolicy ?? EXPORT_POLICY_DEFAULTS;
+  const queued = (
+    kind: string,
+    doc: string,
+    tenant: string,
+    cacheKey: string,
+    payload: Record<string, unknown>,
+  ): Record<string, unknown> =>
+    policy.proofKey
+      ? withQueueProof(policy.proofKey, { tenant, kind, doc, cacheKey }, payload)
+      : payload;
 
   const createExport: Handler = async (ctx) => {
     const doc = ctx.params['id']!;
@@ -251,7 +262,11 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       priority: EXPORT_PRIORITIES[kind]!,
       cacheKey,
       // The request's trace goes with the job, so that its run is part of it (BE-087 criterion 4).
-      payload: { ...payload, traceparent: `00-${ctx.trace.traceId}-${ctx.trace.spanId}-01` },
+      // With a proof key the payload also carries the proof that this service queued the job.
+      payload: queued(kind, doc, ctx.caller.tenant, cacheKey, {
+        ...payload,
+        traceparent: `00-${ctx.trace.traceId}-${ctx.trace.spanId}-01`,
+      }),
       ...(notBefore !== undefined ? { notBefore } : {}),
     });
     d.onJobQueued?.();

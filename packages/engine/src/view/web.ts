@@ -382,6 +382,20 @@ export class EditorCore extends DocumentCore {
           EQUATION_NODES.has(node.type.name) && this.requestEquationEdit(nodePos),
         // Copy and cut are the core's (FE-050, FE-055): the browser's own copy would write ProseMirror's format.
         handleDOMEvents: {
+          // A link to a place in the document is followed with Ctrl or Command and a click while the
+          // text is editable (a plain click places the caret), and with a plain click where it is not
+          // (FE-133 criterion 3). The browser's own jump to a fragment is stopped either way: the
+          // shadow root has no such target.
+          click: (view, event) => {
+            const target = event.target;
+            const anchor = target instanceof Element ? target.closest('a[href^="#"]') : null;
+            if (anchor === null) return false;
+            if (view.editable && !(event.ctrlKey || event.metaKey)) return false;
+            const href = anchor.getAttribute('href');
+            if (href !== null) this.run('followInternalLink', { href });
+            event.preventDefault();
+            return true;
+          },
           // Enter on a selected equation opens the math editor (FE-070). A DOM handler, not `handleKeyDown`,
           // so that a read-only view opens it too (ProseMirror runs `handleKeyDown` only in editable views).
           keydown: (view, event) => {

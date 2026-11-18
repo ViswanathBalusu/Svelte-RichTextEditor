@@ -5,8 +5,9 @@
  * This is the chain as far as the modules go: the engine's command (Node.js, no DOM), then the
  * block's `lang` read from the document, then `proofingRequest` (UX-041, `packages/ui/src/proofing/
  * request.ts`, imported by a relative path because this package does not depend on `ui`). The
- * proofing port itself is not wired into the shell or the core (UX-041 is open), so no proofing
- * request is sent to a port here. Criterion 3 therefore stays unticked; this file proves the link.
+ * request that reaches the port itself is tested in `ux-041-proofing.test.ts` ('sends the language
+ * of the lang mark'), through `core.attachProofing`; that test, with this one, is the evidence for
+ * criterion 3.
  */
 import type { Node as PMNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';

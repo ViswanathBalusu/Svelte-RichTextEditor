@@ -711,7 +711,8 @@ const harness = {
   /** Sets a public `--de-` property on the element that holds the shadow root, as a host page does. */
   setHostProperty: (name: string, value: string) => host.style.setProperty(name, value),
   setLocale: (locale: string) => need().strings.setLocale(locale),
-  refuse: (reason: string, scopes: string[] = []) => need().core.refuse(reason, scopes),
+  refuse: (reason: string, scopes: string[] = [], count?: number) =>
+    need().core.refuse(reason, scopes, count),
   setAside: (items: RecoveredItem[]) => need().core.setAside(items),
   setMode: (mode: EditorMode) => need().core.mode?.set(mode),
   /** As the document does when `settings.trackChanges` changes (UX-038). */

@@ -106,13 +106,11 @@ describe.skipIf(skip)(
       expect(s?.outcome, JSON.stringify(s?.failure)).toBe('passed');
     });
 
-    // Known defect (HIS-018): the service refuses a region restore to an editor with `manage`, because
-    // the restore route applies the whole-document guard before it reads `region`. Row 9 stays open
-    // until region restore is built; the refusal of a viewer is proven by the same scenario.
-    it('row 9: the refusal of a viewer holds, and the editor side is the known defect HIS-018', () => {
+    // The defect HIS-018 recorded here (a region restore refused to an editor with `manage`) is fixed:
+    // the restore route now checks the row version.create before it reads region.
+    it('row 9: a viewer is refused and an editor may restore a region (HIS-018)', () => {
       const s = outcomesOf(report)['authz.restore.region'];
-      expect(s?.outcome).toBe('failed');
-      expect(String(s?.failure?.message ?? '')).toContain('a region restore by an editor');
+      expect(s?.outcome, JSON.stringify(s?.failure)).toBe('passed');
     });
   },
 );

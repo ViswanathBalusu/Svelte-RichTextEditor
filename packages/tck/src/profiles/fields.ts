@@ -178,6 +178,42 @@ export const FIELDS: ProfileDef = {
       },
     }),
     fd({
+      id: 'i14.targets',
+      title: 'I14: a formValue field that targets a key no field has is refused',
+      spec: '12 §3 I14',
+      covers: { messages: ['sync.reject'] },
+      async run(ctx) {
+        const { editor } = await fieldsDoc(ctx);
+        const at = posBefore(editor.content.doc, 'pAfter0000000001') + 1;
+        const mirror = (target: string) => ({
+          stepType: 'replace',
+          from: at,
+          to: at,
+          slice: { content: [{ type: 'field', attrs: { kind: 'formValue', target } }] },
+        });
+        await refusedWith(
+          ctx,
+          await submit(editor.wire, 1, {
+            base: editor.content.seq,
+            steps: [mirror('field:nobody')],
+          }),
+          ['invalid_op', 'field_invalid'],
+          'a formValue field of a key no field has',
+        );
+        // The same field, aimed at a key of the document, is accepted: the refusal is the key.
+        const ok = await acked(editor.wire, 1, {
+          base: editor.content.seq,
+          steps: [mirror('field:name')],
+        });
+        check(
+          ok.seq > editor.content.seq,
+          'a formValue field of an existing key is accepted',
+          `> ${editor.content.seq}`,
+          ok.seq,
+        );
+      },
+    }),
+    fd({
       id: 'i15.values',
       title: 'I15: a value that does not match its kind, or is larger than 4 KiB, is field_invalid',
       spec: '12 §3 I15',

@@ -57,9 +57,36 @@ describe('one visibility gate (HIS-024 criterion 1)', () => {
       'control-plane/export-routes.ts',
       'control-plane/field-routes.ts',
       'control-plane/handlers.ts',
+      'control-plane/history-routes.ts',
+      'control-plane/restore-route.ts',
     ]) {
       const text = readFileSync(join(SRC, rel), 'utf8');
       expect(text, rel).toMatch(/minVisibleSeqOf\(/);
     }
+  });
+
+  it('the control-plane gate delegates the rule: no search of its own, no threshold comparison', () => {
+    const text = readFileSync(join(SRC, 'control-plane/gate.ts'), 'utf8');
+    expect(text).toMatch(/minVisibleSeqAsync\(/);
+    expect(text).toMatch(/stateAllowed\(/);
+    // The binary search of since_access and the comparison of a seq with the gate live in the
+    // authority (`sinceAccessSearch`, `stateVisible`) and nowhere in this module.
+    expect(text).not.toMatch(/while \(lo <= hi\)/);
+    expect(text).not.toMatch(/seq\s*>=\s*min|seq\s*<\s*min/);
+  });
+
+  it('no route compares a seq with the gate itself', () => {
+    const copies: string[] = [];
+    for (const f of files) {
+      // The stores take the gate as a parameter (`min`) and filter by it; they do not compute it.
+      if (GATE_MODULES.has(f.rel) || f.rel.startsWith('storage/')) continue;
+      readFileSync(f.path, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (/\b(?:seq|toSeq|atSeq|fromSeq|after)\s*(?:<|>=)\s*min\b/.test(line))
+            copies.push(`${f.rel}:${i + 1}`);
+        });
+    }
+    expect(copies).toEqual([]);
   });
 });

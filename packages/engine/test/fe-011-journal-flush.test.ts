@@ -80,4 +80,59 @@ describe('FE-011: the journal is complete when the page is hidden', () => {
     detach();
     await service.dispose();
   });
+
+  it('every write requested is started, and the journal holds a commit in flight and the work after it', async () => {
+    const service = new MockService({ presence: false });
+    const docId = service.createDocument(contractDocument(), {
+      grants: [LEGAL_GRANT_FOR_TESTS],
+    });
+    const gate = gatedJournal();
+    const backend = service.backend({ sub: 'eddie' }, { [docId]: 'editor' });
+    await backend.connect();
+    const content = await backend.sync.loadContent(docId);
+    const core = new DocumentCore({ doc: content, schedule: (run) => queueMicrotask(run) });
+    const channel = await backend.sync.open(docId, {
+      resume: { seq: content.seq, incarnation: content.incarnation },
+    });
+    // The service never answers: the first commit stays unconfirmed for the whole test.
+    let sent = 0;
+    (channel as { submit: typeof channel.submit }).submit = () => {
+      sent++;
+      return new Promise(() => undefined);
+    };
+    const detach = core.attach(channel, {
+      seq: content.seq,
+      incarnation: content.incarnation,
+      sync: backend.sync,
+      batchMs: 0,
+      journal: gate.journal,
+    });
+    caret(core, IDS.intro, 'end');
+    type(core, ' first');
+    await sleep(20);
+    // The commit's write is waiting at the gate, so nothing was sent and the journal is empty.
+    expect(sent).toBe(0);
+    expect(gate.real.size).toBe(0);
+    // More keystrokes while the first commit waits: their queue writes are requested behind it.
+    type(core, ' second');
+    type(core, ' third');
+    // The page is hidden. The flush does not resolve while a write is held.
+    let flushed = false;
+    const flush = core.flushJournal().then(() => {
+      flushed = true;
+    });
+    await sleep(20);
+    expect(flushed).toBe(false);
+    gate.open();
+    await flush;
+    expect(flushed).toBe(true);
+    // The commit is unconfirmed (the service never answered), so it is still in the journal, and
+    // the keystrokes made after it are in the stored queue.
+    expect(sent).toBe(1);
+    const { commits, queue } = await gate.real.read(docId);
+    expect(commits).toHaveLength(1);
+    expect(queue.length).toBeGreaterThan(0);
+    detach();
+    await service.dispose();
+  });
 });

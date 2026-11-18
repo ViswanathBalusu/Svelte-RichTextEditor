@@ -34,6 +34,7 @@ import {
   SERVER_SESSION,
   isSnapshot,
   project,
+  projectCommitPage,
   projectionSchema,
   regionPolicyOf,
   rejectionAudit,
@@ -2090,8 +2091,8 @@ export class RoomHost {
    * A page of the commit log after `after` (05 §6.2 `/commits`; BE-038): ascending, at most
    * `limit`, from at or above the reader's visibility gate only (HIS-024: a run of commits). A page
    * ends before a snapshot commit; one that would start with it is `conflict` (the client reloads,
-   * decision D122). A reader whose class hides content is refused: the resource does not serve a
-   * class's steps (ADR 0034 §1).
+   * decision D122). A reader whose class hides content gets the steps of its class and the view
+   * token (BE-098; ADR 0019 item 2); the page of a reader of the full class carries no token.
    */
   async readCommits(
     identity: VerifiedIdentity,
@@ -2156,11 +2157,6 @@ export class RoomHost {
           hides = d.restricted && !hidesNothing(d.tokens.hidden(conn, headDoc, stored));
         }
       }
-      if (hides)
-        throw new DataPlaneError(
-          'forbidden',
-          'the commits resource serves only the full view; reload instead',
-        );
       if (!rangeAllowed(gate, after))
         throw new DataPlaneError('forbidden', 'the history before your access is not visible');
       const to = Math.min(head.seq, after + limit);
@@ -2171,16 +2167,30 @@ export class RoomHost {
           'conflict',
           'a snapshot commit follows; reload the content instead',
         );
-      const page = cut > 0 ? commits.slice(0, cut) : commits;
+      const storedPage = (cut > 0 ? commits.slice(0, cut) : commits) as Exclude<
+        LogCommit,
+        SnapshotCommit
+      >[];
+      // A reader whose class hides content gets the steps of its class, mapped from the full
+      // commits (BE-098; ADR 0019 item 2), under the permission state in storage, as a content
+      // read does: the class is derived from the head document.
+      let page: Exclude<LogCommit, SnapshotCommit>[] = storedPage;
+      let view: string | undefined;
+      if (hides) {
+        const atHead = await this.#materialise(ref, head.seq);
+        const headDoc = schemaOf().nodeFromJSON(atHead.doc);
+        const hidden = d.tokens.hidden(conn, headDoc, stored);
+        const before = after === head.seq ? atHead.doc : (await this.#materialise(ref, after)).doc;
+        page = projectCommitPage(schemaOf(), schemaOf().nodeFromJSON(before), hidden, storedPage);
+        view = d.tokens.tokenFor(hidden);
+      }
       const users = [...new Set(page.map((c) => c.user))].filter((u) => u !== 'system');
       const subs =
         d.users && users.length
           ? await d.users.subsOf(ref.tenant, users)
           : new Map<string, string>();
       const items = page.map((c) =>
-        toRemoteCommit(c as Exclude<LogCommit, SnapshotCommit>, 0, (u) =>
-          d.users ? (subs.get(u) ?? u) : u,
-        ),
+        toRemoteCommit(c, 0, (u) => (d.users ? (subs.get(u) ?? u) : u)),
       );
       const last = items.length ? items[items.length - 1]!.seq : after;
       return {
@@ -2188,6 +2198,7 @@ export class RoomHost {
         next: last < head.seq ? last : null,
         head: head.seq,
         incarnation: head.incarnation,
+        ...(view !== undefined ? { view } : {}),
       };
     } catch (e) {
       throw this.#readError(e, `commits of ${doc}`, { tenant: identity.tenant, doc });
