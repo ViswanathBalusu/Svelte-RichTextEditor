@@ -129,6 +129,31 @@ export async function verifyCheckpoint(
   };
 }
 
+export interface ThinningGate {
+  /** True only when the checkpoint's hash matched a replay of the log. */
+  proceed: boolean;
+  verdict: CheckpointVerdict;
+}
+
+/**
+ * BE-020 criterion 5: the gate that thinning (HIS-030) must pass before older checkpoints are
+ * removed for the one at `seq`. The checkpoint is compared with a replay of the log; on a match
+ * thinning may proceed, on a mismatch it may not and `alert` is called (with the metric counter,
+ * `dep_checkpoint_mismatches_total`, an operator's alert rule reads). A checkpoint that cannot be
+ * verified (missing, or a gap in the log) does not pass either: the error is passed on and
+ * nothing is thinned.
+ */
+export async function gateThinning(
+  s: RecoveryStores,
+  ref: DocRef,
+  seq: number,
+  alert: (verdict: CheckpointVerdict, ref: DocRef) => void | Promise<void>,
+): Promise<ThinningGate> {
+  const verdict = await verifyCheckpoint(s, ref, seq);
+  if (!verdict.ok) await alert(verdict, ref);
+  return { proceed: verdict.ok, verdict };
+}
+
 export interface Affected {
   tenant: string;
   doc: string;
