@@ -29,6 +29,13 @@ export interface LoadedCheckpoint {
   hash: string | null;
 }
 
+/** A checkpoint left as stored bytes, for a worker to parse (BE-019 criterion 5). */
+export interface EncodedCheckpoint {
+  seq: number;
+  encoded: Uint8Array;
+  hash: string | null;
+}
+
 export interface Written extends Encoded {
   seq: number;
   key: string;
@@ -99,6 +106,36 @@ export class Checkpointer {
       base: encoded ? { encoded } : { doc: latest.content.doc },
       hash: null,
     };
+  }
+
+  /**
+   * `load` for a room that opens: a checkpoint of `rawAtOrAbove` stored bytes or more comes back as
+   * its bytes alone, so that nothing of it is decoded on this thread. Smaller ones come back as
+   * `load` gives them. Needs a store that gives bytes and an index; otherwise it is `load`.
+   */
+  async loadForOpen(
+    ref: DocRef,
+    head: number,
+    rawAtOrAbove: number,
+  ): Promise<LoadedCheckpoint | EncodedCheckpoint | null> {
+    const store = this.#store;
+    const index = this.#index;
+    if (!store?.getEncoded || !index) return this.load(ref, head);
+    const pick = (
+      seq: number,
+      encoded: Uint8Array,
+      hash: string | null,
+    ): LoadedCheckpoint | EncodedCheckpoint =>
+      encoded.byteLength >= rawAtOrAbove
+        ? { seq, encoded, hash }
+        : { seq, envelope: decodeContent<JsonEnvelope>(encoded), base: { encoded }, hash };
+    const rows = (await index.list(ref)).filter((r) => r.seq <= head && r.seq > 0);
+    for (const row of rows.reverse()) {
+      const encoded = await store.getEncoded(ref, row.seq);
+      if (encoded) return pick(row.seq, encoded, row.hash);
+    }
+    const zero = await store.getEncoded(ref, 0);
+    return zero ? pick(0, zero, null) : null;
   }
 
   async #read(ref: DocRef, seq: number): Promise<Omit<LoadedCheckpoint, 'hash'> | null> {

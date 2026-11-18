@@ -103,6 +103,7 @@ import { recordOf } from '../workflow/record.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { Auditor } from './audit.ts';
 import type { Checkpointer, LoadedCheckpoint } from './checkpoints.ts';
+import { buildFromParts, OPEN_SLICE } from './open-parts.ts';
 import { gateOf, historySetting, rangeAllowed, stateAllowed } from './gate.ts';
 import type { Faults } from './hooks.ts';
 import type { NodeLease } from './lease.ts';
@@ -1918,8 +1919,9 @@ export class RoomHost {
       // Claim first: it fences any earlier owner, so the log read next is complete (06 §2.1).
       const epoch = await this.#claim(ref);
       const head = await d.logs.head(ref);
-      const cp = await d.checkpointer.load(ref, head.seq);
-      if (!cp) throw new Refusal('unavailable', 'the document has no content to start from');
+      const found = await d.checkpointer.loadForOpen(ref, head.seq, d.settings.openInWorkerBytes);
+      if (!found) throw new Refusal('unavailable', 'the document has no content to start from');
+      const cp = { seq: found.seq };
       const [log, perms, history, atBase] = await Promise.all([
         d.logs.read(ref, cp.seq + 1),
         d.grants.current(ref),
@@ -1930,8 +1932,22 @@ export class RoomHost {
         throw new Error(
           `the log of ${ref.doc} holds ${log.length} commits after ${cp.seq}, its head is ${head.seq}`,
         );
-      const initial = schemaOf().nodeFromJSON(cp.envelope.doc);
-      initial.check();
+      // A large checkpoint is parsed and checked in a worker and built here a slice at a time, so
+      // that other rooms keep acknowledging commits (BE-019 criterion 5; owner decision 72).
+      let initial: Doc;
+      let base: Base;
+      let baseBytes: number;
+      if ('encoded' in found) {
+        const parts = await d.workers.run('open', { encoded: found.encoded, slice: OPEN_SLICE });
+        initial = await buildFromParts(schemaOf(), parts);
+        base = { encoded: found.encoded };
+        baseBytes = parts.bytes;
+      } else {
+        initial = schemaOf().nodeFromJSON(found.envelope.doc);
+        initial.check();
+        base = found.base;
+        baseBytes = baseBytesOf(found);
+      }
       const snapshots = new Map<number, { doc: Doc; json: JsonEnvelope }>();
       for (const c of log)
         if (isSnapshot(c)) {
@@ -1965,8 +1981,8 @@ export class RoomHost {
         incarnation: head.incarnation,
         initial,
         initialSeq: cp.seq,
-        base: cp.base,
-        baseBytes: baseBytesOf(cp),
+        base,
+        baseBytes,
         log,
         snapshots,
         perms,
