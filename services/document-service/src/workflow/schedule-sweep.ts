@@ -27,15 +27,15 @@ import {
   parseDeadline,
   reminderEligible,
   remindTargets,
-  workflowEvent,
   type WorkflowEventName,
 } from '@docedit/authority';
-import type { DepEvent, EventSink } from '../control-plane/events.ts';
+import type { EventSink } from '../control-plane/events.ts';
 import { RevisionConflictError, type DocRef } from '../storage/types.ts';
 import type { ReminderStore } from './reminder-store.ts';
 import { recordOf } from './record.ts';
 import type { RaisedEvent } from './progress.ts';
-import { recordTransition, type ControlRecord, type TransitionDeps } from './transitions.ts';
+import { raiseWorkflowEvents } from './raise-events.ts';
+import { recordTransition, type TransitionDeps } from './transitions.ts';
 import type { WorkflowResourceView } from './workflow-resource.ts';
 
 /** The actor of a change the schedule makes (08 §13: `system`). */
@@ -53,51 +53,6 @@ export interface SweepResult {
   readonly reminded: readonly { readonly doc: string; readonly participant: string }[];
   /** Workflows this run could not handle, with the reason; the others were handled. */
   readonly failed: readonly { readonly doc: string; readonly error: string }[];
-}
-
-const SHA256_HEX = /^[0-9a-f]{64}$/;
-
-/** The `seq` and the chain head an event of this workflow carries, as `raiseAll` of the routes. */
-async function eventPosition(
-  deps: TransitionDeps,
-  ref: DocRef,
-  resource: WorkflowResourceView,
-  control: ControlRecord | null,
-): Promise<{ seq: number; chainHead: string }> {
-  if (control !== null) return control;
-  const head = await deps.logs.head(ref);
-  const logged = (await deps.logs.state?.(ref))?.chainHead;
-  const sent = resource.sentHash?.replace(/^sha256:/, '');
-  const chainHead = [logged, sent].find((h) => h !== undefined && h !== null && SHA256_HEX.test(h));
-  if (chainHead === undefined || chainHead === null)
-    throw new RangeError('the workflow has no chain head to name in an event');
-  return { seq: head.seq, chainHead };
-}
-
-async function raise(
-  deps: SweepDeps,
-  ref: DocRef,
-  resource: WorkflowResourceView,
-  control: ControlRecord | null,
-  raised: readonly RaisedEvent[],
-): Promise<void> {
-  const at = await eventPosition(deps, ref, resource, control);
-  for (const e of raised) {
-    const event = workflowEvent(e.name, {
-      workflow: resource.id,
-      document: ref.doc,
-      ...at,
-      ...(e.participant !== undefined ? { participant: e.participant } : {}),
-    });
-    const out: DepEvent = {
-      type: `${event.type}.v1`,
-      tenant: ref.tenant,
-      subject: ref.doc,
-      data: { ...event.data },
-      time: deps.now(),
-    };
-    deps.events.emit(out);
-  }
 }
 
 /**
@@ -136,7 +91,7 @@ async function expireOne(
     throw e;
   }
   if (!moved.ok) return null;
-  await raise(deps, ref, moved.resource, moved.control, [{ name: 'expired' }]);
+  await raiseWorkflowEvents(deps, ref, moved.resource, moved.control, [{ name: 'expired' }]);
   return true;
 }
 
@@ -168,7 +123,7 @@ async function remindOne(
     if (latest === undefined) continue;
     // The count moves first: of two instances only the one that moves it raises the event.
     if (!(await deps.reminders.claim(ref.tenant, ref.doc, p.id, anchor, raised, latest))) continue;
-    await raise(deps, ref, view, null, [{ name: 'reminder_due', participant: p.id }]);
+    await raiseWorkflowEvents(deps, ref, view, null, [{ name: 'reminder_due', participant: p.id }]);
     out.push(p.id);
   }
   return out;

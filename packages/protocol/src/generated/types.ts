@@ -274,8 +274,8 @@ export interface WorkflowStatus {
   /** The receiving participant's status. */
   participant?: {
     id: string;
-    /** The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's. */
-    state: "active" | "completed" | "waiting" | "paused" | "copy" | "closed" | (string & {});
+    /** The participant's own status: `active` (may act now), `unverified` (their turn, but the access code is still to be submitted), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's. */
+    state: "active" | "unverified" | "completed" | "waiting" | "paused" | "copy" | "closed" | (string & {});
   };
 }
 
@@ -325,6 +325,8 @@ export interface ProblemDetails {
     path: string;
     rule: string;
   }>;
+  /** For `rate_limited` of the access code (FRW-039): how long to wait before retrying; `Retry-After` carries the same wait in whole seconds. */
+  retryAfterMs?: number;
 }
 
 /** The discovery document at `{endpoint}/.well-known/dep` (05 §2). Every member listed is required; it is the same for every tenant of the endpoint and needs no token (D66). */
@@ -959,6 +961,8 @@ export interface Workflow {
     firstViewedAt?: string;
     /** When the participant last became active: the anchor of the reminders (FRW-034). */
     activatedAt?: string;
+    /** When a correct access code was submitted for the participant (FRW-039). */
+    verifiedAt?: string;
   }>;
   routing?: Array<{ [key: string]: unknown }>;
   deadline?: string;
@@ -980,6 +984,12 @@ export interface Workflow {
 export interface WorkflowReason {
   /** Why the workflow is stopped: the participant who declines, or the owner who voids, says. A reason that is blank after trimming is refused. */
   reason: string;
+}
+
+/** The body of `verify` and of the registration of an access code (12 §6.1, §7; FRW-039). */
+export interface WorkflowAccessCode {
+  /** The access code: registered by the host for a participant, and submitted by the participant to verify. It is never stored or returned in the clear. */
+  code: string;
 }
 
 /** A workflow request or response the prose does not define. Placeholder. */
@@ -1950,6 +1960,30 @@ export interface Operations {
     body: never;
     response: void;
   };
+  /** POST /webhooks/{id}/ping: Sends a test delivery to one subscription, marked as a test. (05 §6.2; 13 §10; ADR 0330 §2 (decision 177)) */
+  pingWebhook: {
+    method: "POST";
+    path: "/webhooks/{id}/ping";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: {
+  /** The identifier of the test delivery. */
+  deliveryId: string;
+};
+  };
+  /** POST /webhooks/{id}/deliveries/{deliveryId}/replay: Sends a recent delivery of the subscription again, under its own webhook-id. (05 §6.2; 13 §10; ADR 0330 §2 (decision 177)) */
+  replayWebhookDelivery: {
+    method: "POST";
+    path: "/webhooks/{id}/deliveries/{deliveryId}/replay";
+    params: { id: string; deliveryId: string };
+    query: Record<string, never>;
+    body: never;
+    response: {
+  /** The identifier of the delivery sent. */
+  deliveryId: string;
+};
+  };
   /** GET /audit: The audit trail with filters (13 §10). (05 §6.2; 13 §10) */
   getAudit: {
     method: "GET";
@@ -2211,19 +2245,28 @@ export interface Operations {
     body: WorkflowReason;
     response: Workflow;
   };
+  /** POST /documents/{id}/workflow/participants/{pid}/verify: The participant submits the access code their workflow requires; until it is right, their fields stay read-only (12 §6.1, §7). A wrong code raises `auth_failed`; repeated wrong codes are `rate_limited` with `retryAfterMs`. The method and the document prefix are assumed. (12 §6.1, §7, §10) */
+  participantVerify: {
+    method: "POST";
+    path: "/documents/{id}/workflow/participants/{pid}/verify";
+    params: { id: string; pid: string };
+    query: Record<string, never>;
+    body: WorkflowAccessCode;
+    response: Workflow;
+  };
+  /** POST /documents/{id}/workflow/participants/{pid}/access-code: Registers the access code of a participant whose `auth.require` lists `access_code`; only a salted hash is kept, and the code is never returned. The host sends the code to the person (12 §6.3). Proposed (ADR 0393); the method and path are assumed. (12 §6.1, §7, §10) */
+  registerAccessCode: {
+    method: "POST";
+    path: "/documents/{id}/workflow/participants/{pid}/access-code";
+    params: { id: string; pid: string };
+    query: Record<string, never>;
+    body: WorkflowAccessCode;
+    response: void;
+  };
   /** POST /documents/{id}/workflow/participants/{pid}/consent: Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */
   participantConsent: {
     method: "POST";
     path: "/documents/{id}/workflow/participants/{pid}/consent";
-    params: { id: string; pid: string };
-    query: Record<string, never>;
-    body: WorkflowPlaceholder;
-    response: WorkflowPlaceholder;
-  };
-  /** POST /documents/{id}/workflow/participants/{pid}/verify: Participant action `verify` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */
-  participantVerify: {
-    method: "POST";
-    path: "/documents/{id}/workflow/participants/{pid}/verify";
     params: { id: string; pid: string };
     query: Record<string, never>;
     body: WorkflowPlaceholder;

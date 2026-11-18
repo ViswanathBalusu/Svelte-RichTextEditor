@@ -243,6 +243,23 @@ export interface AssistantContext {
   outline?: ReadonlyArray<{ blockId: string; level: number; text: string }>;
 }
 
+/**
+ * The request as a model should read it (UX-048; 13 §6.2; 10 §3.1): fixed instructions, the user's
+ * request as the only instruction, and every piece of document text as a labelled data part. Text in
+ * a data part never changes what the model does. The editor builds it; a port that cannot use it may
+ * read `prompt` and `context` as before.
+ */
+export interface AssistantPromptStructure {
+  readonly instructions: string;
+  readonly request: string;
+  readonly data: ReadonlyArray<{
+    readonly kind: 'data';
+    readonly source: 'document' | 'comment' | 'field' | 'host';
+    readonly label: string;
+    readonly text: string;
+  }>;
+}
+
 export type AssistantChunk =
   | { kind: 'text'; text: string }
   | { kind: 'done'; agent: string }
@@ -255,7 +272,13 @@ export type AssistantChunk =
  */
 export interface AssistantPort {
   request(
-    request: { docId: string; task: AssistantTask; prompt: string; context: AssistantContext },
+    request: {
+      docId: string;
+      task: AssistantTask;
+      prompt: string;
+      context: AssistantContext;
+      structure?: AssistantPromptStructure;
+    },
     opts?: { signal?: CancelSignal },
   ): AsyncIterable<AssistantChunk>;
 }

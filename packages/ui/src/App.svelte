@@ -1288,6 +1288,24 @@
         // A dialog is closed by Escape itself (the native cancel); the shell does not take the key (FE-070).
         if (key === 'Escape' && event.composedPath().some((n) => n instanceof HTMLDialogElement))
           return false;
+        // UX-010 (decision 168): Alt+F10 moves focus into the mini toolbar. Escape there returns
+        // focus to the selection and hides the toolbar, so no focus is left on a removed button.
+        if (key === 'Alt-F10' && miniShown) {
+          const first = shellEl?.querySelector<HTMLElement>('[data-mini-toolbar] button');
+          if (first) {
+            first.focus();
+            return true;
+          }
+        }
+        if (
+          key === 'Escape' &&
+          miniShown &&
+          shellEl?.querySelector('[data-mini-toolbar]')?.contains(activeElement()) === true
+        ) {
+          miniDismissed = true;
+          core.focus();
+          return true;
+        }
         if (key === 'Escape' && miniShown) {
           miniDismissed = true;
           return true;

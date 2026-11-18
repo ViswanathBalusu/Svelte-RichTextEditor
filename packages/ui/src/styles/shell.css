@@ -520,6 +520,8 @@
 /* The body and the collaborators' layer share one origin (UX-027). */
 .de-body-frame {
   position: relative;
+  /* FE-114: the height the on-screen keyboard covers, set by the element on a touch device. */
+  padding-block-end: var(--de-keyboard-inset, 0px);
 }
 
 .de-panel,

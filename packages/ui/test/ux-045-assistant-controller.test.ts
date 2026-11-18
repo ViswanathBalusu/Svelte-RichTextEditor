@@ -53,14 +53,50 @@ describe('assistant controller (UX-045)', () => {
     expect(calls.map((x) => x.prompt)).toEqual(['p-draft', 'p-rewrite', 'p-summary', 'p-question']);
   });
 
-  it('holds the response and gives text to insert only on approval (criterion 2)', async () => {
+  it('holds the response and inserts it only on approval, through the API (criterion 2; UX-046)', async () => {
+    const inserted: string[] = [];
     const { api } = fakeApi(() => chunks({ kind: 'text', text: 'New text' }, { kind: 'done' }));
+    api.insert = (text) => (inserted.push(text), { ok: true });
     const c = make(api);
     c.ask('draft', 'x');
     await tick();
     expect(c.view().state.phase).toBe('shown');
-    expect(c.approve()).toBe('New text');
-    expect(c.view().state.phase).toBe('idle');
+    expect(inserted).toEqual([]);
+    expect(await c.approve()).toBe(true);
+    expect(inserted).toEqual(['New text']);
+    expect(c.view()).toMatchObject({ state: { phase: 'idle' }, inserted: true });
+  });
+
+  it('keeps the result shown and says why when the core refuses the insertion (UX-046 criterion 4)', async () => {
+    const { api } = fakeApi(() => chunks({ kind: 'text', text: 'T' }, { kind: 'done' }));
+    api.insert = () => ({ ok: false, reason: 'no-suggest' });
+    const c = make(api);
+    c.ask('draft', 'x');
+    await tick();
+    expect(await c.approve()).toBe(false);
+    expect(c.view()).toMatchObject({
+      state: { phase: 'shown', text: 'T' },
+      insertRefused: 'no-suggest',
+      inserted: false,
+    });
+  });
+
+  it('inserts nothing for a view-only author or without an insertion in the API', async () => {
+    const { api } = fakeApi(() => chunks({ kind: 'text', text: 'T' }, { kind: 'done' }));
+    const calls: string[] = [];
+    const withInsert = {
+      ...api,
+      insert: (text: string) => (calls.push(text), { ok: true } as const),
+    };
+    const viewer = make(withInsert, VIEWER);
+    viewer.ask('question', 'q');
+    await tick();
+    expect(await viewer.approve()).toBe(false);
+    const bare = make(api);
+    bare.ask('question', 'q');
+    await tick();
+    expect(await bare.approve()).toBe(false);
+    expect(calls).toEqual([]);
   });
 
   it('cancels a running request: it is aborted at the port and a late answer is ignored (criterion 3)', async () => {
@@ -82,7 +118,7 @@ describe('assistant controller (UX-045)', () => {
     release();
     await tick();
     expect(c.view().state.phase).toBe('cancelled');
-    expect(c.approve()).toBeNull();
+    expect(await c.approve()).toBe(false);
   });
 
   it('ends a failure with nothing held and retry offered, for each failure kind (criterion 4)', async () => {
@@ -98,7 +134,7 @@ describe('assistant controller (UX-045)', () => {
       c.ask('question', 'q');
       await tick();
       expect(c.view().state).toMatchObject({ phase: 'failed', failure, retry: true });
-      expect(c.approve()).toBeNull();
+      expect(await c.approve()).toBe(false);
       expect(EN_GB[`assistant.error.${failure}`]).toMatch(/Nothing was applied/);
     }
   });
@@ -137,7 +173,7 @@ describe('assistant controller (UX-045)', () => {
     expect(c.view().refused).toBeNull();
     expect(c.view().state.phase).toBe('shown');
     // A view-only author's approval inserts nothing.
-    expect(c.approve()).toBeNull();
+    expect(await c.approve()).toBe(false);
     expect(EN_GB['assistant.refused.no-change']).toMatch(/does not allow/);
   });
 

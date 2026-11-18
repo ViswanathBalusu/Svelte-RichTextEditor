@@ -32,7 +32,10 @@ async function collect(stream: AsyncIterable<unknown>): Promise<unknown[]> {
 
 describe('assistant bridge (UX-045)', () => {
   it('is unavailable until a port is attached, tells subscribers, and refuses requests without one', async () => {
-    const bridge = assistantBridge((task, prompt) => REQUEST(task, prompt));
+    const bridge = assistantBridge(
+      (task, prompt) => REQUEST(task, prompt),
+      () => ({ ok: true }),
+    );
     let told = 0;
     bridge.api.available.subscribe(() => told++);
     expect(bridge.api.available.get()).toBe(false);
@@ -54,8 +57,14 @@ describe('assistant bridge (UX-045)', () => {
       { kind: 'done', agent: 'agt1' },
       { kind: 'error', code: 'rate_limited', message: 'slow down' },
     ]);
-    const bridge = assistantBridge((task, prompt) => REQUEST(task, prompt));
+    const inserted: string[] = [];
+    const bridge = assistantBridge(
+      (task, prompt) => REQUEST(task, prompt),
+      (text) => (inserted.push(text), { ok: true }),
+    );
     bridge.attach(p);
+    expect(bridge.api.insert?.('abc')).toEqual({ ok: true });
+    expect(inserted).toEqual(['abc']);
     const abort = new AbortController();
     const out = await collect(bridge.api.request('summarise', 'sum', abort.signal));
     expect(out).toEqual([

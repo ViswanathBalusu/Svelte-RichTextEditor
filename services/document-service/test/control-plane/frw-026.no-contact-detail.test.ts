@@ -58,6 +58,7 @@ describe('the published schema holds no contact detail (FRW-026 criterion 4)', (
         'roles',
         'state',
         'sub',
+        'verifiedAt',
       ].sort(),
     );
   });
@@ -80,6 +81,7 @@ describe('the published schema holds no contact detail (FRW-026 criterion 4)', (
       'completedSeq',
       'firstViewedAt',
       'activatedAt',
+      'verifiedAt',
     ])
       expect(isContact(fine), fine).toBe(false);
   });

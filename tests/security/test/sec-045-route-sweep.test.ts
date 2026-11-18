@@ -97,6 +97,7 @@ const KNOWN_PARAMS = [
   'kid',
   'origin',
   'seq',
+  'deliveryId',
 ];
 
 /** Client messages that take an identifier, and those that do not (05 §5). */
@@ -124,10 +125,15 @@ const NOT_OFFERED = 'this server does not offer the route';
 const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   createImport: 'this server does not import Word files',
   getImport: 'no import job',
+  // ADR 0330 §2 (decision 177): this composition has no webhook dispatcher to send with.
+  pingWebhook: 'this server does not send webhook deliveries',
+  replayWebhookDelivery: 'this server does not send webhook deliveries',
   getWorkflowEvidence: NOT_OFFERED,
   getWorkflowFinal: NOT_OFFERED,
+  // B's workflow has no participant in this scenario (FRW-039).
+  participantVerify: 'has no such participant',
+  registerAccessCode: 'has no such participant',
   participantConsent: NOT_OFFERED,
-  participantVerify: NOT_OFFERED,
   participantComplete: NOT_OFFERED,
   signField: NOT_OFFERED,
   // HIS-040: the route needs a purge pool, which only an operator supplies.
@@ -166,7 +172,8 @@ function bodyFor(operationId: string): unknown {
       participants: [],
     },
     participantConsent: {},
-    participantVerify: {},
+    participantVerify: { code: 'sweep' },
+    registerAccessCode: { code: 'sweep' },
     participantComplete: {},
     participantDecline: { reason: 'sweep' },
     remindWorkflow: {},
@@ -348,6 +355,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       ids['import'] = uuid7();
       ids['pid'] = 'participant-1';
       ids['fid'] = 'ffField000000001';
+      ids['deliveryId'] = uuid7();
     });
     afterAll(async () => {
       await h?.close();

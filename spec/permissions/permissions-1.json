@@ -290,6 +290,7 @@
         "POST /documents/{id}/workflow/send",
         "POST /documents/{id}/workflow/correct",
         "POST /documents/{id}/workflow/resume",
+        "POST /documents/{id}/workflow/participants/{pid}/access-code",
         "POST /documents/{id}/workflow/remind",
         "POST /documents/{id}/workflow/void",
         "DELETE /documents/{id}"
@@ -349,6 +350,8 @@
         "GET /webhooks/{id}",
         "PATCH /webhooks/{id}",
         "DELETE /webhooks/{id}",
+        "POST /webhooks/{id}/ping",
+        "POST /webhooks/{id}/deliveries/{deliveryId}/replay",
         "POST /tokens",
         "POST /sessions/revoke"
       ],

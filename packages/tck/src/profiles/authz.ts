@@ -94,6 +94,8 @@ function serviceRoutes(doc: string): Array<[string, string, unknown]> {
     ['GET', `/webhooks/${uuid7()}`, undefined],
     ['PATCH', `/webhooks/${uuid7()}`, {}],
     ['DELETE', `/webhooks/${uuid7()}`, undefined],
+    ['POST', `/webhooks/${uuid7()}/ping`, undefined],
+    ['POST', `/webhooks/${uuid7()}/deliveries/${uuid7()}/replay`, undefined],
     ['POST', '/tokens', { sub: 'x', docs: { [doc]: 'viewer' } }],
     ['POST', '/sessions/revoke', { sub: 'x' }],
   ];
@@ -348,6 +350,8 @@ export const AUTHZ: ProfileDef = {
           'GET /webhooks/{id}',
           'PATCH /webhooks/{id}',
           'DELETE /webhooks/{id}',
+          'POST /webhooks/{id}/ping',
+          'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
           'POST /tokens',
           'POST /sessions/revoke',
         ],

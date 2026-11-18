@@ -94,6 +94,9 @@ async function readState(
   };
 }
 
+/** The setting in force for a tenant, read inside a transaction of that tenant (FRW-041). */
+export const readCaptureState = readState;
+
 export class PgCaptureSettingsStore {
   readonly #pool: Pool;
   readonly #audit: PgAuditStore;

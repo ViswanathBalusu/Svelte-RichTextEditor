@@ -90,6 +90,8 @@ export type {
   RulePartsView,
   RulesService,
   AssistantApi,
+  AssistantDataInput,
+  AssistantInsertResult,
   AssistantStreamChunk,
   AssistantTaskName,
   WorkflowParticipantView,

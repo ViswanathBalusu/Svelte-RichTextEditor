@@ -120,6 +120,10 @@ export const FRW_EXTENSION: DepExtension = {
                   timestamp(),
                   'When the participant last became active: the anchor of the reminders (FRW-034).',
                 ),
+                verifiedAt: opt(
+                  timestamp(),
+                  'When a correct access code was submitted for the participant (FRW-039).',
+                ),
               }),
             ),
           ),
@@ -149,6 +153,23 @@ export const FRW_EXTENSION: DepExtension = {
         {
           doc: 'The body of `decline` and `void` (12 §6.2).',
           spec: '12 §6.2, §10',
+          gaps: ['G95'],
+        },
+      ),
+    },
+    {
+      name: 'WorkflowAccessCode',
+      owner: FRW,
+      shape: obj(
+        {
+          code: req(
+            text({ minLength: 1, maxLength: 255 }),
+            'The access code: registered by the host for a participant, and submitted by the participant to verify. It is never stored or returned in the clear.',
+          ),
+        },
+        {
+          doc: 'The body of `verify` and of the registration of an access code (12 §6.1, §7; FRW-039).',
+          spec: '12 §6.1, §7, §10',
           gaps: ['G95'],
         },
       ),
@@ -347,7 +368,39 @@ export const FRW_EXTENSION: DepExtension = {
       gaps: ['G95'],
       owner: FRW,
     },
-    ...(['consent', 'verify', 'complete'] as const).map((action) => ({
+    {
+      operationId: 'participantVerify',
+      method: 'POST',
+      path: '/documents/{id}/workflow/participants/{pid}/verify',
+      summary:
+        'The participant submits the access code their workflow requires; until it is right, their fields stay read-only (12 §6.1, §7). A wrong code raises `auth_failed`; repeated wrong codes are `rate_limited` with `retryAfterMs`. The method and the document prefix are assumed.',
+      spec: '12 §6.1, §7, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      body: ref('WorkflowAccessCode'),
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['validation_failed', 'forbidden', 'conflict', 'rate_limited'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    {
+      operationId: 'registerAccessCode',
+      method: 'POST',
+      path: '/documents/{id}/workflow/participants/{pid}/access-code',
+      summary:
+        'Registers the access code of a participant whose `auth.require` lists `access_code`; only a salted hash is kept, and the code is never returned. The host sends the code to the person (12 §6.3). Proposed (ADR 0393); the method and path are assumed.',
+      spec: '12 §6.1, §7, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      body: ref('WorkflowAccessCode'),
+      success: { status: '204' },
+      codes: ['validation_failed', 'conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    ...(['consent', 'complete'] as const).map((action) => ({
       operationId: `participant${action.charAt(0).toUpperCase()}${action.slice(1)}`,
       method: 'POST' as const,
       path: `/documents/{id}/workflow/participants/{pid}/${action}`,

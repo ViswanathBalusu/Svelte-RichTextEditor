@@ -59,6 +59,7 @@ import type { PdfViewerFrame } from './pdf/viewer-frame.ts';
 import { grantsService, regionsView } from './permissions-shell.ts';
 import type { AttachAt, EditorHandle, ReadView } from './session.ts';
 import { assistantBridge } from './assistant.ts';
+import { attachKeyboardInset } from './keyboard-inset-dom.ts';
 import { attachShortcuts } from './shortcuts.ts';
 import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
@@ -297,10 +298,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
   });
   // The backend's assistant port, as the pane reads it (UX-045). The request is built by the core from
   // the selection and the scopes the reader may view (UX-047).
-  const assistant = assistantBridge((task, prompt) => {
-    const { omitted: _omitted, ...request } = core.assistantRequest(task, prompt);
-    return request;
-  });
+  const assistant = assistantBridge(
+    (task, prompt) => {
+      const { omitted: _omitted, ...request } = core.assistantRequest(task, prompt);
+      return request;
+    },
+    // An approved result is put in as suggestions, never as a direct edit (UX-046).
+    (text) => core.insertAssistantResult(text),
+  );
   const stylePath = attachStyles(root, {
     nonce: config.styleNonce,
     forceFallback: config.forceStyleFallback,
@@ -636,6 +641,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The host's extensions are activated once the shell exists; a later change comes through setExtensions.
   app.setExtensions(options.extensions());
   const stopShortcuts = attachShortcuts(root, (command) => core.run(command));
+  // FE-114: on a touch device the caret stays above the on-screen keyboard.
+  const stopKeyboardInset = attachKeyboardInset(root, core);
 
   const api = hostApi(core, registry);
 
@@ -730,6 +737,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       for (const viewer of viewers) viewer.destroy();
       viewers.clear();
       stopShortcuts();
+      stopKeyboardInset();
       workflowSend?.dispose?.();
       void unmount(app);
       registry.destroy();

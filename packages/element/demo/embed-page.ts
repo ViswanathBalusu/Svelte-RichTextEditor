@@ -157,6 +157,68 @@ function rtlDocument(): CdmEnvelope {
 }
 const rtlDocId = service.createDocument(rtlDocument());
 
+/**
+ * A right-to-left document with a region (FE-111 criterion 4): `settings.dir` is `rtl`, and the body
+ * holds an Arabic paragraph, a region of two Arabic paragraphs and an Arabic paragraph after it.
+ */
+const RTL_REGION_IDS = {
+  before: 'pRtlBefore000001',
+  region: 'rRtlMiddle000001',
+  first: 'pRtlFirst0000001',
+  last: 'pRtlLast00000001',
+  after: 'pRtlAfter0000001',
+} as const;
+const RTL_REGION_TEXT = {
+  before: 'قبل المنطقة',
+  first: 'أول المنطقة',
+  last: 'آخر المنطقة',
+  after: 'بعد المنطقة',
+} as const;
+function rtlRegionDocument(): CdmEnvelope {
+  const p = (id: string, text: string) => ({
+    type: 'paragraph',
+    attrs: { id },
+    content: [{ type: 'text', text }],
+  });
+  return {
+    cdm: 1,
+    requires: [],
+    doc: {
+      type: 'doc',
+      content: [
+        {
+          type: 'defs',
+          content: [
+            { type: 'settings', attrs: { lang: 'ar', dir: 'rtl' } },
+            {
+              type: 'style_def',
+              attrs: { id: 'Normal', kind: 'paragraph', name: 'Normal', builtIn: true },
+            },
+            { type: 'page_setup', attrs: { id: 'ps1' } },
+          ],
+        },
+        {
+          type: 'body',
+          attrs: { pageSetup: 'ps1' },
+          content: [
+            p(RTL_REGION_IDS.before, RTL_REGION_TEXT.before),
+            {
+              type: 'region',
+              attrs: { id: RTL_REGION_IDS.region, title: 'Middle', policy: 'inherit' },
+              content: [
+                p(RTL_REGION_IDS.first, RTL_REGION_TEXT.first),
+                p(RTL_REGION_IDS.last, RTL_REGION_TEXT.last),
+              ],
+            },
+            p(RTL_REGION_IDS.after, RTL_REGION_TEXT.after),
+          ],
+        },
+      ],
+    },
+  } as unknown as CdmEnvelope;
+}
+const rtlRegionsDocId = service.createDocument(rtlRegionDocument());
+
 /** The identifiers of the form document (FRW): two roles, and fields of a tenant and a landlord. */
 const FIELD_IDS = {
   tenant: 'role_tenant',
@@ -377,7 +439,7 @@ function userOf(sub: string): { sub: string; name: string } {
 function backend(
   sub: string,
   role: DocRole = 'editor',
-  docs: string[] = [docId, secondDocId, regionsDocId, rtlDocId],
+  docs: string[] = [docId, secondDocId, regionsDocId, rtlDocId, rtlRegionsDocId],
 ) {
   return service.backend(userOf(sub), Object.fromEntries(docs.map((d) => [d, role])));
 }
@@ -435,6 +497,8 @@ Object.assign(globalThis, {
     secondDocId,
     regionsDocId,
     rtlDocId,
+    rtlRegionsDocId,
+    RTL_REGION_IDS,
     fieldsDocId,
     regionRolesDocId,
     kindsDocId,

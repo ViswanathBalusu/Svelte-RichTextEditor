@@ -38,6 +38,7 @@ import {
 import type { ExportPolicy, NotifyFn } from './exports.ts';
 import type { FontCatalogue } from './fonts.ts';
 import type { Cursors } from './http.ts';
+import type { WebhookDispatcher } from './webhook-dispatcher.ts';
 import type { WebhookSubscriptions } from './webhook-subscriptions.ts';
 import type { RetentionService } from './retention.ts';
 import type { HoldService } from './holds.ts';
@@ -58,6 +59,8 @@ import { ApiError } from './problems.ts';
 import type { TokenService } from './tokens.ts';
 import type { UserDirectory } from './users.ts';
 import type { Views } from './visibility.ts';
+import type { AccessCodeStore } from '../workflow/access-code-store.ts';
+import type { EvidenceLedger } from '../workflow/evidence-ledger.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 
 export interface HandlerDeps {
@@ -142,6 +145,8 @@ export interface HandlerDeps {
   versions?: VersionStorePort;
   /** The webhook subscriptions the `/webhooks` routes use (UX-079). Absent: the routes are not offered. */
   webhooks?: WebhookSubscriptions;
+  /** The dispatcher that sends the test ping and replays deliveries (ADR 0330 §2). Absent: not offered. */
+  webhookDispatcher?: Pick<WebhookDispatcher, 'ping' | 'replay'>;
   /** The retention policies of `/retention` and `/documents/{id}/retention` (UX-080). Absent: not offered. */
   retention?: RetentionService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080 criteria 2 and 3). Absent: not offered. */
@@ -154,6 +159,10 @@ export interface HandlerDeps {
   quotaAdmin?: QuotaAdminService;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: not offered. */
   workflows?: WorkflowResourceStore;
+  /** The registered access codes of workflow participants (FRW-039). Absent: not offered. */
+  accessCodes?: AccessCodeStore;
+  /** The workflow evidence ledger (FRW-041), where attempts at an access code are recorded. */
+  evidence?: EvidenceLedger;
   /** The tenant's allowed origins and public keys, listed by `/origins` and `/keys` (UX-077). */
   tenantRegistry?: TenantRegistry;
   /** The index of `GET /search` (BE-054 criterion 2). Absent: the route is not offered. */

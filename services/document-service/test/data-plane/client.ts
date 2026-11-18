@@ -74,10 +74,17 @@ export class DepClient {
 
   static connect(
     url: string,
-    opts: { protocols?: string[]; origin?: string; perMessageDeflate?: boolean } = {},
+    opts: {
+      protocols?: string[];
+      origin?: string;
+      perMessageDeflate?: boolean;
+      /** Extra headers of the upgrade request (a User-Agent, a forwarded address). */
+      headers?: Record<string, string>;
+    } = {},
   ): Promise<DepClient> {
     const ws = new WebSocket(url, opts.protocols ?? ['dep.v1'], {
       ...(opts.origin !== undefined ? { origin: opts.origin } : {}),
+      ...(opts.headers !== undefined ? { headers: opts.headers } : {}),
       perMessageDeflate: opts.perMessageDeflate ?? false,
     });
     const c = new DepClient(ws);

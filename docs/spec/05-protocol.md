@@ -315,7 +315,9 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/imports` | POST | Body: `asset`, `format` (`docx`). Returns a job with warnings on completion |
 | `/imports/{jid}` | GET | |
 | `/fonts` | GET | Font manifest: families, styles, file URLs, hashes, licences, manifest version |
-| `/webhooks`, `/webhooks/{id}` | GET, POST, PATCH, DELETE | Service credential only. Event filters, secret rotation, a test ping, and replay of recent deliveries |
+| `/webhooks`, `/webhooks/{id}` | GET, POST, PATCH, DELETE | Service credential only. Event filters and secret rotation |
+| `/webhooks/{id}/ping` | POST | Service credential only. A test delivery to one subscription, marked as a test; answers 202 with its `deliveryId` (UX-079; decision 177) |
+| `/webhooks/{id}/deliveries/{deliveryId}/replay` | POST | Service credential only. Sends a recent delivery of that subscription again under its own `webhook-id`; answers 202 (UX-079; decision 177) |
 | `/audit`, `/search` | GET | Service credential only. 13, section 10 |
 | `/retention` | GET, PUT | Service credential only. The tenant retention policy; `keep_all` when none is set. PUT is audited. 08, section 11; 13, section 10 |
 | `/documents/{id}/retention` | GET, PUT | Service credential only. The document's own policy, the effective policy and its source. PUT is audited. 08, section 11; 13, section 10 |

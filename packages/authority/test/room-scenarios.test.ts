@@ -837,8 +837,15 @@ describe('attribution (SYN-014)', () => {
     r.open('x1', assistant);
     r.open('c1', USERS.carol);
     r.open('a1', USERS.alice);
+    // An agent connection holds at most `suggest` (UX-044, UX-046), so its text arrives as a suggestion.
+    const doc = baseDoc();
+    const pos = posInside(doc, 'pIntro0000000001');
+    const mark = schema.marks['ins']!.create({ id: 'sAgent0000000001', user: 'carol' });
+    const suggested = json([
+      new ReplaceStep(pos, pos, new Slice(Fragment.from(schema.text('x', [mark])), 0, 0)),
+    ]);
     const one = stored(
-      flush(r, r.submit('x1', { id: id(), base: 0, steps: insert(), origin: 'assistant' })),
+      flush(r, r.submit('x1', { id: id(), base: 0, steps: suggested, origin: 'assistant' })),
       'a1',
     );
     expect(one[0]).toMatchObject({

@@ -31,6 +31,11 @@ import { canonicalize } from '@docedit/model';
 import { recordCorrection, recordResume } from '../workflow/correction.ts';
 import { recordDecline, recordVoid, type StopOutcome } from '../workflow/stop.ts';
 import { recordRemind } from '../workflow/schedule-sweep.ts';
+import {
+  registerParticipantCode,
+  verifyParticipantCode,
+  type AccessCodeProblem,
+} from '../workflow/access-code-service.ts';
 import { recordOf } from '../workflow/record.ts';
 import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
@@ -464,11 +469,121 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     });
   };
 
+  /** The answer to a problem of the access code. */
+  const codeProblem = (doc: string, p: AccessCodeProblem): ApiError => {
+    switch (p.code) {
+      case 'not_found':
+        return new ApiError('not_found', `document ${doc} has no such participant`);
+      case 'not_required':
+        return new ApiError('conflict', 'the participant needs no access code');
+      case 'invalid_state':
+        return new ApiError('conflict', `the workflow is ${p.state}`);
+      case 'conflict':
+        return new ApiError('conflict', `the workflow is ${p.state}`);
+      case 'not_registered':
+        return new ApiError('conflict', 'no access code is registered for the participant');
+      case 'wrong_code':
+        return new ApiError('forbidden', 'the access code is wrong');
+      case 'rate_limited':
+        return new ApiError('rate_limited', 'too many wrong access codes', {
+          retryAfterMs: p.retryAfterMs,
+        });
+    }
+  };
+
+  const accessDeps = () => {
+    if (!d.accessCodes || !d.evidence)
+      throw new ApiError('not_found', 'this server keeps no access codes');
+    return { ...transitionDeps(), codes: d.accessCodes, evidence: d.evidence, events: d.events };
+  };
+
+  /** The code of a body: a string of 1 to 255 characters, else `validation_failed`. */
+  const codeOf = async (ctx: Parameters<Handler>[0]): Promise<string> => {
+    const body = (await ctx.body()) as { code?: unknown } | null;
+    const code = body?.code;
+    if (typeof code !== 'string' || code.length < 1 || code.length > 255)
+      throw new ApiError('validation_failed', 'a code of 1 to 255 characters is required', {
+        violations: [{ path: '/code', rule: 'a code of 1 to 255 characters is required' }],
+      });
+    return code;
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/participants/{pid}/access-code` (FRW-039; method and path
+   * assumed, G95; ADR 0393, proposed). Needs `manage`. The host registers the code of a participant
+   * whose `auth.require` lists `access_code`; only a salted hash is kept and nothing about the code
+   * is returned. A participant who needs none is `conflict`.
+   */
+  const registerAccessCodeRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const pid = ctx.params['pid']!;
+    const deps = accessDeps();
+    guard(ctx.caller, 'manage', doc);
+    await liveDocument(ctx, doc);
+    const out = await registerParticipantCode(deps, {
+      ref: k.refOf(ctx, doc),
+      participant: pid,
+      code: await codeOf(ctx),
+    });
+    if (!out.ok) throw codeProblem(doc, out.problem);
+    return { status: 204 };
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/participants/{pid}/verify` (12 §7; FRW-039; method and prefix
+   * assumed, G95). The caller is a user whose token binds to `pid` (`wfp` and `sub`, FRW-038): the
+   * host's service credential does not prove the code for the person. A wrong code is `forbidden`
+   * and raises `auth_failed`; repeated wrong codes are `rate_limited` with `retryAfterMs`. A correct
+   * code lets the participant fill.
+   */
+  const verifyAccessCodeRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const pid = ctx.params['pid']!;
+    const deps = accessDeps();
+    const identity = ctx.caller.identity;
+    await liveDocument(ctx, doc);
+    const current = await store().read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (!current.participants.some((p) => p.id === pid))
+      throw new ApiError('not_found', `document ${doc} has no such participant`);
+    if (ctx.caller.kind !== 'user' || identity === null || identity.docs[doc] === undefined)
+      throw new ApiError('forbidden', 'only the participant proves their own access code');
+    const bound = bindParticipant(
+      {
+        sub: identity.sub,
+        ...(identity.asserted?.wfp !== undefined ? { wfp: identity.asserted.wfp } : {}),
+      },
+      recordOf(current),
+    );
+    if (!bound.ok || bound.participant.id !== pid)
+      throw new ApiError('forbidden', 'the token is not bound to this participant');
+    const agent = ctx.req.headers['user-agent'];
+    const out = await verifyParticipantCode(deps, {
+      ref: k.refOf(ctx, doc),
+      actor: ctx.caller.actor,
+      participant: pid,
+      code: await codeOf(ctx),
+      // The facts of the request: the socket's address and the `User-Agent` header (FRW-040).
+      facts: {
+        address: ctx.req.socket.remoteAddress ?? null,
+        userAgent: typeof agent === 'string' && agent.length > 0 ? agent.slice(0, 512) : null,
+        amr: identity.asserted?.amr ?? null,
+      },
+    });
+    if (!out.ok) throw codeProblem(doc, out.problem);
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-cache',
+    });
+  };
+
   return {
     getWorkflow,
     putWorkflow,
     sendWorkflow: sendWorkflowRoute,
     remindWorkflow: remindWorkflowRoute,
+    participantVerify: verifyAccessCodeRoute,
+    registerAccessCode: registerAccessCodeRoute,
     voidWorkflow: voidWorkflowRoute,
     participantDecline: declineRoute,
     correctWorkflow: correctWorkflowRoute,

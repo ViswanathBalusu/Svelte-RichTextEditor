@@ -53,6 +53,12 @@ export interface ApiErrorOptions {
   /** For `rate_limited`, `quota_exceeded` and `unavailable`: the `Retry-After` header (05 §5.8). */
   retryAfterS?: number;
   /**
+   * For `rate_limited`, when the limit's own wait is not a whole number of seconds (the access code
+   * of FRW-039): the wait in milliseconds, sent as `retryAfterMs` in the problem and, rounded up,
+   * as `Retry-After`.
+   */
+  retryAfterMs?: number;
+  /**
    * For the codes answered with 401: the `WWW-Authenticate` challenge. Default
    * `Bearer error="invalid_token"`; a request without credentials gets a bare `Bearer` (RFC 6750
    * §3).
@@ -71,6 +77,7 @@ export class ApiError extends Error {
   readonly status: number;
   readonly violations: readonly BodyViolation[] | undefined;
   readonly retryAfterS: number | undefined;
+  readonly retryAfterMs: number | undefined;
   readonly challenge: string | undefined;
 
   constructor(code: RestCode, detail: string, opts: ApiErrorOptions = {}) {
@@ -78,7 +85,12 @@ export class ApiError extends Error {
     this.code = code;
     this.status = opts.status ?? statusOf(code);
     this.violations = opts.violations;
-    this.retryAfterS = opts.retryAfterS;
+    this.retryAfterS =
+      opts.retryAfterS ??
+      (opts.retryAfterMs === undefined
+        ? undefined
+        : Math.max(1, Math.ceil(opts.retryAfterMs / 1000)));
+    this.retryAfterMs = opts.retryAfterMs;
     this.challenge = opts.challenge;
   }
 }
@@ -112,5 +124,6 @@ export function problemOf(e: ApiError, requestId: string): Record<string, unknow
     code: e.code,
     requestId,
     ...(e.violations?.length ? { violations: e.violations } : {}),
+    ...(e.retryAfterMs !== undefined ? { retryAfterMs: e.retryAfterMs } : {}),
   };
 }

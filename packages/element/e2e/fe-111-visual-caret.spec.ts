@@ -29,8 +29,22 @@ function editorCaret(page: Page): Promise<CaretAt> {
     const root = document.querySelector(sel)!.shadowRoot as
       (ShadowRoot & { getSelection?: () => Selection | null }) | null;
     const p = root!.querySelector('p.de-p') as HTMLElement;
+    // Chromium and Firefox read the selection of the shadow root. WebKit's `getSelection` on a
+    // shadow root is retargeted to the host; it gives the real range through `getComposedRanges`
+    // (Safari 17 and later), which returns a static range.
     const s = root?.getSelection?.() ?? document.getSelection();
-    const range = s!.getRangeAt(0);
+    let range: Range = s!.getRangeAt(0);
+    const composed = (
+      s as unknown as {
+        getComposedRanges?: (o: { shadowRoots: ShadowRoot[] }) => StaticRange[];
+      }
+    ).getComposedRanges;
+    if (!root!.contains(range.startContainer) && composed) {
+      const sr = composed.call(s, { shadowRoots: [root!] })[0]!;
+      range = document.createRange();
+      range.setStart(sr.startContainer, sr.startOffset);
+      range.setEnd(sr.endContainer, sr.endOffset);
+    }
     const at = range.getBoundingClientRect();
     return { fromRight: p.getBoundingClientRect().right - at.left, text: p.textContent ?? '' };
   }, editor);
@@ -46,13 +60,9 @@ function referenceCaret(page: Page): Promise<CaretAt> {
 }
 
 test.describe('bidirectional caret in the web view (FE-111, criterion 2, visual)', () => {
-  // WebKit reports the selection of a shadow root retargeted to the document: its anchor is the
-  // host's parent at offset 0, and the collapsed caret has an empty rect. Measured on 2026-11-13
-  // (lane V-FE-097-112). Chromium and Firefox read the caret inside the shadow root.
-  test.skip(
-    ({ browserName }) => browserName === 'webkit',
-    'WebKit gives the shadow root selection a retargeted anchor and an empty caret rect',
-  );
+  // WebKit reports the selection of a shadow root retargeted to the document (anchor: the host's
+  // parent at offset 0, empty caret rect; measured 2026-11-13, lane V-FE-097-112). The helper
+  // `editorCaret` reads the real range with `getComposedRanges` there (lane w1, 2026-11-18).
 
   test('ArrowRight from the end draws the caret where the browser draws it in a plain element', async ({
     page,
@@ -67,6 +77,8 @@ test.describe('bidirectional caret in the web view (FE-111, criterion 2, visual)
       return { x: r.left + 2, y: r.top + r.height / 2 };
     }, editor);
     await page.mouse.click(at.x, at.y);
+    // End moves to the logical end of the line; Firefox sometimes put the click at the start.
+    await page.keyboard.press('End');
     await page.keyboard.type(TYPED);
 
     const text = await page.evaluate((sel) => {

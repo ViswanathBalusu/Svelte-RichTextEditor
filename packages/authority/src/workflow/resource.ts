@@ -13,6 +13,7 @@
  *   `name` are the only identifying members (12 §6.1).
  * - `completed` is not accepted from the writer: completion is the workflow's own transition.
  */
+import { checkAuthRequire } from './access-code.ts';
 import type { ParticipantKind } from './lifecycle.ts';
 
 /** The participant kinds of 12 §6.1. Any other kind is refused. */
@@ -131,11 +132,10 @@ function checkOne(
   let authOk: ParticipantDraft['auth'] | undefined;
   if (auth !== undefined) {
     const req = isObj(auth) ? auth['require'] : undefined;
+    // The only method is the access code (12 §6.1, §7; FRW-039 criterion 5): any other is refused.
     if (
-      !isObj(auth) ||
-      Object.keys(auth).some((m) => m !== 'require') ||
-      (req !== undefined &&
-        (!Array.isArray(req) || !req.every(isNonEmptyString) || new Set(req).size !== req.length))
+      !checkAuthRequire(auth).ok ||
+      (req !== undefined && (!Array.isArray(req) || new Set(req).size !== req.length))
     )
       fail('auth', 'invalid_auth');
     else authOk = req === undefined ? {} : { require: [...(req as string[])] };

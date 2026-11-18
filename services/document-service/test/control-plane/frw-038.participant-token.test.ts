@@ -121,7 +121,18 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     async function open(c: DepClient, doc: string, ch = 1) {
       const o = await c.open(ch, doc);
       expect(o.t, JSON.stringify(o.d)).toBe('ch.opened');
-      return (o.d as { access: { fill: unknown } }).access.fill;
+      const fill = (o.d as { access: { fill: { participant?: string } | null } }).access.fill;
+      // A bound participant's first view is recorded after the channel opens (FRW-040): wait for
+      // it, so that its transition does not interleave with what the test does next.
+      if (fill?.participant !== undefined) {
+        const pid = fill.participant;
+        for (let i = 0; i < 100; i++) {
+          const row = await h.parts.workflows!.read(h.tenant, doc);
+          if (row?.participants.find((p) => p.id === pid)?.firstViewedAt !== undefined) break;
+          await new Promise((r) => setTimeout(r, 30));
+        }
+      }
+      return fill;
     }
 
     const base = async (ref: { tenant: string; doc: string }) => (await h.parts.logs.head(ref)).seq;
@@ -266,23 +277,21 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const before = c.all('perm.changed', 1).length;
         await refresh({ wfp: 'p1' });
         expect(c.all('perm.changed', 1)).toHaveLength(before);
+        // The perm.changed messages of the channel after the first view, in order.
+        const perm = async (n: number) => {
+          for (let i = 0; i < 100 && c.all('perm.changed', 1).length <= n; i++)
+            await new Promise((r) => setTimeout(r, 30));
+          return c.all('perm.changed', 1)[n]!;
+        };
         // A wfp that binds to no one: the fill capability goes.
         await refresh({ wfp: 'nobody' });
-        const lost = await c.take(
-          (m) => m.t === 'perm.changed' && m.ch === 1,
-          5000,
-          'perm.changed',
-        );
+        const lost = await perm(before);
         expect((lost.d as { fill: unknown }).fill).toBeNull();
         const refused = await c.submit(1, { base: await base(ref), steps: [set('Ada')] });
         expect(refused.t).toBe('sync.reject');
         // And back to the participant: the capability returns with the participant's roles.
         await refresh({ wfp: 'p1' });
-        const back = await c.take(
-          (m) => m.t === 'perm.changed' && m.ch === 1,
-          5000,
-          'perm.changed',
-        );
+        const back = await perm(before + 1);
         expect((back.d as { fill: unknown }).fill).toEqual({
           participant: 'p1',
           roles: ['tenant'],
@@ -310,21 +319,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             const r = await post(`/v1/documents/${doc}/workflow/void`, owner, { reason: 'Stop' });
             expect(r.status, r.text).toBe(200);
           } else if (end === 'declined') {
-            // A decline needs the workflow to be in progress: the first view moves it.
-            const view = await import('../../src/workflow/progress.ts');
-            const out = await view.recordFirstView(
-              {
-                workflows: h.parts.workflows!,
-                grants: h.parts.grants,
-                logs: h.parts.logs,
-                notifier: h.service.dataPlane,
-                audit: h.parts.audit,
-                now: h.now,
-                controlWaitMs: 5000,
-              },
-              { ref, actor: 'p1', participant: 'p1' },
-            );
-            expect(out).toMatchObject({ ok: true });
+            // The participant opened the document, so the workflow is in progress (FRW-040).
             const r = await post(`/v1/documents/${doc}/workflow/participants/p1/decline`, token, {
               reason: 'No',
             });

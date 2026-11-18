@@ -1,8 +1,9 @@
 <!--
   The assistant pane (UX-045; 13 §3, §6.2, §12). The author asks for a draft, a rewrite of the
   selection, a summary or an answer to a question, and the answer is shown here. Nothing in the
-  document changes: an answer reaches the text only through the author's approval as a suggestion
-  (UX-046), which this pane does not offer yet. A running request can be cancelled and then applies
+  document changes until the author approves the insertion, and then the core puts the result in as
+  suggestions, never as a direct edit (UX-046). Where the core refuses, nothing is applied and the
+  author is told. A running request can be cancelled and then applies
   nothing. A failure says what happened and offers a retry. The author's access decides which
   requests are available: a view-only author may ask questions and for summaries, and a draft or a
   rewrite is marked unavailable with its reason. Progress and completion are announced in a live
@@ -17,6 +18,7 @@
     announcement,
     assistantAsk,
     errorMessageKey,
+    insertionAllowed,
     retryOffered,
     type AssistantKind,
   } from '../assistant/request-lifecycle.ts';
@@ -50,6 +52,7 @@
 
   const KINDS: readonly AssistantKind[] = ['draft', 'rewrite', 'summary', 'question'];
   const running = $derived(run.phase === 'running');
+  const mayInsert = $derived(insertionAllowed(access?.current.caps ?? []));
   const offers = $derived(
     KINDS.map((kind) => ({ kind, offer: assistantAsk(kind, access?.current.caps ?? []) })),
   );
@@ -57,6 +60,7 @@
   const message = $derived.by(() => {
     const key = announcement(run);
     if (key) return t(key);
+    if (view.inserted) return t('assistant.inserted');
     return run.phase === 'cancelled' ? t('assistant.cancelled') : '';
   });
 
@@ -117,13 +121,40 @@
       tabindex="-1"
       aria-label={tr.t('assistant.response')}
     >
-      {run.text}
+      {view.answer?.text ?? run.text}
     </div>
+    {#if view.answer && view.answer.notices.length > 0}
+      <ul class="de-list" aria-label={tr.t('assistant.notices')} data-assistant-notices>
+        {#each view.answer.notices as notice, i (i)}
+          <li class="de-hint" data-notice={notice.code}>
+            {tr.t(`assistant.notice.${notice.code}` as StringKey, { target: notice.target })}
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    {#if view.insertRefused !== null}
+      <p class="de-error" data-assistant-insert-refused role="alert">
+        {tr.t('assistant.insert.refused')}
+      </p>
+    {/if}
     <div class="de-actions">
+      {#if api.insert}
+        <button
+          type="button"
+          class="de-button"
+          data-assistant-insert
+          aria-disabled={mayInsert ? undefined : 'true'}
+          aria-describedby={mayInsert ? undefined : `${id}-why-insert`}
+          onclick={() => mayInsert && void controller.approve()}>{tr.t('assistant.insert')}</button
+        >
+      {/if}
       <button type="button" class="de-button" onclick={() => controller.dismiss()}
         >{tr.t('assistant.dismiss')}</button
       >
     </div>
+    {#if api.insert && !mayInsert}
+      <p class="de-hint" id={`${id}-why-insert`}>{tr.t('assistant.refused.no-change')}</p>
+    {/if}
   {:else if run.phase === 'failed'}
     <p class="de-error" data-assistant-state="failed" data-failure={run.failure}>
       {t(errorMessageKey(run.failure))}
@@ -135,6 +166,8 @@
         >
       </div>
     {/if}
+  {:else if view.inserted}
+    <p class="de-hint" data-assistant-state="inserted">{tr.t('assistant.inserted')}</p>
   {:else if run.phase === 'cancelled'}
     <p class="de-hint" data-assistant-state="cancelled">{tr.t('assistant.cancelled')}</p>
   {/if}

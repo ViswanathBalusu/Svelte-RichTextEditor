@@ -32,7 +32,15 @@ export function activeParticipantIds(participants: readonly WorkflowParticipant[
 /** Whether the participant may fill now: the workflow is `sent` or `in_progress` and they are active. */
 export function fillActive(record: WorkflowRecord, participantId: string): boolean {
   if (record.state !== 'sent' && record.state !== 'in_progress') return false;
-  return activeParticipantIds(record.participants).includes(participantId);
+  if (!activeParticipantIds(record.participants).includes(participantId)) return false;
+  // A participant who must submit an access code fills only after they have (FRW-039).
+  const who = record.participants.find((p) => p.id === participantId);
+  return who === undefined || !awaitingCode(who);
+}
+
+/** Whether a participant has still to submit the access code their workflow requires of them. */
+export function awaitingCode(participant: WorkflowParticipant): boolean {
+  return participant.codeRequired === true && participant.verified !== true;
 }
 
 /** Whether a must-act participant has still to complete. */
