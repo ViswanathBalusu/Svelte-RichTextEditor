@@ -27,9 +27,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation PUT /documents/{id}/regions/{rid}/lease': LEASES,
   'operation DELETE /documents/{id}/regions/{rid}/lease': LEASES,
   'operation GET /documents/{id}/history': HISTORY,
-  'operation GET /documents/{id}/versions': HISTORY,
-  'operation GET /documents/{id}/diff': HISTORY,
-  'operation GET /documents/{id}/attribution': HISTORY,
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,
   'operation GET /imports/{jid}':
     'imports take a service credential and arrive with EXP (G79; D16)',
@@ -52,8 +49,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'error workflow_active': WORKFLOW,
   'error unavailable': FAULTS,
   'error internal': FAULTS,
-  'event version.created': HISTORY,
-  'event version.restored': HISTORY,
   'event import.completed': 'imports arrive with EXP (G79; D16)',
   'event import.failed': 'imports arrive with EXP (G79; D16)',
 };
