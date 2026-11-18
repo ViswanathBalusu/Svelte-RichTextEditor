@@ -1782,11 +1782,13 @@ As an operator, I want export workers to scale with the queue and stay warm at a
 
 - [ ] Given stateless workers that pull from the queue, when the queue depth grows, then the number of workers grows with it up to the configured maximum.
 - [ ] Given a warm minimum, when the queue is empty, then at least that many workers stay running.
-- [ ] Given a scale-down, when a worker is running a job, then it finishes the job first.
+- [x] Given a scale-down, when a worker is running a job, then it finishes the job first.
 - [ ] Given the worker image, when it is deployed, then it runs as a container on at least two orchestrators.
 - [ ] Given the load tests to the stage 2 targets, when they run, then the export queue wait stays within the target set by the unit-cost sheet.
 
-**Notes:** The warm minimum exists because a cold worker has to load a large image. Stage 1 runs "a few" workers (06 §6), which is covered by EXP-007.
+**Evidence:** Lane w2 (2026-11-18), criterion 3: `services/export-worker/test/exp-077-drain.e2e.test.ts` (one run, 21.8 s, on the development host, Podman and the image `localhost/docedit-export-worker:s4`, in-process test service; not skipped): an export is requested, the test waits until the job is `running` in the queue, queues a second export, then calls `ExportWorker.stop()`, which is what `src/main.ts` runs on SIGTERM or SIGINT. `stop()` resolves only after the first job is `completed`, the second job stays `queued`, and no further compile starts afterwards.
+
+**Notes:** The warm minimum exists because a cold worker has to load a large image. Stage 1 runs "a few" workers (06 §6), which is covered by EXP-007. Lane w2 (2026-11-18): criteria 1, 2, 4 and 5 stay unticked. Criteria 1 and 2 are about separate worker processes that a platform scales: `src/main.ts` runs one runner and nothing in this repository reads the queue depth and changes the number of worker processes. The in-process pool and `Autoscaler` of BE-065 (`services/document-service/src/control-plane/jobs/autoscale.ts`) scale workers inside the document service, not export-worker containers, so citing them would not show the criterion. They need an orchestrator's autoscaler (for example one fed by the queue-depth metric of BE-050 criterion 5, which is open) and a run on it. Criterion 4 needs two real orchestrators; only Podman is available here, and two Podman front ends are not two orchestrators. Criterion 5 needs the stage 2 load tests (BE-066) and the unit-cost sheet's target, which do not exist yet. Criterion 3 is shown for one worker stopped by `stop()`; a platform's grace period shorter than a job is not covered (the job's lease then expires and the queue retries it, BE-049).
 
 ### EXP-078 Gate TeX Live and class upgrades on reference PDFs
 
