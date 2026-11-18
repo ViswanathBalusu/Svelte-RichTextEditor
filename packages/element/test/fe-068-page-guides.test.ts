@@ -190,3 +190,16 @@ describe('loadLayoutReport (FE-068 criterion 2)', () => {
     expect(await loadLayoutReport('https://store.invalid/a.json', broken)).toBeNull();
   });
 });
+
+describe('page guides after an edit since the compile seq (FE-068 criterion 4; owner decision 179)', () => {
+  it('keeps the guides of the compile when the document has changed since its seq', () => {
+    // The owner's answer (docs/owner-decisions-2026-11-15.md, row 179): guides are kept and `seq`
+    // is not compared. The element holds the report from the last compile and clears it only when a
+    // session opens (doc-editor.ts), so an edit leaves the same starts to draw.
+    const report = parseLayoutReport({ ...(compiled as Record<string, unknown>), seq: 3 });
+    expect(report?.seq).toBe(3);
+    const guides = pageGuideBlockIds(report, true);
+    expect(guides).toHaveLength(9);
+    expect(pageGuideBlockIds(report, true)).toEqual(guides);
+  });
+});
