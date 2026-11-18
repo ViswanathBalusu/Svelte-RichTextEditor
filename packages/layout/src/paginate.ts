@@ -938,8 +938,12 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
       const remaining = stop - from;
       if (k < remaining) {
         if (item.widowControl) {
+          const fits = k;
           if (remaining - k < 2) k = remaining - 2;
           if (k < 2) k = 0;
+          // A keepNext chain outranks widow control for the one line it places (ADR 0120 item 4,
+          // owner decision 178): the heading is not left alone above a paragraph that moves whole.
+          if (k === 0 && from === 0 && chainTerminal === index && fits >= 1) k = 1;
         }
         if (k === 0) {
           // A column that is not empty, or an empty column below text whose footnote area the
