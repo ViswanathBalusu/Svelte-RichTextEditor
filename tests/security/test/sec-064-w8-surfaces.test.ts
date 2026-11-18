@@ -27,6 +27,7 @@ import { FULL_VIEWS } from '../../../services/document-service/src/control-plane
 import { createExportHandler } from '../../../services/export-worker/src/job.ts';
 import { TEST_FONTS } from '../../../services/export-worker/test/fonts.ts';
 import { unsandboxed } from '../../../services/asset-worker/src/index.ts';
+import { objectKeys } from '../../../services/document-service/src/objects/store.ts';
 import { SearchIndex } from '../../../services/document-service/src/control-plane/search-index.ts';
 import {
   documentWithRegions,
@@ -357,7 +358,13 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           // The output is delivered by a signed URL of the object store; the test reads the object
           // the URL names, from the store itself (the in-process store's URL is not fetchable).
           const url = (body['result'] as { url: string }).url;
-          const key = decodeURIComponent(url.replace(/^[a-z0-9+]+:\/\/[^/]*\//, '').split('?')[0]!);
+          const path = decodeURIComponent(
+            url.replace(/^[a-z0-9+]+:\/\/[^/]*\//, '').split('?')[0]!,
+          );
+          // With an asset origin the URL is `e/{tenant}/{job}/{name}` (SEC-036); without one it names
+          // the object key itself.
+          const served = /^e\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(path);
+          const key = served ? objectKeys.exportFile(served[1]!, served[2]!, served[3]!) : path;
           const bytes = await h.parts.objects.get(key.replace(/^objects\//, ''));
           expect(bytes, `the output object ${key} exists`).not.toBeNull();
           return { status: last.status, text: `${last.text}\n${new TextDecoder().decode(bytes!)}` };
