@@ -135,7 +135,7 @@ As a maintainer, I want the kernel to implement the measurement interface the la
 - [ ] Given the half-pixel harness of 02 §9.3, painted line widths match computed widths in every supported browser.
 - [ ] Measuring a typical paragraph stays within the kernel's share of the typing budget that S10 set (target).
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold yet (the page-view gate, SPK-013, is not held), and the story depends on WASM-005, which is blocked for that reason. Every criterion needs the kernel to shape manifest font files in the editor: the two-provider run of the layout test suite, the documented advance unit, the cache keyed by font epoch, the half-pixel harness against painted widths in four browsers, and the share of the typing budget. None of these can be met by a mock, and a provider with no font loader and no worker would be scaffolding. The S10 prototype in `packages/perf/src/kernel/` is measurement code and is not the editor's provider; its measurements (SPK-023) stay the evidence for the budget. The engine is harfbuzzjs (ADR 0016, "Result of S10"), so this story does not wait on a Rust build.
 
 ### WASM-007 Unicode segmentation in the kernel
 
