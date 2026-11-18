@@ -574,7 +574,8 @@ export const AUTHZ: ProfileDef = {
     }),
     a({
       id: 'asset.upload',
-      title: 'row 6: an upload needs edit, suggest or fill somewhere, and its uploader completes it',
+      title:
+        'row 6: an upload needs edit, suggest or fill somewhere, and its uploader completes it',
       spec: '07 §12 row 6; 05 §6.2',
       needs: { features: ['assets'] },
       covers: {
