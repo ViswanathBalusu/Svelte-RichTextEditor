@@ -1,34 +1,39 @@
-// BE-054 criteria 1 and 3 on PostgreSQL (lane U-BE-043-056): the search tables of search-index-pg.ts
-// and the indexer job of search-indexer.ts writing to them, against a database this test creates
-// (docedit_u_be_043_056_<hex>) and drops afterwards. Tenants carry the lane name so that nothing
-// else in the shared database is touched. Skips, with the reason, when PostgreSQL is not up
-// (infra/test-env.ps1 up). Not shown here: the GET /search route (criterion 2), the purge pipeline
-// that calls purgeDocument (criterion 3), and the call that queues a job after a checkpoint write
-// (criterion 1); criterion 5 is not a database question.
-import { randomBytes } from 'node:crypto';
-import pg from 'pg';
+// BE-054 criteria 1 and 3 on PostgreSQL: the search tables of migration 0086 (through
+// search-index-pg.ts) and the indexer job of search-indexer.ts writing to them, against a migrated
+// database that createTestDatabase makes and drops. The service role connects, so row-level
+// security applies, as in the running service. Skips, with the reason, when PostgreSQL is not up
+// (infra/test-env.ps1 up). The queueing after a checkpoint, the route and the purge are in
+// be-054-wired.pg.test.ts.
+import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { JsonNode } from '@docedit/model';
 import type { JobRecord } from '../../src/control-plane/jobs/queue.ts';
 import type { JobContext } from '../../src/control-plane/jobs/runner.ts';
 import { SearchIndex } from '../../src/control-plane/search-index.ts';
-import {
-  PgSearchIndex,
-  SEARCH_INDEX_DDL,
-  tokenCounts,
-} from '../../src/control-plane/search-index-pg.ts';
+import { PgSearchIndex, tokenCounts } from '../../src/control-plane/search-index-pg.ts';
 import {
   createSearchIndexHandler,
   type CheckpointSource,
 } from '../../src/control-plane/search-indexer.ts';
-import { ADMIN, postgresUnavailable } from '../support/env.ts';
+import { inTenant } from '../../src/storage/db.ts';
+import {
+  createTestDatabase,
+  newTenant,
+  postgresUnavailable,
+  type TestDatabase,
+} from '../support/env.ts';
 
 const unavailable = await postgresUnavailable();
 if (unavailable) console.warn(`skipped: ${unavailable}`);
 
-const LANE = 'U-BE-043-056';
-const TENANT_A = `t-${LANE}-a`;
-const TENANT_B = `t-${LANE}-b`;
+const TENANT_A = newTenant();
+const TENANT_B = newTenant();
+
+/** A document identifier made from a short name, so that the cases read as they did. */
+const D = (name: string): string => {
+  const h = createHash('md5').update(name).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
+};
 
 const paragraph = (text: string): JsonNode => ({
   type: 'doc',
@@ -77,47 +82,31 @@ function jobFor(tenant: string, doc: string, seq: number, visibility: string): J
 describe.skipIf(unavailable !== null)(
   'BE-054 on PostgreSQL: the search tables and the indexer',
   () => {
-    const name = `docedit_u_be_043_056_${randomBytes(6).toString('hex')}`;
-    let pool: pg.Pool;
+    let db: TestDatabase;
+    let pool: TestDatabase['service'];
 
     beforeAll(async () => {
-      const root = new pg.Client(ADMIN);
-      await root.connect();
-      try {
-        await root.query(`CREATE DATABASE ${name}`);
-      } finally {
-        await root.end();
-      }
-      pool = new pg.Pool({ ...ADMIN, database: name, max: 4 });
-      await pool.query(SEARCH_INDEX_DDL);
+      db = await createTestDatabase();
+      pool = db.service;
     }, 120_000);
 
-    afterAll(async () => {
-      await pool?.end();
-      const root = new pg.Client(ADMIN);
-      await root.connect();
-      try {
-        await root.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
-      } finally {
-        await root.end();
-      }
-    }, 120_000);
+    afterAll(() => db?.drop(), 120_000);
 
     it('indexes a checkpoint through the job and finds it for its tenant only (criterion 1)', async () => {
       const src = checkpoints();
       const index = new PgSearchIndex(pool);
       const handler = indexer({ checkpoints: src, index });
-      src.put(TENANT_A, 'doc-1', 3, 'full', paragraph('The quick brown fox. The fox sleeps.'));
-      src.put(TENANT_B, 'doc-1', 3, 'full', paragraph('An unrelated fox in another tenant.'));
+      src.put(TENANT_A, D('doc-1'), 3, 'full', paragraph('The quick brown fox. The fox sleeps.'));
+      src.put(TENANT_B, D('doc-1'), 3, 'full', paragraph('An unrelated fox in another tenant.'));
 
-      const a = await handler(jobFor(TENANT_A, 'doc-1', 3, 'full'));
+      const a = await handler(jobFor(TENANT_A, D('doc-1'), 3, 'full'));
       expect(a).toEqual({ indexed: true, seq: 3 });
-      await handler(jobFor(TENANT_B, 'doc-1', 3, 'full'));
+      await handler(jobFor(TENANT_B, D('doc-1'), 3, 'full'));
 
       const hitsA = await index.search(TENANT_A, 'fox', { readable: 'all', limit: 10 });
-      expect(hitsA).toEqual([{ doc: 'doc-1', seq: 3, score: 2 }]);
+      expect(hitsA).toEqual([{ doc: D('doc-1'), seq: 3, score: 2 }]);
       const hitsB = await index.search(TENANT_B, 'fox', { readable: 'all', limit: 10 });
-      expect(hitsB).toEqual([{ doc: 'doc-1', seq: 3, score: 1 }]);
+      expect(hitsB).toEqual([{ doc: D('doc-1'), seq: 3, score: 1 }]);
       expect(await index.search(TENANT_A, 'unrelated', { readable: 'all', limit: 10 })).toEqual([]);
       expect(await index.size(TENANT_A)).toBe(1);
     });
@@ -126,29 +115,29 @@ describe.skipIf(unavailable !== null)(
       const src = checkpoints();
       const index = new PgSearchIndex(pool);
       const handler = indexer({ checkpoints: src, index });
-      src.put(TENANT_A, 'doc-seq', 5, 'full', paragraph('alpha beta'));
-      src.put(TENANT_A, 'doc-seq', 4, 'full', paragraph('gamma'));
-      src.put(TENANT_A, 'doc-seq', 6, 'full', paragraph('delta'));
+      src.put(TENANT_A, D('doc-seq'), 5, 'full', paragraph('alpha beta'));
+      src.put(TENANT_A, D('doc-seq'), 4, 'full', paragraph('gamma'));
+      src.put(TENANT_A, D('doc-seq'), 6, 'full', paragraph('delta'));
 
-      expect(await handler(jobFor(TENANT_A, 'doc-seq', 5, 'full'))).toEqual({
+      expect(await handler(jobFor(TENANT_A, D('doc-seq'), 5, 'full'))).toEqual({
         indexed: true,
         seq: 5,
       });
-      expect(await handler(jobFor(TENANT_A, 'doc-seq', 4, 'full'))).toEqual({
+      expect(await handler(jobFor(TENANT_A, D('doc-seq'), 4, 'full'))).toEqual({
         indexed: false,
         seq: 4,
       });
       // The lower checkpoint did not replace the tokens of the higher one.
       expect(await index.search(TENANT_A, 'alpha', { readable: 'all', limit: 5 })).toEqual([
-        { doc: 'doc-seq', seq: 5, score: 1 },
+        { doc: D('doc-seq'), seq: 5, score: 1 },
       ]);
       expect(await index.search(TENANT_A, 'gamma', { readable: 'all', limit: 5 })).toEqual([]);
-      expect(await handler(jobFor(TENANT_A, 'doc-seq', 6, 'full'))).toEqual({
+      expect(await handler(jobFor(TENANT_A, D('doc-seq'), 6, 'full'))).toEqual({
         indexed: true,
         seq: 6,
       });
       expect(await index.search(TENANT_A, 'delta', { readable: 'all', limit: 5 })).toEqual([
-        { doc: 'doc-seq', seq: 6, score: 1 },
+        { doc: D('doc-seq'), seq: 6, score: 1 },
       ]);
       expect(await index.search(TENANT_A, 'alpha', { readable: 'all', limit: 5 })).toEqual([]);
     });
@@ -157,16 +146,16 @@ describe.skipIf(unavailable !== null)(
       const src = checkpoints();
       const index = new PgSearchIndex(pool);
       const handler = indexer({ checkpoints: src, index });
-      src.put(TENANT_A, 'doc-class', 1, 'full', paragraph('public wording'));
-      src.put(TENANT_A, 'doc-class', 1, 'restricted', paragraph('secret wording'));
-      await handler(jobFor(TENANT_A, 'doc-class', 1, 'full'));
-      await handler(jobFor(TENANT_A, 'doc-class', 1, 'restricted'));
+      src.put(TENANT_A, D('doc-class'), 1, 'full', paragraph('public wording'));
+      src.put(TENANT_A, D('doc-class'), 1, 'restricted', paragraph('secret wording'));
+      await handler(jobFor(TENANT_A, D('doc-class'), 1, 'full'));
+      await handler(jobFor(TENANT_A, D('doc-class'), 1, 'restricted'));
 
       const onlyFull = await index.search(TENANT_A, 'wording', {
         readable: new Set(['full']),
         limit: 5,
       });
-      expect(onlyFull).toEqual([{ doc: 'doc-class', seq: 1, score: 1 }]);
+      expect(onlyFull).toEqual([{ doc: D('doc-class'), seq: 1, score: 1 }]);
       expect(
         await index.search(TENANT_A, 'secret', { readable: new Set(['full']), limit: 5 }),
       ).toEqual([]);
@@ -180,19 +169,21 @@ describe.skipIf(unavailable !== null)(
       const src = checkpoints();
       const index = new PgSearchIndex(pool);
       const handler = indexer({ checkpoints: src, index });
-      src.put(TENANT_A, 'doc-purge', 2, 'full', paragraph('purgeable words here'));
-      src.put(TENANT_A, 'doc-keep', 2, 'full', paragraph('purgeable words kept'));
-      src.put(TENANT_B, 'doc-purge', 2, 'full', paragraph('purgeable words elsewhere'));
-      await handler(jobFor(TENANT_A, 'doc-purge', 2, 'full'));
-      await handler(jobFor(TENANT_A, 'doc-keep', 2, 'full'));
-      await handler(jobFor(TENANT_B, 'doc-purge', 2, 'full'));
+      src.put(TENANT_A, D('doc-purge'), 2, 'full', paragraph('purgeable words here'));
+      src.put(TENANT_A, D('doc-keep'), 2, 'full', paragraph('purgeable words kept'));
+      src.put(TENANT_B, D('doc-purge'), 2, 'full', paragraph('purgeable words elsewhere'));
+      await handler(jobFor(TENANT_A, D('doc-purge'), 2, 'full'));
+      await handler(jobFor(TENANT_A, D('doc-keep'), 2, 'full'));
+      await handler(jobFor(TENANT_B, D('doc-purge'), 2, 'full'));
 
-      expect(await index.purgeDocument(TENANT_A, 'doc-purge')).toBe(1);
+      expect(await index.purgeDocument(TENANT_A, D('doc-purge'))).toBe(1);
       const left = await index.search(TENANT_A, 'purgeable', { readable: 'all', limit: 10 });
-      expect(left.map((h) => h.doc)).toEqual(['doc-keep']);
-      const tokens = await pool.query<{ n: string }>(
-        `SELECT count(*)::text AS n FROM search_tokens WHERE tenant = $1 AND doc = $2`,
-        [TENANT_A, 'doc-purge'],
+      expect(left.map((h) => h.doc)).toEqual([D('doc-keep')]);
+      const tokens = await inTenant(pool, TENANT_A, (c) =>
+        c.query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM search_tokens WHERE tenant_id = $1 AND doc_id = $2`,
+          [TENANT_A, D('doc-purge')],
+        ),
       );
       expect(tokens.rows[0]?.n).toBe('0');
       // The other tenant's document with the same identifier is untouched.
@@ -206,10 +197,10 @@ describe.skipIf(unavailable !== null)(
       const pgIndex = new PgSearchIndex(pool);
       const memIndex = new SearchIndex();
       const docs: [string, string][] = [
-        ['d-b', 'red red blue'],
-        ['d-a', 'red blue green'],
-        ['d-c', 'red'],
-        ['d-d', 'blue only'],
+        [D('d-b'), 'red red blue'],
+        [D('d-a'), 'red blue green'],
+        [D('d-c'), 'red'],
+        [D('d-d'), 'blue only'],
       ];
       for (const [i, [doc, text]] of docs.entries()) {
         const content = paragraph(text);
@@ -259,7 +250,7 @@ describe.skipIf(unavailable !== null)(
       };
       await index.indexCheckpoint({
         tenant: TENANT_A,
-        doc: 'doc-pres',
+        doc: D('doc-pres'),
         seq: 1,
         visibility: 'full',
         content,

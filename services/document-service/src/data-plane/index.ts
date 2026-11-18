@@ -184,6 +184,12 @@ class DepDataPlane implements DataPlane {
         store: deps.checkpoints,
         index: deps.checkpointIndex,
         workers: this.#workers,
+        ...(deps.onCheckpoint
+          ? {
+              onSaved: deps.onCheckpoint,
+              onSavedError: (e: unknown) => s.onError(e, 'checkpoint.onSaved'),
+            }
+          : {}),
       }),
       workers: this.#workers,
       audit: this.#audit,
