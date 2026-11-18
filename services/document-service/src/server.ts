@@ -111,6 +111,11 @@ import {
 } from './control-plane/metrics.ts';
 import { Pipeline, type PlainHandler, type Reply } from './control-plane/pipeline.ts';
 import { auditPartitionsTask } from './control-plane/audit-partitions-task.ts';
+import {
+  PayloadThinning,
+  payloadThinningTask,
+  type ThinningStore,
+} from './control-plane/payload-thinning.ts';
 import { SCHEDULE_KIND, Scheduler, type ScheduledTask } from './control-plane/scheduler.ts';
 import { applySeed, parseSeed } from './control-plane/seed.ts';
 import {
@@ -220,6 +225,11 @@ export interface ServiceParts {
    * member of `docedit_purge`. Absent: the route is not offered.
    */
   tombstoneStore?: TombstoneStore;
+  /**
+   * The rows of the thinning of old payloads (HIS-032). Like `purgeStore` it needs a pool that
+   * connects as a member of `docedit_purge`. Absent: no thinning task runs.
+   */
+  thinningStore?: ThinningStore;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
@@ -948,7 +958,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
           now,
         })
       : null;
+  const thinning =
+    parts.thinningStore && parts.retention && parts.audit
+      ? new PayloadThinning({
+          store: parts.thinningStore,
+          retention: parts.retention,
+          audit: parts.audit,
+          now,
+        })
+      : null;
   const tasks: ScheduledTask[] = [
+    // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
+    // scheduler hands the task the documents under a legal hold, and the task leaves them alone.
+    ...(thinning ? [payloadThinningTask(thinning)] : []),
     // The purge of deleted documents past their retention (HIS-039); held documents are left alone.
     ...(purge
       ? [
