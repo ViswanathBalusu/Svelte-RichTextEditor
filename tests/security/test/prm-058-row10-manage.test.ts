@@ -44,7 +44,7 @@ describe('PRM-058 row 10: the matrix row lists the operations and refuses a user
 
   it('names every operation of 07 §12 row 10, including the workflow action', () => {
     expect(row.requirement).toMatchObject({ kind: 'manage' });
-    const ops = (row.requirement as { operations: string[] }).operations;
+    const ops = (row.requirement as unknown as { operations: string[] }).operations;
     for (const op of [
       'document.restore',
       'grants.change',

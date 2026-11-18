@@ -40,26 +40,24 @@ async function append(h: Harness, doc: string, texts: string[]): Promise<void> {
   const head = await h.parts.logs.head(ref);
   const perms = await h.parts.grants.current(ref);
   const pos = inside(documentWithRegions()['doc'], INTRO);
-  const commits = texts.map(
-    (t, i): StoredCommit => ({
-      seq: head.seq + 1 + i,
-      id: uuid7(),
-      kind: 'steps',
-      steps: [
-        { stepType: 'replace', from: pos, to: pos, slice: { content: [{ type: 'text', text: t }] } },
-      ] as StoredCommit['steps'],
-      user: 'u-alice',
-      session: 'session-test',
-      time: h.now(),
-      origin: 'input',
-      scopes: ['body'],
-      revision: perms.revision,
-      cdm: 1,
-      engine: 'pm-steps/1',
-      retired: [],
-      claimed: [],
-    }),
-  );
+  const commits = texts.map((t, i): StoredCommit => ({
+    seq: head.seq + 1 + i,
+    id: uuid7(),
+    kind: 'steps',
+    steps: [
+      { stepType: 'replace', from: pos, to: pos, slice: { content: [{ type: 'text', text: t }] } },
+    ] as StoredCommit['steps'],
+    user: 'u-alice',
+    session: 'session-test',
+    time: h.now(),
+    origin: 'input',
+    scopes: ['body'],
+    revision: perms.revision,
+    cdm: 1,
+    engine: 'pm-steps/1',
+    retired: [],
+    claimed: [],
+  }));
   const r = await h.parts.logs.append(ref, {
     epoch,
     revision: perms.revision,

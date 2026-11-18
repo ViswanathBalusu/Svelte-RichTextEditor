@@ -46,8 +46,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       h = await startHarness(storage, { realDataPlane: true });
       doc = await h.createDocument({ content: version(0), title: 'Audited restore' });
       for (const n of [1, 2]) {
-        const etag = (await h.call('GET', `/v1/documents/${doc}/content`, { token: h.apiKey }))
-          .headers.get('etag')!;
+        const etag = (
+          await h.call('GET', `/v1/documents/${doc}/content`, { token: h.apiKey })
+        ).headers.get('etag')!;
         const r = await h.call('PUT', `/v1/documents/${doc}/content`, {
           token: h.apiKey,
           body: version(n),
