@@ -11,8 +11,8 @@
  * because nothing names the target afterwards. Remote and internal transactions pass, as the region
  * guard lets them: the authority decides those.
  *
- * Not here: the explanation and the list of references that the view shows (FE-133 criterion 4),
- * which needs the view. `style:` and `field:` targets belong to `styleRef` and `formValue` fields,
+ * The refusal is reported to the core, which records it as a `referenced` refusal for the shell to
+ * explain, and `referencePositions` finds the references to show (FE-133 criterion 5). `style:` and `field:` targets belong to `styleRef` and `formValue` fields,
  * not to `ref`, and are not checked here.
  */
 import type { Node as PMNode } from 'prosemirror-model';
@@ -73,14 +73,35 @@ export function removedReferencedTargets(before: PMNode, after: PMNode): string[
   return out.sort();
 }
 
-/** Refuses a local transaction that removes a target which a remaining reference names (I4). */
-export function referenceGuardPlugin(): Plugin {
+/** The `ref` fields of a document that name one of `targets`, as positions in document order. */
+export function referencePositions(doc: PMNode, targets: readonly string[]): number[] {
+  const out: number[] = [];
+  const wanted = new Set(targets);
+  doc.descendants((node, pos) => {
+    if (node.type.name === 'field' && node.attrs['kind'] === 'ref') {
+      const target = node.attrs['target'];
+      if (typeof target === 'string' && wanted.has(target)) out.push(pos);
+    }
+    return true;
+  });
+  return out;
+}
+
+/**
+ * Refuses a local transaction that removes a target which a remaining reference names (I4). The
+ * refusal is reported to `refused` with the targets, so that the shell can explain it and offer to
+ * show the references (FE-133 criterion 5).
+ */
+export function referenceGuardPlugin(refused?: (targets: readonly string[]) => void): Plugin {
   return new Plugin({
     key: referencedTargetKey,
     filterTransaction(tr, state) {
       if (!tr.docChanged) return true;
       if (tr.getMeta(REMOTE) === true || tr.getMeta(INTERNAL) === true) return true;
-      return removedReferencedTargets(state.doc, tr.doc).length === 0;
+      const removed = removedReferencedTargets(state.doc, tr.doc);
+      if (removed.length === 0) return true;
+      refused?.(removed);
+      return false;
     },
   });
 }

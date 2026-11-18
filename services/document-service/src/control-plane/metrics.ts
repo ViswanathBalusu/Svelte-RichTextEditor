@@ -113,6 +113,7 @@ export class Metrics {
 /** The cost drivers of 06 §10 that BE-085 names, as counter names. */
 export const DRIVERS = {
   commits: 'docedit_tenant_commits_total',
+  logBytes: 'docedit_tenant_log_bytes_total',
   payloadBytes: 'docedit_tenant_payload_bytes_total',
   checkpoints: 'docedit_tenant_checkpoints_total',
   checkpointBytes: 'docedit_tenant_checkpoint_bytes_total',
@@ -124,6 +125,8 @@ export const DRIVERS = {
 
 const HELP: Readonly<Record<string, string>> = {
   [DRIVERS.commits]: 'Commits stored, per tenant (BE-085).',
+  [DRIVERS.logBytes]:
+    'UTF-8 bytes of the commits stored, whole (metadata and steps, as JSON), per tenant (BE-085).',
   [DRIVERS.payloadBytes]: 'UTF-8 bytes of the step payloads stored, per tenant (BE-085).',
   [DRIVERS.checkpoints]: 'Checkpoints written, per tenant (BE-085).',
   [DRIVERS.checkpointBytes]: 'Bytes of the checkpoints written, compressed, per tenant (BE-085).',
@@ -178,9 +181,13 @@ export function meteredLogs<T extends LogStore>(inner: T, meter: TenantMeter): T
     if (r.status === 'ok') {
       meter.add(ref.tenant, DRIVERS.commits, req.commits.length);
       let bytes = 0;
-      for (const c of req.commits as ReadonlyArray<{ steps?: unknown }>)
+      let whole = 0;
+      for (const c of req.commits as ReadonlyArray<{ steps?: unknown }>) {
         bytes += utf8Length(JSON.stringify(c.steps ?? []));
+        whole += utf8Length(JSON.stringify(c));
+      }
       meter.add(ref.tenant, DRIVERS.payloadBytes, bytes);
+      meter.add(ref.tenant, DRIVERS.logBytes, whole);
     }
     return r;
   };

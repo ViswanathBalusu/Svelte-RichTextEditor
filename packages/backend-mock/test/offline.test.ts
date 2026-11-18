@@ -111,10 +111,10 @@ describe('backend-mock without the presence port (PRO-099, backend half of crite
     const asksPresence = service.backend(
       { sub: 'eddie' },
       { [docId]: 'editor' },
-      { features: ['presence', 'fields'] },
+      { features: ['presence', 'workflow'] },
     );
     await asksPresence.connect();
-    // `fields` is not offered by the mock (FRW-065), so it is never negotiated.
+    // `workflow` is not offered by the mock, so it is never negotiated.
     expect([...asksPresence.features]).toEqual(['presence']);
     await asksPresence.close();
     await service.dispose();

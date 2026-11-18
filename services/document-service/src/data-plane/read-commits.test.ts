@@ -6,6 +6,12 @@
  * data plane over the same stores, with no room: `gateOf`). Both paths must give the same pages and
  * the same refusals.
  */
+import {
+  NOTHING_HIDDEN,
+  type HiddenSet,
+  type PermissionState,
+  type Visibility,
+} from '@docedit/authority';
 import type { JsonEnvelope } from '@docedit/model';
 import { afterEach, describe, expect, it } from 'vitest';
 import { baseDoc, posInside } from '../../../../packages/authority/test/fixtures.ts';
@@ -75,8 +81,22 @@ async function writeCommits(
 }
 
 /** A second data plane over the same stores: no room holds the document, so storage is read. */
-async function storedPlane(p: Plane, now: () => number): Promise<Plane> {
-  return plane({ stores: p.stores, checkpoints: p.checkpoints, tenant: p.tenant, now });
+async function storedPlane(
+  p: Plane,
+  now: () => number,
+  deps?: Parameters<typeof startPlane>[0] extends infer O
+    ? O extends { deps?: infer D }
+      ? D
+      : never
+    : never,
+): Promise<Plane> {
+  return plane({
+    stores: p.stores,
+    checkpoints: p.checkpoints,
+    tenant: p.tenant,
+    now,
+    ...(deps ? { deps } : {}),
+  });
 }
 
 function identity(
@@ -170,6 +190,50 @@ describe('DataPlane.readCommits pages the log (BE-038 criterion 1)', () => {
       expect((await reader.plane.readCommits(id, doc, 3, 200)).items.map((x) => x.seq)).toEqual([
         4,
       ]);
+    }
+  });
+});
+
+describe('DataPlane.readCommits for a reader whose class hides content (BE-098 criterion 1; ADR 0019)', () => {
+  const LEGAL = 'rLegal000000000B';
+  const hideLegalFromFrank: Visibility = (conn, _doc, perms: PermissionState): HiddenSet =>
+    conn.sub === 'frank' && !perms.grants.some((g) => g.principal === 'user:frank')
+      ? { regions: new Set([LEGAL]), values: new Set(), titles: false }
+      : NOTHING_HIDDEN;
+  const legal = () => posInside(baseDoc(), 'pLegal000000001B');
+
+  it("serves the steps of the reader's class and its view token, in the room and from storage", async () => {
+    const c = clock();
+    const p = await plane({
+      now: c.now,
+      stores: withHistory('all'),
+      deps: { visibility: hideLegalFromFrank },
+    });
+    const doc = await p.createDocument();
+    const bob = await p.client('bob', { [doc]: 'editor' });
+    await bob.open(1, doc);
+    expect((await bob.submit(1, { base: 0, steps: [insertText(legal(), 'SECRETWORD')] })).t).toBe(
+      'sync.ack',
+    );
+    expect((await bob.submit(1, { base: 1, steps: [insertText(intro(), 'seen')] })).t).toBe(
+      'sync.ack',
+    );
+    const frank = identity(p, 'frank', doc);
+    const carol = identity(p, 'carol', doc);
+    for (const reader of [p, await storedPlane(p, c.now, { visibility: hideLegalFromFrank })]) {
+      const page = await reader.plane.readCommits(frank, doc, 0, 200);
+      expect(page.items.map((x) => x.seq)).toEqual([1, 2]);
+      // The commit inside the hidden region arrives empty; the other is mapped to the projection.
+      expect(page.items[0]).toMatchObject({ kind: 'steps', steps: [] });
+      expect(page.items[1]!.steps).toHaveLength(1);
+      expect(JSON.stringify(page)).not.toContain('SECRETWORD');
+      expect(JSON.stringify(page)).not.toContain('region:');
+      // The token is the one a content read of the same plane gives the reader.
+      expect(page.view).toBe((await reader.plane.readContent(frank, doc)).view);
+      // A reader of the full class gets the steps as stored and no token.
+      const full = await reader.plane.readCommits(carol, doc, 0, 200);
+      expect(JSON.stringify(full)).toContain('SECRETWORD');
+      expect(full.view).toBeUndefined();
     }
   });
 });

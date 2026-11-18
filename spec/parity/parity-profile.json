@@ -1536,6 +1536,10 @@
       "capability": "regions-and-permissions"
     },
     {
+      "id": "history.nameVersion",
+      "capability": "version-history"
+    },
+    {
       "id": "review.comment",
       "capability": "comments"
     },

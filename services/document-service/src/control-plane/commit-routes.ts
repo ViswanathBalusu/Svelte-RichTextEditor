@@ -3,16 +3,24 @@
  * decision D141): the paged commit log for catch-up.
  *
  * For a user the data plane pages the log (`DataPlane.readCommits`, packet A): it applies the
- * history visibility gate (`after` below the gate is `forbidden`) and serves readers whose class
- * hides nothing; a reader whose class hides content reloads instead (the gateway's rule), which it
- * answers with `unavailable`. A service credential, and a user when the data plane offers no page,
- * read from storage here under the same rules. A page lists commits as `sync.commit` elements in
+ * history visibility gate (`after` below the gate is `forbidden`). A reader whose class hides
+ * content gets the steps of the class and its view token (`projectCommitPage`; BE-098; ADR 0019
+ * item 2): a commit that changed only hidden content arrives with no steps. A service credential,
+ * and a user when the data plane offers no page, read from storage here under the same rules. A page lists commits as `sync.commit` elements in
  * ascending `seq` with the authors' `sub` values, at most `limit` (1 to 200, default 50), and ends
  * before a snapshot commit, which no page can carry: `reset` names its `seq`, and the client
  * reloads the content there (04 §3.2). `nextCursor` continues the page; `after` of a later request
  * may be used instead.
  */
-import { NOTHING_HIDDEN, rangeVisible, type LogCommit } from '@docedit/authority';
+import {
+  NOTHING_HIDDEN,
+  projectCommitPage,
+  rangeVisible,
+  type HiddenSet,
+  type LogCommit,
+  type StoredCommit,
+} from '@docedit/authority';
+import { cdmSchema } from '@docedit/model/prosemirror';
 import { toRemoteCommit } from '@docedit/protocol/bridge';
 import type { RemoteCommit } from '@docedit/protocol';
 import { connectionOn, minVisibleSeqOf, regionInfosOfJson } from './gate.ts';
@@ -54,7 +62,8 @@ export function commitRoutes(k: Kit): Record<string, Handler> {
 
     if (identity && d.dataPlane?.readCommits) {
       const page = await d.dataPlane.readCommits(identity, doc, after, limit);
-      // The data plane serves only readers whose class hides nothing: their view is the full one.
+      // A page of a class that hides content names the class's token (BE-098); other pages are the
+      // full view.
       return json(
         200,
         {
@@ -62,13 +71,14 @@ export function commitRoutes(k: Kit): Record<string, Handler> {
           nextCursor: next(page.next),
           head: page.head,
           incarnation: page.incarnation,
-          view: fullView,
+          view: page.view ?? fullView,
         },
         headers,
       );
     }
 
     let view = fullView;
+    let hidden: HiddenSet | null = null;
     if (identity) {
       const full = await d.content.rebuild(ref, head.incarnation, head.seq);
       const perms = await d.grants.current(ref);
@@ -89,18 +99,25 @@ export function commitRoutes(k: Kit): Record<string, Handler> {
           'after is below the history visibility of the caller (07 §8)',
         );
       const reader = readerView(d.views, connectionOn(ctx.caller, doc), full.doc, perms);
-      if (!reader.full)
-        throw new ApiError(
-          'unavailable',
-          'a reader whose view hides content reloads instead (ADR 0019)',
-          {
-            retryAfterS: 0,
-          },
-        );
       view = reader.token;
+      if (!reader.full) hidden = reader.hidden;
     }
     const to = Math.min(head.seq, after + limit);
-    const commits: LogCommit[] = to > after ? await d.logs.read(ref, after + 1, to) : [];
+    let commits: LogCommit[] = to > after ? await d.logs.read(ref, after + 1, to) : [];
+    if (hidden) {
+      // The steps of the reader's class, mapped from the stored commits (BE-098; ADR 0019 item 2),
+      // for the page up to a snapshot commit, which no page carries.
+      const cut = commits.findIndex((c) => c.kind === 'snapshot');
+      const stepCommits = (cut < 0 ? commits : commits.slice(0, cut)) as StoredCommit[];
+      const before = (await d.content.rebuild(ref, head.incarnation, after)).doc;
+      const projected = projectCommitPage(
+        cdmSchema(),
+        cdmSchema().nodeFromJSON(before),
+        hidden,
+        stepCommits,
+      );
+      commits = cut < 0 ? projected : [...projected, ...commits.slice(cut)];
+    }
     const name = await k.subsOf(
       ctx.caller.tenant,
       commits.map((c) => c.user),

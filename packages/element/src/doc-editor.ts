@@ -40,7 +40,7 @@ import { emit, type DocEditorEventMap, type DocEditorEventName } from './events.
 import type { StatusDetail } from './events.ts';
 import { headerSnapshot, type HeaderSnapshot } from './header-events.ts';
 import { INTERNALS } from './internals.ts';
-import { Announcer } from './announcer.ts';
+import { Announcer, DEFAULT_SETTLE_MS } from './announcer.ts';
 import { mountLiveRegion, type LiveRegion } from './live-region.ts';
 import type { AssetImageLookup } from '@docedit/engine';
 import { assetImageLookup } from './assets.ts';
@@ -492,6 +492,10 @@ export class DocEditorElement extends Base {
       // The property as it is when a name is needed: a host may set it after loading (PRO-080).
       resolveUsers: (ids) => this.#resolveUsers?.(ids) ?? Promise.resolve(ids.map(() => null)),
       initialSync: 'saved',
+      // Typing flips the save state at every commit; only a state that holds is said (criterion 7).
+      settleMs: DEFAULT_SETTLE_MS,
+      // The shell's catalogue, once the shell exists: the locale and the host's strings apply.
+      translate: (key, params) => this.#mounted?.text(key, params) ?? null,
     });
   }
 
@@ -746,15 +750,16 @@ export class DocEditorElement extends Base {
   }
 
   /**
-   * Runs a command through the path the toolbar uses; false when it does not apply or no document
-   * is loaded (PRO-085).
+   * Runs a command through the path the toolbar uses; false when it does not apply, is unknown or
+   * no document is loaded (PRO-085). `command` is an identifier of the command registry such as
+   * `format.bold` (UX-005), or a name of the editing core such as `bold`.
    */
-  exec(command: CommandName, args?: CommandArgs): boolean {
+  exec(command: CommandName | (string & {}), args?: CommandArgs): boolean {
     return this.#methods.exec(command, args);
   }
 
   /** Whether a command is enabled and active for the user's access now (PRO-085). */
-  queryCommand(command: CommandName, args?: CommandArgs): CommandState {
+  queryCommand(command: CommandName | (string & {}), args?: CommandArgs): CommandState {
     return this.#methods.queryCommand(command, args);
   }
 

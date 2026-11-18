@@ -176,6 +176,32 @@ interface BlockCtx {
 const ix = indexDefinition(CDM1);
 const KNOWN_FEATURES = new Set(['fields', 'extensions', 'preserve']);
 const TOGGLES = ['bold', 'italic', 'strike', 'smallCaps', 'allCaps', 'hidden'] as const;
+/** Run properties with a value, which a table style gives and Word would take from the paragraph style instead. */
+const SHADOWED_RUN = [
+  'fontFamily',
+  'fontSize',
+  'color',
+  'highlight',
+  'vertAlign',
+  'underline',
+  'lang',
+] as const;
+/** The same for paragraph properties (`lineSpacing` and `lineRule` go together). */
+const SHADOWED_PARAGRAPH = [
+  'align',
+  'indentLeft',
+  'indentRight',
+  'indentFirstLine',
+  'spaceBefore',
+  'spaceAfter',
+  'contextualSpacing',
+  'lineSpacing',
+  'lineRule',
+  'keepNext',
+  'keepLines',
+  'pageBreakBefore',
+  'widowControl',
+] as const;
 const FORMATTING_MARKS = new Set([
   'charStyle',
   'bold',
@@ -846,6 +872,36 @@ class DirectWriter {
     return xml;
   }
 
+  private readonly shadowCache = new Map<string, readonly string[]>();
+
+  /**
+   * The properties that the table style gives a paragraph of this style (layer 2) while a style of
+   * the paragraph's own chain also sets them. The model lets the table style win; Word lets the
+   * paragraph style win, `Normal` included.
+   */
+  private tableShadowed(styleId: string, tableStyle: string): readonly string[] {
+    const key = `${styleId}\u0000${tableStyle}`;
+    let known = this.shadowCache.get(key);
+    if (!known) {
+      const attrs = { style: styleId };
+      const plain = resolveParagraph(this.table, attrs, { trace: true });
+      const inTable = resolveParagraph(this.table, attrs, { tableStyle, trace: true });
+      known = [];
+      if (plain.ok && inTable.ok) {
+        const before = plain.value.trace ?? {};
+        known = Object.entries(inTable.value.trace ?? {})
+          .filter(
+            ([k, layer]) =>
+              layer === 'table style' &&
+              (before[k] === 'default style' || before[k] === 'paragraph style'),
+          )
+          .map(([k]) => k);
+      }
+      this.shadowCache.set(key, known);
+    }
+    return known;
+  }
+
   async paragraphXml(
     n: JsonNode,
     pc: PartCtx,
@@ -863,6 +919,39 @@ class DirectWriter {
       this.warn(
         `a style chain is broken (${resolved.error.code} at ${resolved.error.styleId}); its paragraphs keep their direct formatting`,
       );
+    if (rp && cx.tableStyle !== null) {
+      // 03 §6: a table style overrides the default paragraph style. Word lets the paragraph style
+      // chain, `Normal` included, override the table style, so the resolved value is written as a
+      // direct value where the two differ (CDM-041, owner decision 2026-11-15 about the order).
+      const shadowed = this.tableShadowed(rp.styleId, cx.tableStyle);
+      const direct = (k: string): void => {
+        if (values[k] === null || values[k] === undefined)
+          values[k] = (rp.properties as unknown as Values)[k] ?? null;
+      };
+      for (const k of SHADOWED_PARAGRAPH) if (shadowed.includes(k)) direct(k);
+      if (shadowed.includes('lineSpacing') || shadowed.includes('lineRule')) {
+        direct('lineSpacing');
+        direct('lineRule');
+      }
+    }
+    // Word adds the tab stops of a paragraph to those of its styles; the model replaces them
+    // (03 §4.5), so the stops of the styles that the paragraph does not keep are cleared.
+    if (rp && Array.isArray(n.attrs?.['tabs'])) {
+      const inherited = resolveParagraph(
+        this.table,
+        { ...(n.attrs as Record<string, unknown>), tabs: null },
+        { tableStyle: cx.tableStyle },
+      );
+      const kept = rp.properties.tabs;
+      const cleared = inherited.ok
+        ? inherited.value.properties.tabs
+            .filter((t) => !kept.some((k) => k.position === t.position))
+            .map((t) => ({ position: t.position, align: 'clear', leader: 'none' }))
+        : [];
+      values['tabs'] = [...kept, ...cleared].sort(
+        (a, b) => a.position - b.position,
+      ) as unknown as JsonValue;
+    }
     const extras: MergedItem[] = [...paragraphExtras(values), ...extra];
     const numbering = rp?.numbering ?? null;
     if (numbering) {
@@ -886,7 +975,7 @@ class DirectWriter {
             el('w:numId', { 'w:val': numId }),
           ),
         });
-        // Word applies a level's indents after the style's; 03 §6 the other way round (ADR 0032).
+        // The level's indents come after the style's in 03 §6 and in Word (owner decision 9, 2026-11-15). They are written as direct values so that a numbering given through a style gives the same indents in Word.
         if (rp && values['indentLeft'] === null) values['indentLeft'] = rp.properties.indentLeft;
         if (rp && values['indentFirstLine'] === null)
           values['indentFirstLine'] = rp.properties.indentFirstLine;
@@ -1343,6 +1432,14 @@ class DirectWriter {
     if (rp && (typeof values['charStyle'] === 'string' || cx.tableStyle !== null)) {
       const r = resolveRun(this.table, rp, marks);
       if (r.ok) for (const t of TOGGLES) values[t] = r.value[t];
+      if (r.ok && cx.tableStyle !== null) {
+        // As for paragraphs: the table style wins in the model, the paragraph style in Word.
+        const shadowed = this.tableShadowed(rp.styleId, cx.tableStyle);
+        for (const k of SHADOWED_RUN) {
+          const v = (r.value as unknown as Values)[k] ?? null;
+          if (shadowed.includes(k) && values[k] === null && v !== null) values[k] = v;
+        }
+      }
     }
     const fmt = marks.find((m) => m.type === 'fmt');
     const items = [...extras];

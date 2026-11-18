@@ -372,8 +372,8 @@ export interface DataPlane extends RoomNotifier {
   /**
    * `GET /documents/{id}/commits?after=&limit=` (05 §6.2; BE-038): stored commits after `after`
    * in ascending `seq`, at most `limit` (1 to 200), as `sync.commit` elements. Refused with
-   * `forbidden` when `after` is below the caller's visibility gate (HIS-024) or the reader's class
-   * hides content (the gateway reloads such readers), `conflict` when the next commit is a
+   * `forbidden` when `after` is below the caller's visibility gate (HIS-024). A reader whose class
+   * hides content gets the steps of the class and its view token (BE-098). `conflict` when the next commit is a
    * snapshot commit (the client reloads; D122), `not_found` when `after` is above the head.
    */
   readCommits?(
@@ -405,6 +405,11 @@ export interface CommitPage {
   next: number | null;
   head: number;
   incarnation: string;
+  /**
+   * The view token of the reader's class, present when the page is the projection of a class that
+   * hides content (BE-098); absent for the full class.
+   */
+  view?: string;
 }
 
 export type CreateDataPlane = (deps: DataPlaneDeps) => DataPlane;

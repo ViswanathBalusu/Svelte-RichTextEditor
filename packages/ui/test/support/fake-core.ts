@@ -186,6 +186,7 @@ export const FAKE_COMMANDS = [
   'insertRecovered',
   'discardRecovered',
   'finishFill',
+  'showReferences',
 ];
 
 export const FAKE_QUERIES = [
@@ -730,9 +731,14 @@ export class FakeCore implements CoreApi {
     return Promise.resolve(true);
   }
 
-  refuse(reason: string, scopes: readonly string[] = []): void {
+  refuse(reason: string, scopes: readonly string[] = [], count?: number): void {
     const n = (this.refusal?.get()?.n ?? 0) + 1;
-    this.refusal?.set({ n, reason, scopes: [...scopes] });
+    this.refusal?.set({
+      n,
+      reason,
+      scopes: [...scopes],
+      ...(count === undefined ? {} : { count }),
+    });
   }
 
   /** Work was set aside: a rejected commit or unsent work (the core's `recovered` view). */

@@ -150,7 +150,16 @@ class DepDataPlane implements DataPlane {
     this.#quotas = deps.quotas;
     this.#lease = deps.leases
       ? new NodeLease({
-          store: deps.leases,
+          // The hook that makes the database unreachable (BE-079) cuts the renewals too, so a long
+          // outage ends in the node's loss of proof and in the stop of BE-018 (BE-077 criterion 4).
+          store: {
+            renew: (node, leaseMs) =>
+              this.#faults.databaseDown
+                ? Promise.reject(new Error('the database is unreachable'))
+                : deps.leases!.renew(node, leaseMs),
+            alive: (node) => deps.leases!.alive(node),
+            release: (node) => deps.leases!.release(node),
+          },
           node: deps.node,
           settings: s.lease,
           onLost: (why) => this.#host.fence(why),

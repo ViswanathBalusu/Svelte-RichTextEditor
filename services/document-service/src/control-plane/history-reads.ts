@@ -171,6 +171,8 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
   const getDiff: Handler = async (ctx) => {
     const doc = ctx.params['id']!;
     guard(ctx.caller, 'read.history', doc);
+    // The document is resolved first, so a caller of another tenant is refused before any parameter is read.
+    const v = await viewOf(ctx, doc);
     const fromSeq = seqParam(ctx, 'fromSeq', true)!;
     const toSeq = seqParam(ctx, 'toSeq', true)!;
     const rawGranularity = ctx.url.searchParams.get('granularity');
@@ -183,7 +185,6 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
     const region = ctx.url.searchParams.get('region') ?? undefined;
     if (toSeq < fromSeq)
       throw new ApiError('validation_failed', `fromSeq ${fromSeq} is above toSeq ${toSeq}`);
-    const v = await viewOf(ctx, doc);
     checkSeq(fromSeq, v.gate);
     checkSeq(toSeq, v.gate);
     const inc = v.head.incarnation;

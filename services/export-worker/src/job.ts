@@ -27,6 +27,7 @@ import {
   type FontManifest,
 } from '@docedit/export-latex';
 import {
+  checkQueueProof,
   JobFailure,
   type ExportOutputs,
   type JobContext,
@@ -132,6 +133,12 @@ export interface ExportHandlerDeps {
   imageId?: (image: string) => Promise<string | null>;
   /** The key of bundle seals; drawn per process when absent. */
   sealKey?: Uint8Array;
+  /**
+   * The key of the queue proof (EXP-067 criterion 4; `DOCEDIT_EXPORT_PROOF_KEY`). When set, a job
+   * whose payload lacks the proof the control plane writes with the same key is refused before the
+   * payload is read. Absent: the proof is not checked.
+   */
+  queueProofKey?: string;
   /** Per-job limits; 09 §9.3 item 4 by default. */
   limits?: Partial<Limits>;
   now?: () => number;
@@ -169,8 +176,26 @@ interface Payload {
   sealing: SealingPin | null;
 }
 
-function readPayload(job: JobRecord): Payload {
+function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
   const p = job.payload;
+  if (
+    proofKey !== undefined &&
+    !checkQueueProof(
+      proofKey,
+      { tenant: job.tenant, kind: job.kind, doc: job.doc, cacheKey: job.cacheKey },
+      p,
+    )
+  )
+    throw new JobFailure(
+      'validation_failed',
+      'the job was not queued by the control plane; workers compile only what it queued (EXP-067)',
+      false,
+      {
+        diagnostics: [
+          diagnostic('bundle_refused', null, 'The job does not carry the control plane proof.'),
+        ],
+      },
+    );
   for (const k of TEX_MEMBERS)
     if (k in p)
       throw new JobFailure(
@@ -264,7 +289,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     m: ExportMetrics,
   ): Promise<Record<string, unknown>> => {
     const tenant = job.tenant;
-    const payload = readPayload(job);
+    const payload = readPayload(job, deps.queueProofKey);
     m.target = payload.target.slice(0, 20);
     if (
       payload.target !== 'pdf' &&

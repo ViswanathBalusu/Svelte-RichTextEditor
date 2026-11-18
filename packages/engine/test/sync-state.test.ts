@@ -465,6 +465,21 @@ describe('rejected fills (SYN-021)', () => {
     });
   });
 
+  it('a conflict that named fields keeps their identifiers on the discarded item (FRW-010)', () => {
+    let s = typeAt(start(), IDS.intro, 0, 'mine ');
+    s = takeCommit(s, 'c1', limits)!.state;
+    s = receiveCommits(s, [remote(s, IDS.intro, 0, 'theirs ')], schema).state;
+    const t = receiveReject(s, {
+      ...reject('c1', 'conflict', 'drop'),
+      scopes: ['field:f1', 'body', 'field:f2'],
+    });
+    expect(t.state.discarded.map((d) => [d.reason, d.fields])).toEqual([
+      ['conflict', ['f1', 'f2']],
+    ]);
+    const plain = receiveReject(fill(), reject('c1', 'conflict', 'drop'));
+    expect(plain.state.discarded[0]?.fields).toBeUndefined();
+  });
+
   it('a field_invalid discards the fill and reports the validation message', () => {
     const t = receiveReject(fill(), {
       ...reject('c1', 'field_invalid', 'drop'),

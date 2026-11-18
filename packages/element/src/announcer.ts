@@ -10,9 +10,12 @@
  * - recovered edits, with their count (`de-recovered-edits`).
  *
  * Keystrokes are not a notice kind, so typing has no path into the announcer (FE-107 criterion 7).
- * Whether a save-state change that follows every few keystrokes is worth a sentence is an
- * accessibility decision (FE-107 Notes); this module only guarantees that it announces what it is
- * given, once and in order.
+ * Typing does change the save state, though: each commit makes it `saving` and then `saved` again.
+ * With `settleMs` above zero a save-state change is announced only when the state has held for that
+ * long and differs from the one last announced, so a run of keystrokes that ends where it began
+ * says nothing, while a save that takes long, or a lost connection, is said once. The period is a
+ * provisional default pending the accessibility specialist (ADR 0376). With zero, every change is
+ * announced at once, in the order accepted.
  *
  * Nothing is dropped: the queue holds every accepted announcement until the sink has taken it, and
  * one announcement is handed to the sink per scheduled turn, so a burst is spread out instead of
@@ -24,7 +27,12 @@ import type { SyncState } from './events.ts';
 import { format } from './strings.ts';
 import type { Scheduler } from './status.ts';
 
-/** Interface strings for announcements, one table per locale (13 §8; UX-064 will feed it). */
+/**
+ * The English source text of each announcement. It is the fallback only: the sentences come from
+ * the shell's catalogue (`announce.*` keys in ui `i18n/en-GB.ts`, through `AnnouncerOptions.translate`),
+ * so that a locale and a host's replacement strings (UX-063, UX-064) apply to them. This table is
+ * used when no catalogue is there yet (the shell has not mounted) and in tests without a shell.
+ */
 export interface AnnounceStrings {
   saving: string;
   saved: string;
@@ -53,6 +61,42 @@ export const ANNOUNCE_EN: AnnounceStrings = {
   recovered: 'Edits set aside for recovery: {count}.',
 };
 
+/** The catalogue key of each sentence (ui `i18n/en-GB.ts`). */
+export const ANNOUNCE_KEYS: Readonly<Record<keyof AnnounceStrings, string>> = {
+  saving: 'announce.sync.saving',
+  saved: 'announce.sync.saved',
+  unsaved: 'announce.sync.unsaved',
+  readonly: 'announce.sync.readonly',
+  rejected: 'announce.edit.rejected',
+  arrived: 'announce.presence.arrived',
+  left: 'announce.presence.left',
+  unknownPerson: 'announce.presence.unknown',
+  recovered: 'announce.recovered.count',
+};
+
+/** Looks a catalogue key up in the current locale; null when there is no catalogue. */
+export type AnnounceTranslate = (
+  key: string,
+  params: Readonly<Record<string, string | number>>,
+) => string | null;
+
+/**
+ * How long the element lets a save state hold before it is announced (milliseconds). A provisional
+ * default, not a measured or specified figure: ADR 0376 asks the accessibility specialist to set it.
+ */
+export const DEFAULT_SETTLE_MS = 1000;
+
+/** A timer pair, so that tests need no real time. */
+export interface AnnounceTimers {
+  set(run: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
+const PAGE_TIMERS: AnnounceTimers = {
+  set: (run, ms) => setTimeout(run, ms),
+  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+
 export type Notice =
   | { kind: 'sync'; sync: SyncState }
   | { kind: 'rejected'; where: string; reason: string }
@@ -68,7 +112,17 @@ export interface AnnouncerOptions {
   resolveUsers: ResolveUsers | null;
   /** The save state the document is in when it opens; it is not announced. */
   initialSync: SyncState;
+  /**
+   * How long a save state must hold before it is announced, in milliseconds. Zero (the default)
+   * announces each change when it is accepted.
+   */
+  settleMs?: number;
+  /** Timers for `settleMs`; the page's own by default. */
+  timers?: AnnounceTimers;
+  /** Fallback table; `ANNOUNCE_EN` when not given. */
   strings?: AnnounceStrings;
+  /** The shell's catalogue, read each time a sentence is made, so a locale change applies at once. */
+  translate?: AnnounceTranslate;
 }
 
 interface Slot {
@@ -81,6 +135,10 @@ export class Announcer {
   readonly #schedule: Scheduler;
   readonly #resolve: ResolveUsers | null;
   readonly #strings: AnnounceStrings;
+  readonly #translate: AnnounceTranslate | null;
+  readonly #settleMs: number;
+  readonly #timers: AnnounceTimers;
+  #settling: unknown = null;
   readonly #queue: Slot[] = [];
   #lastSync: SyncState;
   #pumping = false;
@@ -91,6 +149,10 @@ export class Announcer {
     this.#schedule = options.schedule;
     this.#resolve = options.resolveUsers;
     this.#strings = options.strings ?? ANNOUNCE_EN;
+    this.#translate = options.translate ?? null;
+    const settle = options.settleMs ?? 0;
+    this.#settleMs = Number.isFinite(settle) && settle > 0 ? settle : 0;
+    this.#timers = options.timers ?? PAGE_TIMERS;
     this.#lastSync = options.initialSync;
   }
 
@@ -99,25 +161,26 @@ export class Announcer {
     if (this.#closed) return false;
     switch (notice.kind) {
       case 'sync': {
+        if (this.#settleMs > 0) return this.#settleSync(notice.sync);
         if (notice.sync === this.#lastSync) return false;
         this.#lastSync = notice.sync;
-        this.#push(this.#strings[notice.sync]);
+        this.#push(this.#say(notice.sync));
         return true;
       }
       case 'rejected':
-        this.#push(format(this.#strings.rejected, { where: notice.where, reason: notice.reason }));
+        this.#push(this.#say('rejected', { where: notice.where, reason: notice.reason }));
         return true;
       case 'recovered': {
         if (!Number.isInteger(notice.count) || notice.count <= 0) return false;
-        this.#push(format(this.#strings.recovered, { count: notice.count }));
+        this.#push(this.#say('recovered', { count: notice.count }));
         return true;
       }
       case 'presence': {
         const slot = this.#enqueue();
-        const template = notice.change === 'arrived' ? this.#strings.arrived : this.#strings.left;
+        const field = notice.change;
         void this.#nameOf(notice.userId).then((name) => {
           if (this.#closed) return;
-          slot.text = format(template, { name });
+          slot.text = this.#say(field, { name });
           this.#kick();
         });
         return true;
@@ -133,7 +196,30 @@ export class Announcer {
   /** Stops the announcer. Sentences still queued are not delivered. */
   close(): void {
     this.#closed = true;
+    this.#stopSettling();
     this.#queue.length = 0;
+  }
+
+  /**
+   * A save state waits `settleMs`, and each change of state starts the wait again. When it ends,
+   * the state is announced unless it is the one last announced. True when a sentence may follow.
+   */
+  #settleSync(state: SyncState): boolean {
+    this.#stopSettling();
+    if (state === this.#lastSync) return false;
+    this.#settling = this.#timers.set(() => {
+      this.#settling = null;
+      if (this.#closed || state === this.#lastSync) return;
+      this.#lastSync = state;
+      this.#push(this.#say(state));
+    }, this.#settleMs);
+    return true;
+  }
+
+  #stopSettling(): void {
+    if (this.#settling === null) return;
+    this.#timers.clear(this.#settling);
+    this.#settling = null;
   }
 
   #push(text: string): void {
@@ -147,13 +233,22 @@ export class Announcer {
     return slot;
   }
 
+  /** One sentence, from the catalogue when there is one, else from the fallback table. */
+  #say(
+    field: keyof AnnounceStrings,
+    params: Readonly<Record<string, string | number>> = {},
+  ): string {
+    const translated = this.#translate?.(ANNOUNCE_KEYS[field], params) ?? null;
+    return translated ?? format(this.#strings[field], params);
+  }
+
   async #nameOf(userId: string): Promise<string> {
-    if (this.#resolve === null) return this.#strings.unknownPerson;
+    if (this.#resolve === null) return this.#say('unknownPerson');
     try {
       const [user] = await this.#resolve([userId]);
-      return user?.name ?? this.#strings.unknownPerson;
+      return user?.name ?? this.#say('unknownPerson');
     } catch {
-      return this.#strings.unknownPerson;
+      return this.#say('unknownPerson');
     }
   }
 
