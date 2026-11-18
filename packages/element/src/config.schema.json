@@ -48,6 +48,34 @@
       "default": false,
       "description": "Experimental, for spike evidence only: use the nonce <style> element even where constructable stylesheets work."
     },
+    "features": {
+      "type": "object",
+      "default": { "comments": true, "export": true, "history": true, "assistant": true },
+      "description": "Feature switches (PRO-081; owner decision 89). Each group is on unless its key is false: comments (comments and suggestions), export (export and print), history, and assistant (assistant and proofing). A group that is off has no controls when the editor loads; it is not a permission, and the server still decides what a caller may do. Any other value, or a key that is not a group, is ignored.",
+      "properties": {
+        "comments": {
+          "type": "boolean",
+          "default": true,
+          "description": "Comments and suggestions: the comments and review panes and commands, the suggestion markup views and the suggesting mode."
+        },
+        "export": {
+          "type": "boolean",
+          "default": true,
+          "description": "Export and print: the export dialog and command, the print command and the PDF pane."
+        },
+        "history": {
+          "type": "boolean",
+          "default": true,
+          "description": "History: the history and catch-up panes and naming a version."
+        },
+        "assistant": {
+          "type": "boolean",
+          "default": true,
+          "description": "Assistant and proofing: the assistant pane, the proofing commands and the findings."
+        }
+      },
+      "additionalProperties": true
+    },
     "pageGuides": {
       "type": "boolean",
       "default": false,

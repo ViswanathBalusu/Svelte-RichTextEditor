@@ -17,6 +17,7 @@ const KNOWN = [
   'deferRemoteWhileComposing',
   'forceStyleFallback',
   'pageGuides',
+  'features',
 ] as const;
 
 /** Names the config must ignore, including ones that could reach a prototype if copied naively. */
@@ -97,6 +98,7 @@ describe('PRO-081 criterion 2: a config key the component does not know is ignor
         'deferRemoteWhileComposing',
         'forceStyleFallback',
         'pageGuides',
+        'features',
       ].sort(),
     );
   });

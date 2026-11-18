@@ -52,6 +52,7 @@ import {
   timeBodyAttach,
 } from './startup-marks.ts';
 import type { NormalConfig } from './config.ts';
+import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-switches.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
 import { hostApi, type HostApi } from './host-api.ts';
@@ -362,251 +363,255 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The core's members of ui's CoreApi (ADR 0041), bound, plus the status and the PDF viewer. The
   // core fills `presence` and `features` from what attach() hands it (the backend's presence port
   // and features); `counts` has no source yet.
-  const shell: ShellCore = {
-    selection: core.selection,
-    panel: core.panel,
-    outline: core.outline,
-    // The styles pane (UX-022): the document's styles, and whether they may be edited now.
-    styles: core.styles,
-    styleEdit: (op, id) => core.checkStyleEdit(op, id),
-    run: (command) => core.run(command),
-    closePanel: () => core.closePanel(),
-    // The variants of the header and footer panel (FE-057): the core lists and opens them.
-    storyVariants: () => core.storyVariants(),
-    editStory: (part, variant) => core.editStory(part, variant),
-    focus: () => core.focus(),
-    // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
-    selectBlock: (id) => core.selectBlock(id),
-    // The navigation pane's search (UX-020 criterion 3): the core's find over the body this reader
-    // holds, with the text around each match; choosing a result selects that match and scrolls to it.
-    // The pane's "match case" is the find's option (the engine's own default stays case-sensitive).
-    search: (query, options) => {
-      const state = core.findText(query, { matchCase: options?.matchCase === true });
-      return Promise.resolve({
-        query,
-        total: state.count,
-        matches: core.findResults().map((r) => ({
-          index: r.index,
-          blockId: r.blockId ?? '',
-          before: r.before,
-          text: r.text,
-          after: r.after,
-        })),
-      });
-    },
-    selectMatch: (match) =>
-      core.selectFindMatch(match.index, { blockId: match.blockId || null, text: match.text }),
-    // Where a menu asked for from the keyboard opens (UX-008 criterion 1).
-    caretRect: () => core.caretRect(),
-    mountBody: (target) => timeBodyAttach(() => core.mountBody(target)),
-    mountPanel: (target) => core.mountPanel(target),
-    access: core.access,
-    revision: core.revision,
-    direction: core.direction,
-    // The mode the switcher shows: the effective one, which the core enforces (the most restrictive
-    // the access allows). The modes the switcher offers are the three this element supports (UX-015;
-    // `fill` is FRW's, offered by its own participant view). `setMode` answers whether the mode asked
-    // for is the one now in effect (FE-041 criterion 1; ui ShellCore.setMode).
-    mode: {
-      get: (): EditorMode => core.mode.get().effective,
-      subscribe: (listener) => core.mode.subscribe(listener),
-    },
-    modes: { get: (): readonly EditorMode[] => SHELL_MODES, subscribe: () => () => {} },
-    setMode: (mode: EditorMode): boolean => {
-      if (!SHELL_MODES.includes(mode)) return false;
-      core.setMode(mode);
-      return core.mode.get().effective === mode;
-    },
-    queryNames: core.queryNames,
-    // Named commands of phase 1b that the shell runs (ui CoreCommandName). `insertField` takes the
-    // palette's `{ kind }` and inserts that form field kind at the caret (FRW-072).
-    // `setRegionPolicy` takes `{ region, policy }` (PRM-036); the engine refuses it without `manage`.
-    // `copyFormat` and `pasteFormat` are the format painter's (UX-009); `insertRecovered` and
-    // `discardRecovered` take `{ id }` and are the recovered edits pane's (UX-017); `setLanguage`
-    // takes `{ lang }` (UX-018).
-    // `renameRegion` takes the permissions pane's `{ region, title }` (PRM-034); the engine refuses it
-    // without `structure` and `edit` in the region.
-    // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
-    // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
-    // `nextEditableRegion` takes no arguments and moves the caret (PRM-027).
-    // `showReferences` takes no arguments and selects a cross-reference that blocked the last
-    // refused deletion (FE-133 criterion 5).
-    commandNames: [
-      'insertField',
-      'setRegionPolicy',
-      'renameRegion',
-      'markRegion',
-      'nextEditableRegion',
-      'showReferences',
-      'copyFormat',
-      'pasteFormat',
-      'insertRecovered',
-      'discardRecovered',
-      'setLanguage',
-      'paragraphStyle',
-      'characterStyle',
-      'tableStyle',
-      'createStyle',
-      'changeStyle',
-      'deleteStyle',
-    ],
-    runNamed: (name, args) => {
-      if (name === 'showReferences') return core.showReferences();
-      if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
-      // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
-      // puts it on the selection through the guards; neither takes an argument.
-      if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
-      // The language dialog (UX-018): the `lang` mark of a BCP 47 tag on the selection, or none (the
-      // document's default) for null; the core checks the tag and the user's right to change it.
-      if (name === 'setLanguage') {
-        const lang = (args as { lang?: unknown } | undefined)?.lang;
-        if (lang !== null && typeof lang !== 'string') return false;
-        return core.run('lang', { lang });
-      }
-      // The recovered edits pane (UX-017): `{ id }` names an item of the core's recovered view.
-      if (name === 'insertRecovered' || name === 'discardRecovered') {
-        const id = (args as { id?: unknown } | undefined)?.id;
-        if (typeof id !== 'string') return false;
-        return name === 'insertRecovered' ? core.insertRecovered(id) : core.discardRecovered(id);
-      }
-      // The styles pane (UX-022): `{ style }` applies a style of the kind the name says, to the
-      // selection through the guards (a user who may only suggest records a suggestion);
-      // `createStyle` takes `{ name, kind, basedOn? }`, `changeStyle` `{ id, name?, basedOn? }` and
-      // `deleteStyle` `{ id }`, and the core checks the user's rights and the rule of 07 §5.3.
-      if (name === 'paragraphStyle' || name === 'characterStyle' || name === 'tableStyle') {
-        const style = (args as { style?: unknown } | undefined)?.style;
-        if (typeof style !== 'string') return false;
-        if (name === 'paragraphStyle') return core.run('paragraphStyle', { style });
-        if (name === 'characterStyle') return core.run('charStyle', { charStyle: style });
-        return core.run('setTableStyle', { tableStyle: style });
-      }
-      if (name === 'createStyle') {
-        const a = args as { name?: unknown; kind?: unknown; basedOn?: unknown } | undefined;
-        if (typeof a?.name !== 'string') return false;
-        if (a.kind !== 'paragraph' && a.kind !== 'character' && a.kind !== 'table') return false;
-        const basedOn = typeof a.basedOn === 'string' ? a.basedOn : null;
-        return core.createStyle({ name: a.name, kind: a.kind, basedOn }).ok;
-      }
-      if (name === 'changeStyle') {
-        const a = args as { id?: unknown; name?: unknown; basedOn?: unknown } | undefined;
-        if (typeof a?.id !== 'string') return false;
-        const changes: { name?: string; basedOn?: string | null } = {};
-        if (typeof a.name === 'string') changes.name = a.name;
-        if (typeof a.basedOn === 'string' || a.basedOn === null) changes.basedOn = a.basedOn;
-        return core.changeStyle(a.id, changes).ok;
-      }
-      if (name === 'deleteStyle') {
-        const id = (args as { id?: unknown } | undefined)?.id;
-        return typeof id === 'string' && core.deleteStyle(id).ok;
-      }
-      if (name === 'markRegion') {
-        const title = (args as { title?: unknown } | undefined)?.title;
-        if (typeof title !== 'string') return false;
-        return core.run('markRegion', { title });
-      }
-      if (name === 'renameRegion') {
-        const a = args as { region?: unknown; title?: unknown } | undefined;
-        if (typeof a?.region !== 'string' || typeof a.title !== 'string') return false;
-        return core.run('renameRegion', { region: a.region, title: a.title });
-      }
-      if (name === 'setRegionPolicy') {
-        const a = args as { region?: unknown; policy?: unknown } | undefined;
-        if (typeof a?.region !== 'string') return false;
-        if (a.policy !== 'inherit' && a.policy !== 'restricted') return false;
-        return core.run('setRegionPolicy', { region: a.region, policy: a.policy });
-      }
-      if (name !== 'insertField') return false;
-      const kind = (args as { kind?: unknown } | undefined)?.kind;
-      if (typeof kind !== 'string') return false;
-      // The palette inserts form fields: `date` is the form kind here, not the page date (ADR 0367).
-      return core.run('insertField', { field: { kind: kind as 'text', form: true } });
-    },
-    query: (name) => core.query(name),
-    // Why a query answered false; the shell shows it as `reason.query.<code>` (FE-044 criterion 5).
-    queryReason: (name) => core.queryReason(name),
-    setLabels: (labels) => core.setLabels(labels),
-    presence: core.presence,
-    // The peers' carets, measured by the core's body view (SYN-036 criterion 5; UX-027).
-    carets: core.carets,
-    features: core.features,
-    counts: core.counts,
-    // The status bar's word count, made off the typing path, and the document's default language
-    // (UX-018). There is no typeset result here, so no page count: the web view shows none (02 §7).
-    stats: derived<DocumentStats>([core.words], () => ({ words: core.words.get(), pages: null })),
-    language: core.language,
-    // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
-    // port `proofing.get().available` is false and the shell shows no proofing control.
-    // The assistant pane, offered only while the backend's assistant port is attached (UX-045).
-    assistant: assistant.api,
-    proofing: core.proofing,
-    proofingStep: (direction) => core.proofingStep(direction),
-    applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
-    ignoreFinding: (id, everywhere) => core.ignoreFinding(id, everywhere),
-    addFindingToDictionary: (id) => core.addFindingToDictionary(id),
-    // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
-    // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
-    refusal: core.refusal,
-    recovered: core.recovered,
-    trimmed: core.trimmed,
-    // The report of Replace and Replace all: how many matches changed and how many were skipped (FE-060).
-    replaced: core.replaced,
-    // The sources pane (UX-103): the core's sources and the changes to them, as commits.
-    sources: sourcesService(core),
-    // The roles manager (FRW-074): the core's roles and the changes to them, as commits.
-    roles: rolesService(core),
-    // The field properties pane (FRW-073): a field's authored attributes and the change of them.
-    fieldProperties: fieldPropertiesService(core),
-    // The rule builder (FRW-024): the core's rules as sentences and the changes to them, as commits.
-    rules: rulesService(core),
-    // The math editor (FE-070): the selected equation, its limits and its confirmation; MathLive loads on first use.
-    mathEditor: mathEditorService(core, { fontsUrl: options.mathFontsUrl }),
-    // Fill mode (FRW-076, FRW-078): the fields without their values, for the guided bar and the
-    // fill pane, and the move of focus to a field's control.
-    fill,
-    focusField: (id) => core.focusField(id),
-    // Preview as a role (FRW-075): the core shows fill mode for one role and never commits it.
-    rolePreview: core.rolePreview,
-    startRolePreview: (role) => core.startRolePreview(role),
-    endRolePreview: () => core.endRolePreview(),
-    status,
-    pdf,
-    ...(options.exports ? { exports: options.exports } : {}),
-    // The send dialog (FRW-028): the pre-send checks and the send action.
-    ...(workflowSend ? { workflowSend } : {}),
-    // How suggestions are shown (UX-035), and the words that name them for assistive technology.
-    markupView: core.markupView,
-    setMarkupView: (view) => core.setMarkupView(view),
-    setSuggestionLabel: (label) => core.setSuggestionLabel(label),
-    // The review tools (UX-036): the list, next and previous, accept and reject.
-    suggestionItems: () => core.suggestionItems().map(reviewItem),
-    stepSuggestion: (direction) => {
-      const found = core.stepSuggestion(direction);
-      return found === null ? null : reviewItem(found);
-    },
-    revealSuggestion: (id) => core.revealSuggestion(id),
-    resolveAtSelection: (action) => core.resolveAtSelection(action),
-    resolveSuggestions: (action, target, author, suggestion) =>
-      core.resolveSuggestions(action, target, author, suggestion),
-    // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
-    // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
-    permissions: core.permissions,
-    ...(port?.regions
-      ? {
-          regions: regionsView(port.regions.bind(port), options.docId, [
-            core.permissions,
-            core.regionTitles,
-          ]),
+  const modes = switchedModes(SHELL_MODES, config.features);
+  const shell: ShellCore = shellWithSwitches(
+    {
+      selection: core.selection,
+      panel: core.panel,
+      outline: core.outline,
+      // The styles pane (UX-022): the document's styles, and whether they may be edited now.
+      styles: core.styles,
+      styleEdit: (op, id) => core.checkStyleEdit(op, id),
+      run: (command) => core.run(command),
+      closePanel: () => core.closePanel(),
+      // The variants of the header and footer panel (FE-057): the core lists and opens them.
+      storyVariants: () => core.storyVariants(),
+      editStory: (part, variant) => core.editStory(part, variant),
+      focus: () => core.focus(),
+      // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
+      selectBlock: (id) => core.selectBlock(id),
+      // The navigation pane's search (UX-020 criterion 3): the core's find over the body this reader
+      // holds, with the text around each match; choosing a result selects that match and scrolls to it.
+      // The pane's "match case" is the find's option (the engine's own default stays case-sensitive).
+      search: (query, options) => {
+        const state = core.findText(query, { matchCase: options?.matchCase === true });
+        return Promise.resolve({
+          query,
+          total: state.count,
+          matches: core.findResults().map((r) => ({
+            index: r.index,
+            blockId: r.blockId ?? '',
+            before: r.before,
+            text: r.text,
+            after: r.after,
+          })),
+        });
+      },
+      selectMatch: (match) =>
+        core.selectFindMatch(match.index, { blockId: match.blockId || null, text: match.text }),
+      // Where a menu asked for from the keyboard opens (UX-008 criterion 1).
+      caretRect: () => core.caretRect(),
+      mountBody: (target) => timeBodyAttach(() => core.mountBody(target)),
+      mountPanel: (target) => core.mountPanel(target),
+      access: core.access,
+      revision: core.revision,
+      direction: core.direction,
+      // The mode the switcher shows: the effective one, which the core enforces (the most restrictive
+      // the access allows). The modes the switcher offers are the three this element supports (UX-015;
+      // `fill` is FRW's, offered by its own participant view). `setMode` answers whether the mode asked
+      // for is the one now in effect (FE-041 criterion 1; ui ShellCore.setMode).
+      mode: {
+        get: (): EditorMode => core.mode.get().effective,
+        subscribe: (listener) => core.mode.subscribe(listener),
+      },
+      modes: { get: (): readonly EditorMode[] => modes, subscribe: () => () => {} },
+      setMode: (mode: EditorMode): boolean => {
+        if (!modes.includes(mode)) return false;
+        core.setMode(mode);
+        return core.mode.get().effective === mode;
+      },
+      queryNames: core.queryNames,
+      // Named commands of phase 1b that the shell runs (ui CoreCommandName). `insertField` takes the
+      // palette's `{ kind }` and inserts that form field kind at the caret (FRW-072).
+      // `setRegionPolicy` takes `{ region, policy }` (PRM-036); the engine refuses it without `manage`.
+      // `copyFormat` and `pasteFormat` are the format painter's (UX-009); `insertRecovered` and
+      // `discardRecovered` take `{ id }` and are the recovered edits pane's (UX-017); `setLanguage`
+      // takes `{ lang }` (UX-018).
+      // `renameRegion` takes the permissions pane's `{ region, title }` (PRM-034); the engine refuses it
+      // without `structure` and `edit` in the region.
+      // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
+      // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
+      // `nextEditableRegion` takes no arguments and moves the caret (PRM-027).
+      // `showReferences` takes no arguments and selects a cross-reference that blocked the last
+      // refused deletion (FE-133 criterion 5).
+      commandNames: [
+        'insertField',
+        'setRegionPolicy',
+        'renameRegion',
+        'markRegion',
+        'nextEditableRegion',
+        'showReferences',
+        'copyFormat',
+        'pasteFormat',
+        'insertRecovered',
+        'discardRecovered',
+        'setLanguage',
+        'paragraphStyle',
+        'characterStyle',
+        'tableStyle',
+        'createStyle',
+        'changeStyle',
+        'deleteStyle',
+      ],
+      runNamed: (name, args) => {
+        if (name === 'showReferences') return core.showReferences();
+        if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
+        // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
+        // puts it on the selection through the guards; neither takes an argument.
+        if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
+        // The language dialog (UX-018): the `lang` mark of a BCP 47 tag on the selection, or none (the
+        // document's default) for null; the core checks the tag and the user's right to change it.
+        if (name === 'setLanguage') {
+          const lang = (args as { lang?: unknown } | undefined)?.lang;
+          if (lang !== null && typeof lang !== 'string') return false;
+          return core.run('lang', { lang });
         }
-      : {}),
-    ...(port?.grants && port.updateGrants
-      ? {
-          grants: grantsService(
-            { grants: port.grants.bind(port), updateGrants: port.updateGrants.bind(port) },
-            options.docId,
-          ),
+        // The recovered edits pane (UX-017): `{ id }` names an item of the core's recovered view.
+        if (name === 'insertRecovered' || name === 'discardRecovered') {
+          const id = (args as { id?: unknown } | undefined)?.id;
+          if (typeof id !== 'string') return false;
+          return name === 'insertRecovered' ? core.insertRecovered(id) : core.discardRecovered(id);
         }
-      : {}),
-  };
+        // The styles pane (UX-022): `{ style }` applies a style of the kind the name says, to the
+        // selection through the guards (a user who may only suggest records a suggestion);
+        // `createStyle` takes `{ name, kind, basedOn? }`, `changeStyle` `{ id, name?, basedOn? }` and
+        // `deleteStyle` `{ id }`, and the core checks the user's rights and the rule of 07 §5.3.
+        if (name === 'paragraphStyle' || name === 'characterStyle' || name === 'tableStyle') {
+          const style = (args as { style?: unknown } | undefined)?.style;
+          if (typeof style !== 'string') return false;
+          if (name === 'paragraphStyle') return core.run('paragraphStyle', { style });
+          if (name === 'characterStyle') return core.run('charStyle', { charStyle: style });
+          return core.run('setTableStyle', { tableStyle: style });
+        }
+        if (name === 'createStyle') {
+          const a = args as { name?: unknown; kind?: unknown; basedOn?: unknown } | undefined;
+          if (typeof a?.name !== 'string') return false;
+          if (a.kind !== 'paragraph' && a.kind !== 'character' && a.kind !== 'table') return false;
+          const basedOn = typeof a.basedOn === 'string' ? a.basedOn : null;
+          return core.createStyle({ name: a.name, kind: a.kind, basedOn }).ok;
+        }
+        if (name === 'changeStyle') {
+          const a = args as { id?: unknown; name?: unknown; basedOn?: unknown } | undefined;
+          if (typeof a?.id !== 'string') return false;
+          const changes: { name?: string; basedOn?: string | null } = {};
+          if (typeof a.name === 'string') changes.name = a.name;
+          if (typeof a.basedOn === 'string' || a.basedOn === null) changes.basedOn = a.basedOn;
+          return core.changeStyle(a.id, changes).ok;
+        }
+        if (name === 'deleteStyle') {
+          const id = (args as { id?: unknown } | undefined)?.id;
+          return typeof id === 'string' && core.deleteStyle(id).ok;
+        }
+        if (name === 'markRegion') {
+          const title = (args as { title?: unknown } | undefined)?.title;
+          if (typeof title !== 'string') return false;
+          return core.run('markRegion', { title });
+        }
+        if (name === 'renameRegion') {
+          const a = args as { region?: unknown; title?: unknown } | undefined;
+          if (typeof a?.region !== 'string' || typeof a.title !== 'string') return false;
+          return core.run('renameRegion', { region: a.region, title: a.title });
+        }
+        if (name === 'setRegionPolicy') {
+          const a = args as { region?: unknown; policy?: unknown } | undefined;
+          if (typeof a?.region !== 'string') return false;
+          if (a.policy !== 'inherit' && a.policy !== 'restricted') return false;
+          return core.run('setRegionPolicy', { region: a.region, policy: a.policy });
+        }
+        if (name !== 'insertField') return false;
+        const kind = (args as { kind?: unknown } | undefined)?.kind;
+        if (typeof kind !== 'string') return false;
+        // The palette inserts form fields: `date` is the form kind here, not the page date (ADR 0367).
+        return core.run('insertField', { field: { kind: kind as 'text', form: true } });
+      },
+      query: (name) => core.query(name),
+      // Why a query answered false; the shell shows it as `reason.query.<code>` (FE-044 criterion 5).
+      queryReason: (name) => core.queryReason(name),
+      setLabels: (labels) => core.setLabels(labels),
+      presence: core.presence,
+      // The peers' carets, measured by the core's body view (SYN-036 criterion 5; UX-027).
+      carets: core.carets,
+      features: core.features,
+      counts: core.counts,
+      // The status bar's word count, made off the typing path, and the document's default language
+      // (UX-018). There is no typeset result here, so no page count: the web view shows none (02 §7).
+      stats: derived<DocumentStats>([core.words], () => ({ words: core.words.get(), pages: null })),
+      language: core.language,
+      // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
+      // port `proofing.get().available` is false and the shell shows no proofing control.
+      // The assistant pane, offered only while the backend's assistant port is attached (UX-045).
+      assistant: assistant.api,
+      proofing: core.proofing,
+      proofingStep: (direction) => core.proofingStep(direction),
+      applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
+      ignoreFinding: (id, everywhere) => core.ignoreFinding(id, everywhere),
+      addFindingToDictionary: (id) => core.addFindingToDictionary(id),
+      // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
+      // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
+      refusal: core.refusal,
+      recovered: core.recovered,
+      trimmed: core.trimmed,
+      // The report of Replace and Replace all: how many matches changed and how many were skipped (FE-060).
+      replaced: core.replaced,
+      // The sources pane (UX-103): the core's sources and the changes to them, as commits.
+      sources: sourcesService(core),
+      // The roles manager (FRW-074): the core's roles and the changes to them, as commits.
+      roles: rolesService(core),
+      // The field properties pane (FRW-073): a field's authored attributes and the change of them.
+      fieldProperties: fieldPropertiesService(core),
+      // The rule builder (FRW-024): the core's rules as sentences and the changes to them, as commits.
+      rules: rulesService(core),
+      // The math editor (FE-070): the selected equation, its limits and its confirmation; MathLive loads on first use.
+      mathEditor: mathEditorService(core, { fontsUrl: options.mathFontsUrl }),
+      // Fill mode (FRW-076, FRW-078): the fields without their values, for the guided bar and the
+      // fill pane, and the move of focus to a field's control.
+      fill,
+      focusField: (id) => core.focusField(id),
+      // Preview as a role (FRW-075): the core shows fill mode for one role and never commits it.
+      rolePreview: core.rolePreview,
+      startRolePreview: (role) => core.startRolePreview(role),
+      endRolePreview: () => core.endRolePreview(),
+      status,
+      pdf,
+      ...(options.exports ? { exports: options.exports } : {}),
+      // The send dialog (FRW-028): the pre-send checks and the send action.
+      ...(workflowSend ? { workflowSend } : {}),
+      // How suggestions are shown (UX-035), and the words that name them for assistive technology.
+      markupView: core.markupView,
+      setMarkupView: (view) => core.setMarkupView(view),
+      setSuggestionLabel: (label) => core.setSuggestionLabel(label),
+      // The review tools (UX-036): the list, next and previous, accept and reject.
+      suggestionItems: () => core.suggestionItems().map(reviewItem),
+      stepSuggestion: (direction) => {
+        const found = core.stepSuggestion(direction);
+        return found === null ? null : reviewItem(found);
+      },
+      revealSuggestion: (id) => core.revealSuggestion(id),
+      resolveAtSelection: (action) => core.resolveAtSelection(action),
+      resolveSuggestions: (action, target, author, suggestion) =>
+        core.resolveSuggestions(action, target, author, suggestion),
+      // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
+      // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
+      permissions: core.permissions,
+      ...(port?.regions
+        ? {
+            regions: regionsView(port.regions.bind(port), options.docId, [
+              core.permissions,
+              core.regionTitles,
+            ]),
+          }
+        : {}),
+      ...(port?.grants && port.updateGrants
+        ? {
+            grants: grantsService(
+              { grants: port.grants.bind(port), updateGrants: port.updateGrants.bind(port) },
+              options.docId,
+            ),
+          }
+        : {}),
+    },
+    config.features,
+  );
 
   // The property as it is when the shell asks (PRO-080 criterion 2): the shell reads its props once,
   // so the wrapper, not the value at mount, is passed. Absent, the answer is no matches.
@@ -649,7 +654,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
       settings: options.settings,
       loadPane: async () => (await import('@docedit/ui/panes/OutlinePane.svelte')).default,
       onShareRequest: options.onShareRequest,
-      ...(options.onPrintRequest ? { onPrintRequest: options.onPrintRequest } : {}),
+      ...(options.onPrintRequest && config.features.export
+        ? { onPrintRequest: options.onPrintRequest }
+        : {}),
       ...(options.onForkRequest ? { onForkRequest: options.onForkRequest } : {}),
       ...(options.onAccessRequest ? { onAccessRequest: options.onAccessRequest } : {}),
       onExtensionError: options.onExtensionError,
@@ -705,7 +712,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
       selectionScope: () => core.selectionScope(),
       commandStates: () => commandStates(core, registry),
     },
-    attach(channel: SyncChannel, at: AttachAt) {
+    attach(channel: SyncChannel, attachAt: AttachAt) {
+      // The ports of a switched-off group are not handed on (PRO-081 criterion 4).
+      const at = attachWithSwitches(attachAt, config.features);
       assistant.attach(at.assistant);
       const detach = core.attach(channel, at);
       return () => {
