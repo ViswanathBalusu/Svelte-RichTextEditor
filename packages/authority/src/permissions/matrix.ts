@@ -256,6 +256,7 @@ export const UNMATRIXED_ROUTES: readonly RouteClassification[] = [
   open('PUT /documents/{id}/regions/{rid}/lease', 'a heartbeat by the holder (07 §10): no row'),
   open('PUT /documents/{id}/read-marker', 'read markers: no row'),
   open('GET /documents/{id}/activity', 'activity: no row'),
+  open('GET /documents/{id}/connect', 'the connect hint (06 section 2.1): no row; it needs `view`'),
   open('GET /documents/{id}/threads', 'reading threads: no row'),
   open('GET /threads/{tid}', 'reading a thread: no row'),
   open('PATCH /comments/{cid}', 'editing a comment: no row'),

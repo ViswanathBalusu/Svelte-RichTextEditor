@@ -511,7 +511,8 @@
       "section": "05 §6.2; 06 §2.1",
       "kind": "missing",
       "text": "`GET /documents/{id}/connect` (06 §2.1) is absent from 05 §6.2.",
-      "seeAlso": "Review 2026-11-06 §3 (06)"
+      "seeAlso": "Review 2026-11-06 §3 (06)",
+      "resolved": "Owner decision 200 (2026-11-15; docs/owner-decisions-2026-11-15.md): the hint is an address on the node lease row, falling back to rendezvous routing (ADR 0243). 05 §6.2 lists the route; its reply is `{ url, node, source }`, a shape the lane w5 proposes (BE-061)."
     },
     {
       "id": "G79",

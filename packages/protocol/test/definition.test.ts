@@ -168,6 +168,7 @@ const PROSE_ROUTES = [
   'POST /documents/{id}/fork',
   'PUT /documents/{id}/read-marker',
   'GET /documents/{id}/activity',
+  'GET /documents/{id}/connect',
   'GET /documents/{id}/threads',
   'POST /documents/{id}/threads',
   'GET /threads/{tid}',
@@ -413,6 +414,7 @@ describe('the DEP definition', () => {
       'G64',
       'G65',
       'G73',
+      'G78',
       'G97',
     ]);
   });

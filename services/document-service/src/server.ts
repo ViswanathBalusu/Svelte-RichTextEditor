@@ -37,6 +37,7 @@ import {
   type AssetRegistry,
 } from './control-plane/assets.ts';
 import { ContentReader } from './control-plane/content.ts';
+import { Placement } from './control-plane/room-routing.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
 import { DebouncedEventSink } from './control-plane/event-throttle.ts';
 import { CompileBudget } from './control-plane/exp-009-compile-budget.ts';
@@ -906,6 +907,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.audit ? { audit: parts.audit } : {}),
     ...(parts.outbox ? { outbox: parts.outbox } : {}),
     ...(parts.leases ? { leases: parts.leases } : {}),
+    ...(config.nodeAddress !== null ? { address: config.nodeAddress } : {}),
     // The room raises refused commits here (PRM-053 criterion 3): the caller's sink or the dispatcher.
     ...(opts.events || webhooks ? { events } : {}),
   });
@@ -1299,6 +1301,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     publicUrl,
     restPath: REST_PATH,
     wsPath: WS_PATH,
+    ...(parts.leases ? { placement: new Placement(parts.leases) } : {}),
     features: announced,
     exportTargets: config.exportTargets,
     signedUrlMs: config.signedUrlSeconds * 1000,

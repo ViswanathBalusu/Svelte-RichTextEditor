@@ -2444,6 +2444,76 @@
         ]
       }
     },
+    "/documents/{id}/connect": {
+      "get": {
+        "operationId": "getConnect",
+        "summary": "The WebSocket URL of the node that owns the document (a hint).",
+        "description": "The WebSocket URL of the node that owns the document (a hint). Requires: view (07 §12). Specified in 05 §6.2; 06 §2.1.",
+        "tags": [
+          "connect"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectHint"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §6.2; 06 §2.1",
+        "x-dep-owner": "PRO",
+        "x-dep-requires": "view"
+      }
+    },
     "/documents/{id}/threads": {
       "get": {
         "operationId": "listThreads",
@@ -10325,6 +10395,36 @@
         },
         "required": [
           "seq"
+        ]
+      },
+      "ConnectHint": {
+        "title": "ConnectHint",
+        "description": "Where a client should open its channel (06 §2.1). A hint only: it grants nothing.",
+        "$comment": "05 §6.2; 06 §2.1",
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "The WebSocket URL to open the channel on.",
+            "type": "string"
+          },
+          "node": {
+            "description": "The node the URL belongs to; empty when the service names no node.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Where the URL came from: the owner of the document, rendezvous routing over the live nodes, or the address of the service itself.",
+            "type": "string",
+            "enum": [
+              "owner",
+              "routing",
+              "entry"
+            ]
+          }
+        },
+        "required": [
+          "url",
+          "node",
+          "source"
         ]
       },
       "Activity": {

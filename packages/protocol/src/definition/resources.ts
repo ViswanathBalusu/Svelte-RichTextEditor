@@ -463,6 +463,23 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
   ),
   named(
+    'ConnectHint',
+    obj(
+      {
+        url: req(str(), 'The WebSocket URL to open the channel on.'),
+        node: req(str(), 'The node the URL belongs to; empty when the service names no node.'),
+        source: req(
+          enm(['owner', 'routing', 'entry']),
+          'Where the URL came from: the owner of the document, rendezvous routing over the live nodes, or the address of the service itself.',
+        ),
+      },
+      {
+        doc: 'Where a client should open its channel (06 §2.1). A hint only: it grants nothing.',
+        spec: '05 §6.2; 06 §2.1',
+      },
+    ),
+  ),
+  named(
     'Activity',
     placeholder(
       "Changes and comment activity by other people since the caller's read marker (08 §10).",
@@ -1400,6 +1417,17 @@ export const OPERATIONS: readonly OperationDef[] = [
     security: BOTH,
     success: ok(ref('Activity')),
     gaps: ['G70', 'G80'],
+    owner: PRO,
+  }),
+  op({
+    operationId: 'getConnect',
+    method: 'GET',
+    path: '/documents/{id}/connect',
+    summary: 'The WebSocket URL of the node that owns the document (a hint).',
+    spec: '05 §6.2; 06 §2.1',
+    security: BOTH,
+    requires: 'view',
+    success: ok(ref('ConnectHint')),
     owner: PRO,
   }),
   op({
