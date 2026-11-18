@@ -251,6 +251,20 @@ describe('selection rectangles (FE-096)', () => {
     ).toEqual(expected);
   });
 
+  it('draws a selection on one line the same in either direction', () => {
+    const t = oneParagraph();
+    const expected = [{ page: 0, x: 20, y: 100, width: 10, height: 12 }];
+    expect(
+      selectionRects(t, { blockId: 'p', offset: 2 }, { blockId: 'p', offset: 0 }, perOffset),
+    ).toEqual([{ page: 0, x: 10, y: 100, width: 10, height: 12 }]);
+    expect(
+      selectionRects(t, { blockId: 'p', offset: 4 }, { blockId: 'p', offset: 2 }, perOffset),
+    ).toEqual(expected);
+    expect(
+      selectionRects(t, { blockId: 'p', offset: 2 }, { blockId: 'p', offset: 4 }, perOffset),
+    ).toEqual(expected);
+  });
+
   it('gives one rectangle per page when the selection runs from one page to the next', () => {
     const rects = selectionRects(
       twoPages(),
