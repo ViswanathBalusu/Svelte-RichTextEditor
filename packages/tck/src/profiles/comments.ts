@@ -135,8 +135,9 @@ export const COMMENTS: ProfileDef = {
           { range: { from: from + text.length, to: to + text.length, baseSeq: ack.seq } },
           'the range moved by the length of the inserted text',
         );
-        // At the seq the thread was made, the range is where it was made.
-        const then = await ctx.service.as(token, 'GET', `/documents/${doc}/threads`, {
+        // At the seq the thread was made, the range is where it was made. The editor reads it: a
+        // commenter has no `edit` and, under the default history setting, sees the head only (07 §8).
+        const then = await ctx.service.as(editor.token, 'GET', `/documents/${doc}/threads`, {
           query: { seq: content.seq },
         });
         expectStatus(then, 200, 'the threads at the earlier seq');

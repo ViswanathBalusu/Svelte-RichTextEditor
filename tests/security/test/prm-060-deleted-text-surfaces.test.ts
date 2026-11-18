@@ -49,7 +49,7 @@ describe('PRM-060 criterion 7: deleted text and the history surfaces (memory)', 
       engine: 'pm-steps/1',
       retired: [],
       claimed: [],
-    } as const;
+    } satisfies Omit<StoredCommit, 'seq' | 'id' | 'steps' | 'time'>;
     const steps: unknown[][] = [
       [
         {
