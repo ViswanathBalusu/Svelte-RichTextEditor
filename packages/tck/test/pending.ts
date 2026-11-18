@@ -7,7 +7,6 @@ const FAULTS = 'needs the fault-injection profile and its server hooks (PRO-126;
 const WORKFLOW =
   'workflow resources of phase 2 (FRW-068); the workflow actions are not defined (G95)';
 const HISTORY = 'history resources of phase 2 (PRO-119)';
-const COMMENTS = 'comment resources of phase 2 (PRO-120)';
 const LEASES = 'leases of phase 2 (PRO-122)';
 
 export const PENDING: Readonly<Record<string, string>> = {
@@ -28,11 +27,7 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation PUT /documents/{id}/regions/{rid}/lease': LEASES,
   'operation DELETE /documents/{id}/regions/{rid}/lease': LEASES,
   'operation GET /documents/{id}/history': HISTORY,
-  'operation GET /documents/{id}/versions': HISTORY,
-  'operation GET /documents/{id}/diff': HISTORY,
-  'operation GET /documents/{id}/attribution': HISTORY,
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,
-  'operation GET /documents/{id}/threads': COMMENTS,
   'operation GET /imports/{jid}':
     'imports take a service credential and arrive with EXP (G79; D16)',
   'operation GET /fonts': 'the font manifest has no shape and no feature yet (G75; G06)',
@@ -54,16 +49,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'error workflow_active': WORKFLOW,
   'error unavailable': FAULTS,
   'error internal': FAULTS,
-  'event thread.created': COMMENTS,
-  'event thread.updated': COMMENTS,
-  'event thread.resolved': COMMENTS,
-  'event thread.reopened': COMMENTS,
-  'event thread.deleted': COMMENTS,
-  'event comment.created': COMMENTS,
-  'event comment.updated': COMMENTS,
-  'event comment.deleted': COMMENTS,
-  'event version.created': HISTORY,
-  'event version.restored': HISTORY,
   'event import.completed': 'imports arrive with EXP (G79; D16)',
   'event import.failed': 'imports arrive with EXP (G79; D16)',
 };
