@@ -3,12 +3,7 @@
 import { DEP1_WIRE } from '@docedit/protocol';
 import fc from 'fast-check';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  IMPLEMENTED_CALLS,
-  capabilities,
-  sidecarProblems,
-  type Capabilities,
-} from '../src/capabilities.ts';
+import { capabilities, sidecarProblems, type Capabilities } from '../src/capabilities.ts';
 import { type RunningServer, listen } from '../src/http.ts';
 import { AuthorityService } from '../src/service.ts';
 
@@ -26,15 +21,17 @@ describe('capabilities', () => {
     const res = await fetch(`${running.url}/v1/authority/capabilities`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Capabilities;
-    expect(body).toEqual(capabilities());
-    expect(body.calls).toEqual([...IMPLEMENTED_CALLS]);
+    expect(body).toEqual(capabilities(new AuthorityService().calls));
+    expect(body.calls).toEqual(['open', 'materialise', 'evaluateRules']);
   });
 
   it('do not offer a feature whose call is not built', () => {
-    const { features } = capabilities();
+    const { features } = capabilities(new AuthorityService().calls);
     // `applyCommit` (PRO-104) and the history calls (PRO-106) are not implemented here yet.
     for (const f of ['regions', 'suggest-enforced', 'fields', 'history', 'read-restrictions'])
       expect(features, f).not.toContain(f);
+    // `evaluateRules` is built (PRO-107), so `rules` is offered.
+    expect(features).toContain('rules');
     // Features of the backend's own planes do not depend on the service.
     for (const f of ['presence', 'comments', 'workflow', 'leases'])
       expect(features, f).toContain(f);

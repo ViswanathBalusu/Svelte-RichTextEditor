@@ -2480,12 +2480,13 @@ As an integrating developer, I want CDM migrations and field rules run by the au
 
 **Acceptance criteria**
 
-- [ ] Given `migrate`, when it is called on a document of an older `cdm`, then it returns content valid for the new version, equal to the in-process migration on fixtures.
-- [ ] Given a migration that fails, when it is called, then the result is a failure and no new state exists.
-- [ ] Given `evaluateRules`, when it is called with a document state and field values, then it returns the same visibility, requirement, enablement and computed values as the shared rules package on the rules fixtures.
+- [x] Given `migrate`, when it is called on a document of an older `cdm`, then it returns content valid for the new version, equal to the in-process migration on fixtures.
+- [x] Given a migration that fails, when it is called, then the result is a failure and no new state exists.
+- [x] Given `evaluateRules`, when it is called with a document state and field values, then it returns the same visibility, requirement, enablement and computed values as the shared rules package on the rules fixtures.
 - [ ] Given the service, when its profile runs (PRO-125), then migrations and rule evaluations are covered.
 
-**Notes:** Migrations are gated by an operator (03 §11.3), never triggered by opening a document.
+**Evidence:** services/authority-service/test/migrate-rules.test.ts (Node.js, 13 pass), code in services/authority-service/src/service.ts and src/http.ts. Criterion 1: `migrate` of a document of an older `cdm` returns canonical content that is valid under the target's definition and equals the in-process migration of `@docedit/model` (text and hash), also over HTTP (test-only migrations and a test definition of version 2, because CDM 1 is the only real version). Criterion 2: a migration that does not stamp the version, one that returns an invalid document, a missing step, a downgrade and an unknown target are all failures; the service holds the same states afterwards. Criterion 3: all 31 positive cases of spec/rules/rules-1.fixtures.json give the same `Evaluation` as `evaluateDocument` called directly, and every field the fixture names has its expected visibility, enablement, requirement and computed value; the 37 negative cases are refused (7 at `open` by the model's invariants, 30 as `invalid_rules`); values that replace stored ones and `keys` are tested. Operator gate: `migrate` is off unless `allowMigrations`, and opening a document of another `cdm` never migrates. Choices: docs/adr/0391-w5-PRO-107-migrate-and-evaluate-rules.md (proposed).
+**Notes:** Migrations are gated by an operator (03 §11.3), never triggered by opening a document. Lane w5, 2026-11-18: criteria 1 to 3 ticked. Criterion 4 stays open: it needs the authority service conformance profile (PRO-125), which has no scenarios; the kit cannot reach the service over DEP (05 §10), and a profile built here would be scaffolding.
 
 ## Conformance kit (05 §11)
 

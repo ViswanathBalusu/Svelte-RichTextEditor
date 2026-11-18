@@ -9,7 +9,7 @@
  * |---|---|
  * | `open` | `POST /v1/authority/documents/{doc}/open` |
  * | `materialise` | `GET /v1/authority/states/{stateId}/content?seq=N` |
- * | `migrate` | `POST /v1/authority/states/{stateId}/migrate` |
+ * | `migrate` | `POST /v1/authority/documents/{doc}/migrate` (a document of an older `cdm` is not a state) |
  * | `evaluateRules` | `POST /v1/authority/states/{stateId}/evaluate-rules` |
  * | what the service supports | `GET /v1/authority/capabilities` |
  *
@@ -106,20 +106,12 @@ const bad = (message: string): Answer<never> => ({
   error: { code: 'invalid_request', message },
 });
 
-/** The calls of 05 §10 that the router dispatches; `migrate` and `evaluateRules` are optional. */
+/** The calls of 05 §10 that the router dispatches. */
 export interface Routes {
   service: AuthorityService;
   /** Whether the service can serve; a service with a store to reach would check it here. */
   ready?: () => boolean;
-  /** More routes under `/v1/authority/states/{stateId}/{call}`, by call name. */
-  stateCalls?: Record<
-    string,
-    (stateId: string, body: unknown) => Promise<{ status: number; value: unknown } | ServiceError>
-  >;
 }
-
-const isServiceError = (v: unknown): v is ServiceError =>
-  typeof v === 'object' && v !== null && 'code' in v && 'message' in v;
 
 /** Routes one request. Pure apart from the service it calls, so tests need no socket. */
 export async function route(routes: Routes, req: HttpRequest): Promise<HttpResponse> {
@@ -130,7 +122,8 @@ export async function route(routes: Routes, req: HttpRequest): Promise<HttpRespo
     const ready = routes.ready?.() ?? true;
     return json(ready ? 200 : 503, { status: ready ? 'ready' : 'not ready' });
   }
-  if (path === `${API}/capabilities` && method === 'GET') return json(200, capabilities());
+  if (path === `${API}/capabilities` && method === 'GET')
+    return json(200, capabilities(service.calls));
   const open = /^\/v1\/authority\/documents\/([^/]+)\/open$/.exec(path);
   if (open) {
     if (method !== 'POST') return methodNotAllowed('POST');
@@ -167,14 +160,32 @@ export async function route(routes: Routes, req: HttpRequest): Promise<HttpRespo
         body: r.text,
       };
     }
-    const handler = routes.stateCalls?.[call];
-    if (handler) {
+    if (call === 'evaluate-rules') {
       if (method !== 'POST') return methodNotAllowed('POST');
       const parsed = parseBody(req.contentType, req.body);
       if (!parsed.ok) return problem(parsed.error);
-      const r = await handler(stateId, parsed.value);
-      return isServiceError(r) ? problem(r) : json(r.status, r.value);
+      const r = service.evaluateRules(stateId, parsed.value ?? {});
+      return r.ok ? json(200, r.evaluation) : problem(r.error);
     }
+  }
+  const migrate = /^\/v1\/authority\/documents\/([^/]+)\/migrate$/.exec(path);
+  if (migrate) {
+    if (method !== 'POST') return methodNotAllowed('POST');
+    const parsed = parseBody(req.contentType, req.body);
+    if (!parsed.ok) return problem(parsed.error);
+    const r = await service.migrate(parsed.value);
+    return r.ok
+      ? {
+          status: 200,
+          headers: { 'content-type': JSON_TYPE },
+          body: canonicalize({
+            content: r.content,
+            contentHash: r.contentHash,
+            cdm: r.cdm,
+            steps: r.steps,
+          }),
+        }
+      : problem(r.error);
   }
   return problem({ code: 'not_found', message: `no route for ${method} ${path}` });
 }

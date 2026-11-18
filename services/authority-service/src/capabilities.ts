@@ -14,7 +14,12 @@ import {
   type TierProblem,
 } from '@docedit/protocol/client';
 
-export const IMPLEMENTED_CALLS: readonly AuthorityServiceCall[] = ['open', 'materialise'];
+export const IMPLEMENTED_CALLS: readonly AuthorityServiceCall[] = [
+  'open',
+  'materialise',
+  'migrate',
+  'evaluateRules',
+];
 
 export interface Capabilities {
   /** The calls of 05 §10 this service implements. */
