@@ -57,6 +57,7 @@ import { attachShortcuts } from './shortcuts.ts';
 import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
+import { rulesService } from './rules.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
 import { mayChange } from './status.ts';
@@ -476,6 +477,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     roles: rolesService(core),
     // The field properties pane (FRW-073): a field's authored attributes and the change of them.
     fieldProperties: fieldPropertiesService(core),
+    // The rule builder (FRW-024): the core's rules as sentences and the changes to them, as commits.
+    rules: rulesService(core),
     // The math editor (FE-070): the selected equation, its limits and its confirmation; MathLive loads on first use.
     mathEditor: mathEditorService(core, { fontsUrl: options.mathFontsUrl }),
     // Fill mode (FRW-076, FRW-078): the fields without their values, for the guided bar and the

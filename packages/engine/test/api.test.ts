@@ -61,6 +61,11 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'checkFieldEntry'
       | 'fieldFillable'
       | 'fieldRuleState'
+      | 'ruleDefs'
+      | 'ruleItems'
+      | 'saveRuleParts'
+      | 'nextRuleId'
+      | 'editRule'
       | 'enterFieldValue'
       | 'validateFields'
       // FRW-070, FRW-078: the fields of fill mode without their values, and the entries a person made.

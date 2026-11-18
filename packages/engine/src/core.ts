@@ -176,6 +176,17 @@ import {
   removePlaceholder,
 } from './picture-placeholder.ts';
 import { FieldRules, type FieldRuleState } from './field-rules.ts';
+import type { RuleParts } from '@docedit/rules';
+import {
+  editRule,
+  listRuleDefs,
+  listRuleItems,
+  ruleFromParts,
+  type RuleDefInfo,
+  type RuleEdit,
+  type RuleEditOutcome,
+  type RuleItemInfo,
+} from './rule-edit.ts';
 import {
   type EnterResult,
   type FieldChange,
@@ -2599,6 +2610,62 @@ export class DocumentCore implements DocumentApi {
   /** The document's roles in the order of its definitions, each with its fields (FRW-074). */
   roles(): RoleInfo[] {
     return listRoles(this.#state.doc);
+  }
+
+  /** The rules as the builder lists them: sentence parts, or the JSON text of another shape (FRW-024). */
+  ruleItems(): RuleItemInfo[] {
+    return listRuleItems(this.#state.doc);
+  }
+
+  /**
+   * Saves a rule of the sentence form from the builder (FRW-024): a new one, or one that replaces
+   * `replace` and keeps every member the builder does not edit. The rest is `editRule`.
+   */
+  saveRuleParts(
+    input: { readonly id: string; readonly parts: RuleParts; readonly replace?: string },
+    check = false,
+  ): RuleEditOutcome {
+    const rule = ruleFromParts(this.#state.doc, input);
+    return this.editRule(
+      { op: 'save', rule, ...(input.replace !== undefined ? { replace: input.replace } : {}) },
+      check,
+    );
+  }
+
+  /** An identifier for a new rule that no rule of the document uses (FRW-024). */
+  nextRuleId(): string {
+    const used = new Set(listRuleDefs(this.#state.doc).map((r) => r.id));
+    for (let n = 1; ; n++) if (!used.has(`rule_${n}`)) return `rule_${n}`;
+  }
+
+  /** The document's rules in the order of its definitions, each as its JSON tree (FRW-024). */
+  ruleDefs(): RuleDefInfo[] {
+    return listRuleDefs(this.#state.doc);
+  }
+
+  /**
+   * Adds, replaces or deletes a rule definition (FRW-024; 12 §3.5). The change is a transaction on
+   * the definitions, so it passes the region guard (`defs` needs `structure`, 07 §4) and leaves as a
+   * commit like any other. The set of rules with the change must compile, with the keys concerned
+   * named when it does not (I14), and a document holds at most 500 (I15). With `check`, only says
+   * whether the change would be made.
+   */
+  editRule(edit: RuleEdit, check = false): RuleEditOutcome {
+    if (this.#locked()) return { ok: false, reason: 'read-only' };
+    const state = this.#state;
+    const outcome = editRule(
+      state,
+      edit,
+      {
+        writable: (pos) => this.canEdit(this.#scopeIn(state.doc, pos)),
+        formFields: this.#requires.includes('fields'),
+      },
+      check ? undefined : this.dispatch,
+    );
+    // The guard has the last word: a transaction it refused leaves the document as it was.
+    if (outcome.ok && !check && this.#state.doc.eq(state.doc))
+      return { ok: false, reason: 'read-only' };
+    return outcome;
   }
 
   /** An identifier for a new role that no role of the document uses (FRW-074). */
