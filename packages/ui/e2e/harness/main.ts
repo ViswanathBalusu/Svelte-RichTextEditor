@@ -49,7 +49,7 @@ import { Icons } from '../../src/icons/icons.ts';
 import { PeopleDirectory } from '../../src/people/directory.ts';
 import { SettingsStore, type ShellSettings } from '../../src/shell/settings.ts';
 import shellCss from '../../src/styles/shell.css?inline';
-import type { ThreadDetail, ThreadSummary } from '../../src/core-api.ts';
+import type { ReviewItem, ThreadDetail, ThreadSummary } from '../../src/core-api.ts';
 import { FakeCore, type FakeCoreOptions, type Notify } from '../../test/support/fake-core.ts';
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
 import { sendService, type SendHarnessLog, type SendHarnessMode } from './frw-028-send-port.ts';
@@ -181,6 +181,8 @@ export interface MountOptions {
   icons?: Record<string, unknown>;
   /** The comment threads port (UX-028), with the `comments` feature announced. */
   comments?: boolean;
+  /** The core lists suggestions and steps and resolves them (UX-036, UX-037). */
+  review?: boolean;
   /** The comments pane itself (UX-030): the real pane is the `comments` loader; threads come from `setThreads`. */
   commentsPane?: boolean;
   /** Milliseconds `searchPrincipals` holds its answer, by query text (UX-031 criterion 2). */
@@ -523,6 +525,7 @@ function mountShell(options: MountOptions = {}): void {
       ? { features: [...(options.features ?? []), ...(options.comments ? ['comments'] : [])] }
       : {}),
     ...(options.comments ? { threads: true } : {}),
+    ...(options.review ? { review: true } : {}),
     ...(options.counts ? { counts: options.counts } : {}),
     ...(options.mode ? { mode: options.mode } : {}),
     ...(options.modes ? { modes: options.modes } : {}),
@@ -837,6 +840,28 @@ const harness = {
     core.selection.set({ ...core.selection.get() });
   },
   setThreadCount: (n: number) => void (need().core.threads!.threads = n),
+  /** The suggestions the core lists, and where the selection is (UX-036). */
+  setReviewItems: (
+    items: ReviewItem[],
+    selection: { from: number; to: number } = { from: 0, to: 0 },
+  ) => {
+    const core = need().core;
+    core.reviewItems = items;
+    core.reviewSelection = selection;
+    // The shell reads whether the selection is empty from the core's selection summary.
+    core.selection.set({ ...core.selection.get(), empty: selection.from === selection.to });
+    core.revision.set(core.revision.get() + 1);
+  },
+  /** What the review commands asked of the core, and the selection now. */
+  reviewCalls: () => JSON.parse(JSON.stringify(need().core.reviewCalls)) as unknown[],
+  reviewSelection: () => ({ ...need().core.reviewSelection }),
+  reviewIds: () => need().core.reviewItems.map((s) => s.id),
+  /** Another person resolves a suggestion first: it leaves the list and the revision moves. */
+  removeReviewItem: (id: string) => {
+    const core = need().core;
+    core.reviewItems = core.reviewItems.filter((s) => s.id !== id);
+    core.revision.set(core.revision.get() + 1);
+  },
   /** The threads the comments pane lists (UX-030). */
   setThreads: (items: ThreadSummary[]) => void (need().core.threads!.items = items),
   /** The service reports a changed list: the pane and the header count read it again (UX-030). */
