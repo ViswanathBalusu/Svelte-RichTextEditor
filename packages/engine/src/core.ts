@@ -758,10 +758,16 @@ export class DocumentCore implements DocumentApi {
   #problems = 0;
   #equationRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
-  #find: { query: string; matches: SearchMatch[]; current: number | null } = {
+  #find: {
+    query: string;
+    matches: SearchMatch[];
+    current: number | null;
+    matchCase: boolean;
+  } = {
     query: '',
     matches: [],
     current: null,
+    matchCase: true,
   };
   #presenceClient: PresenceClient | null = null;
 
@@ -2638,7 +2644,7 @@ export class DocumentCore implements DocumentApi {
   /** Recomputes the matches after a change of the document; the current one stays in range. */
   #refreshFind(): void {
     const f = this.#find;
-    f.matches = findMatches(this.#state.doc, f.query);
+    f.matches = findMatches(this.#state.doc, f.query, { matchCase: f.matchCase });
     if (f.matches.length === 0) f.current = null;
     else if (f.current !== null) f.current = Math.min(f.current, f.matches.length - 1);
     this.#publishFind();
@@ -2650,6 +2656,7 @@ export class DocumentCore implements DocumentApi {
       query: f.query,
       count: f.matches.length,
       current: f.current === null ? null : f.current + 1,
+      ...(f.matchCase ? {} : { matchCase: false }),
     });
   }
 
@@ -2658,14 +2665,15 @@ export class DocumentCore implements DocumentApi {
     return skippedPreservedAtoms(this.#state.doc, this.#find.query);
   }
 
-  findText(query: string): FindState {
-    this.#find = { query, matches: findMatches(this.#state.doc, query), current: null };
+  findText(query: string, options?: { readonly matchCase?: boolean }): FindState {
+    const matchCase = options?.matchCase !== false;
+    this.#find = { query, matches: findMatches(this.#state.doc, query, { matchCase }), current: null, matchCase };
     this.#publishFind();
     return this.findState.get();
   }
 
   clearFind(): void {
-    this.#find = { query: '', matches: [], current: null };
+    this.#find = { query: '', matches: [], current: null, matchCase: true };
     this.#publishFind();
   }
 
@@ -2691,6 +2699,25 @@ export class DocumentCore implements DocumentApi {
     const m = f.matches[next]!;
     const selection = TextSelection.create(this.#state.doc, m.from, m.to);
     // The match scrolls into view in the web view (FE-059 criterion 2).
+    this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
+    this.#publishFind();
+    return true;
+  }
+
+  /**
+   * Selects match `index` of the current find and scrolls it into view (UX-020 criterion 3). When the
+   * caller names what it expects there (the block and the matched text it read), a match that is
+   * now another one is refused, so that a result list that went stale moves nowhere wrong.
+   */
+  selectFindMatch(index: number, expected?: { blockId: string | null; text: string }): boolean {
+    const f = this.#find;
+    const m = f.matches[index];
+    if (!m) return false;
+    if (expected && (m.blockId !== expected.blockId || m.text !== expected.text)) return false;
+    f.current = index;
+    const selection = TextSelection.create(this.#state.doc, m.from, m.to);
+    // The view scrolls relative to the DOM selection, which is in the editor only once it has focus.
+    this.focus();
     this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
     this.#publishFind();
     return true;

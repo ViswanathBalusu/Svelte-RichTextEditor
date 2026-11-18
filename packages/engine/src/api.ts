@@ -637,6 +637,8 @@ export interface FindState {
   readonly query: string;
   readonly count: number;
   readonly current: number | null;
+  /** False when the find ignores case (UX-020); absent when case matters, the default. */
+  readonly matchCase?: boolean;
 }
 
 /** One match for a navigation pane (FE-059 criterion 6): its place and the text around it. */
@@ -819,7 +821,13 @@ export interface DocumentApi {
    * Finds `query` in the body and highlights nothing itself: the matches are the core's and the
    * view draws them (FE-059). An empty query clears the find. Changes no document.
    */
-  findText(query: string): FindState;
+  findText(query: string, options?: { readonly matchCase?: boolean }): FindState;
+  /**
+   * Selects match `index` (0-based, as in `findResults()`) and scrolls it into view; false when
+   * there is no such match, or `blockId` and `text` are given and the match there is another one
+   * (the document changed since the results were read; UX-020 criterion 3).
+   */
+  selectFindMatch(index: number, expected?: { blockId: string | null; text: string }): boolean;
   /** Moves the selection to the next match, wrapping at the end; false when there is none. */
   findNext(): boolean;
   /** Moves the selection to the previous match, wrapping at the start; false when there is none. */

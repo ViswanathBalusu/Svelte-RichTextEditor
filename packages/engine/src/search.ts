@@ -35,9 +35,34 @@ export const CONTEXT = 40;
 /** Stands for an inline node that is not text; no plain query contains it. */
 const OBJECT = '￼';
 
-/** Finds every non-overlapping match of `query` in the body, in document order. */
-export function findMatches(doc: PMNode, query: string): SearchMatch[] {
+/** The match options a caller may give (UX-020: the navigation pane's "match case"). */
+export interface FindOptions {
+  /** Whether case matters; true (the proposed default of ADR 0108) when absent. */
+  readonly matchCase?: boolean;
+}
+
+/**
+ * Lower-cases a text one UTF-16 unit at a time and keeps a unit whose lower case has another length,
+ * so that the folded text has the length of the original and its indices are the same.
+ */
+function fold(text: string): string {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const unit = text[i]!;
+    const lower = unit.toLowerCase();
+    out += lower.length === 1 ? lower : unit;
+  }
+  return out;
+}
+
+/**
+ * Finds every non-overlapping match of `query` in the body, in document order. Case matters unless
+ * `options.matchCase` is false; the matched text, the context and the positions are the document's.
+ */
+export function findMatches(doc: PMNode, query: string, options?: FindOptions): SearchMatch[] {
   if (query === '') return [];
+  const fold_ = options?.matchCase === false;
+  const needle = fold_ ? fold(query) : query;
   const body = doc.lastChild;
   if (!body || body.type.name !== 'body') return [];
   const bodyStart = doc.content.size - body.nodeSize;
@@ -47,7 +72,8 @@ export function findMatches(doc: PMNode, query: string): SearchMatch[] {
     if (node.type.name === 'footnote') return false;
     if (!node.isTextblock) return true;
     const { text, positions } = paragraphText(node, pos + 1);
-    let i = text.indexOf(query);
+    const haystack = fold_ ? fold(text) : text;
+    let i = haystack.indexOf(needle);
     while (i !== -1) {
       const matched = text.slice(i, i + query.length);
       if (!matched.includes(OBJECT)) {
@@ -64,7 +90,7 @@ export function findMatches(doc: PMNode, query: string): SearchMatch[] {
           after: text.slice(i + query.length, i + query.length + CONTEXT).replaceAll(OBJECT, ''),
         });
       }
-      i = text.indexOf(query, i + query.length);
+      i = haystack.indexOf(needle, i + query.length);
     }
     return false;
   });
