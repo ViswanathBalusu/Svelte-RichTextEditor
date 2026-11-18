@@ -93,7 +93,16 @@ export interface AttributionSpanOut {
   agent?: string;
   restoredBy?: string;
   restoredSeq?: number;
+  /**
+   * Set when the content was written below the reader's gate: an unknown person (owner decision
+   * 37; HIS-026 criterion 3). `user` is empty, `seq` is `UNKNOWN_SEQ` and no agent is named, so the
+   * author and the time are withheld.
+   */
+  unknown?: true;
 }
+
+/** The `seq` of a span whose author is withheld: a value no commit has. */
+export const UNKNOWN_SEQ = -1;
 
 export interface AttributionQuery {
   /** The full document at the version asked about, and its attribution map. */
@@ -138,10 +147,39 @@ export function attributionFor(
     const start = e.pos + 1;
     for (const r of map.slice(start, start + e.node.content.size)) {
       if (r.user === HIDDEN_AUTHOR.user && r.seq === HIDDEN_AUTHOR.seq) continue;
+      const from = r.from - start;
+      const to = from + r.len;
+      if (r.seq < q.gate.min) {
+        // Written below the gate: an unknown person, with nothing of the commit (decision 37).
+        // A restore at or above the gate is a visible commit, so it stays named.
+        const s: AttributionSpanOut = {
+          blockId: e.id,
+          from,
+          to,
+          user: '',
+          seq: UNKNOWN_SEQ,
+          unknown: true,
+        };
+        if (r.restoredSeq !== undefined && r.restoredSeq >= q.gate.min) {
+          if (r.restoredBy !== undefined) s.restoredBy = r.restoredBy;
+          s.restoredSeq = r.restoredSeq;
+        }
+        const last = spans[spans.length - 1];
+        if (
+          last?.unknown &&
+          last.blockId === e.id &&
+          last.to === from &&
+          last.restoredBy === s.restoredBy &&
+          last.restoredSeq === s.restoredSeq
+        )
+          last.to = to;
+        else spans.push(s);
+        continue;
+      }
       const s: AttributionSpanOut = {
         blockId: e.id,
-        from: r.from - start,
-        to: r.from - start + r.len,
+        from,
+        to,
         user: r.user,
         seq: r.seq,
       };

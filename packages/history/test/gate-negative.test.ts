@@ -20,7 +20,8 @@ import { Transform } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import { AttributionMap, applyCommit } from '../src/attribution.ts';
 import { type CompareSource, compare } from '../src/compare.ts';
-import { attributionFor, versionFor } from '../src/reader.ts';
+import { UNKNOWN_SEQ, attributionFor, versionFor } from '../src/reader.ts';
+import { withRunTimes } from '../src/who-wrote-times.ts';
 import { type RestoreContext, planRestore } from '../src/restore.ts';
 import { createVersion } from '../src/versions.ts';
 import type { HistoryGate } from '../src/types.ts';
@@ -254,5 +255,62 @@ describe('a comparison that straddles the gate contains nothing from below it (H
     });
     expect(r.ok).toBe(false);
     expect(r).not.toHaveProperty('comparison');
+  });
+});
+
+describe('attribution across the gate shows an unknown person (owner decision 37; HIS-026 criterion 3)', () => {
+  const read = (min: number, seq: number) => {
+    const b = log();
+    const maps = mapsOf(b);
+    const r = attributionFor({
+      doc: b.docs[seq]!,
+      map: maps[seq]!,
+      seq,
+      gate: { min, head: b.head },
+      hidden: NOTHING_HIDDEN,
+    });
+    if (!r.ok) throw new Error(`refused: ${r.code}`);
+    return r;
+  };
+
+  it('withholds the author and the time of content written below the gate', () => {
+    // The gate is the head: only the commit of seq 3 (dan) is at or above it.
+    const r = read(3, 3);
+    expect(r.spans.some((s) => s.unknown)).toBe(true);
+    for (const s of r.spans) {
+      if (s.unknown) expect(s).toMatchObject({ user: '', seq: UNKNOWN_SEQ });
+      else expect(s).toMatchObject({ user: 'dan', seq: 3 });
+      if (s.unknown) expect(s).not.toHaveProperty('agent');
+    }
+    expect(r.spans.filter((s) => !s.unknown).length).toBeGreaterThan(0);
+    const text = JSON.stringify(r);
+    for (const below of ['carol', 'owner']) expect(text).not.toContain(below);
+    // No run names a commit below the gate.
+    expect(r.spans.every((s) => s.unknown || s.seq >= 3)).toBe(true);
+  });
+
+  it('merges neighbouring unknown spans, so that the commits below the gate are not told apart', () => {
+    const r = read(3, 3);
+    for (let i = 1; i < r.spans.length; i++) {
+      const a = r.spans[i - 1]!;
+      const s = r.spans[i]!;
+      expect(Boolean(a.unknown && s.unknown && a.blockId === s.blockId && a.to === s.from)).toBe(
+        false,
+      );
+    }
+  });
+
+  it('shows every author when nothing is below the gate, and the times are withheld in the join', () => {
+    expect(read(0, 3).spans.some((s) => s.unknown)).toBe(false);
+    const b = log();
+    const timed = withRunTimes(read(3, 3), b.log.map((c) => ({ seq: c.seq, time: c.time })), {
+      createdAt: 500,
+    });
+    if (!timed.ok) throw new Error('refused');
+    for (const run of timed.runs) {
+      if (run.unknown) expect(run).not.toHaveProperty('time');
+      else expect(run.time).toBeTypeOf('number');
+    }
+    expect(timed.authors.map((a) => a.user)).toEqual(['dan']);
   });
 });

@@ -50,6 +50,10 @@ describe.skipIf(skip)('history profile against the reference service (PRO-119)',
       'history.gate.history-list-and-versions',
       'the list and a version refuse a seq below the gate (HIS-026)',
     ],
+    [
+      'history.gate.settings-matrix',
+      'each setting and role: refused below the gate, served above, unknown person (HIS-026 criteria 3 to 5)',
+    ],
     ['history.restore.dry-run', 'a dry run stores nothing (criterion 3)'],
     ['history.restore.region', 'a region restore keeps the rest and not the grants (criterion 3)'],
     [

@@ -180,6 +180,8 @@ The setting is enforced by one gate on every place a sequence number can be supp
 
 "`edit` somewhere" counts the role and matching grants only, not the temporary limits of 07, section 4: a lock, an approval or a lease does not take history away from an editor. A document's setting wins over the tenant's, the tenant's is the default for documents without one, and without either the setting is `editors`. Only tenant administrators change either, through the administration API. A change applies at once, history already written included (owner decision 140; ADR 0034).
 
+Text that a reader sees but that was written below their gate is shown in the attribution as an unknown person: the author, the time and the commit are withheld, and neighbouring runs of such text are merged (owner decision 37; HIS-026).
+
 ## 10. Changes since last visit
 
 The component stores a read marker (`seq`) per user and document when the user has viewed the head. On the next visit it asks for the activity since the marker, excluding the user's own commits, and shows it as a comparison with a summary per region, together with mentions and tasks addressed to the user.
