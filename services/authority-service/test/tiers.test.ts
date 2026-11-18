@@ -22,15 +22,23 @@ describe('capabilities', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Capabilities;
     expect(body).toEqual(capabilities(new AuthorityService().calls));
-    expect(body.calls).toEqual(['open', 'materialise', 'applyCommit', 'evaluateRules']);
+    expect(body.calls).toEqual([
+      'open',
+      'materialise',
+      'applyCommit',
+      'restoreSteps',
+      'diff',
+      'attribution',
+      'evaluateRules',
+    ]);
   });
 
   it('do not offer a feature whose call is not built', () => {
     const { features } = capabilities(new AuthorityService().calls);
-    // The history calls (PRO-106) are not implemented here yet; `applyCommit` (PRO-104) is.
-    for (const f of ['history', 'read-restrictions']) expect(features, f).not.toContain(f);
+    // Reader projection is not a call of 05 §10 and no service offers it (ADR 0019).
+    for (const f of ['read-restrictions']) expect(features, f).not.toContain(f);
     // `applyCommit` (PRO-104) and `evaluateRules` (PRO-107) are built, so these are offered.
-    for (const f of ['regions', 'suggest-enforced', 'fields', 'rules'])
+    for (const f of ['regions', 'suggest-enforced', 'fields', 'rules', 'history'])
       expect(features).toContain(f);
     // Features of the backend's own planes do not depend on the service.
     for (const f of ['presence', 'comments', 'workflow', 'leases'])
@@ -53,9 +61,9 @@ describe('capabilities', () => {
   });
 
   it('say what is missing in the refusal', () => {
-    expect(sidecarProblems(['history'])).toMatchObject([
-      { code: 'needs_authority_service', feature: 'history' },
+    expect(sidecarProblems(['read-restrictions'])).toMatchObject([
+      { code: 'needs_authority_service', feature: 'read-restrictions' },
     ]);
-    expect(sidecarProblems(['history'])[0]!.message).toContain('restoreSteps');
+    expect(sidecarProblems(['read-restrictions'])[0]!.message).toContain('projection');
   });
 });

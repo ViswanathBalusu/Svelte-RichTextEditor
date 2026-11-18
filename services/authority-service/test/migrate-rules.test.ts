@@ -388,7 +388,16 @@ describe('the HTTP routes of migrate and evaluateRules', () => {
       calls: string[];
       features: string[];
     };
-    expect(caps.calls).toEqual(['open', 'materialise', 'applyCommit', 'migrate', 'evaluateRules']);
+    expect(caps.calls).toEqual([
+      'open',
+      'materialise',
+      'applyCommit',
+      'restoreSteps',
+      'diff',
+      'attribution',
+      'migrate',
+      'evaluateRules',
+    ]);
     expect(caps.features).toContain('rules');
   });
 });

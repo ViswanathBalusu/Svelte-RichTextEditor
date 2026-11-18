@@ -19,13 +19,9 @@
 import {
   type Checkpoint,
   type ContentSource,
-  type Connection,
-  type DocRole,
   type DocumentState,
   type LogCommit,
   type PermissionState,
-  type RegionApproval,
-  type RegionGrant,
   type RegionState,
   Room,
   type SnapshotCommit,
@@ -35,7 +31,14 @@ import {
   contentAt,
   defaultReplayers,
 } from '@docedit/authority';
-import { type ChainMetadata, chainHash, payloadDigest } from '@docedit/history';
+import {
+  AttributionMap,
+  type AttributionJson,
+  type ChainMetadata,
+  chainHash,
+  coversExactly,
+  payloadDigest,
+} from '@docedit/history';
 import {
   type JsonEnvelope,
   type JsonNode,
@@ -51,44 +54,33 @@ import { cdmSchema } from '@docedit/model/prosemirror';
 import { type Evaluation, type ValueMap, evaluateDocument } from '@docedit/rules';
 import type { AuthorityServiceCall } from '@docedit/protocol/client';
 import { IMPLEMENTED_CALLS } from './capabilities.ts';
+import { attribution, diff, restoreSteps } from './history-calls.ts';
+import type { AttributionAnswer, DiffAnswer, RestoreStepsAnswer } from './history-calls.ts';
 import { readDocument } from '@docedit/model/validate';
 import type { Node } from 'prosemirror-model';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
-/** What the service tells a caller when it does not do what was asked. */
-export type ServiceErrorCode =
-  | 'invalid_request'
-  | 'unknown_state'
-  | 'not_found'
-  | 'state_mismatch'
-  | 'chain_broken'
-  | 'payload_missing'
-  | 'checkpoint_unavailable'
-  | 'checkpoint_mismatch'
-  | 'replay_failed'
-  | 'unsupported_cdm'
-  | 'unsupported_feature'
-  | 'validation_failed'
-  | 'migration_not_enabled'
-  | 'migration_failed'
-  | 'invalid_rules'
-  | 'budget_exceeded'
-  | 'storage_unavailable'
-  | 'unauthorized';
-
-export interface ServiceError {
-  code: ServiceErrorCode;
-  message: string;
-  /** Further fields of the same kind as the code carries, such as the problem's path. */
-  detail?: unknown;
-}
-
-export type Answer<T> = ({ ok: true } & T) | { ok: false; error: ServiceError };
-
-export function fail(code: ServiceErrorCode, message: string, detail?: unknown): Answer<never> {
-  return { ok: false, error: { code, message, ...(detail === undefined ? {} : { detail }) } };
-}
+export {
+  type Answer,
+  type HeldState,
+  type ServiceError,
+  type ServiceErrorCode,
+  type WireAuthor,
+  type WirePermissions,
+  connectionOf,
+  fail,
+  unpackWirePerms,
+} from './common.ts';
+import {
+  type Answer,
+  type HeldState,
+  type WireAuthor,
+  type WirePermissions,
+  connectionOf,
+  fail,
+  unpackWirePerms,
+} from './common.ts';
 
 /**
  * The reference to the checkpoint a log starts from. `seq` is the sequence number it holds (0 for
@@ -101,6 +93,12 @@ export interface CheckpointRef {
   chainHead: string | null;
   contentHash: string;
   content?: JsonEnvelope;
+  /**
+   * Who wrote what up to `seq`, as `AttributionMap.toJSON()` (08 §7). Without it the content of the
+   * checkpoint is attributed to `createdBy` (to nobody when that is absent) at `seq`.
+   */
+  attribution?: AttributionJson;
+  createdBy?: string;
 }
 
 /** The payload of one commit as the hash chain holds it (`{ steps, retired, claimed }`, 08 §2). */
@@ -194,54 +192,6 @@ export interface EvaluateRulesRequest {
 }
 
 export type EvaluateRulesAnswer = Extract<Evaluation, { ok: true }>;
-
-/** A loaded document: immutable, named by its `stateId`. */
-interface HeldState {
-  stateId: string;
-  doc: string;
-  head: number;
-  /** The first sequence number whose content can be read (the checkpoint's). */
-  first: number;
-  source: ContentSource;
-  headDoc: Node;
-  /** The `cdm` of the checkpoint the log starts from. */
-  cdm: number;
-  /** The `requires` of the document at each sequence number from `first` to `head`. */
-  requires: Map<number, string[]>;
-  /** The commits after the checkpoint, in order, and the contents of the snapshots they name. */
-  log: readonly LogCommit[];
-  snapshots: ReadonlyMap<string, Node>;
-  /** The document at `first`: where every replay starts. */
-  checkpointDoc: Node;
-  /** The hash of the commit at `head` (the next commit links to it); the checkpoint's own at `first`. */
-  chainHead: string | null;
-}
-
-/**
- * The permission state a caller hands to `applyCommit` (05 §10; ADR 0394). It is the state the
- * room would hold at apply time, as JSON: the service keeps none of it between calls.
- */
-export interface WirePermissions {
-  /** The grants revision now (04 G7). */
-  revision: number;
-  grants: RegionGrant[];
-  regionStates?: Record<string, RegionState>;
-  leases?: PermissionState['leases'];
-  documentState?: DocumentState;
-  workflowActive?: boolean;
-  approvals?: Record<string, RegionApproval>;
-}
-
-/** The connection a commit is judged under (05 §3): who submits it and with which role. */
-export interface WireAuthor {
-  sub: string;
-  session: string;
-  role: DocRole;
-  groups?: string[];
-  agent?: string;
-  participantRoles?: string[];
-  participantActive?: boolean;
-}
 
 /** What the caller relied on when it decided to apply the commit (04 §5, closing paragraph). */
 export interface WirePreconditions {
@@ -370,6 +320,16 @@ export class AuthorityService {
     const loaded = await this.#checkpoint(doc, ref);
     if (!loaded.ok) return loaded;
     const { envelope, node } = loaded;
+    let baseAttribution: AttributionMap;
+    try {
+      baseAttribution = ref.attribution
+        ? AttributionMap.fromJSON(ref.attribution)
+        : AttributionMap.create(node.content.size, { user: ref.createdBy ?? '', seq: ref.seq });
+    } catch (e) {
+      return fail('invalid_request', `checkpointRef.attribution is not valid: ${String(e)}`);
+    }
+    if (!coversExactly(baseAttribution, node))
+      return fail('invalid_request', 'checkpointRef.attribution does not cover the checkpoint');
 
     // The chain: every record links to the one before and hashes to its own `hash`.
     let prev = ref.chainHead;
@@ -437,6 +397,7 @@ export class AuthorityService {
       snapshots,
       checkpointDoc: node,
       chainHead: prev,
+      baseAttribution,
     };
     this.#hold(state);
     return { ok: true, stateId, seq: head, doc };
@@ -546,15 +507,7 @@ export class AuthorityService {
     const lastRevision = state.log.length ? state.log[state.log.length - 1]!.revision : undefined;
     const at = Number.isSafeInteger(commit.time) ? (commit.time as number) : Date.now();
     const a = commit.author;
-    const conn: Connection = {
-      sub: a.sub,
-      session: a.session,
-      role: a.role,
-      groups: a.groups ?? [],
-      participantRoles: a.participantRoles ?? [],
-      participantActive: a.participantActive ?? false,
-      ...(a.agent !== undefined ? { agent: a.agent } : {}),
-    };
+    const conn = connectionOf(a);
     const room = new Room({
       schema: this.#schema,
       initial: state.checkpointDoc,
@@ -693,6 +646,30 @@ export class AuthorityService {
       hash: await chainHash(prev, meta, digest.hash),
       payload,
     };
+  }
+
+  /** `restoreSteps` (05 §10; 08 §8): the steps or snapshot that restore a document or a region. */
+  async restoreSteps(stateId: unknown, request: unknown): Promise<Answer<RestoreStepsAnswer>> {
+    const found = await this.#stateOf(stateId);
+    return found.ok ? restoreSteps(this.#schema, found.state, request) : found;
+  }
+
+  /** `diff` (05 §10; 08 §6): the comparison of two states of one document. */
+  async diff(stateId: unknown, request: unknown): Promise<Answer<DiffAnswer>> {
+    const found = await this.#stateOf(stateId);
+    return found.ok ? diff(this.#schema, found.state, request) : found;
+  }
+
+  /** `attribution` (05 §10; 08 §7): who wrote which spans of a region or of some blocks. */
+  async attribution(stateId: unknown, request: unknown): Promise<Answer<AttributionAnswer>> {
+    const found = await this.#stateOf(stateId);
+    return found.ok ? attribution(this.#schema, found.state, request) : found;
+  }
+
+  async #stateOf(stateId: unknown): Promise<Answer<{ state: HeldState }>> {
+    if (typeof stateId !== 'string' || !HEX64.test(stateId))
+      return fail('invalid_request', 'stateId must be 64 lower-case hexadecimal digits');
+    return this.#state(stateId);
   }
 
   /**
@@ -973,18 +950,6 @@ function parseApply(input: unknown): Answer<{ value: ApplyCommitRequest }> {
   if (preconditions !== undefined && !isObject(preconditions))
     return bad('preconditions must be an object');
   return { ok: true, value: input as unknown as ApplyCommitRequest };
-}
-
-function unpackWirePerms(p: WirePermissions): PermissionState {
-  return {
-    revision: p.revision,
-    grants: p.grants.map((g) => ({ ...g })),
-    regionStates: new Map(Object.entries(p.regionStates ?? {})),
-    leases: (p.leases ?? []).map((l) => ({ ...l })),
-    documentState: p.documentState ?? 'active',
-    workflowActive: p.workflowActive ?? false,
-    ...(p.approvals ? { approvals: new Map(Object.entries(p.approvals)) } : {}),
-  };
 }
 
 /** What the room checks for a server-authored commit (04 §5), here for a commit the caller decided on. */
