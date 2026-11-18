@@ -296,6 +296,15 @@ export {
   type SealResult,
   type StoreResult,
 } from './workflow/finalisation.ts';
+// Sealing key selection and the binding of a seal request (12 §8.2 step 3, §8.3; FRW-052).
+export {
+  checkSealRequest,
+  selectSealingKey,
+  type SealingConfig,
+  type SealingKey,
+  type SealRequest,
+  type SealRequestVerdict,
+} from './workflow/sealing.ts';
 export {
   planAppearances,
   validateLayout,

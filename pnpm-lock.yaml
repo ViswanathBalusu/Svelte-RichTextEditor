@@ -503,6 +503,8 @@ importers:
         specifier: 2.35.0
         version: 2.35.0
 
+  packages/layout-kernel: {}
+
   packages/model:
     dependencies:
       prosemirror-model:
@@ -720,6 +722,9 @@ importers:
 
   services/signing-service:
     dependencies:
+      '@docedit/authority':
+        specifier: workspace:*
+        version: link:../../packages/authority
       asn1js:
         specifier: 3.0.10
         version: 3.0.10
