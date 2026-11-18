@@ -6,6 +6,12 @@
  *   carries `aria-required`, and carries `aria-invalid` with a message it is described by (`aria-description`) while
  *   its entry has a problem (FRW-004 criterion 1). The other kinds, and a redacted value, keep the
  *   static text of the schema.
+ * - The control is a text input that stops at the field's `maxLength` (in code points), a decimal
+ *   entry for a number, a calendar date for a date, a checkbox, or a list of the option labels for
+ *   a choice whose stored value is the option's id (FRW-079 criterion 2). A control is described by
+ *   its kind and by the role it belongs to, and by the message of its problem (criterion 3).
+ * - `format` changes the display only: while nobody edits the control it shows the formatted text,
+ *   and while it is edited it shows the stored value (criterion 4).
  * - An entry is checked while it is typed and submitted when the control reports a change. The
  *   core keeps an entry with a problem, so the control still shows it after the authority dropped
  *   it (FRW-004 criterion 5).
@@ -19,7 +25,8 @@ import { type FormFieldValue, type JsonValue, fieldText } from '@docedit/model';
 import { isRedactionMarker } from '@docedit/model/definition';
 import { DOMSerializer, type Node as PMNode } from 'prosemirror-model';
 import type { NodeView, NodeViewConstructor } from 'prosemirror-view';
-import type { FieldEntryState } from '../field-entries.ts';
+import { formatFieldValue, type FieldFormat } from '../field-display.ts';
+import { rolesOf, type FieldEntryState } from '../field-entries.ts';
 
 /** What the views need from the core. */
 export interface FormFieldPort {
@@ -35,6 +42,25 @@ export interface FormFieldPort {
 const CONTROL_KINDS = new Set(['text', 'number', 'date', 'checkbox', 'choice']);
 
 type Control = HTMLInputElement | HTMLSelectElement;
+
+/** What a screen reader is told of the kind of a field, beside the control's own role. */
+const KIND_NAMES: Readonly<Record<string, string>> = {
+  text: 'Text field',
+  number: 'Number field',
+  date: 'Date field',
+  checkbox: 'Checkbox field',
+  choice: 'Choice field',
+};
+
+/** The number of pairs of UTF-16 units in `text`: code points beyond U+FFFF. */
+function pairsIn(text: string): number {
+  let n = 0;
+  for (let i = 0; i < text.length - 1; i++) {
+    const c = text.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00) n++;
+  }
+  return n;
+}
 
 interface Refreshable {
   refresh(doc: PMNode): void;
@@ -104,9 +130,16 @@ class FormFieldView implements NodeView, Refreshable {
   #node: PMNode;
   /** The person typed since the last submitted entry. */
   #dirty = false;
+  /** The control has focus: it shows the stored value, not the formatted one. */
+  #editing = false;
+  /** The name of the role the field belongs to, for the description. */
+  #role: string | null = null;
+  /** The control's type is being changed: the focus events of that are not the person's. */
+  #swapping = false;
 
-  constructor(node: PMNode, port: FormFieldPort, views: FormFieldViews) {
+  constructor(node: PMNode, doc: PMNode, port: FormFieldPort, views: FormFieldViews) {
     this.#node = node;
+    this.#role = this.#roleIn(doc);
     this.#port = port;
     this.#views = views;
     const kind = String(node.attrs['kind']);
@@ -128,6 +161,7 @@ class FormFieldView implements NodeView, Refreshable {
     this.#control.addEventListener('input', this.#typed);
     this.#control.addEventListener('change', this.#changed);
     this.#control.addEventListener('focus', this.#focused);
+    this.#control.addEventListener('blur', this.#blurred);
     views.add(this);
     this.#draw();
   }
@@ -163,17 +197,68 @@ class FormFieldView implements NodeView, Refreshable {
     return text === '' ? null : text;
   }
 
+  #roleIn(doc: PMNode): string | null {
+    const assignee = this.#node.attrs['assignee'];
+    return typeof assignee === 'string' ? (rolesOf(doc).get(assignee)?.name ?? null) : null;
+  }
+
   readonly #typed = (): void => {
     const kind = String(this.#node.attrs['kind']);
     if (kind !== 'text' && kind !== 'number') return;
     if (!this.#port.fillable(this.#id)) return this.#draw();
     this.#dirty = true;
+    this.#limitLength();
     this.#showProblems(this.#port.check(this.#id, this.#entry()));
   };
 
   readonly #focused = (): void => {
+    if (this.#swapping) return;
+    this.#editing = true;
+    this.#draw();
     this.#port.focused?.(this.#id);
   };
+
+  readonly #blurred = (): void => {
+    if (this.#swapping) return;
+    this.#editing = false;
+    this.#draw();
+  };
+
+  /**
+   * The control stops at the `maxLength` of the field. The browser counts UTF-16 units and the
+   * limit counts code points (03 §11), so the allowance grows by one for each pair in the entry.
+   */
+  #limitLength(): void {
+    const c = this.#control;
+    if (!(c instanceof HTMLInputElement) || c.type === 'checkbox') return;
+    const limit = (this.#node.attrs['validation'] as { maxLength?: unknown } | null)?.maxLength;
+    if (this.#node.attrs['kind'] !== 'text' || typeof limit !== 'number') {
+      c.removeAttribute('maxlength');
+      return;
+    }
+    c.maxLength = limit + pairsIn(c.value);
+  }
+
+  /** Changes the type of an input, and keeps the focus it had: some engines drop it on the change. */
+  #setType(c: HTMLInputElement, type: string): void {
+    if (c.type === type) return;
+    const root = c.getRootNode() as Document | ShadowRoot;
+    const focused = root.activeElement === c;
+    this.#swapping = true;
+    try {
+      c.type = type;
+      if (focused && root.activeElement !== c) c.focus({ preventScroll: true });
+    } finally {
+      this.#swapping = false;
+    }
+  }
+
+  /** What the control is described by: its kind, its role, and the message of its problem. */
+  #describe(message: string): string {
+    const kind = KIND_NAMES[String(this.#node.attrs['kind'])] ?? 'Field';
+    const info = this.#role === null ? kind : `${kind} for ${this.#role}`;
+    return message === '' ? info : `${info}. ${message}`;
+  }
 
   readonly #changed = (): void => {
     this.#dirty = false;
@@ -185,16 +270,16 @@ class FormFieldView implements NodeView, Refreshable {
     const c = this.#control;
     if (problems.length === 0) {
       c.removeAttribute('aria-invalid');
-      c.removeAttribute('aria-description');
+      c.setAttribute('aria-description', this.#describe(''));
       this.#message.textContent = '';
       this.#message.hidden = true;
       return;
     }
     const text = problems.map((p) => p.message).join('; ');
     c.setAttribute('aria-invalid', 'true');
-    // The description is the message's text, not a reference to its id: no ID reference is set
-    // from script (FE-108 criterion 2).
-    c.setAttribute('aria-description', text);
+    // The description is text, not a reference to the message's id: no ID reference is set from
+    // script (FE-108 criterion 2). It ends with the message's text.
+    c.setAttribute('aria-description', this.#describe(text));
     this.#message.textContent = text;
     this.#message.hidden = false;
   }
@@ -229,12 +314,28 @@ class FormFieldView implements NodeView, Refreshable {
     }
     if (this.#dirty) return;
     const value = state ? state.value : null;
+    const problems = state ? state.problems : [];
+    // The format changes the display only, and only while nobody edits a clean value (criterion 4).
+    const shown =
+      this.#editing || problems.length > 0
+        ? null
+        : formatFieldValue(
+            String(node.attrs['kind']),
+            value,
+            node.attrs['format'] as FieldFormat | null,
+          );
+    // A native date control shows no pattern, so a pattern is shown in a text control until the
+    // person edits the date.
+    if (c instanceof HTMLInputElement && String(node.attrs['kind']) === 'date')
+      this.#setType(c, shown === null ? 'date' : 'text');
     if (c instanceof HTMLInputElement && c.type === 'checkbox') c.checked = value === true;
-    else c.value = typeof value === 'string' ? value : '';
-    this.#showProblems(state ? state.problems : []);
+    else c.value = shown ?? (typeof value === 'string' ? value : '');
+    this.#limitLength();
+    this.#showProblems(problems);
   }
 
-  refresh(): void {
+  refresh(doc: PMNode): void {
+    this.#role = this.#roleIn(doc);
     this.#draw();
   }
 
@@ -262,17 +363,18 @@ class FormFieldView implements NodeView, Refreshable {
     this.#control.removeEventListener('input', this.#typed);
     this.#control.removeEventListener('change', this.#changed);
     this.#control.removeEventListener('focus', this.#focused);
+    this.#control.removeEventListener('blur', this.#blurred);
   }
 }
 
 /** The node view of a `form_field`: a native control for the kinds a person fills by hand. */
 export function formFieldView(port: FormFieldPort, views: FormFieldViews): NodeViewConstructor {
-  return (node) => {
+  return (node, view) => {
     const drawn =
       CONTROL_KINDS.has(String(node.attrs['kind'])) &&
       typeof node.attrs['id'] === 'string' &&
       !isRedactionMarker(node.attrs['value'] as JsonValue | undefined);
-    return drawn ? new FormFieldView(node, port, views) : { dom: schemaDOM(node) };
+    return drawn ? new FormFieldView(node, view.state.doc, port, views) : { dom: schemaDOM(node) };
   };
 }
 

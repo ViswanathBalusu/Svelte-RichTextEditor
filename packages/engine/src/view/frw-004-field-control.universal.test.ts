@@ -36,12 +36,15 @@ function mounted(config: Partial<ConstructorParameters<typeof EditorCore>[0]> = 
   };
   /**
    * The message a control is described by, or null: the alert beside the control, when the control's
-   * description is that alert's text (the description is text, not an ID reference; FE-108).
+   * description ends with that alert's text (the description is text, not an ID reference; FE-108;
+   * it begins with the kind and the role, FRW-079 criterion 3).
    */
   const message = (el: HTMLElement): HTMLElement | null => {
     const text = el.getAttribute('aria-description');
     const alert = el.parentElement?.querySelector<HTMLElement>('[role="alert"]') ?? null;
-    return text !== null && alert !== null && alert.textContent === text ? alert : null;
+    return text !== null && alert !== null && text.endsWith(`. ${alert.textContent}`)
+      ? alert
+      : null;
   };
   return {
     core,
@@ -107,7 +110,7 @@ describe.skipIf(!isBrowser)(
         m.enter(FIELD_IDS.amount, '-1');
         const el = m.enter(FIELD_IDS.amount, entry);
         expect(el.hasAttribute('aria-invalid')).toBe(false);
-        expect(el.hasAttribute('aria-description')).toBe(false);
+        expect(el.getAttribute('aria-description')).toBe('Number field for Tenant');
         expect(
           m.host.querySelector(`[data-field="${FIELD_IDS.amount}"] [role="alert"]`),
         ).toHaveProperty('hidden', true);

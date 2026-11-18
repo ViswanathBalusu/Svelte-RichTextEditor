@@ -28,19 +28,28 @@ export const editorOf = (name: string): string => `doc-editor[data-test="${name}
  */
 export async function mountFields(
   page: Page,
-  opts: { name?: string; sub?: string; role?: string; fill?: boolean; limit?: boolean } = {},
+  opts: {
+    name?: string;
+    sub?: string;
+    role?: string;
+    fill?: boolean;
+    limit?: boolean;
+    kinds?: boolean;
+  } = {},
 ): Promise<void> {
   const name = opts.name ?? 'one';
   await page.evaluate(
-    async ({ name, sub, role, fill, limit }) => {
+    async ({ name, sub, role, fill, limit, kinds }) => {
       const e = (window as unknown as { __embed: Record<string, unknown> }).__embed as unknown as {
         fillBackend(sub: string): unknown;
         backend(sub: string, role: string, docs: string[]): unknown;
         fieldsDocId: string;
+        kindsDocId: string;
         fieldLimitDocId(): string;
       };
       // `limit`: the document one field short of the limit of form fields, not the form document.
-      const docId = limit ? e.fieldLimitDocId() : e.fieldsDocId;
+      // `kinds`: the document with a field of every kind (FRW-079).
+      const docId = limit ? e.fieldLimitDocId() : kinds ? e.kindsDocId : e.fieldsDocId;
       const el = document.createElement('doc-editor') as HTMLElement & { backend: unknown };
       el.dataset['test'] = name;
       if (fill) el.setAttribute('mode', 'fill');
@@ -63,6 +72,7 @@ export async function mountFields(
       role: opts.role ?? 'editor',
       fill: opts.fill ?? false,
       limit: opts.limit ?? false,
+      kinds: opts.kinds ?? false,
     },
   );
   await expect(page.locator(`${editorOf(name)} .de-editing-surface`)).toBeVisible();
