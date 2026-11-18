@@ -6,7 +6,7 @@
  * UPDATE, so a stored row is not rewritten. The row is written in the transaction that reads the
  * capture setting, so a change of the setting applies to the events after it commits.
  */
-import type { CapturedEvidence } from '@docedit/authority';
+import type { CapturedEvidence, CaptureSettings } from '@docedit/authority';
 import { inTenant, type Pool } from '../storage/db.ts';
 import { readCaptureState } from './capture-settings-pg.ts';
 import {
@@ -59,6 +59,15 @@ export class PgEvidenceLedger implements EvidenceLedger {
       );
       return { id: made.id, evidence: made.evidence, hash: made.hash, commit: made.commit };
     });
+  }
+
+  settings(tenant: string): Promise<CaptureSettings> {
+    return inTenant(
+      this.#pool,
+      tenant,
+      async (c) => (await readCaptureState(c, tenant, false)).settings,
+      { readOnly: true },
+    );
   }
 
   async list(tenant: string, doc: string): Promise<readonly StoredEvidence[]> {

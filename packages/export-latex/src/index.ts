@@ -9,6 +9,13 @@
  */
 export { convert, CLASS_VERSION, SUPPORTED_FEATURES } from './convert.ts';
 export { bundleHashInput, canonicalJson } from './bundle-hash.ts';
+export { appendCertificate, certificateBlocks, readCertificateFacts } from './certificate.ts';
+export type {
+  CertificateEvent,
+  CertificateEventKind,
+  CertificateFacts,
+  CertificateParticipant,
+} from './certificate.ts';
 export type {
   AssetInput,
   Bundle,

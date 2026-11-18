@@ -22,8 +22,10 @@ import {
   bundleAltTextReport,
   cdmWriter,
   htmlText,
+  readCertificateFacts,
   markdownText,
   texArchive,
+  type CertificateFacts,
   type Diagnostic,
   type FontManifest,
 } from '@docedit/export-latex';
@@ -185,6 +187,8 @@ interface Payload {
   hiddenValues: string[];
   /** The pin of a sealing export (EXP-079): compiled twice and compared. Null: an ordinary export. */
   sealing: SealingPin | null;
+  /** The facts of the certificate of completion (FRW-050), written by the control plane; or null. */
+  certificate: CertificateFacts | null;
 }
 
 function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
@@ -232,8 +236,15 @@ function readPayload(job: JobRecord, proofKey: string | undefined): Payload {
       'internal',
       'the sealing pin of the job is not one the control plane writes',
     );
+  const certificate = readCertificateFacts(p['certificate']);
+  if (certificate === 'invalid')
+    throw new JobFailure(
+      'internal',
+      'the certificate facts of the job are not the shape the control plane writes',
+    );
   return {
     sealing,
+    certificate,
     doc: p['doc'],
     target: p['target'],
     seq: p['seq'],
@@ -491,7 +502,9 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     const envelope = projectedEnvelope(fullEnvelope, payload);
     m.contentMs = now() - t0;
     stopIfCancelled(ctx);
-    const planned = planJob(payload.options, documentLang(envelope));
+    const planned = planJob(payload.options, documentLang(envelope), {
+      certificateFacts: payload.certificate !== null,
+    });
     if (!planned.ok)
       throw failed('validation_failed', 'an export option cannot be honoured', planned.diagnostics);
     const plan: JobPlan = planned.plan;
@@ -533,6 +546,8 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         date: formatJobDate(job.createdAt, plan),
         fields: plan.fields,
         ...(plan.suggestions ? { suggestions: plan.suggestions } : {}),
+        // The certificate of completion (FRW-050): facts the control plane wrote, never a client's.
+        ...(payload.certificate ? { certificate: payload.certificate } : {}),
       },
       pinned.classFiles,
     );
