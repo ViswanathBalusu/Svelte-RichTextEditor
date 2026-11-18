@@ -51,6 +51,7 @@ import shellCss from '../../src/styles/shell.css?inline';
 import type { ThreadSummary } from '../../src/core-api.ts';
 import { FakeCore, type Notify } from '../../test/support/fake-core.ts';
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
+import { catchUpPort, type CatchUpHarnessMode } from './his-028-catch-up-port.ts';
 
 const violations: string[] = [];
 document.addEventListener('securitypolicyviolation', (e) => {
@@ -102,6 +103,8 @@ export interface MountOptions {
   people?: 'host' | 'failing' | 'none';
   /** The history port of HIS-009: full, a reader of named versions, or failing; absent: none. */
   history?: HistoryHarnessMode;
+  /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
+  catchUp?: CatchUpHarnessMode;
   share?: boolean;
   /** The host can print (UX-040 criterion 3): the print command is offered and records its runs. */
   print?: boolean;
@@ -536,6 +539,13 @@ function mountShell(options: MountOptions = {}): void {
         resolver(options.people ?? 'host') ?? (async (ids) => ids.map(() => null)),
       ),
     });
+  if (options.catchUp)
+    Object.assign(core, {
+      catchUp: catchUpPort(
+        options.catchUp,
+        resolver(options.people ?? 'host') ?? (async (ids) => ids.map(() => null)),
+      ),
+    });
   const strings = new Strings({
     overrides: options.overrides ?? {},
     onMissing: (tag, keys) => missing.push([tag, keys]),
@@ -564,7 +574,10 @@ function mountShell(options: MountOptions = {}): void {
   if (options.headerPanes)
     props['panes'] = {
       comments: async () => (await import('./StubPane.svelte')).default,
-      'catch-up': async () => (await import('./StubPane.svelte')).default,
+      // With a catch-up port the pane is the shell's own (HIS-028); without, a stand-in.
+      ...(options.catchUp
+        ? {}
+        : { 'catch-up': async () => (await import('./StubPane.svelte')).default }),
     };
   else if (options.commentsPane)
     props['panes'] = {

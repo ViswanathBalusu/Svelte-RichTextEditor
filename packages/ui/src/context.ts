@@ -10,6 +10,7 @@ import type { Translator } from './i18n/strings.ts';
 import type { MessageParams } from './i18n/types.ts';
 import type { PeopleDirectory } from './people/directory.ts';
 import type { Writable } from 'svelte/store';
+import type { CatchUpController } from './shell/catch-up.ts';
 import type { LinkedTarget } from './shell/linked-comment.ts';
 
 export interface ShellContext {
@@ -34,6 +35,11 @@ export interface ShellContext {
   readonly docId?: string | undefined;
   /** A prefix for element identifiers, unique per shell, for ARIA references inside the root. */
   readonly idPrefix: string;
+  /**
+   * What others did since the user's last visit (HIS-028). The shell makes it when the host gives a
+   * catch-up port; the header reads its badge and the catch-up pane draws it.
+   */
+  readonly catchUp?: CatchUpController | undefined;
   /** A followed comment link, taken by the comments pane (UX-034); null when none is waiting. */
   readonly linkedThread: Writable<LinkedTarget | null>;
 }
