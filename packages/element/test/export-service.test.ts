@@ -56,8 +56,11 @@ describe('the export service of the element (UX-101)', () => {
   it('offers the targets the deployment announced, the PDF and the LaTeX bundle first (criterion 1)', () => {
     const announcing = (announced: readonly string[] | null): ExportSource => {
       const { port } = reportingPort([wireJob()]);
-      port.targets = () => announced;
-      return sourceOf(port);
+      const source = sourceOf(port);
+      return {
+        ...source,
+        backend: { ...source.backend, exportTargets: () => announced } as unknown as Backend,
+      };
     };
     const offered = (announced: readonly string[] | null) =>
       exportService({ source: () => announcing(announced) }).targets.get();
@@ -68,7 +71,7 @@ describe('the export service of the element (UX-101)', () => {
     // A target the dialog has no name for is not offered; a list with none known offers none.
     expect(offered(['pdf', 'rtf'])).toEqual(['pdf']);
     expect(offered(['rtf'])).toEqual([]);
-    // A deployment that does not say gets the fixed list, as does a stand-in port without the method.
+    // A deployment that does not say gets the fixed list, as does a stand-in backend without the method.
     expect(offered(null)).toEqual(EXPORT_TARGETS);
     expect(
       exportService({ source: () => sourceOf(reportingPort([wireJob()]).port) }).targets.get(),

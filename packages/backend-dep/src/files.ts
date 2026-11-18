@@ -33,8 +33,6 @@ export interface FilePortsHost {
   notices: { add(cb: (n: Notification) => void): Unsubscribe };
   /** The backend's timers, so that close() cancels a poll (PRO-096; the same timers as the rest). */
   clock: { set(fn: () => void, ms: number): number; clear(key: number | null | undefined): void };
-  /** The `exportTargets` of the discovery document, or null before it is read or when absent. */
-  exportTargets(): readonly string[] | null;
 }
 
 /**
@@ -187,7 +185,6 @@ export function createFilePorts(host: FilePortsHost): FilePorts {
   };
 
   const exports: ExportsPort = {
-    targets: () => host.exportTargets(),
     request: async (docId, body, opts) => {
       const job = (
         await call<ExportJob>('POST', `/documents/${enc(docId)}/exports`, {

@@ -87,9 +87,9 @@ async function mountWithExports(
         createdAt: '2026-11-17T10:00:00Z',
         updatedAt: '2026-11-17T10:00:00Z',
       });
+      // What the deployment's discovery document announced (05 §2), or null when it does not say.
+      (backend as { exportTargets?: () => readonly string[] | null }).exportTargets = () => targets;
       backend.exports = {
-        // What the deployment's discovery document announced (05 §2), or null when it does not say.
-        targets: () => targets,
         request: async (
           _docId: string,
           body: unknown,

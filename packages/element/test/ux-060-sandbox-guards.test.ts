@@ -15,14 +15,10 @@ import {
 } from '@docedit/ui/sandbox-protocol';
 import { describe, expect, it } from 'vitest';
 
-const EDIT = ['view', 'comment', 'suggest', 'edit'] as const;
-const READ = ['view', 'comment'] as const;
+const EDIT: Access['caps'] = ['view', 'comment', 'suggest', 'edit'];
+const READ: Access['caps'] = ['view', 'comment'];
 
-function access(
-  docRole: Access['docRole'],
-  body: readonly string[],
-  region: readonly string[],
-): Access {
+function access(docRole: Access['docRole'], body: Access['caps'], region: Access['caps']): Access {
   return {
     rev: 1,
     asOfSeq: 0,

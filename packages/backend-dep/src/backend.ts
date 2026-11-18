@@ -329,8 +329,6 @@ export class DepBackend implements Backend {
       fetch: this.p.fetch,
       notices: { add: (cb) => this.notices.add(cb) },
       clock: { set: (fn, ms) => this.timers.set(fn, ms), clear: (key) => this.timers.clear(key) },
-      // The export targets of the discovery document, once it has been read (UX-101).
-      exportTargets: () => this.discovery?.exportTargets ?? null,
     });
     this.fonts = this.files.fonts;
     this.review = createReviewPorts({
@@ -348,6 +346,11 @@ export class DepBackend implements Backend {
   /** Features both sides support (05 §1 rule 4); empty until connect() resolves (D23). */
   get features(): ReadonlySet<string> {
     return this.negotiated;
+  }
+
+  /** The `exportTargets` of the discovery document (05 §2; UX-101), or null before it is read or when absent. */
+  exportTargets(): readonly string[] | null {
+    return this.discovery?.exportTargets ?? null;
   }
 
   /** Sets the negotiated features and the optional ports that depend on them. */

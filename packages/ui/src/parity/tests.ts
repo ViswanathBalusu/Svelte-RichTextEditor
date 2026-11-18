@@ -203,6 +203,22 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/export-latex/src/exp-036-watermark.compile.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FRW-062 and UX-100 closed (2026-11-18): the service's templates resource, the host's
+  // gallery through its routes, and the gallery in a browser with axe and the keyboard.
+  [
+    'templates',
+    [
+      {
+        path: 'services/document-service/test/control-plane/frw-062.templates.test.ts',
+        kind: 'unit',
+      },
+      { path: 'apps/reference-host/test/ux-100-template-gallery.test.ts', kind: 'unit' },
+      {
+        path: 'apps/reference-host/e2e-gallery/ux-100-template-gallery.spec.ts',
+        kind: 'playwright',
+      },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

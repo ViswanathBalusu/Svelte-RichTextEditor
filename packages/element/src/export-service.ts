@@ -89,14 +89,14 @@ export function exportService(options: ExportServiceOptions): ExportService {
     }
     return e;
   };
-  // The deployment's own list, read from the backend's exports port when the dialog asks: discovery
+  // The deployment's own list, read from the backend when the dialog asks: discovery
   // is read at connect, before the editor is shown, and the list is the same until it reconnects.
   // The same array is returned while the announced list is the same, so a reader sees no change.
   let lastKey = '\0';
   let last: readonly ExportTarget[] = EXPORT_TARGETS;
   const targetsNow = (): readonly ExportTarget[] => {
     if (options.targets) return options.targets;
-    const announced = options.source()?.backend?.exports?.targets?.() ?? null;
+    const announced = options.source()?.backend?.exportTargets?.() ?? null;
     const key = announced ? announced.join(',') : '\0';
     if (key !== lastKey) {
       lastKey = key;
