@@ -54,7 +54,8 @@ export function classifyClose(code: number, lastFatal?: ErrorPayload | null): Cl
     lastFatal?.retryAfterMs !== undefined ? { ...v, retryAfterMs: lastFatal.retryAfterMs } : v;
   switch (code) {
     case 4400:
-      return withRetry({ code: 'bad_message', reconnect: 'backoff' });
+      // 05 §5.8: `bad_message` is not retryable; the client reports a bug (PRO-039 criterion 6).
+      return { code: 'bad_message', reconnect: 'no' };
     case 4401: {
       const c = lastFatal?.code;
       return {
