@@ -1496,11 +1496,84 @@ As a relying party, I want to know whether history can be checked against someth
 
 - [x] Given the existing anchors (the host through webhooks and manifests, write-once storage), when the decision is recorded, then it compares them with a public transparency log.
 - [x] Given a public log, when the decision is recorded, then it states what would be published (a hash only), and the privacy effect.
-- [ ] Given the decision is yes, when it is accepted, then the stories to build it are added.
+- [x] Given the decision is yes, when it is accepted, then the stories to build it are added.
 
 **Evidence:** docs/adr/0156-security-3-backlog-batch.md (section SEC-063): compares the webhook and manifest heads and the write-once store with a public log, and gives the options with what each publishes and its privacy effect (option C publishes only a salted root). Proposed, not accepted by the owner.
 
-**Notes:** Decision 4 of 10 §6. The default taken, pending the owner: no public log in version 1 (option A). Criteria 1 and 2 are ticked on the proposed record. Criterion 3 stays open because it applies only if the owner says yes. Lane w8 (2026-11-17), re-checked after the merge of stories/integration: no change. The owner's decisions of 2026-11-15 and 2026-11-17 do not cover a public transparency log, so the default (option A, no public log in version 1) stands as proposed and no stories are added.
+**Evidence (lane w8, 2026-11-18, criterion 3):** docs/owner-decisions-2026-11-15.md decision 143 (yes, anchor chain heads in a public log; the choice of log goes in an ADR). docs/adr/0409-w8-SEC-063-public-transparency-log.md records what is published (a salted periodic root per tenant, option C), who holds the salt, the port, the failure behaviour and the proposed log. The stories to build it are SEC-065, SEC-066, SEC-067 and SEC-068 below. docs/spec/10-security.md (§3.3 and §6) and docs/spec/08-history.md (§12) are changed to match.
+
+**Notes:** Decision 4 of 10 §6. The default taken, pending the owner: no public log in version 1 (option A). Criteria 1 and 2 are ticked on the proposed record. Criterion 3 stays open because it applies only if the owner says yes. Lane w8 (2026-11-17), re-checked after the merge of stories/integration: no change. The owner's decisions of 2026-11-15 and 2026-11-17 do not cover a public transparency log, so the default (option A, no public log in version 1) stands as proposed and no stories are added. Lane w8 (2026-11-18): that note was out of date. Decision 143 of docs/owner-decisions-2026-11-15.md answers yes and reverses the default, so criterion 3 applies and is ticked. ADR 0409 records the form (option C, a salted periodic root, never a hash per document) and proposes the log (a tile-based, witness-cosigned log, first target the Sigstore public-good Rekor log). The owner asked for the choice to go in an ADR; the log named there is a proposal that the owner accepts or changes. SEC-065 to SEC-068 are added. Criteria 1 and 2 stand, with option C as the chosen form.
+
+### SEC-065 Build the periodic salted root over a tenant's chain heads
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 4 | M | could | Relying party |
+
+**Spec:** 10 §3.3, §6; 08 §12; ADR 0409 · **Requirements:** R4, R10 · **Depends on:** SEC-063, SEC-029, BE-081
+
+As a relying party, I want each tenant's chain heads folded into one root that reveals nothing about any document, so that one public entry can vouch for all of them.
+
+**Acceptance criteria**
+
+- [ ] Given a tenant with documents whose chains have heads, when a period ends, then the service builds a Merkle tree whose leaves are the hash of the head, its sequence number and the tenant's salt, and records the root, the period and the leaf count.
+- [ ] Given a document that did not change in the period, when the tree is built, then its latest head is still a leaf, so a later check of any head finds a root that covers it.
+- [ ] Given a leaf, when an inclusion proof is asked for with the salt, then the proof verifies against the root; given a wrong salt, a changed head or another sequence number, then it does not.
+- [ ] Given the same inputs, when the tree is built twice, then the root is the same (a property test over random heads and orderings).
+- [ ] Given the salt, when it is created, stored and rotated, then it is held under the tenant's key rules (SEC-062) and is never written to a log, a webhook or the public entry.
+
+### SEC-066 Submit roots to a public transparency log and keep the receipts
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 4 | M | could | Operator |
+
+**Spec:** 10 §6; 08 §12; ADR 0409 · **Requirements:** R4, R10 · **Depends on:** SEC-065, BE-081
+
+As an operator, I want each root sent to a public log through a port, so that the log can be changed or turned off without touching the commit path.
+
+**Acceptance criteria**
+
+- [ ] Given a root, when it is submitted through the `TransparencyLog` port, then the service stores the receipt (log identifier, entry index, signed checkpoint) with the signed heads in write-once storage.
+- [ ] Given the log is not reachable, when a submission fails, then it is retried, the root stays in the write-once store, and no commit, open or export waits for it.
+- [ ] Given a local log of the same format as the proposed public log, when an adapter submits to it, then the receipt's checkpoint signature verifies against the log's key. The public log itself is a proposal in ADR 0409 and is called only after the owner accepts it.
+- [ ] Given a self-hosted operator, when the port is pointed at another log or turned off, then the service works, and the verification report shows that no public anchor exists for the tenant.
+- [ ] Given the default period, when it is chosen, then it comes from a measurement of the log's limits and the wanted detection delay, and the measurement says how and where it was taken.
+
+### SEC-067 Let a relying party check history against the public log
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| story | 4 | M | could | Relying party |
+
+**Spec:** 10 §6; 08 §12; ADR 0409 · **Requirements:** R4, R10 · **Depends on:** SEC-066, BE-081
+
+As a relying party, I want to take a chain head and check it against the public log without asking the operator, so that history can be trusted without trusting the operator or the host.
+
+**Acceptance criteria**
+
+- [ ] Given a head, its salt and an inclusion proof, when the verification command (BE-081) runs with the log's public key, then it checks the proof, the receipt's checkpoint and the chain up to the head, and reports each result.
+- [ ] Given a chain rewritten after its root was published, when the command runs, then it reports that the rewritten head is not in the published root.
+- [ ] Given a head committed after the last published root, when the command runs, then it reports "not yet anchored" with the period's end, not a failure; the documentation states this window.
+- [ ] Given no network, when the command runs with a saved receipt, then it verifies offline.
+- [ ] Given an audit export, when it is built, then it carries the receipts and proofs it needs.
+
+### SEC-068 Prove the public log holds nothing but a root
+
+| Type | Phase | Size | Priority | Persona |
+|---|---|---|---|---|
+| enabler | 4 | S | could | Maintainer |
+
+**Spec:** 10 §4, §6; ADR 0409, ADR 0156 · **Requirements:** R4, R10 · **Depends on:** SEC-065, SEC-066
+
+As a maintainer, I want a test that shows what leaves the system, so that a change cannot start publishing identifiers.
+
+**Acceptance criteria**
+
+- [ ] Given a tenant with canary document, tenant and user identifiers and canary text, when a root is submitted, then the bytes sent to the log hold none of them and hold no sequence number.
+- [ ] Given two documents with the same head hash in two tenants, when roots are built, then the leaves differ because of the salts.
+- [ ] Given a tenant's salt is destroyed, when a head is checked, then the proof cannot be built, and the public entry stays and links to nothing.
+- [ ] Given a code change that adds a field to the submission, when the test runs, then it fails until the field is listed with a reason.
 
 ## Read restrictions (ADR 0019)
 
@@ -1542,7 +1615,7 @@ As a maintainer, I want an end-to-end leak test across every surface, so that a 
 | §3.8 Supply chain | SEC-050, SEC-051, SEC-052, SEC-053, SEC-054, SEC-055 |
 | §4 Privacy | SEC-056 (surrogates and erasure), SEC-058 (home region), SEC-057 (deletion and retention); end-to-end encryption: none: non-goal |
 | §5 Security testing | Fuzzing SEC-059; property tests SEC-021, SEC-022, SEC-023; negative conformance tests SEC-060; adversarial sandbox tests SEC-035; review SEC-003 and SEC-004 |
-| §6 Open issues | SEC-011 (browser extensions), SEC-061 (abuse handling), SEC-062 (key management), SEC-063 (transparency log) |
+| §6 Open issues | SEC-011 (browser extensions), SEC-061 (abuse handling), SEC-062 (key management), SEC-063 (transparency log), SEC-065 to SEC-068 (build it) |
 
 Threats of 10 §3.1 to §3.3 and the story that proves each:
 
@@ -1591,6 +1664,6 @@ Threats of 10 §3.1 to §3.3 and the story that proves each:
 | Policy for browser extensions that read or edit content | 10 §6 | SEC-011 |
 | Abuse handling for hosted mode | 10 §6 | SEC-061, BE-097 |
 | Key management for per-document encryption keys and tenant-owned sealing keys | 10 §6; 08 §13 | SEC-062, SEC-057, BE-041 |
-| Anchoring chain heads in a public transparency log | 10 §6 | SEC-063, SEC-029 |
+| Anchoring chain heads in a public transparency log | 10 §6 | SEC-063, SEC-029, SEC-065 to SEC-068 |
 | Are sandboxed third-party extensions ever built? | 13 §13 | SEC-055, SEC-054 |
 | Hosted or self-hosted first? The `cond` stories SEC-058 and SEC-061 and the backup and recovery stories depend on it | 11 §10 (decision 8) | SEC-049, SEC-058, SEC-061 |
