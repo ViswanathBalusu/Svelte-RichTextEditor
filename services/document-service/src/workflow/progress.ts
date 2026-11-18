@@ -68,43 +68,49 @@ export async function recordFirstView(
   req: { ref: DocRef; actor: string; participant: string },
 ): Promise<ProgressOutcome> {
   const { ref, actor, participant } = req;
-  const current = await deps.workflows.read(ref.tenant, ref.doc);
-  if (current === null) return { ok: false, problem: { code: 'not_found' } };
-  const who = current.participants.find((p) => p.id === participant);
-  if (who === undefined) return { ok: false, problem: { code: 'forbidden' } };
-  // A document that is not running shows no first view: a draft is not sent, and an ended one has
-  // nobody to ask. A repeated view stores nothing.
-  const running = current.state === 'sent' || current.state === 'in_progress';
-  if (!running) return { ok: false, problem: { code: 'invalid_state', state: current.state } };
-  if (who.firstViewedAt !== undefined)
-    return { ok: true, changed: false, resource: current, control: null, raised: [] };
+  // Two participants may open the document together: the first to write moves the row, and the other
+  // reads it again and writes on top (a first view is never lost to a race).
+  for (let attempt = 0; ; attempt++) {
+    const current = await deps.workflows.read(ref.tenant, ref.doc);
+    if (current === null) return { ok: false, problem: { code: 'not_found' } };
+    const who = current.participants.find((p) => p.id === participant);
+    if (who === undefined) return { ok: false, problem: { code: 'forbidden' } };
+    // A document that is not running shows no first view: a draft is not sent, and an ended one has
+    // nobody to ask. A repeated view stores nothing.
+    const running = current.state === 'sent' || current.state === 'in_progress';
+    if (!running) return { ok: false, problem: { code: 'invalid_state', state: current.state } };
+    if (who.firstViewedAt !== undefined)
+      return { ok: true, changed: false, resource: current, control: null, raised: [] };
 
-  let to = current.state;
-  if (current.state === 'sent') {
-    const opened = openWorkflow(recordOf(current));
-    if (!opened.ok) return { ok: false, problem: { code: 'invalid_state', state: current.state } };
-    to = opened.record.state;
+    let to = current.state;
+    if (current.state === 'sent') {
+      const opened = openWorkflow(recordOf(current));
+      if (!opened.ok)
+        return { ok: false, problem: { code: 'invalid_state', state: current.state } };
+      to = opened.record.state;
+    }
+    const at = new Date(deps.now()).toISOString();
+    const out = await recordTransition(deps, {
+      ref,
+      actor,
+      from: current,
+      write: {
+        to,
+        participants: current.participants.map((p) =>
+          p.id === participant ? { ...p, firstViewedAt: at } : p,
+        ),
+      },
+    });
+    if (!out.ok && out.problem.code === 'conflict' && attempt < 5) continue;
+    if (!out.ok) return fail(out);
+    return {
+      ok: true,
+      changed: true,
+      resource: out.resource,
+      control: out.control,
+      raised: [{ name: 'participant_viewed', participant }],
+    };
   }
-  const at = new Date(deps.now()).toISOString();
-  const out = await recordTransition(deps, {
-    ref,
-    actor,
-    from: current,
-    write: {
-      to,
-      participants: current.participants.map((p) =>
-        p.id === participant ? { ...p, firstViewedAt: at } : p,
-      ),
-    },
-  });
-  if (!out.ok) return fail(out);
-  return {
-    ok: true,
-    changed: true,
-    resource: out.resource,
-    control: out.control,
-    raised: [{ name: 'participant_viewed', participant }],
-  };
 }
 
 export async function recordCompletion(
