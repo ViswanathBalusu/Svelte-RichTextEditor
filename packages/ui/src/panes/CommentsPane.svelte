@@ -3,11 +3,13 @@
   with author, time, state, the commented text or block kind, and the reply count. The state and
   assignee filters are the rules of `filterThreads`. Each row is named by its author, state and
   reply count. Not built here: choosing a thread to scroll to and highlight it, the live refresh
-  from `thread.*` and `comment.*`, and the count on the header button. The list is read when the
-  pane opens.
+  from `thread.*` and `comment.*`, and the count on the header button. The list and the open thread follow the port's
+  changes; the thread view is components/ThreadView.svelte (UX-029).
 -->
 <script lang="ts">
+  import ThreadView from '../components/ThreadView.svelte';
   import { useShell } from '../context.ts';
+  import { live } from '../live.ts';
   import type { StringKey } from '../i18n/en-GB.ts';
   import type { ThreadSummary } from '../core-api.ts';
   import { tick } from 'svelte';
@@ -19,7 +21,19 @@
 
   const shell = useShell()!;
   const tr = $derived(shell.strings.current);
-  const threads: readonly ThreadSummary[] = shell.core.threads?.list() ?? [];
+  const service = shell.core.threads;
+  // The list follows the port's changes (a thread or comment changed, here or elsewhere; UX-029).
+  const changes = service?.changes ? live(service.changes) : null;
+  const threads: readonly ThreadSummary[] = $derived.by(() => {
+    void changes?.current;
+    return service?.list() ?? [];
+  });
+  // The thread open in the thread view, when the port can show one.
+  let openId = $state<string | null>(null);
+  const detail = $derived.by(() => {
+    void changes?.current;
+    return openId && service?.detail ? service.detail(openId) : null;
+  });
   const linked = shell.linkedThread;
   let root: HTMLElement | undefined = $state();
   // The message for a followed link that cannot be shown (UX-034 criterion 3); nothing else is shown.
@@ -106,6 +120,15 @@
 <section class="de-comments" aria-label={tr.t('pane.comments')} bind:this={root}>
   {#if unavailable}
   <p>{tr.t('comments.link.unavailable')}</p>
+  {:else if openId && service}
+    {#if detail}
+      <ThreadView threads={service} {detail} onBack={() => (openId = null)} />
+    {:else}
+      <p data-thread-gone>{tr.t('comments.thread.gone')}</p>
+      <button type="button" class="de-list-button" data-thread-back onclick={() => (openId = null)}
+        >{tr.t('comments.thread.back')}</button
+      >
+    {/if}
   {:else}
   <div class="de-comments-filters">
     <fieldset class="de-comments-state">
@@ -150,6 +173,15 @@
             <span class="de-comment-replies">{replies(row.replyCount)}</span>
           </div>
           <p class="de-comment-target" data-content>{targetText(row)}</p>
+          {#if service?.detail}
+            <button
+              type="button"
+              class="de-list-button"
+              data-thread-open
+              onclick={() => (openId = row.id)}
+              >{tr.t('comments.thread.open', { author: row.author })}</button
+            >
+          {/if}
         </li>
       {/each}
     </ul>

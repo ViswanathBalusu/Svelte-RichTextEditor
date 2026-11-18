@@ -728,6 +728,33 @@ export const EN_GB = {
   'comments.link.announce': '{author}, {time}, {state}.',
   'comments.link.unavailable':
     'This comment cannot be shown. It may have been deleted, or you may not be able to view this document.',
+  // The thread view (UX-029): replies, edits, resolving, deleting.
+  'comments.thread.open': 'Open thread by {author}',
+  'comments.thread.back': 'Back to the list',
+  'comments.thread.label': 'Thread by {author}',
+  'comments.thread.detached': 'The commented text was removed. The thread stays here to read.',
+  'comments.thread.edited': 'edited',
+  'comments.thread.edit': 'Edit',
+  'comments.thread.edit.label': 'Edit comment by {author}',
+  'comments.thread.edit.save': 'Save',
+  'comments.thread.edit.cancel': 'Cancel',
+  'comments.thread.deleteComment': 'Delete',
+  'comments.thread.deleteThread': 'Delete thread',
+  'comments.thread.resolve': 'Resolve',
+  'comments.thread.reopen': 'Reopen',
+  'comments.thread.reply.label': 'Reply',
+  'comments.thread.reply.post': 'Post reply',
+  'comments.thread.conflict':
+    'This thread changed while you were writing. The latest version is shown and your text is kept.',
+  'comments.thread.failed': 'That did not work. Your text is kept.',
+  'comments.thread.gone': 'This thread no longer exists.',
+  'comments.thread.emptyBody': 'Write something first.',
+  'comments.thread.posted': 'Reply added.',
+  'comments.thread.saved': 'Comment saved.',
+  'comments.thread.commentDeleted': 'Comment deleted.',
+  'comments.thread.threadDeleted': 'Thread deleted.',
+  'comments.thread.resolved': 'Thread resolved.',
+  'comments.thread.reopened': 'Thread reopened.',
 
   // Export (UX-101). Diagnostics' messages come from the service.
   'dialog.export.title': 'Export',
