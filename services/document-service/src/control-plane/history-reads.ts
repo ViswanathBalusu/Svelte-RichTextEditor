@@ -9,7 +9,7 @@
  * work that the refused request would need.
  *
  * Decisions (proposed, docs/adr/0373-w5-PRO-055-history-reads.md):
- * - the attribution route takes `seq` (default the head) and `blocks` (a comma-separated list of
+ * - the attribution route takes `atSeq` (default the head) and `blocks` (a comma-separated list of
  *   block identifiers) besides `region`; the spec names "a region or a block range" and gives no
  *   member names (gap G68);
  * - the attribution map is replayed from the content at seq 0, which is attributed to the user who
@@ -226,7 +226,7 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
     const doc = ctx.params['id']!;
     guard(ctx.caller, 'read.history', doc);
     const v = await viewOf(ctx, doc);
-    const seq = seqParam(ctx, 'seq', false) ?? v.gate.head;
+    const seq = seqParam(ctx, 'atSeq', false) ?? v.gate.head;
     const region = ctx.url.searchParams.get('region') ?? undefined;
     const blocksParam = ctx.url.searchParams.get('blocks');
     const blocks =

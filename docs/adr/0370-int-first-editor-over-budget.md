@@ -13,8 +13,11 @@ Measured with `pnpm build` on Windows 11, Node.js zlib, gzip level 9, minified l
 | Lane worktrees w3 and w4, builds of 2026-11-15 (evening) | 239.8 kB | 296.7 kB |
 | Integration `ccd52bb` (w5 and unblock worktree builds) | 250.3 kB | 307.5 kB |
 | Integration after the batch 5 merges | 276.6 kB | 315.4 kB |
+| Integration after the batch 6 merges (same method; `bundle-report.json` of 2026-11-17) | 291.4 kB | 330.5 kB |
 
 So the DEP configuration was already over the budget at `ccd52bb` and is 15.4 kB over now. The host-backend configuration is within it. The growth since `ccd52bb` comes mostly from the engine and the shell: form field views and entries, the field and role editing, fill mode, and the panes' glue (`packages/engine/src/field-entries.ts`, `field-edit.ts`, `role-edit.ts`, `view/form-field-view.ts`).
+
+Batch 6 added 14.8 kB to the host-backend configuration (8.6 kB below the budget now) and 15.1 kB to the DEP one (30.5 kB over). The new code is in the engine and shell: the proofing controller, the extension document API, the image and equation node views and the equation editor glue. Nobody has measured how much each part costs; that would be the first step of option 2.
 
 ## Options
 

@@ -143,7 +143,7 @@ export const SEQ_INPUTS: readonly SeqInput[] = [
     where: 'GET /documents/{id}/attribution',
     field: 'query.atSeq',
     rule: 'state',
-    note: 'phase 2 (HIS-026): the attribution map at a visible state; the definition has no atSeq member yet (gap G68), see the walk test',
+    note: 'phase 2 (HIS-026): the attribution map at a visible state; the member is `atSeq` in the definition since PRO-055 (ADR 0373)',
   },
   {
     where: 'POST /documents/{id}/fork',

@@ -697,6 +697,7 @@ ecentHead, keeping one entry older than the window. */
     if (opened.catchUp === 'stream' && resume)
       this.#deps.metrics.catchUpCommits.observe({ tenant }, Math.max(0, first.head - resume.seq));
     port.opened(opened);
+    this.#raiseSession('joined', ch);
     this.#presence.join(key, {
       session: port.session,
       user: port.user,
@@ -709,7 +710,9 @@ ecentHead, keeping one entry older than the window. */
 
   /** The client closed the channel, or its connection went away. */
   close(key: string): void {
+    const gone = this.#channels.get(key);
     if (!this.#channels.delete(key)) return;
+    if (gone) this.#raiseSession('left', gone);
     this.#bridge.detach(key);
     this.#window?.drop(key);
     this.#presence.leave(key);
@@ -1019,7 +1022,7 @@ ecentHead, keeping one entry older than the window. */
           break;
         }
         case 'ch.closed':
-          this.#channels.delete(o.channel);
+          if (this.#channels.delete(o.channel)) this.#raiseSession('left', ch);
           this.#presence.leave(o.channel);
           ch.port.closed(e.d, o.cause);
           if (this.#channels.size === 0) this.#armIdle();
@@ -1269,7 +1272,25 @@ ecentHead, keeping one entry older than the window. */
     const channels = [...this.#channels.values()];
     this.#channels.clear();
     this.#finish('stopped');
-    for (const ch of channels) ch.port.closed(d, 'stopped');
+    for (const ch of channels) {
+      this.#raiseSession('left', ch);
+      ch.port.closed(d, 'stopped');
+    }
+  }
+
+  /**
+   * `dep.session.joined` and `dep.session.left` (PRO-072 criterion 4; 05 §7): one event for each
+   * channel that opens or closes, with the session and the head. Content and identities are not in
+   * the data (ADR 0376).
+   */
+  #raiseSession(kind: 'joined' | 'left', ch: HostedChannel): void {
+    this.#deps.events?.emit({
+      type: `dep.session.${kind}.v1`,
+      tenant: this.ref.tenant,
+      subject: this.ref.doc,
+      data: { seq: this.#room.head, session: ch.port.session },
+      time: this.#deps.now(),
+    });
   }
 
   #settleWrite(): void {
@@ -1588,7 +1609,10 @@ ecentHead, keeping one entry older than the window. */
       const channels = [...this.#channels.values()];
       this.#channels.clear();
       this.#finish('stopped');
-      for (const ch of channels) ch.port.closed(d, 'stopped');
+      for (const ch of channels) {
+        this.#raiseSession('left', ch);
+        ch.port.closed(d, 'stopped');
+      }
     }
     await this.#idleWrites();
     if (release) await this.#release();
@@ -1612,7 +1636,10 @@ ecentHead, keeping one entry older than the window. */
     this.#channels.clear();
     this.#deps.metrics.roomsClosed.inc({ tenant: this.ref.tenant, reason: 'fenced' });
     this.#finish('fenced');
-    for (const ch of channels) ch.port.closed(d, 'stopped');
+    for (const ch of channels) {
+      this.#raiseSession('left', ch);
+      ch.port.closed(d, 'stopped');
+    }
   }
 }
 

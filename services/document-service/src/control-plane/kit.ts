@@ -144,6 +144,8 @@ export interface HandlerDeps {
   quotaSource?: QuotaSource;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: no hook is asked. */
   policyHook?: PolicyHookGate;
+  /** True when this node runs the import job (EXP-098); otherwise `/imports` is `not_found`. */
+  importsOffered?: boolean;
 }
 
 export const json = (
