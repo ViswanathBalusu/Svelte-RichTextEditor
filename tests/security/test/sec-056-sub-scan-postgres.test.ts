@@ -151,7 +151,9 @@ describe.skipIf(skip !== null)(
         // D42; docs/adr/0373-w5-PRO-055-history-reads.md). The story's criterion 1 lists the stores
         // and the log, webhooks, exports, search and audit, not this read, so it is left out of the
         // corpus. Whether the wire may carry the `sub` of an e-mail address is the owner's question.
-        if (path.endsWith('/attribution')) continue;
+        // The history list names its authors the same way (HIS-026, lane w7: a proposed decision of
+        // history-list-route.ts), so it is left out for the same reason.
+        if (path.endsWith('/attribution') || path.endsWith('/history')) continue;
         corpus.push({ what: `GET ${path} (${r.status})`, text: r.text });
       }
 
