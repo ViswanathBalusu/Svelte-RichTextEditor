@@ -45,12 +45,14 @@ import { PaneRegistry, type PaneComponent } from '../../src/shell/panes.ts';
 /** The identifier of the extension panel the harness contributes (UX-052). */
 export const EXTENSION_PANE = 'ext-notes';
 import { Strings } from '../../src/i18n/strings.ts';
+import { Icons } from '../../src/icons/icons.ts';
 import { PeopleDirectory } from '../../src/people/directory.ts';
 import { SettingsStore, type ShellSettings } from '../../src/shell/settings.ts';
 import shellCss from '../../src/styles/shell.css?inline';
-import type { ThreadSummary } from '../../src/core-api.ts';
+import type { ThreadDetail, ThreadSummary } from '../../src/core-api.ts';
 import { FakeCore, type FakeCoreOptions, type Notify } from '../../test/support/fake-core.ts';
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
+import { sendService, type SendHarnessLog, type SendHarnessMode } from './frw-028-send-port.ts';
 import { catchUpPort, type CatchUpHarnessMode } from './his-028-catch-up-port.ts';
 
 const violations: string[] = [];
@@ -59,6 +61,9 @@ document.addEventListener('securitypolicyviolation', (e) => {
     `${e.violatedDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber} ${JSON.stringify(e.sample)}`,
   );
 });
+/** What the shell asked of the send service (FRW-028). */
+const sendLog: SendHarnessLog = { fields: [], suggestions: [], refreshes: 0, sends: 0 };
+let sendHandle: ReturnType<typeof sendService> | null = null;
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
@@ -103,6 +108,8 @@ export interface MountOptions {
   people?: 'host' | 'failing' | 'none';
   /** The history port of HIS-009: full, a reader of named versions, or failing; absent: none. */
   history?: HistoryHarnessMode;
+  /** The send dialog's service of FRW-028: see harness/frw-028-send-port.ts for the modes; absent: none. */
+  send?: SendHarnessMode;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
   catchUp?: CatchUpHarnessMode;
   share?: boolean;
@@ -170,6 +177,8 @@ export interface MountOptions {
   extensionContributions?: boolean;
   /** Host string replacements by key (UX-063, criterion 2), passed to the string catalogue. */
   overrides?: Record<string, string>;
+  /** Host icon replacements by command icon name (UX-063, criteria 1 and 3). */
+  icons?: Record<string, unknown>;
   /** The comment threads port (UX-028), with the `comments` feature announced. */
   comments?: boolean;
   /** The comments pane itself (UX-030): the real pane is the `comments` loader; threads come from `setThreads`. */
@@ -182,6 +191,7 @@ interface Mounted {
   core: FakeCore;
   settings: SettingsStore;
   strings: Strings;
+  icons: Icons;
   registry: ReturnType<typeof createCommandRegistry>;
   app: Record<string, unknown>;
   host: HTMLElement;
@@ -260,6 +270,8 @@ function extensionsFor(kind: 'none' | 'valid' | 'mixed'): unknown[] {
 }
 /** Host override keys that no table knows (UX-063, criterion 2). */
 const unknownKeys: string[] = [];
+/** Host icon names whose drawing was not usable (UX-063, criterion 1). */
+const iconsInvalid: string[] = [];
 /** What the export filters received (UX-055). */
 const filterContents: string[] = [];
 /** Hook calls (UX-054): the revision, and whether an input event was being dispatched then. */
@@ -283,7 +295,10 @@ let duringInput = false;
 /** The checker's document (UX-066, UX-067): one issue of each kind, and one in region rLegal. */
 let checkerAltFixed = false;
 const checkerSelected: string[] = [];
+/** How many times the checker read the document (UX-066 criterion 5). */
+let checkerReads = 0;
 function checkerContent(): unknown {
+  checkerReads += 1;
   const text = (value: string, marks: unknown[] = []) =>
     marks.length ? { type: 'text', text: value, marks } : { type: 'text', text: value };
   const para = (id: string, style: string | null, content: unknown[]) => ({
@@ -545,6 +560,15 @@ function mountShell(options: MountOptions = {}): void {
         resolver(options.people ?? 'host') ?? (async (ids) => ids.map(() => null)),
       ),
     });
+  if (options.send) {
+    sendLog.fields.length = 0;
+    sendLog.suggestions.length = 0;
+    sendLog.refreshes = 0;
+    sendLog.sends = 0;
+    sendHandle = sendService(options.send, sendLog);
+    // The roles and the rules panes are stand-ins here; they need only be offered for the links.
+    Object.assign(core, { workflowSend: sendHandle, roles: {}, rules: {} });
+  }
   if (options.catchUp)
     Object.assign(core, {
       catchUp: catchUpPort(
@@ -552,6 +576,11 @@ function mountShell(options: MountOptions = {}): void {
         resolver(options.people ?? 'host') ?? (async (ids) => ids.map(() => null)),
       ),
     });
+  iconsInvalid.length = 0;
+  const icons = new Icons({
+    overrides: options.icons ?? null,
+    onInvalid: (names) => iconsInvalid.push(...names),
+  });
   const strings = new Strings({
     overrides: options.overrides ?? {},
     onMissing: (tag, keys) => missing.push([tag, keys]),
@@ -573,7 +602,15 @@ function mountShell(options: MountOptions = {}): void {
   principalDelays = options.principalDelays ?? {};
   const resolveUsers = resolver(options.people ?? 'host');
   const people = new PeopleDirectory(resolveUsers ? { resolveUsers, retryDelaysMs: [200] } : {});
-  const props: Record<string, unknown> = { core, registry, strings, people, settings, docId: 'd1' };
+  const props: Record<string, unknown> = {
+    core,
+    registry,
+    strings,
+    icons,
+    people,
+    settings,
+    docId: 'd1',
+  };
   if (options.title !== undefined) props['title'] = options.title;
   if (options.outline !== false)
     props['loadPane'] = async () => (await import('../../src/panes/OutlinePane.svelte')).default;
@@ -588,6 +625,12 @@ function mountShell(options: MountOptions = {}): void {
   else if (options.commentsPane)
     props['panes'] = {
       comments: async () => (await import('../../src/panes/CommentsPane.svelte')).default,
+    };
+  if (options.send)
+    props['panes'] = {
+      ...(props['panes'] as Record<string, unknown> | undefined),
+      roles: async () => (await import('./StubPane.svelte')).default,
+      rules: async () => (await import('./StubPane.svelte')).default,
     };
   if (options.share) props['onShareRequest'] = hostShareDialog;
   if (options.print) props['onPrintRequest'] = () => printRequests.push(Date.now());
@@ -668,7 +711,7 @@ function mountShell(options: MountOptions = {}): void {
   const app = mount(App, { target: root, props: props as never }) as Record<string, unknown>;
   flushSync();
   if (options.hostToolbar) stops.push(hostToolbar(registry));
-  current = { core, settings, strings, registry, app, host, root, stops };
+  current = { core, settings, strings, icons, registry, app, host, root, stops };
 }
 
 function unmountShell(): void {
@@ -695,6 +738,7 @@ const harness = {
   hostEvents,
   missing,
   unknownKeys,
+  iconsInvalid,
   filterContents,
   hookCalls,
   hookErrors,
@@ -702,6 +746,12 @@ const harness = {
   documentContent: () => JSON.stringify(DOCUMENT_CONTENT),
   /** The blocks the checker pane asked the core to select, in order (UX-067 criterion 1). */
   checkerSelected: () => checkerSelected.slice(),
+  /** How many times the checker has read the document since the page loaded (UX-066 criterion 5). */
+  checkerReads: () => checkerReads,
+  /** Changes the document count times in one task, as a burst of keystrokes would (UX-066 criterion 5). */
+  burstChecker: (count: number) => {
+    for (let i = 0; i < count; i++) need().core.revision.set(need().core.revision.get() + 1);
+  },
   /** Changes the checker's document: `altFixed` gives the figure its alternative text (UX-067). */
   editChecker: (altFixed: boolean) => {
     checkerAltFixed = altFixed;
@@ -730,6 +780,8 @@ const harness = {
   /** Sets a public `--de-` property on the element that holds the shadow root, as a host page does. */
   setHostProperty: (name: string, value: string) => host.style.setProperty(name, value),
   setLocale: (locale: string) => need().strings.setLocale(locale),
+  /** Replaces the host's icons while the shell is mounted (UX-063). */
+  setIcons: (overrides: Record<string, unknown> | null) => need().icons.setOverrides(overrides),
   refuse: (reason: string, scopes: string[] = [], count?: number) =>
     need().core.refuse(reason, scopes, count),
   setAside: (items: RecoveredItem[]) => need().core.setAside(items),
@@ -768,6 +820,10 @@ const harness = {
   exportPreflights: () => need().core.exports?.preflights ?? [],
   updateExport: (jobId: string, patch: Partial<ExportJobView>) =>
     need().core.exports?.update(jobId, patch),
+  /** What the send dialog asked of its service (FRW-028), and a change of the editor's own checks. */
+  sendLog: () => JSON.parse(JSON.stringify(sendLog)) as SendHarnessLog,
+  setSendFailures: (next: Parameters<ReturnType<typeof sendService>['setFailures']>[0]) =>
+    sendHandle?.setFailures(next),
   grantSaves: () => need().core.grants?.saves ?? [],
   /** The comment threads port (UX-028, UX-031): what was asked for, and what the core reports. */
   principalQueries: () => [...principalQueries],
@@ -783,6 +839,34 @@ const harness = {
   /** The threads the comments pane lists (UX-030). */
   setThreads: (items: ThreadSummary[]) => void (need().core.threads!.items = items),
   refuseNextThread: (code: string) => void (need().core.threads!.refuseNext = code),
+  /** The service's copy of each thread, for the thread view (UX-029); each gets a new version. */
+  putThreads: (details: Array<Omit<ThreadDetail, 'etag'>>) =>
+    void details.forEach((d) => need().core.threads!.put(d)),
+  /** Signs in as another user for the thread view (UX-029). */
+  setThreadUser: (principal: string) => void (need().core.threads!.user = principal),
+  /** Another client replies (comment.created): the pane is told and shows it without a reload. */
+  remoteReply: (id: string, author: string, text: string) =>
+    need().core.threads!.remoteReply(id, author, text),
+  /** The next write finds the thread changed: another client replied first (If-Match fails). */
+  staleNextThread: (author: string, text: string) => {
+    need().core.threads!.staleNext = {
+      apply: (d) => ({
+        ...d,
+        comments: [
+          ...d.comments,
+          {
+            id: `c-stale`,
+            author,
+            createdAt: '2026-11-02T10:30:00Z',
+            body: [{ type: 'text', text }],
+            edited: false,
+          },
+        ],
+      }),
+    };
+  },
+  /** What the thread view asked the service to do. */
+  threadWrites: () => JSON.parse(JSON.stringify(need().core.threads?.writes ?? [])) as unknown[],
   conflictNextGrantSave: () => void (need().core.grants!.conflictNext = true),
   restoreFocus: () => (need().app['restoreFocus'] as () => boolean)(),
   setUndo: (undo: number, redo: number) => {

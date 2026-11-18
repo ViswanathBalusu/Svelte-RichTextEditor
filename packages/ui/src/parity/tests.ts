@@ -177,6 +177,23 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/command-search.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FE-057 and FE-137 closed (2026-11-17); entry added by the batch 12 integrator.
+  [
+    'headers-and-footers',
+    [
+      { path: 'packages/element/e2e/fe-057-panel.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/fe-057-variants.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-137-variant-wiring.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FE-137 and EXP-036 closed; the PDF run of the watermark is a compile test.
+  [
+    'watermark',
+    [
+      { path: 'packages/engine/test/fe-137-watermark.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-036-watermark.compile.test.ts', kind: 'unit' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

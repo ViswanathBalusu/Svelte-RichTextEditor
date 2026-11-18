@@ -41,6 +41,7 @@ import { gridElement } from './import.ts';
 import { type Untrusted, untrustedCount, untrustedPayloads } from './integrity.ts';
 import { SUGGESTION_MARKS, formattingKey, marksToValues } from './marks.ts';
 import { NS, REL, RUN_CONTENT, UNIQUE_TARGET_TYPES, w } from './ooxml.ts';
+import { pname } from './names.ts';
 import {
   type ContentTypes,
   type Relationship,
@@ -177,6 +178,8 @@ class Writer {
   private readonly hasher = new NodeHasher();
   private readonly synthetic: Set<string>;
   private readonly usedRevisionIds = new Set<string>();
+  /** Paragraph identifiers (`w14:paraId`) in the package and those minted here (EXP-118, criterion 4). */
+  private usedParaIds: Set<string> | null = null;
   private nextRevisionId = 900_000;
   private readonly shared: Map<string, JsonValue>;
   private readonly sharedOwners = new Map<string, JsonNode>();
@@ -673,6 +676,37 @@ class Writer {
     return items.map((m) => (isRaw(m) ? m.raw : po.ns.element(m, local))).join('');
   }
 
+  /**
+   * Fresh identity-bound values for an element that has none in the source map: a copy, a split
+   * half or a new element has a new node identifier, so it gets a new `w14:paraId` and the
+   * `w14:textId` Word gives a new paragraph (ADR 0017, part 1). Only in a part whose root declares
+   * the w14 namespace, as Word does; the value is derived from the node identifier, so an export
+   * is repeatable, and it is below 0x80000000 and not used in the package (ECMA-376 Part 4).
+   */
+  async freshIdentity(node: JsonNode, po: PartOut): Promise<Record<string, string>> {
+    if (po.ns.rootUri('w14') !== NS.w14) return {};
+    if (!this.usedParaIds) {
+      const used = new Set<string>();
+      for (const e of this.zip.entries) {
+        if (!e.name.startsWith('word/') || !e.name.endsWith('.xml')) continue;
+        const text = decodeUtf8(entryData(this.zip, e));
+        for (const m of text.matchAll(/paraId="([0-9A-Fa-f]{8})"/g)) used.add(m[1]!.toUpperCase());
+      }
+      this.usedParaIds = used;
+    }
+    const id = String(node.attrs?.['id']);
+    for (let attempt = 0; ; attempt++) {
+      const digest = await sha256HexBytes(utf8(`w14:paraId:${id}:${attempt}`));
+      const value = (parseInt(digest.slice(0, 8), 16) & 0x7fffffff)
+        .toString(16)
+        .toUpperCase()
+        .padStart(8, '0');
+      if (value === '00000000' || this.usedParaIds.has(value)) continue;
+      this.usedParaIds.add(value);
+      return { [pname(NS.w14, 'paraId')]: value, [pname(NS.w14, 'textId')]: '77777777' };
+    }
+  }
+
   async paragraph(
     node: JsonNode,
     src: NodeSource | undefined,
@@ -684,7 +718,11 @@ class Writer {
     const local = new Map<string, string>();
     const open = this.startTag(
       'p',
-      { ...(src?.identity ?? {}), ...(preserved?.attrs ?? {}) },
+      {
+        ...(src ? {} : await this.freshIdentity(node, po)),
+        ...(src?.identity ?? {}),
+        ...(preserved?.attrs ?? {}),
+      },
       po,
       local,
     );

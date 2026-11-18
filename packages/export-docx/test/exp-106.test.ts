@@ -61,12 +61,15 @@ describe('criterion 1: families of the file are mapped through the manifest', ()
       // Substitution changes no node: the same families come out with an empty manifest.
       const plain = await importDocx(bytes, { fonts: { manifest: [] } });
       expect(familiesOf(plain.envelope.doc), file.name).toEqual(families);
-      // Exactly one line per family the document names, apart from the open families.
+      // One line per family, apart from the open families: every family the model holds has its
+      // line. Families named only through the theme are added to them (exp-106-theme.test.ts).
       const wanted = [...new Set(families.map(familyKey))]
         .filter((k) => k && !OPEN_KEYS.has(k))
         .sort();
-      const named = imported.fonts.map((l) => familyKey(l.from)).sort();
-      expect(named, file.name).toEqual(wanted);
+      const named = imported.fonts.map((l) => familyKey(l.from));
+      expect(new Set(named).size, file.name).toBe(named.length);
+      for (const k of wanted) expect(named, file.name).toContain(k);
+      for (const k of named) expect(OPEN_KEYS.has(k), file.name).toBe(false);
       for (const line of imported.fonts) {
         lines++;
         const proprietary = PROPRIETARY_KEY.get(familyKey(line.from));

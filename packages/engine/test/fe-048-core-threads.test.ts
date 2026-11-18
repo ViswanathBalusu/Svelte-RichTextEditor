@@ -54,6 +54,29 @@ describe('the core maps thread ranges through every change (FE-048)', () => {
     expect(drawn).toHaveLength(0);
   });
 
+  it('does not re-attach a detached thread when the deletion is undone (UX-029 criterion 4)', () => {
+    const { core, from, to } = setup();
+    const i = internals(core);
+    const covered = i.state.doc.textBetween(from, to);
+    core.setThreadRange('thread-a', { from, to }, 1);
+    i.dispatch(i.state.tr.delete(from, to));
+    expect(core.threadRanges.get()[0]?.detached).toBe(true);
+    expect(i.state.doc.textBetween(from, from + 4)).not.toBe(covered);
+
+    // Undo puts the text back; the thread stays detached and nothing is drawn over the text.
+    expect(core.run('undo')).toBe(true);
+    expect(internals(core).state.doc.textBetween(from, to)).toBe(covered);
+    const [r] = core.threadRanges.get();
+    expect(r).toMatchObject({ id: 'thread-a', detached: true });
+    expect(
+      commentDecorations(internals(core).state.doc, core.threadRanges.get()).find(),
+    ).toHaveLength(0);
+
+    // Redo and a later edit do not change that either.
+    expect(core.run('redo')).toBe(true);
+    expect(core.threadRanges.get()[0]?.detached).toBe(true);
+  });
+
   it('removes a thread range when the thread is removed', () => {
     const { core, from, to } = setup();
     core.setThreadRange('thread-a', { from, to }, 1);

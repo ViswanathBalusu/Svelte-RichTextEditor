@@ -76,6 +76,7 @@
   import type { StringKey } from './i18n/en-GB.ts';
   import { findingSentence } from './proofing/present.ts';
   import { Strings } from './i18n/strings.ts';
+  import { Icons } from './icons/icons.ts';
   import type { MessageParams } from './i18n/types.ts';
   import { live } from './live.ts';
   import { PeopleDirectory } from './people/directory.ts';
@@ -83,6 +84,7 @@
   import { fillProgress } from './shell/fill.ts';
   import { focusTarget, landmarkKeys, landmarksIn, nextLandmark } from './shell/landmarks.ts';
   import { modeOptions } from './shell/modes.ts';
+  import type { CheckTarget } from './shell/send-checklist.ts';
   import { START_TRACK, stepMode, type ModeTrack } from './shell/suggest-mode.ts';
   import { NoticeTracker, type Notice } from './shell/notices.ts';
   import { PaneRegistry, type PaneComponent } from './shell/panes.ts';
@@ -109,6 +111,8 @@
     registry?: CommandRegistry;
     /** The string catalogue; the element sets its locale from the `locale` attribute. */
     strings?: Strings;
+    /** The icon catalogue: the host's replacement drawings over the built-in ones (UX-063). */
+    icons?: Icons;
     /** The people directory; or `resolveUsers`, from which the shell makes one (UX-025). */
     people?: PeopleDirectory;
     resolveUsers?: ResolveUsers;
@@ -158,6 +162,7 @@
     () => props.registry ?? createCommandRegistry(core, { hasString: (k) => strings.has(k) }),
   );
 
+  const icons = untrack(() => props.icons ?? new Icons());
   const translator = live(strings.view);
   const tr = $derived(translator.current);
   const settings = $derived(live(props.settings ?? { get: () => ({}), subscribe: () => () => {} }));
@@ -359,6 +364,7 @@
     registry,
     people,
     strings: translator,
+    icons: icons.view,
     announce,
     announceText: (text) => void say(text),
     idPrefix: `de${Math.random().toString(36).slice(2, 8)}`,
@@ -507,9 +513,9 @@
   }
 
   // Dialogs of the shell.
-  let dialog = $state<'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | null>(
-    null,
-  );
+  let dialog = $state<
+    'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | 'send' | null
+  >(null);
   // The equation the math editor is open on (FE-070): taken when the request arrives.
   let equation = $state.raw<EquationRef | null>(null);
   if (core.mathEditor) {
@@ -565,6 +571,32 @@
       requestAnimationFrame(() => {
         editor.select(pos);
         core.focus();
+      }),
+    );
+  }
+
+  // A failed check's link in the send dialog (FRW-028 criterion 2): the dialog closes, then focus goes
+  // to the field or the suggestion, or the pane that fixes the check opens. The roles pane is the
+  // participants view until a view of participants exists (FRW-026).
+  function goToCheck(target: CheckTarget): void {
+    dialog = null;
+    void tick().then(() =>
+      requestAnimationFrame(() => {
+        const send = core.workflowSend;
+        switch (target.kind) {
+          case 'field':
+            if (target.keys[0] !== undefined) send?.showField(target.keys[0]);
+            break;
+          case 'suggestion':
+            if (target.ids[0] !== undefined) send?.showSuggestion(target.ids[0]);
+            break;
+          case 'participants':
+            void openPane('roles');
+            break;
+          case 'rules':
+            void openPane('rules');
+            break;
+        }
       }),
     );
   }
@@ -786,6 +818,7 @@
     applyFormat: () => core.runNamed?.('pasteFormat') ?? false,
     openDialog: (name) => {
       if (name === 'export' && !core.exports && !exportFilters()) return false;
+      if (name === 'send' && !core.workflowSend) return false;
       if (name === 'comment') {
         const anchor = core.threads?.anchor() ?? null;
         if (!anchor) return false;
@@ -847,6 +880,7 @@
     if (paneRegistry.get('catch-up')?.load) add(host1a.catchUp);
     if (offered('history')) add(host1a.history);
     if (offered('history') && core.history?.createVersion) add(host1b['history.nameVersion']);
+    if (core.workflowSend) add(host1b['workflow.send']);
     if (props.onShareRequest) add(host1a.share);
     if (core.search) add(host1b['view.find']);
     if (offered('styles')) add(host1b['view.styles']);
@@ -1376,6 +1410,7 @@
       CommentBox,
       ExportDialog,
       MathEditorDialog,
+      SendDialog,
       VersionDialog,
     } = dialogs}
     {#if dialog === 'math' && core.mathEditor && equation}
@@ -1402,6 +1437,12 @@
           dialog = null;
           announce('announce.version.named');
         }}
+        onClose={() => (dialog = null)}
+      />
+    {:else if dialog === 'send' && core.workflowSend}
+      <SendDialog
+        service={core.workflowSend}
+        onNavigate={goToCheck}
         onClose={() => (dialog = null)}
       />
     {:else if dialog === 'region'}

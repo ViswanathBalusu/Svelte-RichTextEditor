@@ -87,6 +87,8 @@ export type {
   RuleOperatorName,
   RulePartsView,
   RulesService,
+  WorkflowSendOutcome,
+  WorkflowSendService,
   MathEditorService,
   MathFieldHandle,
   MathFieldOptions,
@@ -133,6 +135,15 @@ export {
   type StringsOptions,
   type Translator,
 } from './i18n/strings.ts';
+export {
+  BUILT_IN_ICONS,
+  Icons,
+  parseIcon,
+  type IconDrawing,
+  type IconOverrides,
+  type IconSet,
+  type IconsOptions,
+} from './icons/icons.ts';
 export { EN_GB, type StringKey } from './i18n/en-GB.ts';
 export type {
   LocaleTable,
@@ -161,6 +172,7 @@ export {
 } from './shell/settings.ts';
 export type { PageTheme, ThemeSetting } from './shell/theme.ts';
 export type { FieldDraft, FieldOption } from './shell/field-properties.ts';
+export type { SendFailure } from './shell/send-checklist.ts';
 export {
   BUILT_IN_PANES,
   PaneRegistry,

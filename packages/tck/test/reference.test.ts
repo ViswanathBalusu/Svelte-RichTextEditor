@@ -62,6 +62,22 @@ describe.skipIf(skip)('the kit against the reference service', () => {
     expect(s?.outcome, JSON.stringify(s?.failure)).toBe('passed');
   });
 
+  // PRO-111 criterion 6: the `core` profile passes against the reference service, and this file runs
+  // in `pnpm test`, which the CI workflow runs on every change. In-memory storage, test mode off:
+  // the two scenarios that need the test-mode switch are skipped, and `core.sync.busy` is skipped
+  // because the in-memory store answers the first submit before the second is read. The PostgreSQL
+  // run (services/document-service/test/postgres/u-pro-103-119-core.pg.test.ts, test mode on)
+  // passes all of them.
+  it('passes the core profile, skipping only what needs test mode or a slow store (PRO-111 criterion 6)', () => {
+    const core = report.profiles.find((p) => p.id === 'core');
+    expect(core, 'the core profile ran').toBeDefined();
+    const failed = core!.scenarios.filter((s) => s.outcome === 'failed').map((s) => s.id);
+    expect(failed).toEqual([]);
+    const skipped = core!.scenarios.filter((s) => s.outcome === 'skipped').map((s) => s.id);
+    expect(skipped.sort()).toEqual(['core.auth.expired', 'core.session.silence', 'core.sync.busy']);
+    expect(core!.scenarios.filter((s) => s.id === 'core.channel.page')[0]?.outcome).toBe('passed');
+  });
+
   it('exercises in its traffic what every passing scenario declares (PRO-117)', () => {
     expect(judge(report, REFERENCE_KNOWN).unproven).toEqual([]);
   });

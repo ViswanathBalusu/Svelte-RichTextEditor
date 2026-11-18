@@ -9,6 +9,7 @@ import type {
   ClassificationLabel,
   CommandName,
   CommentAnchor,
+  CommentBodyPart,
   CoreApi,
   CoreLabels,
   DocumentStats,
@@ -42,9 +43,11 @@ import type {
   StyleEditOp,
   StyleEditReason,
   StyleSummary,
+  ThreadDetail,
   ThreadOutcome,
   ThreadRequest,
   ThreadSummary,
+  ThreadWrite,
   ThreadsService,
   ViewName,
   ProofingFindingView,
@@ -164,6 +167,132 @@ export class FakeThreads implements ThreadsService {
   /** The threads the comments pane lists (UX-030); set by the harness. */
   items: ThreadSummary[] = [];
 
+  // --- UX-029: the thread view. The service's copy of each thread, its version and its requests.
+  /** The signed-in user. */
+  user = 'user:ada';
+  readonly changes = new Value(0);
+  readonly details = new Map<string, ThreadDetail>();
+  /** What the thread view asked the service to do, as `{ op, ... }` records. */
+  readonly writes: Array<Record<string, unknown>> = [];
+  /** The next write answers `precondition_failed` with the latest thread (another client changed it). */
+  staleNext: { readonly apply: (detail: ThreadDetail) => ThreadDetail } | null = null;
+  #version = 1;
+
+  self(): string {
+    return this.user;
+  }
+
+  detail(id: string): ThreadDetail | null {
+    return this.details.get(id) ?? null;
+  }
+
+  /** Puts a thread in the service's copy, with a new version, and tells the pane. */
+  put(detail: Omit<ThreadDetail, 'etag'>): ThreadDetail {
+    const next = { ...detail, etag: `v${this.#version++}` };
+    this.details.set(next.id, next);
+    const summary = this.items.find((t) => t.id === next.id);
+    if (summary) {
+      const index = this.items.indexOf(summary);
+      this.items[index] = {
+        ...summary,
+        state: next.state,
+        replyCount: Math.max(0, next.comments.length - 1),
+        excerpt: next.detached ? null : summary.excerpt,
+      };
+    }
+    this.changes.set(this.changes.get() + 1);
+    return next;
+  }
+
+  /** Another client's reply: the copy changes and the pane is told, as `comment.created` would. */
+  remoteReply(id: string, author: string, text: string): void {
+    const d = this.details.get(id)!;
+    this.put({
+      ...d,
+      comments: [
+        ...d.comments,
+        {
+          id: `c${d.comments.length + 1}-${author}`,
+          author,
+          createdAt: '2026-11-02T10:00:00Z',
+          body: [{ type: 'text', text }],
+          edited: false,
+        },
+      ],
+    });
+  }
+
+  #write(
+    op: string,
+    id: string,
+    etag: string,
+    detail: Record<string, unknown>,
+    change: (d: ThreadDetail) => Omit<ThreadDetail, 'etag'> | null,
+  ): ThreadWrite {
+    this.writes.push({ op, id, etag, ...detail });
+    const current = this.details.get(id);
+    if (!current) return { ok: false, code: 'not_found' };
+    if (this.staleNext) {
+      const stale = this.staleNext;
+      this.staleNext = null;
+      const latest = this.put(stale.apply(current));
+      return { ok: false, code: 'precondition_failed', latest };
+    }
+    if (etag !== current.etag) return { ok: false, code: 'precondition_failed', latest: current };
+    const next = change(current);
+    if (!next) return { ok: false, code: 'not_found' };
+    return { ok: true, detail: this.put(next) };
+  }
+
+  async reply(id: string, body: readonly CommentBodyPart[], etag: string): Promise<ThreadWrite> {
+    return this.#write('reply', id, etag, { body }, (d) => ({
+      ...d,
+      comments: [
+        ...d.comments,
+        {
+          id: `c${d.comments.length + 1}`,
+          author: this.user,
+          createdAt: '2026-11-02T11:00:00Z',
+          body,
+          edited: false,
+        },
+      ],
+    }));
+  }
+
+  async editComment(
+    id: string,
+    commentId: string,
+    body: readonly CommentBodyPart[],
+    etag: string,
+  ): Promise<ThreadWrite> {
+    return this.#write('edit', id, etag, { commentId, body }, (d) => ({
+      ...d,
+      comments: d.comments.map((c) => (c.id === commentId ? { ...c, body, edited: true } : c)),
+    }));
+  }
+
+  async deleteComment(id: string, commentId: string, etag: string): Promise<ThreadWrite> {
+    return this.#write('deleteComment', id, etag, { commentId }, (d) => ({
+      ...d,
+      comments: d.comments.filter((c) => c.id !== commentId),
+    }));
+  }
+
+  async deleteThread(id: string, etag: string): Promise<{ ok: boolean; code?: string }> {
+    this.writes.push({ op: 'deleteThread', id, etag });
+    const current = this.details.get(id);
+    if (!current) return { ok: false, code: 'not_found' };
+    if (etag !== current.etag) return { ok: false, code: 'precondition_failed' };
+    this.details.delete(id);
+    this.items = this.items.filter((t) => t.id !== id);
+    this.changes.set(this.changes.get() + 1);
+    return { ok: true };
+  }
+
+  async setState(id: string, state: 'open' | 'resolved', etag: string): Promise<ThreadWrite> {
+    return this.#write('state', id, etag, { state }, (d) => ({ ...d, state }));
+  }
   anchor(): CommentAnchor | null {
     return this.current;
   }
