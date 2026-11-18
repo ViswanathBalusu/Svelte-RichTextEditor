@@ -35,13 +35,15 @@ The reasons for this shape are in [ADR 0008](../adr/0008-protocol-planes-and-enc
   "rest": "https://docs.example.com/v1",
   "engines": ["pm-steps/1"],
   "cdm": { "min": 1, "max": 1 },
-  "features": ["presence", "regions", "suggest-enforced", "history", "comments", "assets", "exports", "leases", "fields"],
+  "features": ["presence", "regions", "suggest-enforced", "history", "comments", "assets", "exports", "leases", "fields", "read-restrictions"],
   "mode": "authority",
   "jwks_uri": "https://docs.example.com/.well-known/jwks.json"
 }
 ```
 
 `rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
+
+`read-restrictions` says that the server hides content from readers by projection (ADR 0019, proposed): the view token of section 5.2, the empty `steps` of section 5.3 and the `access_changed` cause of `ch.closed` apply only to a server that announces it. The name is a proposal of the conformance kit (ADR 0042, item 4), not yet a decision of the owner. The CDM schema for projections, `spec/cdm/cdm-1.projection.json`, adds the `hidden_region` placeholder node, which stands where a reader may not see a region.
 
 ## 3. Authentication
 
@@ -128,13 +130,15 @@ There is no session resumption: a new connection is a new session.
 
 | Type | Dir | Payload | Notes |
 |---|---|---|---|
-| `ch.open` | C to S | `kind: "doc"`, `doc`, `engine`, `cdm` (the version the client will use), `features`, optional `resume` (`seq`, `incarnation`, `inflight`), optional `token` | Without `resume` the server answers with `catchUp: "reload"` |
-| `ch.opened` | S to C | `head`, `incarnation`, `catchUp` (`stream`, `page` or `reload`), `inflight` (`accepted` with `seq`, or `unknown`), `access` (section 5.5), optional `workflow` (12) | `head` is the durable head at the moment the channel is attached. The first live commit the client receives is `head + 1` |
+| `ch.open` | C to S | `kind: "doc"`, `doc`, `engine`, `cdm` (the version the client will use), `features`, optional `resume` (`seq`, `incarnation`, `inflight`, optional `view`), optional `token` | Without `resume` the server answers with `catchUp: "reload"`. `resume.view` is the view token of the `ch.opened` or content read that the confirmed document came from |
+| `ch.opened` | S to C | `head`, `incarnation`, `catchUp` (`stream`, `page` or `reload`), `inflight` (`accepted` with `seq`, or `unknown`), `access` (section 5.5), optional `workflow` (12), optional `view` | `view` is the view token (below). `head` is the durable head at the moment the channel is attached. The first live commit the client receives is `head + 1` |
 | `ch.rejected` | S to C | `code`, `message` | Codes: `not_found`, `forbidden`, `unsupported_engine`, `unsupported_cdm`, `unsupported_feature`, `channel_limit`, `already_open`, `unavailable` |
 | `ch.close` | C to S | none | |
-| `ch.closed` | S to C | `code`, `reason`, optional `retryInMs` | For example `forbidden` after revocation, `unavailable` when the room moves or is fenced, `slow_consumer` |
+| `ch.closed` | S to C | `code`, `reason`, optional `retryInMs`, optional `cause` | For example `forbidden` after revocation, `unavailable` when the room moves or is fenced, `slow_consumer`. `cause` is an open vocabulary: `access_changed` (what the reader may see changed; the client reopens at once without `resume`, and its unconfirmed work goes to recovered edits), `fenced`, `lost` and `stopped` (a room stopped serving; the client backs off and resumes as for `unavailable`). `code` stays `unavailable` in every case, so a client that ignores `cause` still recovers |
 
 **Joining.** A client fetches content over REST at some `seq`, then opens the channel with `resume.seq` set to it. With `catchUp: "stream"` the server sends every commit from `resume.seq + 1` to `head`, then `sync.caughtUp`, then live commits; attaching and streaming are atomic. With `catchUp: "page"` the client reads the missing commits from `GET /documents/{id}/commits` and then expects `head + 1`. With `catchUp: "reload"` the client MUST fetch `GET /documents/{id}/content?seq={head}` (a pinned read, which can never be stale) and then expects `head + 1`.
+
+**View token.** A server that announces `read-restrictions` gives every `ch.opened` and every content read (`GET /documents/{id}/content`, pinned or not) a `view`: an opaque string, keyed by the server, that names the visibility class of the reader (the projection this reader gets). A client keeps the `view` of its latest `ch.opened` or content read and sends it as `resume.view`. A resume whose `view` is missing or differs from the current one is answered with `catchUp: "reload"`. A server without read restrictions may omit `view` and ignores it in a resume. A client never reads meaning into the string.
 
 ### 5.3 Sync (engine `pm-steps/1`)
 
@@ -149,6 +153,8 @@ Semantics are defined in [04 Sync engine](04-sync-engine.md).
 | `sync.caughtUp` | S to C | `seq` |
 | `sync.reset` | S to C | `seq`, `reason` (`import`, `restore`, `migration`, `repair`). A snapshot commit was stored; the client reloads content at `seq` |
 | `sync.check` | S to C | `seq`, `hash` |
+
+**Read-restricted readers.** For a reader whose projection hides content, `steps` in `sync.commit` and in `sync.ack` are the steps of the reader's class and may be empty: the commit changed only content the reader cannot see, and the client still advances its `seq`. `sync.ack` to such a reader always has `rebased: true`. `sync.commit` names no scopes, and `scopes` in `sync.reject` name only scopes the reader can see, so a hidden region or field value is never named.
 
 Scope identifiers, used in `scopes` and in `access`: `doc` (the top level of the tree), `body` (the body root), `region:<id>`, `defs`, `story:<id>`, `field:<id>`.
 
@@ -270,7 +276,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/tokens` | POST | Service credential only |
 | `/documents` | GET, POST | Service credential only. POST creates a document, optionally from CDM content, a template (12) or an import, with optional `externalId` and `properties`. GET lists and filters by `externalId`; the editor never lists documents |
 | `/documents/{id}` | GET, PATCH, DELETE | Metadata, `properties`, classification label, `state` (`active`, `locked`, `archived`). DELETE is a soft delete; purge follows the retention policy |
-| `/documents/{id}/content` | GET, PUT | GET returns `{ seq, incarnation, cdm, requires, doc }`, with `?seq=N` for a pinned, immutable, cacheable read; the `ETag` combines incarnation and `seq`. PUT (service credential) replaces content as a snapshot commit with origin `import` |
+| `/documents/{id}/content` | GET, PUT | GET returns `{ seq, incarnation, cdm, requires, doc }` and, under read restrictions, `view`, with `?seq=N` for a pinned, immutable, cacheable read; the `ETag` combines incarnation, `seq` and the view token. Pinned reads are `Cache-Control: private` and immutable for a year, reads at the head `private, no-cache`. PUT (service credential) replaces content as a snapshot commit with origin `import` |
 | `/documents/{id}/commits` | GET | `after`, `limit`. Paged catch-up. Subject to history visibility (07, section 8) |
 | `/documents/{id}/regions` | GET | Derived list: identifier, title, policy, order, state, who can edit |
 | `/documents/{id}/regions/{rid}/state` | PUT | `draft`, `in_review`, `approved`. Needs `manage` |

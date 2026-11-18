@@ -58,6 +58,10 @@ class RewritingSocket implements ServerSocket {
   }
 
   send(text: string): void {
+    if (text.includes('"t":"sync.caughtUp"') && this.owner.holdCaughtUp) {
+      this.owner.held.push(() => this.real.send(text));
+      return;
+    }
     if (!text.includes('"t":"ch.opened"')) {
       this.real.send(text);
       return;
@@ -81,6 +85,10 @@ export class CatchUpServer implements MemoryServer {
   readonly openedModes: string[] = [];
   /** How many `sync.submit` frames are still to be swallowed before the server sees them. */
   swallowBudget = 0;
+  /** While true, `sync.caughtUp` frames wait in `held` instead of reaching the client. */
+  holdCaughtUp = false;
+  /** The held `sync.caughtUp` frames, as functions that send them. */
+  readonly held: Array<() => void> = [];
   private readonly inner: MockDepServer;
   private opens = 0;
 
@@ -98,6 +106,12 @@ export class CatchUpServer implements MemoryServer {
     if (this.swallowBudget <= 0 || !text.includes('"t":"sync.submit"')) return false;
     this.swallowBudget -= 1;
     return true;
+  }
+
+  /** Stops holding `sync.caughtUp` and sends the frames that were held, in order. */
+  releaseCaughtUp(): void {
+    this.holdCaughtUp = false;
+    for (const send of this.held.splice(0)) send();
   }
 
   /** Sends a `ch.opened`, with its catch-up mode changed when the test asked for one. */
