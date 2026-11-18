@@ -1,6 +1,6 @@
 # 0383 UX-011: where the synonyms of a command live
 
-**Status:** proposed (2026-11-17, lane w3). The story's Notes name this as open ("where synonyms live in a registry entry is open"). No owner answer covers it (`docs/owner-decisions-2026-11-15.md`).
+**Status:** proposed (2026-11-17, lane w3). Owner decision 170 (`docs/owner-decisions-2026-11-15.md`) says the synonyms live in the locale tables (13 §8). The key shape below is this lane's proposal within that answer.
 
 ## Context
 

@@ -111,6 +111,11 @@ import {
 } from './control-plane/metrics.ts';
 import { Pipeline, type PlainHandler, type Reply } from './control-plane/pipeline.ts';
 import { auditPartitionsTask } from './control-plane/audit-partitions-task.ts';
+import {
+  PayloadThinning,
+  payloadThinningTask,
+  type ThinningStore,
+} from './control-plane/payload-thinning.ts';
 import { SCHEDULE_KIND, Scheduler, type ScheduledTask } from './control-plane/scheduler.ts';
 import { applySeed, parseSeed } from './control-plane/seed.ts';
 import {
@@ -118,6 +123,7 @@ import {
   PgTenantRegistry,
   type TenantRegistry,
 } from './control-plane/tenants.ts';
+import { registerProcessMetrics } from './control-plane/process-metrics.ts';
 import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-hooks.ts';
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
@@ -220,6 +226,11 @@ export interface ServiceParts {
    * member of `docedit_purge`. Absent: the route is not offered.
    */
   tombstoneStore?: TombstoneStore;
+  /**
+   * The rows of the thinning of old payloads (HIS-032). Like `purgeStore` it needs a pool that
+   * connects as a member of `docedit_purge`. Absent: no thinning task runs.
+   */
+  thinningStore?: ThinningStore;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
@@ -949,7 +960,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
           now,
         })
       : null;
+  const thinning =
+    parts.thinningStore && parts.retention && parts.audit
+      ? new PayloadThinning({
+          store: parts.thinningStore,
+          retention: parts.retention,
+          audit: parts.audit,
+          now,
+        })
+      : null;
   const tasks: ScheduledTask[] = [
+    // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
+    // scheduler hands the task the documents under a legal hold, and the task leaves them alone.
+    ...(thinning ? [payloadThinningTask(thinning)] : []),
     // The purge of deleted documents past their retention (HIS-039); held documents are left alone.
     ...(purge
       ? [
@@ -1030,6 +1053,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   scaleTimer?.unref();
   rescale();
 
+  const processMetrics = registerProcessMetrics(metrics);
   metrics.gauge(
     'docedit_jobs',
     'Queued and running jobs by kind, priority and state (BE-050 criterion 5).',
@@ -1253,6 +1277,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       (closed ??= (async () => {
         stopping = true;
         if (scaleTimer) clearInterval(scaleTimer);
+        processMetrics.stop();
         await scaling;
         // Each export worker finishes the job it runs before it stops (BE-065 criterion 3).
         await exportWorkers?.stop();

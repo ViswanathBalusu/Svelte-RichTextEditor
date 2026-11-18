@@ -1,6 +1,6 @@
 # 0384 UX-035: the markup views as built
 
-**Status:** proposed (2026-11-17, lane w3). The designer's confirmation of the definitions is still outstanding (ADR 0233, decision 4); this record changes one default that ADR 0132 took.
+**Status:** proposed (2026-11-17, lane w3). Owner decision 169 (`docs/owner-decisions-2026-11-15.md`) settles the four definitions as built (ADR 0233, decision 4). This record gives the drawing, the commands and the words for assistive technology, and changes one default that ADR 0132 took.
 
 ## Context
 
@@ -18,4 +18,4 @@
 
 - The engine tests of FE-046 that said `none` draws nothing are changed to the new rule.
 - Table rows and tables hidden by a view leave no bar (a row has no height to take away). FE-046's note that a row `ins` mark is not drawn by the view is a separate, older defect.
-- If the designer defines the views differently, the rules are in `src/suggestion-markup.ts` and `element.css`; the shell does not change.
+- If the owner defines the views differently, the rules are in `src/suggestion-markup.ts` and `element.css`; the shell does not change.
