@@ -12,7 +12,6 @@
  * page: `limit` 1 to 200 (50 when absent), and `nextCursor` when more holds follow (the signed
  * cursors of the kit, as the other lists use).
  */
-import { isUuid } from '../storage/db.ts';
 import { json, type Kit } from './kit.ts';
 import { pageLimit } from './http.ts';
 import type { Handler } from './pipeline.ts';
@@ -20,6 +19,10 @@ import { ApiError } from './problems.ts';
 import type { HoldService } from './holds.ts';
 
 const ROUTE = '/holds';
+
+/** A UUID as the stores keep them (the control plane does not reach the driver, BE-002). */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUuid = (s: string): boolean => UUID.test(s);
 
 export function holdRoutes(k: Kit): Record<string, Handler> {
   const { d } = k;

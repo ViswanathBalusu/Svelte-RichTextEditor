@@ -88,7 +88,7 @@ export class VersionDocument {
     this.seq = input.seq;
     this.time = input.time;
     this.name = input.name ?? null;
-    this.commentsShown = input.comments != null;
+    this.commentsShown = input.comments !== undefined && input.comments !== null;
     this.core = core;
     // The ranges are those of this `seq`, so they are set as they stand: no mapping is needed.
     for (const t of input.comments ?? [])
