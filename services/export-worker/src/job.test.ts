@@ -6,6 +6,7 @@
 import {
   JobRunner,
   MemoryJobQueue,
+  withQueueProof,
   type JobQueue,
   type JobRecord,
 } from '@docedit/document-service';
@@ -127,30 +128,35 @@ function harness(
   });
   const tenant = uuid7();
   const doc = uuid7();
-  const start = async (payload: Record<string, unknown> = {}) => {
+  // `signWith` is a queue proof key: the payload is signed as the control plane signs it (EXP-067).
+  const start = async (payload: Record<string, unknown> = {}, signWith?: string) => {
+    const body = {
+      doc,
+      target: 'pdf',
+      seq: 0,
+      incarnation: INCARNATION,
+      options: {},
+      requester: 'user-1',
+      role: 'editor',
+      view: 'v',
+      hiddenRegions: [],
+      hiddenValues: [],
+      ...payload,
+    };
     const job = await queue.enqueue(tenant, {
       kind: 'export',
       doc,
       createdBy: 'user-1',
-      payload: {
-        doc,
-        target: 'pdf',
-        seq: 0,
-        incarnation: INCARNATION,
-        options: {},
-        requester: 'user-1',
-        role: 'editor',
-        view: 'v',
-        hiddenRegions: [],
-        hiddenValues: [],
-        ...payload,
-      },
+      payload: signWith
+        ? withQueueProof(signWith, { tenant, kind: 'export', doc, cacheKey: null }, body)
+        : body,
     });
     const done = runner.runOnce().then(async () => (await queue.get(tenant, job.id))!);
     return { id: job.id, done };
   };
-  const run = async (payload: Record<string, unknown> = {}) => (await start(payload)).done;
-  return { start, run, stored, metrics, reports, queue, tenant };
+  const run = async (payload: Record<string, unknown> = {}, signWith?: string) =>
+    (await start(payload, signWith)).done;
+  return { start, run, stored, metrics, reports, queue, tenant, runner };
 }
 
 const codes = (job: JobRecord) =>
@@ -359,6 +365,41 @@ describe('the export job handler (EXP-001)', () => {
     expect(job.error?.code).toBe('validation_failed');
     expect(codes(job)).toContain('bundle_refused');
     expect(calls).toHaveLength(0);
+  });
+
+  it('refuses a job the control plane did not queue, when a proof key is set (EXP-067 criterion 4)', async () => {
+    const key = 'k'.repeat(40);
+    const { compile, calls } = fakeCompile();
+    const h = harness({ compile, queueProofKey: key });
+    // Written to the queue by something else: no proof, a proof under another key, a changed option.
+    const bare = await h.run();
+    expect(bare.state).toBe('failed');
+    expect(bare.error?.code).toBe('validation_failed');
+    expect(codes(bare)).toContain('bundle_refused');
+    const wrongKey = await h.run({}, 'j'.repeat(40));
+    expect(codes(wrongKey)).toContain('bundle_refused');
+    const signed = await h.start({ options: { profile: 'preview' } }, key);
+    const row = (await h.queue.get(h.tenant, signed.id))!;
+    await signed.done;
+    expect(calls).toHaveLength(1);
+    // A signed payload that was changed afterwards (another sequence number) fails.
+    const forged = await h.queue.enqueue(h.tenant, {
+      kind: 'export',
+      doc: row.doc,
+      createdBy: 'user-1',
+      payload: { ...row.payload, seq: 7 },
+    });
+    expect(forged.payload['queueProof']).toBe(row.payload['queueProof']);
+    await h.runner.runOnce();
+    const refused = (await h.queue.get(h.tenant, forged.id))!;
+    expect(refused.state).toBe('failed');
+    expect(codes(refused)).toContain('bundle_refused');
+    // Nothing compiled for any refused job; the one signed job compiled.
+    expect(calls).toHaveLength(1);
+    // Without a key on the worker the proof is not checked.
+    const open = harness({ compile });
+    expect((await open.run()).state).toBe('completed');
+    expect(calls).toHaveLength(2);
   });
 
   it('projects a restricted view (EXP-123), and refuses options it cannot honour without compiling', async () => {

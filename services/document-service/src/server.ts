@@ -1022,6 +1022,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       cacheMaxAgeMs: config.exportCacheMaxAgeMs,
       classVersion: config.exportClassVersion,
       tenantConcurrency: config.exportTenantConcurrency,
+      ...(config.exportProofKey ? { proofKey: config.exportProofKey } : {}),
     },
     ...(parts.outbox ? { outbox: parts.outbox } : {}),
     outboxWaitMs: config.outboxWaitMs,

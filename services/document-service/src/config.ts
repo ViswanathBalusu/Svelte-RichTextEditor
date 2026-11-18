@@ -91,6 +91,8 @@ export interface ServiceConfig {
   exportClassVersion: string;
   /** Running export jobs of a kind per tenant without a limit of its own; null: none. */
   exportTenantConcurrency: number | null;
+  /** The key of the queue proof of export jobs (EXP-067 criterion 4); null: none is written. */
+  exportProofKey: string | null;
   /**
    * Whether compile and asset workers outside this process serve the queue: with PostgreSQL by
    * default. Without them, and without handlers in the process, `exports` and `assets` are not
@@ -171,6 +173,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   exportCacheMaxAgeMs: 7 * 24 * 60 * 60 * 1000,
   exportClassVersion: CLASS_VERSION,
   exportTenantConcurrency: null,
+  exportProofKey: null,
   externalWorkers: false,
   outboxWaitMs: 10_000,
   scheduler: true,
@@ -336,6 +339,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     previewWindowMs: int(env, 'DOCEDIT_PREVIEW_WINDOW_MS', DEFAULTS.previewWindowMs),
     exportCacheMaxAgeMs: int(env, 'DOCEDIT_EXPORT_CACHE_MS', DEFAULTS.exportCacheMaxAgeMs),
     exportClassVersion: env['DOCEDIT_EXPORT_CLASS_VERSION'] || DEFAULTS.exportClassVersion,
+    exportProofKey: env['DOCEDIT_EXPORT_PROOF_KEY'] || null,
     exportTenantConcurrency:
       concurrency === undefined || concurrency === ''
         ? null
