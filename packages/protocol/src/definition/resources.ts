@@ -1618,7 +1618,10 @@ export const OPERATIONS: readonly OperationDef[] = [
       document: opt(uuid7(), 'Only events of this document.'),
       actor: opt(text(), 'Only events of this actor.'),
       kind: opt(text(), 'Only events of this kind (for example `grants.changed`).'),
-      from: opt(text(), 'Only events at or after this time: ISO 8601 with a time zone (inclusive).'),
+      from: opt(
+        text(),
+        'Only events at or after this time: ISO 8601 with a time zone (inclusive).',
+      ),
       to: opt(text(), 'Only events before this time: ISO 8601 with a time zone (exclusive).'),
     },
     success: list(ref('AuditEntry')),
