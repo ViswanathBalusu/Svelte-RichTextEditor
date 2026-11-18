@@ -182,6 +182,12 @@ export class Metrics {
   readonly outbox: Counter;
   readonly roomsClosed: Counter;
   readonly writeFailures: Counter;
+  /** Channels opened, by route: `local` (the room is on this node) or `forwarded` (BE-061, BE-062). */
+  readonly channelRoutes: Counter;
+  /** Frames of forwarded channels put on the bus, by direction (BE-062). */
+  readonly forwardFrames: Counter;
+  /** Forwarded channels closed by the forwarding itself, by reason (BE-062). */
+  readonly forwardClosed: Counter;
   /** Seconds rooms stayed open, per tenant (BE-085 criterion 1: open-room time). */
   readonly roomOpenSeconds: Counter;
   /** Seconds identified connections stayed open, per tenant (BE-085 criterion 1: connection time). */
@@ -218,6 +224,9 @@ export class Metrics {
     this.outbox = c('dep_outbox_items_total', 'Outbox items settled, by state');
     this.roomsClosed = c('dep_rooms_closed_total', 'Rooms closed, by reason');
     this.writeFailures = c('dep_write_failures_total', 'Log writes that did not store, by outcome');
+    this.channelRoutes = c('dep_channel_routes_total', 'Channels opened, by route');
+    this.forwardFrames = c('dep_forward_frames_total', 'Forwarded-channel frames sent on the bus');
+    this.forwardClosed = c('dep_forward_closed_total', 'Forwarded channels closed, by reason');
     this.roomOpenSeconds = c('dep_room_open_seconds_total', 'Seconds rooms stayed open, by tenant');
     this.connectionSeconds = c(
       'dep_connection_seconds_total',

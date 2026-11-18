@@ -31,6 +31,7 @@ import { Auditor } from './audit.ts';
 import { Checkpointer } from './checkpoints.ts';
 import { derivedCommitId } from './commit-id.ts';
 import { Faults, testHooks } from './hooks.ts';
+import { Forwarder } from './forwarding.ts';
 import { NodeLease } from './lease.ts';
 import { RateLimits } from './limits.ts';
 import type { LiveQuotaGate } from './session.ts';
@@ -135,6 +136,8 @@ class DepDataPlane implements DataPlane {
   readonly #lease: NodeLease | null;
   readonly #leaseReady: Promise<boolean>;
   readonly #outbox: OutboxDelivery | null;
+  /** Forwards channels to the owning node over the bus (BE-062), or null on a single node. */
+  readonly #forwarder: Forwarder | null;
   readonly #hooks: DataPlaneTestHooks | undefined;
   #closing: Promise<void> | null = null;
 
@@ -205,6 +208,28 @@ class DepDataPlane implements DataPlane {
       ...(deps.assets ? { assets: deps.assets } : {}),
       ...(deps.workflows ? { workflows: deps.workflows } : {}),
     });
+    this.#forwarder =
+      deps.bus && deps.leases
+        ? new Forwarder({
+            node: deps.node,
+            bus: deps.bus,
+            host: this.#host,
+            logs: deps.logs,
+            grants: deps.grants,
+            leases: deps.leases,
+            ...(deps.forwarding ? { settings: deps.forwarding } : {}),
+            now: deps.now,
+            metrics: this.metricsRegistry,
+            onError: s.onError,
+          })
+        : null;
+    if (this.#forwarder) {
+      const f = this.#forwarder;
+      this.#leaseReady = this.#leaseReady.then(async (ok) => {
+        await f.start();
+        return ok;
+      });
+    }
     this.#outbox = deps.outbox
       ? new OutboxDelivery({
           store: deps.outbox,
@@ -249,6 +274,11 @@ class DepDataPlane implements DataPlane {
   /** Resolves once the node holds its lease (at once without leases); false when it could not. */
   ready(): Promise<boolean> {
     return this.#leaseReady;
+  }
+
+  /** The forwarding of channels to owners, for tests and operations. */
+  get forwarder(): Forwarder | null {
+    return this.#forwarder;
   }
 
   /** The rooms open on this node, for tests and operations. */
@@ -304,6 +334,7 @@ class DepDataPlane implements DataPlane {
         verify: this.#deps.verify,
         allowedOrigins: this.#deps.allowedOrigins,
         host: this.#host,
+        forwarding: this.#forwarder ?? undefined,
         grants: this.#deps.grants,
         usersOnWire: this.#deps.users !== undefined,
         now: this.#deps.now,
@@ -445,6 +476,7 @@ class DepDataPlane implements DataPlane {
       for (const s of this.#sessions) s.draining();
       await this.#host.drain(this.settings.drainTimeoutMs);
       for (const s of [...this.#sessions]) s.goaway(1000 + Math.floor(Math.random() * 4000));
+      await this.#forwarder?.close();
       await this.#host.close(reason);
       await this.#outbox?.stop();
       await this.#audit.flush();
