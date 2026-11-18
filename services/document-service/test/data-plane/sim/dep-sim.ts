@@ -31,7 +31,7 @@ import {
   type WriteRequest,
   type WriteResult,
 } from '@docedit/authority';
-import { uuid7, type JsonEnvelope } from '@docedit/model';
+import { canonicalize, uuid7, type JsonEnvelope } from '@docedit/model';
 import {
   SimClient,
   resetIds,
@@ -855,8 +855,17 @@ export class DepSimulation {
       this.#tokens.identity(this.#tokens.issue({ user: 'alice', docs: { [this.doc]: 'owner' } })),
       this.doc,
     );
-    if (JSON.stringify(content.doc) !== JSON.stringify(doc.toJSON()))
-      failures.push('the content served differs from the stored log');
+    // Compared in canonical form: PostgreSQL's jsonb does not keep the order of the keys of an
+    // attribute value (a suggest entry), and the order of keys carries no meaning (03 §9).
+    const served = canonicalize(content.doc);
+    const stored = canonicalize(doc.toJSON());
+    if (served !== stored) {
+      let at = 0;
+      while (at < served.length && served[at] === stored[at]) at++;
+      failures.push(
+        `the content served differs from the stored log, first at offset ${at}: served ...${served.slice(Math.max(0, at - 60), at + 80)} stored ...${stored.slice(Math.max(0, at - 60), at + 80)}`,
+      );
+    }
     // G3, G2: every client converged to the head, with nothing unconfirmed; every ack is stored.
     for (const c of this.clients) {
       if (!c.idle)

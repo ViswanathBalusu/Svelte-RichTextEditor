@@ -125,6 +125,10 @@ const ENDPOINT_REVIEW: Record<string, EndpointEntry> = {
   listCommits: { kind: 'exercised', test: SURFACES_FILE, path: '/commits?after=0' },
   listRegions: { kind: 'exercised', test: SURFACES_FILE, path: '/regions' },
   getGrants: { kind: 'exercised', test: SURFACES_FILE, path: '/grants' },
+  // The segment holds hashes and metadata, never a payload (HIS-037); the reader's gate cuts it.
+  getAuditSegment: { kind: 'exercised', test: SURFACES_FILE, path: '/audit-segment?fromSeq=' },
+  // The suggestion's date comes from an index, not from the log (HIS-042).
+  getSuggestionIntroduction: { kind: 'exercised', test: SURFACES_FILE, path: '/introduction' },
   listHistory: { kind: 'exercised', test: SURFACES_FILE, path: '/history?region=' },
   listVersions: { kind: 'exercised', test: SURFACES_FILE, path: '/versions' },
   getDiff: { kind: 'exercised', test: SURFACES_FILE, path: '/diff?fromSeq=' },

@@ -26,6 +26,8 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation PUT /documents/{id}/regions/{rid}/lease': LEASES,
   'operation GET /documents/{id}/connect':
     'the connect hint needs a server that runs more than one node and a node address; BE-061 tests it in the document service, a kit scenario follows with the node-routing profile (BE-061; PRO-126)',
+  'operation GET /documents/{id}/audit-segment': `the log segment for a third party (08 §12) is served and tested in the document service (HIS-037); a kit scenario follows with the history profile: ${HISTORY}`,
+  'operation GET /documents/{id}/suggestions/{sid}/introduction': `the introducing commit of a suggestion (08 §14) is served and tested in the document service (HIS-042); a kit scenario follows with the history profile: ${HISTORY}`,
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,
   'operation GET /imports/{jid}':
     'imports take a service credential and arrive with EXP (G79; D16)',

@@ -19,6 +19,15 @@ export interface TestLink {
 }
 
 const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = [
+  // Shipped when CDM-019 and FE-130 closed (2026-11-18).
+  [
+    'lists',
+    [
+      { path: 'packages/engine/test/list-commands.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/list-view.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/fe-130-list-labels.compile.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-011 closed (2026-11-17).
   [
     'command-search',
