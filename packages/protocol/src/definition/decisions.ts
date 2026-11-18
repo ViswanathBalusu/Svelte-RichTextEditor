@@ -255,7 +255,7 @@ export const DECISIONS: readonly Decision[] = [
   {
     id: 'D69',
     gaps: ['G80'],
-    text: "Following review SR-C4, an export job, its result and its logs belong to the user who requested it. `GET` and `DELETE /exports/{jid}` are `forbidden` to any other user, even one whose token covers the document, and to the requester once their token carries `no-export`; a service credential may read and cancel any job of its tenant. Whether holders of `manage` may read other users' jobs is for the owner; until then they may not.",
+    text: "Following review SR-C4, an export job, its result and its logs belong to the user who requested it. `GET` and `DELETE /exports/{jid}` answer `not_found` to any other user, even one whose token covers the document, and to a token that does not cover the job's document (owner decision 57: a resource the caller may not see is `not_found`, so that its existence is not confirmed; the first version said `forbidden`), and are `forbidden` to the requester once their token carries `no-export`; a service credential may read and cancel any job of its tenant. Whether holders of `manage` may read other users' jobs is for the owner; until then they may not.",
   },
   {
     id: 'D70',

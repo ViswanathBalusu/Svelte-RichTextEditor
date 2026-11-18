@@ -23,7 +23,7 @@ import type { JobRecord } from './jobs/queue.ts';
 import { withQueueProof } from './job-proof.ts';
 import { json, type Kit } from './kit.ts';
 import { admitExportConcurrency } from './live-quota-rest.ts';
-import { capabilitiesOn, guard, roleOn, type Ctx, type Handler } from './pipeline.ts';
+import { capabilitiesOn, coverOrHide, guard, roleOn, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { exportView, projectContent, readerView } from './visibility.ts';
 
@@ -284,10 +284,11 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
     if (!job || (job.kind !== EXPORT_KIND && job.kind !== PREVIEW_KIND) || !job.doc)
       throw new ApiError('not_found', `no export job ${ctx.params['jid']}`);
     if (ctx.caller.kind === 'service') return { job, canSeeLog: true };
-    // Row 12 of 07 §12 for the job's document, then the requester rule of SR-C4 (D69).
+    // A job of another document or another user is not there for the caller (SR-C4; D69; owner
+    // decision 57), then row 12 of 07 §12 for the job's document.
+    coverOrHide(ctx.caller, job.doc, 'export job');
+    if (job.createdBy !== ctx.caller.actor) throw new ApiError('not_found', 'no such export job');
     guard(ctx.caller, 'export', job.doc);
-    if (job.createdBy !== ctx.caller.actor)
-      throw new ApiError('forbidden', 'an export job belongs to its requester (SR-C4; D69)');
     const caps = capabilitiesOn(ctx.caller, job.doc);
     return { job, canSeeLog: caps === 'all' || caps.has('edit') };
   }
