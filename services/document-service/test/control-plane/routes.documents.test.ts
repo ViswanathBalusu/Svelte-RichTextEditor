@@ -453,9 +453,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           (await h.call('GET', `/v1/documents?externalId=${ext}`, { token: h.apiKey })).json.items,
         ).toEqual([]);
         problem(
-          await h.call('POST', '/v1/documents', { token: h.apiKey, body: { template: uuid7() } }),
+          await h.call('POST', '/v1/documents', { token: h.apiKey, body: { import: uuid7() } }),
           400,
           'validation_failed',
+        );
+        // A template that does not exist is not found (FRW-062; the templates themselves are
+        // tested in frw-062.templates.test.ts).
+        problem(
+          await h.call('POST', '/v1/documents', { token: h.apiKey, body: { template: uuid7() } }),
+          404,
+          'not_found',
         );
       },
     );

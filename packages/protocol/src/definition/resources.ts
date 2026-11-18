@@ -9,6 +9,7 @@ import {
   type NamedShape,
   type Prop,
   type Shape,
+  any,
   anyOf,
   arr,
   bool,
@@ -83,6 +84,7 @@ export const PATH_PARAMS: Readonly<Record<string, Prop>> = {
   jid: req(uuid7(), 'Job identifier.'),
   pid: req(text({ minLength: 1 }), 'Participant identifier.', { gaps: ['G59'] }),
   fid: req(nodeId(), 'Field identifier.'),
+  bid: req(uuid7(), 'Bulk send identifier.'),
 };
 
 const PRO = 'PRO';
@@ -170,7 +172,32 @@ export const REST_SHAPES: readonly NamedShape[] = [
         ),
         template: opt(
           uuid7(),
-          'A template to instantiate (12 §9). Refused with `validation_failed` until templates exist (FRW).',
+          'A template (`POST /templates`) to instantiate (12 §9; FRW-062): the new document is a fork of the template document at `templateSeq`.',
+        ),
+        templateSeq: opt(
+          seq(),
+          'With `template`: the seq of the template document to fork at, pinned and recorded. Default: the head.',
+        ),
+        participants: opt(
+          arr(
+            obj({
+              id: req(text({ minLength: 1 })),
+              roles: req(
+                arr(text()),
+                'The `role_def` identifiers of the template that the person holds.',
+              ),
+              kind: req(enm(['filler', 'signer', 'approver', 'cc'])),
+              order: req(count()),
+              sub: opt(text()),
+              name: opt(text()),
+              auth: opt(obj({ require: opt(arr(text())) })),
+            }),
+          ),
+          'With `template`: participants bound to the roles of the template. They are stored as the draft workflow of the new document.',
+        ),
+        values: opt(
+          map(any(), { keys: text() }),
+          'With `template`: values to prefill by field key, in the same call. All or none are applied.',
         ),
         import: opt(
           uuid7(),
@@ -204,6 +231,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
         cdm: req(int({ min: 1 }), 'CDM major version.'),
         requires: req(arr(ref('FeatureName')), 'Features the content uses (03 §2).'),
         createdAt: req(timestamp()),
+        template: opt(
+          obj({ id: req(uuid7()), seq: req(seq()) }),
+          'Only in the answer to `POST /documents` with `template`: the template and the pinned seq the document was forked at (FRW-062).',
+        ),
       },
       {
         doc: 'Document metadata (05 §6.2). Title, owner and timestamps live here, never in the CDM (03 §2). The ETag is the metadata revision.',

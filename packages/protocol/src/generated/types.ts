@@ -423,8 +423,25 @@ export interface RevokeRequest {
 export interface CreateDocumentRequest {
   /** Initial CDM content: the content at seq 0 (D67). Without it the document starts empty. */
   content?: CdmEnvelope;
-  /** A template to instantiate (12 §9). Refused with `validation_failed` until templates exist (FRW). */
+  /** A template (`POST /templates`) to instantiate (12 §9; FRW-062): the new document is a fork of the template document at `templateSeq`. */
   template?: string;
+  /** With `template`: the seq of the template document to fork at, pinned and recorded. Default: the head. */
+  templateSeq?: number;
+  /** With `template`: participants bound to the roles of the template. They are stored as the draft workflow of the new document. */
+  participants?: Array<{
+    id: string;
+    /** The `role_def` identifiers of the template that the person holds. */
+    roles: string[];
+    kind: "filler" | "signer" | "approver" | "cc";
+    order: number;
+    sub?: string;
+    name?: string;
+    auth?: {
+      require?: string[];
+    };
+  }>;
+  /** With `template`: values to prefill by field key, in the same call. All or none are applied. */
+  values?: { [key: string]: unknown };
   /** An asset to import. Refused with `validation_failed` until imports exist (EXP). */
   import?: string;
   /** The host's identifier; unique in the tenant (`conflict` otherwise). */
@@ -452,6 +469,11 @@ export interface DocumentResource {
   /** Features the content uses (03 §2). */
   requires: FeatureName[];
   createdAt: string;
+  /** Only in the answer to `POST /documents` with `template`: the template and the pinned seq the document was forked at (FRW-062). */
+  template?: {
+    id: string;
+    seq: number;
+  };
 }
 
 /** A JSON merge patch of the document resource: a member present replaces it, `null` clears it. Needs `manage` or a service credential. */
@@ -978,6 +1000,92 @@ export interface Workflow {
     seal?: string;
     certificate?: boolean;
   };
+}
+
+/** One recipient row of a bulk send: what a document made from the template takes (FRW-063). */
+export interface BulkSendRow {
+  /** The recipient's participants, bound to the roles of the template. */
+  participants?: Array<{
+    id: string;
+    roles: string[];
+    kind: "filler" | "signer" | "approver" | "cc";
+    order: number;
+    sub?: string;
+    name?: string;
+    auth?: {
+      require?: string[];
+    };
+  }>;
+  /** The recipient's values, prefilled by key. */
+  values?: { [key: string]: unknown };
+  title?: string;
+  externalId?: string;
+  properties?: { [key: string]: unknown };
+  classification?: string;
+}
+
+/** The body of `POST /bulk-sends` (12 §9; FRW-063). */
+export interface BulkSendCreate {
+  /** The template (`POST /templates`). */
+  template: string;
+  /** The seq of the template document to fork at. Default: the head. */
+  templateSeq?: number;
+  /** One document is made for each row, in order. */
+  rows: BulkSendRow[];
+}
+
+/** The outcome of one row of a bulk send (FRW-063). */
+export interface BulkSendRowResult {
+  /** The position of the row in the request, from 0. */
+  index: number;
+  /** The document made for the row; null when it failed. */
+  document: string | null;
+  /** Why the row failed: the code and the violations the single call would have answered. */
+  error?: {
+    code: ErrorCode;
+    message: string;
+    violations?: Array<{
+      path: string;
+      rule: string;
+    }>;
+  };
+}
+
+/** A bulk send: a job that makes one fork of a template for each recipient row (12 §9; FRW-063). */
+export interface BulkSend {
+  id: string;
+  template: string;
+  /** The seq of the template the documents are forked at: pinned and recorded. */
+  seq: number;
+  state: "queued" | "running" | "completed" | "failed" | "cancelled";
+  /** The number of rows. */
+  total: number;
+  /** The rows handled so far. */
+  done: number;
+  /** Each row with the new document or the failure; set when `state` is `completed`. */
+  rows?: BulkSendRowResult[];
+  error?: {
+    code: ErrorCode;
+    message: string;
+  };
+  createdAt: string;
+  finishedAt?: string;
+}
+
+/** A template: a document with role placeholders, fields and rules, and no participants (12 §9; FRW-062). The members are the lane's proposal (docs/adr/0406-w4-FRW-062-templates.md). */
+export interface Template {
+  id: string;
+  /** The document that is the template. */
+  document: string;
+  name: string;
+  createdAt: string;
+}
+
+/** The body of `POST /templates` (12 §9; FRW-062). */
+export interface TemplateCreate {
+  /** The document to mark as a template. */
+  document: string;
+  name: string;
 }
 
 /** The body of `decline` and `void` (12 §6.2). */
@@ -2154,6 +2262,51 @@ export interface Operations {
     query: { cursor?: string; limit?: number };
     body: never;
     response: List<FieldInfo>;
+  };
+  /** GET /templates: The templates of the tenant, oldest first (12 §9; FRW-062). (12 §9, §10) */
+  listTemplates: {
+    method: "GET";
+    path: "/templates";
+    params: Record<string, never>;
+    query: { cursor?: string; limit?: number };
+    body: never;
+    response: List<Template>;
+  };
+  /** POST /templates: Marks a document as a template (12 §9; FRW-062). (12 §9, §10) */
+  createTemplate: {
+    method: "POST";
+    path: "/templates";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: TemplateCreate;
+    response: Template;
+  };
+  /** POST /bulk-sends: Starts a job that makes one fork of a template for each recipient row (12 §9; FRW-063). Answers 202. (12 §9, §10) */
+  createBulkSend: {
+    method: "POST";
+    path: "/bulk-sends";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: BulkSendCreate;
+    response: BulkSend;
+  };
+  /** GET /bulk-sends/{bid}: State, progress and result of a bulk send (12 §9; FRW-063). (12 §9, §10) */
+  getBulkSend: {
+    method: "GET";
+    path: "/bulk-sends/{bid}";
+    params: { bid: string };
+    query: Record<string, never>;
+    body: never;
+    response: BulkSend;
+  };
+  /** GET /templates/{tid}: One template (12 §9; FRW-062). (12 §9, §10) */
+  getTemplate: {
+    method: "GET";
+    path: "/templates/{tid}";
+    params: { tid: string };
+    query: Record<string, never>;
+    body: never;
+    response: Template;
   };
   /** GET /documents/{id}/field-values: Field values by key; `?seq` reads them at a pinned seq. (12 §10) */
   getFieldValues: {

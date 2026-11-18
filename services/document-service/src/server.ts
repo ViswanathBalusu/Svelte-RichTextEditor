@@ -40,7 +40,6 @@ import {
   type AssetRegistry,
 } from './control-plane/assets.ts';
 import { ContentReader } from './control-plane/content.ts';
-import type { HandlerDeps } from './control-plane/kit.ts';
 import { Placement } from './control-plane/room-routing.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
 import { DebouncedEventSink } from './control-plane/event-throttle.ts';
@@ -65,6 +64,8 @@ import {
   type FontCatalogue,
 } from './control-plane/fonts.ts';
 import { createHandlers } from './control-plane/handlers.ts';
+import type { HandlerDeps } from './control-plane/kit.ts';
+import { BULK_SEND_KIND, bulkSendHandler } from './control-plane/bulk-send.ts';
 import type {
   SubscriptionStore,
   WebhookSubscriptions,
@@ -96,6 +97,8 @@ import {
   type WorkflowResourceStore,
 } from './workflow/workflow-resource.ts';
 import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
+import { MemoryTemplateStore, type TemplateStore } from './workflow/template-store.ts';
+import { PgTemplateStore } from './workflow/template-store-pg.ts';
 import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-store.ts';
 import { PgReminderStore } from './workflow/reminder-store-pg.ts';
 import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
@@ -280,6 +283,8 @@ export interface ServiceParts {
   documentKeys?: DocumentKeys;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
+  /** The templates of /templates (FRW-062). Absent: the routes are not offered. */
+  templates?: TemplateStore;
   /** The count of scheduled reminders raised per participant (FRW-034). Absent: none are raised. */
   reminders?: ReminderStore;
   /** The workflow evidence ledger (FRW-041): evidence in its own workflow table, hashes for the chain. */
@@ -548,6 +553,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
     workflows: new PgWorkflowResourceStore(pool, { now }),
+    templates: new PgTemplateStore(pool),
     reminders: new PgReminderStore(pool),
     evidence: new PgEvidenceLedger(pool, { now }),
     accessCodes: new PgAccessCodeStore(pool),
@@ -596,6 +602,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
     workflows: new MemoryWorkflowResourceStore(),
+    templates: new MemoryTemplateStore(),
     reminders: new MemoryReminderStore(),
     evidence: new MemoryEvidenceLedger(now),
     sealedPdfs: new MemorySealedPdfStore(),
@@ -1036,6 +1043,11 @@ export async function startService(opts: StartOptions): Promise<Service> {
     return r;
   };
 
+  // The bulk sends of templates (FRW-063): a job that makes one document for each row. The handler
+  // reads the control plane's dependencies when a job runs; they are built after the runners.
+  let bulkSendDeps: HandlerDeps | null = null;
+  if (parts.templates) runnerFor({ [BULK_SEND_KIND]: bulkSendHandler(() => bulkSendDeps) });
+
   const exportHandlers: Record<string, JobHandler> = { ...(opts.jobHandlers ?? {}) };
   if (exportHandlers[EXPORT_KIND] && !exportHandlers[PREVIEW_KIND])
     exportHandlers[PREVIEW_KIND] = exportHandlers[EXPORT_KIND]!;
@@ -1385,7 +1397,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       })
     : null;
 
-  const handlers = createHandlers({
+  const controlDeps: HandlerDeps = {
     ...(reads ? { reads } : {}),
     ...(readSessions ? { readSessions } : {}),
     ...(replicaDeps ? { replicaDeps } : {}),
@@ -1446,6 +1458,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(erasures ? { erasures } : {}),
     ...(tombstones ? { tombstones } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
+    ...(parts.templates ? { templates: parts.templates } : {}),
     ...(parts.accessCodes ? { accessCodes: parts.accessCodes } : {}),
     ...(parts.consentTexts ? { consentTexts: parts.consentTexts } : {}),
     ...(parts.evidence ? { evidence: parts.evidence } : {}),
@@ -1457,7 +1470,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(quotaSource ? { quotaSource } : {}),
     ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
     ...(opts.importer ? { importsOffered: true } : {}),
-  });
+  };
+  bulkSendDeps = controlDeps;
+  const handlers = createHandlers(controlDeps);
 
   const ready = () => (parts.readiness ? parts.readiness() : readiness(parts.pool));
   const probe =

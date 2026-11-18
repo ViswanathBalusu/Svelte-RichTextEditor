@@ -86,7 +86,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             reminders: { firstAfterDays: 3, everyDays: 2 },
             consent: { textId: 'esign-consent', version: 3 },
             finalisation: { seal: 'pades-b-lta', certificate: true },
-            routing: [{ when: { '>': [{ field: 'lease.total' }, '50000'] }, then: [] }],
+            // The routes are checked against the document at the save (FRW-037 criterion 3), and
+            // this document has no fields: a condition that needs none.
+            routing: [{ when: { '==': ['1', '1'] }, then: [] }],
           }),
         );
         expect(created.status, created.text).toBe(201);

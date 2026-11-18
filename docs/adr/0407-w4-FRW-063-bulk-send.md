@@ -1,0 +1,19 @@
+# ADR 0407: Bulk send of a template (FRW-063)
+
+**Status:** proposed, 2026-11-18. Written by lane w4. Owner decision 184 of 2026-11-15 (`docs/owner-decisions-2026-11-15.md`) accepts the workflow design ADRs as a set, with the proposals in the notes of FRW-062 and FRW-063. The points below are those 12 §9 leaves open: "the row format, the limits and whether each fork is also sent are not stated".
+
+## Decisions taken
+
+1. **The resource.** `POST /bulk-sends` (a service credential, an `Idempotency-Key`) and `GET /bulk-sends/{bid}`. The body is `{ template, templateSeq?, rows }`. The answer is 202 with `{ id, template, seq, state, total, done, rows?, error?, createdAt, finishedAt? }`. There is no table: a bulk send is a job of the queue (kind `workflow.bulk_send`) and the resource is that job. `state` is the job's.
+2. **A row** is the body of `POST /documents` with a template, less the template: `participants`, `values`, `title`, `externalId`, `properties`, `classification`. Any other member is refused when the request is accepted, as is a row that is not an object.
+3. **One pinned seq.** The template and the seq (the one asked for, or the head when the request is accepted) are checked once, through the history gate of a fork, when the request is accepted. Every fork is made at that seq; it is stored in the job and returned as `seq`.
+4. **The job** makes the rows in order with the same function as `POST /documents` with a template (`createFromTemplate`), so a row is checked and made exactly as a single call would. Nothing is sent: the forks are drafts, each with the draft workflow of its participants. Sending each is a separate action for the owner or the host (`/workflow/send`). The job reports its progress after each row and stops when it is cancelled.
+5. **Rows fail alone.** A row that is refused is reported with the code and the violations the single call would have answered (never a value of the row), and the next row goes on. The job completes with `rows`: for each row its index and the new document, or `null` and the failure. A row that fails leaves no document.
+6. **No fork twice.** (a) The request: a repeat with the same `Idempotency-Key` is answered from the stored response by the pipeline, so no second job is queued; the same key with another body is `idempotency_mismatch` (422). (b) The job: the document of row `i` has the identifier derived from the job's identifier and `i` (`bulkRowDocumentId`, a version 7 shaped hash). A row whose document exists is reported as made and is not made again. The queue's attempts are set to one: a second attempt would be harmless for the documents but would report the rows of the first run again, so a job that is lost ends failed and the owner starts a new one.
+7. **Limit of a request.** At most 1000 rows (`BULK_SEND_MAX_ROWS`), a setting of this build for the size of the job's payload; the spec gives no figure. More is `validation_failed`.
+
+## Open
+
+- **Tenant quotas (FRW-063 criterion 4).** Not built. The tenant quota dimensions are the seven of 06 §12 (connections, open documents, commit rate, room CPU budget, storage, export concurrency, export minutes), fixed in `quotas.ts`, in the `CHECK` of migration 0069 and in the `/quotas` schema. None of them limits documents made or bulk sends. A refusal with `quota_exceeded` needs a new dimension, for example the rows a tenant may have in running bulk sends, and the owner to say what is counted. The cost sheet (06 §10) must count each fork as a full document.
+- **Personal data in the job.** The rows, with their values and participants, are the payload of the job and stay in the `jobs` table. The retention of finished jobs is not set for this kind. The proposal is to clear `rows` from the payload when the job ends.
+- **Cancelling.** A bulk send can be cancelled through the queue, but there is no route for it.

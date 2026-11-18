@@ -33,6 +33,7 @@ export function recordOf(view: WorkflowResourceView): WorkflowRecord {
       ...(p.auth?.require?.includes('access_code') ? { codeRequired: true } : {}),
       ...(p.verifiedAt !== undefined ? { verified: true } : {}),
       ...(p.sub !== undefined ? { sub: p.sub } : {}),
+      ...(p.skippedBy !== undefined ? { skipped: true } : {}),
     })),
     sentSeq: view.sentSeq,
     sentHash: view.sentHash,

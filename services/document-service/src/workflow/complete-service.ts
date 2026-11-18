@@ -195,7 +195,22 @@ export async function completeMyPart(
 
   // Nothing to write: the participant completes at the head the checks read.
   const completedSeq = rulesSeq ?? head.seq;
-  const out = await recordCompletion(deps, { ref, actor, participant, completedSeq });
+  // FRW-037: the routes see the document as the completion leaves it, formula results included.
+  const routingDocument =
+    view.members.routing === undefined
+      ? undefined
+      : rulesSeq === null
+        ? { cdm: full.cdm, requires: full.requires, doc: full.doc }
+        : await deps.content
+            .rebuild(ref, head.incarnation, rulesSeq)
+            .then((after) => ({ cdm: after.cdm, requires: after.requires, doc: after.doc }));
+  const out = await recordCompletion(deps, {
+    ref,
+    actor,
+    participant,
+    completedSeq,
+    ...(routingDocument !== undefined ? { routingDocument } : {}),
+  });
   if (!out.ok) {
     if (out.problem.code === 'not_found') return fail({ code: 'not_found', what: 'workflow' });
     if (out.problem.code === 'forbidden')

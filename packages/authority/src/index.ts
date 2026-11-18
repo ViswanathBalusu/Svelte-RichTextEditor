@@ -426,6 +426,19 @@ export {
   type SentHead,
 } from './workflow/send.ts';
 export {
+  ROUTED_KIND,
+  applyRouting,
+  checkRoutingOfDocument,
+  rolesAddedByRouting,
+  routeParticipants,
+  routedParticipantId,
+  type RoutedParticipant,
+  type RoutedStep,
+  type RoutingApplied,
+  type RoutingCheck,
+  type RoutingFacts,
+} from './workflow/routing.ts';
+export {
   activeParticipantIds,
   awaitingCode,
   completeParticipant,

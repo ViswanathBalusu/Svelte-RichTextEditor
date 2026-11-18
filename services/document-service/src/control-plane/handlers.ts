@@ -44,6 +44,8 @@ import { emptyDocument, regionNodeOf, regionsOfJson } from './content.ts';
 import { exportRoutes } from './export-routes.ts';
 import { fieldRoutes } from './field-routes.ts';
 import { workflowRoutes } from './workflow-routes.ts';
+import { instantiateTemplate, templateRoutes } from './template-routes.ts';
+import { bulkSendRoutes } from './bulk-send.ts';
 import { historyListRoutes } from './history-list-route.ts';
 import { historyReadRoutes } from './history-reads.ts';
 import { historyRoutes } from './history-routes.ts';
@@ -233,9 +235,20 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
       throw new ApiError('validation_failed', 'at most one of content, template and import', {
         violations: sources.map((s) => ({ path: `/${s}`, rule: 'at most one source' })),
       });
-    if (body.template !== undefined || body.import !== undefined)
-      throw new ApiError('validation_failed', 'templates and imports are not offered yet (D62)', {
-        violations: [{ path: `/${sources[0]}`, rule: 'not supported by this server' }],
+    if (body.template !== undefined) {
+      // FRW-062: a fork of the template document at a pinned seq, with participants and values.
+      const made = await instantiateTemplate(k, ctx, body);
+      k.wrote(ctx, made.record.id, 0);
+      emit(ctx, 'dep.document.created', made.record.id, { seq: 0 });
+      return json(
+        201,
+        { ...documentResource(made.record), template: made.template },
+        { ETag: docEtag(made.record), Location: `${rest}/documents/${made.record.id}` },
+      );
+    }
+    if (body.import !== undefined)
+      throw new ApiError('validation_failed', 'imports are not offered yet (D62)', {
+        violations: [{ path: '/import', rule: 'not supported by this server' }],
       });
     let envelope: JsonEnvelope = emptyDocument();
     if (body.content !== undefined) {
@@ -823,6 +836,8 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...tombstoneRoutes(k),
     ...searchRoutes(k),
     ...workflowRoutes(k),
+    ...templateRoutes(k),
+    ...bulkSendRoutes(k),
     getFonts,
   };
 }

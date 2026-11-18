@@ -21,6 +21,7 @@ import {
   activeParticipantIds,
   completeParticipant,
   openWorkflow,
+  routeParticipants,
   type WorkflowEventName,
 } from '@docedit/authority';
 import type { DocRef } from '../storage/types.ts';
@@ -114,13 +115,38 @@ export async function recordCompletion(
     participant: string;
     /** The `seq` of the commit that completes the participant (FRW-047); default: none stored. */
     completedSeq?: number;
+    /**
+     * The document as it stands after the completion's `rules` commit, whole. With it the routes of
+     * the workflow are evaluated and applied in this transition (FRW-037): who is added or skipped
+     * is settled before the participant completes, so the next order is the one routing leaves.
+     */
+    routingDocument?: unknown;
   },
 ): Promise<ProgressOutcome> {
   const { ref, actor, participant } = req;
-  const current = await deps.workflows.read(ref.tenant, ref.doc);
-  if (current === null) return { ok: false, problem: { code: 'not_found' } };
-  const record = recordOf(current);
-  const done = completeParticipant(record, participant);
+  const stored = await deps.workflows.read(ref.tenant, ref.doc);
+  if (stored === null) return { ok: false, problem: { code: 'not_found' } };
+  let current = stored;
+  let routingChanged = false;
+  if (req.routingDocument !== undefined && stored.members.routing !== undefined) {
+    const routed = routeParticipants(stored.participants, {
+      routing: stored.members.routing,
+      document: req.routingDocument,
+      instant: new Date(deps.now()).toISOString(),
+      timeZone: stored.timeZone,
+      except: [participant],
+    });
+    // A routing that cannot be evaluated leaves the participants as they are: the completion
+    // itself does not depend on it, and the owner sees the workflow unchanged.
+    if (routed.ok && routed.changed) {
+      routingChanged = true;
+      current = { ...stored, participants: routed.participants as typeof stored.participants };
+    }
+  }
+  const activeBefore = new Set(activeParticipantIds(recordOf(stored).participants));
+  // Whether the participant may complete is decided on the workflow as it was read: a route that
+  // adds someone ahead of them does not take back a part they have already done.
+  const done = completeParticipant(recordOf(stored), participant);
   if (!done.ok) {
     // A participant who has completed already, or who is not active (an earlier order first, a
     // `cc`), is refused; another state of the workflow is `invalid_state`.
@@ -129,16 +155,23 @@ export async function recordCompletion(
       problem:
         done.refusal === 'forbidden'
           ? { code: 'forbidden' }
-          : { code: 'invalid_state', state: current.state },
+          : { code: 'invalid_state', state: stored.state },
     };
   }
-  const nowActive = new Set(activeParticipantIds(done.record.participants));
+  // The next order is the one that routing leaves: nobody active and nobody left to act ends it.
+  const marked = current.participants.map((p) =>
+    p.id === participant ? { ...p, state: 'completed' } : p,
+  );
+  const nowActive = new Set(
+    activeParticipantIds(recordOf({ ...current, participants: marked }).participants),
+  );
+  const completedWorkflow = nowActive.size === 0;
   const out = await recordTransition(deps, {
     ref,
     actor,
-    from: current,
+    from: stored,
     write: {
-      to: done.record.state,
+      to: completedWorkflow ? 'completed' : stored.state,
       participants: current.participants.map((p) => {
         if (p.id === participant)
           return {
@@ -147,18 +180,24 @@ export async function recordCompletion(
             ...(req.completedSeq !== undefined ? { completedSeq: req.completedSeq } : {}),
           };
         if (p.state === 'completed') return p;
+        if (p.skippedBy !== undefined) return { ...p, state: 'skipped' };
         return { ...p, state: nowActive.has(p.id) ? 'active' : 'pending' };
       }),
     },
+    // A routing change is recorded in the chain, though the lock is the same (FRW-037 criterion 4).
+    ...(routingChanged ? { anchor: true } : {}),
   });
   if (!out.ok) return fail(out);
+  // Everyone who is active now and was not before the completion: the next order, and whoever
+  // routing added or left at the front (the same set as `done.completion.activated` without routing).
+  const activated = [...nowActive].filter((id) => !activeBefore.has(id));
   const raised: RaisedEvent[] = [
     { name: 'participant_completed', participant },
-    ...done.completion.activated.map((id) => ({
+    ...activated.map((id) => ({
       name: 'participant_activated' as const,
       participant: id,
     })),
-    ...(done.completion.completedWorkflow ? [{ name: 'completed' as const }] : []),
+    ...(completedWorkflow ? [{ name: 'completed' as const }] : []),
   ];
   return { ok: true, changed: true, resource: out.resource, control: out.control, raised };
 }
