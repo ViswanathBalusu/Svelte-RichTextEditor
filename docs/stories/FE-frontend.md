@@ -2562,6 +2562,8 @@ As an author who uses a screen reader, I want to read and edit in the page view,
 
 **Notes:** What screen readers read and edit in the page view is decided by S9 (02 §10).
 
+**Notes (lane w1, 2026-11-18):** Blocked; nothing new could be ticked. Criterion 1 is a manual pass with at least one screen reader per platform (NVDA or JAWS, VoiceOver, Orca, TalkBack) on the plan of S9 report section 5; none has been run (SPK-022 Notes), and none can be run by an agent on this machine. The plan itself is part of ADR 0380, which is proposed and not accepted by the owner, and the page view it applies to is not mounted in the element (FE-101), so there is nothing to read yet. Criteria 2 and 3 name the overlay (FE-093) and the live regions (FE-107) inside the page view; both exist as parts (`packages/painter/src/overlay.universal.test.ts`, `packages/element/src/live-region.ts` and `announcer.ts`), but no page view hosts them, and 'announced' is a screen-reader observation, not a DOM check. Criterion 4 needs the page view to offer the web view as the alternative (FE-101 offers the views; `selectView` in `packages/element/src/view-select.ts` falls back to `web` while `pageViewAvailable` is false). Needs from others: FE-101, the owner's decision on ADR 0380, and a person with the four screen readers.
+
 ### FE-100 Reconcile page breaks with the typeset result
 
 | Type | Phase | Size | Priority | Persona |
