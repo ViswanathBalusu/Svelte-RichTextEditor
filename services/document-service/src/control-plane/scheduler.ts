@@ -8,9 +8,10 @@
  * next one, and the schedule lives in the database across restarts (criterion 3). A task that works
  * on tenants' data runs once per tenant and is given that tenant; the store it calls sets the
  * tenant's context (`inTenant`). A task that deletes data skips a tenant for which `onHold` says
- * yes. That is the mechanism of criterion 4 only: no hold store exists yet (HIS-031, phase 2), so
- * `src/server.ts` passes no `onHold` and nothing is skipped in the running service. 08 §11 places
- * a hold on a document, not a tenant, so the shape of this hook is open (ADR 0104).
+ * yes, and is given the tenant's held documents (`heldDocuments`, from the hold store of HIS-031)
+ * to keep. 08 §11 places a hold on a document, not a tenant, so `src/server.ts` passes
+ * `heldDocuments` and no `onHold`: a hold keeps one document's data and stops no other work
+ * (docs/adr/0377-w5-BE-052-holds-in-scheduled-tasks.md, proposed).
  * Every run and failure is counted in the metrics.
  *
  * Platform jobs belong to the nil tenant, `00000000-0000-0000-0000-000000000000`, which no tenant
@@ -31,9 +32,21 @@ export interface ScheduledTask {
   /** What a run does once for the deployment (for example creating audit partitions). */
   run?: (now: number) => Promise<void>;
   /** What a run does for each tenant, under that tenant's context. Returns a count, if any. */
-  forTenant?: (tenant: string, now: number) => Promise<unknown>;
-  /** Whether the task deletes data: it then skips tenants under a legal hold (criterion 4). */
+  forTenant?: (tenant: string, now: number, scope: TaskScope) => Promise<unknown>;
+  /**
+   * Whether the task deletes data. It then skips a tenant for which `onHold` says yes, and it is
+   * given the documents a legal hold covers, in `scope.held`, to leave alone (criterion 4).
+   */
   deletes?: boolean;
+}
+
+/** What the scheduler tells a task about the tenant it runs for. */
+export interface TaskScope {
+  /**
+   * The documents of the tenant under a legal hold (08 §11), read just before the run, for tasks
+   * that delete. Empty for other tasks and when the scheduler has no hold source.
+   */
+  held: ReadonlySet<string>;
 }
 
 export interface SchedulerOptions {
@@ -46,6 +59,12 @@ export interface SchedulerOptions {
    * store of HIS-031 (phase 2) exists; without it no tenant is skipped.
    */
   onHold?: (tenant: string) => Promise<boolean>;
+  /**
+   * The documents of a tenant under a legal hold (HIS-031). A hold is placed on a document (08 §11),
+   * so a task that deletes is handed this set and keeps those documents' data; the tenant's other
+   * documents are handled as before (ADR 0104 Q4, proposed answer in the ADR of BE-052).
+   */
+  heldDocuments?: (tenant: string) => Promise<ReadonlySet<string>>;
   metrics?: Metrics;
   now: () => number;
   onError?: (error: unknown, task: string) => void;
@@ -122,7 +141,11 @@ export class Scheduler {
         for (const tenant of await this.#o.tenants()) {
           if (task.deletes && (await this.#o.onHold?.(tenant))) continue;
           try {
-            const n = await task.forTenant(tenant, now);
+            const held =
+              task.deletes && this.#o.heldDocuments
+                ? await this.#o.heldDocuments(tenant)
+                : new Set<string>();
+            const n = await task.forTenant(tenant, now, { held });
             if (typeof n === 'number') count += n;
           } catch (e) {
             failures++;

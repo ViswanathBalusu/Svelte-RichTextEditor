@@ -166,6 +166,40 @@ describe('scheduled maintenance (BE-052)', () => {
     expect(env.errors).toEqual([]);
   });
 
+  it("hands a task that deletes the tenant's held documents, read in that run, and other tasks none (criterion 4)", async () => {
+    const env = setup(10 * EVERY);
+    const heldBy: Record<string, string[]> = { [T1]: ['d1', 'd2'], [T2]: [] };
+    const reads: string[] = [];
+    const got: Array<{ task: string; tenant: string; held: string[] }> = [];
+    const record = (task: string): ScheduledTask => ({
+      name: `test.${task}`,
+      everyMs: EVERY,
+      ...(task === 'purge' ? { deletes: true } : {}),
+      forTenant: async (tenant, _now, scope) => {
+        got.push({ task, tenant, held: [...scope.held] });
+      },
+    });
+    const s = new Scheduler({
+      queue: env.queue,
+      tasks: [record('purge'), record('report')],
+      tenants: async () => [T1, T2],
+      heldDocuments: async (t) => {
+        reads.push(t);
+        return new Set(heldBy[t]);
+      },
+      now: () => 10 * EVERY,
+    });
+    await s.ensure();
+    await env.drain([env.runner(s, 'a')]);
+    expect(got.filter((g) => g.task === 'purge')).toEqual([
+      { task: 'purge', tenant: T1, held: ['d1', 'd2'] },
+      { task: 'purge', tenant: T2, held: [] },
+    ]);
+    expect(got.filter((g) => g.task === 'report').every((g) => g.held.length === 0)).toBe(true);
+    // The hold source is read for the deleting task only: once per tenant.
+    expect(reads).toEqual([T1, T2]);
+  });
+
   it("purges each tenant's expired idempotency keys in that tenant's own run, and none of a tenant an injected onHold reports (criterion 4 mechanism only)", async () => {
     const env = setup(0);
     const store = new MemoryIdempotencyStore();
