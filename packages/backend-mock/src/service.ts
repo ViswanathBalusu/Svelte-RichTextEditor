@@ -128,6 +128,11 @@ export class MockService implements BackendHost {
     this.must(docId).setGrants(grants);
   }
 
+  /** The lease routes' stored change: replaces the leases in force (07 §10). */
+  setLeases(docId: string, leases: Parameters<MockDocument['setLeases']>[0]): void {
+    this.must(docId).setLeases(leases);
+  }
+
   /** `PUT /documents/{id}/content`: a snapshot commit with origin `import`. */
   replaceContent(docId: string, content: CdmEnvelope): void {
     const result = validate(content);
