@@ -287,13 +287,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // `setRegionPolicy` takes `{ region, policy }` (PRM-036); the engine refuses it without `manage`.
     // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
     // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
-    commandNames: ['insertField', 'setRegionPolicy', 'markRegion'],
+    commandNames: ['insertField', 'setRegionPolicy', 'markRegion', 'nextEditableRegion'],
     runNamed: (name, args) => {
       if (name === 'markRegion') {
         const title = (args as { title?: unknown } | undefined)?.title;
         if (typeof title !== 'string') return false;
         return core.run('markRegion', { title });
       }
+      if (name === 'nextEditableRegion') return core.run('nextEditableRegion');
       if (name === 'setRegionPolicy') {
         const a = args as { region?: unknown; policy?: unknown } | undefined;
         if (typeof a?.region !== 'string') return false;

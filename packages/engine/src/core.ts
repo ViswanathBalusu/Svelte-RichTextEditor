@@ -426,6 +426,7 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'hasHeader',
   'canInsertField',
   'canMarkRegion',
+  'hasNextEditableRegion',
 ];
 
 /**
@@ -1348,6 +1349,8 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('insertField', { field: { kind: 'text' } }).enabled;
       case 'canMarkRegion':
         return this.queryCommand('markRegion', { title: REGION_QUERY_TITLE }).enabled;
+      case 'hasNextEditableRegion':
+        return this.queryCommand('nextEditableRegion').enabled;
       default:
         return undefined;
     }

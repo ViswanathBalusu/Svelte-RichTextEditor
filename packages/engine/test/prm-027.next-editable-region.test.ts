@@ -164,3 +164,40 @@ describe('nextEditableRegionStart', () => {
     expect(nextEditableRegionStart(doc, textStart(c, IDS.inB), onlyB)).toBeNull();
   });
 });
+
+describe('the named query the toolbar asks (PRM-027 criteria 1 and 4)', () => {
+  it('is listed in queryNames and answers whether a later region may be edited', () => {
+    const c = core();
+    expect(c.queryNames).toContain('hasNextEditableRegion');
+    caretAt(c, textStart(c, IDS.before));
+    expect(c.query('hasNextEditableRegion')).toBe(true);
+    caretAt(c, textStart(c, IDS.inC));
+    expect(c.query('hasNextEditableRegion')).toBe(false);
+  });
+
+  it('follows an access change: the answer turns off and on without moving the caret', () => {
+    const c = core();
+    caretAt(c, textStart(c, IDS.inA));
+    expect(c.query('hasNextEditableRegion')).toBe(true);
+
+    const base = access();
+    // Region C may no longer be edited: nothing is left after the caret.
+    c.setAccess({
+      ...base,
+      rev: 2,
+      scopes: { ...base.scopes, [`region:${IDS.regionC}`]: [...READ] },
+    });
+    expect(c.query('hasNextEditableRegion')).toBe(false);
+    expect(c.run('nextEditableRegion')).toBe(false);
+
+    // Region B becomes editable: it is the next one.
+    c.setAccess({
+      ...base,
+      rev: 3,
+      scopes: { ...base.scopes, [`region:${IDS.regionB}`]: [...EDIT] },
+    });
+    expect(c.query('hasNextEditableRegion')).toBe(true);
+    expect(c.run('nextEditableRegion')).toBe(true);
+    expect(caret(c)).toBe(textStart(c, IDS.inB));
+  });
+});
