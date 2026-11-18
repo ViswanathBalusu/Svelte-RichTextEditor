@@ -5,10 +5,15 @@
  * attached `available` is true and the shell offers the assistant pane and its command. A request is
  * built by the core from what the reader may view (UX-047), sent to the port, and streamed back. The
  * bridge writes nothing to the document: an answer is data, and reaches the text only through the
- * author's approval as suggestions (UX-046).
+ * author's approval, which the core records as suggestions (UX-046).
  */
 import type { AssistantPort, CancelSignal } from '@docedit/protocol';
-import type { AssistantApi, AssistantStreamChunk, AssistantTaskName } from '@docedit/ui';
+import type {
+  AssistantApi,
+  AssistantInsertResult,
+  AssistantStreamChunk,
+  AssistantTaskName,
+} from '@docedit/ui';
 import type { ReadView } from './session.ts';
 
 /** The request the core builds: `task` and `prompt` as given, with the document and its context. */
@@ -39,7 +44,10 @@ function cancelSignal(signal: AbortSignal): CancelSignal {
   };
 }
 
-export function assistantBridge(build: BuildRequest): AssistantBridge {
+export function assistantBridge(
+  build: BuildRequest,
+  insert: (text: string) => AssistantInsertResult,
+): AssistantBridge {
   let port: AssistantPort | undefined;
   let available = false;
   const listeners = new Set<() => void>();
@@ -53,6 +61,7 @@ export function assistantBridge(build: BuildRequest): AssistantBridge {
   return {
     api: {
       available: view,
+      insert,
       async *request(task, prompt, signal): AsyncIterable<AssistantStreamChunk> {
         const current = port;
         if (!current) throw new Error('no assistant port is attached');

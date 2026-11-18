@@ -60,6 +60,27 @@ function openPane(page: Page, id: string): Promise<boolean> {
   );
 }
 
+/** The suggestions the element's core lists, as kind and text. */
+function suggestions(page: Page): Promise<Array<{ kind: string; text: string }>> {
+  return page.evaluate((sel) => {
+    const embed = (
+      window as unknown as {
+        __embed: {
+          internals(el: Element): {
+            editor: {
+              core: { suggestionItems(): Array<{ kind: string; text: string }> };
+            } | null;
+          };
+        };
+      }
+    ).__embed;
+    return embed
+      .internals(document.querySelector(sel)!)
+      .editor!.core.suggestionItems()
+      .map((s) => ({ kind: s.kind, text: s.text }));
+  }, EDITOR);
+}
+
 test.describe('the assistant pane in the element (UX-045)', () => {
   test('a backend without an assistant port has no pane', async ({ page }) => {
     await openEmbed(page);
@@ -90,5 +111,23 @@ test.describe('the assistant pane in the element (UX-045)', () => {
       (requests[0] as { context: { blocks: unknown[] } }).context.blocks.length,
     ).toBeGreaterThan(0);
     expect(await bodyText(page)).toBe(before);
+  });
+
+  test('approving the answer puts it in the real document as an insertion suggestion, never as plain text (UX-046 criterion 1)', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mount(page, true);
+    expect(await openPane(page, 'assistant')).toBe(true);
+    const pane = page.locator(PANE);
+    await pane.getByRole('textbox').fill('Draft a line');
+    await pane.locator('[data-ask="draft"]').click();
+    await expect(pane.locator('[data-assistant-state="shown"]')).toHaveText('Scripted answer');
+    const before = await suggestions(page);
+    expect(before).toEqual([]);
+    await pane.locator('[data-assistant-insert]').click();
+    await expect(pane.locator('[data-assistant-state="inserted"]')).toBeVisible();
+    const after = await suggestions(page);
+    expect(after).toEqual([{ kind: 'ins', text: 'Scripted answer' }]);
   });
 });

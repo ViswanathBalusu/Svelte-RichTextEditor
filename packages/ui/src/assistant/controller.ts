@@ -18,6 +18,7 @@ import {
   assistantAsk,
   assistantStep,
   IDLE,
+  insertionAllowed,
   type AssistantAskRefusal,
   type AssistantFailure,
   type AssistantKind,
@@ -40,6 +41,10 @@ export interface AssistantView {
   readonly state: AssistantState;
   /** Why the last request was refused before it started, or null. */
   readonly refused: AssistantAskRefusal | null;
+  /** The core's reason when the last insertion was refused (nothing was applied), or null. */
+  readonly insertRefused: string | null;
+  /** The last result was inserted as suggestions. */
+  readonly inserted: boolean;
 }
 
 export interface AssistantController {
@@ -52,8 +57,12 @@ export interface AssistantController {
   cancel(): void;
   /** Drops a shown or failed result. */
   dismiss(): void;
-  /** The text an approval would insert, or null; the document is not changed here. */
-  approve(): string | null;
+  /**
+   * The author approves the shown result: the API puts it in the document as suggestions. When it
+   * refuses, nothing is applied and the result stays shown with the reason. False when nothing is
+   * inserted: no result shown, no right to insert, or no insertion in the API.
+   */
+  approve(): boolean;
   /** Aborts any request and stops listening. */
   dispose(): void;
 }
@@ -69,6 +78,8 @@ export function createAssistantController(options: {
   let last: { kind: AssistantKind; prompt: string } | null = null;
   let current: AbortController | null = null;
   let allowInsert = false;
+  let insertRefused: string | null = null;
+  let inserted = false;
 
   const step = (event: Parameters<typeof assistantStep>[1]): string | null => {
     const out = assistantStep(state, event, allowInsert);
@@ -107,6 +118,8 @@ export function createAssistantController(options: {
       return false;
     }
     refused = null;
+    insertRefused = null;
+    inserted = false;
     allowInsert = caps.includes('edit') || caps.includes('suggest');
     last = { kind, prompt };
     const ctl = new AbortController();
@@ -117,7 +130,7 @@ export function createAssistantController(options: {
   }
 
   return {
-    view: () => ({ state, refused }),
+    view: () => ({ state, refused, insertRefused, inserted }),
     ask: start,
     retry: () => (state.phase === 'failed' && last ? start(last.kind, last.prompt) : false),
     cancel() {
@@ -128,9 +141,25 @@ export function createAssistantController(options: {
     },
     dismiss() {
       refused = null;
+      insertRefused = null;
+      inserted = false;
       step({ type: 'dismiss' });
     },
-    approve: () => step({ type: 'approve' }),
+    approve() {
+      if (state.phase !== 'shown' || !options.api.insert) return false;
+      allowInsert = insertionAllowed(options.caps());
+      if (!allowInsert) return false;
+      const result = options.api.insert(state.text);
+      if (!result.ok) {
+        insertRefused = result.reason;
+        options.onChange();
+        return false;
+      }
+      step({ type: 'approve' });
+      inserted = true;
+      options.onChange();
+      return true;
+    },
     dispose() {
       current?.abort();
       current = null;

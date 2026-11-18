@@ -369,7 +369,16 @@ export interface AssistantApi {
     prompt: string,
     signal: AbortSignal,
   ): AsyncIterable<AssistantStreamChunk>;
+  /**
+   * Puts an approved result at the selection as suggestions, never as a direct edit (UX-046). Absent
+   * where the core cannot; the pane then offers no insertion. Nothing is applied when it refuses.
+   */
+  insert?(text: string): AssistantInsertResult;
 }
+
+/** What `AssistantApi.insert` did; `reason` is the core's (UX-046 criterion 4). */
+export type AssistantInsertResult =
+  { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
 /** One proofing finding as the interface reads it (UX-041): text, kind and suggestions, no position. */
 export interface ProofingFindingView {

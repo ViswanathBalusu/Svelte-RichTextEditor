@@ -297,10 +297,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
   });
   // The backend's assistant port, as the pane reads it (UX-045). The request is built by the core from
   // the selection and the scopes the reader may view (UX-047).
-  const assistant = assistantBridge((task, prompt) => {
-    const { omitted: _omitted, ...request } = core.assistantRequest(task, prompt);
-    return request;
-  });
+  const assistant = assistantBridge(
+    (task, prompt) => {
+      const { omitted: _omitted, ...request } = core.assistantRequest(task, prompt);
+      return request;
+    },
+    // An approved result is put in as suggestions, never as a direct edit (UX-046).
+    (text) => core.insertAssistantResult(text),
+  );
   const stylePath = attachStyles(root, {
     nonce: config.styleNonce,
     forceFallback: config.forceStyleFallback,

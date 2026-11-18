@@ -126,6 +126,9 @@ function regionCaps(
   return out;
 }
 
+/** What an agent connection may hold in a scope, at most (ADR 0234 A3). */
+const AGENT_CAPS: Capability[] = ['view', 'comment', 'suggest'];
+
 function limit(set: Set<Capability>, allowed: Capability[]): void {
   for (const c of [...set]) if (!allowed.includes(c)) set.delete(c);
 }
@@ -165,20 +168,30 @@ export function computeAccess(
     for (const s of [body, structureScopes, newRegion]) limit(s, keep);
     for (const s of regionMap.values()) limit(s as Set<Capability>, keep);
   }
+  // An agent connection holds at most `suggest` in every scope (07 §4; ADR 0234 A3, UX-044): the
+  // intersection of what the user holds and `{view, comment, suggest}`. It never holds `edit`, `fill`,
+  // `structure` or `manage`, so P4 applies to everything it submits, an editor's agent included.
+  const agent = conn.agent !== undefined;
+  const capped = (caps: Caps): Caps => {
+    if (!agent) return caps;
+    const out = new Set<Capability>(caps);
+    limit(out, AGENT_CAPS);
+    return out;
+  };
   return {
     revision: perms.revision,
     at: now,
-    docRole,
-    body,
-    structureScopes,
-    regions: regionMap,
-    newRegion,
+    docRole: capped(docRole),
+    body: capped(body),
+    structureScopes: capped(structureScopes),
+    regions: agent ? new Map([...regionMap].map(([id, caps]) => [id, capped(caps)])) : regionMap,
+    newRegion: capped(newRegion),
     granted,
     leases: perms.leases.filter((l) => l.expiresAt > now),
     fill: {
       roles: conn.participantRoles,
       active: conn.participantActive,
-      allowed: fillAllowed,
+      allowed: fillAllowed && !agent,
       participant: conn.participant ?? null,
     },
   };

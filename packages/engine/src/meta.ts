@@ -14,4 +14,8 @@ export const SUGGESTED = 'docedit.suggested';
 
 /** The origin of a commit that accepts or rejects suggestions (FE-047; 08 §14; UX-036). */
 export const RESOLVE_ORIGIN = 'docedit.resolveOrigin';
-export type ResolveOrigin = 'suggestion.accept' | 'suggestion.reject';
+/**
+ * The origin hint of a commit that accepts or rejects suggestions, or that inserts an assistant's
+ * approved result as suggestions (UX-046). The hint is a client claim (04 §2).
+ */
+export type ResolveOrigin = 'suggestion.accept' | 'suggestion.reject' | 'assistant';

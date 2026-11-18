@@ -652,6 +652,14 @@ export type EquationConfirmation =
  * field first, P9), `not_found` (the document has no field with that key) or another code of the
  * protocol (04 §9).
  */
+/** What `insertAssistantResult` did (UX-046). Nothing is applied unless `ok`. */
+export type AssistantInsertOutcome =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'no-suggest' | 'read-only' | 'no-user' | 'not-recorded';
+    };
+
 export type FieldFillOutcome =
   | { readonly ok: true; readonly confirmed: boolean }
   | { readonly ok: false; readonly code: string; readonly message: string };
@@ -995,6 +1003,12 @@ export interface DocumentApi {
     prompt: string,
     attachments?: readonly HostAttachment[],
   ): AssistantRequest & { readonly omitted: number };
+  /**
+   * Puts an assistant's approved result at the selection as suggestions, whatever the edit mode and
+   * whatever the user's role (UX-046 criterion 1; 13 §6.2). It is never a direct edit. Refused, with
+   * nothing applied, where the user has no `suggest`, and the refusal is recorded as any refused change.
+   */
+  insertAssistantResult(text: string): AssistantInsertOutcome;
   /** Gives the core the proofing port (13 §6.1); returns the function that detaches it (UX-041). */
   attachProofing(
     port: ProofingPort,

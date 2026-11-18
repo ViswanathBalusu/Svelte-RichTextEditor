@@ -423,6 +423,10 @@ export const EN_GB = {
   'assistant.retry': 'Try again',
   'assistant.dismiss': 'Clear',
   'assistant.insert': 'Insert as suggestion',
+  'assistant.insert.refused':
+    'The result was not inserted: you cannot suggest changes here. Nothing was applied.',
+  'assistant.inserted':
+    'The result was inserted as suggestions. Review them in the review pane before they take effect.',
   'assistant.response': 'Response',
   'assistant.progress': 'The assistant is working.',
   'assistant.done':
