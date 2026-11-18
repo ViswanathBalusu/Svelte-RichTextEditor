@@ -212,6 +212,75 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
+      'refuses a paused participant’s commit as read_only, over a token bound by wfp (criterion 2, service half)',
+      async () => {
+        const content = document();
+        const doc = await h.createDocument({ content });
+        const owner = h.userToken({ [doc]: 'owner' }, { sub: `owner-032-${uuid7()}` });
+        const body = {
+          ...BODY(doc),
+          participants: [
+            { id: 'p1', roles: ['tenant'], kind: 'signer', order: 1, sub: 'sub-p1' },
+            { id: 'p2', roles: ['landlord'], kind: 'signer', order: 1, sub: 'sub-p2' },
+            { id: 'p3', roles: ['witness'], kind: 'signer', order: 2, sub: 'sub-p3' },
+          ],
+        };
+        const made = await h.call('PUT', `/v1/documents/${doc}/workflow`, {
+          token: owner,
+          body,
+          headers: { 'if-match': '"0"' },
+        });
+        expect(made.status, made.text).toBe(201);
+        const sent = await h.call('POST', `/v1/documents/${doc}/workflow/send`, { token: owner });
+        expect(sent.status, sent.text).toBe(200);
+        const ref = { tenant: h.tenant, doc };
+        const tree = schema.nodeFromJSON((content as { doc: unknown }).doc);
+        const set = (value: string) => ({
+          stepType: 'attr',
+          pos: posOf(tree, TENANT_FIELD),
+          attr: 'value',
+          value,
+        });
+        const client = await DepClient.connect(`${h.base.replace(/^http/, 'ws')}/dep`);
+        clients.push(client);
+        const token = h.userToken({ [doc]: 'filler' }, { sub: 'sub-p1', wfp: 'p1' });
+        expect((await client.hello(token)).t).toBe('welcome');
+        const opened = await client.open(1, doc);
+        expect(opened.t).toBe('ch.opened');
+        expect((opened.d as { access: { fill: unknown } }).access.fill).toMatchObject({
+          participant: 'p1',
+          active: true,
+        });
+        // Wait for the first view the open records, so that its transition does not interleave.
+        for (let i = 0; i < 100; i++) {
+          const row = await h.parts.workflows!.read(ref.tenant, doc);
+          if (row?.participants.find((p) => p.id === 'p1')?.firstViewedAt !== undefined) break;
+          await new Promise((r) => setTimeout(r, 30));
+        }
+        const before = await client.submit(1, {
+          base: (await h.parts.logs.head(ref)).seq,
+          steps: [set('Ada')],
+        });
+        expect(before.t, JSON.stringify(before)).toBe('sync.ack');
+
+        expect((await post(doc, owner, 'correct')).status).toBe(200);
+        expect(await marks(ref)).toMatchObject({ p1: 'paused', p2: 'paused', p3: 'paused' });
+        const changed = await client.take(
+          (m) => m.t === 'perm.changed' && m.ch === 1,
+          5000,
+          'perm.changed for the paused participant',
+        );
+        expect(changed.t).toBe('perm.changed');
+        const head = (await h.parts.logs.head(ref)).seq;
+        const refused = await client.submit(1, { base: head, steps: [set('Bea')] });
+        expect(refused.t).toBe('sync.reject');
+        expect(refused.d).toMatchObject({ code: 'read_only' });
+        // Nothing of the refused value was stored.
+        expect((await h.parts.logs.head(ref)).seq).toBe(head);
+      },
+    );
+
+    it.skipIf(skip)(
       'resumes with nothing changed: nobody is reset and the document is locked again (criterion 5)',
       async () => {
         const { doc, owner, ref } = await running();

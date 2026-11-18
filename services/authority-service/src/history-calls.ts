@@ -73,7 +73,8 @@ export interface RestoreStepsRequest extends HistoryView {
 }
 
 export type RestoreStepsAnswer =
-  | (({ kind: 'steps'; region: string; steps: StepJson[] } | RestoreSnapshot) & RestoreCommon)
+  | (({ kind: 'steps'; region: string; steps: StepJson[]; parts: StepJson[][] } | RestoreSnapshot) &
+      RestoreCommon)
   | HistoryRefusal;
 
 interface RestoreSnapshot {
@@ -306,7 +307,14 @@ export function restoreSteps(
     ...(plan.dryRun ? { dryRun: plan.dryRun } : {}),
   };
   if (plan.kind === 'steps')
-    return { ok: true, kind: 'steps', region: plan.region, steps: plan.stepsJson, ...common };
+    return {
+      ok: true,
+      kind: 'steps',
+      region: plan.region,
+      steps: plan.stepsJson,
+      parts: plan.parts,
+      ...common,
+    };
   const content = canonicalEnvelope({
     cdm: state.cdm,
     requires: state.requires.get(state.head) ?? [],

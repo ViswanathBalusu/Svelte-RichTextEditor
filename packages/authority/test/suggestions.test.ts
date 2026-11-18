@@ -10,7 +10,6 @@ import {
   AddNodeMarkStep,
   AttrStep,
   RemoveMarkStep,
-  RemoveNodeMarkStep,
   ReplaceStep,
   type Step,
   Transform,
@@ -29,6 +28,7 @@ import { regionInfos } from '../src/permissions/visibility.ts';
 import { applySteps } from '../src/rebase.ts';
 import { Room } from '../src/room/room.ts';
 import { stepsToJson } from '../src/steps.ts';
+import { addSuggestion, removeSuggestion } from './block-suggest.ts';
 import { REQUIRES, USERS, basePermissions, posInside, posOf, schema } from './fixtures.ts';
 import { oracleViolations } from './harness/oracle.ts';
 import { commitId, messages, rejection, roomWith, verdictBetween } from './permission-fixtures.ts';
@@ -136,6 +136,53 @@ describe('the suggestion baseline (PRM-013)', () => {
     );
   });
 
+  it('takes overlapping fmt marks of two users back to the same baseline in either order (criterion 4)', () => {
+    const plain = para(text('abc'));
+    const bold = schema.marks['bold']!.create();
+    const italic = schema.marks['italic']!.create();
+    // The engine gives the second user's fmt the first user's before (owner decision 79; ADR 0378),
+    // so every fmt of the run records the formatting before the first suggestion.
+    const swapped = [
+      ['sAlice0000000001', 'sBob0000000001'],
+      ['sBob0000000001', 'sAlice0000000001'],
+    ] as const;
+    for (const [first, second] of swapped) {
+      const both = para(
+        text('a'),
+        text('bc', [
+          bold,
+          italic,
+          fmt(first, first.startsWith('sAlice') ? 'alice' : 'bob', { marks: [], attrs: {} }),
+          fmt(second, second.startsWith('sAlice') ? 'alice' : 'bob', { marks: [], attrs: {} }),
+        ]),
+      );
+      expect(baselineText([both])).toBe(baselineText([plain]));
+    }
+    // A suggester adds a second user's fmt over a run that already carries one: the commit keeps the
+    // baseline, so P4 accepts it.
+    const doc = tableDoc();
+    const start = posInside(doc, 'pIntro0000000001');
+    const seeded = applySteps(doc, [
+      new AddMarkStep(start, start + 4, bold),
+      new AddMarkStep(start, start + 4, fmt('sCarol0000000001', 'carol', { marks: [], attrs: {} })),
+    ]);
+    if (!seeded.ok) throw new Error(seeded.reason);
+    const verdict = check(
+      USERS.dave,
+      seeded.value.doc,
+      [
+        new AddMarkStep(start, start + 4, italic),
+        new AddMarkStep(
+          start,
+          start + 4,
+          fmt('sDave00000000001', 'dave', { marks: [], attrs: {} }),
+        ),
+      ],
+      { owners: new Map([['sCarol0000000001', 'carol']]) },
+    );
+    expect(verdict.ok).toBe(true);
+  });
+
   it('includes attributes and bookmarks', () => {
     const a = para(text('abc'));
     const aligned = schema.nodes['paragraph']!.create({ id: 'pIntro0000000001', align: 'center' }, [
@@ -169,10 +216,10 @@ describe('the suggestion baseline (PRM-013)', () => {
     const table = posOf(doc, 'tTable0000000001');
     const row = posOf(doc, 'trRow00000000002');
     // A block marked del is kept; a block marked fmt is restored to its before.
-    expect(baselineText(apply([new AddNodeMarkStep(table, del('sDave00000000001', 'dave'))]))).toBe(
+    expect(baselineText(apply([addSuggestion(doc, table, del('sDave00000000001', 'dave'))]))).toBe(
       base,
     );
-    expect(baselineText(apply([new AddNodeMarkStep(row, del('sDave00000000001', 'dave'))]))).toBe(
+    expect(baselineText(apply([addSuggestion(doc, row, del('sDave00000000001', 'dave'))]))).toBe(
       base,
     );
     const intro = posOf(doc, 'pIntro0000000001');
@@ -180,7 +227,7 @@ describe('the suggestion baseline (PRM-013)', () => {
       baselineText(
         apply([
           new AttrStep(intro, 'style', 'Heading1'),
-          new AddNodeMarkStep(intro, fmt('sDave00000000001', 'dave', { attrs: { style: null } })),
+          addSuggestion(doc, intro, fmt('sDave00000000001', 'dave', { attrs: { style: null } })),
         ]),
       ),
     ).toBe(base);
@@ -188,8 +235,10 @@ describe('the suggestion baseline (PRM-013)', () => {
     // paragraph.
     const fresh = schema.nodeFromJSON({
       type: 'table_row',
-      attrs: { id: 'trRow00000000003' },
-      marks: [{ type: 'ins', attrs: { id: 'sDave00000000001', user: 'dave' } }],
+      attrs: {
+        id: 'trRow00000000003',
+        suggest: [{ type: 'ins', attrs: { id: 'sDave00000000001', user: 'dave' } }],
+      },
       content: [
         {
           type: 'table_cell',
@@ -214,9 +263,11 @@ describe('the suggestion baseline (PRM-013)', () => {
       baselineText(apply([new ReplaceStep(end, end, new Slice(Fragment.from(fresh), 0, 0))])),
     ).toBe(base);
     const newPara = schema.nodes['paragraph']!.create(
-      { id: 'pSuggested000001' },
+      {
+        id: 'pSuggested000001',
+        suggest: [{ type: 'ins', attrs: { id: 'sDave00000000001', user: 'dave' } }],
+      },
       [text('New')],
-      [ins('sDave00000000001', 'dave')],
     );
     const at = posOf(doc, 'pEnd00000000001Z');
     expect(
@@ -267,8 +318,9 @@ describe('the suggestion baseline (PRM-013)', () => {
       else if (c.kind === 2) {
         tr.addMark(from, to, schema.marks['bold']!.create());
         tr.addMark(from, to, fmt(id, c.user, { marks: [] }));
-      } else if (c.kind === 3) tr.addNodeMark(posOf(base, 'pIntro0000000001'), del(id, c.user));
-      else tr.addNodeMark(posOf(base, 'trRow00000000001'), del(id, c.user));
+      } else if (c.kind === 3)
+        tr.step(addSuggestion(tr.doc, posOf(base, 'pIntro0000000001'), del(id, c.user)));
+      else tr.step(addSuggestion(tr.doc, posOf(base, 'trRow00000000001'), del(id, c.user)));
       if (c.change) tr.insert(intro, text('Q'));
       const hash = await sha256Hex(baselineText(scope(tr.doc)));
       if (c.change) {
@@ -429,7 +481,7 @@ describe('P4: suggesters propose without altering the baseline (PRM-014)', () =>
     const from = posOf(doc, 'rLegal000000000B') + 1;
     const marks = (user: string, id: string): Step[] => {
       const steps: Step[] = [];
-      legal.forEach((p, o) => steps.push(new AddNodeMarkStep(from + o, del(id, user))));
+      legal.forEach((_p, o) => steps.push(addSuggestion(doc, from + o, del(id, user))));
       return steps;
     };
     // Carol is an editor without a grant: the restricted region gives her view and comment only.
@@ -694,12 +746,12 @@ describe('P4 for block suggestions (PRM-062)', () => {
           const who = e.named ? e.user : 'mallory';
           const sid = `s${e.user.padEnd(14, '0')}${e.kind}`;
           const steps: Step[] = [];
-          if (e.kind === 0) steps.push(new AddNodeMarkStep(pos, del(sid, who)));
-          else if (e.kind === 1) steps.push(new AddNodeMarkStep(pos, ins(sid, who)));
+          if (e.kind === 0) steps.push(addSuggestion(doc, pos, del(sid, who)));
+          else if (e.kind === 1) steps.push(addSuggestion(doc, pos, ins(sid, who)));
           else if (e.kind === 2) {
             steps.push(new AttrStep(pos, 'style', 'Heading1'));
-            steps.push(new AddNodeMarkStep(pos, fmt(sid, who, { attrs: { style: null } })));
-          } else if (e.kind === 3) steps.push(new RemoveNodeMarkStep(pos, del(sid, who)));
+            steps.push(addSuggestion(doc, pos, fmt(sid, who, { attrs: { style: null } })));
+          } else if (e.kind === 3) steps.push(removeSuggestion(doc, pos, sid));
           else steps.push(new AddNodeMarkStep(pos, schema.marks['bold']!.create()));
           const user = Object.values(USERS).find((u) => u.sub === e.user)!;
           const r = applySteps(doc, steps);

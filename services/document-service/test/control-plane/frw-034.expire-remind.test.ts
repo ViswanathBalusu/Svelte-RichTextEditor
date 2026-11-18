@@ -280,7 +280,17 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         });
         expect(filled.t, JSON.stringify(filled)).toBe('sync.ack');
 
-        const before = await controls(ref);
+        // The first view moved the workflow to `in_progress` and wrote its own control commit
+        // (FRW-030 criterion 1); wait for it, so that what follows counts the expiry's alone.
+        for (let i = 0; i < 100 && (await state(ref)).state !== 'in_progress'; i++)
+          await new Promise((r) => setTimeout(r, 30));
+        let before = await controls(ref);
+        for (let stable = 0; stable < 4;) {
+          await new Promise((r) => setTimeout(r, 50));
+          const now = await controls(ref);
+          stable = now === before ? stable + 1 : 0;
+          before = now;
+        }
         h.advance(DAY - MARGIN);
         expect((await sweep()).expired).not.toContain(doc);
         // The participant who filled opened the document, which moved the workflow on (FRW-040).

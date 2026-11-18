@@ -25,7 +25,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'field wf.changed.rev': WORKFLOW,
   'field wf.changed.participant': WORKFLOW,
   'operation PUT /documents/{id}/regions/{rid}/lease': LEASES,
-  'operation DELETE /documents/{id}/regions/{rid}/lease': LEASES,
   'operation GET /documents/{id}/connect':
     'the connect hint needs a server that runs more than one node and a node address; BE-061 tests it in the document service, a kit scenario follows with the node-routing profile (BE-061; PRO-126)',
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,

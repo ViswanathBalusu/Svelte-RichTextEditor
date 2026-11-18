@@ -14,7 +14,9 @@ import {
   type LogCommit,
   type SnapshotReason,
   type StepJson,
+  type ThreadAnchor,
 } from '@docedit/authority';
+import type { AttributionJson } from '@docedit/history';
 import { canonicalize } from '@docedit/model';
 
 /**
@@ -131,6 +133,29 @@ export function encodeContent(canonicalText: string): Buffer {
 
 export function decodeContent<T = unknown>(stored: Uint8Array): T {
   return JSON.parse(zstdDecompressSync(stored).toString('utf8')) as T;
+}
+
+/**
+ * What the side object of a checkpoint holds (06 §2.2 step 3, §8; SYN-032 criterion 6): the comment
+ * ranges at the checkpoint's `seq`, each anchor at that `seq`, and the attribution map (HIS-014,
+ * ADR 0377). `v` is 1 for an object that carries the map.
+ */
+export interface CheckpointSide {
+  v?: 1;
+  seq: number;
+  threads: ThreadAnchor[];
+  attribution?: AttributionJson;
+}
+
+/** The side object as stored: canonical JSON (RFC 8785) compressed with Zstandard, like content. */
+export function encodeSide(side: CheckpointSide): Buffer {
+  return encodeContent(canonicalize(side));
+}
+
+export function decodeSide(stored: Uint8Array): CheckpointSide {
+  const side = decodeContent<Partial<CheckpointSide>>(stored);
+  // An object written with only the attribution map has no ranges and no `seq`.
+  return { ...side, seq: side.seq ?? -1, threads: side.threads ?? [] };
 }
 
 /** hash = SHA-256(previous hash ‖ canonical metadata ‖ SHA-256(canonical payload)) (08 §2). */

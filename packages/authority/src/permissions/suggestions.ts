@@ -5,7 +5,8 @@
  *
  * The baseline is the content with every suggestion rejected: `ins` content removed, `del` marks
  * ignored, `fmt` changes taken back to their recorded `before`. It includes attributes, bookmarks
- * (anchor atoms) and block suggestions (node marks on paragraphs, table rows and tables, 03 §5).
+ * (anchor atoms) and block suggestions (the suggest attribute of paragraphs, table rows and tables,
+ * 03 §5; owner decision 92).
  * Field values are not part of it: a value is its own scope (`field:<id>`, 07 §5.1).
  *
  * The check (ADR 0050 item 2): the scope with the submitter's own suggestions rejected must be the
@@ -48,6 +49,35 @@ export function isSuggestionMark(m: Mark): boolean {
   return SUGGESTION.has(m.type.name);
 }
 
+/** One suggestion: a suggestion mark, or an entry of the `suggest` attribute of a block. */
+export interface SuggestionEntry {
+  readonly type: string;
+  readonly attrs: Readonly<Record<string, unknown>>;
+}
+
+/** The entries of a block's `suggest` attribute that have the shape of a suggestion. */
+export function blockSuggestions(n: Node): SuggestionEntry[] {
+  const s: unknown = n.attrs['suggest'];
+  if (!Array.isArray(s)) return [];
+  return s.filter(
+    (e): e is SuggestionEntry =>
+      !!e &&
+      typeof e === 'object' &&
+      typeof (e as SuggestionEntry).type === 'string' &&
+      SUGGESTION.has((e as SuggestionEntry).type) &&
+      !!(e as SuggestionEntry).attrs &&
+      typeof (e as SuggestionEntry).attrs === 'object',
+  );
+}
+
+/** Every suggestion a node carries itself: its suggestion marks and its block suggestions. */
+export function suggestionsOn(n: Node): SuggestionEntry[] {
+  const out: SuggestionEntry[] = [];
+  for (const m of n.marks) if (isSuggestionMark(m)) out.push({ type: m.type.name, attrs: m.attrs });
+  out.push(...blockSuggestions(n));
+  return out;
+}
+
 /**
  * The prefixes of the labels an import gives the authors of tracked changes (07 §15; spike S11:
  * `word:<author>`). EXP registers a prefix here for every format it imports.
@@ -63,7 +93,7 @@ export function isImportLabel(user: unknown): boolean {
 }
 
 /** Which suggestion marks a rejection takes back. */
-export type Rejects = (mark: Mark) => boolean;
+export type Rejects = (suggestion: SuggestionEntry) => boolean;
 
 /** Counts the nodes a comparison converted, for the instrumented tests (PRM-013, PRM-016). */
 export interface Counter {
@@ -87,15 +117,10 @@ function headOf(n: Node, rejects: Rejects): Head {
   let removed = false;
   let formatting: unknown[] | null = null;
   let attrs: Record<string, unknown> | undefined = n.isText ? undefined : { ...n.attrs };
-  const kept: Mark[] = [];
-  for (const m of n.marks) {
-    if (!SUGGESTION.has(m.type.name) || !rejects(m)) {
-      kept.push(m);
-      continue;
-    }
-    if (m.type.name === 'ins') removed = true;
-    else if (m.type.name === 'fmt') {
-      const before = m.attrs['before'] as {
+  const takeBack = (type: string, entryAttrs: Readonly<Record<string, unknown>>) => {
+    if (type === 'ins') removed = true;
+    else if (type === 'fmt') {
+      const before = entryAttrs['before'] as {
         marks?: unknown;
         attrs?: Record<string, unknown>;
       } | null;
@@ -103,11 +128,37 @@ function headOf(n: Node, rejects: Rejects): Head {
       if (before && before.attrs && typeof before.attrs === 'object' && attrs)
         attrs = { ...attrs, ...before.attrs };
     }
-    // `del`: rejecting a suggested deletion keeps the content and drops the mark.
+    // `del`: rejecting a suggested deletion keeps the content and drops the suggestion.
+  };
+  const kept: Mark[] = [];
+  for (const m of n.marks) {
+    if (!SUGGESTION.has(m.type.name) || !rejects({ type: m.type.name, attrs: m.attrs })) {
+      kept.push(m);
+      continue;
+    }
+    takeBack(m.type.name, m.attrs);
   }
-  const marks: unknown[] = formatting
-    ? [...formatting, ...kept.filter((m) => SUGGESTION.has(m.type.name)).map((m) => m.toJSON())]
-    : kept.map((m) => m.toJSON());
+  // Block suggestions: the entries of `suggest` that stay are the ones the rejection does not take.
+  const block = blockSuggestions(n);
+  if (block.length && attrs) {
+    const stay: SuggestionEntry[] = [];
+    for (const e of block) {
+      if (rejects(e)) takeBack(e.type, e.attrs);
+      else stay.push(e);
+    }
+    attrs['suggest'] = stay.length ? stay : null;
+  }
+  // A `fmt` that is not rejected stands for a change of formatting that this rejection leaves in
+  // place, and every `fmt` of a run records the baseline, not the run's marks before its own change
+  // (owner decision 79; ADR 0378). Taking one user's `fmt` back then cannot restore the run's
+  // formatting before that user's change, so the run's formatting is left out of a comparison that
+  // keeps another user's `fmt`. The baseline (every `fmt` rejected) still compares it.
+  const keptFmt = kept.some((m) => m.type.name === 'fmt');
+  const marks: unknown[] = keptFmt
+    ? kept.filter((m) => SUGGESTION.has(m.type.name)).map((m) => m.toJSON())
+    : formatting
+      ? [...formatting, ...kept.filter((m) => SUGGESTION.has(m.type.name)).map((m) => m.toJSON())]
+      : kept.map((m) => m.toJSON());
   if (attrs && n.type.name === 'form_field')
     for (const a of FILL_ATTRIBUTES) Reflect.deleteProperty(attrs, a);
   const json: JsonNode = { type: n.type.name };
@@ -116,7 +167,6 @@ function headOf(n: Node, rejects: Rejects): Head {
   if (marks.length) json.marks = marks as NonNullable<JsonNode['marks']>;
   return { removed, json };
 }
-
 /** The whole subtree with the selected suggestions taken back, or null when it is removed. */
 function rejectedNode(n: Node, rejects: Rejects, count: Counter): JsonNode | null {
   count.visited++;

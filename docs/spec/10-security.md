@@ -76,7 +76,7 @@ An open shadow root is not a security boundary. The host page can read it. That 
 | Editing under permissions that were just revoked | The log write is conditional on the grants revision (04, G7) |
 | Corrupting the document | Schema, invariant and attribute-grammar checks on every commit, for every step type; step types limited to an allow-list |
 | Stalling or crashing a process that hosts many rooms | Admission control before any work; CPU budgets per connection; heavy work in worker threads; structural limits; fuzzing of the authority |
-| Forging history | Server-side attribution; a hash chain that includes permission and workflow changes; chain heads published to hosts and anchored in write-once storage |
+| Forging history | Server-side attribution; a hash chain that includes permission and workflow changes; chain heads published to hosts, anchored in write-once storage and, as a salted periodic root, in a public transparency log |
 | Changing an approved region | Approvals are bound to a sequence number and a content hash, and no commit of any origin may change an approved region (07, section 11) |
 | Two writers | Epoch-checked writes and the log's primary key; self-fencing on the node lease (06, section 2.1) |
 | Reading deleted text through old versions | One visibility gate on every sequence number a caller can supply (07, section 8) |
@@ -96,7 +96,7 @@ The rules are in 09, sections 4, 6.3 and 9.3. In short: only machine-generated L
 | Remote content in DOCX | External relationships are never followed |
 | Macros and embedded objects | Macro-enabled files are refused. Embedded objects are kept as opaque preserved content: never parsed, run or rendered, and written back unchanged on DOCX export (ADR 0017; 09, section 12) |
 | Decoder exploits | Decoding happens in a sandboxed worker without network or credentials; output is re-encoded |
-| Content-type confusion | The declared type must match the detected type; assets are served with fixed content types and `nosniff` from a separate origin |
+| Content-type confusion | The declared type must match the detected type; assets and export results are served with fixed content types and `nosniff` from a separate origin |
 | Impersonation through imported tracked changes | Imported authors become labels, never user identities |
 
 ### 3.6 Signing and evidence
@@ -111,7 +111,7 @@ The rules are in 09, sections 4, 6.3 and 9.3. In short: only machine-generated L
 
 ### 3.7 Data and tenancy
 
-- Row-level security and a tenant identifier on every table, object path and cache key; per-tenant encryption keys; optional dedicated deployments.
+- Row-level security and a tenant identifier on every table that holds tenant data (not `node_leases`: 06, section 4.1), and on every object path and cache key; per-tenant encryption keys; optional dedicated deployments.
 - Signed URLs are short-lived, scoped to one object, and issued only after a permission check.
 - Logs and metrics never contain document content or tokens. Support works from structural dumps without text (06, section 11).
 - Secrets are held in a secret manager and rotated. Webhook secrets and service credentials have overlap periods for rotation.
@@ -119,7 +119,7 @@ The rules are in 09, sections 4, 6.3 and 9.3. In short: only machine-generated L
 
 ### 3.8 Supply chain
 
-Lock files, dependency review, a software bill of materials per release, signed container images, pinned base images, and a pinned TeX Live with a licence manifest. The editor bundle loads no code at run time from third-party origins. Sandboxed third-party extensions (phase 4; ADR 0393) are an explicit exception with their own review (13, section 7.2).
+Lock files, dependency review, a software bill of materials per release, signed container images, pinned base images, and a pinned TeX Live with a licence manifest. The editor bundle loads no code at run time from third-party origins. Sandboxed third-party extensions (phase 4; ADR 0393) are an explicit exception with their own review (13, section 7.2). The terms of the exception, and the first review of the sandbox, are in `docs/review/2026-11-18-ux-060-sandbox-review.md`: the extension's code runs only in a sandboxed frame with an opaque origin and no network, the host chooses what is installed, and the code of an extension is not part of the release's bill of materials.
 
 ## 4. Privacy
 
@@ -143,4 +143,4 @@ Lock files, dependency review, a software bill of materials per release, signed 
 - A policy for browser extensions that read or modify editor content (grammar checkers, translators). They run with the user's privileges and cannot be prevented, but their edits arrive as ordinary input and pass the same checks.
 - Abuse handling for hosted mode (malware distribution through assets, phishing documents) needs an operational policy.
 - Key management details for per-document encryption keys and for tenant-owned sealing keys.
-- Whether chain heads should also be anchored in a public transparency log.
+- Anchoring chain heads in a public transparency log: decided yes (owner decision 143). A salted periodic root per tenant is published, never a per-document hash (ADR 0409; stories SEC-065 to SEC-068). The choice of log is proposed in that ADR.

@@ -13,7 +13,12 @@ import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { podmanSandbox, type AssetUrlKeys, type Sandbox } from '@docedit/asset-worker';
+import {
+  podmanSandbox,
+  signExportUrl,
+  type AssetUrlKeys,
+  type Sandbox,
+} from '@docedit/asset-worker';
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
 import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
@@ -79,6 +84,13 @@ import {
   type RetentionStore,
 } from './control-plane/retention.ts';
 import { PgRetentionStore } from './control-plane/retention-pg.ts';
+import {
+  HistoryVisibilityService,
+  MemoryVisibilityStore,
+  withEffectiveHistoryVisibility,
+  type VisibilityStore,
+} from './control-plane/history-visibility.ts';
+import { PgVisibilityStore } from './control-plane/history-visibility-pg.ts';
 import { QuotaAdminService, type QuotaAdminStore } from './control-plane/quota-admin.ts';
 import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
@@ -252,6 +264,8 @@ export interface ServiceParts {
   webhookStore?: SubscriptionStore;
   /** The retention policies of `/retention` (UX-080). Absent: the routes are not offered. */
   retention?: RetentionService;
+  /** The history visibility settings of /history-visibility (HIS-025). Absent: not offered. */
+  historyVisibility?: HistoryVisibilityService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080). Absent: the routes are not offered. */
   holds?: HoldService;
   /**
@@ -475,6 +489,30 @@ function retentionOver(
 }
 
 /**
+ * The history visibility settings of `/history-visibility` (HIS-025) over a settings store, the
+ * document store and the audit trail. The document store given to the gate and the rooms is wrapped
+ * by withEffectiveHistoryVisibility over the same settings store, so that a change applies to the
+ * next request.
+ */
+function visibilityOver(
+  store: VisibilityStore,
+  documents: DocumentStore,
+  audit: AuditStore,
+  now: () => number,
+): HistoryVisibilityService {
+  return new HistoryVisibilityService({
+    store,
+    audit,
+    documentExists: async (tenant, doc) => {
+      if (!isUuid(doc)) return false;
+      const record = await documents.get({ tenant, doc });
+      return record !== null && record.deletedAt === null;
+    },
+    now,
+  });
+}
+
+/**
  * The legal holds of `/holds` (UX-080 criteria 2 and 3) over a hold store, the parts' document
  * store and audit trail. The same rule as `retentionOver` applies to the stores it keeps.
  */
@@ -535,12 +573,13 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
   const grants = new PgGrantStore(pool);
   const logs = new PgLogStore(pool, { permissions: (ref) => grants.current(ref) });
   const documents = new PgDocumentStore(pool);
+  const visibility = new PgVisibilityStore(pool);
   const audit = new PgAuditStore(pool);
   return {
     logs,
     ownership: logs,
     grants,
-    documents,
+    documents: withEffectiveHistoryVisibility(documents, visibility),
     objects: new MemoryObjectStore(),
     registry: new PgTenantRegistry(pool),
     users: new PgUserDirectory(pool),
@@ -551,6 +590,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     checkpointIndex: new PgCheckpointIndex(pool),
     audit,
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
+    historyVisibility: visibilityOver(visibility, documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
     workflows: new PgWorkflowResourceStore(pool, { now }),
     templates: new PgTemplateStore(pool),
@@ -585,11 +625,12 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
 export function memoryParts(now: () => number = Date.now): ServiceParts {
   const store = new MemoryStore();
   const audit = new MemoryAudit();
+  const visibility = new MemoryVisibilityStore();
   return {
     logs: store,
     ownership: store,
     grants: store,
-    documents: store,
+    documents: withEffectiveHistoryVisibility(store, visibility),
     objects: new MemoryObjectStore(),
     registry: new MemoryTenantRegistry(now),
     users: new MemoryUserDirectory(),
@@ -600,6 +641,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     checkpointIndex: new MemoryCheckpointIndex(now),
     audit,
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
+    historyVisibility: visibilityOver(visibility, store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
     workflows: new MemoryWorkflowResourceStore(),
     templates: new MemoryTemplateStore(),
@@ -702,7 +744,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
     const replicaGrants = new PgGrantStore(replicaDb);
     base.replica = {
       logs: new PgLogStore(replicaDb, { permissions: (ref) => replicaGrants.current(ref) }),
-      documents: new PgDocumentStore(replicaDb),
+      documents: withEffectiveHistoryVisibility(
+        new PgDocumentStore(replicaDb),
+        new PgVisibilityStore(replicaDb),
+      ),
       grants: replicaGrants,
       versions: new PgVersionStore(replicaDb),
     };
@@ -1112,12 +1157,13 @@ export async function startService(opts: StartOptions): Promise<Service> {
       runnerFor({ [PREVIEW_KIND]: exportHandlers[PREVIEW_KIND]! }, { hooks, claim });
   }
 
+  const exportUrlKeys = assetUrlKeys(config.assetUrlKey);
   const uploads = assetUploads({
     objects: parts.objects,
     assets,
     s3: config.s3,
     origin: config.assetOrigin,
-    urlKeys: assetUrlKeys(config.assetUrlKey),
+    urlKeys: exportUrlKeys,
     uploadSeconds: config.uploadSeconds,
     urlLifetimeMs: config.signedUrlSeconds * 1000,
   });
@@ -1436,6 +1482,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
     },
     assetRegistry: parts.assetRegistry,
     uploads,
+    ...(config.assetOrigin && exportUrlKeys
+      ? {
+          exportUrl: (tenant: string, job: string, name: string, expiresAt: number) =>
+            signExportUrl({
+              origin: config.assetOrigin!,
+              tenant,
+              job,
+              name,
+              expiresAt,
+              keys: exportUrlKeys,
+            }),
+        }
+      : {}),
     uploadSeconds: config.uploadSeconds,
     fonts: () => fonts,
     exportPolicy: {
@@ -1452,6 +1511,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.webhooks ? { webhooks: parts.webhooks } : {}),
     ...(webhooks ? { webhookDispatcher: webhooks.dispatcher } : {}),
     ...(parts.retention ? { retention: parts.retention } : {}),
+    ...(parts.historyVisibility ? { historyVisibility: parts.historyVisibility } : {}),
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),

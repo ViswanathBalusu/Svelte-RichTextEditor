@@ -5,10 +5,8 @@
  * The bundle is then searched: the raw probe must appear in no file, and the probe must appear in
  * the emitted form of each place. Nothing here compiles; the check is on the text of the bundle.
  *
- * Found in this round: a link title is written by `pdfHexString` (UTF-16BE, `inline.ts`), which is
- * not one of the three emitters, while the attribute table (`attributes.ts`) names `pdfString` for
- * `mark:link.title`. The test accepts the hex form, so it shows the probe is encoded, not that the
- * route is the emitter the criterion names.
+ * The link title is written by `pdfString` like every other title (EXP-030 criterion 5, owner
+ * decision 209); until then it went through `pdfHexString`.
  */
 import { describe, expect, it } from 'vitest';
 import { doc, nid, para, run, type J } from '../test/docs.ts';
@@ -19,14 +17,6 @@ const PROBE = '\\write18{x}%^^41';
 /** Upper-case UTF-8 hexadecimal digits of a string, as `pdfString` writes them. */
 function utf8Hex(s: string): string {
   return Buffer.from(s, 'utf8').toString('hex').toUpperCase();
-}
-
-/** UTF-16BE hexadecimal digits with the byte order mark, as `pdfHexString` writes them. */
-function utf16Hex(s: string): string {
-  let out = 'FEFF';
-  for (let i = 0; i < s.length; i++)
-    out += s.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0');
-  return out;
 }
 
 const HEADING_STYLE: J = {
@@ -103,9 +93,9 @@ describe('EXP-043 criterion 4: the output carries each probe only in its emitted
     expect(target).not.toContain('^');
   });
 
-  it('writes the link title with the UTF-16BE hex form of pdfHexString (see Notes)', async () => {
+  it('writes the link title in the form of pdfString', async () => {
     const env = doc(probeDocument(), { styles: [HEADING_STYLE] });
     const b = await run(env, { title: 'T' });
-    expect(b.files['main.tex']!).toContain(utf16Hex(PROBE));
+    expect(b.files['main.tex']!).toContain(`\\DEstr{${utf8Hex(PROBE)}}`);
   });
 });

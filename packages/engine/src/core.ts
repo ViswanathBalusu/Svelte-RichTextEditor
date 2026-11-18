@@ -179,7 +179,7 @@ import {
   picturePlaceholderPlugin,
   removePlaceholder,
 } from './picture-placeholder.ts';
-import { FieldRules, type FieldRuleState } from './field-rules.ts';
+import { FieldRules, ruleWords, type FieldRuleState } from './field-rules.ts';
 import type { RuleParts } from '@docedit/rules';
 import {
   editRule,
@@ -215,7 +215,7 @@ import { INTERNAL, REMOTE, RESOLVE_ORIGIN, SUGGESTED, type ResolveOrigin } from 
 import { scopeDiff } from './scope-diff.ts';
 import { ExtensionApi } from './extension-api.ts';
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
-import { recordAsSuggestion } from './suggestion-edit.ts';
+import { recordAsSuggestion, suggestDelete, suggestReplace } from './suggestion-edit.ts';
 import {
   type MarkupView,
   type SuggestionLabel,
@@ -1853,6 +1853,17 @@ export class DocumentCore implements DocumentApi {
   }
 
   /**
+   * The rule a rejection named, with the words the rule carries, read from the confirmed document
+   * (FRW-023 criterion 5). Nothing when the rejection named no rule, or named one the document does
+   * not have (an invariant such as `I15`).
+   */
+  #ruleOf(i: Discarded): Pick<RecoveredItem, 'rule'> | Record<string, never> {
+    if (i.rule === undefined) return {};
+    const words = ruleWords(this.#sync.confirmed, i.rule);
+    return words === null ? {} : { rule: words };
+  }
+
+  /**
    * What the form field `id` shows: its entry, the stored value and the problems of the entry
    * (FRW-004). Null when the document has no such field.
    */
@@ -3464,7 +3475,9 @@ one or original. It is a
   /**
    * Replaces every match in a scope the user may change, as one change, so that one undo takes
    * them back. Matches in other scopes are skipped and counted; when nothing is replaced, the
-   * refusal is recorded once with the scopes that blocked it.
+   * refusal is recorded once with the scopes that blocked it. Where suggestion mode is on, each
+   * replacement is a suggestion: the match is marked deleted and the new text inserted after it
+   * (owner decision 46).
    */
   replaceAll(text: string): ReplaceReport {
     return this.#reported(this.#replaceAll(text), true);
@@ -3472,9 +3485,16 @@ one or original. It is a
 
   #replaceAll(text: string): ReplaceReport {
     const f = this.#find;
-    const tr = this.#state.tr;
+    const state = this.#state;
+    const tr = state.tr;
     const blocked = new Set<string>();
     let editable = 0;
+    // In suggestion mode every replacement is a suggestion (owner decision 46 of
+    // docs/owner-decisions-2026-11-15.md): the match gets a `del` and the text after it an `ins`.
+    // The builders work on the state the matches were found in; the steps of a match are applied
+    // after those of the matches behind it, which they do not move.
+    const author = this.#user === null ? null : { user: this.#user, nextId: this.#newId };
+    let suggested = false;
     // Last match first: a change does not move the matches before it.
     for (let i = f.matches.length - 1; i >= 0; i--) {
       const m = f.matches[i]!;
@@ -3482,9 +3502,23 @@ one or original. It is a
         blocked.add(m.scope);
         continue;
       }
-      tr.insertText(text, m.from, m.to);
       editable++;
+      if (author !== null && this.#suggestionIn(m.scope).on) {
+        const marks = state.doc.resolve(m.from).marks();
+        const content =
+          text === '' ? Fragment.empty : Fragment.from(state.schema.text(text, marks));
+        const part =
+          content.size === 0
+            ? suggestDelete(state, m.from, m.to, author).tr
+            : suggestReplace(state, m.from, m.to, content, author);
+        for (const step of part.steps) tr.step(step);
+        suggested = true;
+        continue;
+      }
+      tr.insertText(text, m.from, m.to);
     }
+    // Recorded here, so that the core does not record the change a second time.
+    if (suggested) tr.setMeta(SUGGESTED, true);
     const skipped = f.matches.length - editable;
     const notice = (): void => {
       if (blocked.size === 0) return;
@@ -3578,6 +3612,7 @@ one or original. It is a
         ...s,
         caps: access === null ? FULL_CAPS : (capsOf(access, depScope(scope)) as readonly string[]),
         canResolve: this.#mayResolve(scope),
+        region: scope.startsWith('region:') ? scope.slice('region:'.length) : null,
       };
     });
   }
@@ -4403,6 +4438,7 @@ one or original. It is a
               seq: i.seq,
               ...words,
               ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
+              ...this.#ruleOf(i),
             };
           }),
         ];

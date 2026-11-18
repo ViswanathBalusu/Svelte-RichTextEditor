@@ -91,6 +91,12 @@ export type RestorePlan = (
       region: string;
       steps: Step[];
       stepsJson: StepJson[];
+      /**
+       * `stepsJson` cut into runs that each fit one commit (owner decision 36). One run when the
+       * whole fits. They are applied in order, each against the head the one before made, as
+       * linked commits of origin `restore` by the same person.
+       */
+      parts: StepJson[][];
       /** Original authors of the restored content, by step (`applyStep`'s hint). */
       hint: RestoreHint;
     }
@@ -98,7 +104,10 @@ export type RestorePlan = (
       kind: 'snapshot';
       reason: 'restore';
       region?: string;
-      /** Set when a region restore fell back because its steps were too large. */
+      /**
+       * Not set by this module since owner decision 36: a region restore whose steps are too large
+       * for one commit is split into linked commits. Kept so that readers of older answers compile.
+       */
       fallback?: 'too_large';
     }
 ) &
@@ -518,15 +527,43 @@ function planRegion(
     );
     const from = shift.map(cPos[c0]!, 1);
     const to = c1 === c0 ? from : shift.map(cPos[c1]!, -1);
-    const step = new ReplaceStep(from, to, new Slice(Fragment.from(nodes), 0, 0));
-    const failed = tr.maybeStep(step).failed;
-    if (failed)
-      return refuse('internal', `the restore of region ${region} does not apply: ${failed}`);
-    hint.push(
-      target.attribution && nodes.length
-        ? runsOf(target.attribution, tPos[t0]!, tPos[t1]!)
-        : undefined,
-    );
+    const whole = new ReplaceStep(from, to, new Slice(Fragment.from(nodes), 0, 0));
+    // One step replaces a whole run of changed blocks. When that step alone is too large for a
+    // commit, the first block replaces the run and each later block is inserted after it, so that
+    // the run can be split into linked commits (owner decision 36) and every state between them
+    // is valid (a region is never empty, an identifier is never in use twice). A single block that
+    // is too large stays refused.
+    const pieces: Array<{ step: Step; hint: readonly Run[] | undefined }> = [];
+    const maxBytes = ctx.maxCommitBytes ?? DEFAULT_LIMITS.maxCommitBytes;
+    if (
+      nodes.length > 1 &&
+      commitBytes({ steps: [whole.toJSON()] }) + COMMIT_OVERHEAD_BYTES > maxBytes
+    ) {
+      let at = from;
+      nodes.forEach((n, i) => {
+        pieces.push({
+          step: new ReplaceStep(at, i === 0 ? to : at, new Slice(Fragment.from(n), 0, 0)),
+          hint: target.attribution
+            ? runsOf(target.attribution, tPos[t0 + i]!, tPos[t0 + i + 1]!)
+            : undefined,
+        });
+        at += n.nodeSize;
+      });
+    } else {
+      pieces.push({
+        step: whole,
+        hint:
+          target.attribution && nodes.length
+            ? runsOf(target.attribution, tPos[t0]!, tPos[t1]!)
+            : undefined,
+      });
+    }
+    for (const piece of pieces) {
+      const failed = tr.maybeStep(piece.step).failed;
+      if (failed)
+        return refuse('internal', `the restore of region ${region} does not apply: ${failed}`);
+      hint.push(piece.hint);
+    }
   }
   const preconditions: Preconditions = {
     head: ctx.head.seq,
@@ -541,32 +578,75 @@ function planRegion(
     tr.steps.forEach((s, i) => resultAttribution!.applyStep(s, author, hint[i]));
   }
   const stepsJson = stepsToJson(tr.steps);
-  const tooLarge =
-    tr.steps.length > (ctx.maxSteps ?? DEFAULT_LIMITS.maxStepsPerCommit) ||
-    commitBytes({ steps: stepsJson }) + 4096 >
-      (ctx.maxCommitBytes ?? DEFAULT_LIMITS.maxCommitBytes);
+  const parts = splitSteps(
+    stepsJson,
+    ctx.maxSteps ?? DEFAULT_LIMITS.maxStepsPerCommit,
+    ctx.maxCommitBytes ?? DEFAULT_LIMITS.maxCommitBytes,
+  );
+  if (parts === null)
+    return refuse(
+      'too_large',
+      `one step of the restore of region ${region} is larger than a commit may be`,
+    );
   const base = {
     ...notes,
     result,
     ...(resultAttribution ? { resultAttribution } : {}),
     unchanged: tr.steps.length === 0,
   };
-  if (tooLarge)
-    return {
-      ok: true,
-      plan: {
-        kind: 'snapshot',
-        reason: 'restore',
-        region,
-        fallback: 'too_large',
-        ...base,
-        preconditions: { ...preconditions, workflowActive: ctx.workflowActive ?? false },
-      },
-    };
   return {
     ok: true,
-    plan: { kind: 'steps', region, steps: tr.steps, stepsJson, hint, ...base, preconditions },
+    plan: {
+      kind: 'steps',
+      region,
+      steps: tr.steps,
+      stepsJson,
+      parts,
+      hint,
+      ...base,
+      preconditions,
+    },
   };
+}
+
+/** The room's allowance for what a commit carries besides its steps (ids, user, times). */
+const COMMIT_OVERHEAD_BYTES = 4096;
+
+/**
+ * Cuts steps into the fewest runs, in order, that each fit a commit (owner decision 36: a region
+ * restore over the size limit is split into linked commits). A run is valid when it has at most
+ * `maxSteps` steps and its encoded size plus the overhead is within `maxBytes`. Null when one
+ * step alone is too large: a step cannot be cut, so the restore is refused as `too_large`.
+ */
+export function splitSteps(
+  steps: readonly StepJson[],
+  maxSteps: number,
+  maxBytes: number,
+): StepJson[][] | null {
+  const fits = (run: readonly StepJson[]): boolean =>
+    run.length <= maxSteps && commitBytes({ steps: [...run] }) + COMMIT_OVERHEAD_BYTES <= maxBytes;
+  const parts: StepJson[][] = [];
+  let run: StepJson[] = [];
+  for (const step of steps) {
+    if (fits([...run, step])) {
+      run.push(step);
+      continue;
+    }
+    if (run.length === 0) return null;
+    parts.push(run);
+    run = [step];
+    if (!fits(run)) return null;
+  }
+  if (run.length > 0 || parts.length === 0) parts.push(run);
+  return parts;
+}
+
+/**
+ * What the room checks again for run `index` of a split restore: the plan's preconditions, with the
+ * head each earlier run moved on by one commit.
+ */
+export function restorePartPreconditions(pre: Preconditions, index: number): Preconditions {
+  return index === 0 || pre.head === undefined ? pre : { ...pre, head: pre.head + index };
 }
 
 /** Runs of a map between two positions, as hint runs (their restore marking is added on apply). */

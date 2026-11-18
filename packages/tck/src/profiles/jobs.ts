@@ -182,11 +182,12 @@ export const EXPORTS: ProfileDef = {
     }),
     ex({
       id: 'identifiers',
-      title: 'a job is refused to another user of the document and to a caller of another document',
+      title:
+        'a job is not found by another user of the document or by a caller of another document',
       spec: '05 §6.1; D69; review SR-C4',
       covers: {
         operations: ['GET /exports/{jid}', 'DELETE /exports/{jid}'],
-        errors: ['forbidden'],
+        errors: ['not_found'],
       },
       async run(ctx) {
         const { doc, job } = await viewerExport(ctx);
@@ -194,22 +195,22 @@ export const EXPORTS: ProfileDef = {
         equal(
           problemOf(await ctx.service.as(colleague, 'GET', `/exports/${job.id}`), 'another user')
             .code,
-          'forbidden',
-          "another user's job (D69)",
+          'not_found',
+          "another user's job (D69; owner decision 57)",
         );
         equal(
           problemOf(await ctx.service.as(colleague, 'DELETE', `/exports/${job.id}`), 'another user')
             .code,
-          'forbidden',
-          "cancelling another user's job (D69)",
+          'not_found',
+          "cancelling another user's job (D69; owner decision 57)",
         );
         const other = await ctx.document();
         const { token: outsider } = await ctx.token('outsider', { [other]: 'owner' });
         const r = await ctx.service.as(outsider, 'GET', `/exports/${job.id}`);
         equal(
           problemOf(r, 'a caller of another document').code,
-          'forbidden',
-          'the token must cover the job document (05 §6.1)',
+          'not_found',
+          'a job of a document the token does not cover is not found (05 §6.1; owner decision 57)',
         );
         const service = await ctx.service.call('GET', `/exports/${job.id}`);
         equal(service.status, 200, 'a service credential may read any job of its tenant (D69)');
@@ -540,7 +541,7 @@ export const ASSETS: ProfileDef = {
       spec: '05 §6.1, §6.2',
       covers: {
         operations: ['POST /assets/{aid}/complete', 'POST /documents/{id}/assets/resolve'],
-        errors: ['forbidden'],
+        errors: ['not_found'],
       },
       async run(ctx) {
         const doc = await ctx.document();
@@ -556,7 +557,7 @@ export const ASSETS: ProfileDef = {
             await ctx.service.as(outsider, 'POST', `/assets/${aid}/complete`),
             'another document',
           ).code,
-          'forbidden',
+          'not_found',
           'completing an asset of another document',
         );
         const r = await ctx.service.as(outsider, 'POST', `/documents/${other}/assets/resolve`, {

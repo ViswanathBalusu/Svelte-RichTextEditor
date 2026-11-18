@@ -1,6 +1,6 @@
 # ADR 0034: How a resuming channel catches up, and the shape of the history visibility gate
 
-**Status:** proposed, 2026-11-06. Decision stories SYN-026 and HIS-023. It also records three choices the specification leaves open that the same work needed: the code for a server-authored commit whose preconditions no longer hold, the rule evaluation budget of a commit, and how a snapshot commit is written. Nothing here amends 04, 05, 07 or 08 yet; the proposed amendments are at the end.
+**Status:** accepted, 2026-11-18 (owner decisions 140, 166 and 202 of `docs/owner-decisions-2026-11-15.md`, and the bulk acceptance of decisions 196 to 220), with item 3 of section 1 corrected by decision 202: beyond the limits the answer is `reload`, never `page`. Proposed 2026-11-06. Decision stories SYN-026 and HIS-023. It also records three choices the specification leaves open that the same work needed: the code for a server-authored commit whose preconditions no longer hold, the rule evaluation budget of a commit, and how a snapshot commit is written. Nothing here amends 04, 05, 07 or 08 yet; the proposed amendments are at the end.
 
 ## Context
 
@@ -16,8 +16,8 @@ The room answers `ch.opened` with `head`, `incarnation`, `inflight` and `catchUp
 
 1. `reload` when there is no `resume`, the incarnation differs, `resume.seq` is not a sequence number from 0 to the head, `resume.seq` is below the first commit the room holds (a room started from a checkpoint), `resume.seq` is below the user's visibility gate (section 2), or a snapshot commit lies after `resume.seq`.
 2. `stream` when the missing commits are within both catch-up limits (`catchUpCommits`, default 5,000, and `catchUpBytes`, default 5 MiB, measured as the serialised size of the stored commits): the commits from `resume.seq + 1` to the head, then `sync.caughtUp`, then live commits.
-3. Beyond the limits, `page` when the host serves `GET /documents/{id}/commits` (`RoomInit.commitsResource`), otherwise `reload`. On `page` the room sends nothing up to the head and no `sync.caughtUp`; live commits start at `head + 1`. The client pages up to the head, applies the live commits it buffered, and only then resubmits an in-flight commit reported `unknown`.
-4. Behind the projection gateway (ADR 0019) `page` becomes `reload` with the reader's projection, because the commits resource does not serve a class's steps yet.
+3. Beyond the limits, `reload` (corrected by owner decision 202; the first version answered `page` when the host served `GET /documents/{id}/commits` and `reload` otherwise). The value `page` stays in the schema and the server does not send it.
+4. Behind the projection gateway (ADR 0019) the reload carries the reader's projection.
 
 `inflight` is present whenever `resume.inflight` was sent, on a reload too (S6 decision D08). It is `accepted` with the stored `seq` only for the caller's own stored commit, and `unknown` otherwise, including a commit that is still waiting to be stored: a resubmission with the same `id` attaches to the pending acknowledgement (04 §5 step 2), so `unknown` is safe.
 
@@ -71,12 +71,12 @@ Bad:
 | Always `page` beyond the limits | Not every host serves the commits resource in phase 1b; `reload` is always available |
 | `since_access` without the claim behaves as `editors` | Silent widening; the host misconfiguration should be visible as missing history, not as more history |
 
-## Proposed amendments, once accepted
+## Amendments made (2026-11-18)
 
 - 07 §8: "`minVisibleSeq(user)` is a sequence number; a single state is visible at or above it, at the head and at a named version; a run of commits only from a `seq` at or above it."
 - 08 §9: the table of section 2, the rule on `access_since` without the claim, and the precedence of the settings.
-- 05 §5.2: the order of section 1, the meaning of `page` for live commits, and `inflight` on a reload.
-- HIS-024, HIS-025 and HIS-026 follow section 2.
+- 05 §5.2: the order of section 1; `page` is not sent (decision 202); `inflight` on a reload. 04 §9 item 4 says `reload` beyond the limits (decision 166).
+- HIS-024, HIS-025 and HIS-026 follow section 2; their Notes say so.
 
 ## Revisit when
 

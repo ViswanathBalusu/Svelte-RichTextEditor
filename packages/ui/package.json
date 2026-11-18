@@ -19,6 +19,7 @@
     "./fill": "./src/shell/fill.ts",
     "./send-checklist": "./src/shell/send-checklist.ts",
     "./strings": "./src/i18n/strings.ts",
+    "./sandbox-protocol": "./src/extensions/sandbox-protocol.ts",
     "./styles/*": "./src/styles/*"
   },
   "scripts": {

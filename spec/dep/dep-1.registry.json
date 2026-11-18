@@ -429,7 +429,7 @@
       ],
       "requires": "Service credential",
       "ifMatch": "required",
-      "idempotencyKey": false,
+      "idempotencyKey": true,
       "success": "204",
       "spec": "05 §6.2; 04 §3.2",
       "owner": "PRO"
@@ -892,7 +892,7 @@
         "service"
       ],
       "feature": "assets",
-      "requires": "view on a document the asset is attached to",
+      "requires": "view on a document the asset is attached to; the uploader's own ready upload before a commit references it",
       "ifMatch": "none",
       "idempotencyKey": false,
       "success": "200",
@@ -1170,6 +1170,62 @@
       "success": "200",
       "spec": "08 §11; 13 §10",
       "owner": "UX"
+    },
+    {
+      "operationId": "getTenantHistoryVisibility",
+      "method": "GET",
+      "path": "/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "setTenantHistoryVisibility",
+      "method": "PUT",
+      "path": "/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "getDocumentHistoryVisibility",
+      "method": "GET",
+      "path": "/documents/{id}/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "setDocumentHistoryVisibility",
+      "method": "PUT",
+      "path": "/documents/{id}/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
     },
     {
       "operationId": "getTenantOrigins",

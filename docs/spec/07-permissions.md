@@ -65,7 +65,7 @@ For an agent connection (05 section 3.2.1), the capabilities in every scope are 
 
 Then apply these limits, in order:
 
-1. If the document's state is `locked` or `archived`: `view` only, plus `comment` when `locked`, plus `fill` where an active workflow allows it.
+1. If the document's state is `locked` or `archived`: `view` only, plus `comment` when `locked`, plus `fill` where an active workflow allows it, plus `edit` in a region on which the connection holds a grant whose principal is `role:<id>` while the participant bound to that role is active in a workflow that is `sent` or `in_progress` and the document is `locked` (owner decision 132 of 2026-11-15; FRW-086, option a). No other grant keeps `edit` on a locked document, a grant to a role never conveys `structure` or `manage`, and the limits below (an approved region, a lease held by someone else) still apply. A paused participant (`correcting`), one who has completed, and a workflow that is `declined`, `voided` or `expired` hold no `edit`.
 2. If the region's state is `approved`: at most `view` and `comment`, for everyone including owners. An owner must change the state before editing.
 3. If another user holds a lease on the region: at most `view` and `comment`.
 
@@ -126,7 +126,7 @@ These are requirements on the component's user experience. They are not security
 - The region guard refuses local transactions in scopes without `edit`, `suggest` or `fill`, so the user normally never sees a rejection.
 - A region is isolating. Backspace at the start of its first paragraph and Delete at the end of its last do nothing. Enter at the end stays inside. Selections that start inside a region are clamped to it. There is always a body paragraph after a region (03, section 4.2).
 - A deletion across several scopes removes only the parts the user may edit and says so.
-- "Replace all" skips scopes the user cannot edit and reports how many matches it skipped.
+- "Replace all" skips scopes the user cannot edit and reports how many matches it skipped. Where suggestion mode is on, each replacement is a suggestion: the match is marked deleted and the new text is inserted after it, marked inserted (owner decision 46).
 - A user who may edit only regions can apply existing styles there but cannot change definitions, page setup, headers or footers.
 - Numbering continues across region boundaries because it is computed (03, section 7) and is not stored in the content.
 - In a scope where the user has `suggest` only, the editor is in suggestion mode and cannot leave it.
@@ -135,6 +135,8 @@ These are requirements on the component's user experience. They are not security
 ## 8. History visibility
 
 Old versions can contain text that was deleted before a person was given access. One setting per tenant or document decides what each person may see (08, section 9). It is enforced by a single gate, `minVisibleSeq(user)`, applied to every place a sequence number can be supplied: content at a `seq`, history, comparison, attribution, activity, forks, exports at a `seq`, the commits resource, and `resume.seq` on a channel. A resume below the gate gets `catchUp: "reload"` instead of old commits. Read markers only move forward.
+
+`minVisibleSeq(user)` is a sequence number: the lowest `seq` whose content the user may read. A single state (content at a `seq`, a version, one side of a comparison) is visible at or above it, at the head, and at a named version; the head is never blocked. A run of commits after a `seq` (`resume.seq`, `after`, `fromSeq`) may be sent only when that `seq` is at or above it, because the commits reveal every state up to the head; named versions do not open runs. A named version discloses its own content, its attribution map and a comparison with another visible state, which is computed from the two states and never from the commits between them. A person under `editors` who is not an editor reloads after a short disconnect unless they resume at the head. The gate is evaluated when a request arrives, so a change of setting applies at once to history already written and nothing is rewritten (owner decision 140; ADR 0034).
 
 ## 9. Live changes, revocation and races
 
@@ -146,7 +148,7 @@ Old versions can contain text that was deleted before a person was given access.
 
 ## 10. Leases
 
-A lease gives one user exclusive editing of a region for a short time, for teams that want check-out behaviour. It is optional (feature `leases`). A lease has an identifier, a holder and an expiry (default five minutes); the holder extends it with a heartbeat, up to a maximum total of eight hours. It ends when released, when it expires, or when a user with `manage` breaks it. While a lease is held, other users' capabilities in the region are limited as in section 4. Leases are not locks in the document and are not needed for correctness.
+A lease gives one user exclusive editing of a region for a short time, for teams that want check-out behaviour. It is optional (feature `leases`). A lease has an identifier, a holder and an expiry (default five minutes); the holder extends it with a heartbeat, up to a maximum total of eight hours. It ends when released, when it expires, or when a user with `manage` breaks it. While a lease is held, other users' capabilities in the region are limited as in section 4. Leases are not locks in the document and are not needed for correctness. A lease changes nobody's grants, so a former holder's pending commit is checked as any commit is, under their grants once the lease has ended: it is accepted if the grants allow it and otherwise rejected with `permission_denied`, its content going to recovered edits (owner decision 135).
 
 ## 11. Region states
 
@@ -164,13 +166,13 @@ An approval is bound to what was approved: the state record holds the `seq` and 
 | Create a thread, reply | `comment` in the scopes of the target |
 | Resolve, reopen or assign a thread | `comment` in its scope; delete needs the author or `manage` |
 | Upload an asset | `edit`, `suggest` or `fill` somewhere in the document |
-| Read an asset | `view` on a document the asset is attached to |
+| Read an asset | `view` on a document the asset is attached to; the uploader may also read their own ready upload for that document before a commit references it |
 | Named version | `edit` somewhere in the document |
 | Restore a region | `edit` in that region; not approved; not leased to someone else |
 | Restore a document, grants, region state or policy, break a lease, workflow actions, delete | `manage` |
 | Acquire a lease | `edit` in that region |
 | Export | `view`, unless restricted with `no-export`; raw compile logs need `edit` |
-| Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, holds | Service credential |
+| Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds | Service credential |
 
 Every row has negative tests in the conformance kit.
 
@@ -182,7 +184,7 @@ Every row has negative tests in the conformance kit.
 
 ## 14. Audit
 
-Every grant change, state change, lease break, session revocation, restore, workflow transition, and every rejection with `permission_denied` or `invalid_op` is written to the audit trail with the actor, the document, the scopes and the server time. A content change made with a service credential (a prefill, a content replacement) is written as well, with the person it is attributed to (the user named in `DEP-Actor`, or `system`), the credential that made it and the commit's origin (owner decision 174). Changes of permission state are also control commits in the hash-chained log. Rejections raise the throttled webhook `dep.commit.rejected`.
+Every grant change, state change, lease break, session revocation, restore, workflow transition, and every rejection with `permission_denied` or `invalid_op` is written to the audit trail with the actor, the document, the scopes and the server time. A content change made with a service credential (a prefill, a content replacement) is written as well, with the person it is attributed to (the user named in `DEP-Actor`, or `system`), the credential that made it and the commit's origin (owner decision 174). A service call that names a user in `DEP-Actor` is bounded by that user's rights and not by the credential's (05 section 3.2): the permission checks of this section and the history gate of section 8 apply to the named user, and the audit entry records both. Changes of permission state are also control commits in the hash-chained log. Rejections raise the throttled webhook `dep.commit.rejected`.
 
 ## 15. DOCX mapping
 

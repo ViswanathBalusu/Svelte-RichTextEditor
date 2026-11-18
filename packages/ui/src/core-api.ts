@@ -217,6 +217,8 @@ export interface RecoveredItem {
   readonly changedAt?: string | null;
   /** For a `conflict` that named fields: their identifiers, changed by someone else first (FRW-010). */
   readonly fields?: readonly string[];
+  /** For a rejection that named a rule of the document: the rule and its own words (FRW-023). */
+  readonly rule?: { readonly id: string; readonly message: string | null };
 }
 
 /** Work set aside so far; `de-recovered-edits` carries `count` (05 §8.1). */
@@ -791,12 +793,13 @@ export interface CoreApi {
   /** Accepts or rejects the suggestions in the selection, or the one the caret is in: one commit (UX-036). */
   resolveAtSelection?(action: 'accept' | 'reject'): ReviewReport;
   /**
-   * Accepts or rejects every suggestion in the selection or the document, or only an author's, or
-   * only one suggestion: one commit; those in a scope without `edit` stay pending and are counted.
+   * Accepts or rejects every suggestion in the selection, the document or one region (`{ id }`, the
+   * region's identifier), or only an author's, or only one suggestion: one commit; those in a scope
+   * without `edit` stay pending and are counted.
    */
   resolveSuggestions?(
     action: 'accept' | 'reject',
-    target?: 'selection' | 'document',
+    target?: 'selection' | 'document' | { readonly id: string },
     author?: string,
     suggestion?: string,
   ): ReviewReport;
@@ -1240,6 +1243,11 @@ export type HistoryPaneItem =
       readonly to: string;
       /** Identifiers of the people in the group; names come from `resolveUsers` (UX-025). */
       readonly authors: readonly string[];
+      /**
+       * The people an assistant acted for in the group, with the agent (HIS-017). Absent or empty when
+       * every change is the person's own.
+       */
+      readonly assisted?: ReadonlyArray<{ readonly user: string; readonly agent: string }>;
       readonly changes: number;
       readonly origins: readonly string[];
       /** The last `seq` of the group: the state a reader opens (HIS-010); absent when the host gives none. */
@@ -1319,6 +1327,8 @@ export interface HistoryChange {
   readonly type?: string;
   readonly user?: string;
   readonly seq?: number;
+  /** Set when an assistant acted for `user` (HIS-017). */
+  readonly agent?: string;
   readonly attrs?: readonly string[];
   readonly spans?: ReadonlyArray<{
     readonly op: 'insert' | 'delete';
@@ -1326,6 +1336,7 @@ export interface HistoryChange {
     readonly text: string;
     readonly user?: string;
     readonly seq?: number;
+    readonly agent?: string;
   }>;
 }
 
@@ -1581,6 +1592,8 @@ export interface ReviewItem {
   readonly caps: readonly Capability[];
   /** Whether the user may accept or reject it now (`edit` in its scope, document not locked). */
   readonly canResolve: boolean;
+  /** The identifier of the region the suggestion lies in; null in the body (UX-036 criterion 2). */
+  readonly region?: string | null;
 }
 
 /** What an accept or reject did: the suggestions handled, those left pending, and where. */

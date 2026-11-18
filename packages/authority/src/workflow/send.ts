@@ -61,13 +61,17 @@ function scan(node: unknown, out: Scan): void {
   }
   if (node['type'] === 'role_def' && attrs !== undefined && typeof attrs['id'] === 'string')
     out.roles.push(attrs['id']);
-  if (Array.isArray(node['marks']))
-    for (const mark of node['marks']) {
-      if (!isObj(mark) || typeof mark['type'] !== 'string' || !SUGGESTION_MARKS.has(mark['type']))
-        continue;
-      const id = isObj(mark['attrs']) ? mark['attrs']['id'] : undefined;
-      out.suggestions.push(typeof id === 'string' ? id : null);
-    }
+  // Suggestions are marks on text and inline nodes, and entries of `suggest` on blocks (03 §5).
+  const entries: unknown[] = [
+    ...(Array.isArray(node['marks']) ? node['marks'] : []),
+    ...(attrs !== undefined && Array.isArray(attrs['suggest']) ? attrs['suggest'] : []),
+  ];
+  for (const mark of entries) {
+    if (!isObj(mark) || typeof mark['type'] !== 'string' || !SUGGESTION_MARKS.has(mark['type']))
+      continue;
+    const id = isObj(mark['attrs']) ? mark['attrs']['id'] : undefined;
+    out.suggestions.push(typeof id === 'string' ? id : null);
+  }
   if (Array.isArray(node['content'])) for (const child of node['content']) scan(child, out);
 }
 

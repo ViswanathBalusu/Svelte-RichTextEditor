@@ -25,7 +25,7 @@ import {
 } from '../../src/room/types.ts';
 import { REQUIRES, USERS, baseDoc, basePermissions, schema, type UserName } from '../fixtures.ts';
 import { SimClient, resetIds, simId, type ToServer } from './client.ts';
-import { oracleViolations, changedScopes, scopeTexts } from './oracle.ts';
+import { oracleViolations, changedScopes, scopeTexts, sugsOf } from './oracle.ts';
 import { type Fault, MemoryStorage } from './storage.ts';
 
 export type Op =
@@ -630,8 +630,8 @@ export class Simulation {
       const fields = oracleScopes.filter((s) => s.startsWith('field:'));
       if (fields.length) fieldChanges.set(c.seq, fields);
       doc.descendants((n) => {
-        for (const m of n.marks)
-          if (['ins', 'del', 'fmt'].includes(m.type.name) && !owners.has(String(m.attrs['id'])))
+        for (const m of sugsOf(n))
+          if (!owners.has(String(m.attrs['id'])))
             owners.set(String(m.attrs['id']), String(m.attrs['user']));
         return true;
       });

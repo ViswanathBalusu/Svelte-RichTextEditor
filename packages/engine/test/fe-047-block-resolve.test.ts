@@ -9,6 +9,7 @@ import fc from 'fast-check';
 import type { Node as PMNode } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
+import { addBlockEntry, entry, hasKind } from '../src/block-suggestion.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { resolveSuggestions } from '../src/suggestion-resolve.ts';
 import { recordAsSuggestion } from '../src/suggestion-edit.ts';
@@ -27,8 +28,7 @@ const everything = (doc: PMNode) => ({ from: 0, to: doc.content.size });
 /** Puts a block `ins`, `del` or `fmt` node mark on the intro paragraph, as the recorder would. */
 function markIntro(state: EditorState, type: 'ins' | 'del', user: string, id: string): EditorState {
   const pos = introPos(state.doc);
-  const tr = state.tr.addNodeMark(pos, state.schema.marks[type]!.create({ id, user }));
-  return state.apply(tr);
+  return state.apply(addBlockEntry(state.tr, pos, entry(type, id, user)));
 }
 
 /** The intro paragraph by its identifier, or null once it has been removed. */
@@ -54,7 +54,7 @@ describe('block suggestions on resolve (FE-047 criterion 4)', () => {
     const accepted = resolveSuggestions(s0, 'accept', everything(s0.doc));
     const s2 = s0.apply(accepted.tr);
     expect(introNode(s2)).not.toBeNull();
-    expect(introNode(s2)!.marks.some((m) => m.type.name === 'ins')).toBe(false);
+    expect(hasKind(introNode(s2)!, 'ins')).toBe(false);
     expect(s2.doc.textContent).toBe(s0.doc.textContent);
   });
 
@@ -63,7 +63,7 @@ describe('block suggestions on resolve (FE-047 criterion 4)', () => {
     expect(introNode(s0.apply(resolveSuggestions(s0, 'accept', everything(s0.doc)).tr))).toBeNull();
     const kept = s0.apply(resolveSuggestions(s0, 'reject', everything(s0.doc)).tr);
     expect(introNode(kept)).not.toBeNull();
-    expect(introNode(kept)!.marks.some((m) => m.type.name === 'del')).toBe(false);
+    expect(hasKind(introNode(kept)!, 'del')).toBe(false);
   });
 
   it('rejecting a block fmt restores the recorded style; accepting it keeps the new style', () => {
@@ -80,11 +80,11 @@ describe('block suggestions on resolve (FE-047 criterion 4)', () => {
 
     const rejected = s1.apply(resolveSuggestions(s1, 'reject', everything(s1.doc)).tr);
     expect(introNode(rejected)!.attrs['style']).toBe(original);
-    expect(introNode(rejected)!.marks.some((m) => m.type.name === 'fmt')).toBe(false);
+    expect(hasKind(introNode(rejected)!, 'fmt')).toBe(false);
 
     const accepted = s1.apply(resolveSuggestions(s1, 'accept', everything(s1.doc)).tr);
     expect(introNode(accepted)!.attrs['style']).toBe('Quote');
-    expect(introNode(accepted)!.marks.some((m) => m.type.name === 'fmt')).toBe(false);
+    expect(hasKind(introNode(accepted)!, 'fmt')).toBe(false);
   });
 
   it('a removed block takes its inner text suggestions with it and counts them once', () => {
@@ -148,7 +148,7 @@ describe('block suggestions on resolve (FE-047 criterion 4)', () => {
           const done = state.apply(res.tr);
           const expected = reject ? original : values[values.length - 1];
           expect(introNode(done)!.attrs['style']).toBe(expected);
-          expect(introNode(done)!.marks.some((m) => m.type.name === 'fmt')).toBe(false);
+          expect(hasKind(introNode(done)!, 'fmt')).toBe(false);
         },
       ),
       { numRuns: 60 },

@@ -24,7 +24,7 @@ import type { NotifyFn } from './exports.ts';
 import { JobFailure, type JobHandler, type JobHooks } from './jobs/runner.ts';
 import type { JobRecord } from './jobs/queue.ts';
 import { json, type Kit } from './kit.ts';
-import { capabilitiesOn, type Ctx, type Handler } from './pipeline.ts';
+import { capabilitiesOn, hiddenFrom, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 
 export const IMPORT_KIND = 'import';
@@ -281,9 +281,11 @@ export function importRoutes(k: Kit): Record<string, Handler> {
     if (!job || job.kind !== IMPORT_KIND || !job.doc)
       throw new ApiError('not_found', `no import job ${ctx.params['jid']}`);
     if (ctx.caller.kind === 'service') return job;
+    // A job of a document the token does not cover, or of another author, is answered as a
+    // missing one is (owner decision 57; SEC-016 criterion 4).
+    if (hiddenFrom(ctx.caller, job.doc) || job.createdBy !== ctx.caller.actor)
+      throw new ApiError('not_found', `no import job ${ctx.params['jid']}`);
     capabilitiesOn(ctx.caller, job.doc);
-    if (job.createdBy !== ctx.caller.actor)
-      throw new ApiError('forbidden', 'an import job belongs to the author it was queued for');
     return job;
   }
 

@@ -52,11 +52,13 @@ import {
   type SnapshotCommit,
   type SnapshotReason,
   type StepJson,
+  type ThreadAnchor,
   type ToClient,
   type WriteRequest,
   type WriteResult,
 } from '@docedit/authority';
 import { mathGateReason } from '@docedit/export-latex';
+import { AttributionMap } from '@docedit/history';
 import type { JsonEnvelope, JsonNode } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import type {
@@ -103,6 +105,7 @@ import { recordOf } from '../workflow/record.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { Auditor } from './audit.ts';
 import type { Checkpointer, LoadedCheckpoint } from './checkpoints.ts';
+import { buildFromParts, OPEN_SLICE } from './open-parts.ts';
 import { gateOf, historySetting, rangeAllowed, stateAllowed } from './gate.ts';
 import type { Faults } from './hooks.ts';
 import type { NodeLease } from './lease.ts';
@@ -110,6 +113,7 @@ import type { Metrics } from './metrics.ts';
 import { PresenceRelay } from './presence.ts';
 import type { Settings } from './settings.ts';
 import { assetRefsIn, type AssetAttachments } from './asset-attachments.ts';
+import { type AttributionTracker, contentSizeOf, openAttribution } from './attribution.ts';
 import { admissionFor } from './sec-028-admission.ts';
 import { BroadcastWindow } from './syn-041-coalescing.ts';
 import type { Base, Encoded } from './tasks.ts';
@@ -345,6 +349,12 @@ export class HostedRoom {
   #heads: Array<{ seq: number; at: number }> = [];
   /** When the last channel left, for the order in which idle rooms are closed (BE-021). */
   idleSince: number | null = null;
+  /**
+   * Who wrote each position of the document (08 §7; HIS-014): kept up to date as commits are
+   * stored and saved with each checkpoint. Null when the room has none (a transient room, or a
+   * store with no side objects), or when the commits it was given could not be applied.
+   */
+  attribution: AttributionTracker | null;
 
   constructor(init: {
     ref: DocRef;
@@ -358,6 +368,8 @@ export class HostedRoom {
     base: Base;
     /** Its canonical size, an estimate where the bytes are unknown. */
     baseBytes: number;
+    /** The comment ranges saved with the checkpoint, each at `initialSeq` (SYN-032). */
+    threads?: readonly ThreadAnchor[];
     /** Stored commits after `initialSeq`, in order. */
     log: readonly LogCommit[];
     /** The content of each snapshot commit in `log`. */
@@ -371,11 +383,14 @@ export class HostedRoom {
     subs: ReadonlyMap<string, string>;
     /** The doc_assets rows of the document (BE-044), when the host checks asset references. */
     attached?: ReadonlyMap<string, number>;
+    /** The attribution map at the head the room opens at (HIS-014). */
+    attribution?: AttributionTracker | null;
     deps: HostDeps;
     onStop: (room: HostedRoom, reason: string) => void;
     transient?: boolean;
   }) {
     const { deps } = init;
+    this.attribution = init.attribution ?? null;
     this.ref = init.ref;
     this.record = init.record;
     this.epoch = init.epoch;
@@ -411,6 +426,7 @@ export class HostedRoom {
       initial: init.initial,
       initialSeq: init.initialSeq,
       requires: init.record.requires,
+      ...(init.threads?.length ? { threads: init.threads } : {}),
       log: init.log,
       snapshotContent: snapshotDoc,
       perms: init.perms,
@@ -1017,6 +1033,11 @@ ecentHead, keeping one entry older than the window. */
     }
   }
 
+  /** The effective history visibility setting, read again for this request (HIS-025). */
+  setHistoryVisibility(setting: string | null | undefined): void {
+    if (!this.#stopped) this.#room.setHistoryVisibility(historySetting(setting));
+  }
+
   // --- Permissions (07 §9; 05 §5.5) ------------------------------------------------------------
 
   /** The control plane changed permission data and read the new state back (BE-026; PRM-019). */
@@ -1314,7 +1335,15 @@ ecentHead, keeping one entry older than the window. */
       this.#tainted = req.snapshot.seq;
       let key: string;
       try {
-        key = (await this.#deps.checkpointer.save(this.ref, req.snapshot.seq, content, false)).key;
+        // The map of a snapshot commit is one run of its user and `seq` (08 §7).
+        const side = this.attribution
+          ? AttributionMap.create(contentSizeOf(schemaOf(), content.envelope.doc), {
+              user: req.snapshot.user,
+              seq: req.snapshot.seq,
+            }).toJSON()
+          : undefined;
+        key = (await this.#deps.checkpointer.save(this.ref, req.snapshot.seq, content, false, side))
+          .key;
       } catch (e) {
         this.#report(e, `checkpoint of snapshot ${req.snapshot.seq}`);
         this.#deps.metrics.checkpointFailures.inc({ tenant: this.ref.tenant });
@@ -1485,6 +1514,14 @@ ecentHead, keeping one entry older than the window. */
     if (!commits.length) return;
     this.#noteHead();
     for (const c of commits) {
+      const content = isSnapshot(c) ? this.#snapshots.get(c.id) : undefined;
+      this.attribution?.apply(c, () =>
+        contentSizeOf(schemaOf(), content ? content.envelope.doc : this.#room.document.toJSON()),
+      );
+      if (this.attribution?.broken) {
+        this.#report(new Error(this.attribution.broken), 'attribution map');
+        this.attribution = null;
+      }
       if (isSnapshot(c)) {
         // The snapshot's checkpoint was written before the commit and is now indexed.
         const content = this.#snapshots.get(c.id);
@@ -1558,6 +1595,11 @@ ecentHead, keeping one entry older than the window. */
       requires: [...this.#room.requiresList],
       commits: this.#since.slice(0, n),
     };
+    // The comment ranges at `at` (SYN-032 criterion 6; owner decision 81): the room holds them at
+    // its durable head, so they are taken now, with the steps, and only when that head is `at`. A
+    // checkpoint below the head (a repair) gets none: anchors of a later `seq` would be mapped over
+    // the wrong steps when a room opened from it.
+    const threads = this.#room.head === at ? this.#room.threadAnchors() : [];
     const tenant = this.ref.tenant;
     const span = this.#deps.tracer.start('dep.checkpoint', this.#lastTrace, {
       tenant,
@@ -1569,13 +1611,15 @@ ecentHead, keeping one entry older than the window. */
     this.#checkpointing = (async () => {
       try {
         const e = await this.#deps.checkpointer.replay(input);
-        await this.#deps.checkpointer.save(this.ref, at, e);
+        const side = this.attribution?.jsonAt(at) ?? undefined;
+        await this.#deps.checkpointer.save(this.ref, at, e, true, side, threads);
         this.stats.checkpoints++;
         this.#checkpointFailures = 0;
         this.#deps.metrics.checkpoints.inc({ tenant, reason });
         this.#deps.metrics.checkpointLatency.observe({ tenant }, performance.now() - started);
         if (gen === this.#baseGen && at === this.#base.seq + n) {
           this.#base = { seq: at, base: { encoded: e.encoded }, bytes: e.bytes };
+          this.attribution?.advance(at);
           this.#baseGen++;
           this.#since = this.#since.slice(n);
           this.#sinceBytes = this.#since.reduce(
@@ -1871,7 +1915,7 @@ export class RoomHost {
     if (this.#deps.faults.databaseDown)
       return Promise.reject(new Refusal('unavailable', 'the database is unreachable'));
     const known = this.get(ref);
-    if (known) return Promise.resolve(known);
+    if (known) return this.#withFreshSetting(ref, known);
     const k = refKey(ref);
     let p = this.#loading.get(k);
     if (!p) {
@@ -1884,6 +1928,21 @@ export class RoomHost {
       this.#loading.set(k, p);
     }
     return p;
+  }
+
+  /**
+   * A room that is already open takes the history visibility setting stored now, so a change made
+   * on any node applies to the next channel (HIS-025 criterion 5). A failed read keeps the setting
+   * the room has; the gate then still holds what it held.
+   */
+  async #withFreshSetting(ref: DocRef, room: HostedRoom): Promise<HostedRoom> {
+    try {
+      const record = await this.#deps.documents.get(ref);
+      if (record) room.setHistoryVisibility(record.historyVisibility);
+    } catch {
+      // The room keeps its setting.
+    }
+    return room;
   }
 
   #acquireAfter(ref: DocRef): Promise<HostedRoom> {
@@ -1918,8 +1977,9 @@ export class RoomHost {
       // Claim first: it fences any earlier owner, so the log read next is complete (06 §2.1).
       const epoch = await this.#claim(ref);
       const head = await d.logs.head(ref);
-      const cp = await d.checkpointer.load(ref, head.seq);
-      if (!cp) throw new Refusal('unavailable', 'the document has no content to start from');
+      const found = await d.checkpointer.loadForOpen(ref, head.seq, d.settings.openInWorkerBytes);
+      if (!found) throw new Refusal('unavailable', 'the document has no content to start from');
+      const cp = { seq: found.seq };
       const [log, perms, history, atBase] = await Promise.all([
         d.logs.read(ref, cp.seq + 1),
         d.grants.current(ref),
@@ -1930,8 +1990,22 @@ export class RoomHost {
         throw new Error(
           `the log of ${ref.doc} holds ${log.length} commits after ${cp.seq}, its head is ${head.seq}`,
         );
-      const initial = schemaOf().nodeFromJSON(cp.envelope.doc);
-      initial.check();
+      // A large checkpoint is parsed and checked in a worker and built here a slice at a time, so
+      // that other rooms keep acknowledging commits (BE-019 criterion 5; owner decision 72).
+      let initial: Doc;
+      let base: Base;
+      let baseBytes: number;
+      if ('encoded' in found) {
+        const parts = await d.workers.run('open', { encoded: found.encoded, slice: OPEN_SLICE });
+        initial = await buildFromParts(schemaOf(), parts);
+        base = { encoded: found.encoded };
+        baseBytes = parts.bytes;
+      } else {
+        initial = schemaOf().nodeFromJSON(found.envelope.doc);
+        initial.check();
+        base = found.base;
+        baseBytes = baseBytesOf(found);
+      }
       const snapshots = new Map<number, { doc: Doc; json: JsonEnvelope }>();
       for (const c of log)
         if (isSnapshot(c)) {
@@ -1940,6 +2014,34 @@ export class RoomHost {
           const doc = schemaOf().nodeFromJSON(json.doc);
           snapshots.set(c.seq, { doc, json });
         }
+      // Who wrote what (HIS-014): the map saved with the checkpoint plus the commits after it. A
+      // failure leaves the room without one; it never stops the room from opening.
+      let attribution: AttributionTracker | null = null;
+      if (!transient && d.checkpointer.sides) {
+        try {
+          attribution = await openAttribution({
+            ref,
+            record,
+            schema: schemaOf(),
+            checkpointer: d.checkpointer,
+            logs: d.logs,
+            checkpoint: { seq: cp.seq, size: initial.content.size },
+            log,
+            snapshotSize: async (c) => {
+              const loaded = snapshots.get(c.seq);
+              if (loaded) return loaded.doc.content.size;
+              const json = d.logs.snapshotContent ? await d.logs.snapshotContent(ref, c.seq) : null;
+              if (!json) throw new Error(`the content of snapshot commit ${c.seq} is missing`);
+              return contentSizeOf(schemaOf(), json.doc);
+            },
+          });
+        } catch (e) {
+          d.settings.onError(e, `attribution map of ${ref.doc}`, {
+            tenant: ref.tenant,
+            doc: ref.doc,
+          });
+        }
+      }
       // The revision in force at the checkpoint: that of the commit stored at its `seq` (every
       // commit records the revision it was checked against); at 0 the one the document was created
       // with (D67), or, while the log is still empty, the newest one stored (D125): permission data
@@ -1965,8 +2067,9 @@ export class RoomHost {
         incarnation: head.incarnation,
         initial,
         initialSeq: cp.seq,
-        base: cp.base,
-        baseBytes: baseBytesOf(cp),
+        base,
+        baseBytes,
+        ...(found.threads.length ? { threads: found.threads } : {}),
         log,
         snapshots,
         perms,
@@ -1975,6 +2078,7 @@ export class RoomHost {
           : {}),
         initialRevision,
         subs,
+        attribution,
         ...(attached ? { attached } : {}),
         deps: d,
         transient,
@@ -2044,6 +2148,7 @@ export class RoomHost {
         await room.shutdown('the document was deleted', true);
         return;
       }
+      room.setHistoryVisibility(record.historyVisibility);
       const perms = await this.#deps.grants.current(ref);
       if (perms.revision > room.permissions.revision) room.permissionsChanged(perms);
       // The document resource changed (metadata or state): open channels may re-read it (05 §5.6).
@@ -2191,6 +2296,8 @@ export class RoomHost {
       const room = this.get(ref);
       if (room) {
         const head = room.head;
+        if (seq !== undefined && seq !== head)
+          room.setHistoryVisibility((await d.documents.get(ref))?.historyVisibility);
         if (
           seq !== undefined &&
           seq !== head &&
@@ -2288,6 +2395,7 @@ export class RoomHost {
       let hides: boolean;
       if (room && room.head === head.seq) {
         if (stored.revision > room.permissions.revision) room.permissionsChanged(stored);
+        room.setHistoryVisibility(record.historyVisibility);
         gate = room.minVisibleSeq(conn);
         hides = d.restricted && room.hidesFor(conn);
       } else {
