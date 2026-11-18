@@ -18,8 +18,7 @@
  *
  * The names of the keys are proposed in `docs/stories/PRO-protocol.md` (PRO-081 Notes).
  */
-import type { EditorMode } from '@docedit/ui';
-import type { ShellCore } from './editor.ts';
+import type { CoreApi, EditorMode } from '@docedit/ui';
 import type { AttachAt, ReadView } from './session.ts';
 
 export type FeatureGroup = 'comments' | 'export' | 'history' | 'assistant';
@@ -83,10 +82,10 @@ export function switchedModes(
  * The shell's view of the core without the members of the groups that are off. The members are
  * left out, not replaced by empty ones, because the shell tests for their presence.
  */
-export function shellWithSwitches(shell: ShellCore, on: FeatureSwitches): ShellCore {
+export function shellWithSwitches<T extends CoreApi>(shell: T, on: FeatureSwitches): T {
   if (FEATURE_GROUPS.every((g) => on[g])) return shell;
   const hidden = hiddenBackendFeatures(on);
-  let out: ShellCore = shell;
+  let out: T = shell;
   if (hidden.size > 0 && shell.features) {
     const base = shell.features;
     const features: ReadView<readonly string[]> = {
@@ -107,11 +106,11 @@ export function shellWithSwitches(shell: ShellCore, on: FeatureSwitches): ShellC
       setSuggestionLabel: _h,
       ...rest
     } = out;
-    out = rest as ShellCore;
+    out = rest as unknown as T;
   }
   if (!on.export) {
     const { exports: _x, ...rest } = out;
-    out = rest as ShellCore;
+    out = rest as unknown as T;
   }
   return out;
 }
