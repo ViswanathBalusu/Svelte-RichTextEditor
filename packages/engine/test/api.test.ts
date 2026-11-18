@@ -49,6 +49,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'peerSelections'
       // PRM-034: the element re-reads the region list when a region is renamed, added or removed.
       | 'regionTitles'
+      // UX-017: the recovered edits pane puts a set-aside edit back or drops it, by its id.
+      | 'insertRecovered'
+      | 'discardRecovered'
       // FRW-004: the entries of form fields, for the field controls of the web view. The fill
       // methods of the embedding API (12 §10) are FRW-069's and are not on the document API yet.
       | 'fieldEntry'
