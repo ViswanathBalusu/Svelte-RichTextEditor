@@ -673,6 +673,9 @@
             "$ref": "#/components/parameters/IfMatch"
           },
           {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
             "$ref": "#/components/parameters/DepActor"
           },
           {
@@ -714,6 +717,9 @@
         "x-dep-spec": "05 §6.2; 04 §3.2",
         "x-dep-owner": "PRO",
         "x-dep-requires": "Service credential",
+        "x-dep-codes": [
+          "idempotency_mismatch"
+        ],
         "x-dep-gaps": [
           "G62"
         ],

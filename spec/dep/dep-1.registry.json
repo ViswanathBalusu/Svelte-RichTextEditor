@@ -429,7 +429,7 @@
       ],
       "requires": "Service credential",
       "ifMatch": "required",
-      "idempotencyKey": false,
+      "idempotencyKey": true,
       "success": "204",
       "spec": "05 §6.2; 04 §3.2",
       "owner": "PRO"
