@@ -572,6 +572,63 @@ export const AUTHZ: ProfileDef = {
         await succeeds(ctx, editor, 'POST', path, 'a lease by an editor');
       },
     }),
+    a({
+      id: 'asset.upload',
+      title: 'row 6: an upload needs edit, suggest or fill somewhere, and its uploader completes it',
+      spec: '07 §12 row 6; 05 §6.2',
+      needs: { features: ['assets'] },
+      covers: {
+        operations: ['POST /documents/{id}/assets', 'POST /assets/{aid}/complete'],
+        errors: ['forbidden'],
+      },
+      async run(ctx) {
+        row('asset.upload');
+        const doc = await ctx.document();
+        const { token: viewer } = await ctx.token('viewer', { [doc]: 'viewer' });
+        const { token: editor } = await ctx.token('editor', { [doc]: 'editor' });
+        const { token: other } = await ctx.token('other-editor', { [doc]: 'editor' });
+        const request = { filename: 'authz.png', mime: 'image/png', size: 64 };
+        await refused(
+          ctx,
+          viewer,
+          'POST',
+          `/documents/${doc}/assets`,
+          'an upload by a viewer',
+          request,
+        );
+        const created = await succeeds(
+          ctx,
+          editor,
+          'POST',
+          `/documents/${doc}/assets`,
+          'an upload by an editor',
+          { body: request },
+        );
+        const id = (JSON.parse(created.text) as { asset?: unknown }).asset;
+        check(typeof id === 'string', 'the identifier of the upload', 'a string', created.text);
+        const path = `/assets/${String(id)}/complete`;
+        await refused(ctx, other, 'POST', path, 'completion by an editor who is not the uploader');
+        await succeeds(ctx, editor, 'POST', path, 'completion by the uploader');
+      },
+    }),
+    a({
+      id: 'asset.read',
+      title: 'row 7: resolving asset URLs needs view on the document',
+      spec: '07 §12 row 7; 05 §6.2',
+      needs: { features: ['assets'] },
+      covers: { operations: ['POST /documents/{id}/assets/resolve'], errors: ['forbidden'] },
+      async run(ctx) {
+        row('asset.read');
+        const doc = await ctx.document();
+        const other = await ctx.document();
+        const { token: outsider } = await ctx.token('outsider', { [other]: 'owner' });
+        const { token: viewer } = await ctx.token('viewer', { [doc]: 'viewer' });
+        const body = { assets: [uuid7()] };
+        const path = `/documents/${doc}/assets/resolve`;
+        await refused(ctx, outsider, 'POST', path, 'resolving without view', body);
+        await succeeds(ctx, viewer, 'POST', path, 'resolving with view', { body });
+      },
+    }),
     ...MATRIX.filter(
       (r) =>
         ![
@@ -586,6 +643,8 @@ export const AUTHZ: ProfileDef = {
           'version.create',
           'restore.region',
           'lease.acquire',
+          'asset.upload',
+          'asset.read',
         ].includes(r.id),
     ).map((r) =>
       a({
@@ -594,21 +653,10 @@ export const AUTHZ: ProfileDef = {
         spec: `07 §12 row ${r.row}`,
         covers: {},
         async run(ctx) {
-          const feature = {
-            'thread.create': 'comments',
-            'thread.update': 'comments',
-            'asset.upload': 'assets',
-            'asset.read': 'assets',
-            'version.create': 'history',
-            'restore.region': 'history',
-            'lease.acquire': 'leases',
-          }[r.id];
-          if (feature && !ctx.has(feature))
-            ctx.skip(
-              `its routes need the feature \`${feature}\`, which the target does not announce`,
-            );
+          // Every row of the matrix of 2026-11 has a scenario above; a row added later without one
+          // is reported as skipped, so that the gap shows in the report.
           ctx.skip(
-            `row ${r.row} (${r.routes.join(', ') || 'no route'}) has no scenario yet: its resources arrive with ${feature ?? 'a later phase'}`,
+            `row ${r.row} (${r.routes.join(', ') || 'no route'}) has no scenario yet: add one in this profile`,
           );
         },
       }),

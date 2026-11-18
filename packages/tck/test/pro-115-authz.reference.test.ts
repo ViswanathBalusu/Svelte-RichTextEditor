@@ -78,7 +78,7 @@ describe.skipIf(skip)(
       target = await startReference({
         env: {
           DOCEDIT_FEATURES:
-            'presence,regions,suggest-enforced,read-restrictions,comments,history,leases',
+            'presence,regions,suggest-enforced,read-restrictions,comments,history,leases,assets',
         },
       });
       report = await runKit({
@@ -96,6 +96,13 @@ describe.skipIf(skip)(
 
     it('calls rows 4, 5 and 11 with and without the capability', () => {
       for (const id of ['thread.create', 'thread.update', 'lease.acquire']) {
+        const s = outcomesOf(report)[`authz.${id}`];
+        expect(s?.outcome, `${id}: ${JSON.stringify(s?.failure)}`).toBe('passed');
+      }
+    });
+
+    it('calls rows 6 and 7 with and without the capability', () => {
+      for (const id of ['asset.upload', 'asset.read']) {
         const s = outcomesOf(report)[`authz.${id}`];
         expect(s?.outcome, `${id}: ${JSON.stringify(s?.failure)}`).toBe('passed');
       }
