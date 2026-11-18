@@ -88,6 +88,7 @@ function participantsOf(stored: unknown): WorkflowResourceView['participants'] {
       completedSeq: _completedSeq,
       firstViewedAt: _firstViewedAt,
       activatedAt: _activatedAt,
+      verifiedAt: _verifiedAt,
       ...draft
     } = own(p);
     return draft;
@@ -95,13 +96,14 @@ function participantsOf(stored: unknown): WorkflowResourceView['participants'] {
   const checked = checkParticipants(drafts);
   if (!checked.ok) return [];
   return checked.participants.map((draft, i) => {
-    const { state, completedSeq, firstViewedAt, activatedAt } = own(stored[i]);
+    const { state, completedSeq, firstViewedAt, activatedAt, verifiedAt } = own(stored[i]);
     return {
       ...draft,
       ...(typeof state === 'string' ? { state } : {}),
       ...(typeof completedSeq === 'number' ? { completedSeq } : {}),
       ...(typeof firstViewedAt === 'string' ? { firstViewedAt } : {}),
       ...(typeof activatedAt === 'string' ? { activatedAt } : {}),
+      ...(typeof verifiedAt === 'string' ? { verifiedAt } : {}),
     };
   });
 }

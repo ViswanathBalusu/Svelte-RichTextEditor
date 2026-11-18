@@ -1752,10 +1752,11 @@
                 "minLength": 1
               },
               "state": {
-                "description": "The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's.",
+                "description": "The participant's own status: `active` (may act now), `unverified` (their turn, but the access code is still to be submitted), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's.",
                 "type": "string",
                 "examples": [
                   "active",
+                  "unverified",
                   "completed",
                   "waiting",
                   "paused",

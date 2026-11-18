@@ -30,6 +30,8 @@ export interface WorkflowResourceView {
 ecordTransition each time a participant who was not active becomes so.
      */
     readonly activatedAt?: string;
+    /** When a correct access code was submitted for the participant (FRW-039; set once). */
+    readonly verifiedAt?: string;
   })[];
   readonly members: WorkflowMembers;
 }

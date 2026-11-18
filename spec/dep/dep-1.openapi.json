@@ -6757,11 +6757,11 @@
         ]
       }
     },
-    "/documents/{id}/workflow/participants/{pid}/consent": {
+    "/documents/{id}/workflow/participants/{pid}/verify": {
       "post": {
-        "operationId": "participantConsent",
-        "summary": "Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed.",
-        "description": "Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed. Only when the server announces the feature `workflow`. Specified in 12 §10.",
+        "operationId": "participantVerify",
+        "summary": "The participant submits the access code their workflow requires; until it is right, their fields stay read-only (12 §6.1, §7). A wrong code raises `auth_failed`; repeated wrong codes are `rate_limited` with `retryAfterMs`. The method and the document prefix are assumed.",
+        "description": "The participant submits the access code their workflow requires; until it is right, their fields stay read-only (12 §6.1, §7). A wrong code raises `auth_failed`; repeated wrong codes are `rate_limited` with `retryAfterMs`. The method and the document prefix are assumed. Only when the server announces the feature `workflow`. Specified in 12 §6.1, §7, §10.",
         "tags": [
           "workflow"
         ],
@@ -6810,7 +6810,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WorkflowPlaceholder"
+                "$ref": "#/components/schemas/WorkflowAccessCode"
               }
             }
           }
@@ -6822,6 +6822,9 @@
               "DEP-Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
               "Deprecation": {
                 "$ref": "#/components/headers/Deprecation"
               },
@@ -6832,7 +6835,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkflowPlaceholder"
+                  "$ref": "#/components/schemas/Workflow"
                 }
               }
             }
@@ -6844,19 +6847,121 @@
             "$ref": "#/components/responses/Problem5XX"
           }
         },
-        "x-dep-spec": "12 §10",
+        "x-dep-spec": "12 §6.1, §7, §10",
         "x-dep-owner": "FRW",
         "x-dep-feature": "workflow",
+        "x-dep-codes": [
+          "validation_failed",
+          "forbidden",
+          "conflict",
+          "rate_limited"
+        ],
         "x-dep-gaps": [
           "G95"
         ]
       }
     },
-    "/documents/{id}/workflow/participants/{pid}/verify": {
+    "/documents/{id}/workflow/participants/{pid}/access-code": {
       "post": {
-        "operationId": "participantVerify",
-        "summary": "Participant action `verify` (12 §7, §8.1). The method and the document prefix are assumed.",
-        "description": "Participant action `verify` (12 §7, §8.1). The method and the document prefix are assumed. Only when the server announces the feature `workflow`. Specified in 12 §10.",
+        "operationId": "registerAccessCode",
+        "summary": "Registers the access code of a participant whose `auth.require` lists `access_code`; only a salted hash is kept, and the code is never returned. The host sends the code to the person (12 §6.3). Proposed (ADR 0393); the method and path are assumed.",
+        "description": "Registers the access code of a participant whose `auth.require` lists `access_code`; only a salted hash is kept, and the code is never returned. The host sends the code to the person (12 §6.3). Proposed (ADR 0393); the method and path are assumed. Requires: manage (07 §12). Only when the server announces the feature `workflow`. Specified in 12 §6.1, §7, §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Participant identifier.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Participant identifier."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowAccessCode"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No content.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §6.1, §7, §10",
+        "x-dep-owner": "FRW",
+        "x-dep-requires": "manage",
+        "x-dep-feature": "workflow",
+        "x-dep-codes": [
+          "validation_failed",
+          "conflict"
+        ],
+        "x-dep-gaps": [
+          "G95"
+        ]
+      }
+    },
+    "/documents/{id}/workflow/participants/{pid}/consent": {
+      "post": {
+        "operationId": "participantConsent",
+        "summary": "Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed.",
+        "description": "Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed. Only when the server announces the feature `workflow`. Specified in 12 §10.",
         "tags": [
           "workflow"
         ],
@@ -9641,6 +9746,12 @@
                 "rule"
               ]
             }
+          },
+          "retryAfterMs": {
+            "description": "For `rate_limited` of the access code (FRW-039): how long to wait before retrying; `Retry-After` carries the same wait in whole seconds.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -12000,6 +12111,12 @@
                   "type": "string",
                   "format": "date-time",
                   "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+                },
+                "verifiedAt": {
+                  "description": "When a correct access code was submitted for the participant (FRW-039).",
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
                 }
               },
               "required": [
@@ -12086,6 +12203,23 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "WorkflowAccessCode": {
+        "title": "WorkflowAccessCode",
+        "description": "The body of `verify` and of the registration of an access code (12 §6.1, §7; FRW-039).",
+        "$comment": "12 §6.1, §7, §10; gaps: G95",
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "The access code: registered by the host for a participant, and submitted by the participant to verify. It is never stored or returned in the clear.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "code"
         ]
       },
       "WorkflowPlaceholder": {

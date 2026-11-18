@@ -19,6 +19,7 @@ Keys are given for Windows and Linux, with the Apple form after the slash where 
 | `shell.nextLandmark` | Ctrl+F6 | Ctrl+F6 | Alt+F6 | Ctrl+F6: “Skip to web contents” (Windows, Linux); use the alternative | Ctrl+F6: “Move focus to the web content pane” (Windows, Linux); use the alternative | not checked | none listed |
 | `shell.previousLandmark` | Ctrl+Shift+F6 | Ctrl+Shift+F6 | Alt+Shift+F6 | none listed | none listed | not checked | none listed |
 | `shell.contextMenu` | Shift+F10, ContextMenu | Shift+F10, ContextMenu | none | none listed | Shift+F10: “Open context menu” (Windows, Linux); the editor takes it only inside the editor | not checked | none listed |
+| `shell.miniToolbar` | none | Alt+F10 | none | none listed | none listed | not checked | none listed |
 | `shell.applyFormat` | none | Enter | none | none listed | none listed | not checked | none listed |
 | `shell.cancel` | none | Escape | none | none listed | none listed | not checked | none listed |
 

@@ -96,6 +96,8 @@ import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-sto
 import { PgReminderStore } from './workflow/reminder-store-pg.ts';
 import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
 import { PgEvidenceLedger } from './workflow/evidence-ledger-pg.ts';
+import { MemoryAccessCodeStore, type AccessCodeStore } from './workflow/access-code-store.ts';
+import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
 import { recordParticipantOpened } from './workflow/participant-view.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
@@ -267,6 +269,8 @@ export interface ServiceParts {
   reminders?: ReminderStore;
   /** The workflow evidence ledger (FRW-041): evidence in its own workflow table, hashes for the chain. */
   evidence?: EvidenceLedger;
+  /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
+  accessCodes?: AccessCodeStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
   quotaAdmin?: QuotaAdminService;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: none is asked. */
@@ -502,6 +506,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     workflows: new PgWorkflowResourceStore(pool, { now }),
     reminders: new PgReminderStore(pool),
     evidence: new PgEvidenceLedger(pool, { now }),
+    accessCodes: new PgAccessCodeStore(pool),
     quotaAdmin: quotaAdminOver(
       new PgQuotaStore(pool, (tenant) =>
         // `tenants` is under row-level security, so the question runs in the tenant's own context.
@@ -548,6 +553,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     workflows: new MemoryWorkflowResourceStore(),
     reminders: new MemoryReminderStore(),
     evidence: new MemoryEvidenceLedger(now),
+    accessCodes: new MemoryAccessCodeStore(),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
       // reaches it is registered; the memory store has no other tenant table to ask.
@@ -1335,6 +1341,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(erasures ? { erasures } : {}),
     ...(tombstones ? { tombstones } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
+    ...(parts.accessCodes ? { accessCodes: parts.accessCodes } : {}),
+    ...(parts.evidence ? { evidence: parts.evidence } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),
     compileBudget,

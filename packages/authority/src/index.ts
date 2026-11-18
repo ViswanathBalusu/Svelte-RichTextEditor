@@ -413,7 +413,19 @@ export {
   type SendResult,
   type SentHead,
 } from './workflow/send.ts';
-export { activeParticipantIds, completeParticipant, fillActive } from './workflow/order.ts';
+export {
+  activeParticipantIds,
+  awaitingCode,
+  completeParticipant,
+  fillActive,
+} from './workflow/order.ts';
+export {
+  ACCESS_CODE_METHOD,
+  checkAuthRequire,
+  registerAccessCode,
+  verifyAccessCode,
+  type AccessCodeRecord,
+} from './workflow/access-code.ts';
 // Correcting a document in progress and resuming it (FRW-032).
 export {
   compareWithSent,

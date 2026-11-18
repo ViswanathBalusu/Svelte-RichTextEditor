@@ -59,6 +59,8 @@ import { ApiError } from './problems.ts';
 import type { TokenService } from './tokens.ts';
 import type { UserDirectory } from './users.ts';
 import type { Views } from './visibility.ts';
+import type { AccessCodeStore } from '../workflow/access-code-store.ts';
+import type { EvidenceLedger } from '../workflow/evidence-ledger.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 
 export interface HandlerDeps {
@@ -152,6 +154,10 @@ export interface HandlerDeps {
   quotaAdmin?: QuotaAdminService;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: not offered. */
   workflows?: WorkflowResourceStore;
+  /** The registered access codes of workflow participants (FRW-039). Absent: not offered. */
+  accessCodes?: AccessCodeStore;
+  /** The workflow evidence ledger (FRW-041), where attempts at an access code are recorded. */
+  evidence?: EvidenceLedger;
   /** The tenant's allowed origins and public keys, listed by `/origins` and `/keys` (UX-077). */
   tenantRegistry?: TenantRegistry;
   /** The index of `GET /search` (BE-054 criterion 2). Absent: the route is not offered. */
