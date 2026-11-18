@@ -39,6 +39,10 @@ import {
   fingerprintOf,
   isIdempotencyKey,
 } from './idempotency.ts';
+import {
+  DocumentKeyDestroyedError,
+  DocumentKeyUnavailableError,
+} from '../storage/document-keys.ts';
 import { PayloadAbsentError } from '../storage/payload-absent.ts';
 import { ApiError, isApiError, type RestCode } from './problems.ts';
 import { Router, type OperationDef } from './router.ts';
@@ -311,6 +315,7 @@ export class Pipeline {
       const err = isApiError(e)
         ? e
         : (payloadAbsentRefusal(e) ??
+          documentKeyRefusal(e) ??
           registryRefusal(e) ??
           infrastructureRefusal(e, this.#o.unavailableRetryAfterS ?? 1) ??
           new ApiError('internal', 'the request failed', { cause: e }));
@@ -528,6 +533,25 @@ function payloadAbsentRefusal(e: unknown): ApiError | null {
     `the detail of commit ${e.seq} was removed and is no longer available (08 §11, §13)`,
     { cause: e },
   );
+}
+
+/**
+ * A read that needs a document's own key (HIS-041): a destroyed key is `not_found`, with the reason,
+ * since the content is gone for good; a key service that cannot be reached is `unavailable`, so the
+ * document is not served and never served unsealed (criterion 3). The messages carry no key data.
+ */
+function documentKeyRefusal(e: unknown): ApiError | null {
+  if (e instanceof DocumentKeyDestroyedError)
+    return new ApiError(
+      'not_found',
+      'the key of this document was destroyed, so its content is unreadable (08 §13)',
+      { cause: e },
+    );
+  if (e instanceof DocumentKeyUnavailableError)
+    return new ApiError('unavailable', 'the key of this document is not available now', {
+      cause: e,
+    });
+  return null;
 }
 
 function registryRefusal(e: unknown): ApiError | null {
