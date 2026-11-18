@@ -19,10 +19,15 @@ import {
   posBefore,
   posIn,
 } from '../documents.ts';
-import type { HttpResponse } from '../rest.ts';
+import { expectStatus, type HttpResponse } from '../rest.ts';
 import { scenario, type ProfileDef, type ScenarioDef } from '../scenario.ts';
 import { FIELD_IDS, fieldsDocument } from './fields.ts';
+import { TEST_HOOKS_FEATURE, hook } from './fault-injection.ts';
 import { join, openChannel, problemOf, submit } from './support.ts';
+
+/** Messages of the burst that provokes 
+ate_limited on the socket; provisional. */
+const FLOOD = 3000;
 
 type Surface = 'socket' | 'rest' | 'sync' | 'channel-close';
 
@@ -100,6 +105,78 @@ async function fresh(ctx: ScenarioContext, frame?: string) {
 
 async function firstError(ctx: ScenarioContext, w: Awaited<ReturnType<typeof fresh>>['w']) {
   return w.next((m) => m.t === 'error', 'an error message', { timeoutMs: ctx.timeoutMs });
+}
+
+/**
+ * Sets tenant quotas through `PUT /quotas` (service credential, 06 §12), runs `fn`, and puts the
+ * values the tenant had back, whatever `fn` does. A server that keeps no quota settings answers
+ * `not_found` and the scenario is skipped. The scenarios that use it need the test-mode switch,
+ * because for a moment the kit's own tenant has a quota of 0.
+ */
+async function withQuota(
+  ctx: ScenarioContext,
+  patch: Record<string, number>,
+  fn: () => Promise<void>,
+) {
+  const before = await ctx.service.call('GET', '/quotas');
+  if (before.status === 404) ctx.skip('the server keeps no quota settings (GET /quotas is 404)');
+  expectStatus(before, 200, 'GET /quotas');
+  const values = before.json as Record<string, number | null>;
+  const set = async (body: Record<string, number | null>) => {
+    const current = await ctx.service.call('GET', '/quotas');
+    return ctx.service.call('PUT', '/quotas', {
+      body,
+      headers: { 'if-match': current.headers.get('etag') ?? '*' },
+    });
+  };
+  expectStatus(await set(patch), 200, 'PUT /quotas');
+  try {
+    await fn();
+  } finally {
+    const restore: Record<string, number | null> = {};
+    // PUT /quotas takes whole numbers only (a dimension cannot be cleared), so a dimension the
+    // tenant had not set goes back as the largest whole number: no quota in practice (ADR 0415).
+    for (const k of Object.keys(patch)) restore[k] = values[k] ?? Number.MAX_SAFE_INTEGER;
+    expectStatus(await set(restore), 200, 'PUT /quotas, restoring the values');
+  }
+}
+
+/** A replacement of the content with the document's current ETag, as `replaceContent` of the service helper sends it. */
+async function replaceContent(ctx: ScenarioContext, doc: string) {
+  const current = await ctx.service.call('GET', `/documents/${doc}/content`);
+  return ctx.service.call('PUT', `/documents/${doc}/content`, {
+    body: importedDocument(),
+    headers: { 'if-match': current.headers.get('etag') ?? '*' },
+  });
+}
+/**
+ * `join` that waits for a server that is busy proving its lease: a node answers `unavailable` to a
+ * `ch.open` for a moment under load (05 §5.2), and the client opens again as 04 §9 says.
+ */
+async function joinWhenAvailable(ctx: ScenarioContext, name: string, doc: string, role: string) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await join(ctx, name, doc, role);
+    } catch (e) {
+      if (attempt >= 6 || !(e instanceof KitFailure) || !e.received?.includes('unavailable'))
+        throw e;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+}
+/** The fault-injection scenarios need the hooks of the server (ADR 0219, ADR 0398). */
+function requireHooks(ctx: ScenarioContext) {
+  if (!ctx.has(TEST_HOOKS_FEATURE)) ctx.skip(`the server does not announce ${TEST_HOOKS_FEATURE}`);
+}
+
+/** Runs `fn` while the store is unreachable (`POST /_test/database`), and brings it back. */
+async function withDatabaseDown(ctx: ScenarioContext, fn: () => Promise<void>) {
+  expectStatus(await hook(ctx, 'POST', '/database', { down: true }), 204, 'the database hook');
+  try {
+    await fn();
+  } finally {
+    await hook(ctx, 'POST', '/database', { down: false });
+  }
 }
 
 const PROVOCATIONS: Provocation[] = [
@@ -621,45 +698,197 @@ const PROVOCATIONS: Provocation[] = [
   {
     code: 'rate_limited',
     surface: 'socket',
-    how: 'a flood of messages',
-    unreachable:
-      'needs load beyond what a conformance run should send; the fault-injection profile (PRO-126)',
+    how: `a flood of ${FLOOD} messages on one connection`,
+    needs: { testMode: true },
+    async run(ctx) {
+      // The spec names no limit, so the kit sends a bounded burst of ch.open for a document the
+      // token does not cover (the figure is provisional, not a measurement; a ping is never limited,
+      // 04 §12) and skips when the server takes all of it. Test mode only, because it is a flood.
+      const { w } = await fresh(ctx);
+      const other = await ctx.document();
+      for (let i = 0; i < FLOOD; i++)
+        w.send({
+          t: 'ch.open',
+          ch: 1,
+          id: `f${i}`,
+          d: { kind: 'doc', doc: other, engine: 'pm-steps/1', cdm: 1, features: [] },
+        });
+      const limited = await w.arrives(
+        (m) => m.t === 'error' && m.d.code === 'rate_limited',
+        ctx.timeoutMs,
+      );
+      if (!limited) ctx.skip(`the server answered ${FLOOD} messages in a burst without a limit`);
+      socketError(
+        await w.next((m) => m.t === 'error' && m.d.code === 'rate_limited', 'a rate_limited error'),
+        'rate_limited',
+      );
+    },
   },
   {
     code: 'rate_limited',
     surface: 'sync',
-    how: 'a spent CPU budget in a room',
-    unreachable: 'needs load (04 §12); PRO-126',
+    how: 'a spent CPU budget in a room (the tenant quota roomCpuBudget set to 0)',
+    needs: { testMode: true },
+    async run(ctx) {
+      const doc = await ctx.document();
+      const m = await joinWhenAvailable(ctx, 'cpu', doc, 'editor');
+      await withQuota(ctx, { roomCpuBudget: 0 }, async () => {
+        syncReject(
+          await submit(m.wire, m.ch, {
+            base: m.content.seq,
+            steps: [insertText(posIn(m.content.doc, IDS.intro), 'x')],
+          }),
+          'rate_limited',
+        );
+      });
+      await m.wire.close();
+    },
   },
   {
     code: 'rate_limited',
     surface: 'rest',
-    how: 'a flood of requests',
-    unreachable: 'needs load; PRO-126',
+    how: 'a replacement of the content while the room CPU budget is spent',
+    needs: { testMode: true },
+    async run(ctx) {
+      const doc = await ctx.document();
+      await withQuota(ctx, { roomCpuBudget: 0 }, async () => {
+        restProblem(await replaceContent(ctx, doc), 'rate_limited', 'a spent CPU budget');
+      });
+    },
+  },
+  {
+    code: 'quota_exceeded',
+    surface: 'socket',
+    how: 'a hello over the connection quota of the tenant (set to 0)',
+    needs: { testMode: true },
+    async run(ctx) {
+      const doc = await ctx.document();
+      const { token } = await ctx.token('quota', { [doc]: 'editor' });
+      await withQuota(ctx, { connections: 0 }, async () => {
+        const w = await ctx.connect({ label: 'registry' });
+        w.send({
+          t: 'hello',
+          id: 'h',
+          d: { ...HELLO_BASE, token, features: ctx.clientFeatures() },
+        });
+        socketError(await firstError(ctx, w), 'quota_exceeded');
+      });
+    },
+  },
+  {
+    code: 'quota_exceeded',
+    surface: 'sync',
+    how: 'a commit over the commit-rate quota of the tenant (set to 0)',
+    needs: { testMode: true },
+    async run(ctx) {
+      const doc = await ctx.document();
+      const m = await joinWhenAvailable(ctx, 'rate', doc, 'editor');
+      await withQuota(ctx, { commitRate: 0 }, async () => {
+        syncReject(
+          await submit(m.wire, m.ch, {
+            base: m.content.seq,
+            steps: [insertText(posIn(m.content.doc, IDS.intro), 'x')],
+          }),
+          'quota_exceeded',
+        );
+      });
+      await m.wire.close();
+    },
   },
   {
     code: 'quota_exceeded',
     surface: 'rest',
-    how: 'a tenant quota',
-    unreachable: 'quotas are operator settings (06 §12); PRO-126',
+    how: 'a replacement of the content over the commit-rate quota of the tenant (set to 0)',
+    needs: { testMode: true },
+    async run(ctx) {
+      const doc = await ctx.document();
+      await withQuota(ctx, { commitRate: 0 }, async () => {
+        restProblem(await replaceContent(ctx, doc), 'quota_exceeded', 'a spent commit-rate quota');
+      });
+    },
   },
   {
     code: 'unavailable',
     surface: 'socket',
-    how: 'a draining server',
-    unreachable: 'needs fault injection (PRO-126; BE-079)',
+    how: 'a ch.open while the store is unreachable (the database hook)',
+    needs: { testMode: true },
+    async run(ctx) {
+      requireHooks(ctx);
+      const doc = await ctx.document();
+      const { token } = await ctx.token('down', { [doc]: 'editor' });
+      const w = await ctx.connect({ label: 'registry' });
+      await ctx.hello(w, token);
+      await withDatabaseDown(ctx, async () => {
+        const reply = await openChannel(ctx, w, 1, doc);
+        socketError(reply, 'unavailable');
+      });
+    },
+  },
+  {
+    code: 'unavailable',
+    surface: 'rest',
+    how: 'a replacement of the content while the store is unreachable (the database hook)',
+    needs: { testMode: true },
+    async run(ctx) {
+      requireHooks(ctx);
+      const doc = await ctx.document();
+      await withDatabaseDown(ctx, async () => {
+        restProblem(
+          await replaceContent(ctx, doc),
+          'unavailable',
+          'a replacement of the content while the database is down',
+        );
+      });
+    },
   },
   {
     code: 'unavailable',
     surface: 'sync',
-    how: 'a failed log write',
-    unreachable: 'needs fault injection (PRO-126; BE-079)',
+    how: 'a commit whose log write fails (the fail-next-write hook)',
+    needs: { testMode: true },
+    async run(ctx) {
+      requireHooks(ctx);
+      const doc = await ctx.document();
+      const m = await joinWhenAvailable(ctx, 'write', doc, 'editor');
+      expectStatus(
+        await hook(ctx, 'POST', `/documents/${doc}/fail-next-write`, { at: 'before-insert' }),
+        204,
+        'fail-next-write',
+      );
+      syncReject(
+        await submit(m.wire, m.ch, {
+          base: m.content.seq,
+          steps: [insertText(posIn(m.content.doc, IDS.intro), 'x')],
+        }),
+        'unavailable',
+      );
+      await m.wire.close();
+    },
   },
   {
     code: 'unavailable',
     surface: 'channel-close',
-    how: 'a room that moves',
-    unreachable: 'needs fault injection (PRO-126; BE-079)',
+    how: 'a room that is killed under an open channel (the kill-room hook)',
+    needs: { testMode: true },
+    async run(ctx) {
+      requireHooks(ctx);
+      const doc = await ctx.document();
+      const m = await joinWhenAvailable(ctx, 'fenced', doc, 'editor');
+      const from = m.wire.mark();
+      expectStatus(await hook(ctx, 'POST', `/documents/${doc}/kill-room`), 200, 'kill-room');
+      const closed = await m.wire.next<Extract<ServerMessage, { t: 'ch.closed' }>>(
+        (x) => x.t === 'ch.closed' && x.ch === m.ch,
+        'ch.closed on the killed room',
+        { from },
+      );
+      equal(closed.d.code, 'unavailable', 'the ch.closed code');
+      includes(
+        retryHint('unavailable').surfaces as string[],
+        'channel-close',
+        'unavailable may close a channel (05 §5.8)',
+      );
+      await m.wire.close();
+    },
   },
   {
     code: 'internal',
