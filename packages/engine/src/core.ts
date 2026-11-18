@@ -3295,6 +3295,7 @@ export class DocumentCore implements DocumentApi {
             text: i.text,
             seq: i.seq,
             ...this.#rejectionWords(i),
+            ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
           })),
         ];
         this.recovered.set({ count: items.length, items });

@@ -173,6 +173,8 @@ export interface RecoveredItem {
   readonly scopes?: readonly string[];
   /** When the permissions changed (an ISO 8601 time), when known (07 §9; PRM-024). */
   readonly changedAt?: string | null;
+  /** For a `conflict` that named fields: their identifiers, changed by someone else first (FRW-010). */
+  readonly fields?: readonly string[];
 }
 
 /** Work set aside so far; `de-recovered-edits` carries `count` (05 §8.1). */

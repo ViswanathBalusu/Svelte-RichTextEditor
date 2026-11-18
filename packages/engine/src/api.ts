@@ -489,6 +489,11 @@ export interface RecoveredItem {
   changedBy?: string | null;
   /** When that control commit was stored (its `serverTime`), or null when unknown. */
   changedAt?: string | null;
+  /**
+   * For a `conflict` rejection that named fields: their identifiers, which someone else changed
+   * first (12 §4.2, P9; FRW-010 criterion 5). Absent for any other reason.
+   */
+  fields?: string[];
 }
 
 /** Work set aside so far: `de-recovered-edits` carries `count` (05 §8.1). */
