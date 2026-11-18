@@ -41,6 +41,7 @@ import { recordOf } from '../workflow/record.ts';
 import { signField, type SignProblem } from '../workflow/sign-service.ts';
 import { completeMyPart, type CompleteProblem } from '../workflow/complete-service.ts';
 import { startFinalExport } from '../workflow/final-export-start.ts';
+import { buildWorkflowEvidenceBundle } from '../workflow/evidence-bundle.ts';
 import { EXPORT_POLICY_DEFAULTS } from './export-routes.ts';
 import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
@@ -923,6 +924,43 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
   };
 
   /**
+   * `GET /documents/{id}/workflow/evidence` (12 §8.2 step 4, §10; FRW-055 criterion 1; method
+   * assumed, G95; docs/adr/0402-w4-FRW-055-evidence-bundle.md, proposed). The caller needs `manage`:
+   * 07 §12 has no row for the bundle, which holds personal data. The workflow must be `completed` or
+   * `finalised`. The answer is the bundle (`docedit-workflow-evidence/1`); every retrieval is audited
+   * as `workflow.evidence_retrieved` with the caller, the document and the server time.
+   */
+  const getEvidence: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    if (!d.evidence) throw new ApiError('not_found', 'this server keeps no workflow evidence');
+    guard(ctx.caller, 'manage', doc);
+    await liveDocument(ctx, doc);
+    const found = await store().read(ctx.caller.tenant, doc);
+    if (found === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (found.state !== 'completed' && found.state !== 'finalised')
+      throw new ApiError('not_found', `the workflow of document ${doc} has no evidence bundle yet`);
+    const built = await buildWorkflowEvidenceBundle(
+      { logs: d.logs, evidence: d.evidence },
+      k.refOf(ctx, doc),
+      found,
+    );
+    if (!built.ok)
+      throw new ApiError('not_found', `the workflow of document ${doc} has no evidence bundle yet`);
+    await d.audit?.record([
+      {
+        id: uuid7(),
+        tenant: ctx.caller.tenant,
+        doc,
+        actor: ctx.caller.actor,
+        kind: 'workflow.evidence_retrieved',
+        data: { workflow: found.id, state: found.state, items: built.bundle.evidence.items.length },
+        at: d.now(),
+      },
+    ]);
+    return json(200, built.bundle, { 'Cache-Control': 'private, no-store' });
+  };
+
+  /**
    * `GET /documents/{id}/workflow/final` (12 §8.2 step 4, §10; FRW-054 criterion 4; method assumed,
    * G95; docs/adr/0401-w4-FRW-054-finalise-and-final-route.md, proposed). The caller needs the head
    * content's capability, as for the workflow resource (07 §12 has no row for it). The answer is the
@@ -959,6 +997,7 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
   return {
     getWorkflow,
     getWorkflowFinal: getFinal,
+    getWorkflowEvidence: getEvidence,
     putWorkflow,
     sendWorkflow: sendWorkflowRoute,
     remindWorkflow: remindWorkflowRoute,
