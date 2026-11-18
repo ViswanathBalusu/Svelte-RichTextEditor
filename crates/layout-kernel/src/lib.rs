@@ -2,7 +2,8 @@
 //! the layout engine (02 §9.1), compiled to WebAssembly and loaded on demand (WASM-002).
 //!
 //! WASM-001 is the toolchain: three calls that prove the build and the package end to end. WASM-005
-//! adds the font faces (`faces`) and WASM-006 shaping and measurement with HarfRust (`shaping`). The kernel reads no file, no clock and no system font: every input
+//! adds the font faces (`faces`), WASM-006 shaping and measurement with HarfRust (`shaping`) and
+//! WASM-008 first-fit line breaking (`linebreak`). The kernel reads no file, no clock and no system font: every input
 //! is a byte slice, a string or a number given by the caller, and fonts arrive only as the bytes of
 //! the files the manifest names, checked against the manifest's SHA-256.
 //!
@@ -17,10 +18,12 @@ use harfrust::{shape, Buffer, Feature, Font, Language, ShapeOptions, ShaperFont}
 use wasm_bindgen::prelude::*;
 
 pub mod faces;
+pub mod linebreak;
 pub mod sha256;
 pub mod shaping;
 
 use faces::{FaceStore, Loaded};
+use linebreak::{break_lines, Align, Measure, Params, Stop};
 use shaping::{
     scale_units, spread_advances, to_advance_units, ShapeCache, ShapeFailure, ShapeKey,
     ADVANCE_UNITS_PER_POINT,
@@ -35,7 +38,7 @@ thread_local! {
 
 /// The version of the call interface. It changes when a call of the kernel changes its meaning, or
 /// when a call is added.
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;
 
 /// The version of the crate, as `major.minor.patch`.
 #[wasm_bindgen]
@@ -297,6 +300,141 @@ pub fn face_line_metrics(alias: &str, size_twips: u32) -> Result<Vec<i32>, JsErr
     Ok(vec![ascent, descent, gap])
 }
 
+/// The runs of a paragraph, as arrays that are the same length: the end of each run in code units,
+/// the face alias, the size in twips, the language and the features of a text run, and the width of
+/// a box run (an inline atom; -1 for a text run).
+struct RunMeasure<'a> {
+    ends: &'a [u32],
+    aliases: &'a [String],
+    sizes: &'a [u32],
+    languages: &'a [String],
+    features: &'a [String],
+    boxes: &'a [i32],
+    text: &'a [u16],
+}
+
+impl Measure for RunMeasure<'_> {
+    type Error = ShapeFailure;
+
+    /// The width of text[a, b): a text run is shaped over the part of it inside the range (through
+    /// the cache), a box run counts its whole width when the range touches it.
+    fn span(&mut self, a: usize, b: usize) -> Result<i64, ShapeFailure> {
+        let mut total = 0i64;
+        let mut start = 0usize;
+        for (i, &end) in self.ends.iter().enumerate() {
+            let end = end as usize;
+            let (low, high) = (a.max(start), b.min(end));
+            if low < high {
+                let width = self.boxes[i];
+                if width >= 0 {
+                    total += i64::from(width);
+                } else {
+                    let advances = run_advances(
+                        &self.aliases[i],
+                        self.sizes[i],
+                        &self.languages[i],
+                        &self.features[i],
+                        &self.text[low..high],
+                    )?;
+                    total += advances.iter().map(|&v| i64::from(v)).sum::<i64>();
+                }
+            }
+            start = end;
+        }
+        Ok(total)
+    }
+}
+
+/// Breaks one paragraph into lines by first fit (`linebreak.rs`), shaping each run through the cache.
+///
+/// `text` is the block's text with each inline atom as one code unit (09 §7.1). The runs are the
+/// parallel arrays `run_ends` (exclusive ends, ascending, the last the text's length), `run_aliases`,
+/// `run_sizes` (twips), `run_languages`, `run_features` and `run_boxes` (the width of an atom in
+/// advance units, or -1 for a text run). `opportunities` are the offsets at which a break is allowed.
+/// `geometry` is `[column_width, indent_left, indent_right, indent_first, default_tab_stop]` and
+/// `tab_stops` pairs of `[position, align]` (0 left, 1 centre, 2 right, 3 decimal), all lengths in
+/// advance units. The answer is six numbers for each line: `from`, `to`, `x`, `width`, and for a
+/// justified line the space it needs (`extra`) and the number of spaces that share it. Throws
+/// `bad_request`, or what shaping throws (`unknown_face`, `bad_feature`, `shape_failed`, `bad_size`).
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn break_paragraph(
+    text: &[u16],
+    run_ends: &[u32],
+    run_aliases: Vec<String>,
+    run_sizes: &[u32],
+    run_languages: Vec<String>,
+    run_features: Vec<String>,
+    run_boxes: &[i32],
+    opportunities: &[u32],
+    geometry: &[i32],
+    tab_stops: &[i32],
+    justify: bool,
+) -> Result<Vec<i32>, JsError> {
+    let bad = || JsError::new(ShapeFailure::BadRequest.code());
+    let runs = run_ends.len();
+    if run_aliases.len() != runs
+        || run_sizes.len() != runs
+        || run_languages.len() != runs
+        || run_features.len() != runs
+        || run_boxes.len() != runs
+        || geometry.len() != 5
+        || tab_stops.len() % 2 != 0
+    {
+        return Err(bad());
+    }
+    let mut previous = 0u32;
+    for &end in run_ends {
+        if end < previous {
+            return Err(bad());
+        }
+        previous = end;
+    }
+    if usize::try_from(previous).unwrap_or(usize::MAX) != text.len() {
+        return Err(bad());
+    }
+    let stops = tab_stops
+        .chunks_exact(2)
+        .map(|pair| Stop {
+            position: i64::from(pair[0]),
+            align: Align::from_code(pair[1]),
+        })
+        .collect();
+    let params = Params {
+        text,
+        opportunities,
+        column_width: i64::from(geometry[0]),
+        indent_left: i64::from(geometry[1]),
+        indent_right: i64::from(geometry[2]),
+        indent_first: i64::from(geometry[3]),
+        stops,
+        default_tab: i64::from(geometry[4]),
+        justify,
+    };
+    let mut measure = RunMeasure {
+        ends: run_ends,
+        aliases: &run_aliases,
+        sizes: run_sizes,
+        languages: &run_languages,
+        features: &run_features,
+        boxes: run_boxes,
+        text,
+    };
+    let lines =
+        break_lines(&params, &mut measure).map_err(|failure| JsError::new(failure.code()))?;
+    let clamp = |v: i64| i32::try_from(v).unwrap_or(if v < 0 { i32::MIN } else { i32::MAX });
+    let mut out = Vec::with_capacity(lines.len() * 6);
+    for line in lines {
+        out.push(clamp(i64::from(line.from)));
+        out.push(clamp(i64::from(line.to)));
+        out.push(clamp(line.x));
+        out.push(clamp(line.width));
+        out.push(clamp(line.extra));
+        out.push(clamp(i64::from(line.spaces)));
+    }
+    Ok(out)
+}
+
 /// What the shaping cache has done: hits, misses, entries and the code units of text it holds.
 #[wasm_bindgen]
 pub fn shape_cache_stats() -> Vec<u32> {
@@ -324,7 +462,7 @@ mod tests {
     #[test]
     fn reports_the_crate_version_and_the_interface_version() {
         assert_eq!(kernel_version(), env!("CARGO_PKG_VERSION"));
-        assert_eq!(abi_version(), 3);
+        assert_eq!(abi_version(), 4);
     }
 
     #[test]

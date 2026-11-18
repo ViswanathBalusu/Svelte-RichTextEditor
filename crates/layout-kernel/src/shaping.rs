@@ -38,6 +38,8 @@ pub enum ShapeFailure {
     Failed,
     /// The size is 0.
     BadSize,
+    /// The arrays of a request do not agree (`break_paragraph`).
+    BadRequest,
 }
 
 impl ShapeFailure {
@@ -47,6 +49,7 @@ impl ShapeFailure {
             ShapeFailure::BadFeature => "bad_feature",
             ShapeFailure::Failed => "shape_failed",
             ShapeFailure::BadSize => "bad_size",
+            ShapeFailure::BadRequest => "bad_request",
         }
     }
 }

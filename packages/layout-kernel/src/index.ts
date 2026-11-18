@@ -12,8 +12,10 @@
  * fonts arrive as bytes from the manifest (WASM-005).
  */
 
+import { packParagraph, unpackLines, type BrokenLine, type ParagraphInput } from './paragraph.ts';
+
 /** The version of the kernel's call interface that this package expects of the crate. */
-export const KERNEL_ABI_VERSION = 3;
+export const KERNEL_ABI_VERSION = 4;
 
 /** The files that `build:wasm` writes to `dist/`, by role. */
 export const KERNEL_FILES = {
@@ -61,10 +63,24 @@ export interface KernelGlue {
   face_line_metrics(alias: string, size_twips: number): Int32Array;
   shape_cache_stats(): Uint32Array;
   shape_cache_clear(): void;
+  break_paragraph(
+    text: Uint16Array,
+    run_ends: Uint32Array,
+    run_aliases: string[],
+    run_sizes: Uint32Array,
+    run_languages: string[],
+    run_features: string[],
+    run_boxes: Int32Array,
+    opportunities: Uint32Array,
+    geometry: Int32Array,
+    tab_stops: Int32Array,
+    justify: boolean,
+  ): Int32Array;
 }
 
 /** The codes of a run that was not shaped (crates/layout-kernel/src/shaping.rs). */
-export type ShapeErrorCode = 'unknown_face' | 'bad_feature' | 'shape_failed' | 'bad_size';
+export type ShapeErrorCode =
+  'unknown_face' | 'bad_feature' | 'shape_failed' | 'bad_size' | 'bad_request';
 
 /** A run the kernel did not shape. `code` is the crate's code. */
 export class KernelShapeError extends Error {
@@ -159,6 +175,13 @@ export interface KernelShaper {
   lineMetrics(alias: string, sizeTwips: number): RunLineMetrics;
   cacheStats(): ShapeCacheStats;
   clearCache(): void;
+  /**
+   * Breaks a paragraph into lines by first fit (WASM-008): the rule of the layout engine's own
+   * breaker, in advance units, with the break opportunities given. Each text run is shaped through
+   * the cache, so re-breaking an edited paragraph shapes only what changed. Throws
+   * `KernelShapeError` (`unknown_face`, `bad_request` and the like).
+   */
+  breakParagraph(paragraph: ParagraphInput): BrokenLine[];
 }
 
 /** A started kernel. */
@@ -301,9 +324,30 @@ export function finishKernel(glue: Omit<KernelGlue, 'initSync'>, output?: unknow
         return { hits, misses, entries, units };
       },
       clearCache: () => glue.shape_cache_clear(),
+      breakParagraph: (paragraph) => {
+        const p = packParagraph(paragraph);
+        return unpackLines(
+          shapeCall(() =>
+            glue.break_paragraph(
+              p.text,
+              p.runEnds,
+              p.aliases,
+              p.sizes,
+              p.languages,
+              p.features,
+              p.boxes,
+              p.opportunities,
+              p.geometry,
+              p.tabStops,
+              paragraph.justify === true,
+            ),
+          ),
+        );
+      },
     },
     memoryBytes: () => memoryOf(output)?.buffer.byteLength ?? null,
   };
 }
 
 export * from './batch.ts';
+export * from './paragraph.ts';

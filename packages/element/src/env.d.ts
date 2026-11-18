@@ -34,4 +34,5 @@ declare module '@docedit/layout-kernel/wasm/docedit_layout_kernel.js' {
   export const face_line_metrics: KernelGlueModule['face_line_metrics'];
   export const shape_cache_stats: KernelGlueModule['shape_cache_stats'];
   export const shape_cache_clear: KernelGlueModule['shape_cache_clear'];
+  export const break_paragraph: KernelGlueModule['break_paragraph'];
 }
