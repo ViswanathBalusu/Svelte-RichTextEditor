@@ -371,6 +371,7 @@
         "suggestion.reject",
         "fill",
         "assistant",
+        "extension",
         "restore",
         "import",
         "migration",
@@ -1105,10 +1106,15 @@
               "minLength": 1
             },
             "state": {
+              "description": "The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's.",
               "type": "string",
               "examples": [
                 "active",
-                "completed"
+                "completed",
+                "waiting",
+                "paused",
+                "copy",
+                "closed"
               ]
             }
           },
@@ -3720,6 +3726,12 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "firstViewedAt": {
+                "description": "When the participant first opened the document (12 §6.3; FRW-031).",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
               }
             },
             "required": [

@@ -1017,6 +1017,7 @@
           "suggestion.reject",
           "fill",
           "assistant",
+          "extension",
           "restore",
           "import",
           "migration",
@@ -1751,10 +1752,15 @@
                 "minLength": 1
               },
               "state": {
+                "description": "The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's.",
                 "type": "string",
                 "examples": [
                   "active",
-                  "completed"
+                  "completed",
+                  "waiting",
+                  "paused",
+                  "copy",
+                  "closed"
                 ]
               }
             },

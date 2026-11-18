@@ -24,6 +24,16 @@ describe('refusals of the region guard', () => {
     expect(tracker.refusal(null)).toBeNull();
   });
 
+  it('says why a column, a merge or a split was refused in suggestion mode (FE-045 criterion 5)', () => {
+    const tracker = new NoticeTracker(null, undefined);
+    const notice = tracker.refusal({ n: 1, reason: 'suggestion', scopes: ['body'] });
+    expect(notice).toMatchObject({ kind: 'refusal', key: 'notice.refused.suggestion' });
+    const words = new Strings().current;
+    expect(words.t('notice.refused.suggestion')).toContain('suggestion mode cannot record it');
+    // The words carry no scope: the notice does not say where the change was tried (ADR 0019).
+    expect(words.t('notice.refused.suggestion')).not.toContain('body');
+  });
+
   it('explains every code of the guard, and an unknown one in general words', () => {
     for (const reason of [
       'scope',
@@ -35,6 +45,7 @@ describe('refusals of the region guard', () => {
       'identifier',
       'step',
       'invariant',
+      'suggestion',
     ])
       expect(refusalKey(reason), reason).not.toBe('notice.refused.other');
     expect(refusalKey('something-new')).toBe('notice.refused.other');

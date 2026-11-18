@@ -127,6 +127,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `view.checker` | accessibility-checker |
 | `view.sources` | citations |
 | `view.fieldProperties` | fields-and-forms |
+| `view.rules` | fields-and-forms |
 | `view.roles` | fields-and-forms |
 | `view.fillSummary` | fields-and-forms |
 | `format.painter` | format-painter |
@@ -147,6 +148,10 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `mode.review` | modes |
 | `mode.view` | modes |
 | `mode.fill` | modes |
+| `review.markup.all` | suggestions |
+| `review.markup.simple` | suggestions |
+| `review.markup.none` | suggestions |
+| `review.markup.original` | suggestions |
 | `view.layout.web` | views |
 | `view.layout.read` | views |
 | `view.layout.print` | views |

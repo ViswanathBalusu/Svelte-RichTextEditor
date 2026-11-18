@@ -41,7 +41,7 @@ This document defines how concurrent edits are ordered, validated and distribute
 | `id` | UUID chosen by the client. Unique per document. Reused unchanged when the same commit is resubmitted |
 | `base` | The `seq` the client had applied when it created the steps |
 | `steps` | 1 to `maxStepsPerCommit` steps (default 500). The serialised commit MUST NOT exceed `maxCommitBytes` (default 1 MiB) |
-| `origin` | A hint from the client: `input`, `paste`, `format`, `undo`, `redo`, `suggestion.accept`, `suggestion.reject`, `fill`, `assistant`. It is recorded and shown as the client's claim; nothing is authorised on its strength |
+| `origin` | A hint from the client: `input`, `paste`, `format`, `undo`, `redo`, `suggestion.accept`, `suggestion.reject`, `fill`, `assistant`, `extension` (a change made by an extension through the document API of 13 §7.1). It is recorded and shown as the client's claim; nothing is authorised on its strength |
 
 Origins reserved for commits the server authors: `restore`, `import`, `migration`, `repair`, `sign`, `rules`, `prefill`, `control`.
 

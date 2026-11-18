@@ -76,3 +76,30 @@ export function workflowView(record: WorkflowRecord, participantId: string | nul
         : { id: own.id, kind: own.kind, status: participantStatusWord(record, own) },
   };
 }
+
+/**
+ * The workflow object as it goes on the wire (`ch.opened.workflow` and `wf.changed`, 12 §10; the
+ * `WorkflowStatus` of the DEP definition): the state and the receiving participant's own status.
+ * It never names another participant (FRW-035 criterion 5). A connection that is not a participant
+ * gets the state alone.
+ */
+export interface WorkflowStatusMessage {
+  readonly state: WorkflowStateName;
+  readonly participant?: { readonly id: string; readonly state: ParticipantStatusWord };
+}
+
+export function workflowStatus(
+  record: WorkflowRecord,
+  participantId: string | null | undefined,
+): WorkflowStatusMessage {
+  const own =
+    participantId === null || participantId === undefined
+      ? undefined
+      : record.participants.find((p) => p.id === participantId);
+  return own === undefined
+    ? { state: record.state }
+    : {
+        state: record.state,
+        participant: { id: own.id, state: participantStatusWord(record, own) },
+      };
+}

@@ -10,8 +10,8 @@
  * - `all`: every suggestion, with a class for its kind (`de-suggest-ins`, `de-suggest-del`,
  *   `de-suggest-fmt`), so the editing surface can tell the kinds apart without colour;
  * - `simple`: the document as it reads once every suggestion is accepted: a deleted run or block is
- *   hidden (`de-suggest-hidden`), and an insertion or formatting change carries the cue
- *   `de-suggest-changed`;
+ *   taken out of the text but leaves a bar where it was (`de-suggest-gone`), and an insertion or
+ *   formatting change carries the bar `de-suggest-changed` (UX-035: a marker where changes exist);
  * - `original`: the document as it reads once every suggestion is rejected: an inserted run or block
  *   is hidden, a deleted run is restored (`de-suggest-restored`), and a formatting change is shown
  *   at its previous value (`de-suggest-before`);
@@ -36,11 +36,11 @@ const SUGGESTION_MARKS: ReadonlySet<string> = new Set(['ins', 'del', 'fmt']);
 export function suggestionClasses(view: MarkupView, kind: 'ins' | 'del' | 'fmt'): string[] {
   switch (view) {
     case 'none':
-      return [];
+      return kind === 'del' ? ['de-suggest-hidden'] : [];
     case 'all':
       return [`de-suggest-${kind}`];
     case 'simple':
-      return kind === 'del' ? ['de-suggest-hidden'] : ['de-suggest-changed'];
+      return kind === 'del' ? ['de-suggest-gone'] : ['de-suggest-changed'];
     case 'original':
       if (kind === 'ins') return ['de-suggest-hidden'];
       return kind === 'del' ? ['de-suggest-restored'] : ['de-suggest-before'];
@@ -73,8 +73,17 @@ export function authorTone(user: string): number {
   return h % AUTHOR_TONES;
 }
 
-export function suggestionSpecs(doc: PMNode, view: MarkupView): SuggestionSpec[] {
-  if (view === 'none') return [];
+/**
+ * Names a suggestion for assistive technology, for example Inserted by Ada (UX-035 criterion 4).
+ * The engine has no strings or people: the shell supplies the words and the author's name.
+ */
+export type SuggestionLabel = (kind: 'ins' | 'del' | 'fmt', user: string) => string;
+
+export function suggestionSpecs(
+  doc: PMNode,
+  view: MarkupView,
+  label?: SuggestionLabel,
+): SuggestionSpec[] {
   const specs: SuggestionSpec[] = [];
   doc.descendants((node, pos) => {
     for (const mark of node.marks) {
@@ -91,6 +100,15 @@ export function suggestionSpecs(doc: PMNode, view: MarkupView): SuggestionSpec[]
           'data-suggestion-user': String(mark.attrs['user'] ?? ''),
           'data-suggestion-id': String(mark.attrs['id'] ?? ''),
           'data-suggestion-tone': String(authorTone(String(mark.attrs['user'] ?? ''))),
+          // The words a screen reader hears before the run; the stylesheet draws them out of sight.
+          ...(label && view !== 'none'
+            ? {
+                'data-suggestion-label': label(
+                  kind as 'ins' | 'del' | 'fmt',
+                  String(mark.attrs['user'] ?? ''),
+                ),
+              }
+            : {}),
         },
       });
     }

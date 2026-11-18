@@ -58,6 +58,9 @@ import { commitBytes, parseSteps, stepsToJson } from '../steps.ts';
 import { Admission, type AdmissionConfig } from './admission.ts';
 import { featuresUsed } from './features.ts';
 import { DEFAULT_RULE_BUDGET, ruleGate } from './rules.ts';
+import type { WorkflowRecord } from '../workflow/lifecycle.ts';
+import { fillActive } from '../workflow/order.ts';
+import { workflowStatus } from '../workflow/state-view.ts';
 import {
   type ThreadAnchor,
   type ThreadState,
@@ -115,6 +118,8 @@ interface Channel {
   conn: RoomConnection;
   access: Access;
   inflight: string | null;
+  /** The workflow object last sent on the channel, as JSON (FRW-035), or null when none was. */
+  workflow?: string | null;
 }
 
 /** What the control plane relied on when it authorised a server-authored commit (04 §5, §10). */
@@ -172,6 +177,12 @@ export interface RoomInit {
   /** Stored commits from sequence number `initialSeq + 1`, in order. */
   log: readonly LogCommit[];
   perms: PermissionState;
+  /**
+   * The document's workflow, when it has one (FRW-035). The room then derives `access.fill.active`
+   * of a connection that carries a `participant` from it, sends the workflow object on `ch.opened`
+   * and keeps it current through `workflowChanged`.
+   */
+  workflow?: WorkflowRecord;
   /** The grants revision in force at `initialSeq` (when the document was created, for 0). */
   initialRevision: number;
   epoch: number;
@@ -428,6 +439,7 @@ export class Room {
   private readonly retired = new Set<string>();
   private readonly owners = new Map<string, string>();
   private perms: PermissionState;
+  private workflow: WorkflowRecord | null;
   private recordedRevision = 0;
 
   private tentativeDoc: Node;
@@ -447,6 +459,7 @@ export class Room {
     this.attachedAssets = init.attachedAssets;
     this.mathGate = init.mathGate;
     this.perms = init.perms;
+    this.workflow = init.workflow ?? null;
     this.recordedRevision = init.initialRevision;
     this.baseSeq = init.initialSeq ?? 0;
     this.historyVisibility = init.historyVisibility ?? DEFAULT_HISTORY_VISIBILITY;
@@ -609,12 +622,40 @@ export class Room {
     // Computed afresh for every check, from the tentative document, so that a region created,
     // removed or re-policied by an earlier commit, and any expiry, is always taken into account.
     // The region list comes from the index, not from a scan of the body (PRM-016).
-    return computeAccess(conn, this.tentativeIndex.regionList(), this.perms, this.now());
+    return computeAccess(
+      this.withWorkflow(conn),
+      this.tentativeIndex.regionList(),
+      this.perms,
+      this.now(),
+    );
+  }
+
+  /**
+   * The connection as the workflow sees it (FRW-035): a participant of the workflow is active
+   * exactly when the record says so, whatever the token claimed when it was issued. A connection
+   * with no participant, or one the record does not list, is left as it is.
+   */
+  private withWorkflow(conn: Connection): Connection {
+    if (this.workflow === null || conn.participant === undefined) return conn;
+    const id = conn.participant;
+    if (!this.workflow.participants.some((p) => p.id === id)) return conn;
+    const active = fillActive(this.workflow, id);
+    return active === conn.participantActive ? conn : { ...conn, participantActive: active };
+  }
+
+  /** The workflow object for a connection, as JSON text for comparison, or null without a workflow. */
+  private workflowFor(conn: Connection) {
+    return this.workflow === null ? null : workflowStatus(this.workflow, conn.participant);
   }
 
   /** Access at the durable head, for the requests that refer to it (threads; 07 §6). */
   private durableAccess(conn: Connection): Access {
-    return computeAccess(conn, this.durableIndex.regionList(), this.perms, this.now());
+    return computeAccess(
+      this.withWorkflow(conn),
+      this.durableIndex.regionList(),
+      this.perms,
+      this.now(),
+    );
   }
 
   private content(seq: number, doc: Node) {
@@ -652,7 +693,14 @@ export class Room {
       return fx;
     }
     const access = this.access(conn);
-    this.channels.set(channel, { id: channel, conn, access, inflight: null });
+    const workflow = this.workflowFor(conn);
+    this.channels.set(channel, {
+      id: channel,
+      conn,
+      access,
+      inflight: null,
+      workflow: workflow === null ? null : JSON.stringify(workflow),
+    });
     // Only the caller's own commit is reported as accepted; another user's identifier is "unknown",
     // so a resubmission meets the duplicate check of step 2 and is refused (04 §5; 07 §16). A
     // commit still waiting to be stored is "unknown" too: a resubmission attaches to it (step 2).
@@ -672,6 +720,7 @@ export class Room {
       incarnation: this.incarnation,
       inflight,
       access,
+      ...(workflow === null ? {} : { workflow }),
     };
     if (catchUp === 'reload') {
       fx.send.push({
@@ -1697,6 +1746,39 @@ export class Room {
     this.ensureControlCommit();
     this.startWrite(fx);
     return fx;
+  }
+
+  /**
+   * The workflow moved (FRW-035): a transition, a completion or an activation. `record` is the new
+   * state of the workflow; `perms` is the permission state the control plane stored with it, whose
+   * revision is higher when the transition changes what a connection may do (the lock, an
+   * activation). From this call the room enforces the new access. A channel gets `perm.changed`
+   * first (every channel with `perms`; only the channels whose access changed without it) and
+   * then, when its own workflow object changed, `wf.changed` with the complete new object. A channel is told nothing about other participants. The revision is
+   * recorded as a control commit, as for `permissionsChanged`.
+   */
+  workflowChanged(record: WorkflowRecord, perms?: PermissionState): Effects {
+    const fx = this.fx();
+    if (this.stopped) return fx;
+    this.workflow = record;
+    if (perms !== undefined) this.setPermissions(perms, fx);
+    // A transition that changes access under the same revision (no lock moved) is sent as an expiry is.
+    this.sendAccessChanges(fx);
+    for (const ch of this.channels.values()) {
+      const view = this.workflowFor(ch.conn);
+      const text = view === null ? null : JSON.stringify(view);
+      if (text === (ch.workflow ?? null)) continue;
+      ch.workflow = text;
+      if (view !== null) fx.send.push({ channel: ch.id, msg: { t: 'wf.changed', workflow: view } });
+    }
+    this.ensureControlCommit();
+    this.startWrite(fx);
+    return fx;
+  }
+
+  /** The document's workflow as the room holds it, or null (FRW-035). */
+  get workflowRecord(): WorkflowRecord | null {
+    return this.workflow;
   }
 
   private setPermissions(perms: PermissionState, fx: Effects): void {

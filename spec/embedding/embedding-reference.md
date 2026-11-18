@@ -118,6 +118,10 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `proofing.next` | review | spelling-and-grammar | `Alt-F7` |  |
 | `proofing.previous` | review | spelling-and-grammar | `Alt-Shift-F7` |  |
 | `review.comment` | review | comments |  |  |
+| `review.markup.all` | review | suggestions |  |  |
+| `review.markup.none` | review | suggestions |  |  |
+| `review.markup.original` | review | suggestions |  |  |
+| `review.markup.simple` | review | suggestions |  |  |
 | `view.catchUp` | header | catch-up |  |  |
 | `view.checker` | review | accessibility-checker |  |  |
 | `view.commandSearch` | view | command-search | `Alt-Q` |  |

@@ -395,6 +395,15 @@ export {
 // FRW-038). Exported for the workflow service (FRW-030), which is not built yet: nothing raises,
 // signs or delivers these events today.
 export { lockFor, type WorkflowLock } from './workflow/lock.ts';
+// The workflow object of `ch.opened` and `wf.changed` (FRW-035).
+export {
+  workflowStatus,
+  workflowView,
+  participantStatusWord,
+  type ParticipantStatusWord,
+  type WorkflowStatusMessage,
+  type WorkflowView,
+} from './workflow/state-view.ts';
 // The send transition, the order of activation and the refusals' registry codes (FRW-027, FRW-030),
 // for the document service's workflow routes.
 export {
@@ -404,7 +413,8 @@ export {
   type SendResult,
   type SentHead,
 } from './workflow/send.ts';
-export { activeParticipantIds } from './workflow/order.ts';
+export { activeParticipantIds, completeParticipant, fillActive } from './workflow/order.ts';
+export { openWorkflow } from './workflow/lifecycle.ts';
 export {
   sendProblem,
   transitionProblem,

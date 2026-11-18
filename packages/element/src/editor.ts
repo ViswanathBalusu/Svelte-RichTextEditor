@@ -58,6 +58,7 @@ import { attachShortcuts } from './shortcuts.ts';
 import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
+import { rulesService } from './rules.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
 import { mayChange } from './status.ts';
@@ -482,6 +483,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     roles: rolesService(core),
     // The field properties pane (FRW-073): a field's authored attributes and the change of them.
     fieldProperties: fieldPropertiesService(core),
+    // The rule builder (FRW-024): the core's rules as sentences and the changes to them, as commits.
+    rules: rulesService(core),
     // The math editor (FE-070): the selected equation, its limits and its confirmation; MathLive loads on first use.
     mathEditor: mathEditorService(core, { fontsUrl: options.mathFontsUrl }),
     // Fill mode (FRW-076, FRW-078): the fields without their values, for the guided bar and the
@@ -491,6 +494,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
     status,
     pdf,
     ...(options.exports ? { exports: options.exports } : {}),
+    // How suggestions are shown (UX-035), and the words that name them for assistive technology.
+    markupView: core.markupView,
+    setMarkupView: (view) => core.setMarkupView(view),
+    setSuggestionLabel: (label) => core.setSuggestionLabel(label),
     // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,

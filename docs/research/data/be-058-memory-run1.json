@@ -1,0 +1,371 @@
+{
+  "harness": "BE-058",
+  "date": "2026-11-18T05:57:16.832Z",
+  "storage": "memory",
+  "node": {
+    "machine": {
+      "platform": "win32 10.0.26300",
+      "cpu": "Intel(R) Core(TM) i9-10900KF CPU @ 3.70GHz",
+      "logicalCpus": 20,
+      "memoryGiB": 127.8
+    },
+    "nodeVersion": "v22.18.0",
+    "serviceHeapLimitMiB": "node default",
+    "note": "The load generator and the service run on one machine as two processes, over the loopback interface."
+  },
+  "database": null,
+  "run": {
+    "settings": {
+      "connections": 2000,
+      "documents": 500,
+      "typistSteps": [
+        25,
+        50,
+        75,
+        100,
+        150
+      ],
+      "gateTypists": 50,
+      "commitsPerSecond": 3,
+      "holdMs": 20000,
+      "coldDocuments": 10,
+      "coldParagraphs": 4000,
+      "connectConcurrency": 50,
+      "eventLoopBudgetMs": 300,
+      "drainWaitMs": 90000,
+      "metricsToken": "6c9e33527c08f5512d5b50c3846573c7c364251ecc14939b"
+    },
+    "rampUpMs": 5608,
+    "connected": 2000,
+    "connectFailures": 0,
+    "connectOpenMs": {
+      "n": 2000,
+      "p50": 22.9,
+      "p95": 33,
+      "p99": 39.1,
+      "max": 49,
+      "mean": 23.3
+    },
+    "atPeak": {
+      "openRooms": 500,
+      "slowConsumers": 0,
+      "eventLoopP99Ms": 498.04,
+      "eventLoopMaxMs": 520.58,
+      "rssMiB": 286.4,
+      "cpuSeconds": 20.108,
+      "at": 18456.5265
+    },
+    "cdmBytes": 680595,
+    "phases": [
+      {
+        "typists": 25,
+        "offeredCommitsPerSecond": 75,
+        "commitsSent": 1468,
+        "commitsAcked": 1468,
+        "unacked": 0,
+        "commitsPerSecond": 72.2,
+        "ackMs": {
+          "n": 1468,
+          "p50": 2.8,
+          "p95": 9.7,
+          "p99": 57.2,
+          "max": 72.9,
+          "mean": 4.7
+        },
+        "cold": {
+          "openMs": {
+            "n": 10,
+            "p50": 73.2,
+            "p95": 81.7,
+            "p99": 81.7,
+            "max": 81.7,
+            "mean": 73.4
+          },
+          "failures": 0
+        },
+        "generatorLagP99Ms": 14.8,
+        "closedEarly": 0,
+        "closeCodes": {},
+        "slowConsumerCloses": 0,
+        "eventLoop": {
+          "p99Ms": 17.69,
+          "maxMs": 77.75
+        },
+        "serviceRssMiB": 411.5,
+        "serviceCpuPct": 17.1,
+        "openRooms": 510,
+        "checks": {
+          "ackMedian": true,
+          "ackP99": true,
+          "coldOpenP95": true,
+          "noSlowConsumer": true,
+          "noEarlyClose": true,
+          "allCommitsAcknowledged": true,
+          "eventLoopWithinBudget": true
+        },
+        "ok": true
+      },
+      {
+        "typists": 50,
+        "offeredCommitsPerSecond": 150,
+        "commitsSent": 2939,
+        "commitsAcked": 2939,
+        "unacked": 0,
+        "commitsPerSecond": 144.5,
+        "ackMs": {
+          "n": 2939,
+          "p50": 4.1,
+          "p95": 16.3,
+          "p99": 38,
+          "max": 61.1,
+          "mean": 6
+        },
+        "cold": {
+          "openMs": {
+            "n": 10,
+            "p50": 71.9,
+            "p95": 85.2,
+            "p99": 85.2,
+            "max": 85.2,
+            "mean": 72.8
+          },
+          "failures": 0
+        },
+        "generatorLagP99Ms": 14.7,
+        "closedEarly": 0,
+        "closeCodes": {},
+        "slowConsumerCloses": 0,
+        "eventLoop": {
+          "p99Ms": 16.66,
+          "maxMs": 81.23
+        },
+        "serviceRssMiB": 646.4,
+        "serviceCpuPct": 24.5,
+        "openRooms": 520,
+        "checks": {
+          "ackMedian": true,
+          "ackP99": true,
+          "coldOpenP95": true,
+          "noSlowConsumer": true,
+          "noEarlyClose": true,
+          "allCommitsAcknowledged": true,
+          "eventLoopWithinBudget": true
+        },
+        "ok": true
+      },
+      {
+        "typists": 75,
+        "offeredCommitsPerSecond": 225,
+        "commitsSent": 4422,
+        "commitsAcked": 4422,
+        "unacked": 0,
+        "commitsPerSecond": 217.5,
+        "ackMs": {
+          "n": 4422,
+          "p50": 8.6,
+          "p95": 30.4,
+          "p99": 65,
+          "max": 103.3,
+          "mean": 12.2
+        },
+        "cold": {
+          "openMs": {
+            "n": 10,
+            "p50": 72.2,
+            "p95": 104.1,
+            "p99": 104.1,
+            "max": 104.1,
+            "mean": 79.1
+          },
+          "failures": 0
+        },
+        "generatorLagP99Ms": 20,
+        "closedEarly": 0,
+        "closeCodes": {},
+        "slowConsumerCloses": 0,
+        "eventLoop": {
+          "p99Ms": 59.14,
+          "maxMs": 91.12
+        },
+        "serviceRssMiB": 866.9,
+        "serviceCpuPct": 38.1,
+        "openRooms": 530,
+        "checks": {
+          "ackMedian": true,
+          "ackP99": true,
+          "coldOpenP95": true,
+          "noSlowConsumer": true,
+          "noEarlyClose": true,
+          "allCommitsAcknowledged": true,
+          "eventLoopWithinBudget": true
+        },
+        "ok": true
+      },
+      {
+        "typists": 100,
+        "offeredCommitsPerSecond": 300,
+        "commitsSent": 5900,
+        "commitsAcked": 5900,
+        "unacked": 0,
+        "commitsPerSecond": 292.4,
+        "ackMs": {
+          "n": 5900,
+          "p50": 43,
+          "p95": 212.1,
+          "p99": 275.5,
+          "max": 327.8,
+          "mean": 66.1
+        },
+        "cold": {
+          "openMs": {
+            "n": 10,
+            "p50": 77.9,
+            "p95": 93.8,
+            "p99": 93.8,
+            "max": 93.8,
+            "mean": 81.5
+          },
+          "failures": 0
+        },
+        "generatorLagP99Ms": 14.8,
+        "closedEarly": 0,
+        "closeCodes": {},
+        "slowConsumerCloses": 0,
+        "eventLoop": {
+          "p99Ms": 172.98,
+          "maxMs": 246.38
+        },
+        "serviceRssMiB": 1063.1,
+        "serviceCpuPct": 71.2,
+        "openRooms": 530,
+        "checks": {
+          "ackMedian": true,
+          "ackP99": true,
+          "coldOpenP95": true,
+          "noSlowConsumer": true,
+          "noEarlyClose": true,
+          "allCommitsAcknowledged": true,
+          "eventLoopWithinBudget": true
+        },
+        "ok": true
+      },
+      {
+        "typists": 150,
+        "offeredCommitsPerSecond": 450,
+        "commitsSent": 6195,
+        "commitsAcked": 6195,
+        "unacked": 0,
+        "commitsPerSecond": 203.4,
+        "ackMs": {
+          "n": 6195,
+          "p50": 387.6,
+          "p95": 694.2,
+          "p99": 3256.6,
+          "max": 6318.7,
+          "mean": 454.5
+        },
+        "cold": {
+          "openMs": {
+            "n": 10,
+            "p50": 89.7,
+            "p95": 4198.6,
+            "p99": 4198.6,
+            "max": 4198.6,
+            "mean": 596.4
+          },
+          "failures": 0
+        },
+        "generatorLagP99Ms": 14.1,
+        "closedEarly": 0,
+        "closeCodes": {},
+        "slowConsumerCloses": 0,
+        "eventLoop": {
+          "p99Ms": 683.11,
+          "maxMs": 4270.29
+        },
+        "serviceRssMiB": 1510.6,
+        "serviceCpuPct": 72,
+        "openRooms": 524,
+        "checks": {
+          "ackMedian": false,
+          "ackP99": false,
+          "coldOpenP95": false,
+          "noSlowConsumer": true,
+          "noEarlyClose": true,
+          "allCommitsAcknowledged": true,
+          "eventLoopWithinBudget": false
+        },
+        "ok": false
+      }
+    ],
+    "saturation": {
+      "typists": 150,
+      "failed": [
+        "ackMedian",
+        "ackP99",
+        "coldOpenP95",
+        "eventLoopWithinBudget"
+      ]
+    },
+    "gateTypists": 50,
+    "ackMs": {
+      "n": 2939,
+      "p50": 4.1,
+      "p95": 16.3,
+      "p99": 38,
+      "max": 61.1,
+      "mean": 6
+    },
+    "cold": {
+      "cdmBytes": 680595,
+      "openMs": {
+        "n": 10,
+        "p50": 71.9,
+        "p95": 85.2,
+        "p99": 85.2,
+        "max": 85.2,
+        "mean": 72.8
+      },
+      "failures": 0
+    },
+    "eventLoop": {
+      "budgetP99Ms": 300,
+      "p99Ms": 16.66,
+      "maxMs": 81.23
+    },
+    "openRoomsAtEnd": 524,
+    "openRoomsAfterLeave": 0,
+    "roomsGoneMs": 63332.5,
+    "serviceRssMiB": {
+      "atPeak": 286.4,
+      "atEnd": 1517.7,
+      "afterLeave": 775.5
+    },
+    "targets": {
+      "ackP50Ms": 50,
+      "ackP99Ms": 300,
+      "coldOpenP95Ms": 500,
+      "stage1Connections": 2000,
+      "stage1Documents": 500
+    },
+    "checks": {
+      "gatePhaseReached": true,
+      "ackMedian": true,
+      "ackP99": true,
+      "coldOpenP95": true,
+      "coldOpenDocumentUnder1MB": true,
+      "noSlowConsumer": true,
+      "noEarlyClose": true,
+      "allCommitsAcknowledged": true,
+      "allConnected": true,
+      "roomsReturnToZero": true,
+      "eventLoopWithinBudget": true
+    },
+    "met": true
+  },
+  "gate": {
+    "baseline": null,
+    "ok": true,
+    "failures": []
+  }
+}

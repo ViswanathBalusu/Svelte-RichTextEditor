@@ -1,8 +1,9 @@
 // The authority refuses a fill from a participant who is not active (FRW-022 criterion 4; 12 §4.2 P7;
 // lane V-FRW-019-036). The participant's `participantActive` is derived from the workflow record with
 // `fillActive`, and the room's permission state with `lockFor`, for each way a participant can be
-// inactive: waiting for an earlier order, completed, and in a declined or voided workflow. The
-// `paused` case is not in the workflow's states (12 §6), so it is not tested here.
+// inactive: waiting for an earlier order, completed, paused (a workflow in `correcting`), and in a
+// declined, voided or completed workflow. A locked document answers `read_only` (owner decision 21,
+// docs/owner-decisions-2026-11-15.md); an unlocked one answers `permission_denied`.
 import { AttrStep } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import { Room, type RoomInit } from '../src/room/room.ts';
@@ -48,8 +49,11 @@ function sent(participants: WorkflowParticipant[]): WorkflowRecord {
   return result.record;
 }
 
-function roomFor(record: WorkflowRecord): Room {
-  const lock = lockFor(record.state);
+function roomFor(
+  record: WorkflowRecord,
+  lockOverride?: { documentState: 'active' | 'locked'; workflowActive: boolean },
+): Room {
+  const lock = lockOverride ?? lockFor(record.state);
   if (lock === null) throw new Error(`no lock is decided for ${record.state}`);
   const init: RoomInit = {
     schema,
@@ -96,16 +100,17 @@ function rejection(fx: Effects): Reject | undefined {
 }
 
 /**
- * Refuses the fill with the code the room gives. The criterion says `permission_denied`; in a locked
- * document (`declined`, `voided`) the room refuses first on the document state, as `read_only`
- * (room/room.ts, the state check before the fill check). That is recorded in the story Notes.
+ * Refuses the fill with the code the room gives: `permission_denied` while the document is not
+ * locked, `read_only` in a locked one (`declined`, `voided`, `completed`), where the room refuses
+ * first on the document state (room/room.ts; owner decision 21).
  */
 function expectRefused(
   record: WorkflowRecord,
   pid: string,
   code: string = 'permission_denied',
+  lockOverride?: { documentState: 'active' | 'locked'; workflowActive: boolean },
 ): void {
-  const room = roomFor(record);
+  const room = roomFor(record, lockOverride);
   openAs(room, record, pid);
   const fx = fill(room);
   expect(rejection(fx)).toMatchObject({ code });
@@ -148,5 +153,33 @@ describe('a participant who is not active is refused a fill (FRW-022 criterion 4
     expect(lockFor('voided')).toEqual({ documentState: 'locked', workflowActive: false });
     expectRefused(voided.record, 'first', 'read_only');
     expectRefused(voided.record, 'second', 'read_only');
+  });
+});
+
+describe('a paused participant and a completed workflow (FRW-022 criterion 4)', () => {
+  it('refuses a fill while the workflow is correcting (paused), as permission_denied', () => {
+    const inProgress = openWorkflow(sent([p('first', 1), p('second', 2)]));
+    if (!inProgress.ok) throw new Error('a sent workflow must open');
+    const correcting: WorkflowRecord = { ...inProgress.record, state: 'correcting' };
+    expect(fillActive(correcting, 'first')).toBe(false);
+    // The lock of `correcting` is not decided (FRW-032); the owner corrects the body, so the document
+    // is not locked and the refusal is the participant's, not the document's.
+    expectRefused(correcting, 'first', 'permission_denied', {
+      documentState: 'active',
+      workflowActive: false,
+    });
+  });
+
+  it('refuses every participant of a completed workflow, whose document stays locked (read_only)', () => {
+    const inProgress = openWorkflow(sent([p('first', 1), p('second', 2)]));
+    if (!inProgress.ok) throw new Error('a sent workflow must open');
+    const one = completeParticipant(inProgress.record, 'first');
+    if (!one.ok) throw new Error('the first participant must complete');
+    const two = completeParticipant(one.record, 'second');
+    if (!two.ok) throw new Error('the second participant must complete');
+    expect(two.record.state).toBe('completed');
+    expect(lockFor('completed')).toEqual({ documentState: 'locked', workflowActive: false });
+    expectRefused(two.record, 'first', 'read_only');
+    expectRefused(two.record, 'second', 'read_only');
   });
 });

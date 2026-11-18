@@ -1,7 +1,7 @@
 /**
  * Turning on a first-page or odd and even variant through the core's `setPageSetup` creates its
  * header and footer stories in the same step (FE-137 criterion 2, engine part; lane U-FE-129-141).
- * The header panel opening is the view's (FE-057) and is not tested here.
+ * The core also opens the header of a variant just turned on in the panel (criterion 2, round w1).
  */
 import { validate } from '@docedit/model/validate';
 import { describe, expect, it } from 'vitest';
@@ -53,6 +53,41 @@ describe('setPageSetup turns on variants with their stories (FE-137 criterion 2)
     expect(setup(c)['differentOddEven']).toBe(true);
     expect(setup(c)['marginLeft']).toBe(1440);
     expect(validate(c.getContent()).violations).toEqual([]);
+  });
+
+  it('opens the new variant header in the header panel (criterion 2, FE-057)', () => {
+    const c = core();
+    expect(c.panel.get()).toBeNull();
+    c.run('setPageSetup', { pageSetup: { id: 'ps1', changes: { differentFirstPage: true } } });
+    const doc = internals(c).state.doc;
+    const header = storyOfVariant(doc, 'ps1', 'header', 'first');
+    expect(c.panel.get()).toMatchObject({
+      kind: 'story',
+      id: header,
+      label: 'Header',
+      part: 'header',
+      variant: 'first',
+    });
+    // The footer of the variant exists too, and the panel offers it as its own button.
+    expect(c.storyVariants().find((v) => v.part === 'footer' && v.variant === 'first')?.story).toBe(
+      storyOfVariant(doc, 'ps1', 'footer', 'first'),
+    );
+  });
+
+  it('opens the odd and even variant header when only that flag is turned on', () => {
+    const c = core();
+    c.run('setPageSetup', { pageSetup: { id: 'ps1', changes: { differentOddEven: true } } });
+    expect(c.panel.get()).toMatchObject({ part: 'header', variant: 'even' });
+  });
+
+  it('opens no panel when no variant is turned on, or when it was already on', () => {
+    const c = core();
+    c.run('setPageSetup', { pageSetup: { id: 'ps1', changes: { marginLeft: 1440 } } });
+    expect(c.panel.get()).toBeNull();
+    c.run('setPageSetup', { pageSetup: { id: 'ps1', changes: { differentFirstPage: true } } });
+    c.closePanel();
+    c.run('setPageSetup', { pageSetup: { id: 'ps1', changes: { differentFirstPage: true } } });
+    expect(c.panel.get()).toBeNull();
   });
 
   it('turning a variant off creates no stories', () => {

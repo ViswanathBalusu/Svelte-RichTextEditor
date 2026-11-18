@@ -208,7 +208,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ref,
           actor: 'alice',
           from: view as WorkflowResourceView,
-          write: { to: 'completed' },
+          write: { to: 'expired' },
         }),
       ).rejects.toThrow(RangeError);
     });

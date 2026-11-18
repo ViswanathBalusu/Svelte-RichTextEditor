@@ -123,6 +123,7 @@ import {
   PgTenantRegistry,
   type TenantRegistry,
 } from './control-plane/tenants.ts';
+import { registerProcessMetrics } from './control-plane/process-metrics.ts';
 import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-hooks.ts';
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
@@ -766,6 +767,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.assetRegistry
       ? { assets: new RegistryAssetAttachments(parts.logs, parts.assetRegistry) }
       : {}),
+    ...(parts.workflows ? { workflows: parts.workflows } : {}),
     now,
     checkpoints,
     settings: {
@@ -1079,6 +1081,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   scaleTimer?.unref();
   rescale();
 
+  const processMetrics = registerProcessMetrics(metrics);
   metrics.gauge(
     'docedit_jobs',
     'Queued and running jobs by kind, priority and state (BE-050 criterion 5).',
@@ -1302,6 +1305,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       (closed ??= (async () => {
         stopping = true;
         if (scaleTimer) clearInterval(scaleTimer);
+        processMetrics.stop();
         await scaling;
         // Each export worker finishes the job it runs before it stops (BE-065 criterion 3).
         await exportWorkers?.stop();

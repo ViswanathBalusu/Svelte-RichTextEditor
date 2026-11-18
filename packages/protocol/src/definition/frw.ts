@@ -101,6 +101,10 @@ export const FRW_EXTENSION: DepExtension = {
                 auth: opt(obj({ require: opt(arr(text())) })),
                 state: opt(text()),
                 completedSeq: opt(seq()),
+                firstViewedAt: opt(
+                  timestamp(),
+                  'When the participant first opened the document (12 §6.3; FRW-031).',
+                ),
               }),
             ),
           ),

@@ -11,6 +11,7 @@
  */
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extensions/document-api.ts';
 import type { FieldDraft } from './shell/field-properties.ts';
+import type { MarkupView } from './shell/markup-views.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -714,6 +715,17 @@ export interface CoreApi {
   readonly view?: ReadView<ViewName>;
   readonly views?: ReadView<readonly ViewName[]>;
   setView?(view: ViewName): boolean;
+  /**
+   * How suggestions are shown (UX-035; 13 §5): ll until it is set. Choosing a view is a setting of
+   * this reader. It changes no content and sends no commit.
+   */
+  readonly markupView?: ReadView<MarkupView>;
+  setMarkupView?(view: MarkupView): void;
+  /**
+   * Gives the body the words that name a suggestion for assistive technology, for example
+   * Inserted by Ada (UX-035 criterion 4); null removes them.
+   */
+  setSuggestionLabel?(label: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null): void;
 
   /**
    * Spelling and grammar (UX-041; 13 §6.1). Absent, or `available` false, when the host gave no
@@ -800,6 +812,8 @@ export interface CoreApi {
   readonly roles?: RolesService;
   /** The properties of form fields (FRW-073). Absent: the field properties pane is not offered. */
   readonly fieldProperties?: FieldPropertiesService;
+  /** The rules of the document and the builder's changes to them (FRW-024). Absent: no rules pane. */
+  readonly rules?: RulesService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
   readonly mathEditor?: MathEditorService;
 }
@@ -957,6 +971,80 @@ export interface FieldPropertiesService {
   /** The workflow's state when the document is in one (`sent`, `in_progress`, ...); else null. */
   workflow?(): string | null;
   apply(id: string, patch: Partial<FieldDraft>): FieldChangeResult;
+}
+
+/** One side of a rule's comparison: a field's key, or a literal as typed (FRW-024). */
+export type RuleOperandView = { readonly field: string } | { readonly literal: string };
+
+/** The effect words the builder offers (12 §5.2): the field effects. */
+export type RuleEffectName = 'show' | 'hide' | 'require' | 'enable' | 'disable';
+
+/** The comparison operators the builder offers, in the rules language's own spelling. */
+export type RuleOperatorName = '==' | '!=' | '<' | '<=' | '>' | '>=';
+
+export interface RuleEffectView {
+  readonly effect: RuleEffectName;
+  readonly keys: readonly string[];
+}
+
+/** A rule of the sentence form as parts; the words are the shell's own strings (FRW-024). */
+export interface RulePartsView {
+  readonly left: RuleOperandView;
+  readonly operator: RuleOperatorName;
+  readonly right: RuleOperandView;
+  readonly then: readonly RuleEffectView[];
+  /** Null when the rule has no `else`. */
+  readonly otherwise: readonly RuleEffectView[] | null;
+}
+
+/** A rule of the document as the builder lists it. */
+export interface RuleItem {
+  readonly id: string;
+  /** The sentence parts, or null for a rule of another shape, which the builder shows as JSON. */
+  readonly parts: RulePartsView | null;
+  /** The rule's JSON tree as text, for a rule with no parts. */
+  readonly json: string;
+}
+
+export type RuleChangeResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'read-only' | 'no-feature' | 'duplicate' | 'not-defined' | 'no-change';
+    }
+  | {
+      readonly ok: false;
+      readonly reason: 'rule_limit';
+      readonly limit: number;
+      readonly message: string;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: 'invalid_rules';
+      /** Each problem of the rule set, with the field keys it concerns (I14). */
+      readonly problems: readonly { readonly message: string; readonly keys: readonly string[] }[];
+    };
+
+/**
+ * The rule builder's port over the core (FRW-024; 12 §5, §11). A change is a commit of the
+ * definitions through the log, and needs `structure`, which `canEdit` reports.
+ */
+export interface RulesService {
+  readonly rules: ReadView<readonly RuleItem[]>;
+  /** The fields rules may name: key and label, document content. */
+  readonly fields: ReadView<readonly { readonly key: string; readonly label: string }[]>;
+  readonly canEdit: ReadView<boolean>;
+  /** An identifier for a new rule that no rule of the document uses. */
+  nextId(): string;
+  /** Saves a rule of the sentence form: a new one, or one that replaces `replace`. */
+  save(rule: {
+    readonly id: string;
+    readonly parts: RulePartsView;
+    readonly replace?: string;
+  }): RuleChangeResult;
+  remove(id: string): RuleChangeResult;
+  /** Moves to the field with this key in the document; false when there is none. */
+  showField(key: string): boolean;
 }
 
 /** A role of the document as the roles manager and the legend show it (FRW-074; 12 §3.1). */

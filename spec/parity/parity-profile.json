@@ -1512,6 +1512,10 @@
       "capability": "fields-and-forms"
     },
     {
+      "id": "view.rules",
+      "capability": "fields-and-forms"
+    },
+    {
       "id": "view.roles",
       "capability": "fields-and-forms"
     },
@@ -1590,6 +1594,22 @@
     {
       "id": "mode.fill",
       "capability": "modes"
+    },
+    {
+      "id": "review.markup.all",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.markup.simple",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.markup.none",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.markup.original",
+      "capability": "suggestions"
     },
     {
       "id": "view.layout.web",

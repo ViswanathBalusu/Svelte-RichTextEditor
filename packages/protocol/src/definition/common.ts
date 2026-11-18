@@ -67,6 +67,8 @@ export const CLIENT_ORIGINS = [
   'suggestion.reject',
   'fill',
   'assistant',
+  // A change made by an extension through the document API (UX-049; owner decision 173).
+  'extension',
 ] as const;
 export const SERVER_ORIGINS = [
   'restore',
@@ -567,7 +569,10 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
         participant: opt(
           obj({
             id: req(text({ minLength: 1 })),
-            state: req(str({ known: ['active', 'completed'] })),
+            state: req(
+              str({ known: ['active', 'completed', 'waiting', 'paused', 'copy', 'closed'] }),
+              "The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's.",
+            ),
           }),
           "The receiving participant's status.",
         ),

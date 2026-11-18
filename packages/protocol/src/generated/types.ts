@@ -88,7 +88,7 @@ export interface Step {
 }
 
 /** Origin of a commit: a client hint (recorded, never trusted) or a server-reserved origin (04 §3.1). */
-export type Origin = "input" | "paste" | "format" | "undo" | "redo" | "suggestion.accept" | "suggestion.reject" | "fill" | "assistant" | "restore" | "import" | "migration" | "repair" | "sign" | "rules" | "prefill" | "control" | (string & {});
+export type Origin = "input" | "paste" | "format" | "undo" | "redo" | "suggestion.accept" | "suggestion.reject" | "fill" | "assistant" | "extension" | "restore" | "import" | "migration" | "repair" | "sign" | "rules" | "prefill" | "control" | (string & {});
 
 /** A step commit as submitted: the payload of `sync.submit` (04 §3.1; 05 §5.3). */
 export interface Commit {
@@ -274,7 +274,8 @@ export interface WorkflowStatus {
   /** The receiving participant's status. */
   participant?: {
     id: string;
-    state: "active" | "completed" | (string & {});
+    /** The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's. */
+    state: "active" | "completed" | "waiting" | "paused" | "copy" | "closed" | (string & {});
   };
 }
 
@@ -944,6 +945,8 @@ export interface Workflow {
     };
     state?: string;
     completedSeq?: number;
+    /** When the participant first opened the document (12 §6.3; FRW-031). */
+    firstViewedAt?: string;
   }>;
   routing?: Array<{ [key: string]: unknown }>;
   deadline?: string;
