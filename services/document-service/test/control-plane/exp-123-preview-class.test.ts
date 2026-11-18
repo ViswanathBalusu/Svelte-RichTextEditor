@@ -132,8 +132,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         // The first viewer's job is still readable only by its requester.
         const stolen = await h.call('GET', `/v1/exports/${first.json.id}`, { token: other });
-        expect(stolen.status).toBe(403);
-        expect(stolen.json.code).toBe('forbidden');
+        expect(stolen.status).toBe(404);
+        expect(stolen.json.code).toBe('not_found');
       },
       30_000,
     );

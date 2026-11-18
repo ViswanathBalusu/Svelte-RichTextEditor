@@ -144,12 +144,12 @@ There is no session resumption: a new connection is a new session.
 | Type | Dir | Payload | Notes |
 |---|---|---|---|
 | `ch.open` | C to S | `kind: "doc"`, `doc`, `engine`, `cdm` (the version the client will use), `features`, optional `resume` (`seq`, `incarnation`, `inflight`, optional `view`), optional `token` | Without `resume` the server answers with `catchUp: "reload"`. `resume.view` is the view token of the `ch.opened` or content read that the confirmed document came from. A channel `token` whose user has been revoked is answered with a non-fatal `error` of code `revoked`, not a `ch.rejected` (ADR 0379, proposed) |
-| `ch.opened` | S to C | `head`, `incarnation`, `catchUp` (`stream`, `page` or `reload`), `inflight` (`accepted` with `seq`, or `unknown`), `access` (section 5.5), optional `workflow` (12), optional `view` | `view` is the view token (below). `head` is the durable head at the moment the channel is attached. The first live commit the client receives is `head + 1` |
+| `ch.opened` | S to C | `head`, `incarnation`, `catchUp` (`stream` or `reload`; `page` stays in the schema and a server does not send it, owner decision 202), `inflight` (`accepted` with `seq`, or `unknown`), `access` (section 5.5), optional `workflow` (12), optional `view` | `view` is the view token (below). `head` is the durable head at the moment the channel is attached. The first live commit the client receives is `head + 1` |
 | `ch.rejected` | S to C | `code`, `message` | Codes: `not_found`, `forbidden`, `unsupported_engine`, `unsupported_cdm`, `unsupported_feature`, `channel_limit`, `already_open`, `unavailable` |
 | `ch.close` | C to S | none | |
 | `ch.closed` | S to C | `code`, `reason`, optional `retryInMs`, optional `cause` | For example `forbidden` after revocation, `unavailable` when the room moves or is fenced, `slow_consumer`. `cause` is an open vocabulary: `access_changed` (what the reader may see changed; the client reopens at once without `resume`, and its unconfirmed work goes to recovered edits), `fenced`, `lost` and `stopped` (a room stopped serving; the client backs off and resumes as for `unavailable`). `code` stays `unavailable` in every case, so a client that ignores `cause` still recovers |
 
-**Joining.** A client fetches content over REST at some `seq`, then opens the channel with `resume.seq` set to it. With `catchUp: "stream"` the server sends every commit from `resume.seq + 1` to `head`, then `sync.caughtUp`, then live commits; attaching and streaming are atomic. With `catchUp: "page"` the client reads the missing commits from `GET /documents/{id}/commits` and then expects `head + 1`. With `catchUp: "reload"` the client MUST fetch `GET /documents/{id}/content?seq={head}` (a pinned read, which can never be stale) and then expects `head + 1`.
+**Joining.** A client fetches content over REST at some `seq`, then opens the channel with `resume.seq` set to it. With `catchUp: "stream"` the server sends every commit from `resume.seq + 1` to `head`, then `sync.caughtUp`, then live commits; attaching and streaming are atomic. A resume beyond 5,000 commits or 5 MiB, below the user's visibility gate (07, section 8), across a snapshot commit, or with another incarnation gets `catchUp: "reload"` (owner decisions 166 and 202). With `catchUp: "reload"` the client MUST fetch `GET /documents/{id}/content?seq={head}` (a pinned read, which can never be stale) and then expects `head + 1`.
 
 **View token.** A server that announces `read-restrictions` gives every `ch.opened` and every content read (`GET /documents/{id}/content`, pinned or not) a `view`: an opaque string, keyed by the server, that names the visibility class of the reader (the projection this reader gets). A client keeps the `view` of its latest `ch.opened` or content read and sends it as `resume.view`. A resume whose `view` is missing or differs from the current one is answered with `catchUp: "reload"`. A server without read restrictions may omit `view` and ignores it in a resume. A client never reads meaning into the string.
 
@@ -275,10 +275,10 @@ S  {"t":"event","ch":1,"d":{"type":"export.completed","resource":"/exports/0192f
 - JSON bodies. Errors use RFC 9457 problem details with a `code` from section 5.8.
 - **Browsers.** The service answers CORS preflights for the tenant's allowed origins, allows the headers `Authorization`, `Content-Type`, `If-Match`, `Idempotency-Key`, `DEP-Actor` and `traceparent`, and exposes `ETag`, `Retry-After`, `Deprecation` and `Sunset`. The conformance kit asserts these headers.
 - **Concurrency.** Every mutable resource has an `ETag`, and updates require `If-Match`.
-- **Idempotency.** `POST` requests that create something accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
+- **Idempotency.** `POST` requests that create something, and `PUT /documents/{id}/content`, accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
 - **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200.
 - **Tracing.** Requests may carry `traceparent`; responses carry a request identifier.
-- **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document.
+- **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A caller whose token does not cover that document, and a user who may not see the resource (another user's export or import job), gets `not_found`, the answer for an identifier that names nothing, with the same body apart from the identifier (owner decision 57 of 2026-11-15; SEC-016). A caller who sees the resource but lacks the capability gets `forbidden`.
 
 Callers are end users (every request is checked against that user's permissions) and host backends (service credential). The authorisation matrix in 07, section 12, lists the capability each resource needs.
 
@@ -311,12 +311,12 @@ Callers are end users (every request is checked against that user's permissions)
 | `/comments/{cid}` | PATCH, DELETE | Author only, or `manage` |
 | `/documents/{id}/assets` | POST | Body: `filename`, `mime`, `size`. Returns an asset identifier and a size-bound pre-signed upload into a quarantine area |
 | `/assets/{aid}/complete` | POST | The asset worker validates, re-encodes, hashes and stores the asset, then raises `asset.ready` or `asset.failed` |
-| `/documents/{id}/assets/resolve` | POST | Body: asset identifiers used by the document. Returns short-lived signed URLs, because an `<img>` cannot send a bearer token |
+| `/documents/{id}/assets/resolve` | POST | Body: asset identifiers used by the document, and the caller's own ready uploads for it that no commit references yet (decision 198). Returns short-lived signed URLs, because an `<img>` cannot send a bearer token |
 | `/documents/{id}/exports` | POST | Body: `target` (`pdf`, `tex`, `docx`, `cdm`, `html`, `md`), optional `seq`, `options` (09, section 9.1). Returns `202` with a job. `pending_suggestions` when the document has unresolved suggestions and `options.suggestions` is absent. Refused for callers restricted with `no-export` |
 | `/exports/{jid}` | GET, DELETE | State (`queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`), progress, result, diagnostics |
 | `/documents/{id}/imports` | POST | Body: `asset`, `format` (`docx`). Returns a job with warnings on completion |
 | `/imports/{jid}` | GET | |
-| `/fonts` | GET | Font manifest: families, styles, file URLs, hashes, licences, manifest version |
+| `/fonts` | GET | Font manifest: families, styles, file URLs, hashes, licences, manifest version. Tenant-wide: every user of the tenant may read it, with no document in view (decision 95) |
 | `/webhooks`, `/webhooks/{id}` | GET, POST, PATCH, DELETE | Service credential only. Event filters and secret rotation |
 | `/webhooks/{id}/ping` | POST | Service credential only. A test delivery to one subscription, marked as a test; answers 202 with its `deliveryId` (UX-079; decision 177) |
 | `/webhooks/{id}/deliveries/{deliveryId}/replay` | POST | Service credential only. Sends a recent delivery of that subscription again under its own `webhook-id`; answers 202 (UX-079; decision 177) |
@@ -407,7 +407,7 @@ All events are `CustomEvent`s with `bubbles: true` and `composed: true`. They ca
 | `de-recovered-edits` | `{ count }` when rejected or unsent content was set aside |
 | `de-export-progress`, `de-export-completed`, `de-export-failed` | Job state |
 | `de-auth-required` | `getToken` failed or the token was refused |
-| `de-share-request`, `de-fork-request` | The user asked for something the host owns |
+| `de-share-request`, `de-fork-request` | The user asked for something the host owns. `de-fork-request` carries `{ docId, atSeq }` (HIS-022) |
 | `de-error` | `{ code, message, fatal }` |
 
 Fill-mode methods and events are in 12, section 10. Theming uses CSS custom properties with the prefix `--de-` and `::part()` names listed in 02. An iframe variant of this API over `postMessage` is deferred.

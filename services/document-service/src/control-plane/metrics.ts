@@ -225,6 +225,8 @@ export function meteredCheckpoints(
     latest: (ref, seq) => inner.latest(ref, seq),
   };
   if (inner.getEncoded) out.getEncoded = (ref, seq) => inner.getEncoded!(ref, seq);
+  if (inner.putSide) out.putSide = (ref, seq, bytes) => inner.putSide!(ref, seq, bytes);
+  if (inner.getSide) out.getSide = (ref, seq) => inner.getSide!(ref, seq);
   if (inner.setAside) out.setAside = (ref, above) => inner.setAside!(ref, above);
   return out;
 }

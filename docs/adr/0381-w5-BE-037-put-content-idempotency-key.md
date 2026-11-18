@@ -1,7 +1,7 @@
 # 0381 BE-037: `Idempotency-Key` on `PUT /documents/{id}/content`
 
-Status: proposed (lane w5, 2026-11-17). Story: BE-037 criterion 5. Open question: ADR 0104, Q9.
-The owner has not decided it and `docs/owner-decisions-2026-11-15.md` does not list it.
+Status: accepted by decision 101 of `docs/owner-decisions-2026-11-15.md` (option 2). Story: BE-037
+criterion 5. Question: ADR 0104, Q9. Revised by lane w5, 2026-11-18.
 
 ## Context
 
@@ -30,6 +30,9 @@ the conformance kit and 05 §6.1.
 
 ## Taken here
 
-Option 1, as the default of Q9 says. Criterion 5 stays unticked: its words name the header, and the
-route does not read it. If the owner chooses option 2 the change is the flag, `pnpm generate`, the
-wording of 05 §6.1 and one test through the header.
+Option 2, as decision 101 accepts. `replaceContent` has `idempotencyKey: true` and the code
+`idempotency_mismatch` in `packages/protocol/src/definition/resources.ts`; the artifacts under `spec/dep`
+are regenerated; 05 §6.1 says "`POST` requests that create something, and `PUT /documents/{id}/content`".
+The pipeline already runs any route with the flag through the idempotency store, before the handler
+checks `If-Match`, so a repeat with the same key and body gets the stored 204, and the same key with
+another body gets `idempotency_mismatch`. Tests: `services/document-service/test/server/be-037-w5-put-twice.test.ts`.

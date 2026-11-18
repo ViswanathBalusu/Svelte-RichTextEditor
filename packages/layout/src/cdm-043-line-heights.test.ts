@@ -5,8 +5,8 @@
  *
  * The fixtures give each run's natural height in twips. Each run gets its own font family whose
  * ascent is that height, so the natural height of the run is the fixture's height in points (one
- * twip is 1/20 pt). The layout does not round to whole twips, so its heights are compared with the
- * fixture's within half a twip.
+ * twip is 1/20 pt). A `multiple` height is rounded half up to whole twips (owner decision 78), so the
+ * layout's heights equal the fixture's.
  */
 import { describe, expect, it } from 'vitest';
 import lineFixtures from '../../model/fixtures/semantics/line-spacing.json' with { type: 'json' };
@@ -59,6 +59,6 @@ describe('line heights, layout side of line-spacing.json (CDM-043)', () => {
     );
     expect(fragment.lines).toHaveLength(1);
     const twips = fragment.lines[0]!.height / TWIP;
-    expect(Math.abs(twips - c.expected)).toBeLessThanOrEqual(0.5);
+    expect(twips).toBeCloseTo(c.expected, 6);
   });
 });

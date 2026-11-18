@@ -73,6 +73,35 @@ describe('the suggestion list (UX-036, UX-037)', () => {
     await service.dispose();
   });
 
+  it('names the region each suggestion lies in, and accept all takes one region and one author (criterion 2)', async () => {
+    const { service, m } = await setUp('grace', 'editor');
+    await saved(m);
+    expect(m.core.suggestionItems().map((s) => [s.id, s.region])).toEqual([
+      ['sSamInsert000001', null],
+      ['sTessDelete00001', null],
+      ['sTessInsert00001', IDS.open],
+    ]);
+    // A region and an author together: sam has nothing in the region, so nothing is handled.
+    expect(m.core.resolveSuggestions('accept', { id: IDS.open }, 'sam')).toEqual({
+      handled: 0,
+      skipped: 0,
+      skippedScopes: [],
+    });
+    expect(m.core.suggestionItems()).toHaveLength(3);
+    traffic.clear();
+    // The region alone: its one suggestion, as one commit; the body's two stay pending.
+    const report = m.core.resolveSuggestions('accept', { id: IDS.open }, 'tess');
+    expect(report).toEqual({ handled: 1, skipped: 0, skippedScopes: [] });
+    await saved(m);
+    expect(traffic.submitted).toEqual([{ origin: 'suggestion.accept', steps: expect.any(Number) }]);
+    expect(m.core.suggestionItems().map((s) => s.id)).toEqual([
+      'sSamInsert000001',
+      'sTessDelete00001',
+    ]);
+    m.detach();
+    await service.dispose();
+  });
+
   it('a suggester may resolve none: no edit in the body, whoever wrote the suggestion', async () => {
     const { service, m } = await setUp('sam', 'suggester');
     const items = m.core.suggestionItems();

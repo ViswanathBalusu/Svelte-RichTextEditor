@@ -4,9 +4,11 @@ import {
   type Access,
   type Connection,
   type Effects,
+  type StepJson,
   type PermissionState,
   Room,
   type WriteRequest,
+  commitBytes,
   computeAccess,
   mapRanges,
   regionInfos,
@@ -15,7 +17,13 @@ import type { Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import { AttributionMap, applyCommit } from '../src/attribution.ts';
-import { type RestoreContext, planRestore } from '../src/restore.ts';
+import {
+  type RestoreContext,
+  type RestorePlan,
+  planRestore,
+  restorePartPreconditions,
+  splitSteps,
+} from '../src/restore.ts';
 import {
   HIDDEN,
   LogBuilder,
@@ -221,23 +229,149 @@ describe('restoring one region (HIS-018)', () => {
     expect(live.equals(r.plan.resultAttribution!)).toBe(true);
   });
 
-  it('falls back to a snapshot commit when the steps are too large for one commit', () => {
+  it('splits steps that are too large for one commit into linked commits, in order (owner decision 36)', () => {
+    const b = edited();
+    const whole = planRestore({ toSeq: 0, region: 'rTerms000000000A' }, ctx(b, USERS.bob));
+    if (!whole.ok || whole.plan.kind !== 'steps') throw new Error('no steps');
+    expect(whole.plan.parts).toEqual([whole.plan.stepsJson]);
+    expect(whole.plan.steps.length).toBeGreaterThan(1);
+
+    const r = planRestore(
+      { toSeq: 0, region: 'rTerms000000000A' },
+      ctx(b, USERS.bob, { maxSteps: 1 }),
+    );
+    if (!r.ok || r.plan.kind !== 'steps') throw new Error('no steps');
+    // One step to a commit; the parts in order are the steps of the plan, and the result is the same.
+    expect(r.plan.parts.length).toBe(r.plan.steps.length);
+    expect(r.plan.parts.every((p) => p.length === 1)).toBe(true);
+    expect(r.plan.parts.flat()).toEqual(whole.plan.stepsJson);
+    expect(r.plan.result.eq(whole.plan.result)).toBe(true);
+
+    // Applied through the room, each part against the head the one before made: the same document.
+    const { room: rm, flush } = room(b);
+    r.plan.parts.forEach((part, i) => {
+      const fx = flush(
+        rm.author('svc', {
+          id: uuid(),
+          base: 3 + i,
+          steps: part,
+          origin: 'restore',
+          as: USERS.bob,
+          preconditions: restorePartPreconditions(r.plan.preconditions, i),
+        }),
+      );
+      expect(fx.send.find((o) => o.channel === 'svc')?.msg).toMatchObject({
+        t: 'sync.ack',
+        seq: 4 + i,
+      });
+    });
+    expect(rm.document.eq(r.plan.result)).toBe(true);
+  });
+
+  it('moves the head precondition on by one commit for each later part, and a stale head is refused', () => {
+    const b = edited();
+    const r = planRestore(
+      { toSeq: 0, region: 'rTerms000000000A' },
+      ctx(b, USERS.bob, { maxSteps: 1 }),
+    );
+    if (!r.ok || r.plan.kind !== 'steps') throw new Error('no steps');
+    expect(restorePartPreconditions(r.plan.preconditions, 0)).toBe(r.plan.preconditions);
+    expect(restorePartPreconditions(r.plan.preconditions, 2)).toMatchObject({ head: 5 });
+    // Another commit lands between the first part and the second: the second is refused, so the
+    // restore stops with the first part applied rather than applying later steps to moved content.
+    const { room: rm, flush } = room(b);
+    flush(
+      rm.author('svc', {
+        id: uuid(),
+        base: 3,
+        steps: r.plan.parts[0]!,
+        origin: 'restore',
+        as: USERS.bob,
+        preconditions: r.plan.preconditions,
+      }),
+    );
+    flush(
+      rm.author('svc', {
+        id: uuid(),
+        base: 4,
+        steps: typeAt(rm.document, 'pTerms000000001A', 0, 'Elsewhere. ').steps.map((x) =>
+          x.toJSON(),
+        ),
+        origin: 'prefill',
+        as: USERS.alice,
+      }),
+    );
+    expect(rm.head).toBe(5);
+    const late = flush(
+      rm.author('svc', {
+        id: uuid(),
+        base: 4,
+        steps: r.plan.parts[1]!,
+        origin: 'restore',
+        as: USERS.bob,
+        preconditions: restorePartPreconditions(r.plan.preconditions, 1),
+      }),
+    );
+    expect(late.send.find((o) => o.channel === 'svc')?.msg).toMatchObject({ t: 'sync.reject' });
+  });
+
+  it('cuts a run of changed blocks into a replacement of the first and an insertion of each later one when its one step is too large', () => {
+    const b = edited();
+    const whole = planRestore({ toSeq: 0, region: 'rTerms000000000A' }, ctx(b, USERS.bob));
+    if (!whole.ok || whole.plan.kind !== 'steps') throw new Error('no steps');
+    // Find a limit under which the single step of some run no longer fits but its blocks do.
+    let cut: Extract<RestorePlan, { kind: 'steps' }> | null = null;
+    for (let limit = 4200; limit < 9000 && cut === null; limit += 50) {
+      const r = planRestore(
+        { toSeq: 0, region: 'rTerms000000000A' },
+        ctx(b, USERS.bob, { maxCommitBytes: limit }),
+      );
+      if (r.ok && r.plan.kind === 'steps' && r.plan.steps.length > whole.plan.steps.length)
+        cut = r.plan;
+    }
+    if (cut === null) throw new Error('no limit cut a run');
+    expect(cut.parts.length).toBeGreaterThan(1);
+    expect(cut.parts.flat()).toEqual(cut.stepsJson);
+    expect(cut.hint).toHaveLength(cut.steps.length);
+    // The same content, whichever way the steps are cut.
+    expect(cut.result.eq(whole.plan.result)).toBe(true);
+    const { room: rm, flush } = room(b);
+    cut.parts.forEach((part, i) => {
+      flush(
+        rm.author('svc', {
+          id: uuid(),
+          base: 3 + i,
+          steps: part,
+          origin: 'restore',
+          as: USERS.bob,
+          preconditions: restorePartPreconditions(cut!.preconditions, i),
+        }),
+      );
+    });
+    expect(rm.head).toBe(3 + cut.parts.length);
+    expect(rm.document.eq(whole.plan.result)).toBe(true);
+  });
+
+  it('refuses with too_large when one step alone cannot fit a commit', () => {
     const b = edited();
     const r = planRestore(
       { toSeq: 0, region: 'rTerms000000000A' },
       ctx(b, USERS.bob, { maxCommitBytes: 200 }),
     );
-    expect(r.ok && r.plan).toMatchObject({
-      kind: 'snapshot',
-      reason: 'restore',
-      region: 'rTerms000000000A',
-      fallback: 'too_large',
-    });
-    const steps = planRestore({ toSeq: 0, region: 'rTerms000000000A' }, ctx(b, USERS.bob));
-    // The snapshot holds the same content, with the head as a precondition so that it cannot
-    // overwrite commits made after it was planned.
-    expect(r.ok && steps.ok && r.plan.result.eq(steps.plan.result)).toBe(true);
-    expect(r.ok && r.plan.preconditions).toMatchObject({ head: 3 });
+    expect(r).toMatchObject({ ok: false, code: 'too_large' });
+  });
+
+  it('cuts a list of steps into the fewest runs that each fit', () => {
+    const step = (n: number) => ({ stepType: 'x', pad: 'a'.repeat(n) }) as unknown as StepJson;
+    const none = splitSteps([], 5, 10_000);
+    expect(none).toEqual([[]]);
+    const four = [step(1), step(1), step(1), step(1)];
+    expect(splitSteps(four, 3, 10_000)).toEqual([four.slice(0, 3), four.slice(3)]);
+    expect(splitSteps(four, 4, 10_000)).toEqual([four]);
+    // Bytes: the overhead is 4096, so a limit of 4096 + two steps' size holds two steps.
+    const size = commitBytes({ steps: [step(1), step(1)] });
+    expect(splitSteps(four, 100, 4096 + size)).toEqual([four.slice(0, 2), four.slice(2)]);
+    expect(splitSteps([step(5000)], 100, 4096 + 100)).toBeNull();
   });
 
   it('refuses a user without edit in the region with forbidden', () => {

@@ -17,9 +17,11 @@
  * HIS-021), which makes the gate, capability, approval, lease and workflow checks. A dry run
  * stores nothing and answers with the comparison between the head and the result. A region restore
  * needs `edit` in that region, which is not approved and not leased to someone else; it is
- * applied as a snapshot commit of the current document with only that region restored, because the
- * control plane has no way to hand a steps commit to the room (decision in
- * docs/adr/0374-w5-PRO-056-region-restore.md, proposed). Steps 5 to 7 are the same.
+ * applied as the steps the plan computes, handed to the room through the outbox as commits of origin
+ * `restore` by the person (HIS-018, ADR 0408). Steps that are too large for one commit are split
+ * into several linked commits (owner decision 36): consecutive commits of origin `restore` by the
+ * same person, bracketed by the `pre-restore` version at the old head and the `restore` version
+ * at the last one, each checked against the head the one before made. Steps 5 to 7 are the same.
  *
  * The response of an applied restore is `{ seq, toSeq, preRestoreSeq }` (with `region` for a region,
  * and `notes: { recreated, replaced }` when a definition had to be recreated or replaced, HIS-020).
@@ -27,9 +29,10 @@
  * (docs/adr/0358-lane-V-HIS-017-032.md).
  */
 import type { Connection } from '@docedit/authority';
-import { planRestore } from '@docedit/history';
+import { planRestore, restorePartPreconditions, type RestorePlan } from '@docedit/history';
 import { canonicalize, uuid7 } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
+import { derivedCommitId } from '../data-plane/commit-id.ts';
 import { regionNodeOf } from './content.ts';
 import {
   accessOf,
@@ -94,16 +97,13 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
     doc: string,
     ref: DocRef,
     headSeq: number,
-    envelope: JsonEnvelope,
+    write: (traceparent: string) => Promise<{ seq: number; commits: number }>,
     toSeq: number,
     region?: string,
     notes?: { recreated: string[]; replaced: string[] },
   ): Promise<Reply> => {
     const store = d.versions;
-    const apply = d.dataPlane?.replaceContent?.bind(d.dataPlane);
     if (!store) throw new ApiError('not_found', 'versions are not offered by this service');
-    if (!apply)
-      throw new ApiError('not_found', 'this server does not replace content yet (BE-037)');
     const actor = ctx.caller.actor;
     const pre = await store.create(
       ref,
@@ -114,11 +114,7 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('internal', `could not record the pre-restore version: ${pre.message}`);
     // The request's trace goes with the restore through the outbox and the room (BE-087 criterion 3).
     const traceparent = `00-${ctx.trace.traceId}-${ctx.trace.spanId}-01`;
-    const { seq } = await apply(ref, envelope, actor, {
-      reason: 'restore',
-      traceparent,
-      head: String(headSeq),
-    });
+    const { seq, commits } = await write(traceparent);
     k.wrote(ctx, doc, seq);
 
     const restored = await store.create(
@@ -136,7 +132,12 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
     k.notify()?.(ref, {
       type: 'version.restored',
       resource: `/documents/${doc}/versions`,
-      data: { seq, toSeq, ...(region !== undefined ? { region } : {}) },
+      data: {
+        seq,
+        toSeq,
+        ...(region !== undefined ? { region } : {}),
+        ...(commits > 1 ? { commits } : {}),
+      },
     });
     // A restore is on the audit trail (07 section 14; UX-081 criterion 1): who, which document and
     // the sequence numbers. No content is recorded.
@@ -161,11 +162,91 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       toSeq,
       preRestoreSeq: headSeq,
       ...(region !== undefined ? { region } : {}),
+      // A restore split into linked commits (owner decision 36) says how many (ADR 0408, proposed).
+      ...(commits > 1 ? { commits } : {}),
       // HIS-020 criterion 4: the person is told when a definition was recreated or replaced.
       ...(notes !== undefined && (notes.recreated.length > 0 || notes.replaced.length > 0)
         ? { notes }
         : {}),
     });
+  };
+
+  /**
+   * Hands the parts of a steps plan to the room through the outbox, one commit each in order,
+   * each against the head the one before made (owner decision 36). The commit identifiers are
+   * derived from the request, so a retry of the same restore at the same head is the same commits.
+   * A part the room refuses stops the restore: the parts before it stay applied, history only moves
+   * forward, and the answer says how far it got.
+   */
+  const writeSteps = async (
+    ctx: Ctx,
+    ref: DocRef,
+    headSeq: number,
+    plan: Extract<RestorePlan, { kind: 'steps' }>,
+    body: RestoreBody,
+    traceparent: string,
+  ): Promise<{ seq: number; commits: number }> => {
+    const outbox = d.outbox!;
+    const actor = ctx.caller.actor;
+    let last = headSeq;
+    // Control commits the room recorded since the plan (a permission change moves the head without
+    // touching content); each moves the base and the head precondition of the parts after it.
+    let moved = 0;
+    for (const [i, part] of plan.parts.entries()) {
+      for (let attempt = 0; ; attempt++) {
+        const expected = headSeq + i + moved;
+        const item = await outbox.enqueue({
+          tenant: ref.tenant,
+          doc: ref.doc,
+          commitId: derivedCommitId(
+            'restore',
+            ref.tenant,
+            ref.doc,
+            actor,
+            `head:${headSeq}`,
+            `to:${body.toSeq}`,
+            `region:${body.region ?? ''}`,
+            `part:${i}`,
+            `moved:${moved}`,
+          ),
+          kind: 'author',
+          request: {
+            origin: 'restore',
+            actor,
+            base: expected,
+            steps: part,
+            preconditions: restorePartPreconditions(plan.preconditions, i + moved),
+            traceparent,
+          },
+        });
+        const deadline = d.now() + (d.outboxWaitMs ?? 10_000);
+        let settled = item;
+        while (settled.state === 'pending' && d.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          settled = (await outbox.get(ref.tenant, item.id)) ?? settled;
+        }
+        const result = settled.result as { code?: string; seq?: number } | null;
+        if (settled.state === 'done' && typeof result?.seq === 'number') {
+          last = result.seq;
+          break;
+        }
+        const progress = `part ${i + 1} of ${plan.parts.length}; ${i} applied`;
+        if (settled.state === 'pending')
+          throw new ApiError('unavailable', `the restore was not delivered in time (${progress})`);
+        // Only control commits came in: the content is as planned, so try again from the new head.
+        const since =
+          result?.code === 'conflict' && attempt < 3 ? await d.logs.read(ref, expected + 1) : [];
+        if (since.length > 0 && since.every((c) => c.kind === 'control')) {
+          moved += since.length;
+          continue;
+        }
+        throw new ApiError(
+          'conflict',
+          `the document changed while the restore was applied (${progress}; ${result?.code ?? 'refused'})`,
+        );
+      }
+    }
+    return { seq: last, commits: plan.parts.length };
   };
 
   /** A region restore or a dry run: planned by `planRestore`, applied only when it is not a dry run. */
@@ -227,6 +308,7 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
           headSeq: v.head.seq,
           ...(body.region !== undefined ? { region: body.region } : {}),
           kind: plan.kind,
+          ...(plan.kind === 'steps' ? { commits: plan.parts.length } : {}),
           unchanged: plan.unchanged,
           notes: {
             reidentified: plan.reidentified,
@@ -245,7 +327,25 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
         unchanged: true,
         ...(body.region !== undefined ? { region: body.region } : {}),
       });
-    if (!d.dataPlane?.replaceContent)
+    const notes = { recreated: plan.recreated, replaced: plan.replaced };
+    if (plan.kind === 'steps') {
+      if (!d.outbox)
+        throw new ApiError('unavailable', 'server-authored commits are not delivered here');
+      // BE-091: the restore is a commit, so it counts against the tenant's live-use quotas.
+      await admitRestCommit(d.liveQuotas, ctx.caller.tenant);
+      return commitRestore(
+        ctx,
+        doc,
+        v.ref,
+        v.head.seq,
+        (traceparent) => writeSteps(ctx, v.ref, v.head.seq, plan, body, traceparent),
+        body.toSeq,
+        body.region,
+        notes,
+      );
+    }
+    const replace = d.dataPlane?.replaceContent?.bind(d.dataPlane);
+    if (!replace)
       throw new ApiError('not_found', 'this server does not replace content yet (BE-037)');
     // BE-091: the restore is a commit, so it counts against the tenant's live-use quotas.
     await admitRestCommit(d.liveQuotas, ctx.caller.tenant);
@@ -258,10 +358,25 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       requires: v.full.requires,
       doc: plan.result.toJSON(),
     } as JsonEnvelope;
-    return commitRestore(ctx, doc, v.ref, v.head.seq, envelope, body.toSeq, body.region, {
-      recreated: plan.recreated,
-      replaced: plan.replaced,
-    });
+    return commitRestore(
+      ctx,
+      doc,
+      v.ref,
+      v.head.seq,
+      async (traceparent) => ({
+        seq: (
+          await replace(v.ref, envelope, ctx.caller.actor, {
+            reason: 'restore',
+            traceparent,
+            head: String(v.head.seq),
+          })
+        ).seq,
+        commits: 1,
+      }),
+      body.toSeq,
+      body.region,
+      notes,
+    );
   };
 
   const restoreDocument: Handler = async (ctx: Ctx) => {
@@ -321,7 +436,24 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       requires: target.requires,
       doc: target.doc,
     } as JsonEnvelope;
-    return commitRestore(ctx, doc, ref, head.seq, envelope, body.toSeq);
+    const replace = d.dataPlane.replaceContent.bind(d.dataPlane);
+    return commitRestore(
+      ctx,
+      doc,
+      ref,
+      head.seq,
+      async (traceparent) => ({
+        seq: (
+          await replace(ref, envelope, ctx.caller.actor, {
+            reason: 'restore',
+            traceparent,
+            head: String(head.seq),
+          })
+        ).seq,
+        commits: 1,
+      }),
+      body.toSeq,
+    );
   };
 
   // Keyed by the operationId of `spec/dep` (`restore`), as the route table looks handlers up.

@@ -303,6 +303,11 @@
       "summary": "A reader asked for access to hidden content (UX-104, ADR 0019). `scope` is the DEP scope identifier of the placeholder. The host decides who answers; the editor sends nothing itself."
     },
     {
+      "name": "de-fork-request",
+      "detail": "{ docId: string; atSeq: number }",
+      "summary": "The user chose to copy a version into a new document (HIS-022; 05 §8.1). Fork is a service-credential operation, so the editor only asks: the host calls `POST /documents/{id}/fork` with `atSeq`. Identifiers and a `seq` only, no content."
+    },
+    {
       "name": "de-export-progress",
       "detail": "{ jobId: string; state: string; progress: number | null }",
       "summary": "An export job reports its state (PRO-086): identifiers and job state only, no content."

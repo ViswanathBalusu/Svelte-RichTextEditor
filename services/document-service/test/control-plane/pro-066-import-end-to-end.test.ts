@@ -128,7 +128,7 @@ describe('PRO-066: import a Word file, end to end (memory)', () => {
     expect(typeof accepted.json.id).toBe('string');
     const jobPath = `/v1/imports/${accepted.json.id}`;
     const userGet = await h.call('GET', jobPath, { token: userToken });
-    expect(userGet.status).toBe(403);
+    expect(userGet.status).toBe(404);
 
     // Criterion 2: the state, and the warnings once the job is complete.
     let job: Record<string, unknown> = {};

@@ -673,6 +673,9 @@
             "$ref": "#/components/parameters/IfMatch"
           },
           {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
             "$ref": "#/components/parameters/DepActor"
           },
           {
@@ -714,6 +717,9 @@
         "x-dep-spec": "05 §6.2; 04 §3.2",
         "x-dep-owner": "PRO",
         "x-dep-requires": "Service credential",
+        "x-dep-codes": [
+          "idempotency_mismatch"
+        ],
         "x-dep-gaps": [
           "G62"
         ],
@@ -3346,7 +3352,7 @@
       "post": {
         "operationId": "resolveAssets",
         "summary": "Returns short-lived signed URLs, because an `<img>` cannot send a bearer token.",
-        "description": "Returns short-lived signed URLs, because an `<img>` cannot send a bearer token. Requires: view on a document the asset is attached to (07 §12). Only when the server announces the feature `assets`. Specified in 05 §6.2.",
+        "description": "Returns short-lived signed URLs, because an `<img>` cannot send a bearer token. Requires: view on a document the asset is attached to; the uploader's own ready upload before a commit references it (07 §12). Only when the server announces the feature `assets`. Specified in 05 §6.2.",
         "tags": [
           "assets"
         ],
@@ -3419,7 +3425,7 @@
         },
         "x-dep-spec": "05 §6.2",
         "x-dep-owner": "PRO",
-        "x-dep-requires": "view on a document the asset is attached to",
+        "x-dep-requires": "view on a document the asset is attached to; the uploader's own ready upload before a commit references it",
         "x-dep-feature": "assets",
         "x-dep-gaps": [
           "G72",

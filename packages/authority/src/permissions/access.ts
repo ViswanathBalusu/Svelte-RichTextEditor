@@ -96,6 +96,25 @@ function bestGrant(
   return best;
 }
 
+/**
+ * Whether a grant whose principal is `role:<id>` gives the connection `edit` in the region. Only a
+ * role placeholder keeps `edit` on a locked document (07 §4, limit 1); a grant to a person or a
+ * group does not.
+ */
+function roleGrantConveysEdit(
+  region: string,
+  conn: Connection,
+  perms: PermissionState,
+  now: number,
+): boolean {
+  for (const g of perms.grants) {
+    if (g.region !== region || !g.principal.startsWith('role:')) continue;
+    if (!isRegionRole(g.role) || !grantMatches(g, conn, now, perms.workflowActive)) continue;
+    if (ROLE_CAPABILITIES[g.role].includes('edit')) return true;
+  }
+  return false;
+}
+
 function regionCaps(
   region: RegionInfo,
   grant: Capability[] | null,
@@ -166,7 +185,18 @@ export function computeAccess(
   if (perms.documentState !== 'active') {
     const keep: Capability[] = perms.documentState === 'locked' ? ['view', 'comment'] : ['view'];
     for (const s of [body, structureScopes, newRegion]) limit(s, keep);
-    for (const s of regionMap.values()) limit(s as Set<Capability>, keep);
+    for (const [id, s] of regionMap) {
+      // FRW-086, option (a), owner decision 132 of 2026-11-15: a locked document keeps `edit` in a
+      // region granted to a role whose bound participant is active in the workflow (07 §4, limit 1).
+      // The limits above already took it away where a region is approved or leased to another.
+      const roleEdit =
+        perms.documentState === 'locked' &&
+        perms.workflowActive &&
+        conn.participantActive &&
+        s.has('edit') &&
+        roleGrantConveysEdit(id, conn, perms, now);
+      limit(s as Set<Capability>, roleEdit ? [...keep, 'edit'] : keep);
+    }
   }
   // An agent connection holds at most `suggest` in every scope (07 §4; ADR 0234 A3, UX-044): the
   // intersection of what the user holds and `{view, comment, suggest}`. It never holds `edit`, `fill`,

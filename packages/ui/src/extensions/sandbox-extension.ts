@@ -17,6 +17,8 @@ import type { ExtensionEntry } from './host.ts';
 import type { ExtensionDocumentApi } from './document-api.ts';
 import { mountSandboxFrame, type SandboxKey } from './sandbox-frame.ts';
 import { parseAccess, type SandboxLogEntry } from './sandbox-protocol.ts';
+import { contributePanel } from './contributions.ts';
+import type { PaneComponent, PaneRegistry } from '../shell/panes.ts';
 
 /** What the host gives an entry when it activates it (the shell's `ExtensionApi`). */
 export interface SandboxedActivationApi {
@@ -31,8 +33,23 @@ export interface SandboxedExtensionOptions {
   readonly manifest: Readonly<Record<string, unknown>>;
   /** The URL of the host's `sandbox-frame.html`. */
   readonly frameUrl: string;
-  /** Where the iframe goes. A panel body, or a hidden element for an extension with no panel. */
-  readonly container: () => HTMLElement;
+  /** Where the iframe goes: a hidden element for an extension with no panel. Not used with `panel`. */
+  readonly container?: () => HTMLElement;
+  /**
+   * Gives the extension a panel in the pane host (UX-060). The frame is mounted in the pane's body
+   * when the pane opens and removed when it closes, so the extension's code runs while its panel is
+   * open; the pane is registered with the extension and removed with it. Focus enters the frame
+   * when the pane opens, and Ctrl+F6, Alt+F6 and Escape pressed in the frame reach the shell.
+   */
+  readonly panel?: {
+    readonly registry: PaneRegistry;
+    readonly id: string;
+    /**
+     * Loads the pane component, `panes/SandboxPane.svelte`: `() => import('@docedit/ui/panes/SandboxPane.svelte')`
+     * with the default export. The host passes it so that this module stays free of Svelte files.
+     */
+    readonly load: () => Promise<PaneComponent>;
+  };
   /** Whether the editor is in suggestion mode now (for `access.write` of `suggest`). */
   readonly suggesting: () => boolean;
   /** Receives each refused or ignored message of the frame. */
@@ -59,6 +76,37 @@ export function sandboxedExtension(
       if (api.document === null)
         throw new Error('the editor does not offer the document API to extensions');
       const name = String(manifest['name'] ?? manifest['id']);
+      const documentApi = api.document;
+      if (options.panel) {
+        const mount = (container: HTMLElement, onKey: (key: SandboxKey) => void): (() => void) => {
+          const frame = mountSandboxFrame({
+            container,
+            frameUrl: options.frameUrl,
+            entryUrl: entry.trim(),
+            extension: String(manifest['id']),
+            title: name,
+            api: documentApi,
+            access: access.access,
+            suggesting: options.suggesting,
+            log: options.log,
+            onKey,
+            // The pane closes and opens again while the extension stays installed.
+            keepApi: true,
+          });
+          options.onMounted?.(frame);
+          return () => frame.dispose();
+        };
+        api.onRemove(
+          contributePanel(options.panel.registry, {
+            id: options.panel.id,
+            label: name,
+            load: options.panel.load,
+            props: { mount },
+          }),
+        );
+        return;
+      }
+      if (!options.container) throw new Error('a sandboxed extension needs a container or a panel');
       const frame = mountSandboxFrame({
         container: options.container(),
         frameUrl: options.frameUrl,

@@ -177,7 +177,7 @@ What the editor does when its own layout disagrees with a reported break is defi
 
 ### 9.1 Job flow and options
 
-`POST /documents/{id}/exports` creates a job (05, section 6). States: `queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`. Progress is pushed as `export.progress` events. The result holds a signed URL with an expiry, the page count, the URL of `layout.json`, whether page references converged, warnings and diagnostics. A second request for the same bundle and profile returns the first result.
+`POST /documents/{id}/exports` creates a job (05, section 6). States: `queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`. Progress is pushed as `export.progress` events. The result holds a signed URL with an expiry (on the asset origin of 10, section 3.5, with a fixed content type, `nosniff` and a download disposition for each file; never a URL of the object store; owner decision 66), the page count, the URL of `layout.json`, whether page references converged, warnings and diagnostics. A second request for the same bundle and profile returns the first result.
 
 | Option | Values |
 |---|---|

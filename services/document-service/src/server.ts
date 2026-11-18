@@ -13,7 +13,12 @@ import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { podmanSandbox, type AssetUrlKeys, type Sandbox } from '@docedit/asset-worker';
+import {
+  podmanSandbox,
+  signExportUrl,
+  type AssetUrlKeys,
+  type Sandbox,
+} from '@docedit/asset-worker';
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
 import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
@@ -1112,12 +1117,13 @@ export async function startService(opts: StartOptions): Promise<Service> {
       runnerFor({ [PREVIEW_KIND]: exportHandlers[PREVIEW_KIND]! }, { hooks, claim });
   }
 
+  const exportUrlKeys = assetUrlKeys(config.assetUrlKey);
   const uploads = assetUploads({
     objects: parts.objects,
     assets,
     s3: config.s3,
     origin: config.assetOrigin,
-    urlKeys: assetUrlKeys(config.assetUrlKey),
+    urlKeys: exportUrlKeys,
     uploadSeconds: config.uploadSeconds,
     urlLifetimeMs: config.signedUrlSeconds * 1000,
   });
@@ -1436,6 +1442,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
     },
     assetRegistry: parts.assetRegistry,
     uploads,
+    ...(config.assetOrigin && exportUrlKeys
+      ? {
+          exportUrl: (tenant: string, job: string, name: string, expiresAt: number) =>
+            signExportUrl({
+              origin: config.assetOrigin!,
+              tenant,
+              job,
+              name,
+              expiresAt,
+              keys: exportUrlKeys,
+            }),
+        }
+      : {}),
     uploadSeconds: config.uploadSeconds,
     fonts: () => fonts,
     exportPolicy: {

@@ -128,6 +128,11 @@ export interface MountOptions {
    */
   onPrintRequest?: () => void;
   /**
+   * Called when the user chooses to copy a version into a new document (HIS-022); the element raises
+   * `de-fork-request` from it. The history pane offers the command only when this is given.
+   */
+  onForkRequest?: (detail: { atSeq: number }) => void;
+  /**
    * Called when a reader asks for access to a placeholder (UX-104, ADR 0019); the element raises
    * `de-access-request` from it. The shell shows the request control only when this is given.
    */
@@ -221,6 +226,7 @@ function reviewItem(s: ReturnType<EditorCore['suggestionItems']>[number]): Revie
     text: s.text,
     caps: s.caps.filter((c): c is Capability => (CAPABILITIES as readonly string[]).includes(c)),
     canResolve: s.canResolve,
+    region: s.region,
   };
 }
 
@@ -643,6 +649,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       loadPane: async () => (await import('@docedit/ui/panes/OutlinePane.svelte')).default,
       onShareRequest: options.onShareRequest,
       ...(options.onPrintRequest ? { onPrintRequest: options.onPrintRequest } : {}),
+      ...(options.onForkRequest ? { onForkRequest: options.onForkRequest } : {}),
       ...(options.onAccessRequest ? { onAccessRequest: options.onAccessRequest } : {}),
       onExtensionError: options.onExtensionError,
     },

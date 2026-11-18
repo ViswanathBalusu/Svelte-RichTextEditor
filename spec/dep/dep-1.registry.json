@@ -429,7 +429,7 @@
       ],
       "requires": "Service credential",
       "ifMatch": "required",
-      "idempotencyKey": false,
+      "idempotencyKey": true,
       "success": "204",
       "spec": "05 §6.2; 04 §3.2",
       "owner": "PRO"
@@ -892,7 +892,7 @@
         "service"
       ],
       "feature": "assets",
-      "requires": "view on a document the asset is attached to",
+      "requires": "view on a document the asset is attached to; the uploader's own ready upload before a commit references it",
       "ifMatch": "none",
       "idempotencyKey": false,
       "success": "200",
