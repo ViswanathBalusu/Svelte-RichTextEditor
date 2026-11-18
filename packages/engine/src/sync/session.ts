@@ -51,7 +51,7 @@ import {
   reset,
   takeCommit,
 } from './state.ts';
-import { type JournalEntry, type JournalPort } from './journal.ts';
+import { type JournalEntry, type JournalPort, type QueueAt } from './journal.ts';
 
 /** What the session needs from the editing core. */
 export interface SyncHost {
@@ -257,8 +257,25 @@ export class SyncSession {
     this.#maxSteps = opts.limits?.maxStepsPerCommit ?? DEFAULT_LIMITS.maxStepsPerCommit;
     this.#maxCommitBytes = opts.limits?.maxCommitBytes ?? DEFAULT_LIMITS.maxCommitBytes;
     this.#retryMs = (opts.retry ?? DEFAULT_RETRY).minMs;
+    // Work put back from the journal (FE-009) is already in the queue: it is not written again.
+    this.#queueKey = JSON.stringify(stepsToJson(host.sync.queue));
     this.#restoreRecovered();
     this.#bind(channel);
+  }
+
+  /**
+   * Keeps work from the journal that could not be put back as recovered edits (FE-009; FE-010): it is
+   * reported as set aside, written to the journal's recovered store, and its commits and the queue
+   * leave the journal, so that it is not tried again on the next visit.
+   */
+  setAside(items: readonly Discarded[]): void {
+    if (items.length === 0 || this.#ended) return;
+    this.#host.event({ type: 'discarded', items });
+    this.#recordRecovered(items);
+    for (const id of new Set(items.map((i) => i.commit))) if (id !== null) this.#journalDrop(id);
+    // The queue in the journal may be the work just set aside: write what the client now holds.
+    this.#queueKey = '\u0000';
+    this.#writeQueue();
   }
 
   /** The channel in use, or null while reconnecting. */
@@ -767,12 +784,19 @@ export class SyncSession {
     const key = JSON.stringify(steps);
     if (key === this.#queueKey) return;
     this.#queueKey = key;
+    const at = this.#queueAt();
     this.#journalChain = this.#journalChain
-      .then(() => journal.setQueue(this.docId, steps))
+      .then(() => journal.setQueue(this.docId, steps, at))
       .then(
         () => this.#setJournalOk(true, ''),
         (e: unknown) => this.#setJournalOk(false, journalReason(e)),
       );
+  }
+
+  /** The confirmed document the queue is made on, written with it (FE-009). */
+  #queueAt(): QueueAt {
+    const s = this.#host.sync;
+    return { seq: s.seq, incarnation: s.incarnation };
   }
 
   /**
@@ -850,12 +874,15 @@ export class SyncSession {
       base: commit.base,
       steps: commit.steps,
       ...(commit.origin ? { origin: commit.origin } : {}),
+      // The incarnation `base` belongs to, so that the next visit resumes in the same log (FE-009).
+      ...(this.#host.sync.incarnation === '' ? {} : { incarnation: this.#host.sync.incarnation }),
     };
     const queue = stepsToJson(this.#host.sync.queue) as StepJson[];
     this.#queueKey = JSON.stringify(queue);
+    const at = this.#queueAt();
     this.#journalChain = this.#journalChain
       .then(() => journal.put(entry))
-      .then(() => journal.setQueue(this.docId, queue))
+      .then(() => journal.setQueue(this.docId, queue, at))
       .then(
         () => {
           this.#setJournalOk(true, '');
