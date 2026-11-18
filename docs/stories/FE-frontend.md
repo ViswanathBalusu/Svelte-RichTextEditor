@@ -1946,11 +1946,15 @@ As a maintainer, I want an explicit decision on whether layout runs in a worker 
 **Acceptance criteria**
 
 - [ ] Given the open question in 02 §15, when the decision is made, then it states whether layout runs in a worker from the start or later, and where text measurement runs given the outcome of S5.
-- [ ] Given the decision, when the layout engine API (FE-076) is tested, then the same tests pass in Node.js, on the main thread and in a worker.
+- [x] Given the decision, when the layout engine API (FE-076) is tested, then the same tests pass in Node.js, on the main thread and in a worker.
 - [ ] Given a worker is chosen, when the layout tree crosses to the main thread, then the cost per animation frame is measured against the typing latency target.
 - [ ] Given the decision, when it is recorded, then ADR 0005 is updated.
 
+**Evidence (lane w1, 2026-11-18):** criterion 2: the FE-076 scenario gives the same serialised tree on the main thread and in a worker, with no `document` or `window` in the worker: `packages/layout/test/fe-076-worker.test.ts` (Node.js `worker_threads`; 2 passed) and `packages/layout/src/fe-076-browser-worker.universal.test.ts` (main thread and a browser `Worker`; 3 passed, one per Chromium, Firefox and WebKit), run 2026-11-18 on the lane's Windows machine with `pnpm exec vitest run --project node` and `--project browser`. The criterion holds whichever way the placement is decided, because the engine is the same code in all three places.
+
 **Notes:** The engine has no DOM dependency so that it can run in a worker (02 §9.1); canvas measurement in a worker needs `OffscreenCanvas` and the font aliases registered there (FE-063). Lane FE-079-091 (round 1, 2026-11-13): the proposed default is in docs/adr/0206-lane-FE-079-091.md (status: proposed): layout stays on the main thread at first, with the engine kept DOM-free so that a worker move needs no change of API, and measurement stays with canvas on the main thread. Criterion 1 stays open: it needs the outcome of S5, which is not in the repository. Criteria 2 and 3 need a worker and a browser run, not made. Criterion 4 stays open: ADR 0005 is an accepted record and was not edited by this lane.
+
+**Notes (lane w1, 2026-11-18):** Partial: criterion 2 ticked (Evidence). S5 is now in the repository (docs/spikes/2026-11-06-s5-text-measurement.md), so the objection of the earlier notes to criterion 1 no longer holds, but the decision is still the owner's: decisions 26 and 27 of docs/owner-decisions-2026-11-15.md settle the page view and the Rust WebAssembly module, not where layout runs, and decision 220 does not cover lane ADRs 0205 and 0206. A new proposal that uses S5, S10 and decision 27 is docs/adr/0390-w1-FE-075-layout-placement.md (proposed: layout and measurement in a worker from the start, main thread as fallback). Criterion 1 stays open for the owner's word. Criterion 3 stays open: it applies once a worker is chosen, and no measurement exists of the whole tree crossing to the main thread (S10 measured one paragraph's lines, at most 0.41 ms at the 95th percentile, reference profile); the ADR names it as the condition for accepting. Criterion 4 stays open: ADR 0005 is updated when the owner accepts a placement.
 
 ### FE-076 Define the layout engine API and its injected interfaces
 
