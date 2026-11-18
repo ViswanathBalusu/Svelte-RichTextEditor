@@ -160,14 +160,12 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     }
 
     const rowsOf = (doc: string) => h.parts.evidence!.list(h.tenant, doc);
-    const chainHead = async (ref: { tenant: string; doc: string }) =>
-      (await h.parts.logs.state!(ref)).chainHead;
     const agent = { 'user-agent': 'FrwTest/40' };
 
     it.skipIf(skip)(
       'records the session, address, agent, amr, consent, view, each signing and the completion, from the server only (criteria 1, 2, 3 and 5)',
       async () => {
-        const { doc, owner, ref } = await workflow([
+        const { doc, owner } = await workflow([
           { id: 'p1', roles: ['tenant'], kind: 'signer', order: 1, sub: 'sub-p1' },
         ]);
         const tok = token(doc, 'p1', { amr: ['pwd', 'otp'] });
@@ -208,9 +206,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             headers: agent,
           });
           expect(ok.status, ok.text).toBe(200);
+          // The signing commit, as the route names it: a control commit that anchors the salted hash
+          // of the evidence follows it (FRW-041), so the head is no longer the signing.
           heads.push({
-            seq: (await h.parts.logs.head(ref)).seq,
-            chain: (await chainHead(ref))!,
+            seq: (ok.json as { seq: number }).seq,
+            chain: (ok.json as { chainHash: string }).chainHash,
             key,
             mode,
           });

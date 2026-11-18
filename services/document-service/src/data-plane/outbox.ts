@@ -78,6 +78,26 @@ export function opOf(item: OutboxItem): ServerOp | null {
       trace,
     };
   }
+  // An evidence anchor (FRW-041): an `author` item with no steps, holding the origin and the salted
+  // hash. The outbox needs no new kind for it.
+  const anchored = r['evidence'];
+  if (anchored !== undefined) {
+    const ev = anchored as { origin?: unknown; evidenceHash?: unknown } | null;
+    if (
+      ev === null ||
+      typeof ev !== 'object' ||
+      (ev.origin !== 'sign' && ev.origin !== 'rules') ||
+      typeof ev.evidenceHash !== 'string'
+    )
+      return null;
+    return {
+      kind: 'anchor',
+      id: item.commitId,
+      actor: 'system',
+      evidence: { origin: ev.origin, evidenceHash: ev.evidenceHash },
+      trace,
+    };
+  }
   if (typeof r['origin'] !== 'string' || !Number.isSafeInteger(r['base'])) return null;
   return {
     kind: 'author',
