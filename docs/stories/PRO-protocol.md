@@ -1815,7 +1815,7 @@ As an integrating developer, I want to set `mode` to `edit`, `view` or `fill`, s
 
 **Evidence (lane U-PRO-069-085, 2026-11-13): criteria 1, 2, 3 and 5 in four browsers.** `packages/element/e2e/attributes.spec.ts` with `-g "PRO-07[789]"`, projects chromium, msedge, firefox and webkit: 29 passed, 0 failed, 3 flaky (each passed on retry: `mode="edit"` in WebKit and the `mode="review"` viewer test in WebKit, and `theme="auto"` in Edge). The run is `pnpm exec playwright test -c packages/element/playwright.config.ts --project=... e2e/attributes.spec.ts`, with `DOCEDIT_DEMO_PORT=56130`.
 
-**Notes:** The default when `mode` is absent is not stated (Open questions). `review` is PRO-078. Element packet round 5 (2026-11-13): criterion 4 stays open. `mode="fill"` is tested only as a lock of the body (mode.spec 'fill and an unknown value'); the fill behaviour of 12 §11 is FRW-007, which is not built.
+**Notes:** The default when `mode` is absent is not stated (Open questions). `review` is PRO-078. Element packet round 5 (2026-11-13): criterion 4 stays open. `mode="fill"` is tested only as a lock of the body (mode.spec 'fill and an unknown value'); the fill behaviour of 12 §11 is FRW-007, which is not built. Lane w5 (2026-11-17): no tick added; criterion 4 waits for FRW-007. Owner decision 5 of 2026-11-15 (FRW-083, the first slice of form mode) does not settle the fill behaviour of 12 §11.
 
 ### PRO-078 Start in suggestion mode
 
