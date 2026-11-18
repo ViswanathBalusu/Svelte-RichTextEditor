@@ -36,6 +36,7 @@ import {
 } from '../src/index.ts';
 import type { ZipArchive, ZipWriteEntry } from '../src/index.ts';
 import { corpusFiles, readFile } from './corpus.ts';
+import { savingFailures } from './regressions.ts';
 
 interface Seed {
   readonly name: string;
@@ -350,6 +351,11 @@ function record(family: string, outcome: Outcome): void {
 
 /** Imports the bytes and fails on a crash or on a slow import. */
 async function importChecked(family: string, bytes: Uint8Array, limitMs: number): Promise<void> {
+  // A crash or a slow import saves the input to test/regressions/ (EXP-110 criterion 5).
+  await savingFailures(bytes, family, () => importOnce(family, bytes, limitMs));
+}
+
+async function importOnce(family: string, bytes: Uint8Array, limitMs: number): Promise<void> {
   const start = performance.now();
   let outcome: Outcome = 'imported';
   try {
