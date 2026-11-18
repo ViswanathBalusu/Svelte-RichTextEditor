@@ -2043,7 +2043,7 @@
             }
           },
           {
-            "name": "seq",
+            "name": "atSeq",
             "in": "query",
             "required": false,
             "schema": {

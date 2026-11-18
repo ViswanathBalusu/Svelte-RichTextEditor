@@ -156,7 +156,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const atHead = await diff('fromSeq=3&toSeq=3', viewer);
         expect(atHead.status).toBe(200);
         expect(atHead.json.changes).toEqual([]);
-        const old = await attribution('seq=1', viewer);
+        const old = await attribution('atSeq=1', viewer);
         expect(old.status).toBe(403);
         expect((await attribution('', viewer)).status).toBe(200);
       },
@@ -180,7 +180,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     it.skipIf(skip)(
       'reads attribution at an earlier seq, for a region and for blocks (criterion 2)',
       async () => {
-        const r = await attribution('seq=2');
+        const r = await attribution('atSeq=2');
         expect(r.json.seq).toBe(2);
         const spans = r.json.spans.filter((s: { blockId: string }) => s.blockId === block);
         expect(spans.slice(0, 2).map((s: { user: string }) => s.user)).toEqual(['alice', 'bob']);
@@ -192,8 +192,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect((await attribution('region=rLegal0000000001')).status).toBe(200);
         expect((await attribution('region=rNoSuchRegion001')).status).toBe(404);
         expect((await attribution('blocks=nosuchblock00001')).status).toBe(404);
-        expect((await attribution('seq=9')).status).toBe(404);
-        expect((await attribution('seq=x')).status).toBe(400);
+        expect((await attribution('atSeq=9')).status).toBe(404);
+        expect((await attribution('atSeq=x')).status).toBe(400);
       },
     );
 
