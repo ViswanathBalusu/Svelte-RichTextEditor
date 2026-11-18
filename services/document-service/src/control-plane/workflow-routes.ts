@@ -27,7 +27,7 @@ import {
   type WorkflowParticipant,
 } from '@docedit/authority';
 import { createHash } from 'node:crypto';
-import { canonicalize } from '@docedit/model';
+import { canonicalize, uuid7 } from '@docedit/model';
 import { recordCorrection, recordResume } from '../workflow/correction.ts';
 import { recordDecline, recordVoid, type StopOutcome } from '../workflow/stop.ts';
 import { recordRemind } from '../workflow/schedule-sweep.ts';
@@ -39,6 +39,9 @@ import {
 import { acceptConsent, type ConsentProblem } from '../workflow/consent-service.ts';
 import { recordOf } from '../workflow/record.ts';
 import { signField, type SignProblem } from '../workflow/sign-service.ts';
+import { completeMyPart, type CompleteProblem } from '../workflow/complete-service.ts';
+import { startFinalExport } from '../workflow/final-export-start.ts';
+import { EXPORT_POLICY_DEFAULTS } from './export-routes.ts';
 import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
 import { checkIfMatch } from './http.ts';
@@ -787,6 +790,138 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     );
   };
 
+  /** The answer to a problem of the completion. */
+  const completeProblem = (doc: string, p: CompleteProblem): ApiError => {
+    switch (p.code) {
+      case 'not_found':
+        return new ApiError('not_found', `document ${doc} has no such ${p.what}`);
+      case 'invalid_state':
+        return new ApiError('conflict', `the workflow is ${p.state}`);
+      case 'forbidden':
+        return new ApiError('forbidden', p.reason);
+      case 'conflict':
+        return new ApiError('conflict', `the workflow is ${p.state}`);
+      case 'not_stored':
+        return new ApiError('conflict', `the completion was not stored (${p.reason})`);
+      case 'validation':
+        return new ApiError(
+          'validation_failed',
+          'the fields do not pass: ' + p.problems.map((x) => x.key || x.code).join(', '),
+          {
+            violations: p.problems.map((x) => ({
+              path: x.key === '' ? '/' : `/fields/${x.key}`,
+              rule: x.rule !== undefined ? `${x.code} (${x.rule})` : x.code,
+            })),
+          },
+        );
+    }
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/participants/{pid}/complete` (12 §5.3, §6.2, §8.1 step 4; FRW-047;
+   * method and prefix assumed, G95; ADR 0398, proposed). The caller is the participant: a user whose
+   * token binds to `pid`. The body is empty or `{}`. The service checks the participant's fields,
+   * writes the `rules` commit, marks the participant completed and answers the workflow resource. A
+   * refusal because a field does not pass is `validation_failed` with one violation for each field
+   * key and rule; the participant stays active. A second call answers the same and writes nothing.
+   */
+  const completeRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const pid = ctx.params['pid']!;
+    if (!d.evidence || !d.workflows || !d.outbox)
+      throw new ApiError('not_found', 'this server does not offer completion');
+    const body = (await ctx.body()) as Record<string, unknown> | null | undefined;
+    if (body !== null && body !== undefined) {
+      if (typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length > 0)
+        throw new ApiError('validation_failed', 'the completion request has no body', {
+          violations: [{ path: '/', rule: 'an empty body' }],
+        });
+    }
+    const identity = ctx.caller.identity;
+    await liveDocument(ctx, doc);
+    const current = await store().read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (!current.participants.some((p) => p.id === pid))
+      throw new ApiError('not_found', `document ${doc} has no such participant`);
+    if (ctx.caller.kind !== 'user' || identity === null || identity.docs[doc] === undefined)
+      throw new ApiError('forbidden', 'only the participant completes their part');
+    const bound = bindParticipant(
+      {
+        sub: identity.sub,
+        ...(identity.asserted?.wfp !== undefined ? { wfp: identity.asserted.wfp } : {}),
+      },
+      recordOf(current),
+    );
+    if (!bound.ok || bound.participant.id !== pid)
+      throw new ApiError('forbidden', 'the token is not bound to this participant');
+    const agent = ctx.req.headers['user-agent'];
+    const out = await completeMyPart(
+      {
+        ...transitionDeps(),
+        evidence: d.evidence,
+        content: d.content,
+        outbox: d.outbox,
+        ...(d.outboxWaitMs !== undefined ? { waitMs: d.outboxWaitMs } : {}),
+      },
+      {
+        ref: k.refOf(ctx, doc),
+        actor: ctx.caller.actor,
+        participant: pid,
+        facts: {
+          address: ctx.req.socket.remoteAddress ?? null,
+          userAgent: typeof agent === 'string' && agent.length > 0 ? agent.slice(0, 512) : null,
+        },
+      },
+    );
+    if (!out.ok) throw completeProblem(doc, out.problem);
+    if (out.changed)
+      await raiseAll(ctx, doc, {
+        ok: true,
+        changed: true,
+        resource: out.resource,
+        control: out.control,
+        raised: out.raised,
+      });
+    // The workflow has reached `completed`: the final export starts (12 §8.2 step 1; FRW-049). A
+    // failure to start it does not undo the completion; it is audited and the workflow stays
+    // `completed`.
+    if (out.changed && out.raised.some((e) => e.name === 'completed')) {
+      await startFinalExport(
+        {
+          logs: d.logs,
+          grants: d.grants,
+          content: d.content,
+          views: d.views,
+          queue: d.queue,
+          policy: d.exportPolicy ?? EXPORT_POLICY_DEFAULTS,
+          targets: d.exportTargets,
+          versions: d.versions,
+          audit: d.audit,
+          evidence: d.evidence,
+          now: d.now,
+          onQueued: d.onJobQueued,
+        },
+        { ref: k.refOf(ctx, doc), workflow: out.resource, fallbackActor: ctx.caller.actor },
+      ).catch((e: unknown) => {
+        void d.audit?.record([
+          {
+            id: uuid7(),
+            tenant: ctx.caller.tenant,
+            doc,
+            actor: 'system',
+            kind: 'workflow.finalisation_failed',
+            data: { workflow: out.resource.id, stage: 'start', reason: String(e) },
+            at: d.now(),
+          },
+        ]);
+      });
+    }
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-store',
+    });
+  };
+
   return {
     getWorkflow,
     putWorkflow,
@@ -794,6 +929,7 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     remindWorkflow: remindWorkflowRoute,
     participantVerify: verifyAccessCodeRoute,
     participantConsent: consentRoute,
+    participantComplete: completeRoute,
     signField: signRoute,
     registerAccessCode: registerAccessCodeRoute,
     voidWorkflow: voidWorkflowRoute,

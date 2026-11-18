@@ -19,6 +19,7 @@ import {
 import type { Bundle, BundleManifest, ConvertOptions, Diagnostic, SourceMap } from './bundle.ts';
 import { bundleHashInput, canonicalJson } from './bundle-hash.ts';
 import { block, closeLists, flowBlocks, newFlow } from './blocks.ts';
+import { appendCertificate } from './certificate.ts';
 import { settleSuggestions } from './suggestions.ts';
 import { computeCitations } from './citations.ts';
 import {
@@ -126,7 +127,18 @@ function sourceMap(ctx: Ctx): SourceMap {
   };
 }
 
-export async function convert(envelope: CdmEnvelope, options: ConvertOptions): Promise<Bundle> {
+export async function convert(input: CdmEnvelope, options: ConvertOptions): Promise<Bundle> {
+  // The certificate of completion (FRW-050) is appended to the body before anything reads it, so
+  // that the checks and the numbering see it like the rest of the document.
+  const envelope = options.certificate
+    ? ({
+        ...input,
+        doc: appendCertificate(
+          input.doc as unknown as Record<string, unknown>,
+          options.certificate,
+        ),
+      } as unknown as CdmEnvelope)
+    : input;
   const o = {
     tagging: options.tagging ?? 'on',
     pdfStandard: options.pdfStandard ?? 'ua-2+a-4f',
@@ -468,6 +480,7 @@ export async function convert(envelope: CdmEnvelope, options: ConvertOptions): P
       timeZone: options.timeZone ?? '',
       instant: options.instant ?? '',
       ...(options.classification ? { classification: options.classification } : {}),
+      ...(options.certificate ? { certificate: 'on' } : {}),
     },
     redactions: ctx.redactions,
     files: sortedHashes,

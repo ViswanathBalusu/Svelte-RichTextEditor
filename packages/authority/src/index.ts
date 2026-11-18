@@ -335,8 +335,11 @@ export {
 export {
   COMPLETION_RULE_BUDGET,
   completionCheck,
+  completionWrites,
   hiddenValuesToClear,
   type CompletionProblem,
+  type CompletionWrite,
+  type CompletionWrites,
   type CompletionVerdict,
 } from './workflow/completion.ts';
 export {
@@ -551,3 +554,23 @@ export {
   type GatewayStats,
   type Visibility,
 } from './projection/gateway.ts';
+
+export {
+  finalExportRequest,
+  type FinalExportRequest,
+  type FinalExportVerdict,
+  type FinalisationOptions,
+} from './workflow/final-export.ts';
+
+export {
+  buildCertificateFacts,
+  CERTIFICATE_EVENT_KINDS,
+  CERTIFICATE_STATEMENT,
+  type CertificateEventFact,
+  type CertificateEventInput,
+  type CertificateEventKind,
+  type CertificateFacts,
+  type CertificateInput,
+  type CertificateParticipantFact,
+  type CertificateParticipantInput,
+} from './workflow/certificate.ts';

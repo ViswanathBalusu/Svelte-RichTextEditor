@@ -3,6 +3,7 @@
  * Nothing here is specific to LaTeX except `Bundle`, `SourceMap` and the class options; the writer
  * interface in `writer.ts` uses the generic parts only (EXP-002).
  */
+import type { CertificateFacts } from './certificate.ts';
 import type { CounterEffect } from '@docedit/model';
 import type { CodeRange } from './fonts/coverage.ts';
 
@@ -130,6 +131,12 @@ export interface ConvertOptions {
    * options in `manifest.json`, so a change of label changes the bundle hash.
    */
   classification?: string;
+  /**
+   * The certificate of completion (FRW-050): the facts it prints. The converter appends the
+   * certificate after the body, starting on a new page, through the same typed emitters as the body.
+   * Absent: no certificate. The option joins the options in `manifest.json`.
+   */
+  certificate?: CertificateFacts;
   /** Neutral notices, in the job's language. Defaults are in English. */
   notices?: Readonly<{ hiddenRegion?: string; redactedValue?: string }>;
 }

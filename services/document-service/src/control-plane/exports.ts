@@ -21,9 +21,9 @@
  *   `manage` and `options.full: true`; a service credential reads the full document anyway.
  */
 import { createHash } from 'node:crypto';
-import { canonicalize } from '@docedit/model';
+import { canonicalize, uuid7 } from '@docedit/model';
 import type { Diagnostic, Notification } from '@docedit/protocol';
-import type { DocRef } from '../storage/types.ts';
+import type { AuditStore, DocRef } from '../storage/types.ts';
 import type { EventSink } from './events.ts';
 import type { JobHooks, JobOutcome } from './jobs/runner.ts';
 import type { JobRecord } from './jobs/queue.ts';
@@ -160,6 +160,12 @@ export function exportHooks(opts: {
   versions?: Pick<VersionStorePort, 'create'>;
   /** Called when the `export` version could not be stored; the export itself stays completed. */
   versionFailed?: (job: JobRecord) => void;
+  /**
+   * Where the failure of a workflow's final export is recorded (FRW-049 criterion 3): the entry
+   * `workflow.finalisation_failed` names the job and the error code, for the operator. The workflow
+   * stays `completed`. Absent: no entry.
+   */
+  audit?: Pick<AuditStore, 'record'>;
 }): JobHooks {
   const isExport = (j: JobRecord) => (EXPORT_KINDS as readonly string[]).includes(j.kind);
   const tell = (job: JobRecord, type: string, data: Record<string, unknown>) => {
@@ -210,6 +216,27 @@ export function exportHooks(opts: {
           recordExportVersion(job, job.payload['seq'], job.doc);
       } else if (outcome.state === 'failed' && !outcome.retried) {
         tell(job, 'export.failed', { state: 'failed', code: outcome.error.code });
+        const fin = job.payload['finalisation'] as { workflow?: unknown } | undefined;
+        if (fin !== undefined && fin !== null && typeof fin === 'object')
+          void opts.audit
+            ?.record([
+              {
+                id: uuid7(),
+                tenant: job.tenant,
+                doc: job.doc,
+                actor: 'system',
+                kind: 'workflow.finalisation_failed',
+                data: {
+                  workflow: typeof fin.workflow === 'string' ? fin.workflow : null,
+                  stage: 'export',
+                  job: job.id,
+                  seq,
+                  code: outcome.error.code,
+                },
+                at: opts.now(),
+              },
+            ])
+            .catch(() => undefined);
         opts.events.emit({
           type: 'dep.export.failed.v1',
           tenant: job.tenant,
