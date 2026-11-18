@@ -1,7 +1,7 @@
 // The generated ProseMirror schema (CDM-008).
 import { describe, expect, it } from 'vitest';
 import { Slice, Fragment } from 'prosemirror-model';
-import { AddNodeMarkStep, ReplaceStep } from 'prosemirror-transform';
+import { AddNodeMarkStep, AttrStep, ReplaceStep } from 'prosemirror-transform';
 import example from '../../fixtures/example-03-12.json' with { type: 'json' };
 import kitchenSink from '../../fixtures/kitchen-sink.json' with { type: 'json' };
 import { CDM1 } from '../definition/cdm1.ts';
@@ -45,7 +45,7 @@ describe('CDM ProseMirror schema', () => {
     expect(schema.nodes['region']!.spec.isolating).toBe(true);
   });
 
-  it('lets suggestion marks coexist and allows them as node marks on paragraphs, rows and tables', () => {
+  it('lets suggestion marks coexist, and keeps block suggestions in the `suggest` attribute', () => {
     const ins = schema.marks['ins']!;
     const a = ins.create({ id: 'sSuggestionAAAAA', user: 'u1' });
     const b = ins.create({ id: 'sSuggestionBBBBB', user: 'u2' });
@@ -57,12 +57,20 @@ describe('CDM ProseMirror schema', () => {
     const doc = schema.nodeFromJSON(example.doc);
     const bodyPos = doc.child(0).nodeSize; // position before body
     const firstParagraph = bodyPos + 1;
-    const ok = new AddNodeMarkStep(firstParagraph, a).apply(doc);
+    // A block takes no node mark (owner decision 92): ProseMirror refuses it, and the step fails.
+    expect(new AddNodeMarkStep(firstParagraph, a).apply(doc).failed).not.toBeNull();
+    // Its suggestions are an attribute of a paragraph, a table row and a table.
+    for (const name of ['paragraph', 'table_row', 'table'])
+      expect(schema.nodes[name]!.spec.attrs?.['suggest'], name).toEqual({
+        default: null,
+        validate: expect.anything(),
+      });
+    const entry = { type: 'ins', attrs: { id: 'sSuggestionAAAAA', user: 'u1' } };
+    const ok = new AttrStep(firstParagraph, 'suggest', [entry]).apply(doc);
     expect(ok.failed).toBeNull();
-    // Inside the region, the paragraph can also carry it (the region allows node marks on children).
-    // A section break or a figure cannot: the invariant engine rejects that (model.validate, I1).
+    ok.doc!.check();
+    expect(ok.doc!.nodeAt(firstParagraph)!.attrs['suggest']).toEqual([entry]);
   });
-
   it('declares ext with default {} on every node and mark except text', () => {
     for (const [name, type] of Object.entries(schema.nodes)) {
       if (name === 'text') continue;

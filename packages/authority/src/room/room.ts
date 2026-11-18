@@ -51,7 +51,7 @@ import { outcomeCheck } from '../permissions/outcome.ts';
 import { authoriseThread, type ThreadAction } from '../permissions/comments.ts';
 import { PermissionIndex } from '../permissions/indexes.ts';
 import { NodeIndex } from './node-index.ts';
-import { isSuggestionMark } from '../permissions/suggestions.ts';
+import { suggestionsOn } from '../permissions/suggestions.ts';
 import { mapRanges } from '../ranges.ts';
 import { applySteps, mapsOf, rebaseOver } from '../rebase.ts';
 import { commitBytes, parseSteps, stepsToJson } from '../steps.ts';
@@ -300,9 +300,8 @@ const AUTHORED_ORIGINS: readonly string[] = SERVER_ORIGINS.filter((o) => o !== '
 function suggestionUsers(doc: Node): Map<string, string> {
   const out = new Map<string, string>();
   const visit = (n: Node) => {
-    for (const m of n.marks)
-      if (isSuggestionMark(m) && !out.has(String(m.attrs['id'])))
-        out.set(String(m.attrs['id']), String(m.attrs['user']));
+    for (const m of suggestionsOn(n))
+      if (!out.has(String(m.attrs['id']))) out.set(String(m.attrs['id']), String(m.attrs['user']));
   };
   visit(doc);
   doc.descendants((n) => {

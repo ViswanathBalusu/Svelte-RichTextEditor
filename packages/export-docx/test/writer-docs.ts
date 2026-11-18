@@ -488,8 +488,7 @@ export async function writerDocs(): Promise<WriterDoc[]> {
       ]),
       {
         type: 'paragraph',
-        attrs: { id: nid('p') },
-        marks: [ins('insSuggestion002')],
+        attrs: { id: nid('p'), suggest: [ins('insSuggestion002')] },
         content: [t('A suggested paragraph')],
       },
       {
@@ -499,8 +498,7 @@ export async function writerDocs(): Promise<WriterDoc[]> {
           { type: 'table_row', attrs: { id: nid('r') }, content: [cell('kept row'), cell('kept')] },
           {
             type: 'table_row',
-            attrs: { id: nid('r') },
-            marks: [del('delSuggestion002')],
+            attrs: { id: nid('r'), suggest: [del('delSuggestion002')] },
             content: [cell('deleted row'), cell('deleted')],
           },
         ],

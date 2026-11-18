@@ -21,21 +21,20 @@ export function text(value: string, marks: J[] = []): J {
   return marks.length > 0 ? { type: 'text', text: value, marks } : { type: 'text', text: value };
 }
 
-/** A paragraph with the given node marks. */
+/** A paragraph with the given block suggestions (the suggest attribute, 03 §5). */
 export function markedPara(value: string, marks: J[]): J {
-  return { ...para(value), marks };
+  const p = para(value);
+  return { ...p, attrs: { ...p.attrs, suggest: marks } };
 }
 
 /** A table of one-paragraph cells, one row per entry; a row or the table may carry marks. */
 export function tableOf(rows: Array<{ cells: string[]; marks?: J[] }>, marks: J[] = []): J {
   return {
     type: 'table',
-    attrs: { id: nid('t'), grid: [2880, 2880] },
-    ...(marks.length > 0 ? { marks } : {}),
+    attrs: { id: nid('t'), grid: [2880, 2880], ...(marks.length > 0 ? { suggest: marks } : {}) },
     content: rows.map((r) => ({
       type: 'table_row',
-      attrs: { id: nid('r') },
-      ...(r.marks && r.marks.length > 0 ? { marks: r.marks } : {}),
+      attrs: { id: nid('r'), ...(r.marks && r.marks.length > 0 ? { suggest: r.marks } : {}) },
       content: r.cells.map((c) => ({
         type: 'table_cell',
         attrs: { id: nid('c') },

@@ -329,6 +329,40 @@ const ELEMENT_ATOM = ['footnote'];
 // ---------------------------------------------------------------------------------------------
 // Nodes, in schema order.
 
+/** The kinds of block suggestion a `suggest` attribute holds (03 §5). */
+export const SUGGESTION_KINDS: readonly string[] = ['ins', 'del', 'fmt'];
+
+/**
+ * The state of a block suggestion (03 §5; owner decision 92, ADR 0018 as amended). A paragraph, a
+ * table row and a table keep their suggestions in this attribute and not as node marks, so the
+ * editing surface can draw them as node decorations with no element around the block. Each entry
+ * has the shape of a suggestion mark: `{ type, attrs: { id, user, before? } }`. `null` means none.
+ */
+const suggestAttr = (): AttrDef =>
+  attr(
+    nullable(
+      arr(
+        obj(
+          {
+            type: oneOf(SUGGESTION_KINDS),
+            attrs: obj(
+              {
+                id: NODE_ID,
+                user: USER,
+                before: nullable({ kind: 'json', maxBytes: 4096, maxDepth: 6 }),
+              },
+              { required: ['id', 'user'] },
+            ),
+          },
+          { required: ['type', 'attrs'] },
+        ),
+        8,
+        { minItems: 1 },
+      ),
+    ),
+    null,
+    'Block suggestions: `ins`, `del` or `fmt` entries with the suggesting user; null when there are none. On a `fmt` entry, `before` records only `style`, `align` and `numbering` (CDM-040).',
+  );
 const nodes: NodeDef[] = [
   {
     name: 'doc',
@@ -508,7 +542,6 @@ const nodes: NodeDef[] = [
   {
     name: 'story',
     content: 'story_block+',
-    marks: 'ins del fmt',
     isolating: true,
     selectable: false,
     allowGapCursor: false,
@@ -524,7 +557,6 @@ const nodes: NodeDef[] = [
   {
     name: 'body',
     content: '(block | region | section_break)+',
-    marks: 'ins del fmt',
     spec: '03 §4.2',
     doc: 'The body.',
     attrs: {
@@ -537,7 +569,6 @@ const nodes: NodeDef[] = [
   {
     name: 'region',
     content: 'block+',
-    marks: 'ins del fmt',
     isolating: true,
     spec: '03 §4.2',
     doc: 'A permission scope: a direct child of the body, never nested (I3).',
@@ -592,6 +623,7 @@ const nodes: NodeDef[] = [
       ),
       numberingRestart: attr(nullable(int(0, 32767)), null, 'Restart the list at this number.'),
       ...paragraphProps(),
+      suggest: suggestAttr(),
       preserved: preserved(),
       ext: ext(),
     },
@@ -600,7 +632,6 @@ const nodes: NodeDef[] = [
     name: 'table',
     group: 'block',
     content: 'table_row+',
-    marks: 'ins del fmt',
     spec: '03 §4.3',
     doc: 'A table; tables do not nest in version 1.',
     attrs: {
@@ -630,6 +661,7 @@ const nodes: NodeDef[] = [
       ),
       borders: attr(nullable(TABLE_BORDERS), null, 'Table borders.'),
       cellMargins: attr(nullable(MARGINS), null, 'Default cell margins.'),
+      suggest: suggestAttr(),
       preserved: preserved(),
       ext: ext(),
     },
@@ -644,6 +676,7 @@ const nodes: NodeDef[] = [
       height: attr(nullable(ULENGTH), null, 'Row height in twips.'),
       heightRule: attr(oneOf(['auto', 'atLeast', 'exact']), 'auto', 'How `height` applies.'),
       cantSplit: attr(bool(), false, 'Keep the row on one page.'),
+      suggest: suggestAttr(),
       preserved: preserved(),
       ext: ext(),
     },
@@ -651,7 +684,6 @@ const nodes: NodeDef[] = [
   {
     name: 'table_cell',
     content: 'cell_block+',
-    marks: 'ins del fmt',
     isolating: true,
     spec: '03 §4.3',
     doc: 'A table cell.',
@@ -1094,8 +1126,8 @@ const marks: MarkDef[] = [
   }),
 ];
 
-/** Node types that may carry suggestion marks as node marks (03 §5). */
-export const NODE_MARK_HOSTS: readonly string[] = ['paragraph', 'table_row', 'table'];
+/** Node types that may carry block suggestions in their suggest attribute (03 §5). */
+export const SUGGESTION_HOSTS: readonly string[] = ['paragraph', 'table_row', 'table'];
 /** The attributes a block-level `fmt` suggestion may record in `before` (03 §5; CDM-040). */
 export const BLOCK_FORMAT_ATTRIBUTES: readonly string[] = ['style', 'align', 'numbering'];
 /** Node types whose content is checked by I10 for page and column breaks. */

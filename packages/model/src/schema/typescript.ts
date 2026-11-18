@@ -2,7 +2,6 @@
  * Generates the TypeScript types of CDM documents from the definition (CDM-006). The output has no
  * ProseMirror import, so a consumer needs only these types and a JSON parser.
  */
-import { NODE_MARK_HOSTS } from '../definition/cdm1.ts';
 import type {
   CdmDefinition,
   Grammar,
@@ -107,7 +106,6 @@ export function generateTypes(def: CdmDefinition): string {
     `export type CdmMark = ${def.marks.map((m) => `${pascal(m.name)}Mark`).join(' | ')};`,
     '',
   );
-  out.push(`export type SuggestionNodeMark = InsMark | DelMark | FmtMark;`, '');
 
   for (const n of def.nodes) {
     const name = pascal(n.name);
@@ -129,8 +127,7 @@ export function generateTypes(def: CdmDefinition): string {
       const children = allowedChildren(def, n.content).map((c) => `${pascal(c)}Node`);
       members.push(`  content?: Array<${children.join(' | ')}>;`);
     }
-    if (NODE_MARK_HOSTS.includes(n.name)) members.push('  marks?: SuggestionNodeMark[];');
-    else if (n.inline) members.push('  marks?: CdmMark[];');
+    if (n.inline) members.push('  marks?: CdmMark[];');
     out.push(doc, `export interface ${name}Node {\n${members.join('\n')}\n}`, '');
   }
   out.push(

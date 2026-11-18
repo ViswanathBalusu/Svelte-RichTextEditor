@@ -4,7 +4,6 @@
 import { Fragment, type Node, Slice } from 'prosemirror-model';
 import {
   AddMarkStep,
-  AddNodeMarkStep,
   AttrStep,
   ReplaceAroundStep,
   ReplaceStep,
@@ -16,6 +15,7 @@ import { ROLE_CAPABILITIES } from '../src/permissions/model.ts';
 import { diffScopes } from '../src/permissions/scopes.ts';
 import { regionInfos } from '../src/permissions/visibility.ts';
 import { applySteps } from '../src/rebase.ts';
+import { addSuggestion } from './block-suggest.ts';
 import { posInside, posOf } from './fixtures.ts';
 import {
   FIELDS,
@@ -89,9 +89,10 @@ describe('a fill-only participant changes only the values of their own fields (F
         'body',
       ],
       [
-        'a node mark',
-        () => [
-          new AddNodeMarkStep(
+        'a block suggestion',
+        (d) => [
+          addSuggestion(
+            d,
             p,
             schema.marks['ins']!.create({ id: 'sErin00000000001', user: 'erin' }),
           ),

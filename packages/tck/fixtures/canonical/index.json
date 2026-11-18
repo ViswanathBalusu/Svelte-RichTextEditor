@@ -27,9 +27,9 @@
       "kind": "envelope",
       "rules": ["bytes", "markOrder", "textMerge"],
       "input": "inputs/all-constructs.json",
-      "inputSha256": "e1f64cc19b2078243b734fdf3f12c924251b8e6e78232e82da51c71a9ec89ff0",
+      "inputSha256": "74f8cf342a4183404e2b2ee34ee193a0b884e628651f20c1ec2eedefda00ff02",
       "expected": "expected/all-constructs.jcs",
-      "sha256": "8a9f31113a0bb1eb6ec5366d967a6c1c37114b14c4f39a4ffecb3b640b15669f",
+      "sha256": "16d29ce5460fbee258965233c35b03b2412f579584e558114e9a35266a2ff481",
       "assets": [
         "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10",
         "0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a11",
