@@ -165,9 +165,8 @@ describe('the prose of 05 against the published artifacts (PRO-117 criteria 1 an
       .flatMap((r) => code(r[0]!))
       .filter((n) => n.startsWith('dep.'))
       .map((n) => `${n}.v1`);
-    const regHooks = registry.webhooks
-      .map((w) => w.type)
-      .filter((t) => !t.startsWith('dep.workflow.'));
+    // 05 §7 names the workflow events too (FRW-036 criterion 5), so none is left out here.
+    const regHooks = registry.webhooks.map((w) => w.type);
     for (const e of events)
       if (!regHooks.includes(e))
         problems.push(diff('05 §7', `webhook ${e}`, 'is missing from dep-1.registry.json'));

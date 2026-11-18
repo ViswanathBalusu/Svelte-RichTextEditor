@@ -126,8 +126,9 @@ describe('the prose of 05 and 12 §10 against the definition', () => {
     )![1]!;
     // 12 §10 writes the first name in full and the rest bare (G85): decision D17 completes them.
     const p12names = code(row).map((n) => (n.startsWith('dep.') ? n : `dep.workflow.${n}`));
+    // 05 §7 and 12 §10 both name the workflow events (FRW-036 criterion 5): the union is compared.
     expect(DEP1.webhooks.map(webhookType).sort()).toEqual(
-      [...p7, ...p12names].map((n) => `${n}.v1`).sort(),
+      [...new Set([...p7, ...p12names])].map((n) => `${n}.v1`).sort(),
     );
   });
 
