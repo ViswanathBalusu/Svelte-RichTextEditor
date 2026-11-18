@@ -38,3 +38,11 @@ The operator fills in these values for the deployment, and keeps them where the 
 | Time to age out after a purge | purge time plus the backup retention |
 
 A request to erase content before that time needs the operator to expire or rewrite the backups. A restored backup brings purged documents back: after any restore the purge job must run again, and the operator must re-apply the deletions made since the backup was taken.
+
+## Thinning old payloads (HIS-032)
+
+A tenant (or one document) that sets the retention policy `thin_payloads` with `afterDays` has the payloads of commits older than that period deleted once a day (`payloads.thin`, `src/control-plane/payload-thinning.ts`). The rows are the same: only the rows of `doc_commit_payloads` go. The commit rows, the payload hashes and the chain stay, so the log still verifies.
+
+What stays: the checkpoints, the payload of a snapshot commit, the payloads that a named, export, sent or completed version needs to be rebuilt, every payload above the newest checkpoint (a room replays from it), and everything for a document under a legal hold. A read that needs a removed payload answers `not_found` with the reason.
+
+The job uses the same login as the purge (a member of `docedit_purge`) and is given as `thinningStore` (`PgThinningStore`); without it the task does not run. Each document that loses payloads gets one `history.thinned` audit event with counts.
