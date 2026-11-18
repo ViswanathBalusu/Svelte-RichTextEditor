@@ -111,8 +111,6 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   listThreads: 'thread list: no handler in the document service',
   createImport: 'imports: no handler in the document service',
   getImport: 'imports: no handler in the document service',
-  getWorkflow: 'workflow: no handler in the document service',
-  putWorkflow: 'workflow: no handler in the document service',
   getWorkflowEvidence: 'workflow: no handler in the document service',
   getWorkflowFinal: 'workflow: no handler in the document service',
   participantConsent: 'workflow: no handler in the document service',
@@ -145,7 +143,14 @@ function bodyFor(operationId: string): unknown {
     setDocumentRetention: { mode: 'inherit' },
     placeHold: { reason: 'sweep' },
     prefillFieldValues: { values: {} },
-    putWorkflow: { participants: [] },
+    // The published schema's required members; doc is not the path's, which the route refuses.
+    putWorkflow: {
+      id: '0190a000-0000-7000-8000-000000000002',
+      doc: '0190a000-0000-7000-8000-000000000003',
+      state: 'draft',
+      rev: 1,
+      participants: [],
+    },
     participantConsent: {},
     participantVerify: {},
     participantComplete: {},
@@ -284,6 +289,13 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       ids['webhook'] = made('webhook', hook, hook.json?.id);
       const hold = await asB('POST', `/v1/documents/${ids['doc']}/holds`, { reason: 'sweep' });
       made('hold', hold, hold.json?.id);
+      // B's workflow, so that the control reads and replaces an object of its own (FRW-025).
+      const workflow = await h.call('PUT', `/v1/documents/${ids['doc']}/workflow`, {
+        token: ownerB,
+        headers: { 'If-Match': '"0"' },
+        body: { ...(bodyFor('putWorkflow') as object), doc: ids['doc'] },
+      });
+      made('workflow', workflow, workflow.json?.id);
       // B has no import job, workflow participant or form field in this scenario; the identifiers
       // are well-formed ones that name nothing (see NOT_FOUND_FOR_OWNER).
       ids['import'] = uuid7();
