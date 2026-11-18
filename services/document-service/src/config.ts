@@ -83,6 +83,18 @@ export interface ServiceConfig {
    * live there; a lost or unreachable store loosens limits and never loses data.
    */
   valkeyUrl: string | null;
+  /**
+   * A read replica of the database (BE-064): lists, pinned content and history reads are served
+   * from it when it can answer them correctly. Default none: every read goes to the primary.
+   */
+  replicaDatabaseUrl: string | null;
+  /**
+   * Read-your-writes sessions kept, with a replica (BE-064 criterion 3). A setting with no default:
+   * a replica without it is refused at start.
+   */
+  readSessions: number | null;
+  /** Documents whose replica lag is sampled at each metrics scrape (BE-064 criterion 4); default none. */
+  readLagDocuments: number | null;
   /** A font set with the converter's `fonts.json` (PRO-067, BE-047); null: no fonts. */
   fontsDir: string | null;
   /** Where the font files are served; default `{publicUrl}/fonts`. */
@@ -186,6 +198,9 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   unavailableRetryAfterS: 1,
   metricsToken: null,
   valkeyUrl: null,
+  replicaDatabaseUrl: null,
+  readSessions: null,
+  readLagDocuments: null,
   fontsDir: null,
   fontsBaseUrl: null,
   assetOrigin: null,
@@ -286,6 +301,10 @@ export function checkConfig(c: ServiceConfig): void {
     throw new Error('choose one object store: DOCEDIT_S3_* or DOCEDIT_AZURE_ACCOUNT, not both');
   if (c.assetOrigin && !c.assetUrlKey)
     throw new Error('DOCEDIT_ASSET_ORIGIN needs DOCEDIT_ASSET_URL_KEY');
+  if (c.replicaDatabaseUrl && !c.databaseUrl)
+    throw new Error('DOCEDIT_REPLICA_DATABASE_URL needs DOCEDIT_DATABASE_URL');
+  if (c.replicaDatabaseUrl && c.readSessions === null)
+    throw new Error('DOCEDIT_REPLICA_DATABASE_URL needs DOCEDIT_READ_SESSIONS (no default)');
 }
 
 /** Settings from DOCEDIT_* variables. Secrets come from the environment, never from a file here. */
@@ -357,6 +376,11 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     unavailableRetryAfterS: int(env, 'DOCEDIT_RETRY_AFTER_S', DEFAULTS.unavailableRetryAfterS),
     metricsToken: env['DOCEDIT_METRICS_TOKEN'] || null,
     valkeyUrl: env['DOCEDIT_VALKEY_URL'] || null,
+    replicaDatabaseUrl: env['DOCEDIT_REPLICA_DATABASE_URL'] || null,
+    readSessions: env['DOCEDIT_READ_SESSIONS'] ? int(env, 'DOCEDIT_READ_SESSIONS', 1) : null,
+    readLagDocuments: env['DOCEDIT_READ_LAG_DOCUMENTS']
+      ? int(env, 'DOCEDIT_READ_LAG_DOCUMENTS', 1)
+      : null,
     fontsDir: env['DOCEDIT_FONTS_DIR'] || null,
     fontsBaseUrl: env['DOCEDIT_FONTS_BASE_URL'] || null,
     assetOrigin: env['DOCEDIT_ASSET_ORIGIN'] || null,
