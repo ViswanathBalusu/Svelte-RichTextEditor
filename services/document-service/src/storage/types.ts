@@ -318,6 +318,13 @@ export interface CheckpointStore {
   /** The stored bytes of the checkpoint at exactly `seq`, or null. */
   getEncoded?(ref: DocRef, seq: number): Promise<Uint8Array | null>;
   /**
+   * Stores the side object of the checkpoint at `seq`: the comment ranges at that `seq`, as
+   * `encodeSide` writes them (06 §2.2 step 3, §8; SYN-032 criterion 6; owner decision 81).
+   */
+  putSide?(ref: DocRef, seq: number, bytes: Uint8Array): Promise<void>;
+  /** The stored bytes of the side object of the checkpoint at exactly `seq`, or null. */
+  getSide?(ref: DocRef, seq: number): Promise<Uint8Array | null>;
+  /**
    * Sets aside every checkpoint above `aboveSeq`, so that `get` and `latest` no longer return it
    * (a log rewound by a database recovery; BE-078). Returns the sequence numbers set aside.
    */

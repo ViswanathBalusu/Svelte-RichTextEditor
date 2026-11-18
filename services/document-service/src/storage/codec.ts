@@ -14,6 +14,7 @@ import {
   type LogCommit,
   type SnapshotReason,
   type StepJson,
+  type ThreadAnchor,
 } from '@docedit/authority';
 import { canonicalize } from '@docedit/model';
 
@@ -131,6 +132,25 @@ export function encodeContent(canonicalText: string): Buffer {
 
 export function decodeContent<T = unknown>(stored: Uint8Array): T {
   return JSON.parse(zstdDecompressSync(stored).toString('utf8')) as T;
+}
+
+/**
+ * What the side object of a checkpoint holds (06 §2.2 step 3, §8; SYN-032 criterion 6): the comment
+ * ranges at the checkpoint's `seq`, each anchor at that `seq`. The attribution map joins it with
+ * HIS-014.
+ */
+export interface CheckpointSide {
+  seq: number;
+  threads: ThreadAnchor[];
+}
+
+/** The side object as stored: canonical JSON (RFC 8785) compressed with Zstandard, like content. */
+export function encodeSide(side: CheckpointSide): Buffer {
+  return encodeContent(canonicalize(side));
+}
+
+export function decodeSide(stored: Uint8Array): CheckpointSide {
+  return decodeContent<CheckpointSide>(stored);
 }
 
 /** hash = SHA-256(previous hash ‖ canonical metadata ‖ SHA-256(canonical payload)) (08 §2). */

@@ -12,10 +12,10 @@
  * recorded one (or from the content at sequence number 0, D67): an object written for a snapshot
  * whose commit was never stored is not used.
  */
-import type { StepJson } from '@docedit/authority';
+import type { StepJson, ThreadAnchor } from '@docedit/authority';
 import type { JsonEnvelope } from '@docedit/model';
 import { objectKeys } from '../objects/store.ts';
-import { decodeContent } from '../storage/codec.ts';
+import { decodeContent, decodeSide, encodeSide } from '../storage/codec.ts';
 import type { CheckpointIndex, CheckpointStore, DocRef } from '../storage/types.ts';
 import type { Base, Encoded } from './tasks.ts';
 import type { Workers } from './workers.ts';
@@ -27,6 +27,8 @@ export interface LoadedCheckpoint {
   base: Base;
   /** The hash of the canonical text, when the index or the bytes give it. */
   hash: string | null;
+  /** The comment ranges saved with the checkpoint, each at `seq` (SYN-032); none when there is no side object. */
+  threads: ThreadAnchor[];
 }
 
 export interface Written extends Encoded {
@@ -85,10 +87,10 @@ export class Checkpointer {
       const rows = (await this.#index.list(ref)).filter((r) => r.seq <= head && r.seq > 0);
       for (const row of rows.reverse()) {
         const got = await this.#read(ref, row.seq);
-        if (got) return { ...got, hash: row.hash };
+        if (got) return { ...got, hash: row.hash, threads: await this.#readThreads(ref, row.seq) };
       }
       const zero = await this.#read(ref, 0);
-      return zero ? { ...zero, hash: null } : null;
+      return zero ? { ...zero, hash: null, threads: [] } : null;
     }
     const latest = await store.latest(ref, head);
     if (!latest) return null;
@@ -98,10 +100,25 @@ export class Checkpointer {
       envelope: latest.content,
       base: encoded ? { encoded } : { doc: latest.content.doc },
       hash: null,
+      threads: await this.#readThreads(ref, latest.seq),
     };
   }
 
-  async #read(ref: DocRef, seq: number): Promise<Omit<LoadedCheckpoint, 'hash'> | null> {
+  /** The comment ranges saved with the checkpoint at `seq` (none: no side object, or none readable). */
+  async #readThreads(ref: DocRef, seq: number): Promise<ThreadAnchor[]> {
+    const store = this.#store;
+    if (!store?.getSide) return [];
+    const bytes = await store.getSide(ref, seq);
+    if (!bytes) return [];
+    const side = decodeSide(bytes);
+    // Anchors that refer to another `seq` than the checkpoint's would be mapped over the wrong steps.
+    return side.seq === seq ? side.threads : [];
+  }
+
+  async #read(
+    ref: DocRef,
+    seq: number,
+  ): Promise<Omit<LoadedCheckpoint, 'hash' | 'threads'> | null> {
     const store = this.#store!;
     if (store.getEncoded) {
       const encoded = await store.getEncoded(ref, seq);
@@ -127,14 +144,26 @@ export class Checkpointer {
     return this.#workers.run('checkpoint', input);
   }
 
-  /** Stores an encoded checkpoint at `seq`; with `index`, records it too. */
-  async save(ref: DocRef, seq: number, e: Encoded, index = true): Promise<Written> {
+  /**
+   * Stores an encoded checkpoint at `seq`; with `index`, records it too. With `threads` (the
+   * comment ranges at `seq`; SYN-032 criterion 6) and a store that keeps side objects, they are
+   * stored with it before the index row is written, so a recorded checkpoint has its ranges.
+   */
+  async save(
+    ref: DocRef,
+    seq: number,
+    e: Encoded,
+    index = true,
+    threads?: readonly ThreadAnchor[],
+  ): Promise<Written> {
     const store = this.#store;
     if (!store) throw new Error('no checkpoint store is configured');
     if (store.putEncoded) await store.putEncoded(ref, seq, e.encoded);
     // A store without encoded writes gets the envelope: decoded here (once the control plane's
     // store offers putEncoded, nothing heavy is left on the main thread).
     else await store.put(ref, seq, decodeContent<JsonEnvelope>(e.encoded));
+    if (threads?.length && store.putSide)
+      await store.putSide(ref, seq, encodeSide({ seq, threads: [...threads] }));
     const key = keyOf(ref, seq);
     if (index && this.#index)
       await this.#index.record(ref, { seq, key, bytes: e.encoded.byteLength, hash: e.hash });
