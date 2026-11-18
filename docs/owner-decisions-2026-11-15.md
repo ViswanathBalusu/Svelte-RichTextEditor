@@ -212,8 +212,40 @@ The owner answered these in the working session of 2026-11-17. They are settled 
 | 194 | Close for a silent client | PRO-037, PRO-111, BE-093 | The server sends a proper close (1000 or 1001) instead of dropping the connection. The mapping of the 1009 close is still open. |
 | 195 | `node_leases` without a tenant column | BE-011 | Allowed (ADR 0332). The rule is reworded to tables that hold tenant data. |
 
-The owner chose to be asked every remaining decision, including the engineering ones.
+After decision 195 the owner said to take the proposed default for what was left. Decisions 196 to 220 are those defaults; none was put to the owner one by one.
 
-The owner will review the decisions that have a proposed default (Part B of `owner-blockers-2026-11-17.md`) before any is treated as settled. Until then they stay open: use the default and say so in the story's Notes, as before.
+| # | Topic | Stories | Decision |
+|---|---|---|---|
+| 196 | HTTP status per error code | PRO-002 | Status ranges only (D13). |
+| 197 | Scope of a legal hold | BE-052 | Per document (08 §11). |
+| 198 | An uploader resolving their own upload | BE-045 | Allowed before any commit references it, as built (ADR 0242). The spec text changes. |
+| 199 | Browser extensions | SEC-011 | The position of 10 §6: they run with the user's privileges and the guide says so. |
+| 200 | Node address hint for `/connect` | BE-061, BE-060, BE-062 | An address on the node lease row, falling back to rendezvous routing (ADR 0243). |
+| 201 | Name of the read-restriction feature | PRO-131 | `read-restrictions`. |
+| 202 | `page` against `reload` | BE-038 | `reload`, as the gateway answers. ADR 0034 is corrected. |
+| 203 | "One configuration file" for the boundary rules | FND-004 | The split over three places is accepted. |
+| 204 | Proving story of register row T-3.1-host-policies | SEC-001 | FE-125 (ADR 0360). |
+| 205 | Key-custody record | SEC-062 | Accepted as proposed, with the two-person recovery rule. |
+| 206 | A range whose payloads are gone | HIS-032, HIS-030 | `not_found` with a reason, as built. |
+| 207 | Fonts of old versions | HIS-010 | The live font manifest. |
+| 208 | Spacing and keep-with-next in style macros | EXP-013 | The converter's `\DEgap` and `\DEkeep` lines stand; 09 §3.1 is reworded. |
+| 209 | PDF text strings and bookmarks | EXP-043, EXP-030, EXP-045 | One string emitter for titles, with the class change it needs. Decision 25 (hex for link targets) stands. |
+| 210 | A block's `fallbackText` | EXP-035 | Through `pdfString`, as built. |
+| 211 | Display environments at the math gate | EXP-050 | As built; the criterion is reworded to match the gate. |
+| 212 | "Nothing unexpected" in the token trace | EXP-046, EXP-053 | A denylist of dangerous primitives (ADR 0320). |
+| 213 | "Files outside the working directory" | EXP-075 | Read as outside the sandbox; the criterion is reworded (ADR 0368). |
+| 214 | External relationships in a written DOCX | EXP-090 | Allowed for hyperlinks and for those the original had (review SR-M18). |
+| 215 | Numbers in the DOCX writer | CDM-042 | Word's native numbering, as built. |
+| 216 | Event that drives the classification label | UX-085 | `document.updated`. |
+| 217 | "The gateway uses no ProseMirror type" | SYN-046 | Checked on the session layer and the protocol only. |
+| 218 | Non-goals that differ between documents | pending item 36 | Follow 13 §2. |
+| 219 | Refusal codes in two criteria | PRO-059, PRM-066 | PRO-059 is read as the REST code (ADR 0372). A grant change by a user without `manage` stays `forbidden`. |
+| 220 | The remaining proposed ADRs | pending items 13, 14, 28, 33 | Spike choices S3 and S6, ADRs 0020 and 0030 to 0052, and protocol decisions D40 to D119 are accepted as proposed, except where a decision above says otherwise (ADR 0033 item 4 is reversed by decision 128). `page_setup` nullable attributes: no change. |
+
+Not settled by "use the defaults", because no default is recorded: whether a final export that does not converge fails or is delivered flagged (EXP-061); what "the export worker container" means and whether `stack.ps1` counts as the compose file (BE-005); the rest of ADR 0031 (pending item 38); the specification licence (pending item 15); the mapping of the 1009 close (PRO-037); the tagpdf table module (EXP-041); names of hidden region scopes in an exported log (HIS-037); the size limit of inline custom content (UX-057); the small gaps of UX-029, UX-032, UX-036 and UX-063; SEC-005 and SEC-029; a store in `backend-dep` for thread events (PRO-097). Use the built behaviour and say so in the story's Notes.
+
+The owner chose to be asked every remaining decision, including the engineering ones, until decision 195.
+
+The decisions that had a proposed default (Part B of `owner-blockers-2026-11-17.md`) are settled by decisions 116 to 220.
 
 Still open, not asked yet: the PDF text-string encoding and the bookmark string path (EXP-043 criteria 1 and 4), the baseline for comparing published artifact sets (PRO-006), new third-party libraries (Floating UI, a Markdown renderer, a UAX 14 implementation), migration sequencing for search and webhook tables, and the items listed in `docs/owner-decisions-pending.md`.
