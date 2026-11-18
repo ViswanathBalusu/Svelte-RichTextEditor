@@ -1590,7 +1590,7 @@ As a maintainer, I want to know at which audience size a room needs followers, s
 - [ ] Given coalesced broadcasts (04 §12), when the measurement is repeated, then the effect of coalescing is reported.
 - [ ] Given the data, when the spike ends, then a recommendation says whether followers are needed before stage 3.
 
-**Notes:** Time box: three days. Phase inferred: the answer is needed before the stage 2 build.
+**Notes:** Time box: three days. Phase inferred: the answer is needed before the stage 2 build. Lane w5, 2026-11-18: nothing ticked (blocked). All three criteria are measurements of a room with a growing audience on real room hosts, the spike's input. BE-066 (the stage 2 load test on several room hosts, a dependency here) is not built, and no multi-host setup exists to measure on. A single-process measurement would not show a core's saturation on the reference machine (ADR 0037), so no figure is reported.
 
 ### BE-068 Run gateway, room and API tiers as separate deployables
 
