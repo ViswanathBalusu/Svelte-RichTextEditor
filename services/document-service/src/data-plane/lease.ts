@@ -68,7 +68,9 @@ export class NodeLease {
     this.#renewing ??= (async () => {
       const sent = this.#mono();
       try {
-        await this.#o.store.renew(this.#o.node, this.#o.settings.durationMs, this.#o.address);
+        const { store, node, address, settings } = this.#o;
+        if (address === undefined) await store.renew(node, settings.durationMs);
+        else await store.renew(node, settings.durationMs, address);
         this.stats.renewed++;
         this.#validUntil = sent + this.#o.settings.durationMs - this.#o.settings.marginMs;
         this.#lost = false;
