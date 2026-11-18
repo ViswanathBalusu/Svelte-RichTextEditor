@@ -539,6 +539,38 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
   step('parity report', parityOk, parityOk ? [] : parity.output.trim().split('\n').slice(-15));
   if (parityOk) for (const f of parityFiles) addArtefact(f, 'parity report');
 
+  // 8c. The accessibility conformance report (UX-069; 13 §8), linked from the release notes. It
+  // draws on the axe results of the browser run (DOCEDIT_AXE_RESULTS, when that file exists), the
+  // manual logs and the known issues, and refuses to build on an inconsistent table.
+  const axeResults = process.env['DOCEDIT_AXE_RESULTS'];
+  const a11y = run(
+    'pnpm',
+    [
+      '--filter',
+      '@docedit/ui',
+      'a11y:report',
+      '--release',
+      version,
+      '--date',
+      created.slice(0, 10),
+      '--out',
+      artefactsDir,
+      ...(axeResults && existsSync(axeResults) ? ['--axe', resolve(axeResults)] : []),
+    ],
+    o.root,
+  );
+  const a11yFiles = [
+    'ACCESSIBILITY-CONFORMANCE-REPORT.md',
+    'accessibility-conformance-report.json',
+  ];
+  const a11yOk = a11y.ok && a11yFiles.every((f) => existsSync(join(artefactsDir, f)));
+  step(
+    'accessibility conformance report',
+    a11yOk,
+    a11yOk ? [] : a11y.output.trim().split('\n').slice(-15),
+  );
+  if (a11yOk) for (const f of a11yFiles) addArtefact(f, 'accessibility conformance report');
+
   // 9. The manifest and the checksums of every file.
   const failed = steps.filter((s) => !s.ok).map((s) => s.name);
   const manifest = {
