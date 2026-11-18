@@ -37,6 +37,7 @@ import { guard, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { readerView, type ReaderView } from './visibility.ts';
 import type { StoredThread } from '../storage/thread-store.ts';
+import type { DocRef } from '../storage/types.ts';
 
 /** Whether no scope of a change is a region hidden from the class (`region:<id>`; 07 §8). */
 function scopesVisible(view: ReaderView, scopes: readonly string[]): boolean {
@@ -72,7 +73,7 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
   });
 
   /** The threads of the document the reader may see, up to a cap. */
-  const threadsOf = async (ref: ReturnType<Kit['refOf']>, reader: ReaderView) => {
+  const threadsOf = async (ref: DocRef, reader: ReaderView) => {
     const store = d.threads;
     const out: StoredThread[] = [];
     if (!store) return out;

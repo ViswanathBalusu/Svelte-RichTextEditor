@@ -61,7 +61,13 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     feature: 'comments',
     load: () => load(import('../panes/CommentsPane.svelte')),
   },
-  { id: 'catch-up', label: 'pane.catch-up', feature: 'history' },
+  {
+    id: 'catch-up',
+    label: 'pane.catch-up',
+    feature: 'history',
+    load: () => load(import('../panes/CatchUpPane.svelte')),
+    available: (core) => core.catchUp !== undefined,
+  },
   { id: 'review', label: 'pane.review' },
   {
     id: 'history',

@@ -47,6 +47,7 @@
   import StatusBar from './components/StatusBar.svelte';
   import Toolbar from './components/Toolbar.svelte';
   import { provideShell } from './context.ts';
+  import { createCatchUpController } from './shell/catch-up.ts';
   import type { FilterRegistry } from './extensions/filters.ts';
   import type { StatusItemRegistry } from './extensions/contributions.ts';
   import {
@@ -311,6 +312,7 @@
       loadedPanes.set(id, component);
     }
     paneFailed = false;
+    if (pane?.id === 'catch-up') void catchUp?.finish();
     pane = { id, component };
     await focusPane(focus);
     return true;
@@ -318,6 +320,8 @@
 
   function closePane(): void {
     if (!pane) return;
+    // Leaving the catch-up moves the user's marker to the head (HIS-028 criterion 4).
+    if (pane.id === 'catch-up') void catchUp?.finish();
     pane = null;
     const back = paneReturn;
     paneReturn = null;
@@ -341,8 +345,16 @@
     closePane();
   }
 
+  // What others did since the last visit: read when the document opens (HIS-028).
+  const catchUp = core.catchUp ? createCatchUpController(core.catchUp) : undefined;
+  onMount(() => {
+    void catchUp?.refresh();
+  });
+  onDestroy(() => catchUp?.dispose());
+
   provideShell({
     core,
+    catchUp,
     registry,
     people,
     strings: translator,
