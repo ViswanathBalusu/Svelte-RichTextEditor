@@ -186,13 +186,14 @@ describe.skipIf(!ready.ok)(`export end to end through the control plane (${ready
     const viewer = t.userToken({ [doc]: 'viewer' }, 'vera');
     const { id, api } = await exportAndWait(doc, viewer);
     expect(api.state).toBe('completed');
-    // A requester without edit gets no log (D68); another user gets nothing at all (D69).
+    // A requester without edit gets no log (D68); another user gets nothing at all (D69), and the
+    // identifier answers as one that does not exist (owner decision 57; SEC-016).
     expect(api.result.log).toBeUndefined();
     const other = await t.call('GET', `/v1/exports/${id}`, {
       token: t.userToken({ [doc]: 'owner' }, 'olga'),
     });
-    expect(other.status).toBe(403);
-    expect(other.json.code).toBe('forbidden');
+    expect(other.status).toBe(404);
+    expect(other.json.code).toBe('not_found');
     // The service credential may read it: the log is stored as plain text.
     const svc = await t.call('GET', `/v1/exports/${id}`, { token: t.apiKey });
     const log = await fetchOutput(id, 'compile.log', svc.json.result.log);
