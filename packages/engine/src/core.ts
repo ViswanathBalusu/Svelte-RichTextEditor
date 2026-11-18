@@ -280,6 +280,7 @@ import {
   sortTableRows,
   tableStyleRefusal,
 } from './table-style-sort.ts';
+import { type AltRequest, setAltText } from './alt-text.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
@@ -828,6 +829,9 @@ export class DocumentCore implements DocumentApi {
     (n) => this.words.set(n),
   );
   readonly refusal: ReadValue<RefusalNotice | null>;
+  /** The last picture that was inserted without alternative text, for the shell to ask for it (FE-132). */
+  readonly altRequest: ReadValue<AltRequest | null>;
+  #altRequests = 0;
   readonly mode: ReadValue<ModeState>;
   /** Suggestion mode at the caret, and why (FE-041 criterion 5). */
   readonly suggestion: ReadValue<SuggestionModeInfo>;
@@ -988,6 +992,7 @@ export class DocumentCore implements DocumentApi {
     this.language = new ReadValue<string | null>(null, Object.is, hub);
     this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
+    this.altRequest = new ReadValue<AltRequest | null>(null, sameJson, hub);
     this.#requested = config.mode ?? 'edit';
     this.#accessValue = config.access ?? null;
     this.#effective = effectiveMode(this.#requested, this.#accessValue);
@@ -1738,6 +1743,17 @@ export class DocumentCore implements DocumentApi {
     this.focus();
     this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
     return true;
+  }
+
+  /**
+   * Stores the alternative text of the first picture of `asset` that has none (FE-132 criterion 5),
+   * through the guard of the scope it is in. False when no such picture is left, the text is blank or
+   * the user may not change that part.
+   */
+  setImageAlt(asset: string, alt: string): boolean {
+    if (this.#locked()) return false;
+    const command = setAltText(asset, alt, (pos) => this.canEdit(this.#scopeAt(pos)));
+    return command(this.#state, (tr) => this.dispatchTransaction(tr));
   }
 
   setAccess(access: Access | null): void {
@@ -3860,6 +3876,8 @@ one or original. It is a
         try {
           const result = await pasteImage(host, image, port, { writable });
           out.push(result);
+          // A picture has no alternative text when it arrives: the shell asks for it (FE-132 criterion 5).
+          if (result.ok) this.altRequest.set({ n: ++this.#altRequests, asset: result.asset });
           // The user is told why the picture was not added (FE-053 criterion 3), in the shell's
           // own words: the refusal view carries the reason only, never the service's message.
           if (!result.ok) {

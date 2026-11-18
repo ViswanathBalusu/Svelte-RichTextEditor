@@ -758,6 +758,11 @@ export const EN_GB = {
   'dialog.language.preview': 'Language: {name}',
   'dialog.language.invalid': 'This is not a valid language tag.',
   'dialog.language.default': 'Use the language of the document',
+  'dialog.altText.title': 'Alternative text for the picture',
+  'dialog.altText.field': 'Describe the picture',
+  'dialog.altText.hint':
+    'Say what the picture shows, for people who cannot see it. If you leave it for later, the accessibility checker lists the picture.',
+  'dialog.altText.later': 'Later',
   'dialog.region.title': 'Make a region',
   'dialog.region.field': 'Title of the region',
   'dialog.region.hint':
@@ -845,6 +850,8 @@ export const EN_GB = {
   'announce.region.failed': 'The region could not be made.',
   'announce.language.set': 'Language set.',
   'announce.language.failed': 'The language could not be set here.',
+  'announce.altText.set': 'Alternative text set.',
+  'announce.altText.failed': 'The alternative text could not be set here.',
 
   // The math editor (FE-070). The equation's LaTeX is content; the words around it are not.
   'dialog.math.title': 'Edit equation',

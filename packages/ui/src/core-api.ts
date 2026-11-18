@@ -293,6 +293,8 @@ export type CoreQueryName1b =
  * - `insertRecovered`, `discardRecovered`: `{ id }`, the item's `id` or its index as a string
  *   (UX-017);
  * - `finishFill`: none (FRW-076);
+ * - `setAltText`: `{ asset, alt }`; stores the text on the first picture of that asset that has none
+ *   (FE-132 criterion 5);
  * - `showReferences`: none; moves the selection to a cross-reference that blocked the last refused
  *   deletion, the next at each call (FE-133 criterion 5).
  */
@@ -314,7 +316,8 @@ export type CoreCommandName =
   | 'insertRecovered'
   | 'discardRecovered'
   | 'finishFill'
-  | 'showReferences';
+  | 'showReferences'
+  | 'setAltText';
 
 /** Modes of 05 §8.1 and 13 §3. */
 export type EditorMode = 'edit' | 'review' | 'view' | 'fill';
@@ -738,6 +741,8 @@ export interface CoreApi {
 
   /** The last local change the region guard refused; the shell shows and announces it. */
   readonly refusal?: ReadView<RefusalNotice | null>;
+  /** The last picture inserted without alternative text; the shell asks for it (FE-132 criterion 5). */
+  readonly altRequest?: ReadView<{ readonly n: number; readonly asset: string } | null>;
   /** The last deletion the core trimmed to the editable parts (FE-037 criterion 2); the shell announces it. */
   readonly trimmed?: ReadView<TrimNotice | null>;
   /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3); the shell reports it. */

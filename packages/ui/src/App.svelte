@@ -532,8 +532,24 @@
 
   // Dialogs of the shell.
   let dialog = $state<
-    'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | 'send' | null
+    'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | 'send' | 'alt' | null
   >(null);
+  // The picture that was just inserted without alternative text (FE-132 criterion 5).
+  let altAsset = $state<string | null>(null);
+  if (core.altRequest) {
+    const requests = core.altRequest;
+    let seen = requests.get()?.n ?? 0;
+    const stop = requests.subscribe(() => {
+      const request = requests.get();
+      if (!request || request.n === seen) return;
+      seen = request.n;
+      // Another dialog stays; the picture then goes to the checker's list.
+      if (dialog !== null) return;
+      altAsset = request.asset;
+      dialog = 'alt';
+    });
+    onDestroy(stop);
+  }
   // The equation the math editor is open on (FE-070): taken when the request arrives.
   let equation = $state.raw<EquationRef | null>(null);
   if (core.mathEditor) {
@@ -623,6 +639,14 @@
     dialog = null;
     const done = core.runNamed?.('setLanguage', { lang }) ?? false;
     announce(done ? 'announce.language.set' : 'announce.language.failed');
+  }
+
+  function applyAltText(alt: string): void {
+    const asset = altAsset;
+    dialog = null;
+    altAsset = null;
+    const done = asset !== null && (core.runNamed?.('setAltText', { asset, alt }) ?? false);
+    announce(done ? 'announce.altText.set' : 'announce.altText.failed');
   }
 
   function markRegion(title: string): void {
@@ -1585,6 +1609,7 @@
   {/if}
   {#if dialogs}
     {@const {
+      AltTextDialog,
       LanguageDialog,
       RegionDialog,
       CommentBox,
@@ -1603,6 +1628,14 @@
         }}
         onRejected={() => announce('announce.equation.rejected')}
         onClose={closeMath}
+      />
+    {:else if dialog === 'alt'}
+      <AltTextDialog
+        onApply={applyAltText}
+        onClose={() => {
+          dialog = null;
+          altAsset = null;
+        }}
       />
     {:else if dialog === 'language'}
       <LanguageDialog
