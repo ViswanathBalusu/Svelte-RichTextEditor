@@ -2648,6 +2648,8 @@ As a maintainer, I want the page view's exit criteria measured on every release 
 
 **Notes:** Phase 3 is gated on the evidence review at the end of phase 2. This story absorbed UX-075 during the cross-check.
 
+**Notes (lane w1, 2026-11-18):** Blocked; nothing new could be ticked. Every criterion measures or exercises the editable page view in the element, which is not mounted (FE-101 Notes). Criteria 1 and 4 are typing measurements (keystroke to paint, the typing targets of UX-072) and need a bridge to type through (FE-098, blocked on ADR 0380). Criterion 2 (a 1,000-page document with only the visible pages and a small overscan mounted) and criterion 5 (memory of a 100-page document) need the page view in a browser; the painter's window (`packages/painter/src/window.ts`) virtualises read-only pages and is tested on its own (`window.universal.test.ts`), but that does not show the element's page view, and no memory figure may be quoted without a run of it on the reference machine (FND-007; ADR 0037). Criterion 3 needs the thumbnails (UX-021) in that view. Criterion 6 names FE-098, FE-099 and FE-100 as passed: FE-098 and FE-099 are blocked, and FE-100 criterion 5 is open. Needs from others: FE-101, FE-098, UX-021, the reference machine with CPU throttling.
+
 ## Accessibility of the editing surface (02 §10)
 
 ### FE-103 Operate the editor from the keyboard and leave it again
