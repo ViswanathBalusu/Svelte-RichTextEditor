@@ -922,8 +922,43 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     });
   };
 
+  /**
+   * `GET /documents/{id}/workflow/final` (12 §8.2 step 4, §10; FRW-054 criterion 4; method assumed,
+   * G95; docs/adr/0401-w4-FRW-054-finalise-and-final-route.md, proposed). The caller needs the head
+   * content's capability, as for the workflow resource (07 §12 has no row for it). The answer is the
+   * sealed PDF itself, `application/pdf`, with its SHA-256 as `Repr-Digest` (RFC 9530) and as the
+   * ETag. Only a `finalised` workflow has one; before that the answer is `not_found`. A signed URL
+   * with an expiry is not offered: the bytes are sent from the service, so the read is always
+   * authorised. Nothing here writes: no other method is routed for the path.
+   */
+  const getFinal: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    if (!d.sealedPdfs) throw new ApiError('not_found', 'this server keeps no sealed PDFs');
+    guard(ctx.caller, 'read.head', doc);
+    await liveDocument(ctx, doc);
+    const found = await store().read(ctx.caller.tenant, doc);
+    if (found === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    const sealed =
+      found.state === 'finalised'
+        ? await d.sealedPdfs.read(ctx.caller.tenant, doc, found.id)
+        : null;
+    if (sealed === null)
+      throw new ApiError('not_found', `the workflow of document ${doc} has no sealed PDF yet`);
+    const hex = sealed.record.storedHash;
+    const etag = `"sha256:${hex}"`;
+    const headers = {
+      ETag: etag,
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'application/pdf',
+      'Repr-Digest': `sha-256=:${Buffer.from(hex, 'hex').toString('base64')}:`,
+    };
+    if (notModified(ctx, etag)) return { status: 304, headers };
+    return { status: 200, bytes: Buffer.from(sealed.bytes), headers };
+  };
+
   return {
     getWorkflow,
+    getWorkflowFinal: getFinal,
     putWorkflow,
     sendWorkflow: sendWorkflowRoute,
     remindWorkflow: remindWorkflowRoute,

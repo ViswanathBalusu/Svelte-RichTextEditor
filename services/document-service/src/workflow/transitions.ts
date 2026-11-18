@@ -61,6 +61,11 @@ export interface TransitionRequest {
    * stopped it (FRW-033). It is kept in the audit trail only, never in a webhook.
    */
   readonly note?: Readonly<Record<string, string | number | null>>;
+  /**
+   * Write a grants revision, and so a control commit, even when the new state changes no lock (FRW-054:
+   * `completed` to `finalised` keeps the lock, and the transition is still part of the chain, 12 §6.2).
+   */
+  readonly anchor?: boolean;
 }
 
 /** The commit that records the transition, when it could be read back. */
@@ -135,9 +140,9 @@ export async function recordTransition(
   deps: TransitionDeps,
   req: TransitionRequest,
 ): Promise<TransitionOutcome> {
-  const { ref, actor, from, write, note } = req;
+  const { ref, actor, from, write, note, anchor } = req;
   const lock = lockFor(write.to as WorkflowStateName);
-  if (lock === null)
+  if (lock === null || lock === undefined)
     throw new RangeError(
       `recordTransition: the lock of state ${write.to} is not decided (FRW-029)`,
     );
@@ -149,7 +154,7 @@ export async function recordTransition(
   const change: { documentState?: typeof lock.documentState; workflowActive?: boolean } = {};
   if (before.documentState !== lock.documentState) change.documentState = lock.documentState;
   if (before.workflowActive !== lock.workflowActive) change.workflowActive = lock.workflowActive;
-  if (Object.keys(change).length > 0) {
+  if (Object.keys(change).length > 0 || anchor === true) {
     const after = await deps.grants.change(ref, change, {
       actor,
       ifRevision: before.revision,
