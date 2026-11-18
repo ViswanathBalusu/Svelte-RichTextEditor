@@ -124,6 +124,12 @@ export interface ConvertOptions {
    * diagnostic `pending_suggestions`, and the bundle shows the text as if all were rejected.
    */
   suggestions?: Suggestions;
+  /**
+   * The document's classification label (EXP-089; owner decision 51): printed as text in the
+   * header and the footer of every page. Absent or empty: no marking. The label joins the
+   * options in `manifest.json`, so a change of label changes the bundle hash.
+   */
+  classification?: string;
   /** Neutral notices, in the job's language. Defaults are in English. */
   notices?: Readonly<{ hiddenRegion?: string; redactedValue?: string }>;
 }

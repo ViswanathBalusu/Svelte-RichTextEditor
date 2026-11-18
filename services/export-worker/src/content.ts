@@ -36,6 +36,8 @@ export interface Content {
   envelope: CdmEnvelope;
   /** The document's title (05 §6.2), for the PDF's metadata; the CDM has none (03 §2). */
   title: string | null;
+  /** The document's classification label (UX-085; EXP-089), or null when it has none. */
+  classification: string | null;
 }
 
 /** The content of `ref` at `seq`, for the incarnation the job was created for. */
@@ -91,6 +93,7 @@ export async function contentAt(
       doc: r.doc.toJSON(),
     } as unknown as CdmEnvelope,
     title: record.title,
+    classification: record.label ?? null,
   };
 }
 

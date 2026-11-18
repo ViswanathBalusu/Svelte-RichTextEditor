@@ -12,13 +12,15 @@ const GUIDE = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'integration-guide.md'),
   'utf8',
 );
-const bullet = GUIDE.split('\n').find((l) => l.startsWith('- **Output restrictions (UX-040)')) ?? '';
+const bullet =
+  GUIDE.split('\n').find((l) => l.startsWith('- **Output restrictions (UX-040)')) ?? '';
 
 describe('integration guide, output restrictions (UX-040 criterion 5)', () => {
   it('states the deterrent wording and names each restriction', () => {
     expect(bullet).toContain('deter casual copying');
     expect(bullet).toContain('not a security boundary');
-    for (const name of ['no-export', 'no-copy', 'no-print']) expect(bullet).toContain(`\`${name}\``);
+    for (const name of ['no-export', 'no-copy', 'no-print'])
+      expect(bullet).toContain(`\`${name}\``);
   });
 
   it('describes what the editor and the service do, without the stale "not wired" text', () => {
