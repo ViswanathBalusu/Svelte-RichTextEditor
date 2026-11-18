@@ -40,6 +40,17 @@ export interface HiddenSet {
   values: ReadonlySet<string>;
   /** Whether the titles of hidden regions are shown on the placeholder. */
   titles: boolean;
+  /**
+   * The keys of the form fields whose value this reader may not read: those of hidden values, of
+   * fields inside hidden regions, and of values the rules compute from them (FRW-089). A mirror of
+   * one of them carries no `cached` text in the projection. Absent: none.
+   */
+  keys?: ReadonlySet<string>;
+  /**
+   * The reference targets (`node:<id>`, `bookmark:<name>`, `eq:<label>`) that lie in hidden
+   * regions (FRW-089). A `ref` field that points at one carries no `cached` text. Absent: none.
+   */
+  targets?: ReadonlySet<string>;
 }
 
 export const NOTHING_HIDDEN: HiddenSet = { regions: new Set(), values: new Set(), titles: false };
@@ -150,6 +161,45 @@ function marksIn(pschema: Schema, node: Node) {
     : [];
 }
 
+/** The key a `formValue` mirror points at, or null for any other node. */
+function mirrorKey(n: Node): string | null {
+  if (n.type.name !== 'field' || n.attrs['kind'] !== 'formValue') return null;
+  const target = n.attrs['target'];
+  return typeof target === 'string' && target.startsWith('field:') ? target.slice(6) : null;
+}
+
+/** Whether `n` is a mirror of a value this reader may not read (FRW-089). */
+function mirrorsHidden(n: Node | null | undefined, hidden: HiddenSet): boolean {
+  if (!n || hidden.keys === undefined) return false;
+  const key = mirrorKey(n);
+  return key !== null && hidden.keys.has(key);
+}
+
+/**
+ * Whether the projection keeps no `cached` text on this field (FRW-089). A mirror of a hidden value
+ * keeps none, because the text is that value. A `ref` to a target inside a hidden region keeps none,
+ * because the reader has nothing to resolve it against: it shows a placeholder, not the label of
+ * something it cannot see. A `styleRef` keeps none while a region is hidden, because the text it
+ * caches may come from a paragraph the reader cannot see. The numbers of what the reader can see are
+ * those of the full document (owner decision 11); a `seq` field is such a number and is not blanked.
+ */
+function blanksCached(n: Node, hidden: HiddenSet): boolean {
+  if (n.type.name !== 'field') return false;
+  const kind = n.attrs['kind'];
+  if (kind === 'styleRef') return hidden.regions.size > 0;
+  if (kind === 'ref') {
+    const target = n.attrs['target'];
+    return typeof target === 'string' && hidden.targets?.has(target) === true;
+  }
+  return mirrorsHidden(n, hidden);
+}
+
+/** The attributes a field node has in a projection. */
+function fieldAttrs(n: Node, hidden: HiddenSet): Node['attrs'] {
+  if (!blanksCached(n, hidden) || (n.attrs['cached'] ?? null) === null) return n.attrs;
+  return { ...n.attrs, cached: null };
+}
+
 /** The projection of one node that is not a hidden region (hidden values redacted). */
 function convert(n: Node, hidden: HiddenSet, key: string, pschema: Schema): Node {
   const byKey = entry(converted, pschema, n);
@@ -160,7 +210,9 @@ function convert(n: Node, hidden: HiddenSet, key: string, pschema: Schema): Node
     const attrs =
       n.type.name === 'form_field' && hidden.values.has(String(n.attrs['id']))
         ? redactedAttrs(n.attrs)
-        : n.attrs;
+        : n.type.name === 'field'
+          ? fieldAttrs(n, hidden)
+          : n.attrs;
     const children: Node[] = [];
     n.forEach((c) => children.push(convert(c, hidden, key, pschema)));
     out = pschema.nodes[n.type.name]!.create(attrs, children, marksIn(pschema, n));
@@ -333,6 +385,7 @@ function sliceHoldsHidden(slice: Slice, hidden: HiddenSet): boolean {
   slice.content.descendants((n) => {
     if (n.type.name === 'region') found = true;
     else if (n.type.name === 'form_field' && hidden.values.has(String(n.attrs['id']))) found = true;
+    else if (blanksCached(n, hidden)) found = true;
     return !found;
   });
   return found;
@@ -516,6 +569,11 @@ function routeOf(step: Step, before: Node, spans: readonly Span[], hidden: Hidde
     if (inOne(step.pos)) return 'inside';
     // The region node itself: its placeholder carries the id and possibly the title, no marks.
     if (spans.some((s) => s.fullStart === step.pos)) return 'diff';
+    // A change to a field whose cached text the projection blanks is the diff of the projections.
+    if (step instanceof AttrStep && step.attr === 'cached') {
+      const target = before.nodeAt(step.pos);
+      if (target && blanksCached(target, hidden)) return 'diff';
+    }
     if (step instanceof AttrStep && isRedactedAttr(step.attr)) {
       const target = before.nodeAt(step.pos);
       if (target?.type.name === 'form_field' && hidden.values.has(String(target.attrs['id'])))
