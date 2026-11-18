@@ -25,6 +25,7 @@ export * from './engine.ts';
 export * from './justify.ts';
 export * from './incremental.ts';
 export * from './caret.ts';
+export * from './page-keys.ts';
 export * from './page-heights.ts';
 export * from './layout-json.ts';
 export * from './reconcile.ts';
