@@ -15,7 +15,7 @@ import {
 import { connectionOn, regionInfosOfJson, requireRow } from './gate.ts';
 import { json, type Kit } from './kit.ts';
 import { admitStorage } from './live-quota-rest.ts';
-import { coverOrHide, guard, type Ctx, type Handler } from './pipeline.ts';
+import { guard, hiddenFrom, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { projectContent, readerView } from './visibility.ts';
 
@@ -137,8 +137,10 @@ export function assetRoutes(k: Kit): Record<string, Handler> {
   async function assetOf(ctx: Ctx): Promise<AssetRecord> {
     const a = await registry().get(ctx.caller.tenant, ctx.params['aid']!);
     if (!a) throw new ApiError('not_found', `no asset ${ctx.params['aid']}`);
-    // The caller's token must cover the asset's document; otherwise there is no such asset.
-    coverOrHide(ctx.caller, a.doc, 'asset');
+    // The caller's token must cover the asset's document; if it does not, the asset is not found
+    // (owner decision 57; SEC-016 criterion 4).
+    if (hiddenFrom(ctx.caller, a.doc))
+      throw new ApiError('not_found', `no asset ${ctx.params['aid']}`);
     connectionOn(ctx.caller, a.doc);
     await liveDocument(ctx, a.doc);
     return a;

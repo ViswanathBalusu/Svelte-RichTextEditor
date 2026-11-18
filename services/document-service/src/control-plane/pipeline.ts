@@ -161,15 +161,13 @@ export function capabilitiesOn(caller: Caller, doc: string): ReadonlySet<Capabil
 }
 
 /**
- * For a resource addressed by a bare identifier (`/exports/{jid}`, `/imports/{jid}`, `/assets/{aid}`,
- * `/threads/{tid}`, `/comments/{cid}`; BE-032 criterion 6): the resource has been resolved to its
- * document, and a user token that does not cover that document sees no such resource. The answer is
- * `not_found` and not `forbidden`, so that the token does not learn that the identifier exists
- * (owner decision 57). A service credential covers every document of its tenant.
+ * True when a user token does not cover `doc`. A resource named by a bare identifier in such a
+ * document is answered as a missing one is, `not_found` (owner decision 57; SEC-016 criterion 4),
+ * so that a refusal does not tell the caller that the identifier exists. A service credential
+ * acts for the tenant and is never hidden from a document.
  */
-export function coverOrHide(caller: Caller, doc: string, what: string): void {
-  if (caller.kind === 'service') return;
-  if (caller.identity!.docs[doc] === undefined) throw new ApiError('not_found', `no such ${what}`);
+export function hiddenFrom(caller: Caller, doc: string): boolean {
+  return caller.kind === 'user' && caller.identity!.docs[doc] === undefined;
 }
 
 /** Refuses unless the caller holds `cap` on `doc` (07 §12); `forbidden` otherwise. */

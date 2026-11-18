@@ -28,6 +28,13 @@ export const assetKeys = {
     if (!isSha256(sha256)) throw new RangeError('an asset key is a lower-case SHA-256');
     return `${assetKeys.prefix(tenant)}assets/${sha256}`;
   },
+  /** A file an export job wrote: `tenants/{tenant}/exports/{job}/{name}` (the control plane's key). */
+  exportFile(tenant: string, job: string, name: string): string {
+    if (!isUuid(job)) throw new RangeError('a job identifier is a lower-case UUID');
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name))
+      throw new RangeError('an export file name is one safe segment');
+    return `${assetKeys.prefix(tenant)}exports/${job}/${name}`;
+  },
   /** The tenant and hash of a final key, or null. */
   parseFinal(key: string): { tenant: string; sha256: string } | null {
     const m = /^tenants\/([0-9a-f-]{36})\/assets\/([0-9a-f]{64})$/.exec(key);
