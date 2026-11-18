@@ -317,7 +317,7 @@ describe('the control plane tells the rooms (BE-035 criteria 4 to 6; PRO-052 cri
 });
 
 describe('worker threads (BE-001 criteria 3, 4)', () => {
-  it('fails only the request whose worker crashed, with the retryable code internal, and goes on', async () => {
+  it('fails only the request whose worker crashed, with the retryable code internal, and goes on [neg:code internal]', async () => {
     const h = await startHarness('memory', { allowWorkerCrash: true });
     try {
       const doc = await h.createDocument({ content: documentWithRegions() });

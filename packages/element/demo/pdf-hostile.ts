@@ -2,7 +2,8 @@
  * Hostile PDFs for the viewer's isolation tests (FE-071 criterion 2; 09 §9.3 rule 7; 10 §3.1):
  *
  * - `scripts`: an OpenAction with JavaScript, page open and close actions with JavaScript, a launch
- *   action, a form field with keystroke, format and calculate scripts, and a link annotation. Each
+ *   action, a form field with keystroke, format and calculate scripts, and link annotations (one
+ *   launch, one URI, SEC-036). Each
  *   script calls back to the demo server (`/pwned?case=…`), so a script that ran leaves a request;
  * - `pages`: a document with a very large number of real pages;
  * - `lying`: a page tree whose /Count claims a million pages while it holds one.
@@ -51,13 +52,15 @@ export function scriptsPdf(base: string): Buffer {
     `<< /Type /Catalog /Pages 2 0 R /OpenAction ${js('open-action')} /AA << /WC ${js('will-close')} /WP ${js('will-print')} >> /AcroForm << /Fields [6 0 R] /NeedAppearances true >> /Names << /JavaScript << /Names [(init) ${js('names')}] >> >> >>`,
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
     // 3 the page: open and close scripts, a launch action, the field and a link
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> /AA << /O ${js('page-open')} /C << /S /Launch /F (calc.exe) /Win << /F (cmd.exe) /P (/c calc) >> >> >> /Annots [6 0 R 7 0 R] >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> /AA << /O ${js('page-open')} /C << /S /Launch /F (calc.exe) /Win << /F (cmd.exe) /P (/c calc) >> >> >> /Annots [6 0 R 7 0 R 8 0 R] >>`,
     stream('BT /F1 12 Tf 20 180 Td (Hostile PDF) Tj ET'),
     FONT,
     // 6 a text field with keystroke, format and calculate scripts
     `<< /Type /Annot /Subtype /Widget /FT /Tx /T (field) /Rect [20 100 180 130] /P 3 0 R /V (value) /AA << /K ${js('keystroke')} /F ${js('format')} /C ${js('calculate')} /Fo ${js('focus')} >> >>`,
     // 7 a link that would launch an application
     `<< /Type /Annot /Subtype /Link /Rect [20 40 180 70] /A << /S /Launch /F (calc.exe) >> >>`,
+    // 8 a link with a URI action to the demo server (SEC-036): following it would leave a request
+    `<< /Type /Annot /Subtype /Link /Rect [20 140 180 170] /A << /S /URI /URI (${base}/pwned?case=uri) >> >>`,
   ]);
 }
 

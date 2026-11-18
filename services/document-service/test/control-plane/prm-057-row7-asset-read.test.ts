@@ -77,7 +77,7 @@ async function attachImage(h: Harness, doc: string, asset: string): Promise<void
 }
 
 for (const storage of ['memory', 'postgres'] as Storage[]) {
-  describe(`PRM-057 row 7: asset reads (${storage})`, async () => {
+  describe(`PRM-057 row 7: asset reads (${storage}) [neg:row asset.read]`, async () => {
     const skip = await skipReason(storage);
     let h: Harness;
     beforeAll(async () => {
