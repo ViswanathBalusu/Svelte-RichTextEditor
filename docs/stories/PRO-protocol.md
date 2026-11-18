@@ -161,7 +161,7 @@ As a maintainer, I want deprecations to be announced for at least twelve months 
 **Evidence:** criterion 2 (lane V-PRO-001-017, 2026-11-13): `services/document-service/test/control-plane/routes.documents.test.ts` (the test "answers CORS for allowed origins only"): a `GET` from an allowed origin gets `Access-Control-Expose-Headers` listing `Deprecation` and `Sunset`, in memory and on PostgreSQL. This checks the exposed header list the browser applies; no browser was run for it.
 - [ ] Given a feature or field marked deprecated, when a major version that removes it is prepared, then CI fails unless the deprecation date in the artifacts is at least twelve months earlier.
 
-**Notes:** Condition: only when the first feature, field or resource is deprecated; nothing is deprecated in 1.0.
+**Notes:** Condition: only when the first feature, field or resource is deprecated; nothing is deprecated in 1.0. Lane w5, 2026-11-18: nothing new ticked. No resource, field or feature is marked deprecated in the OpenAPI document (`packages/protocol/src/generate/openapi.ts` declares the `Deprecation` and `Sunset` headers, but no operation carries `deprecated`), so criterion 1 has nothing to test. Criterion 3 needs a major version that removes a deprecated item, and no such version exists; the status is blocked by its condition.
 
 ## Discovery (05 §2)
 
@@ -1114,7 +1114,7 @@ As a tenant administrator, I want a classification label on the document resourc
 
 **Evidence:** `services/document-service/src/control-plane/handlers.ts` (`updateDocument` and `documentResource`: the `classification` field maps to the stored `label`) and `services/document-service/src/storage/memory.ts` and `document-store.ts` (the label is stored and cleared). `services/document-service/test/control-plane/pro-048-classification.test.ts`, memory and PostgreSQL in Podman (`docedit-test-postgres`; lane U-PRO-035-051, 2026-11-13, both variants pass, none skipped): a new document has no label; `PATCH` with a current `If-Match` sets it and `GET` returns it; a stale `If-Match` is refused and the label does not change; `PATCH` with `null` clears it and `GET` returns none (criterion 1).
 
-**Notes:** Phase 4 per 13 §12 ("classification labels"). Lane PRO-043-056, round 2: criterion 1 is ticked. Criterion 2 stays open: the status bar (UX-076) and the exports (EXP-004, EXP-005) that show and apply the label are not built. Criterion 3 is the client's (PRO-005) and is not tested in this lane. Lane V-PRO-035-051 (2026-11-13): criterion 3 stays open: no client code in the repository reads `GET /documents/{id}` metadata (`packages/backend-dep` reads content, regions, grants, commits and assets only), so there is no client read that could ignore the field; see docs/adr/0311-lane-V-PRO-035-051.md, open question C.
+**Notes:** Phase 4 per 13 §12 ("classification labels"). Lane PRO-043-056, round 2: criterion 1 is ticked. Criterion 2 stays open: the status bar (UX-076) and the exports (EXP-004, EXP-005) that show and apply the label are not built. Criterion 3 is the client's (PRO-005) and is not tested in this lane. Lane V-PRO-035-051 (2026-11-13): criterion 3 stays open: no client code in the repository reads `GET /documents/{id}` metadata (`packages/backend-dep` reads content, regions, grants, commits and assets only), so there is no client read that could ignore the field; see docs/adr/0311-lane-V-PRO-035-051.md, open question C. Lane w5, 2026-11-18: nothing new ticked. Criterion 2 is blocked: the status bar reads the label only when the element supplies the `classification` view, which it does not yet (UX-085 criterion 2), and the export marking is EXP-089, not built (criterion 3 of UX-085). Criterion 3 stays open: no client reads the metadata of `GET /documents/{id}` (see above).
 
 ### PRO-049 Read document content at the head or at a pinned sequence number
 
@@ -2450,9 +2450,13 @@ As an integrating developer, I want comment ranges and presence mapped by the au
 
 **Acceptance criteria**
 
-- [ ] Given `mapRanges(stateId, ranges)`, when it is called, then it returns the ranges mapped to the head, equal to the in-process mapping on the same fixtures.
-- [ ] Given a range whose content was deleted, when it is mapped, then the result follows the behaviour defined for comment ranges in ADR 0015.
-- [ ] Given a `stateId` that is not known, when the call is made, then the service says so, so the caller can `open` again.
+- [x] Given `mapRanges(stateId, ranges)`, when it is called, then it returns the ranges mapped to the head, equal to the in-process mapping on the same fixtures.
+- [x] Given a range whose content was deleted, when it is mapped, then the result follows the behaviour defined for comment ranges in ADR 0015.
+- [x] Given a `stateId` that is not known, when the call is made, then the service says so, so the caller can `open` again.
+
+**Evidence:** services/authority-service/test/map-ranges.test.ts (Node.js, 5 tests, ephemeral port), code in services/authority-service/src/range-calls.ts (`mapRangesCall`, which calls `mapRangesThrough` of `@docedit/authority`), src/service.ts (`mapRanges`), src/http.ts (`POST /v1/authority/states/{stateId}/map-ranges`) and src/capabilities.ts. Criterion 1: from seq 0, 1, 2 and 3 to the head 4, the service's answer equals `mapRangesThrough` over the same four commits, for a range of inserted text, a range across two blocks, a caret (zero width) and a range at the start; the head itself answers the ranges unchanged. Criterion 2: a range over the text inserted at seq 1 and deleted at seq 3 collapses (`collapsed: true`, `from` equal to `to`). Criterion 3: an unknown `stateId` answers `unknown_state` with the message to open again; a seq past the head is `not_found`; a reversed or negative range is `invalid_request`. HTTP: the route answers 200 with the service's answer, 405 for GET, and the capabilities list `mapRanges`. Choices: docs/adr/0404-w5-PRO-105-map-ranges.md (proposed).
+
+**Notes:** Lane w5, 2026-11-18: criteria 1 to 3 ticked. The request shape `{ seq, ranges }` and the refusals are the proposed choices of docs/adr/0404-w5-PRO-105-map-ranges.md; 05 §10 gives no signature. Presence positions use the same call as zero-width ranges; no separate presence call is built. Not checked here: a browser or a container run; the engine's own mapping is tested by `packages/engine/test/fe-048-range-agreement.test.ts` and is unchanged.
 
 ### PRO-106 Compute restore steps, comparisons and attribution in the authority service
 
@@ -2937,7 +2941,7 @@ As a maintainer, I want to take the owner's decision on when a second server imp
 - [ ] Given the decision, when it is recorded, then the roadmap and PRO-129 are updated.
 - [ ] Given that no partner has asked by the review at the end of phase 4, when the roadmap is reviewed, then the decision is recorded as "not scheduled" and the freeze of 1.0 stays open.
 
-**Notes:** Condition: a partner wants to build one. Until then the freeze is not scheduled.
+**Notes:** Condition: a partner wants to build one. Until then the freeze is not scheduled. Lane w5 (2026-11-18): nothing can be ticked. The owner's answers of 2026-11-15 and 2026-11-17 do not list this decision, and no partner is named anywhere in the repository, so criterion 1 needs the owner's word (a partner, a target tier and a date) and criterion 2 follows it (PRO-129 and the roadmap change only after that decision). Criterion 3 is the review at the end of phase 4, which has not happened. The default of 05 §11 stands in the meantime: the second server is not scheduled and the freeze of 1.0 stays open. No decision record was written, because there is nothing yet to propose.
 
 ### PRO-129 Freeze protocol 1.0 after a second server passes `core`
 
@@ -2956,7 +2960,7 @@ As a maintainer, I want protocol 1.0 frozen only after an independent server pas
 - [ ] Given the differences between the two implementations found on the way, when they were ambiguities in the prose, then 05 is amended before the freeze.
 - [ ] Given the freeze, when the roadmap is read, then the date and the implementation are recorded.
 
-**Notes:** Condition: PRO-128 yields a date.
+**Notes:** Condition: PRO-128 yields a date. Lane w5 (2026-11-18): nothing can be ticked, so the story is blocked. Criterion 1 needs a second server that is not derived from the reference service, and none exists: `packages/backend-mock` and `services/document-service` are both ours and share the protocol package, so a pass by either proves nothing about an independent reading of 05. PRO-128 is unticked and has no partner, tier or date (see its Notes), and the owner's answers of 2026-11-15 and 2026-11-17 do not cover it. Criterion 2 (tag 1.0) follows a pass and a freeze date. Criterion 3 (amend 05 for ambiguities found) can only come from the comparison of two implementations. Criterion 4 (record date and implementation in the roadmap) follows the freeze. The default of 05 §11 stands: protocol 1.0 is not frozen, and the artifacts, the registry and the kit stay at their pre-1.0 versions. Nothing was built, and no decision record was written, because there is nothing yet to propose.
 
 ## Read restrictions (ADR 0019)
 

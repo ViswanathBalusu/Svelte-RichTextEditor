@@ -13,11 +13,13 @@ import { ShardMap } from '../control-plane/jobs/sharding.ts';
 import { migrateShards } from './shards.ts';
 import { tenantProblems } from './tenant-guard.ts';
 import {
+  cdmNotes,
   expectedSchemaVersion,
   loadMigrations,
   loadReleases,
   migrate,
   planProblems,
+  releaseNoteProblems,
   releaseNotes,
 } from './migrate.ts';
 
@@ -27,7 +29,11 @@ if (command === 'notes' || command === 'check') {
   const migrations = await loadMigrations();
   const releases = await loadReleases();
   if (command === 'check') {
-    const problems = [...planProblems(migrations, releases), ...tenantProblems(migrations)];
+    const problems = [
+      ...planProblems(migrations, releases),
+      ...releaseNoteProblems(releases),
+      ...tenantProblems(migrations),
+    ];
     for (const p of problems) console.error(p);
     process.exit(problems.length ? 1 : 0);
   }
@@ -46,6 +52,7 @@ if (command === 'notes' || command === 'check') {
     string
   >;
   console.log(releaseNotes(migrations, versions, notes));
+  console.log(cdmNotes(release));
   process.exit(0);
 }
 

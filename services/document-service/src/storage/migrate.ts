@@ -236,6 +236,12 @@ export interface Release {
    * The note in the file wins when both exist.
    */
   rollback?: Record<string, string>;
+  /**
+   * The CDM steps of the release (BE-095 criterion 2): the migrations of document model versions
+   * an operator may start with it (BE-094), and how to undo them. A release with none says so with
+   * an empty `steps`.
+   */
+  cdm?: { steps: string[]; rollback: string };
 }
 
 export async function loadReleases(dir = MIGRATIONS_DIR): Promise<Release[]> {
@@ -243,7 +249,12 @@ export async function loadReleases(dir = MIGRATIONS_DIR): Promise<Release[]> {
   const parsed = JSON.parse(text) as { releases?: unknown };
   if (!Array.isArray(parsed.releases)) throw new Error('releases.json: an object with releases[]');
   return parsed.releases.map((r, i) => {
-    const x = r as { version?: unknown; migrations?: unknown; rollback?: unknown };
+    const x = r as {
+      version?: unknown;
+      migrations?: unknown;
+      rollback?: unknown;
+      cdm?: unknown;
+    };
     if (typeof x.version !== 'string' || !Array.isArray(x.migrations))
       throw new Error(`releases.json /releases/${i}: version and migrations[]`);
     const release: Release = { version: x.version, migrations: x.migrations.map(String) };
@@ -254,8 +265,46 @@ export async function loadReleases(dir = MIGRATIONS_DIR): Promise<Release[]> {
         Object.entries(x.rollback).map(([k, v]) => [k, String(v)]),
       );
     }
+    if (x.cdm !== undefined) {
+      const c = x.cdm as { steps?: unknown; rollback?: unknown } | null;
+      if (!c || typeof c !== 'object' || !Array.isArray(c.steps) || typeof c.rollback !== 'string')
+        throw new Error(`releases.json /releases/${i}/cdm: steps[] and a rollback note`);
+      release.cdm = { steps: c.steps.map(String), rollback: c.rollback };
+    }
     return release;
   });
+}
+
+/**
+ * Problems with the release notes the releases allow (BE-095 criterion 2): each release lists its
+ * database steps (the plan checks them) and states its CDM steps and how to undo them, even when
+ * it has none.
+ */
+export function releaseNoteProblems(releases: readonly Release[]): string[] {
+  const out: string[] = [];
+  for (const r of releases) {
+    if (!r.cdm) {
+      out.push(`release ${r.version} does not state its CDM steps (cdm.steps, cdm.rollback)`);
+      continue;
+    }
+    if (r.cdm.rollback.trim().length === 0)
+      out.push(`release ${r.version} gives no rollback note for its CDM steps`);
+  }
+  return out;
+}
+
+/**
+ * The CDM steps of a release and how to roll them back, as Markdown (BE-095 criterion 2). A
+ * release that is not listed yet has no statement to print.
+ */
+export function cdmNotes(release: Release | undefined): string {
+  if (!release?.cdm)
+    return 'CDM steps: not stated yet. State them in releases.json when the release is cut.\n';
+  const { steps, rollback } = release.cdm;
+  const list = steps.length
+    ? steps.map((s) => `- ${s}`).join('\n')
+    : 'No CDM steps. No document changes its model version with this release.';
+  return `CDM steps of ${release.version}:\n\n${list}\n\nHow to roll back the CDM steps: ${rollback}\n`;
 }
 
 /**

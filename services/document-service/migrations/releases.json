@@ -3,6 +3,10 @@
   "releases": [
     {
       "version": "0.1.0-phase1a",
+      "cdm": {
+        "steps": [],
+        "rollback": "Nothing to undo: the release starts no CDM migration, and every document stays at CDM 1."
+      },
       "migrations": [
         "0001_platform",
         "0002_documents_and_log",

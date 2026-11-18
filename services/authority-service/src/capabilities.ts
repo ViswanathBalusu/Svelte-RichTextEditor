@@ -5,7 +5,7 @@
  *
  * `IMPLEMENTED_CALLS` grows as the calls of 05 §10 are built: `open` and `materialise` are PRO-103,
  * `migrate` and `evaluateRules` are PRO-107, `applyCommit` is PRO-104, `restoreSteps`, `diff` and
- * `attribution` are PRO-106. `mapRanges` (PRO-105) is not here, so the features that need them are not offered.
+ * `attribution` are PRO-106. `mapRanges` is PRO-105.
  */
 import {
   type AuthorityServiceCall,
@@ -23,6 +23,7 @@ export const IMPLEMENTED_CALLS: readonly AuthorityServiceCall[] = [
   'attribution',
   'migrate',
   'evaluateRules',
+  'mapRanges',
 ];
 
 export interface Capabilities {
