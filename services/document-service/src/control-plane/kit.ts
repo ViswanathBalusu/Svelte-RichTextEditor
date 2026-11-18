@@ -26,6 +26,7 @@ import {
 } from '../storage/types.ts';
 import type { AssetRegistry, AssetUploads } from './assets.ts';
 import type { ContentReader } from './content.ts';
+import type { WorkerPool } from './workers/pool.ts';
 import type { EventSink } from './events.ts';
 import {
   CHANGE_WINDOW_MS,
@@ -66,6 +67,11 @@ export interface HandlerDeps {
   tokens: TokenService;
   queue: JobQueue;
   content: ContentReader;
+  /**
+   * Where a comparison runs (HIS-011 criterion 4): the worker pool, so that it never holds the loop
+   * that serves requests and rooms. Absent: the comparison runs inline (small tests, tools).
+   */
+  comparePool?: Pick<WorkerPool, 'run'>;
   views: Views;
   events: EventSink;
   notifier: RoomNotifier;

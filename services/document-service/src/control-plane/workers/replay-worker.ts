@@ -2,9 +2,14 @@
  * The replay worker (BE-001 criterion 3; BE-036 criterion 3): rebuilds the content at a sequence
  * number from a checkpoint and the steps of the commits after it, off the main thread. Errors are
  * reported by name only: a message could quote content (BE-088).
+ *
+ * It also compares two versions (HIS-011 criterion 4): the comparison walks both documents and the
+ * commits between them, which can take long on a large document, so it runs here and never on the
+ * loop that serves requests and rooms.
  */
 import { parentPort, threadId, workerData } from 'node:worker_threads';
 import { DEFAULT_LIMITS, applySteps, parseSteps } from '@docedit/authority';
+import { compareTask, type CompareTask } from './compare-task.ts';
 import { cdmSchema } from '@docedit/model/prosemirror';
 
 interface Materialise {
@@ -34,6 +39,12 @@ parentPort?.on('message', (m: { id: number; kind: string; input: unknown }) => {
   try {
     if (m.kind === 'materialise')
       parentPort!.postMessage({ id: m.id, ok: true, value: materialise(m.input as Materialise) });
+    else if (m.kind === 'compare')
+      parentPort!.postMessage({
+        id: m.id,
+        ok: true,
+        value: { result: compareTask(m.input as CompareTask), threadId },
+      });
     else if (m.kind === 'crash' && allowCrash) process.exit(70);
     else if (m.kind === 'thread') parentPort!.postMessage({ id: m.id, ok: true, value: threadId });
     else parentPort!.postMessage({ id: m.id, ok: false, error: 'unknown task' });
