@@ -365,6 +365,7 @@
       body: tr.t('surface.body'),
       footnote: tr.t('surface.footnote'),
       story: tr.t('surface.story'),
+      footer: tr.t('surface.footer'),
     });
   });
 
@@ -1144,8 +1145,33 @@
   }
 
   const panelLabel = $derived(
-    panel.current ? tr.t(panel.current.kind === 'footnote' ? 'panel.footnote' : 'panel.story') : '',
+    panel.current
+      ? tr.t(
+          panel.current.kind === 'footnote'
+            ? 'panel.footnote'
+            : panel.current.part === 'footer'
+              ? 'panel.footer'
+              : 'panel.story',
+        )
+      : '',
   );
+  // The variants the header or footer panel offers (FE-057 criterion 1): the parts, and the variants
+  // the page setup uses for the part that is open. Asked again when the document or the panel changes.
+  const storyVariants = $derived.by(() => {
+    void revision?.current;
+    if (panel.current?.kind !== 'story' || !core.storyVariants) return [];
+    return core.storyVariants();
+  });
+  const openPart = $derived(panel.current?.part ?? 'header');
+  const partVariants = $derived(storyVariants.filter((v) => v.part === openPart));
+  /** Opens another part: the same variant when that part uses it, else the default one. */
+  function openOtherPart(part: 'header' | 'footer'): void {
+    const same = storyVariants.find(
+      (v) => v.part === part && v.variant === (panel.current?.variant ?? 'default'),
+    );
+    const target = same ?? storyVariants.find((v) => v.part === part && v.variant === 'default');
+    if (target) core.editStory?.(target.part, target.variant);
+  }
   const paneLabel = $derived.by(() => {
     const d = pane ? paneRegistry.get(pane.id) : undefined;
     return d ? tr.text(d.label) : '';
@@ -1208,6 +1234,30 @@
           <span>{panelLabel}</span>
           <button type="button" onclick={() => core.closePanel()}>{tr.t('panel.close')}</button>
         </div>
+        {#if storyVariants.length > 0}
+          <!-- The part and the variant of the open story (FE-057): plain buttons, so the keyboard reaches them. -->
+          <div class="de-panel-variants" role="group" aria-label={tr.t('panel.variants')}>
+            {#each ['header', 'footer'] as const as part (part)}
+              <button
+                type="button"
+                aria-pressed={openPart === part}
+                disabled={!storyVariants.some((v) => v.part === part && v.editable)}
+                onclick={() => openOtherPart(part)}
+                >{tr.t(part === 'header' ? 'panel.story' : 'panel.footer')}</button
+              >
+            {/each}
+            <span class="de-panel-variants-gap" aria-hidden="true"></span>
+            {#each partVariants as v (v.variant)}
+              <button
+                type="button"
+                aria-pressed={panel.current?.variant === v.variant}
+                disabled={!v.editable}
+                onclick={() => core.editStory?.(v.part, v.variant)}
+                >{tr.t(`panel.variant.${v.variant}`)}</button
+              >
+            {/each}
+          </div>
+        {/if}
         {#key panel.current.id}
           <div class="de-panel-editor" {@attach (node) => core.mountPanel(node)}></div>
         {/key}

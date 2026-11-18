@@ -316,6 +316,10 @@ export interface PanelInfo {
   kind: 'footnote' | 'story';
   id: string;
   label: string;
+  /** For a header or footer story: which one (FE-057). */
+  part?: StoryPart;
+  /** For a header or footer story: the variant the page setup names it for; null when it names none. */
+  variant?: StoryVariant | null;
 }
 
 export interface OutlineItem {
@@ -420,6 +424,8 @@ export interface CoreLabels {
   readonly body: string;
   readonly footnote: string;
   readonly story: string;
+  /** The name of a footer's sub-editor; `story` is used when it is not given. */
+  readonly footer?: string;
 }
 
 /** Named queries of the document API for the command registry (13 §4; ADR 0041). */
@@ -755,6 +761,7 @@ export type InsertResult =
     };
 
 import type { CdmFragment } from './cdm-fragment.ts';
+import type { StoryPart, StoryVariant, StoryVariantInfo } from './header-footer.ts';
 import type { ClipboardInput, ClipboardPayload, CutResult } from './clipboard.ts';
 import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
@@ -845,6 +852,10 @@ export interface DocumentApi {
   openFootnote(id: string): void;
   /** Opens the story's panel. Returns false, and opens nothing, when the user may not change the story (07 §7). */
   openStory(id: string): boolean;
+  /** The variants of the header and footer the page setup uses, with the story each names (FE-057). */
+  storyVariants(): Array<StoryVariantInfo & { editable: boolean }>;
+  /** Opens a variant in the panel, creating its story through the guard when it has none (FE-057). */
+  editStory(part: StoryPart, variant: StoryVariant): boolean;
   closePanel(): void;
   /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
   selectBlock(id: string): boolean;

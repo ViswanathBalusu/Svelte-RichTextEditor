@@ -14,7 +14,13 @@ describe('opening a story panel by rights (FE-056 criterion 6)', () => {
   it('opens the panel for a person who may change the story', () => {
     const c = core();
     expect(c.openStory(SPIKE_IDS.header)).toBe(true);
-    expect(c.panel.get()).toEqual({ kind: 'story', id: SPIKE_IDS.header, label: 'Header' });
+    expect(c.panel.get()).toEqual({
+      kind: 'story',
+      id: SPIKE_IDS.header,
+      label: 'Header',
+      part: 'header',
+      variant: 'default',
+    });
   });
 
   it('opens no panel for a person who may only view the story', () => {

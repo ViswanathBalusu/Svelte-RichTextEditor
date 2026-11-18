@@ -157,7 +157,8 @@
 .de-action,
 .de-presence-more,
 .de-notice-dismiss,
-.de-panel-head button {
+.de-panel-head button,
+.de-panel-variants button {
   /* Never squeezed below their label: what does not fit goes to "More" instead (UX-006). */
   flex: 0 0 auto;
   font: inherit;
@@ -177,7 +178,8 @@
 .de-action:hover,
 .de-presence-more:hover,
 .de-notice-dismiss:hover,
-.de-panel-head button:hover {
+.de-panel-head button:hover,
+.de-panel-variants button:hover {
   background: var(--_de-control-hover);
 }
 
@@ -186,6 +188,7 @@
 .de-presence-more:focus-visible,
 .de-notice-dismiss:focus-visible,
 .de-panel-head button:focus-visible,
+.de-panel-variants button:focus-visible,
 .de-menu-item:focus-visible {
   outline: 2px solid var(--_de-focus);
   outline-offset: 1px;
@@ -510,6 +513,29 @@
   background: var(--_de-surface-raised);
   color: var(--_de-text);
   border: 1px solid var(--_de-border);
+}
+
+.de-panel-variants {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-1);
+  margin-block-end: var(--_de-space-2);
+}
+
+.de-panel-variants button[aria-pressed='true'] {
+  background: var(--_de-control-active);
+  border-color: var(--_de-control-active-border);
+  box-shadow: inset 0 -3px 0 var(--_de-control-active-border);
+}
+
+.de-panel-variants button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.de-panel-variants-gap {
+  flex: 0 0 var(--_de-space-3);
 }
 
 .de-panel-head {

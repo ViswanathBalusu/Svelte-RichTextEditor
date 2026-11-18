@@ -106,7 +106,15 @@ import { fragmentOfSteps, recoveredKind } from './recovered-fragment.ts';
 import { bodyGuard, initialSelection, selectAllInBody } from './body.ts';
 import { effectiveMode, modeLocks } from './mode.ts';
 import { insertFootnote } from './footnote.ts';
-import { createVariantStory } from './header-footer.ts';
+import {
+  type StoryPart,
+  type StoryVariant,
+  type StoryVariantInfo,
+  createVariantStory,
+  pageSetupIdOf,
+  roleOfStory,
+  storyVariantsOf,
+} from './header-footer.ts';
 import { type CitationItemInput, insertCitation } from './citation-insert.ts';
 import { addLink, followInternalLink, insertBookmark } from './links-bookmarks.ts';
 import { type PageSetupChanges, setPageSetup } from './page-setup-commands.ts';
@@ -2163,20 +2171,26 @@ export class DocumentCore implements DocumentApi {
     state: EditorState,
     dispatch: ((tr: Transaction) => void) | undefined,
   ): boolean {
-    let setupId: string | null = null;
-    state.doc.forEach((node) => {
-      if (node.type.name !== 'defs') return;
-      node.forEach((child) => {
-        if (setupId === null && child.type.name === 'page_setup')
-          setupId = String(child.attrs['id']);
-      });
-    });
+    return this.#createStory(state, dispatch, 'header', 'default');
+  }
+
+  /**
+   * Creates the story a variant of the header or footer has none of, and opens it (FE-057
+   * criterion 2). One transaction through the guard: a refusal leaves no story behind.
+   */
+  #createStory(
+    state: EditorState,
+    dispatch: ((tr: Transaction) => void) | undefined,
+    part: StoryPart,
+    variant: StoryVariant,
+  ): boolean {
+    const setupId = pageSetupIdOf(state.doc);
     if (setupId === null) return false;
     // An availability check (no dispatch) must not draw from the id source: the toolbar asks on
     // every update, and each draw would shift the ids later suggestions and stories receive.
-    if (!dispatch) return createVariantStory(state, setupId, 'header', 'default', 'probe') !== null;
+    if (!dispatch) return createVariantStory(state, setupId, part, variant, 'probe') !== null;
     const storyId = this.#newId();
-    const tr = createVariantStory(state, setupId, 'header', 'default', storyId);
+    const tr = createVariantStory(state, setupId, part, variant, storyId);
     if (tr === null) return false;
     dispatch(tr);
     let present = false;
@@ -3285,13 +3299,45 @@ export class DocumentCore implements DocumentApi {
     // 07 §7 (FE-056 criterion 6): a person who may not change the story gets no panel, so the
     // command is disabled for them. A read-only panel would need the view, which is not built.
     if (!this.canEdit(`story:${id}`)) return false;
-    this.#open({ kind: 'story', id }, 'Header');
+    const role = roleOfStory(this.#state.doc, id);
+    this.#open({ kind: 'story', id }, role?.part === 'footer' ? 'Footer' : 'Header', role);
     return true;
   }
 
-  #open(target: { kind: 'footnote' | 'story'; id: string }, label: string): void {
+  /**
+   * The variants of the header and footer the page setup uses, each with the story it names or null
+   * and whether the person may edit it, or create it when there is none (FE-057 criterion 1).
+   */
+  storyVariants(): Array<StoryVariantInfo & { editable: boolean }> {
+    return storyVariantsOf(this.#state.doc).map((v) => ({
+      ...v,
+      editable: v.story === null ? this.canEdit('doc') : this.canEdit(`story:${v.story}`),
+    }));
+  }
+
+  /**
+   * Opens the header or footer of a variant in the panel. A variant with no story yet gets one first,
+   * through the guard (FE-057 criterion 2). False, and nothing changes, when the page setup does not
+   * use the variant, when the person may not change the story, or when the guard refuses the new story.
+   */
+  editStory(part: StoryPart, variant: StoryVariant): boolean {
+    const found = this.storyVariants().find((v) => v.part === part && v.variant === variant);
+    if (found === undefined) return false;
+    if (found.story !== null) return this.openStory(found.story);
+    return this.#createStory(this.#state, (tr) => this.dispatchTransaction(tr), part, variant);
+  }
+
+  #open(
+    target: { kind: 'footnote' | 'story'; id: string },
+    label: string,
+    role: { part: StoryPart; variant: StoryVariant | null } | null = null,
+  ): void {
     this.#target = target;
-    this.panel.set({ ...target, label });
+    this.panel.set({
+      ...target,
+      label,
+      ...(role === null ? {} : { part: role.part, variant: role.variant }),
+    });
     this.revision.set(this.revision.get() + 1);
   }
 

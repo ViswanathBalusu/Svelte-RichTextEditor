@@ -42,6 +42,26 @@ export interface PanelInfo {
   id: string;
   /** Kept for spike S1; the shell names panels from its own string tables by `kind` (UX-064). */
   label: string;
+  /** For a header or footer story: which one (FE-057). */
+  part?: StoryPart;
+  /** For a header or footer story: the variant the page setup names it for; null when it names none. */
+  variant?: StoryVariant | null;
+}
+
+/** The part of the page a story is set in (03 §4.1). */
+export type StoryPart = 'header' | 'footer';
+
+/** The pages a header or footer is used on: every page, the first page, or the even pages. */
+export type StoryVariant = 'default' | 'first' | 'even';
+
+/** One variant of the header or the footer, as the panel offers it (FE-057 criterion 1). */
+export interface StoryVariantInfo {
+  readonly part: StoryPart;
+  readonly variant: StoryVariant;
+  /** The story the page setup names for it, or null when it has none yet. */
+  readonly story: string | null;
+  /** Whether the person may edit it, or create it when it has none. */
+  readonly editable: boolean;
 }
 
 export interface OutlineItem {
@@ -191,6 +211,8 @@ export interface CoreLabels {
   readonly footnote: string;
   /** Accessible name of the header or footer sub-editor. */
   readonly story: string;
+  /** Accessible name of the footer sub-editor; `story` is used when it is not given. */
+  readonly footer?: string;
 }
 
 /**
@@ -556,6 +578,10 @@ export interface CoreApi {
   readonly outline: ReadView<readonly OutlineItem[]>;
   run(command: CommandName): boolean;
   closePanel(): void;
+  /** The variants of the header and footer the page setup uses (FE-057); absent: no variant tabs. */
+  storyVariants?(): readonly StoryVariantInfo[];
+  /** Opens a variant in the panel, creating its story when it has none (FE-057). */
+  editStory?(part: StoryPart, variant: StoryVariant): boolean;
   focus(): void;
   /** Mounts the body view; returns the function that unmounts it. */
   mountBody(target: HTMLElement): () => void;

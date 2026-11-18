@@ -292,6 +292,12 @@ export const EN_GB = {
   // Panels and panes (13 §3; UX-019).
   'panel.footnote': 'Footnote',
   'panel.story': 'Header',
+  'panel.footer': 'Footer',
+  // The variants of a header or footer (FE-057): the pages each is used on.
+  'panel.variants': 'Header and footer variants',
+  'panel.variant.default': 'Every page',
+  'panel.variant.first': 'First page',
+  'panel.variant.even': 'Even pages',
   'panel.close': 'Close',
   'pane.outline': 'Navigation',
   'pane.comments': 'Comments',
@@ -927,6 +933,7 @@ export const EN_GB = {
   'surface.body': 'Document',
   'surface.footnote': 'Footnote text',
   'surface.story': 'Header',
+  'surface.footer': 'Footer',
 
   // Spelling and grammar findings (UX-041, UX-042; 13 §6.1). Shown only with a proofing port.
   'command.proofing.next': 'Next spelling or grammar issue',
