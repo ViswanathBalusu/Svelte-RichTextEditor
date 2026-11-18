@@ -112,6 +112,13 @@ export interface ServiceConfig {
   /** Scheduled maintenance (BE-052). */
   scheduler: boolean;
   /**
+   * The search index (BE-054): every stored checkpoint queues a job that indexes its words, and
+   * `GET /search` is offered to a service credential. Off by default (proposed, ADR 0388).
+   * The index copies the words of every document into more tables, which erasure and purge
+   * must then reach (HIS-039; SEC-045).
+   */
+  searchIndex: boolean;
+  /**
    * Webhook delivery (05 §7; BE-055, BE-056; PRM-053). Null: no event is delivered to a webhook
    * and `/webhooks` is not offered. Every number here is a setting with no default, because the
    * spec gives none (ADR 0146): `DOCEDIT_WEBHOOKS=true` needs all four of them.
@@ -187,6 +194,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   externalWorkers: false,
   outboxWaitMs: 10_000,
   scheduler: true,
+  searchIndex: false,
   webhooks: null,
 };
 
@@ -359,6 +367,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     externalWorkers: flag(env, 'DOCEDIT_EXTERNAL_WORKERS', databaseUrl !== null),
     outboxWaitMs: int(env, 'DOCEDIT_OUTBOX_WAIT_MS', DEFAULTS.outboxWaitMs),
     scheduler: flag(env, 'DOCEDIT_SCHEDULER', DEFAULTS.scheduler),
+    searchIndex: flag(env, 'DOCEDIT_SEARCH_INDEX', DEFAULTS.searchIndex),
     webhooks: webhookSettings(env),
   };
   checkConfig(config);

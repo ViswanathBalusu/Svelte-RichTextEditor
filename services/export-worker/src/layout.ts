@@ -26,6 +26,21 @@ export interface LayoutBlock {
   lineStarts?: number[];
   /** The page of each line start, same order. */
   linePages?: number[];
+  /**
+   * For a table: the page on which each row starts, in row order (a repeated header row is not
+   * listed again); null for a row whose cells hold no material the class reported (EXP-057).
+   */
+  rowPages?: Array<number | null>;
+  /**
+   * Indexes into `lineStarts` of the lines that start a new column: the line is on the same page as
+   * the line before it and higher up the page (EXP-057). Absent when the block has none.
+   */
+  columnBreaks?: number[];
+  /**
+   * `block` on a text block that the file could not report at line level: only `page` and `y` of
+   * its first material are given, and the page view keeps its own lines for it (EXP-057).
+   */
+  granularity?: 'block';
 }
 
 /**
@@ -101,6 +116,12 @@ export const LAYOUT_SCHEMA = {
           y: { type: 'integer', minimum: 0, maximum: 31680 },
           lineStarts: { type: 'array', items: { type: 'integer', minimum: 0 } },
           linePages: { type: 'array', items: { type: 'integer', minimum: 1, maximum: 2000 } },
+          rowPages: {
+            type: 'array',
+            items: { type: ['integer', 'null'], minimum: 1, maximum: 2000 },
+          },
+          columnBreaks: { type: 'array', items: { type: 'integer', minimum: 1 } },
+          granularity: { const: 'block' },
         },
       },
     },
@@ -233,6 +254,16 @@ const OPENS: Record<number, OpensWith> = {
   4: 'float',
 };
 
+/** The block kinds whose text the class reports line by line (`kinds` of map.json). */
+const TEXT_KINDS: ReadonlySet<string> = new Set([
+  'paragraph',
+  'heading',
+  'listItem',
+  'cellParagraph',
+  'storyParagraph',
+  'footnoteParagraph',
+]);
+
 /** Builds layout.json from the raw report and the converter's map. */
 export function buildLayout(
   raw: Raw,
@@ -255,6 +286,7 @@ export function buildLayout(
     };
   });
   const blocks: Record<string, LayoutBlock> = {};
+  const counted = new Map<string, number>();
   for (const [b, [page, y]] of [...raw.blocks.entries()].sort((x, z) => x[0] - z[0])) {
     const bid = id(b);
     if (bid) blocks[bid] = { page, y: toTwips(y) };
@@ -266,6 +298,54 @@ export function buildLayout(
       if (!e) continue;
       (e.lineStarts ??= []).push(off);
       (e.linePages ??= []).push(page);
+    }
+    // A line that starts a column: same page as the line before it, and higher up (EXP-057).
+    const last = new Map<string, [number, number]>();
+    const breaks = new Map<string, number[]>();
+    for (const [b, , page, y] of raw.lines) {
+      const bid = id(b);
+      const e = bid ? blocks[bid] : undefined;
+      if (!bid || !e) continue;
+      const k = (counted.get(bid) ?? 0) as number;
+      counted.set(bid, k + 1);
+      const before = last.get(bid);
+      if (before && before[0] === page && y < before[1]) {
+        const list = breaks.get(bid) ?? [];
+        list.push(k);
+        breaks.set(bid, list);
+      }
+      last.set(bid, [page, y]);
+    }
+    for (const [bid, list] of breaks) blocks[bid]!.columnBreaks = list;
+  }
+  // The rows of each table and the page each starts on, from the blocks its cells registered.
+  const byNumber = (n: number): LayoutBlock | undefined => {
+    const bid = id(n);
+    return bid ? blocks[bid] : undefined;
+  };
+  for (const [tid, ranges] of Object.entries(map.tables ?? {})) {
+    const e = blocks[tid];
+    if (!e) continue;
+    e.rowPages = ranges.map(([from, to]) => {
+      let page: number | null = null;
+      for (let n = from; n < to; n++) {
+        const p = byNumber(n)?.page;
+        if (p !== undefined && (page === null || p < page)) page = p;
+      }
+      return page;
+    });
+  }
+  // A text block with no line start under a compile at line level is reported at block level.
+  let textBlocks = 0;
+  let withLines = 0;
+  if (raw.level >= 2) {
+    for (let n = 1; n < map.blocks.length; n++) {
+      const bid = id(n);
+      const e = bid ? blocks[bid] : undefined;
+      if (!bid || !e || !TEXT_KINDS.has(map.kinds[n] ?? '')) continue;
+      textBlocks++;
+      if (e.lineStarts?.length) withLines++;
+      else e.granularity = 'block';
     }
   }
   // A field is reported under its identifier, from the converter's map; a number the map does not
@@ -284,7 +364,8 @@ export function buildLayout(
   return {
     seq: meta.seq,
     classVersion: meta.classVersion,
-    granularity: raw.level >= 2 ? 'line' : 'block',
+    // `line` when the compile reported lines, and at least one text block has them (EXP-057).
+    granularity: raw.level >= 2 && (textBlocks === 0 || withLines > 0) ? 'line' : 'block',
     unit: 'twip',
     pages,
     blocks,
@@ -340,6 +421,17 @@ export function validateLayout(value: unknown): string[] {
         errors.push(`blocks.${k}.lineStarts`);
       if (lp !== undefined && (!Array.isArray(lp) || !lp.every((x) => isInt(x, 1, pageCount))))
         errors.push(`blocks.${k}.linePages`);
+      const rp = b['rowPages'];
+      if (
+        rp !== undefined &&
+        (!Array.isArray(rp) || !rp.every((x) => x === null || isInt(x, 1, pageCount)))
+      )
+        errors.push(`blocks.${k}.rowPages`);
+      const cb = b['columnBreaks'];
+      if (cb !== undefined && (!Array.isArray(cb) || !cb.every((x) => isInt(x, 1))))
+        errors.push(`blocks.${k}.columnBreaks`);
+      if (b['granularity'] !== undefined && b['granularity'] !== 'block')
+        errors.push(`blocks.${k}.granularity`);
     }
   const fields = v['fields'];
   if (typeof fields !== 'object' || fields === null) errors.push('fields');

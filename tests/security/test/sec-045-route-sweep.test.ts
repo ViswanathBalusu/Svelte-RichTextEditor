@@ -129,7 +129,6 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   participantConsent: NOT_OFFERED,
   participantVerify: NOT_OFFERED,
   participantComplete: NOT_OFFERED,
-  participantDecline: NOT_OFFERED,
   signField: NOT_OFFERED,
   // HIS-040: the route needs a purge pool, which only an operator supplies.
   tombstoneCommit: 'this server does not remove payloads',
@@ -169,7 +168,8 @@ function bodyFor(operationId: string): unknown {
     participantConsent: {},
     participantVerify: {},
     participantComplete: {},
-    participantDecline: {},
+    participantDecline: { reason: 'sweep' },
+    voidWorkflow: { reason: 'sweep' },
     signField: {},
   };
   return bodies[operationId];

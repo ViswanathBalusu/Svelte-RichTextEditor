@@ -13,10 +13,14 @@ import {
   BASE_PARAGRAPH,
   BASE_RUN,
   computeLabels,
+  referenceText,
   resolveLabelRun,
   resolveParagraph,
   resolveRun,
   styleTable,
+  resolveTableFormat,
+  type DocumentLabels,
+  type LabelOptions,
   type ResolvedParagraph,
   type RunProperties,
   type StyleTable,
@@ -50,6 +54,8 @@ export interface FlowText {
   readonly size: number;
   /** For `noteRef`: the footnote's identifier. For `field`: the field kind. */
   readonly ref?: string;
+  /** For `equation`: the LaTeX source, which a math measurer sizes (FE-064 criterion 4). */
+  readonly latex?: string;
 }
 
 export interface FlowTab {
@@ -144,6 +150,20 @@ export interface FlowBox {
   readonly align: 'left' | 'center' | 'right';
   readonly keepNext: boolean;
   readonly regionId: string | null;
+  /** For `equation`: the LaTeX source and the font around it, which a math measurer sizes. */
+  readonly latex?: string;
+  readonly font?: FlowFont;
+  /**
+   * For a numbered `equation`: its number from the shared numbering algorithm, without the
+   * parentheses the painter shows around it (03 §4.3).
+   */
+  readonly number?: string;
+  /**
+   * The CDM range the block covers, as offsets inside it: 0 to the size of its content, or to 1 for
+   * an atom (FE-078 criterion 2; `blockSpan`).
+   */
+  readonly start?: number;
+  readonly end?: number;
 }
 
 export interface FlowBreak {
@@ -159,6 +179,9 @@ export interface FlowCell {
   readonly vAlign: 'top' | 'center' | 'bottom';
   readonly margins: FlowInsets;
   readonly blocks: readonly FlowBlock[];
+  /** The CDM range of the cell inside its table's content (FE-078 criterion 2). */
+  readonly start?: number;
+  readonly end?: number;
 }
 
 export interface FlowRow {
@@ -168,6 +191,9 @@ export interface FlowRow {
   readonly cantSplit: boolean;
   readonly header: boolean;
   readonly cells: readonly FlowCell[];
+  /** The CDM range of the row inside its table's content (FE-078 criterion 2). */
+  readonly start?: number;
+  readonly end?: number;
 }
 
 export interface FlowInsets {
@@ -187,6 +213,9 @@ export interface FlowTable {
   readonly bordered: boolean;
   readonly rows: readonly FlowRow[];
   readonly regionId: string | null;
+  /** The CDM range of the table: 0 to the size of its rows (FE-078 criterion 2). */
+  readonly start?: number;
+  readonly end?: number;
 }
 
 export type FlowBlock = FlowParagraph | FlowTable | FlowBox | FlowBreak;
@@ -291,6 +320,22 @@ function inlineSize(node: CdmNode): number {
   return 1;
 }
 
+/**
+ * A node's size in CDM positions: text by UTF-16 length, a node with content by its content plus two
+ * (its open and close), any other node one.
+ */
+function nodeSize(node: CdmNode): number {
+  if (node.type === 'text') return node.text?.length ?? 0;
+  if (node.content === undefined) return 1;
+  return 2 + contentSize(node);
+}
+
+const contentSize = (node: CdmNode): number =>
+  (node.content ?? []).reduce((sum, child) => sum + nodeSize(child), 0);
+
+/** The range a box or table covers inside its block: its content, or 1 for an atom (FE-078). */
+const blockSpan = (node: CdmNode): number => (node.content === undefined ? 1 : contentSize(node));
+
 // ---------------------------------------------------------------------------------------------
 // Numbering (03 §7). The labels come from the shared algorithm (`computeLabels`, packages/model);
 // a list level's indents and the run format of its label come from the model's cascade (FE-077).
@@ -360,29 +405,12 @@ interface Context {
    * CDM-042): the format of `footnoteFormat` and the restart of `footnoteRestart` (FE-084).
    */
   readonly footnoteLabels: ReadonlyMap<string, string>;
+  /** The document's labels from the shared numbering algorithm (FE-077). */
+  readonly labels: DocumentLabels;
   /** The label of each numbered paragraph (lists and headings), by paragraph identifier (FE-077). */
   readonly listLabels: ReadonlyMap<string, string>;
   /** The paragraphs whose style or direct formatting turns contextualSpacing on (CDM-043). */
   readonly contextual: Set<FlowBlock>;
-}
-
-/** A property through a style's `basedOn` chain, stopping before `stopAt` (exclusive). */
-function chainValue(
-  table: StyleTable,
-  styleId: string | null,
-  name: string,
-  stopAt: string | null,
-): unknown {
-  const seen = new Set<string>();
-  for (let id = styleId; id !== null && id !== stopAt && !seen.has(id) && seen.size < 10;) {
-    seen.add(id);
-    const style = table.styles.get(id);
-    if (!style) return null;
-    const value = style[name];
-    if (value !== undefined && value !== null) return value;
-    id = str(style['basedOn']);
-  }
-  return null;
 }
 
 /** What the cascade resolved for one paragraph: every run in it starts from this. */
@@ -565,7 +593,27 @@ function paragraphShape(ctx: Context, scope: Scope): ParagraphShape {
   };
 }
 
-function fieldText(node: CdmNode): string {
+/**
+ * The text a field prints. A `seq` field and a `ref` field print what the shared numbering
+ * algorithm computes (`computeLabels`, `referenceText`; 03 §4.4, §7), as literal text; the field's
+ * cached text is the fallback where the algorithm gives none (a target that carries no label, a
+ * `styleRef`). `seqIndex` is the `seq` field's place among the `seq` fields of its block.
+ */
+function fieldText(
+  labels: DocumentLabels,
+  node: CdmNode,
+  ownerId: string,
+  seqIndex: number,
+): string {
+  const kind = str(node.attrs?.['kind']);
+  if (kind === 'seq') {
+    const label = labels.sequences.get(ownerId)?.[seqIndex];
+    if (label) return label.text;
+  } else if (kind === 'ref') {
+    const target = str(node.attrs?.['target']);
+    const text = target === null ? null : referenceText(labels, target);
+    if (text !== null) return text;
+  }
   const cached = str(node.attrs?.['cached']);
   if (cached) return cached;
   switch (str(node.attrs?.['kind'])) {
@@ -579,6 +627,12 @@ function fieldText(node: CdmNode): string {
       return '?';
   }
 }
+
+/** The LaTeX source of an equation node, when it has one, as the property a flow node carries. */
+const latexOf = (node: CdmNode): { latex: string } | Record<string, never> => {
+  const latex = str(node.attrs?.['latex']);
+  return latex === null ? {} : { latex };
+};
 
 /** Stand-in text for an atom: spaces become no-break spaces so that it never breaks. */
 const atomText = (s: string): string => s.replace(/ /g, ' ') || ' ';
@@ -645,8 +699,12 @@ function paragraphBlocks(
     });
     inlines.push({ kind: 'tab', font: o.label.font, offset: 0, size: 0, toPt: o.shape.indentLeft });
   }
+  // The place of each `seq` field among the `seq` fields of this block, which is how the numbering
+  // algorithm lists them (`DocumentLabels.sequences`).
+  let seqCount = 0;
   for (const node of content) {
     const marks = node.marks ?? [];
+    const seqIndex = node.type === 'field' && node.attrs?.['kind'] === 'seq' ? seqCount++ : -1;
     const size = inlineSize(node);
     const at = offset;
     offset += size;
@@ -722,6 +780,7 @@ function paragraphBlocks(
           kind: 'text',
           role: 'equation',
           text: atomText(str(node.attrs?.['latex']) ?? ''),
+          ...latexOf(node),
           // Italic unless the run says otherwise: a mark the run carries wins.
           font: fontOf(
             ctx,
@@ -736,7 +795,7 @@ function paragraphBlocks(
         inlines.push({
           kind: 'text',
           role: 'field',
-          text: atomText(fieldText(node)),
+          text: atomText(fieldText(ctx.labels, node, o.id, seqIndex)),
           font: fontOf(ctx, o.scope, marks),
           offset: at,
           size,
@@ -881,9 +940,11 @@ function paragraphOf(
 function tableOf(ctx: Context, node: CdmNode, regionId: string | null): FlowTable {
   const id = str(node.attrs?.['id']) ?? 'unidentified';
   const tableStyle = str(node.attrs?.['style']);
-  const styleValue = (name: string): unknown =>
-    node.attrs?.[name] ?? (tableStyle ? chainValue(ctx.table, tableStyle, name, null) : null);
-  const cellMargins = insetsOf(styleValue('cellMargins'), {
+  // The table's borders and cell margins come from the model's table cascade (CDM-028, CDM-041): a
+  // direct value on the table over its table style's chain. A style the cascade cannot resolve
+  // (missing, cyclic) leaves both unset, as the validator reports it separately (I4, I5).
+  const format = resolveTableFormat(ctx.table, node.attrs ?? undefined);
+  const cellMargins = insetsOf(format.ok ? format.value.cellMargins : null, {
     top: 0,
     right: 5.4,
     bottom: 0,
@@ -893,27 +954,40 @@ function tableOf(ctx: Context, node: CdmNode, regionId: string | null): FlowTabl
   const grid = Array.isArray(node.attrs?.['grid'])
     ? (node.attrs?.['grid'] as number[]).map(pt)
     : [];
-  const rows: FlowRow[] = (node.content ?? []).map((row, r) => ({
-    id: str(row.attrs?.['id']) ?? `${id}/r${r}`,
-    height: num(row.attrs?.['height']) !== null ? pt(num(row.attrs?.['height']) ?? 0) : null,
-    heightRule: ((): FlowRow['heightRule'] => {
-      const rule = str(attr(row, 'heightRule'));
-      return rule === 'atLeast' || rule === 'exact' ? rule : 'auto';
-    })(),
-    cantSplit: bool(attr(row, 'cantSplit')) ?? false,
-    header: r < headerRows,
-    cells: (row.content ?? []).map((cell, c) => {
-      const v = str(attr(cell, 'vAlign'));
-      return {
-        id: str(cell.attrs?.['id']) ?? `${id}/r${r}c${c}`,
-        colspan: num(attr(cell, 'colspan')) ?? 1,
-        rowspan: num(attr(cell, 'rowspan')) ?? 1,
-        vAlign: v === 'center' || v === 'bottom' ? v : 'top',
-        margins: insetsOf(cell.attrs?.['margins'], cellMargins),
-        blocks: blocksOf(ctx, cell.content ?? [], tableStyle ?? 'TableNormal', regionId),
-      };
-    }),
-  }));
+  // Row and cell ranges are offsets inside the table's content.
+  let rowStart = 0;
+  const rows: FlowRow[] = (node.content ?? []).map((row, r) => {
+    const start = rowStart;
+    rowStart += nodeSize(row);
+    let cellStart = start + 1;
+    return {
+      start,
+      end: rowStart,
+      id: str(row.attrs?.['id']) ?? `${id}/r${r}`,
+      height: num(row.attrs?.['height']) !== null ? pt(num(row.attrs?.['height']) ?? 0) : null,
+      heightRule: ((): FlowRow['heightRule'] => {
+        const rule = str(attr(row, 'heightRule'));
+        return rule === 'atLeast' || rule === 'exact' ? rule : 'auto';
+      })(),
+      cantSplit: bool(attr(row, 'cantSplit')) ?? false,
+      header: r < headerRows,
+      cells: (row.content ?? []).map((cell, c) => {
+        const v = str(attr(cell, 'vAlign'));
+        const from = cellStart;
+        cellStart += nodeSize(cell);
+        return {
+          start: from,
+          end: cellStart,
+          id: str(cell.attrs?.['id']) ?? `${id}/r${r}c${c}`,
+          colspan: num(attr(cell, 'colspan')) ?? 1,
+          rowspan: num(attr(cell, 'rowspan')) ?? 1,
+          vAlign: v === 'center' || v === 'bottom' ? v : 'top',
+          margins: insetsOf(cell.attrs?.['margins'], cellMargins),
+          blocks: blocksOf(ctx, cell.content ?? [], tableStyle ?? 'TableNormal', regionId),
+        };
+      }),
+    };
+  });
   const align = str(node.attrs?.['align']);
   return {
     kind: 'table',
@@ -922,9 +996,11 @@ function tableOf(ctx: Context, node: CdmNode, regionId: string | null): FlowTabl
     align: align === 'center' ? 'center' : align === 'end' ? 'right' : 'left',
     headerRows,
     cellMargins,
-    bordered: styleValue('borders') !== null,
+    bordered: (format.ok ? format.value.borders : null) !== null,
     rows,
     regionId,
+    start: 0,
+    end: rowStart,
   };
 }
 
@@ -943,7 +1019,22 @@ function lineHeightOf(font: FlowFont): number {
   return font.sizePt * 1.2;
 }
 
+/** The flow blocks of one CDM block; each box it makes covers the block's range (FE-078). */
 function blockOf(
+  ctx: Context,
+  node: CdmNode,
+  tableStyle: string | null,
+  regionId: string | null,
+): FlowBlock[] {
+  const id = str(node.attrs?.['id']) ?? 'unidentified';
+  return blocksFor(ctx, node, tableStyle, regionId).map((b) =>
+    b.kind === 'box' && b.id === id && b.start === undefined
+      ? { ...b, start: 0, end: blockSpan(node) }
+      : b,
+  );
+}
+
+function blocksFor(
   ctx: Context,
   node: CdmNode,
   tableStyle: string | null,
@@ -1012,6 +1103,9 @@ function blockOf(
           align: 'center',
           keepNext: false,
           regionId,
+          ...latexOf(node),
+          font,
+          ...(ctx.labels.equations.has(id) ? { number: ctx.labels.equations.get(id)! } : {}),
         },
       ];
     }
@@ -1220,8 +1314,18 @@ function spaceBlocks(
   );
 }
 
+/** What `toFlow` takes besides the document. */
+export interface ToFlowOptions {
+  /**
+   * The counter effects of the hidden regions of a projection, by block identifier, as the server
+   * computes them from the full document (`counterEffects`; ADR 0019). With them the labels of a
+   * projection are the full document's (owner decision 11); without them it numbers what it holds.
+   */
+  readonly effects?: LabelOptions['effects'];
+}
+
 /** Converts a CDM envelope into flow blocks. */
-export function toFlow(envelope: CdmEnvelopeLike): FlowDocument {
+export function toFlow(envelope: CdmEnvelopeLike, options: ToFlowOptions = {}): FlowDocument {
   const doc = envelope.doc;
   const defs = doc.content?.find((n) => n.type === 'defs');
   const body = doc.content?.find((n) => n.type === 'body');
@@ -1229,7 +1333,10 @@ export function toFlow(envelope: CdmEnvelopeLike): FlowDocument {
   const pageSetups = new Map<string, CdmNode>();
   for (const d of defs?.content ?? [])
     if (d.type === 'page_setup') pageSetups.set(str(d.attrs?.['id']) ?? '', d);
-  const labels = computeLabels(doc as unknown as Parameters<typeof computeLabels>[0]);
+  const labels = computeLabels(
+    doc as unknown as Parameters<typeof computeLabels>[0],
+    options.effects === undefined ? {} : { effects: options.effects },
+  );
   const ctx: Context = {
     table: tolerantTable(styleTable(doc as unknown as Parameters<typeof styleTable>[0])),
     pageSetups,
@@ -1239,6 +1346,7 @@ export function toFlow(envelope: CdmEnvelopeLike): FlowDocument {
     footnoteFormat: (settings && str(attr(settings, 'footnoteFormat'))) ?? 'decimal',
     docLang: (settings && str(attr(settings, 'lang'))) ?? null,
     footnoteLabels: labels.footnotes,
+    labels,
     listLabels: new Map([...labels.lists].map(([paragraph, list]) => [paragraph, list.text])),
     contextual: new Set<FlowBlock>(),
   };

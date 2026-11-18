@@ -333,7 +333,13 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
     return join(lines);
   };
 
+  const rowBlocks: Array<[number, number]> = [];
   const emitRow = (r: number, repeated: boolean): void => {
+    const first = ctx.blocks.length;
+    emitRowCells(r, repeated);
+    if (!repeated) rowBlocks[r] = [first, ctx.blocks.length];
+  };
+  const emitRowCells = (r: number, repeated: boolean): void => {
     const row = rows[r]!;
     const rowId = idOf(row);
     void rowId;
@@ -446,6 +452,9 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
       line(ctx, t('\\DEtblend'));
     }
   });
+  // The rows of a table in the body flow, for the rows per page of layout.json (EXP-057).
+  if (id && rowBlocks.length === rows.length && !ctx.tableRows.has(id))
+    ctx.tableRows.set(id, rowBlocks);
   flow.prev = null;
 }
 

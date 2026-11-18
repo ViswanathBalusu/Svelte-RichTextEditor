@@ -19,8 +19,8 @@
  *   and ties broken by document identifier. One hit per document: its best readable entry.
  *   The hit carries no visibility class, so a result does not reveal which class matched.
  *
- * This is the in-memory index. The PostgreSQL search tables, the indexer job that a checkpoint
- * triggers, the `GET /search` route and the purge pipeline are not built here (see BE-054 Notes).
+ * This is the in-memory index. The PostgreSQL index is search-index-pg.ts, the indexer job is
+ * search-indexer.ts and the route is search-routes.ts.
  */
 import type { JsonNode } from '@docedit/model';
 
@@ -108,6 +108,19 @@ export interface CheckpointInput {
   readonly visibility: string;
   /** The content as the class may read it (projected by the caller). */
   readonly content: JsonNode;
+  /**
+   * The occurrences of each word of `content`, when the caller has counted them already (the
+   * indexer job counts in a worker thread, BE-054 criterion 5). Absent: counted from `content`.
+   */
+  readonly tokens?: ReadonlyMap<string, number>;
+}
+
+/** The occurrences of each word of a checkpoint's text. */
+export function tokenCounts(content: JsonNode): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const text of extractSearchText(content))
+    for (const token of searchTokens(text)) counts.set(token, (counts.get(token) ?? 0) + 1);
+  return counts;
 }
 
 export interface SearchQuery {
@@ -148,9 +161,7 @@ export class SearchIndex {
     const key = entryKey(input.tenant, input.doc, input.visibility);
     const held = this.#entries.get(key);
     if (held && held.seq > input.seq) return false;
-    const counts = new Map<string, number>();
-    for (const text of extractSearchText(input.content))
-      for (const token of searchTokens(text)) counts.set(token, (counts.get(token) ?? 0) + 1);
+    const counts = new Map(input.tokens ?? tokenCounts(input.content));
     this.#entries.set(key, {
       tenant: input.tenant,
       doc: input.doc,

@@ -57,7 +57,9 @@ const HOSTILE: Array<{ name: string; bytes: Uint8Array }> = [
   },
   {
     name: 'word/embeddings/object1.bin',
-    bytes: Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, 0xff, 0xfe, 0x00, 0x3c, 0x73, 0x63, 0x72, 0x69]),
+    bytes: Uint8Array.from([
+      0xd0, 0xcf, 0x11, 0xe0, 0xff, 0xfe, 0x00, 0x3c, 0x73, 0x63, 0x72, 0x69,
+    ]),
   },
   {
     name: 'word/embeddings/script1.xml',
@@ -111,8 +113,7 @@ beforeEach(() => {
       CALLS.push(name);
       throw new Error(`${name} must not be called during import`);
     };
-  for (const name of ['fetch', 'XMLHttpRequest', 'WebSocket'])
-    vi.stubGlobal(name, record(name));
+  for (const name of ['fetch', 'XMLHttpRequest', 'WebSocket']) vi.stubGlobal(name, record(name));
 });
 
 afterEach(() => {

@@ -152,6 +152,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `view.zoomIn` | view | zoom |  |  |
 | `view.zoomOut` | view | zoom |  |  |
 | `view.zoomReset` | view | zoom |  |  |
+| `workflow.send` | review | fields-and-forms |  |  |
 
 ## Configuration
 

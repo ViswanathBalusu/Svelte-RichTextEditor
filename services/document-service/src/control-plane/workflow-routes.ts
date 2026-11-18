@@ -15,9 +15,12 @@
  */
 import {
   activeParticipantIds,
+  bindParticipant,
   checkWorkflowBody,
+  fieldOwnersOf,
   sendProblem,
   sendWorkflow,
+  snapshotOf,
   workflowEvent,
   type SendProblem,
   type WorkflowEventName,
@@ -25,6 +28,10 @@ import {
 } from '@docedit/authority';
 import { createHash } from 'node:crypto';
 import { canonicalize } from '@docedit/model';
+import { recordCorrection, recordResume } from '../workflow/correction.ts';
+import { recordDecline, recordVoid, type StopOutcome } from '../workflow/stop.ts';
+import { recordOf } from '../workflow/record.ts';
+import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
 import { checkIfMatch } from './http.ts';
 import { json, notModified, type Kit } from './kit.ts';
@@ -244,5 +251,199 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     });
   };
 
-  return { getWorkflow, putWorkflow, sendWorkflow: sendWorkflowRoute };
+  /** The webhooks of a transition carry the control commit's `seq` and the chain head (ADR 0382). */
+  const raiseAll = async (
+    ctx: Parameters<Handler>[0],
+    doc: string,
+    out: Extract<ProgressOutcome, { ok: true }>,
+  ): Promise<void> => {
+    const ref = k.refOf(ctx, doc);
+    const head = await d.logs.head(ref);
+    const chain =
+      (await d.logs.state?.(ref))?.chainHead ??
+      out.resource.sentHash?.replace(/^sha256:/, '') ??
+      '';
+    const at = { seq: out.control?.seq ?? head.seq, chainHead: out.control?.chainHead ?? chain };
+    for (const e of out.raised) {
+      const event = workflowEvent(e.name, {
+        workflow: out.resource.id,
+        document: doc,
+        ...at,
+        ...(e.participant !== undefined ? { participant: e.participant } : {}),
+      });
+      k.emit(ctx, event.type, doc, { ...event.data });
+    }
+  };
+
+  const problemOf = (
+    doc: string,
+    problem: Extract<ProgressOutcome | StopOutcome, { ok: false }>['problem'],
+  ) => {
+    switch (problem.code) {
+      case 'reason_required':
+        return new ApiError('validation_failed', 'a reason is required', {
+          violations: [{ path: '/reason', rule: 'a reason is required' }],
+        });
+      case 'not_found':
+        return new ApiError('not_found', `document ${doc} has no workflow`);
+      case 'forbidden':
+        return new ApiError('forbidden', 'the caller may not do this');
+      case 'invalid_state':
+        return new ApiError('conflict', `the workflow is ${problem.state}`);
+      case 'conflict':
+        return new ApiError('conflict', `the workflow is ${problem.state}`);
+    }
+  };
+
+  const transitionDeps = () => ({
+    workflows: store(),
+    grants: d.grants,
+    logs: d.logs,
+    notifier: d.notifier,
+    ...(d.audit ? { audit: d.audit } : {}),
+    now: d.now,
+    controlWaitMs: CONTROL_WAIT_MS,
+  });
+
+  /**
+   * `POST /documents/{id}/workflow/correct` (12 §6.2 `correct`; FRW-032; method and path assumed,
+   * G95). Needs `manage`. An `in_progress` workflow moves to `correcting`: the document is unlocked
+   * for the owner, the participants are paused, a control commit records it and `corrected` is
+   * raised. Any other state is `conflict`.
+   */
+  const correctWorkflowRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    guard(ctx.caller, 'manage', doc);
+    await liveDocument(ctx, doc);
+    const out = await recordCorrection(transitionDeps(), {
+      ref: k.refOf(ctx, doc),
+      actor: ctx.caller.actor,
+    });
+    if (!out.ok) throw problemOf(doc, out.problem);
+    await raiseAll(ctx, doc, out);
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-cache',
+    });
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/resume` (12 §6.2 `resume`; FRW-032; method and path assumed,
+   * G95). Needs `manage`. The document at the head is compared with the document at `sentSeq`
+   * (the whole document, not the caller's projection); the participants the change concerns are
+   * reset, the document is locked again and the workflow returns to `in_progress`.
+   */
+  const resumeWorkflowRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const workflows = store();
+    guard(ctx.caller, 'manage', doc);
+    await liveDocument(ctx, doc);
+    const ref = k.refOf(ctx, doc);
+    const current = await workflows.read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (current.state !== 'correcting' || current.sentSeq === null)
+      throw new ApiError(
+        'conflict',
+        `the workflow is ${current.state}; only a corrected one is resumed`,
+      );
+    const head = await d.logs.head(ref);
+    const [sent, now] = await Promise.all([
+      d.content.rebuild(ref, head.incarnation, current.sentSeq),
+      d.content.rebuild(ref, head.incarnation, head.seq),
+    ]);
+    const out = await recordResume(transitionDeps(), {
+      ref,
+      actor: ctx.caller.actor,
+      sent: snapshotOf({ cdm: sent.cdm, requires: sent.requires, doc: sent.doc }),
+      head: snapshotOf({ cdm: now.cdm, requires: now.requires, doc: now.doc }),
+      owners: fieldOwnersOf(
+        { cdm: now.cdm, requires: now.requires, doc: now.doc },
+        current.participants,
+      ),
+    });
+    if (!out.ok) throw problemOf(doc, out.problem);
+    await raiseAll(ctx, doc, out);
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-cache',
+    });
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/void` (12 §6.2 `void`; FRW-033; method and path assumed, G95).
+   * Needs `manage` and a reason. A workflow that is `sent` or `in_progress` becomes `voided`; the
+   * document stays locked and nobody fills it any more. Any other state is `conflict`; a blank
+   * reason is `validation_failed` and nothing changes.
+   */
+  const voidWorkflowRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    guard(ctx.caller, 'manage', doc);
+    await liveDocument(ctx, doc);
+    const body = (await ctx.body()) as { reason: string };
+    const out = await recordVoid(transitionDeps(), {
+      ref: k.refOf(ctx, doc),
+      actor: ctx.caller.actor,
+      reason: body.reason,
+    });
+    if (!out.ok) throw problemOf(doc, out.problem);
+    await raiseAll(ctx, doc, out);
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-cache',
+    });
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/participants/{pid}/decline` (12 §6.2 `decline`; FRW-033; method
+   * and prefix assumed, G95). The caller is a user whose token binds to `pid` (`wfp` names the
+   * participant and `sub` is the one recorded for them, `bindParticipant`, FRW-038), or the host's
+   * service credential. Any other user is `forbidden`. A participant who is a `cc`,
+   * or a workflow that is not `in_progress`, is refused; a blank reason is `validation_failed`.
+   */
+  const declineRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const pid = ctx.params['pid']!;
+    const identity = ctx.caller.identity;
+    await liveDocument(ctx, doc);
+    const current = await store().read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    // The host's service credential acts for the participant it names (05 §6.1: it may act on every
+    // route); a user acts only for the participant their token is bound to.
+    if (ctx.caller.kind === 'user') {
+      if (identity === null || identity.docs[doc] === undefined)
+        throw new ApiError('forbidden', 'the token does not cover this document');
+      const bound = bindParticipant(
+        {
+          sub: identity.sub,
+          ...(identity.asserted?.wfp !== undefined ? { wfp: identity.asserted.wfp } : {}),
+        },
+        recordOf(current),
+      );
+      if (!bound.ok || bound.participant.id !== pid)
+        throw new ApiError('forbidden', 'the token is not bound to this participant');
+    }
+    const body = (await ctx.body()) as { reason: string };
+    const out = await recordDecline(transitionDeps(), {
+      ref: k.refOf(ctx, doc),
+      actor: ctx.caller.actor,
+      participant: pid,
+      reason: body.reason,
+    });
+    if (!out.ok) throw problemOf(doc, out.problem);
+    await raiseAll(ctx, doc, out);
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-cache',
+    });
+  };
+
+  return {
+    getWorkflow,
+    putWorkflow,
+    sendWorkflow: sendWorkflowRoute,
+    voidWorkflow: voidWorkflowRoute,
+    participantDecline: declineRoute,
+    correctWorkflow: correctWorkflowRoute,
+    resumeWorkflow: resumeWorkflowRoute,
+  };
 }

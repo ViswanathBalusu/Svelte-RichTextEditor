@@ -7,6 +7,7 @@
  * This module does not load fonts. The caller passes a `FontArrivals` source (in the browser, the
  * page's `document.fonts`; in tests, a fake) that resolves once per alias.
  */
+import { cachingMathMeasurer, type MathMeasurer } from './math-measure.ts';
 import { cachingMeasurer, type TextMeasurer } from './measure.ts';
 
 /**
@@ -48,6 +49,11 @@ export class FontEpoch {
   /** A measurer whose cache is keyed by the current epoch (`cachingMeasurer`, measure.ts). */
   measurer(inner: TextMeasurer): TextMeasurer {
     return cachingMeasurer(inner, this.#value);
+  }
+
+  /** A math measurer whose cache is keyed by the current epoch (`cachingMathMeasurer`). */
+  mathMeasurer(inner: MathMeasurer): MathMeasurer {
+    return cachingMathMeasurer(inner, this.#value);
   }
 
   /**

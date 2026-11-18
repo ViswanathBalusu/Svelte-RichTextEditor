@@ -12,8 +12,9 @@
  * or `failed`), each with one diagnostic that names a block. The read view's poll waits one second
  * between reports (read-view.ts), so the progress text is seen.
  *
- * Not covered here: moving the editor to a diagnostic's block (criterion 4, needs the editing core)
- * and a change of `view` while the element is open (FE-065 criterion 3).
+ * Not covered here: moving the editor to a diagnostic's block (criterion 4, in
+ * e2e/fe-072-open-in-editor.spec.ts) and a change of `view` while the element is open (FE-065
+ * criterion 3, in e2e/fe-065-view-switch.spec.ts).
  */
 import { expect, test, type Page } from '@playwright/test';
 import { FILTERED_BROWSERS, openEmbed } from './embed-helpers.ts';

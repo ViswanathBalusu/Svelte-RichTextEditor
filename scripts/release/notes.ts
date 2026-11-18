@@ -76,6 +76,71 @@ export interface ImageRecord {
   sbom: string;
 }
 
+/** The lossless DOCX round trip of ADR 0017 on the SPK-028 corpus (EXP-120), as `roundtrip-report.ts` writes it. */
+export interface RoundTripSummary {
+  corpus: { files: number; version: string };
+  r0: { pass: number; of: number };
+  r1: { pass: number; of: number };
+  failures: readonly string[];
+}
+
+/** The summary of a `roundtrip-report.ts` JSON file, or null when the text is not one. */
+export function parseRoundTrip(text: string): RoundTripSummary | null {
+  try {
+    const j = JSON.parse(text) as Partial<RoundTripSummary>;
+    const count = (x: unknown): x is { pass: number; of: number } =>
+      !!x &&
+      typeof (x as { pass?: unknown }).pass === 'number' &&
+      typeof (x as { of?: unknown }).of === 'number';
+    if (
+      !j.corpus ||
+      typeof j.corpus.version !== 'string' ||
+      typeof j.corpus.files !== 'number' ||
+      !count(j.r0) ||
+      !count(j.r1) ||
+      !Array.isArray(j.failures)
+    )
+      return null;
+    return {
+      corpus: { files: j.corpus.files, version: j.corpus.version },
+      r0: { pass: j.r0.pass, of: j.r0.of },
+      r1: { pass: j.r1.pass, of: j.r1.of },
+      failures: j.failures.map(String),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The lossless round-trip section: the corpus version and the pass rates (EXP-120, criterion 4). */
+export function renderRoundTrip(r: RoundTripSummary | null | undefined): string[] {
+  const head = ['## Lossless DOCX round trip', ''];
+  if (!r)
+    return [
+      ...head,
+      'Not measured for this release: the round-trip report did not run (see the release steps).',
+      '',
+    ];
+  return [
+    ...head,
+    `Corpus version \`${r.corpus.version}\` (${r.corpus.files} files; the first 16 hexadecimal digits of the SHA-256 of \`packages/export-docx/corpus/SOURCES.md\`).`,
+    '',
+    '| Contract (ADR 0017) | Passed | Of | Pass rate |',
+    '|---|---:|---:|---:|',
+    `| R0, import and export without edits | ${r.r0.pass} | ${r.r0.of} | ${rate(r.r0)} |`,
+    `| R1, scripted edits | ${r.r1.pass} | ${r.r1.of} | ${rate(r.r1)} |`,
+    '',
+    r.failures.length
+      ? `${r.failures.length} failure(s); the first: ${r.failures[0]}`
+      : 'No failures.',
+    '',
+  ];
+}
+
+function rate(x: { pass: number; of: number }): string {
+  return x.of ? `${((100 * x.pass) / x.of).toFixed(1)} %` : 'not applicable';
+}
+
 export interface NotesInput {
   version: string;
   date: string;
@@ -87,6 +152,8 @@ export interface NotesInput {
   missing: readonly string[];
   changes: readonly ChangeEntry[];
   coverage: readonly CoverageChange[];
+  /** The result of the lossless round-trip report; absent when it did not run (EXP-120). */
+  roundTrip?: RoundTripSummary | null;
   /** The workflow identity that signs images, for the verification commands. */
   signer?: { repository: string; workflow: string };
 }
@@ -175,6 +242,7 @@ export function renderReleaseNotes(n: NotesInput): string {
       );
     p.push('');
   }
+  p.push(...renderRoundTrip(n.roundTrip));
   p.push(
     '## Accessibility',
     '',

@@ -93,6 +93,15 @@ import {
 import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
+import { SearchIndex } from './control-plane/search-index.ts';
+import { PgSearchIndex } from './control-plane/search-index-pg.ts';
+import {
+  createSearchIndexHandler,
+  enqueueIndexing,
+  SEARCH_INDEX_KIND,
+  type IndexTarget,
+} from './control-plane/search-indexer.ts';
+import { Workers } from './data-plane/workers.ts';
 import { Cursors } from './control-plane/http.ts';
 import {
   MemoryIdempotencyStore,
@@ -180,6 +189,7 @@ import type {
   AuditStore,
   CheckpointIndex,
   CheckpointStore,
+  DocRef,
   DocumentStore,
   GrantStore,
   LogStore,
@@ -352,6 +362,8 @@ export interface Service {
   events: EventSink;
   /** The webhook dispatcher when `config.webhooks` is set (PRM-053), or null. It is `events`. */
   webhooks: WebhookDispatcher | null;
+  /** The worker threads that count the words of a checkpoint (BE-054), or null when search is off. */
+  searchWorkers: Workers | null;
   /** The runner of the in-process export handlers, or null. */
   runner: JobRunner | null;
   /** Every runner of the process: maintenance, assets, exports. */
@@ -584,6 +596,16 @@ function assetUrlKeys(text: string | null): AssetUrlKeys | null {
   return { current: { id: text.slice(0, i), secret: Buffer.from(text.slice(i + 1), 'base64') } };
 }
 
+/** The visibility class the search index holds: what a service credential reads (ADR 0019). */
+const SEARCH_FULL_CLASS = 'full';
+/**
+ * The threads that count the words of a checkpoint, and the time one count may take (BE-054
+ * criterion 5). Proposed defaults, not measurements: one thread keeps the indexer's use of the
+ * machine small, and a count that runs past the limit fails its job, which is retried.
+ */
+const SEARCH_WORKER_THREADS = 1;
+const SEARCH_TASK_TIMEOUT_MS = 30_000;
+
 export async function startService(opts: StartOptions): Promise<Service> {
   const config = opts.config;
   checkConfig(config);
@@ -754,7 +776,34 @@ export async function startService(opts: StartOptions): Promise<Service> {
         countRetryMs: LIVE_QUOTA_COUNT_RETRY_MS,
       })
     : undefined;
+  // The search index (BE-054; off unless config.searchIndex). Every stored checkpoint queues a job
+  // that indexes its words; the words are counted in a worker thread, so no room's event loop does
+  // it (criterion 5). The index is PostgreSQL's with a database, the in-memory one without.
+  let searchTarget: (IndexTarget & { purgeDocument(t: string, d: string): unknown }) | null = null;
+  let searchWorkers: Workers | null = null;
+  if (config.searchIndex) {
+    const index = parts.pool ? new PgSearchIndex(parts.pool) : new SearchIndex();
+    searchTarget = index;
+    searchWorkers = new Workers({
+      size: SEARCH_WORKER_THREADS,
+      timeoutMs: SEARCH_TASK_TIMEOUT_MS,
+    });
+    if (!parts.search)
+      parts.search = { search: async (tenant, q, query) => index.search(tenant, q, query) };
+    if (!parts.searchPurge) parts.searchPurge = index;
+  }
   const dataPlane = (opts.createDataPlane ?? defaultDataPlane)({
+    ...(searchTarget
+      ? {
+          onCheckpoint: async (ref: DocRef, seq: number) => {
+            await enqueueIndexing(parts.queue, ref.tenant, {
+              doc: ref.doc,
+              seq,
+              visibility: SEARCH_FULL_CLASS,
+            });
+          },
+        }
+      : {}),
     logs,
     ownership: parts.ownership,
     grants: parts.grants,
@@ -1047,6 +1096,23 @@ export async function startService(opts: StartOptions): Promise<Service> {
         logger.error({ event: 'schedule.error', message: 'ensure', ...errorFields(e) }),
       );
   }
+  if (searchTarget && searchWorkers) {
+    const workers = searchWorkers;
+    runnerFor({
+      [SEARCH_INDEX_KIND]: createSearchIndexHandler({
+        checkpoints: {
+          // Only the class `full` is indexed: it is what a service credential reads (ADR 0019).
+          readCheckpoint: async (tenant, doc, seq, visibility) =>
+            visibility === SEARCH_FULL_CLASS
+              ? ((await checkpoints.get({ tenant, doc }, seq))?.doc ?? null)
+              : null,
+        },
+        index: searchTarget,
+        tokenise: async (content) =>
+          new Map((await workers.run('searchTokens', { doc: content })).tokens),
+      }),
+    });
+  }
   for (const r of runners) r.start();
 
   // The scaler reads the queue depth on a timer and whenever a job is queued (BE-065); one reading
@@ -1292,6 +1358,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     webhooks: webhooks?.dispatcher ?? null,
     runner,
     runners,
+    searchWorkers,
     scheduler,
     metrics,
     meter,
@@ -1310,6 +1377,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         // Each export worker finishes the job it runs before it stops (BE-065 criterion 3).
         await exportWorkers?.stop();
         await Promise.all(runners.map((r) => r.stop()));
+        await searchWorkers?.close().catch(() => undefined);
         await dataPlane.close().catch(() => undefined);
         sharedRateStore?.close();
         // The last change of a burst that still waits for its window is raised before the sends drain.

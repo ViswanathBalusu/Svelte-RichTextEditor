@@ -63,6 +63,7 @@ import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
 import { rulesService } from './rules.ts';
+import { workflowSendService, type WorkflowSendSource } from './workflow-send.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
 import { mayChange } from './status.ts';
@@ -96,6 +97,11 @@ export interface MountOptions {
    * offers no export command.
    */
   exports?: ExportService;
+  /**
+   * The session's workflow port and document, when the backend has the workflow port (FRW-028).
+   * Without it the shell offers no "send for completion" command. Null while no session is current.
+   */
+  workflow?: () => WorkflowSendSource | null;
   /** The manifest's family-to-alias lookup (FE-062 criterion 1); absent when none was read. */
   fontAlias?: (family: string) => string | undefined;
   /** The signed URL of an asset, for the web view's pictures (FE-067 criterion 3); absent without assets. */
@@ -304,6 +310,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
   });
 
   const fill = fillView(core);
+  // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
+  const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
   const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;
@@ -530,6 +538,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     status,
     pdf,
     ...(options.exports ? { exports: options.exports } : {}),
+    // The send dialog (FRW-028): the pre-send checks and the send action.
+    ...(workflowSend ? { workflowSend } : {}),
     // How suggestions are shown (UX-035), and the words that name them for assistive technology.
     markupView: core.markupView,
     setMarkupView: (view) => core.setMarkupView(view),
@@ -706,6 +716,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       for (const viewer of viewers) viewer.destroy();
       viewers.clear();
       stopShortcuts();
+      workflowSend?.dispose?.();
       void unmount(app);
       registry.destroy();
       core.destroy();

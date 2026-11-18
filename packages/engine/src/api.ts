@@ -7,7 +7,7 @@
  * `outline()` of 02 §5.1 is `outline.get()`: the outline is a read view, so that the interface can
  * subscribe to it.
  */
-import type { FieldReport, StepJson } from '@docedit/authority';
+import type { FieldReport, SendProblem, StepJson } from '@docedit/authority';
 
 export type { FieldReport };
 import type {
@@ -940,6 +940,10 @@ export interface DocumentApi {
   closePanel(): void;
   /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
   selectBlock(id: string): boolean;
+  /** Selects the text of the suggestion with this identifier and scrolls it into view; false when it cannot (FRW-028). */
+  selectSuggestion(id: string): boolean;
+  /** The pre-send checks over the visible document, given the roles each participant holds; empty when all pass (FRW-028). */
+  sendChecklist(participants: readonly { readonly roles: readonly string[] }[]): SendProblem[];
   /**
    * After a deletion was refused with reason `referenced`, selects one of the cross-references that
    * name the target, the next at each call (FE-133 criterion 5); false when there is none to show.

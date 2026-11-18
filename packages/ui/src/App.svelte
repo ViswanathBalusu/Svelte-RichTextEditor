@@ -42,6 +42,7 @@
   import MiniToolbar from './components/MiniToolbar.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
   import FillBar from './components/FillBar.svelte';
+  import WorkflowBanner from './components/WorkflowBanner.svelte';
   import FullToolbar from './components/FullToolbar.svelte';
   import Header from './components/Header.svelte';
   import StatusBar from './components/StatusBar.svelte';
@@ -84,6 +85,8 @@
   import { fillProgress } from './shell/fill.ts';
   import { focusTarget, landmarkKeys, landmarksIn, nextLandmark } from './shell/landmarks.ts';
   import { modeOptions } from './shell/modes.ts';
+  import type { CheckTarget } from './shell/send-checklist.ts';
+  import { lockKind } from './shell/workflow-lock.ts';
   import { reviewOffers } from './shell/review-rules.ts';
   import { START_TRACK, stepMode, type ModeTrack } from './shell/suggest-mode.ts';
   import { NoticeTracker, type Notice } from './shell/notices.ts';
@@ -450,14 +453,16 @@
       trimmed?.get(),
       replaced?.get(),
     );
+    // While a workflow holds the document, a refused or rejected change is explained in its words.
+    const locked = (): boolean => lockKind(core.workflowSend?.state.get() ?? null) !== null;
     const show = (next: Notice | null) => {
       if (!next) return;
       notice = next;
       announce(next.key, { count: next.count, ...next.params });
     };
     const stops: Array<() => void> = [];
-    if (refusal) stops.push(refusal.subscribe(() => show(tracker.refusal(refusal.get()))));
-    if (recovered) stops.push(recovered.subscribe(() => show(tracker.recovered(recovered.get()))));
+    if (refusal) stops.push(refusal.subscribe(() => show(tracker.refusal(refusal.get(), locked()))));
+    if (recovered) stops.push(recovered.subscribe(() => show(tracker.recovered(recovered.get(), locked()))));
     if (trimmed) stops.push(trimmed.subscribe(() => show(tracker.trimmed(trimmed.get()))));
     // After the refusal: a Replace all that skipped matches records a refusal first, and the report
     // with the counts is the notice that stays (FE-060 criterion 3).
@@ -513,9 +518,9 @@
   }
 
   // Dialogs of the shell.
-  let dialog = $state<'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | null>(
-    null,
-  );
+  let dialog = $state<
+    'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | 'send' | null
+  >(null);
   // The equation the math editor is open on (FE-070): taken when the request arrives.
   let equation = $state.raw<EquationRef | null>(null);
   if (core.mathEditor) {
@@ -571,6 +576,32 @@
       requestAnimationFrame(() => {
         editor.select(pos);
         core.focus();
+      }),
+    );
+  }
+
+  // A failed check's link in the send dialog (FRW-028 criterion 2): the dialog closes, then focus goes
+  // to the field or the suggestion, or the pane that fixes the check opens. The roles pane is the
+  // participants view until a view of participants exists (FRW-026).
+  function goToCheck(target: CheckTarget): void {
+    dialog = null;
+    void tick().then(() =>
+      requestAnimationFrame(() => {
+        const send = core.workflowSend;
+        switch (target.kind) {
+          case 'field':
+            if (target.keys[0] !== undefined) send?.showField(target.keys[0]);
+            break;
+          case 'suggestion':
+            if (target.ids[0] !== undefined) send?.showSuggestion(target.ids[0]);
+            break;
+          case 'participants':
+            void openPane('roles');
+            break;
+          case 'rules':
+            void openPane('rules');
+            break;
+        }
       }),
     );
   }
@@ -817,6 +848,7 @@
     applyFormat: () => core.runNamed?.('pasteFormat') ?? false,
     openDialog: (name) => {
       if (name === 'export' && !core.exports && !exportFilters()) return false;
+      if (name === 'send' && !core.workflowSend) return false;
       if (name === 'comment') {
         const anchor = core.threads?.anchor() ?? null;
         if (!anchor) return false;
@@ -922,6 +954,7 @@
     if (paneRegistry.get('catch-up')?.load) add(host1a.catchUp);
     if (offered('history')) add(host1a.history);
     if (offered('history') && core.history?.createVersion) add(host1b['history.nameVersion']);
+    if (core.workflowSend) add(host1b['workflow.send']);
     if (props.onShareRequest) add(host1a.share);
     if (core.search) add(host1b['view.find']);
     if (offered('styles')) add(host1b['view.styles']);
@@ -1348,6 +1381,9 @@
   {:else if mode.toolbar !== 'none'}
     <Toolbar onEscape={() => core.focus()} />
   {/if}
+  {#if core.workflowSend}
+    <WorkflowBanner service={core.workflowSend} />
+  {/if}
   {#if core.fill}
     <FillBar fill={core.fill} onFinish={finishFill} />
   {/if}
@@ -1479,6 +1515,7 @@
       CommentBox,
       ExportDialog,
       MathEditorDialog,
+      SendDialog,
       VersionDialog,
     } = dialogs}
     {#if dialog === 'math' && core.mathEditor && equation}
@@ -1505,6 +1542,12 @@
           dialog = null;
           announce('announce.version.named');
         }}
+        onClose={() => (dialog = null)}
+      />
+    {:else if dialog === 'send' && core.workflowSend}
+      <SendDialog
+        service={core.workflowSend}
+        onNavigate={goToCheck}
         onClose={() => (dialog = null)}
       />
     {:else if dialog === 'region'}

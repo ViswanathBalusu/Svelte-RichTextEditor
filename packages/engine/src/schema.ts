@@ -90,7 +90,7 @@ export function paragraphDOM(node: PMNode): DOMOutputSpec {
  * read here: only the label and the fallback text reach the page. The atom is not editable, so the
  * content inside it is not editable either.
  */
-function preservedDOM(tag: 'div' | 'span', node: PMNode): DOMOutputSpec {
+export function preservedDOM(tag: 'div' | 'span', node: PMNode): DOMOutputSpec {
   const raw =
     typeof node.attrs['label'] === 'string' && node.attrs['label'] !== ''
       ? node.attrs['label']

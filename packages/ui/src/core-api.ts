@@ -12,6 +12,7 @@
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extensions/document-api.ts';
 import type { FieldDraft } from './shell/field-properties.ts';
 import type { MarkupView } from './shell/markup-views.ts';
+import type { SendFailure } from './shell/send-checklist.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -835,6 +836,8 @@ export interface CoreApi {
   readonly fieldProperties?: FieldPropertiesService;
   /** The rules of the document and the builder's changes to them (FRW-024). Absent: no rules pane. */
   readonly rules?: RulesService;
+  /** The send dialog's checks and the send action (FRW-028). Absent: no "send for completion" command. */
+  readonly workflowSend?: WorkflowSendService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
   readonly mathEditor?: MathEditorService;
 }
@@ -1066,6 +1069,55 @@ export interface RulesService {
   remove(id: string): RuleChangeResult;
   /** Moves to the field with this key in the document; false when there is none. */
   showField(key: string): boolean;
+}
+
+/**
+ * What the send dialog got from the server (FRW-028; 12 §6.2 `send`). A refusal for the checklist
+ * carries the server's verdict, which replaces the editor's own.
+ */
+export type WorkflowSendOutcome =
+  | { readonly ok: true; readonly state: string }
+  | {
+      readonly ok: false;
+      readonly reason: 'checklist_failed';
+      readonly failures: readonly SendFailure[];
+    }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'not_draft' | 'failed' };
+
+/** A participant of the workflow as the lock banner names them; the name is the owner's text. */
+export interface WorkflowParticipantView {
+  readonly id: string;
+  /** The name the owner gave; null when none. */
+  readonly name: string | null;
+  readonly roles: readonly string[];
+  /** The participant's state in the workflow resource; null when the resource does not say. */
+  readonly state: string | null;
+}
+
+/**
+ * The send dialog's port over the core and the backend's workflow port (FRW-028; 12 §6.2). The
+ * checks run over the document the reader holds and the participants the workflow resource lists.
+ */
+export interface WorkflowSendService {
+  /** The workflow's state (`draft`, `sent`, ...); null while it has not been read. */
+  readonly state: ReadView<string | null>;
+  /** The failures of the editor's own checks; empty when every check passes. */
+  readonly failures: ReadView<readonly SendFailure[]>;
+  /**
+   * The people bound to the workflow and where each stands (`active`, `pending`, `completed`, ...),
+   * for the lock banner: who may still act (FRW-029 criterion 6). Empty until the resource is read.
+   */
+  readonly participants: ReadView<readonly WorkflowParticipantView[]>;
+  /** Reads the workflow resource again (the participants and the state). */
+  refresh(): Promise<void>;
+  /** Moves to the form field with this key; false when there is none. */
+  showField(key: string): boolean;
+  /** Selects the suggestion with this identifier; false when there is none. */
+  showSuggestion(id: string): boolean;
+  /** Asks the server to send; the state follows the answer. */
+  send(): Promise<WorkflowSendOutcome>;
+  /** Stops following the workflow; called when the editor is destroyed. */
+  dispose?(): void;
 }
 
 /** A role of the document as the roles manager and the legend show it (FRW-074; 12 §3.1). */

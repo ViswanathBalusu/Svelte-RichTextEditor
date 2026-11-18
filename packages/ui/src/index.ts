@@ -89,6 +89,9 @@ export type {
   RuleOperatorName,
   RulePartsView,
   RulesService,
+  WorkflowParticipantView,
+  WorkflowSendOutcome,
+  WorkflowSendService,
   MathEditorService,
   MathFieldHandle,
   MathFieldOptions,
@@ -172,6 +175,7 @@ export {
 } from './shell/settings.ts';
 export type { PageTheme, ThemeSetting } from './shell/theme.ts';
 export type { FieldDraft, FieldOption } from './shell/field-properties.ts';
+export type { SendFailure } from './shell/send-checklist.ts';
 export {
   BUILT_IN_PANES,
   PaneRegistry,

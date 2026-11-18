@@ -19,12 +19,23 @@ import {
   ref,
   req,
   seq,
+  str,
   text,
   timestamp,
   uuid7,
 } from './shapes.ts';
 
 const FRW = 'FRW';
+/** The workflow events that concern one participant: their data names the participant (FRW-036). */
+const PARTICIPANT_EVENTS = [
+  'participant_activated',
+  'participant_viewed',
+  'field_completed',
+  'participant_completed',
+  'participant_declined',
+  'auth_failed',
+  'reminder_due',
+];
 const FIELD_KINDS = [
   'text',
   'number',
@@ -117,6 +128,23 @@ export const FRW_EXTENSION: DepExtension = {
         {
           doc: 'The workflow resource, from the example of 12 §6.1; which members are required is not stated.',
           spec: '12 §6.1',
+          gaps: ['G95'],
+        },
+      ),
+    },
+    {
+      name: 'WorkflowReason',
+      owner: FRW,
+      shape: obj(
+        {
+          reason: req(
+            text({ minLength: 1, maxLength: 2000 }),
+            'Why the workflow is stopped: the participant who declines, or the owner who voids, says. A reason that is blank after trimming is refused.',
+          ),
+        },
+        {
+          doc: 'The body of `decline` and `void` (12 §6.2).',
+          spec: '12 §6.2, §10',
           gaps: ['G95'],
         },
       ),
@@ -234,7 +262,72 @@ export const FRW_EXTENSION: DepExtension = {
       gaps: ['G95'],
       owner: FRW,
     },
-    ...(['consent', 'verify', 'complete', 'decline'] as const).map((action) => ({
+    {
+      operationId: 'correctWorkflow',
+      method: 'POST',
+      path: '/documents/{id}/workflow/correct',
+      summary:
+        'Corrects a document that is in progress: pauses every participant and unlocks the document for the owner (12 §6.2). The method and path are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    {
+      operationId: 'resumeWorkflow',
+      method: 'POST',
+      path: '/documents/{id}/workflow/resume',
+      summary:
+        'Resumes a corrected workflow: compares the document with its sent version, resets the participants the change concerns and locks the document again (12 §6.2). The method and path are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    {
+      operationId: 'voidWorkflow',
+      method: 'POST',
+      path: '/documents/{id}/workflow/void',
+      summary:
+        'Voids a workflow that is sent or in progress, with a reason; the document stays locked (12 §6.2). The method and path are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      body: ref('WorkflowReason'),
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['validation_failed', 'conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    {
+      operationId: 'participantDecline',
+      method: 'POST',
+      path: '/documents/{id}/workflow/participants/{pid}/decline',
+      summary:
+        'The participant declines to proceed, with a reason; the participant whose token is bound to {pid} may, and so may the host with its service credential (12 §6.2). The method and the document prefix are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      idempotencyKey: true,
+      body: ref('WorkflowReason'),
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['validation_failed', 'conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    ...(['consent', 'verify', 'complete'] as const).map((action) => ({
       operationId: `participant${action.charAt(0).toUpperCase()}${action.slice(1)}`,
       method: 'POST' as const,
       path: `/documents/{id}/workflow/participants/{pid}/${action}`,
@@ -305,7 +398,25 @@ export const FRW_EXTENSION: DepExtension = {
     version: 1,
     when: `Workflow event \`${name}\` (12 §6.3, §10).`,
     spec: '12 §10',
-    data: {},
+    // Identifiers, the `seq` of the control commit and the chain head: no contact detail and no
+    // evidence personal data (12 §6.3; FRW-036 criteria 1, 2 and 4). `seq` is added to every event.
+    data: {
+      workflow: req(uuid7(), 'The workflow identifier (12 §6.1).'),
+      document: req(uuid7(), 'The document identifier, as `subject`.'),
+      chainHead: req(
+        str({ format: 'sha256' }),
+        'The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.',
+        { gaps: ['G83'] },
+      ),
+      ...(PARTICIPANT_EVENTS.includes(name)
+        ? {
+            participant: req(
+              text({ minLength: 1 }),
+              'The participant identifier (12 §6.1), so that the host can invite the person and mint their token.',
+            ),
+          }
+        : {}),
+    },
     gaps: name === 'sent' ? [] : ['G85'],
     decisions: name === 'sent' ? [] : ['D17'],
     owner: FRW,

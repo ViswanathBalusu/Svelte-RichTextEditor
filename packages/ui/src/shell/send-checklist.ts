@@ -167,3 +167,31 @@ export function checklistAnnouncement(
   if (before !== null && failedAfter.join() === failedBefore.join()) return null;
   return { key: 'send.check.announce', failed: failedAfter.length };
 }
+
+/**
+ * The failures a refused send names, from the violations of the problem (FRW-028 criterion 4). The
+ * service writes each as a JSON Pointer: `/fields/<key>`, `/roles/<id>`, `/suggestions/<id>`, and the
+ * path of a rule for the rules check (FRW-027). An empty list means the problem named none.
+ */
+export function failuresFromViolations(
+  violations: readonly { readonly path: string }[],
+): SendFailure[] {
+  const keys: string[] = [];
+  const roles: string[] = [];
+  const suggestionIds: (string | null)[] = [];
+  const rules: unknown[] = [];
+  for (const { path } of violations) {
+    const [, head, ...rest] = path.split('/');
+    const name = rest.join('/');
+    if (head === 'fields') keys.push(name);
+    else if (head === 'roles') roles.push(name);
+    else if (head === 'suggestions') suggestionIds.push(name === '' ? null : name);
+    else rules.push(path);
+  }
+  const failures: SendFailure[] = [];
+  if (keys.length > 0) failures.push({ code: 'required_field_unassigned', keys });
+  if (roles.length > 0) failures.push({ code: 'role_without_participant', roles });
+  if (rules.length > 0) failures.push({ code: 'rules_invalid', problems: rules });
+  if (suggestionIds.length > 0) failures.push({ code: 'pending_suggestions', suggestionIds });
+  return failures;
+}

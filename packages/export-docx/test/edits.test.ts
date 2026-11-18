@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { validate } from '@docedit/model/validate';
 import { checkR1, everyParagraph, exportDocx, importDocx, scriptedEdits } from '../src/index.ts';
+import { r1Failures } from './ci-failure.ts';
 import { corpusFiles, readFile } from './corpus.ts';
 
 const files = corpusFiles();
@@ -34,7 +35,7 @@ describe.each(files)('$name', (file) => {
       );
       const out = await exportDocx(edit.envelope, bytes, imported.sourceMap, imported.assets);
       const r1 = checkR1(bytes, out.bytes, imported.sourceMap, edit.edit);
-      expect(r1.violations).toEqual([]);
+      expect(r1Failures(file.name, name, r1.violations)).toEqual([]);
     },
   );
 
@@ -46,6 +47,7 @@ describe.each(files)('$name', (file) => {
       regenerate: new Set(edit.edited),
     });
     expect(out.regenerated.length).toBeGreaterThanOrEqual(edit.edited.length);
-    expect(checkR1(bytes, out.bytes, imported.sourceMap, edit).violations).toEqual([]);
+    const r1 = checkR1(bytes, out.bytes, imported.sourceMap, edit);
+    expect(r1Failures(file.name, 'every paragraph regenerated', r1.violations)).toEqual([]);
   });
 });

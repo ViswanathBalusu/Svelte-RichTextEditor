@@ -114,9 +114,34 @@ function eventOf(type: string, data: DepEvent['data']): DepEvent {
   return { type, tenant: TENANT, subject: uuid7(), data, time: Date.now() };
 }
 
+interface DataSchema {
+  properties?: { data?: { required?: string[]; properties?: Record<string, DataProperty> } };
+}
+interface DataProperty {
+  type?: string;
+  format?: string;
+  pattern?: string;
+}
+
+/** A value for one required member of `data`, from what its schema says about it. */
+function valueFor(name: string, p: DataProperty | undefined): unknown {
+  if (name === 'chainHead') return CHAIN;
+  if (p?.format === 'uuid') return uuid7();
+  if (p?.type === 'integer') return 7;
+  if (p?.type === 'string') return 'p-1';
+  throw new Error(`no test value for data.${name}: extend valueFor`);
+}
+
 /** What every schema requires of `data`, and nothing more. */
-const dataOf = (type: string): DepEvent['data'] =>
-  type === 'dep.document.changed.v1' ? { seq: 7, chainHead: CHAIN } : { seq: 7 };
+const dataOf = (type: string): DepEvent['data'] => {
+  const schema = JSON.parse(
+    readFileSync(new URL(`${type}.schema.json`, WEBHOOKS), 'utf8'),
+  ) as DataSchema;
+  const data = schema.properties?.data;
+  const out: Record<string, unknown> = {};
+  for (const name of data?.required ?? []) out[name] = valueFor(name, data?.properties?.[name]);
+  return out as DepEvent['data'];
+};
 
 describe('PRO-069 criterion 4: a delivery of every event type passes the schema of its type', () => {
   it('lists the published types, so that a new schema is covered without a change here', () => {

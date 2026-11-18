@@ -125,8 +125,12 @@ export class NoticeTracker {
     };
   }
 
-  /** A notice for a refusal the guard has not reported before, or null. */
-  refusal(next: RefusalNotice | null | undefined): Notice | null {
+  /**
+   * A notice for a refusal the guard has not reported before, or null. `workflowLocked` is true while
+   * a workflow locks the document: a read-only refusal then says why, in the workflow's words
+   * (FRW-029 criterion 6).
+   */
+  refusal(next: RefusalNotice | null | undefined, workflowLocked = false): Notice | null {
     if (!next || typeof next.n !== 'number' || next.n === this.#refusal) return null;
     this.#refusal = next.n;
     // Suggestions a resolve command skipped are counted and named as such (FE-047 criterion 6).
@@ -143,16 +147,22 @@ export class NoticeTracker {
         action: 'showReferences',
       };
     }
+    const key: StringKey =
+      workflowLocked && next.reason === 'read-only'
+        ? 'notice.refused.workflow'
+        : counted
+          ? 'notice.suggestions.skipped'
+          : refusalKey(String(next.reason));
     return {
       kind: 'refusal',
-      key: counted ? 'notice.suggestions.skipped' : refusalKey(String(next.reason)),
+      key,
       count: counted && skipped !== undefined ? skipped : 1,
       serial: ++this.#serial,
     };
   }
 
   /** A notice for items added to the recovered list since the last call, or null. */
-  recovered(next: RecoveredEdits | undefined): Notice | null {
+  recovered(next: RecoveredEdits | undefined, workflowLocked = false): Notice | null {
     const count = next?.count ?? 0;
     const before = this.#recovered;
     this.#recovered = count;
@@ -166,7 +176,11 @@ export class NoticeTracker {
     const fieldConflict = reason === 'conflict' && (first?.fields?.length ?? 0) > 0;
     return {
       kind: 'rejection',
-      key: fieldConflict ? 'notice.rejected.fieldConflict' : rejectionKey(String(reason)),
+      key: fieldConflict
+        ? 'notice.rejected.fieldConflict'
+        : workflowLocked && reason === 'read_only'
+          ? 'notice.rejected.workflow'
+          : rejectionKey(String(reason)),
       count: count - before,
       serial: ++this.#serial,
     };

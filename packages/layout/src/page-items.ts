@@ -49,6 +49,9 @@ export interface TableCellItem {
   readonly width: number;
   readonly margins: FlowInsets;
   readonly paragraphs: readonly ParagraphItem[];
+  /** The cell's CDM range inside its table (FE-078 criterion 2). */
+  readonly from?: number;
+  readonly to?: number;
 }
 
 /**
@@ -63,6 +66,9 @@ export interface TableRowItem {
   /** The row's height: its tallest cell with the cell margins, or the row's own height rule. */
   readonly height: number;
   readonly cells: readonly TableCellItem[];
+  /** The row's CDM range inside its table; a cut row's pieces keep the whole row's (FE-078). */
+  readonly from?: number;
+  readonly to?: number;
 }
 
 export interface PaginatedPage extends LayoutPage {
@@ -86,4 +92,15 @@ export interface PageFrame {
   readonly bottomFree: number;
   /** The page number format, for a page the footnotes add. */
   readonly format: string;
+}
+
+/** The `from` and `to` of a node that has them, as properties to spread into a copy (FE-078). */
+export function rangeOf(node: { readonly from?: number; readonly to?: number }): {
+  from?: number;
+  to?: number;
+} {
+  return {
+    ...(node.from !== undefined ? { from: node.from } : {}),
+    ...(node.to !== undefined ? { to: node.to } : {}),
+  };
 }
