@@ -2043,7 +2043,7 @@
             }
           },
           {
-            "name": "seq",
+            "name": "atSeq",
             "in": "query",
             "required": false,
             "schema": {
@@ -4225,6 +4225,58 @@
           }
         ],
         "parameters": [
+          {
+            "name": "document",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Only events of this document.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Only events of this document."
+          },
+          {
+            "name": "actor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Only events of this actor.",
+              "type": "string"
+            },
+            "description": "Only events of this actor."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Only events of this kind (for example `grants.changed`).",
+              "type": "string"
+            },
+            "description": "Only events of this kind (for example `grants.changed`)."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Only events at or after this time: ISO 8601 with a time zone (inclusive).",
+              "type": "string"
+            },
+            "description": "Only events at or after this time: ISO 8601 with a time zone (inclusive)."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Only events before this time: ISO 8601 with a time zone (exclusive).",
+              "type": "string"
+            },
+            "description": "Only events before this time: ISO 8601 with a time zone (exclusive)."
+          },
           {
             "$ref": "#/components/parameters/Cursor"
           },

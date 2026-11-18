@@ -81,7 +81,13 @@ describe.skipIf(unavailable !== null)('BE-054 criterion 2 on PostgreSQL: GET /se
       content: para('invoice from elsewhere'),
     });
     const kit = {
-      d: { search: index },
+      d: {
+        search: index,
+        // The route reads each hit's externalId from the document row (UX-084).
+        documents: {
+          get: async (ref: { doc: string }) => ({ externalId: `ext-${ref.doc}`, deletedAt: null }),
+        },
+      },
     } as unknown as Kit;
     handler = searchRoutes(kit).search!;
   }, 120_000);
@@ -108,21 +114,40 @@ describe.skipIf(unavailable !== null)('BE-054 criterion 2 on PostgreSQL: GET /se
   it('returns the caller tenant hits only, one per document, without class or text', async () => {
     const reply = await handler(ctxFor('?q=invoice&limit=10', serviceOf(TENANT_A)));
     expect(reply.status).toBe(200);
-    const body = reply.body as Array<Record<string, unknown>>;
+    const body = (reply.body as { items: Array<Record<string, unknown>> }).items;
     // Best first: doc-a2 holds invoice twice, so it scores higher than doc-a1. The length check
     // keeps an empty reply from passing the checks below.
     expect(body.length).toBe(2);
     expect(body.map((h) => h['doc'])).toEqual(['doc-a2', 'doc-a1']);
-    for (const h of body) expect(Object.keys(h).sort()).toEqual(['doc', 'score', 'seq']);
+    for (const h of body)
+      expect(Object.keys(h).sort()).toEqual(['doc', 'externalId', 'score', 'seq']);
     expect(JSON.stringify(body)).not.toContain('secret');
     expect(JSON.stringify(body)).not.toContain('elsewhere');
   });
 
+  it('pages by cursor in the same order as the first page (UX-084)', async () => {
+    const first = await handler(ctxFor('?q=invoice&limit=1', serviceOf(TENANT_A)));
+    const page1 = first.body as { items: Array<{ doc: string }>; nextCursor: string | null };
+    expect(page1.items.map((h) => h.doc)).toEqual(['doc-a2']);
+    expect(page1.nextCursor).not.toBeNull();
+    const second = await handler(
+      ctxFor(
+        `?q=invoice&limit=1&cursor=${encodeURIComponent(page1.nextCursor!)}`,
+        serviceOf(TENANT_A),
+      ),
+    );
+    const page2 = second.body as { items: Array<{ doc: string }>; nextCursor: string | null };
+    expect(page2.items.map((h) => h.doc)).toEqual(['doc-a1']);
+    expect(page2.nextCursor).toBeNull();
+  });
+
   it("finds the other tenant's document for that tenant only", async () => {
     const reply = await handler(ctxFor('?q=elsewhere&limit=10', serviceOf(TENANT_B)));
-    expect((reply.body as Array<{ doc: string }>).map((h) => h.doc)).toEqual(['doc-b1']);
+    expect((reply.body as { items: Array<{ doc: string }> }).items.map((h) => h.doc)).toEqual([
+      'doc-b1',
+    ]);
     const none = await handler(ctxFor('?q=elsewhere&limit=10', serviceOf(TENANT_A)));
-    expect(none.body).toEqual([]);
+    expect(none.body).toEqual({ items: [], nextCursor: null });
   });
 
   it('refuses a user token with forbidden (the handler keeps the pipeline rule)', async () => {

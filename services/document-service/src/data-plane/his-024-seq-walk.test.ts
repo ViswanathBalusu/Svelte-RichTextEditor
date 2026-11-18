@@ -98,8 +98,9 @@ export function clientSeqFieldsOf(def: {
 const listed = (): Set<string> => new Set(SEQ_INPUTS.map((i) => `${i.where}|${i.field}`));
 
 /**
- * Listed inputs the definition does not declare yet. None: the attribution route takes `seq` (PRO-055),
- * so every listed input is a field of the definition.
+ * Listed inputs the definition does not declare yet. None now: the attribution route has taken
+ * `atSeq` in the definition since PRO-055 (ADR 0373); the walk fails on any listed input the
+ * definition lacks.
  */
 const NOT_IN_DEFINITION: ReadonlySet<string> = new Set<string>();
 
@@ -118,7 +119,8 @@ describe('the sequence inputs of the protocol are one table (HIS-024 criterion 4
     const found = clientSeqFieldsOf(DEP1);
     const stale = [...listed()].filter((k) => !found.has(k) && !NOT_IN_DEFINITION.has(k));
     expect(stale).toEqual([]);
-    expect(found.has('GET /documents/{id}/attribution|query.seq')).toBe(true);
+    // The attribution route declares `atSeq` (PRO-055).
+    expect(found.has('GET /documents/{id}/attribution|query.atSeq')).toBe(true);
   });
 
   it('a new ungated sequence field fails the walk', () => {

@@ -54,6 +54,7 @@ import { ApiError } from './problems.ts';
 import type { TokenService } from './tokens.ts';
 import type { UserDirectory } from './users.ts';
 import type { Views } from './visibility.ts';
+import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 
 export interface HandlerDeps {
   documents: DocumentStore;
@@ -128,6 +129,8 @@ export interface HandlerDeps {
   holds?: HoldService;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: not offered. */
   quotaAdmin?: QuotaAdminService;
+  /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: not offered. */
+  workflows?: WorkflowResourceStore;
   /** The tenant's allowed origins and public keys, listed by `/origins` and `/keys` (UX-077). */
   tenantRegistry?: TenantRegistry;
   /** The index of `GET /search` (BE-054 criterion 2). Absent: the route is not offered. */

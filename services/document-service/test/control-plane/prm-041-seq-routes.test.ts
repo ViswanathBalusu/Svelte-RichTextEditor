@@ -20,13 +20,12 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
   'GET /documents/{id}/commits': { file: 'control-plane/commit-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/exports': { file: 'control-plane/export-routes.ts', gate: CONTROL_GATE },
   'GET /documents/{id}/field-values': { file: 'control-plane/field-routes.ts', gate: CONTROL_GATE },
+  // PRO-055 and PRO-056: the history reads and the restore read the gate through `historyViewOf`
+  // and `minVisibleSeqOf`, and refuse with `checkSeq` or `planRestore`.
+  'GET /documents/{id}/diff': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
+  'GET /documents/{id}/attribution': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/versions': { file: 'control-plane/versions-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/restore': { file: 'control-plane/restore-route.ts', gate: CONTROL_GATE },
-  'GET /documents/{id}/diff': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
-  'GET /documents/{id}/attribution': {
-    file: 'control-plane/history-reads.ts',
-    gate: CONTROL_GATE,
-  },
   'POST /documents/{id}/fork': { file: 'control-plane/history-routes.ts', gate: CONTROL_GATE },
 };
 

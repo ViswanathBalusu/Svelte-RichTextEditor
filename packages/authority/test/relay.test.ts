@@ -267,8 +267,14 @@ describe('relay mode: capabilities (SYN-044 criterion 2)', () => {
     ]);
   });
 
-  it('lists the three excluded features as the ones a relay cannot enforce', () => {
-    expect([...RELAY_EXCLUDED_FEATURES].sort()).toEqual(['fields', 'regions', 'suggest-enforced']);
+  it('lists the three features a relay cannot enforce and the workflow of FRW-025 as excluded', () => {
+    // 05 §2 names regions, suggest-enforced and fields; workflow is the proposal of ADR 0371.
+    expect([...RELAY_EXCLUDED_FEATURES].sort()).toEqual([
+      'fields',
+      'regions',
+      'suggest-enforced',
+      'workflow',
+    ]);
   });
 });
 
