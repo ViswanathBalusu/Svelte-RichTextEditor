@@ -87,6 +87,7 @@ export type {
   RuleOperatorName,
   RulePartsView,
   RulesService,
+  WorkflowParticipantView,
   WorkflowSendOutcome,
   WorkflowSendService,
   MathEditorService,

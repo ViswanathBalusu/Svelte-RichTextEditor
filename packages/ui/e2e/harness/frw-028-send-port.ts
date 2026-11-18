@@ -7,12 +7,28 @@
  * Modes: `pass` (every check passes; a send succeeds), `fail` (every check fails), `server-refuses`
  * (the editor's checks pass; the server refuses a send and names a role), `forbidden` (the editor's
  * checks pass; the server refuses a send), `sent` (the workflow is already sent) and `unread`
- * (the resource never arrives, so the state stays unknown).
+ * (the resource never arrives, so the state stays unknown). `running`, `declined` and `voided` are
+ * workflows past the send, with Ada Lovelace to act now and a participant with no name waiting
+ * (FRW-029 criterion 6: the lock banner).
  */
-import type { ReadView, WorkflowSendOutcome, WorkflowSendService } from '../../src/core-api.ts';
+import type {
+  ReadView,
+  WorkflowParticipantView,
+  WorkflowSendOutcome,
+  WorkflowSendService,
+} from '../../src/core-api.ts';
 import type { SendFailure } from '../../src/shell/send-checklist.ts';
 
-export type SendHarnessMode = 'pass' | 'fail' | 'server-refuses' | 'forbidden' | 'sent' | 'unread';
+export type SendHarnessMode =
+  | 'pass'
+  | 'fail'
+  | 'server-refuses'
+  | 'forbidden'
+  | 'sent'
+  | 'unread'
+  | 'running'
+  | 'declined'
+  | 'voided';
 
 export interface SendHarnessLog {
   fields: string[];
@@ -44,16 +60,36 @@ function view<T>(initial: T): ReadView<T> & { set(next: T): void } {
   };
 }
 
+const PEOPLE: readonly WorkflowParticipantView[] = [
+  { id: 'p1', name: 'Ada Lovelace', roles: ['role_tenant'], state: 'active' },
+  { id: 'p2', name: null, roles: ['role_landlord'], state: 'pending' },
+];
+
+const STATE_OF: Readonly<Partial<Record<SendHarnessMode, string>>> = {
+  sent: 'sent',
+  running: 'in_progress',
+  declined: 'declined',
+  voided: 'voided',
+};
+
 export function sendService(
   mode: SendHarnessMode,
   log: SendHarnessLog,
-): WorkflowSendService & { setFailures(next: readonly SendFailure[]): void } {
+): WorkflowSendService & {
+  setFailures(next: readonly SendFailure[]): void;
+  setState(next: string | null): void;
+} {
   const failures = view<readonly SendFailure[]>(mode === 'fail' ? ALL_FAIL : []);
-  const state = view<string | null>(mode === 'sent' ? 'sent' : mode === 'unread' ? null : 'draft');
+  const state = view<string | null>(mode === 'unread' ? null : (STATE_OF[mode] ?? 'draft'));
+  const participants = view<readonly WorkflowParticipantView[]>(
+    STATE_OF[mode] !== undefined && mode !== 'sent' ? PEOPLE : [],
+  );
   return {
     state,
     failures,
+    participants,
     setFailures: (next) => failures.set(next),
+    setState: (next) => state.set(next),
     async refresh() {
       log.refreshes++;
     },

@@ -824,6 +824,7 @@ const harness = {
   sendLog: () => JSON.parse(JSON.stringify(sendLog)) as SendHarnessLog,
   setSendFailures: (next: Parameters<ReturnType<typeof sendService>['setFailures']>[0]) =>
     sendHandle?.setFailures(next),
+  setSendState: (next: string | null) => sendHandle?.setState(next),
   grantSaves: () => need().core.grants?.saves ?? [],
   /** The comment threads port (UX-028, UX-031): what was asked for, and what the core reports. */
   principalQueries: () => [...principalQueries],

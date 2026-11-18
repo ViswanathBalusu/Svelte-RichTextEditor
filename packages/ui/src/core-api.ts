@@ -1063,6 +1063,16 @@ export type WorkflowSendOutcome =
     }
   | { readonly ok: false; readonly reason: 'forbidden' | 'not_draft' | 'failed' };
 
+/** A participant of the workflow as the lock banner names them; the name is the owner's text. */
+export interface WorkflowParticipantView {
+  readonly id: string;
+  /** The name the owner gave; null when none. */
+  readonly name: string | null;
+  readonly roles: readonly string[];
+  /** The participant's state in the workflow resource; null when the resource does not say. */
+  readonly state: string | null;
+}
+
 /**
  * The send dialog's port over the core and the backend's workflow port (FRW-028; 12 §6.2). The
  * checks run over the document the reader holds and the participants the workflow resource lists.
@@ -1072,6 +1082,11 @@ export interface WorkflowSendService {
   readonly state: ReadView<string | null>;
   /** The failures of the editor's own checks; empty when every check passes. */
   readonly failures: ReadView<readonly SendFailure[]>;
+  /**
+   * The people bound to the workflow and where each stands (`active`, `pending`, `completed`, ...),
+   * for the lock banner: who may still act (FRW-029 criterion 6). Empty until the resource is read.
+   */
+  readonly participants: ReadView<readonly WorkflowParticipantView[]>;
   /** Reads the workflow resource again (the participants and the state). */
   refresh(): Promise<void>;
   /** Moves to the form field with this key; false when there is none. */
@@ -1080,6 +1095,8 @@ export interface WorkflowSendService {
   showSuggestion(id: string): boolean;
   /** Asks the server to send; the state follows the answer. */
   send(): Promise<WorkflowSendOutcome>;
+  /** Stops following the workflow; called when the editor is destroyed. */
+  dispose?(): void;
 }
 
 /** A role of the document as the roles manager and the legend show it (FRW-074; 12 §3.1). */

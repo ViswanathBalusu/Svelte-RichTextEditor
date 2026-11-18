@@ -414,6 +414,17 @@ export {
   type SentHead,
 } from './workflow/send.ts';
 export { activeParticipantIds, completeParticipant, fillActive } from './workflow/order.ts';
+// Correcting a document in progress and resuming it (FRW-032).
+export {
+  compareWithSent,
+  correctWorkflow,
+  resumeWorkflow,
+  type DocumentChange,
+  type DocumentSnapshot,
+  type FieldOwners,
+  type ResumeResult,
+} from './workflow/correction.ts';
+export { fieldOwnersOf, snapshotOf } from './workflow/snapshot.ts';
 export { openWorkflow } from './workflow/lifecycle.ts';
 export {
   sendProblem,
