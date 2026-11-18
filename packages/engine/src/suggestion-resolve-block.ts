@@ -73,7 +73,10 @@ export function planBlockSuggestions(
 ): BlockPlan {
   const mineOf = (node: PMNode): Mark[] =>
     node.marks.filter(
-      (m) => isSuggestion(m) && (scope.author === undefined || m.attrs['user'] === scope.author),
+      (m) =>
+        isSuggestion(m) &&
+        (scope.author === undefined || m.attrs['user'] === scope.author) &&
+        (scope.suggestion === undefined || m.attrs['id'] === scope.suggestion),
     );
   const found: { pos: number; node: PMNode }[] = [];
   state.doc.nodesBetween(scope.from, scope.to, (node, pos) => {

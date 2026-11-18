@@ -40,6 +40,7 @@ import type {
   ParagraphInput,
 } from './lines.ts';
 import type { TextMeasurer } from './measure.ts';
+import type { MathMeasurer } from './math-measure.ts';
 import type {
   NoteItem,
   NoteRef,
@@ -73,6 +74,11 @@ export interface ItemProviders {
    * ignored and the editor's own break stays there. Absent: no line starts are adopted.
    */
   readonly forcedLines?: ReadonlyMap<string, readonly number[]>;
+  /**
+   * Sizes equations from the screen fonts (FE-064 criterion 4; `math-measure.ts`). Absent, or where
+   * it answers `null`, an equation keeps the stand-in size of `flow.ts`.
+   */
+  readonly math?: MathMeasurer;
 }
 
 export interface PageItems {
@@ -160,10 +166,16 @@ export function paragraphItem(
       notes.push({ offset: inline.offset, id: inline.ref });
     const text = inlineText(inline);
     if (text.length === 0) continue;
+    const math =
+      inline.kind === 'text' && inline.role === 'equation' && inline.latex !== undefined
+        ? providers.math?.measure(inline.latex, false, inline.font)
+        : null;
     runs.push({
       text,
       font: inline.font,
       ...(inline.kind === 'box' && inline.exactWidth ? { width: inline.width } : {}),
+      // An equation the math measurer sizes takes that width and height (FE-064 criterion 4).
+      ...(math ? { width: math.width, height: math.height } : {}),
     });
     const exact = inline.kind === 'text' && inline.role === 'text' && inline.size === text.length;
     spans.push({ t0: t, t1: t + text.length, cdm: inline.offset, size: inline.size, exact });
@@ -278,7 +290,15 @@ export function tableItem(
         if (item.notes) return null;
         paragraphs.push(item);
       }
-      cells.push({ cellId: cell.id, x: cellX, width, margins: cell.margins, paragraphs });
+      cells.push({
+        cellId: cell.id,
+        x: cellX,
+        width,
+        margins: cell.margins,
+        paragraphs,
+        ...(cell.start !== undefined ? { from: cell.start } : {}),
+        ...(cell.end !== undefined ? { to: cell.end } : {}),
+      });
       cellX += width;
     }
     // The row is as tall as its tallest cell with the cell's margins, or as its height rule says.
@@ -301,9 +321,25 @@ export function tableItem(
         : row.heightRule === 'atLeast'
           ? Math.max(content, own)
           : content;
-    rows.push({ rowId: row.id, header: row.header, cantSplit: row.cantSplit, height, cells });
+    rows.push({
+      rowId: row.id,
+      header: row.header,
+      cantSplit: row.cantSplit,
+      height,
+      cells,
+      ...(row.start !== undefined ? { from: row.start } : {}),
+      ...(row.end !== undefined ? { to: row.end } : {}),
+    });
   }
-  return { kind: 'table', blockId: t.id, x, width: total, rows };
+  return {
+    kind: 'table',
+    blockId: t.id,
+    x,
+    width: total,
+    rows,
+    ...(t.start !== undefined ? { from: t.start } : {}),
+    ...(t.end !== undefined ? { to: t.end } : {}),
+  };
 }
 
 /** Converts the flow blocks of one section into pagination items, in order. */
@@ -320,15 +356,23 @@ export function pageItems(
       case 'paragraph':
         items.push(paragraphItem(b, columnWidth, providers, defaultTabStop));
         break;
-      case 'box':
+      case 'box': {
+        // A display equation the math measurer sizes takes that size, as wide as the column at most.
+        const math =
+          b.what === 'equation' && b.latex !== undefined && b.font
+            ? providers.math?.measure(b.latex, true, b.font)
+            : null;
         items.push({
           kind: 'box',
           blockId: b.id,
-          width: b.width,
-          height: b.height,
+          width: math ? Math.min(math.width, columnWidth) : b.width,
+          height: math ? math.height : b.height,
           keepNext: b.keepNext,
+          ...(b.start !== undefined ? { from: b.start } : {}),
+          ...(b.end !== undefined ? { to: b.end } : {}),
         });
         break;
+      }
       case 'pageBreak':
         items.push({ kind: 'pageBreak' });
         break;
@@ -396,7 +440,16 @@ export function flowStoryResolver(doc: FlowDocument, providers: ItemProviders): 
           fragments.push({ ...item.fragment, y });
           y += item.fragment.height + item.spaceAfter;
         } else if (b.kind === 'box') {
-          fragments.push({ kind: 'box', blockId: b.id, x: 0, y, width: b.width, height: b.height });
+          fragments.push({
+            kind: 'box',
+            blockId: b.id,
+            ...(b.start !== undefined ? { from: b.start } : {}),
+            ...(b.end !== undefined ? { to: b.end } : {}),
+            x: 0,
+            y,
+            width: b.width,
+            height: b.height,
+          });
           y += b.height;
         }
       }

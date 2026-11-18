@@ -1616,6 +1616,30 @@
       "capability": "suggestions"
     },
     {
+      "id": "review.next",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.previous",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.accept",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.reject",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.acceptAll",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.rejectAll",
+      "capability": "suggestions"
+    },
+    {
       "id": "view.layout.web",
       "capability": "views"
     },

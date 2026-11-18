@@ -85,6 +85,12 @@ export const EN_GB = {
   'command.mode.review': 'Reviewing',
   'command.mode.view': 'Viewing',
   // How suggestions are shown (UX-035). The first four name the views of 13 §5.
+  'command.review.next': 'Next suggestion',
+  'command.review.previous': 'Previous suggestion',
+  'command.review.accept': 'Accept suggestion',
+  'command.review.reject': 'Reject suggestion',
+  'command.review.acceptAll': 'Accept all suggestions',
+  'command.review.rejectAll': 'Reject all suggestions',
   'command.review.markup.all': 'Show all markup',
   'command.review.markup.simple': 'Show simple markup',
   'command.review.markup.none': 'Show no markup',
@@ -165,6 +171,7 @@ export const EN_GB = {
   'reason.query.archived': 'The document is archived.',
   'reason.query.workflow': 'The document is out for completion and cannot be changed now.',
   'reason.query.noComment': 'You do not have permission to comment on this part of the document.',
+  'reason.query.noSuggestions': 'There are no suggestions in this document.',
   'reason.query.noCommentTarget':
     'Select some text, or a figure, table or equation, to comment on it.',
   'reason.query.suggestion':
@@ -215,6 +222,26 @@ export const EN_GB = {
   'notice.refused.pictureSize':
     'The picture was not added: its size could not be used in the document.',
   'notice.refused.other': 'That change was not made.',
+  // What the review commands announce (UX-036). Counts are the suggestions handled and left pending.
+  'review.step': '{kind} by {name}: {text}',
+  'review.step.noText': '{kind} by {name}.',
+  'review.kind.ins': 'Insertion',
+  'review.kind.del': 'Deletion',
+  'review.kind.fmt': 'Formatting change',
+  'review.none': 'There are no suggestions.',
+  'review.nothingHere': 'No suggestion at the cursor or in the selection.',
+  'review.accepted': {
+    one: '{count} suggestion accepted.',
+    other: '{count} suggestions accepted.',
+  },
+  'review.rejected': {
+    one: '{count} suggestion rejected.',
+    other: '{count} suggestions rejected.',
+  },
+  'review.left': {
+    one: '{count} suggestion left pending, because you cannot edit that part.',
+    other: '{count} suggestions left pending, because you cannot edit those parts.',
+  },
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',
   // A deletion refused because a cross-reference still names its target (I4; FE-133). The count is
@@ -406,6 +433,12 @@ export const EN_GB = {
   'synonyms.mode.edit': 'write; change',
   'synonyms.mode.review': 'track changes; suggest',
   'synonyms.mode.view': 'read only; read',
+  'synonyms.review.next': 'track changes; review; go to change; find suggestion',
+  'synonyms.review.previous': 'track changes; review; go back; earlier suggestion',
+  'synonyms.review.accept': 'track changes; approve; keep change; take change',
+  'synonyms.review.reject': 'track changes; decline; undo change; discard change',
+  'synonyms.review.acceptAll': 'track changes; approve all; keep all changes',
+  'synonyms.review.rejectAll': 'track changes; decline all; discard all changes',
   'synonyms.review.markup.all': 'markup; track changes; suggestions; show changes',
   'synonyms.review.markup.simple': 'markup; track changes; suggestions; bars',
   'synonyms.review.markup.none': 'markup; final; accepted; clean',

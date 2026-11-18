@@ -39,6 +39,11 @@ export interface BreakRun {
    * `width` points wide whatever its text is. Absent for text, which the measurer measures.
    */
   readonly width?: number;
+  /**
+   * Set with `width` for a run that stands for an equation (FE-064 criterion 4): a line that holds
+   * it is at least this tall. Absent: the run's font gives the height.
+   */
+  readonly height?: number;
 }
 
 /**
@@ -104,6 +109,7 @@ interface Segment {
   readonly end: number;
   readonly font: FontKey;
   readonly width?: number;
+  readonly height?: number;
 }
 
 const SPACE = 0x20;
@@ -165,6 +171,7 @@ export function breakParagraph(
       end: offset + run.text.length,
       font: run.font,
       ...(run.width !== undefined ? { width: run.width } : {}),
+      ...(run.height !== undefined ? { height: run.height } : {}),
     });
     offset += run.text.length;
   }
@@ -247,12 +254,17 @@ export function breakParagraph(
 
   const lineHeight = (a: number, b: number): number => {
     const fonts: FontKey[] = [];
+    let tallest = 0;
     if (b > a) {
-      for (const s of segments) if (s.end > a && s.start < b) fonts.push(s.font);
+      for (const s of segments)
+        if (s.end > a && s.start < b) {
+          fonts.push(s.font);
+          tallest = Math.max(tallest, s.height ?? 0);
+        }
     } else {
       fonts.push(n === 0 ? input.markFont : fontAt(Math.max(a - 1, 0)));
     }
-    const natural = fonts.reduce((max, f) => Math.max(max, naturalHeight(f)), 0);
+    const natural = fonts.reduce((max, f) => Math.max(max, naturalHeight(f)), tallest);
     const spacing = input.line;
     if (spacing.rule === 'multiple') return spacing.factor * natural;
     if (spacing.rule === 'exact') return spacing.pt;
@@ -401,6 +413,7 @@ function sliceRuns(runs: readonly BreakRun[], a: number, b: number): BreakRun[] 
         text: run.text.slice(lo - offset, hi - offset),
         font: run.font,
         ...(run.width !== undefined ? { width: run.width } : {}),
+        ...(run.height !== undefined ? { height: run.height } : {}),
       });
     offset += run.text.length;
   }

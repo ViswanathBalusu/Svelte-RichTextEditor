@@ -964,6 +964,12 @@ export interface Workflow {
   };
 }
 
+/** The body of `decline` and `void` (12 §6.2). */
+export interface WorkflowReason {
+  /** Why the workflow is stopped: the participant who declines, or the owner who voids, says. A reason that is blank after trimming is refused. */
+  reason: string;
+}
+
 /** A workflow request or response the prose does not define. Placeholder. */
 export type WorkflowPlaceholder = { [key: string]: unknown };
 
@@ -2157,6 +2163,24 @@ export interface Operations {
     body: never;
     response: Workflow;
   };
+  /** POST /documents/{id}/workflow/void: Voids a workflow that is sent or in progress, with a reason; the document stays locked (12 §6.2). The method and path are assumed. (12 §6.2, §10) */
+  voidWorkflow: {
+    method: "POST";
+    path: "/documents/{id}/workflow/void";
+    params: { id: string };
+    query: Record<string, never>;
+    body: WorkflowReason;
+    response: Workflow;
+  };
+  /** POST /documents/{id}/workflow/participants/{pid}/decline: The participant declines to proceed, with a reason; the participant whose token is bound to {pid} may, and so may the host with its service credential (12 §6.2). The method and the document prefix are assumed. (12 §6.2, §10) */
+  participantDecline: {
+    method: "POST";
+    path: "/documents/{id}/workflow/participants/{pid}/decline";
+    params: { id: string; pid: string };
+    query: Record<string, never>;
+    body: WorkflowReason;
+    response: Workflow;
+  };
   /** POST /documents/{id}/workflow/participants/{pid}/consent: Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */
   participantConsent: {
     method: "POST";
@@ -2179,15 +2203,6 @@ export interface Operations {
   participantComplete: {
     method: "POST";
     path: "/documents/{id}/workflow/participants/{pid}/complete";
-    params: { id: string; pid: string };
-    query: Record<string, never>;
-    body: WorkflowPlaceholder;
-    response: WorkflowPlaceholder;
-  };
-  /** POST /documents/{id}/workflow/participants/{pid}/decline: Participant action `decline` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */
-  participantDecline: {
-    method: "POST";
-    path: "/documents/{id}/workflow/participants/{pid}/decline";
     params: { id: string; pid: string };
     query: Record<string, never>;
     body: WorkflowPlaceholder;
@@ -2364,78 +2379,170 @@ export interface CommitRejectedData {
 export interface WorkflowSentData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.participant_activated.v1`: Workflow event `participant_activated` (12 §6.3, §10). */
 export interface WorkflowParticipantActivatedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.participant_viewed.v1`: Workflow event `participant_viewed` (12 §6.3, §10). */
 export interface WorkflowParticipantViewedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.field_completed.v1`: Workflow event `field_completed` (12 §6.3, §10). */
 export interface WorkflowFieldCompletedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.participant_completed.v1`: Workflow event `participant_completed` (12 §6.3, §10). */
 export interface WorkflowParticipantCompletedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.participant_declined.v1`: Workflow event `participant_declined` (12 §6.3, §10). */
 export interface WorkflowParticipantDeclinedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.auth_failed.v1`: Workflow event `auth_failed` (12 §6.3, §10). */
 export interface WorkflowAuthFailedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.reminder_due.v1`: Workflow event `reminder_due` (12 §6.3, §10). */
 export interface WorkflowReminderDueData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.corrected.v1`: Workflow event `corrected` (12 §6.3, §10). */
 export interface WorkflowCorrectedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.voided.v1`: Workflow event `voided` (12 §6.3, §10). */
 export interface WorkflowVoidedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.expired.v1`: Workflow event `expired` (12 §6.3, §10). */
 export interface WorkflowExpiredData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.completed.v1`: Workflow event `completed` (12 §6.3, §10). */
 export interface WorkflowCompletedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.finalised.v1`: Workflow event `finalised` (12 §6.3, §10). */
 export interface WorkflowFinalisedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** `data` by CloudEvents `type`. */

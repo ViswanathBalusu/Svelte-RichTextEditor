@@ -46,6 +46,8 @@ import type {
   ThreadDetail,
   ThreadOutcome,
   ThreadRequest,
+  ReviewItem,
+  ReviewReport,
   ThreadSummary,
   ThreadWrite,
   ThreadsService,
@@ -149,6 +151,8 @@ export interface FakeCoreOptions {
   proofing?: ProofingStatus;
   /** Offer the comment threads port (UX-028); absent: no `threads`. */
   threads?: boolean;
+  /** The review tools (UX-036): the core lists suggestions, steps and resolves. */
+  review?: boolean;
 }
 
 /**
@@ -607,6 +611,14 @@ export class FakeCore implements CoreApi {
       this.classification = new Value(options.classification, notify);
     if (options.proofing) this.proofing = new Value(options.proofing, notify);
     if (options.threads) this.threads = new FakeThreads();
+    if (!options.review)
+      Object.assign(this, {
+        suggestionItems: undefined,
+        stepSuggestion: undefined,
+        revealSuggestion: undefined,
+        resolveAtSelection: undefined,
+        resolveSuggestions: undefined,
+      });
     if (!options.extended) {
       // Like the core of phase 1a: none of the members of phase 1b.
       Object.assign(this, {
@@ -895,6 +907,83 @@ export class FakeCore implements CoreApi {
 
   setSuggestionLabel(label: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null): void {
     this.suggestionLabel = label;
+  }
+
+  // --- UX-036: the review tools. Present only with `options.review`; the list is the harness's.
+  /** The suggestions the core lists, in any order; the shell reads them sorted by position. */
+  reviewItems: ReviewItem[] = [];
+  /** The caret position the review commands start from. */
+  reviewCaret = 0;
+  /** What the review commands asked of the core. */
+  readonly reviewCalls: Array<Record<string, unknown>> = [];
+  /** Positions the caret may have selected: a range, or a caret when from equals to. */
+  reviewSelection: { from: number; to: number } = { from: 0, to: 0 };
+
+  suggestionItems(): readonly ReviewItem[] {
+    return [...this.reviewItems].sort((a, b) => a.from - b.from);
+  }
+
+  stepSuggestion(direction: 1 | -1): ReviewItem | null {
+    const items = this.suggestionItems();
+    this.reviewCalls.push({ op: 'step', direction });
+    if (items.length === 0) return null;
+    const head = this.reviewSelection.from;
+    const found =
+      direction === 1
+        ? (items.find((s) => s.from > head) ?? items[0])
+        : ([...items].reverse().find((s) => s.from < head) ?? items[items.length - 1]);
+    if (!found) return null;
+    this.reviewSelection = { from: found.from, to: found.to };
+    return found;
+  }
+
+  revealSuggestion(id: string): boolean {
+    this.reviewCalls.push({ op: 'reveal', id });
+    const found = this.reviewItems.find((s) => s.id === id);
+    if (!found) return false;
+    this.reviewSelection = { from: found.from, to: found.to };
+    return true;
+  }
+
+  #resolve(action: 'accept' | 'reject', pick: (s: ReviewItem) => boolean): ReviewReport {
+    const matching = this.reviewItems.filter(pick);
+    const handled = matching.filter((s) => s.canResolve);
+    const skipped = matching.filter((s) => !s.canResolve);
+    this.reviewItems = this.reviewItems.filter((s) => !handled.includes(s));
+    this.reviewCalls.push({
+      op: action,
+      handled: handled.map((s) => s.id),
+      skipped: skipped.length,
+    });
+    if (handled.length > 0) this.revision.set(this.revision.get() + 1);
+    return {
+      handled: handled.length,
+      skipped: skipped.length,
+      skippedScopes: skipped.length ? ['body'] : [],
+    };
+  }
+
+  resolveAtSelection(action: 'accept' | 'reject'): ReviewReport {
+    const { from, to } = this.reviewSelection;
+    return this.#resolve(action, (s) =>
+      from === to ? s.from <= from && from <= s.to : s.from >= from && s.to <= to,
+    );
+  }
+
+  resolveSuggestions(
+    action: 'accept' | 'reject',
+    target: 'selection' | 'document' = 'selection',
+    author?: string,
+    suggestion?: string,
+  ): ReviewReport {
+    const { from, to } = this.reviewSelection;
+    return this.#resolve(
+      action,
+      (s) =>
+        (target === 'document' || (s.from >= from && s.to <= to)) &&
+        (author === undefined || s.user === author) &&
+        (suggestion === undefined || s.id === suggestion),
+    );
   }
 
   setRegionLabels(labels: Readonly<Record<string, RegionLabel>>): void {

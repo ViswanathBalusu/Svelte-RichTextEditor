@@ -54,6 +54,11 @@ export interface TransitionRequest {
   /** The workflow as the caller read it; the transition applies only to that state and revision. */
   readonly from: WorkflowResourceView;
   readonly write: WorkflowTransitionWrite;
+  /**
+   * More for the audit entry of the transition, such as the reason a workflow was stopped and who
+   * stopped it (FRW-033). It is kept in the audit trail only, never in a webhook.
+   */
+  readonly note?: Readonly<Record<string, string | number | null>>;
 }
 
 /** The commit that records the transition, when it could be read back. */
@@ -110,7 +115,7 @@ export async function recordTransition(
   deps: TransitionDeps,
   req: TransitionRequest,
 ): Promise<TransitionOutcome> {
-  const { ref, actor, from, write } = req;
+  const { ref, actor, from, write, note } = req;
   const lock = lockFor(write.to as WorkflowStateName);
   if (lock === null)
     throw new RangeError(
@@ -161,7 +166,7 @@ export async function recordTransition(
       doc: ref.doc,
       actor,
       kind: 'workflow.transition',
-      data: { from: from.state, to: write.to, rev: moved.resource.rev },
+      data: { from: from.state, to: write.to, rev: moved.resource.rev, ...note },
       at: deps.now(),
     },
   ]);

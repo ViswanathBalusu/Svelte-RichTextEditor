@@ -35,8 +35,16 @@ export interface ParagraphFragment {
   readonly lines: readonly LayoutLine[];
 }
 
+/**
+ * The CDM range a node of a table or box covers, as offsets inside its top-level block (the table or
+ * the box): the same coordinates as the `from` and `to` of a paragraph fragment inside its own
+ * block. `layoutFlow` sets them on every node it makes (FE-078 criterion 2); a tree built by hand
+ * may leave them out.
+ */
 export interface LayoutCell {
   readonly cellId: string;
+  readonly from?: number;
+  readonly to?: number;
   readonly x: number;
   readonly width: number;
   readonly fragments: readonly LayoutFragment[];
@@ -44,6 +52,8 @@ export interface LayoutCell {
 
 export interface LayoutRow {
   readonly rowId: string;
+  readonly from?: number;
+  readonly to?: number;
   /** A header row repeated at the top of a continuation page. */
   readonly repeated: boolean;
   readonly y: number;
@@ -54,6 +64,9 @@ export interface LayoutRow {
 export interface TableFragment {
   readonly kind: 'table';
   readonly blockId: string;
+  /** From the first row's range to the last row's: the rows this fragment holds. */
+  readonly from?: number;
+  readonly to?: number;
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -64,6 +77,8 @@ export interface TableFragment {
 export interface BoxFragment {
   readonly kind: 'box';
   readonly blockId: string;
+  readonly from?: number;
+  readonly to?: number;
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -72,8 +87,21 @@ export interface BoxFragment {
 
 export type LayoutFragment = ParagraphFragment | TableFragment | BoxFragment;
 
+/** A place in the document: a block and an offset inside it. */
+export interface LayoutPosition {
+  readonly blockId: string;
+  readonly offset: number;
+}
+
 export interface LayoutPage {
   readonly index: number;
+  /**
+   * What the page's body covers: where its first fragment starts and where its last one ends, or
+   * null for a page with no body fragment (FE-078 criterion 2). Headers, footers and footnotes are
+   * not part of it.
+   */
+  readonly start?: LayoutPosition | null;
+  readonly end?: LayoutPosition | null;
   /** Index of the flow section the page belongs to. */
   readonly section: number;
   readonly width: number;
@@ -89,6 +117,20 @@ export interface LayoutTree {
   readonly engine: string;
   readonly measurer: string;
   readonly pages: readonly LayoutPage[];
+}
+
+/** The body range of a page's fragments, as `LayoutPage.start` and `end` record it. */
+export function pageRange(fragments: readonly LayoutFragment[]): {
+  readonly start: LayoutPosition | null;
+  readonly end: LayoutPosition | null;
+} {
+  const first = fragments[0];
+  const last = fragments[fragments.length - 1];
+  if (!first || !last) return { start: null, end: null };
+  return {
+    start: { blockId: first.blockId, offset: first.from ?? 0 },
+    end: { blockId: last.blockId, offset: last.to ?? 0 },
+  };
 }
 
 /** Freezes a tree in place, recursively (FE-078: the tree is immutable). */
