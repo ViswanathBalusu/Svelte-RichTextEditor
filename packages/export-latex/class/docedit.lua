@@ -75,6 +75,7 @@ local GLUE_LEADERS     = subtype_number("glue", "leaders")
 local GLUE_USER        = subtype_number("glue", "userskip")
 local DISC_EXPLICIT    = subtype_number("disc", "explicit")
 local HLIST_LINE       = subtype_number("hlist", "line")
+local HLIST_INDENT     = subtype_number("hlist", "indent")
 local MATH_BEGIN       = subtype_number("math", "beginmath")
 
 -- Attribute register numbers, set by init().
@@ -429,7 +430,9 @@ local function tallest_run(head)
         if d > md then md = d end
       end
     else
-      local lh = has_attribute(n, A.rlh)
+      -- The paragraph indent box carries the paragraph's own font attributes. It is not a run, so it
+      -- must not lift the first line (ADR 0032 §4; EXP-021): an empty line falls back to the paragraph.
+      local lh = not (id == HLIST and getsubtype(n) == HLIST_INDENT) and has_attribute(n, A.rlh)
       if lh and (id == GLYPH or id == HLIST or id == VLIST or id == RULE) and lh > tallest then
         tallest, descent = lh, has_attribute(n, A.rld) or 0
       end
