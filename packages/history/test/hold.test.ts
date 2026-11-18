@@ -27,7 +27,13 @@ describe('legal holds (HIS-031)', () => {
     });
     if (!set.ok) throw new Error(set.reason);
     const during = thinningPlan(cps, { now: NOW, weeklyAfterMs: WEEKLY_AFTER, hold: true });
-    expect(during).toEqual({ ok: true, keep: [1, 2, 3, 4, 5, 6], remove: [], held: [] });
+    expect(during).toEqual({
+      ok: true,
+      keep: [1, 2, 3, 4, 5, 6],
+      remove: [],
+      held: [],
+      keepers: [],
+    });
 
     const released = applyHold(set.state, {
       action: 'release',

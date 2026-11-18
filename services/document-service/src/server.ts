@@ -146,6 +146,12 @@ import {
 import { Pipeline, type PlainHandler, type Reply } from './control-plane/pipeline.ts';
 import { auditPartitionsTask } from './control-plane/audit-partitions-task.ts';
 import {
+  CheckpointThinning,
+  checkpointThinningTask,
+  type CheckpointThinningStore,
+} from './control-plane/checkpoint-thinning.ts';
+import { gateThinning } from './data-plane/recovery.ts';
+import {
   PayloadThinning,
   payloadThinningTask,
   type ThinningStore,
@@ -280,6 +286,11 @@ export interface ServiceParts {
    * connects as a member of `docedit_purge`. Absent: no thinning task runs.
    */
   thinningStore?: ThinningStore;
+  /**
+   * The rows of the thinning of old checkpoints (HIS-030). Like `purgeStore` it needs a pool that
+   * connects as a member of `docedit_purge`. Absent: no checkpoint thinning task runs.
+   */
+  checkpointThinningStore?: CheckpointThinningStore;
   /**
    * Per-document keys (HIS-041). With both `documentKeyStore` and `keyService`, the service seals
    * the payloads and objects of documents that have a key and builds `documentKeys` to give and
@@ -561,6 +572,11 @@ function quotaAdminOver(
   now: () => number,
 ): QuotaAdminService {
   return new QuotaAdminService({ store, audit, now });
+}
+
+/** The registry of a data plane that has one (the shipped one does; a test double may not). */
+interface DataPlaneRegistry {
+  metricsRegistry?: { checkpointMismatches: { inc(labels: Record<string, string>): void } };
 }
 
 /** Parts over PostgreSQL with the service role (06 §4.1; BE-011). */
@@ -1231,7 +1247,51 @@ export async function startService(opts: StartOptions): Promise<Service> {
           now,
         })
       : null;
+  // Thinning of old checkpoints (HIS-030): a checkpoint that replaces older ones is compared with a
+  // replay of the log first (BE-020 criterion 5), and a mismatch raises the alert counter.
+  const checkpointThinning =
+    parts.checkpointThinningStore && parts.audit
+      ? new CheckpointThinning({
+          store: parts.checkpointThinningStore,
+          objects: parts.objects,
+          audit: parts.audit,
+          now,
+          verify: async (ref, seq) =>
+            (
+              await gateThinning(
+                {
+                  logs,
+                  checkpoints,
+                  index: parts.checkpointIndex,
+                  audit: parts.audit,
+                },
+                ref,
+                seq,
+                (verdict) => {
+                  // The alert counter lives in the data plane's registry (BE-020 criterion 5).
+                  (
+                    dataPlane as unknown as DataPlaneRegistry
+                  ).metricsRegistry?.checkpointMismatches.inc({
+                    tenant: ref.tenant,
+                  });
+                  logger.error({
+                    event: 'checkpoint.mismatch',
+                    tenant: ref.tenant,
+                    message: `checkpoint ${verdict.seq} of ${ref.doc} differs from its replay`,
+                  });
+                },
+              )
+            ).proceed,
+          onUnverifiable: (ref, seq, error) =>
+            logger.error({
+              event: 'checkpoints.thin.unverifiable',
+              tenant: ref.tenant,
+              message: `${ref.doc} at ${seq}: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+        })
+      : null;
   const tasks: ScheduledTask[] = [
+    ...(checkpointThinning ? [checkpointThinningTask(checkpointThinning)] : []),
     // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
     // scheduler hands the task the documents under a legal hold, and the task leaves them alone.
     ...(thinning ? [payloadThinningTask(thinning)] : []),
