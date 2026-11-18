@@ -1259,6 +1259,7 @@ export const EN_GB = {
     other: '{count} changes',
   },
   'history.group.authors': 'Authors: {authors}',
+  'history.group.assisted': 'Written by an assistant for {name}: {agent}',
   'history.group.origins': 'Origins: {origins}',
   'history.group.named': 'Named version',
   'history.version.by': 'Named by {name} at {time}',
@@ -1289,7 +1290,7 @@ export const EN_GB = {
     one: '{name}: {count} passage, from {first} to {last}.',
     other: '{name}: {count} passages, from {first} to {last}.',
   },
-  'history.who.assistant': 'An assistant acted for this person.',
+  'history.who.assistant': 'Written by an assistant ({agent}) for this person.',
   'history.who.restored': 'Brought back by {by}.',
 
   // Comparing two versions (HIS-013; 08 §6).
@@ -1309,6 +1310,11 @@ export const EN_GB = {
   'history.compare.next': 'Next change',
   'history.compare.deletions': 'Show deleted text',
   'history.compare.announce': 'Change {n} of {m}: {kind}, by {name}',
+  'history.compare.announce.assistant':
+    'Change {n} of {m}: {kind}, written by an assistant ({agent}) for {name}',
+  'history.compare.assistant.title': 'Written by assistants',
+  'history.compare.assistant.row':
+    'Change {n}: {kind}, written by an assistant ({agent}) for {name}',
   'history.compare.announce.nobody': 'Change {n} of {m}: {kind}',
   'history.compare.kind.modified': 'text changed',
   'history.compare.kind.added': 'added',
