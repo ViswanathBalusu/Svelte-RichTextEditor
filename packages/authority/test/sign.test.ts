@@ -6,7 +6,13 @@ import type { Node } from 'prosemirror-model';
 import { describe, expect, it } from 'vitest';
 import { computeAccess } from '../src/permissions/access.ts';
 import type { FillContext } from '../src/permissions/registry.ts';
-import { checkSign, fieldsToDateSign, signedDate } from '../src/permissions/sign.ts';
+import {
+  checkSign,
+  checkSignConditions,
+  fieldsToDateSign,
+  signedDate,
+  type SignConditions,
+} from '../src/permissions/sign.ts';
 import type { FieldChange } from '../src/permissions/scopes.ts';
 import { regionInfos } from '../src/permissions/visibility.ts';
 import { FIELDS, MORE, USERS, fieldsDoc, morePermissions } from './permission-fixtures.ts';
@@ -136,6 +142,66 @@ describe('a dateSigned value is the date in the workflow time zone (FRW-046 crit
         (t, zone) => /^\d{4}-\d{2}-\d{2}$/.test(signedDate(t, zone)),
       ),
       { numRuns: 300 },
+    );
+  });
+});
+
+describe('the conditions the sign endpoint checks without a commit (FRW-046 criteria 2 and 6)', () => {
+  const ok: SignConditions = {
+    kind: 'signature',
+    assignee: 'tenant',
+    readOnly: false,
+    participantRoles: ['tenant'],
+    active: true,
+    enabled: true,
+  };
+  const refusal = (c: Partial<SignConditions>) => {
+    const v = checkSignConditions({ ...ok, ...c });
+    return v.ok ? null : v.reason;
+  };
+
+  it('allows an active participant to sign an enabled signature or initials field of their role', () => {
+    expect(checkSignConditions(ok)).toEqual({ ok: true });
+    expect(checkSignConditions({ ...ok, kind: 'initials' })).toEqual({ ok: true });
+  });
+
+  it('refuses each condition that fails, and names it', () => {
+    expect(refusal({ kind: 'text' })).toContain('only a signature or initials');
+    expect(refusal({ kind: 'dateSigned' })).toContain('only a signature or initials');
+    expect(refusal({ assignee: 'landlord' })).toContain('role the participant does not hold');
+    expect(refusal({ assignee: null })).toContain('role the participant does not hold');
+    expect(refusal({ participantRoles: [] })).toContain('role the participant does not hold');
+    expect(refusal({ active: false })).toContain('not active');
+    expect(refusal({ readOnly: true })).toContain('read-only');
+    expect(refusal({ enabled: false })).toContain('hidden or disabled');
+  });
+
+  it('allows a signing only when every condition holds (property)', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom('signature', 'initials', 'text', 'dateSigned'),
+        fc.constantFrom('tenant', 'landlord', null),
+        fc.boolean(),
+        fc.boolean(),
+        fc.boolean(),
+        (kind, assignee, readOnly, active, enabled) => {
+          const v = checkSignConditions({
+            kind,
+            assignee,
+            readOnly,
+            participantRoles: ['tenant'],
+            active,
+            enabled,
+          });
+          const all =
+            (kind === 'signature' || kind === 'initials') &&
+            assignee === 'tenant' &&
+            !readOnly &&
+            active &&
+            enabled;
+          expect(v.ok).toBe(all);
+        },
+      ),
     );
   });
 });
