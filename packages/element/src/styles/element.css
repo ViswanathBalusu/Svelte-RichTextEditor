@@ -316,6 +316,19 @@ img.ProseMirror-separator {
   text-decoration-style: wavy;
 }
 
+/* A comparison drawn over a version (HIS-013): a bar in the margin of every changed block, a border
+   that survives forced colours; the negative margin cancels its width so that the text does not
+   move. Deleted text is a `del` widget that carries the suggestion classes and the author tone. */
+.de-change-bar {
+  border-inline-start: 3px solid currentColor;
+  margin-inline-start: -6px;
+  padding-inline-start: 3px;
+}
+
+.de-compare-deleted {
+  text-decoration-thickness: 2px;
+}
+
 /* Proofing findings (UX-041): an underline that is not a background colour, so it survives forced
    colours; the finding the last navigation chose is outlined as well. */
 .de-proof-spelling {

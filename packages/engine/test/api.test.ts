@@ -93,7 +93,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // SYN-036: the peers' carets as rectangles, which the shell draws (UX-027).
       | 'carets'
       // FRW-078: the summary's link moves focus to a field's control.
-      | 'focusField';
+      | 'focusField'
+      // HIS-013: a read-only version view draws a comparison over its document.
+      | 'setComparison';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });
