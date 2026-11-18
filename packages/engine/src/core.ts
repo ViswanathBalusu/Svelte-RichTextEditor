@@ -2405,9 +2405,26 @@ export class DocumentCore implements DocumentApi {
       });
       return false;
     }
+    const usedBefore =
+      name === 'setPageSetup' ? this.#headerVariantsInUse() : new Set<StoryVariant>();
     const done = command(this.#state, this.dispatch);
+    if (done && name === 'setPageSetup') {
+      // FE-137 criterion 2: a variant just turned on has its stories, and its header opens in the
+      // panel (FE-057). The caret stays where the panel puts it.
+      const turnedOn = [...this.#headerVariantsInUse()].find((v) => !usedBefore.has(v));
+      if (turnedOn !== undefined && this.editStory('header', turnedOn)) return done;
+    }
     if (done && name !== 'insertFootnote' && name !== 'editHeader') this.focus();
     return done;
+  }
+
+  /** The header variants the body's page setup uses now. */
+  #headerVariantsInUse(): Set<StoryVariant> {
+    return new Set(
+      storyVariantsOf(this.#state.doc)
+        .filter((v) => v.part === 'header')
+        .map((v) => v.variant),
+    );
   }
 
   exec(name: CommandName, args?: CommandArgs): boolean {
