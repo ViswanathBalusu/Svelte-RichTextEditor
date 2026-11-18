@@ -576,6 +576,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(options.exports ? { exports: options.exports } : {}),
       // The send dialog (FRW-028): the pre-send checks and the send action.
       ...(workflowSend ? { workflowSend } : {}),
+      // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
+      ...(fillActions ? { accessCode: { submit: (code: string) => fillActions.verify(code) } } : {}),
       // How suggestions are shown (UX-035), and the words that name them for assistive technology.
       markupView: core.markupView,
       setMarkupView: (view) => core.setMarkupView(view),

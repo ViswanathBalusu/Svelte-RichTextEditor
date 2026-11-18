@@ -35,6 +35,7 @@ import { cdmSchema } from '@docedit/model/prosemirror';
 import { derivedCommitId, stableJson } from '../data-plane/commit-id.ts';
 import type { ContentReader } from '../control-plane/content.ts';
 import type { DocRef, OutboxStore } from '../storage/types.ts';
+import { anchorEvidence } from './evidence-anchor.ts';
 import type { EvidenceLedger } from './evidence-ledger.ts';
 import { recordCompletion, type ProgressOutcome } from './progress.ts';
 import { recordOf } from './record.ts';
@@ -219,7 +220,7 @@ export async function completeMyPart(
   }
 
   // The evidence of the completion.
-  await deps.evidence.record(ref.tenant, {
+  const made = await deps.evidence.record(ref.tenant, {
     doc: ref.doc,
     participant,
     kind: who.kind as ParticipantKind,
@@ -231,6 +232,8 @@ export async function completeMyPart(
       userAgent: req.facts.userAgent,
     },
   });
+  // Its salted hash enters the chain in a control commit after the completion (12 §7; FRW-041).
+  await anchorEvidence(deps, ref, { origin: 'rules', evidenceHash: made.hash });
   return {
     ok: true,
     changed: true,

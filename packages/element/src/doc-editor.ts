@@ -70,6 +70,7 @@ import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
 import { selectView, VIEW_STRINGS, type ViewName } from './view-select.ts';
 import { frameScheduler } from './status.ts';
+import { requestLayoutKernel } from './layout-kernel-request.ts';
 import { EMBEDDING_VERSION, RELEASE } from './version.ts';
 
 /** `getToken` (05 §8.1): returns a token for the document, held in memory only. */
@@ -419,10 +420,23 @@ export class DocEditorElement extends Base {
         this.#viewOverride = null;
         this.#pendingBlock = null;
         this.#scheduleLoad();
+        this.#prepareKernel(value);
         break;
       default:
         break;
     }
+  }
+
+  /**
+   * The page view needs the layout kernel (WebAssembly; WASM-002), so asking for it loads the kernel,
+   * and nothing else does: a session that only uses the web or read view fetches no WebAssembly. The
+   * page view is not mounted yet (`pageViewAvailable` is false in `#viewChoice`), so the editor shows
+   * the web view meanwhile and the kernel waits for it. Touch devices never get the page view (FE-113).
+   */
+  #prepareKernel(view: string | null): void {
+    if (view !== 'print') return;
+    if (typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches) return;
+    void requestLayoutKernel((detail) => this.#emit('de-diagnostic', detail));
   }
 
   #attributes(): {

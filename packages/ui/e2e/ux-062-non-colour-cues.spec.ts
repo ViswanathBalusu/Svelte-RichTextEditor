@@ -3,8 +3,8 @@
  * not colour remains under forced colours and in the high-contrast theme. Checked on the surfaces the
  * shell has: presence in the header (idle people have a dashed outline and the word "idle"), the
  * roles of a grant (each has its own shape and its name in text) and the state of a region (an
- * icon and the state in words). The suggestion kinds of the review pane are not checked: the shell
- * has no review pane yet (UX-037), so that part of the criterion is open.
+ * icon and the state in words) and the kinds of suggestion in the review pane (UX-037), each named
+ * in words in the row and in its accessible name.
  * Run from the repository root with
  * `pnpm exec playwright test -c packages/ui/playwright.config.ts ux-062-non-colour-cues`.
  */
@@ -97,6 +97,51 @@ for (const environment of ['forced-colors', 'high-contrast', 'both'] as const) {
         );
       }
       expect(new Set(shapes).size).toBe(ROLES.length);
+    });
+
+    test('review pane: each kind of suggestion is named in words', async ({ page }) => {
+      const theme = await enter(page, environment);
+      const h = await open(page, { theme, extended: true, review: true });
+      const base = {
+        block: false,
+        user: 'u1',
+        caps: ['view', 'comment', 'suggest', 'edit'],
+        canResolve: true,
+      } as const;
+      await h.setReviewItems([
+        { ...base, id: 's1', kind: 'ins', from: 10, to: 15, text: 'added' },
+        { ...base, id: 's2', kind: 'del', from: 30, to: 35, text: 'removed' },
+        { ...base, id: 's3', kind: 'fmt', from: 50, to: 55, text: 'styled' },
+        { ...base, id: 's4', kind: 'del', block: true, from: 70, to: 75, text: 'a block' },
+      ]);
+      expect(await h.exec('view.review')).toEqual({ ran: true, reason: null });
+      const pane = page.locator('.de-pane[data-pane="review"]');
+      await expect(pane).toBeVisible();
+      if (environment !== 'high-contrast')
+        expect(await page.evaluate(() => matchMedia('(forced-colors: active)').matches)).toBe(true);
+      // The kind is a word in the row, drawn with a size, and the four words differ: no kind is told
+      // apart by colour alone.
+      const words: string[] = [];
+      for (const id of ['s1', 's2', 's3', 's4']) {
+        const kind = pane.locator(`li[data-suggestion="${id}"] .de-review-kind`);
+        const box = await kind.boundingBox();
+        expect(box?.width, `${id} kind is drawn`).toBeGreaterThan(0);
+        words.push((await kind.innerText()).trim());
+      }
+      expect(words).toEqual(['Insertion', 'Deletion', 'Formatting change', 'Block change']);
+      expect(new Set(words).size).toBe(4);
+      // The word is also in the row's accessible name, so a screen reader hears the kind.
+      for (const [id, word] of [
+        ['s1', 'Insertion'],
+        ['s2', 'Deletion'],
+        ['s3', 'Formatting change'],
+        ['s4', 'Block change'],
+      ] as const)
+        expect(
+          await pane
+            .locator(`li[data-suggestion="${id}"] .de-review-head`)
+            .getAttribute('aria-label'),
+        ).toContain(word);
     });
 
     test('region states: each has its own icon and its name in words', async ({ page }) => {

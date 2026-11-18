@@ -156,6 +156,12 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
   },
 ];
 
+/**
+ * The loader of the pane that holds a sandboxed extension's frame (UX-060). The host passes it to
+ * `sandboxedExtension` as `panel.load`; the component is its own chunk, loaded when the pane first opens.
+ */
+export const loadSandboxPane: PaneLoader = () => load(import('../panes/SandboxPane.svelte'));
+
 export class PaneRegistry {
   readonly #panes = new Map<string, PaneDescriptor>();
   readonly #listeners = new Set<() => void>();

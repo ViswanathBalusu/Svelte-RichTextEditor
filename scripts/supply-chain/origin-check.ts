@@ -26,7 +26,8 @@ import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyseBundle, packageAt, type BundleContents } from './bundle.ts';
 
-export type Rule = 'remote-import' | 'computed-import' | 'remote-address' | 'eval';
+export type Rule =
+  'remote-import' | 'computed-import' | 'computed-script' | 'remote-address' | 'eval';
 
 export interface Finding {
   rule: Rule;
@@ -52,6 +53,8 @@ export interface OriginException {
   rule: Rule;
   /** A path prefix inside the bundle; the exception applies only there. */
   file?: string;
+  /** Text the finding's detail must contain, so that the exception excuses one address only. */
+  detail?: string;
   reason: string;
   decision: string;
   expires: string;
@@ -139,6 +142,13 @@ function calleeName(e: ts.Expression): string | null {
 const literalText = (e: ts.Expression | undefined): string | null =>
   e && (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) ? e.text : null;
 
+/** `document.createElement('script')`, on any receiver. */
+const isScriptElement = (e: ts.Expression): boolean =>
+  ts.isCallExpression(e) &&
+  ts.isPropertyAccessExpression(e.expression) &&
+  e.expression.name.text === 'createElement' &&
+  literalText(e.arguments[0]) === 'script';
+
 /** Scans one script. Positions are relative to `text`; `lineOffset` shifts them (inline scripts). */
 export function scanScript(
   text: string,
@@ -166,7 +176,36 @@ export function scanScript(
     else if (isRemote(lit)) add('remote-import', node);
     else if (isGeneratedCode(lit)) add('eval', node);
   };
+  // Names that hold a script element, so that a computed address given to one can be found.
+  const scripts = new Set<string>();
+  const isScript = (e: ts.Expression): boolean =>
+    isScriptElement(e) || (ts.isIdentifier(e) && scripts.has(e.text));
   const visit = (n: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(n) &&
+      ts.isIdentifier(n.name) &&
+      n.initializer &&
+      isScriptElement(n.initializer)
+    )
+      scripts.add(n.name.text);
+    if (
+      ts.isBinaryExpression(n) &&
+      n.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isPropertyAccessExpression(n.left) &&
+      n.left.name.text === 'src' &&
+      isScript(n.left.expression) &&
+      literalText(n.right) === null
+    )
+      add('computed-script', n);
+    if (
+      ts.isCallExpression(n) &&
+      ts.isPropertyAccessExpression(n.expression) &&
+      n.expression.name.text === 'setAttribute' &&
+      isScript(n.expression.expression) &&
+      literalText(n.arguments[0]) === 'src' &&
+      literalText(n.arguments[1]) === null
+    )
+      add('computed-script', n);
     if (ts.isCallExpression(n)) {
       if (n.expression.kind === ts.SyntaxKind.ImportKeyword) importOf(n, n.arguments[0]);
       else {
@@ -384,7 +423,8 @@ export function checkOrigins(
         (e) =>
           e.rule === finding.rule &&
           e.package === nameOf(finding.package) &&
-          (!e.file || finding.file.startsWith(e.file)),
+          (!e.file || finding.file.startsWith(e.file)) &&
+          (!e.detail || finding.detail.includes(e.detail)),
       );
       if (exception) {
         used.add(exception);

@@ -58,6 +58,8 @@ export const MATRIX: readonly MatrixRow[] = [
     routes: [
       'GET /documents/{id}/content',
       'GET /documents/{id}/commits',
+      'GET /documents/{id}/audit-segment',
+      'GET /documents/{id}/suggestions/{sid}/introduction',
       'GET /documents/{id}/history',
       'GET /documents/{id}/versions',
       'GET /documents/{id}/diff',

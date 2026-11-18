@@ -701,6 +701,10 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
         engines: req(arr(str({ known: ENGINES }), { minItems: 1 })),
         cdm: req(ref('CdmRange')),
         features: req(arr(ref('FeatureName'), { unique: true })),
+        exportTargets: opt(
+          arr(text({ minLength: 1 }), { unique: true }),
+          'The export targets the deployment offers (`pdf`, `tex`, and others by name), present when the `exports` feature is announced. A client offers these and no other; a service refuses a target that is not in the list with `validation_failed`. Absent: the deployment does not say, and a client offers the PDF and the LaTeX bundle (UX-101; ADR 0382).',
+        ),
         mode: req(
           enm(['authority', 'relay']),
           'A relay never announces `regions`, `suggest-enforced` or `fields` (04 §14).',

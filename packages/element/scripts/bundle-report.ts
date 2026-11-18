@@ -62,13 +62,49 @@ export interface LazyFile {
 
 export const BUDGET_GZIP_BYTES = 320_000;
 
+/**
+ * Budgets for single lazy modules (WASM-012 criterion 1; ADR 0016), counted as gzip level 9 bytes
+ * of the file. The build fails when a file that `match` names is larger. Proposed, not decided by
+ * the owner: the figure is S10's measurement of the whole Rust prototype (shaping, line breaking
+ * and hyphenation), 419,844 bytes of gzip at `opt-level = 3` without wasm-opt
+ * (docs/spikes/2026-11-06-s10-text-kernel.md, section 3.3), rounded up to 420,000. The kernel in
+ * the repository is far smaller now (WASM-001 is the toolchain only); the budget is what the
+ * finished kernel may grow to, so that it never costs more than the prototype the owner chose on.
+ */
+export const MODULE_BUDGETS: ReadonlyArray<{
+  name: string;
+  match: RegExp;
+  gzipBytes: number;
+  source: string;
+}> = [
+  {
+    name: 'layout kernel',
+    match: /(^|\/)docedit_layout_kernel_bg[^/]*\.wasm$/,
+    gzipBytes: 420_000,
+    source: 'S10 report section 3.3: the Rust prototype was 419,844 bytes of gzip',
+  },
+];
+
+/** The lazy files over their module budget, as sentences for the build's output. Empty when none. */
+export function moduleBudgetViolations(lazy: readonly LazyFile[]): string[] {
+  const out: string[] = [];
+  for (const file of lazy)
+    for (const budget of MODULE_BUDGETS)
+      if (budget.match.test(file.file) && file.size.gzip > budget.gzipBytes)
+        out.push(
+          `${file.file} is ${file.size.gzip} bytes of gzip, over the ${budget.name} budget of ${budget.gzipBytes} (${budget.source})`,
+        );
+  return out;
+}
+
 const isWasm = (name: string) => /\.wasm(\?.*)?$/.test(name);
 
 /** The feature a lazy file belongs to, from its name and the modules in it. */
 export function lazyFeatureOf(fileName: string, moduleIds: readonly string[] = []): LazyFeature {
   const ids = moduleIds.map((id) => id.replaceAll('\\', '/'));
   const any = (test: RegExp) => ids.some((id) => test.test(id));
-  if (isWasm(fileName)) return 'webassembly';
+  if (isWasm(fileName) || any(/\/layout-kernel\/dist\/|\/element\/src\/features\/layout-kernel/))
+    return 'webassembly';
   if (/pdf\.worker/.test(fileName)) return 'pdf worker';
   if (fileName.startsWith('viewer/') || any(/\/element\/src\/pdf\//)) return 'pdf viewer';
   if (any(/node_modules\/(katex|mathlive)\//) || any(/\/element\/src\/katex-/))
@@ -231,6 +267,8 @@ export interface Report {
   lazyByFeature: Array<{ feature: LazyFeature; files: number; size: Size }>;
   /** Empty, or why the build fails for WebAssembly (FND-008 criterion 3). */
   wasmViolations: string[];
+  /** Empty, or the lazy modules over their own budget (WASM-012 criterion 1). */
+  moduleBudgetViolations: string[];
   withinBudget: boolean;
 }
 
@@ -281,6 +319,7 @@ export function bundleReport(
     lazy: [],
     lazyByFeature: [],
     wasmViolations: wasmViolations(chunks, withDep ?? first),
+    moduleBudgetViolations: [],
     withinBudget: Math.max(size.gzip, withDep ? total(withDep).gzip : 0) <= BUDGET_GZIP_BYTES,
   };
   if (viewerDir) {
@@ -326,6 +365,7 @@ export function bundleReport(
     const files = report.lazy.filter((f) => f.feature === feature);
     return { feature, files: files.length, size: files.reduce((s, f) => add(s, f.size), ZERO) };
   });
+  report.moduleBudgetViolations = moduleBudgetViolations(report.lazy);
   return report;
 }
 
@@ -362,6 +402,7 @@ export function printReport(report: Report): void {
       `${f.feature.padEnd(46)}${`${f.files} files`.padEnd(19)}${kb(f.size.raw).padStart(10)}${kb(f.size.gzip).padStart(11)}${kb(f.size.brotli).padStart(11)}`,
     );
   for (const v of report.wasmViolations) console.log(`WebAssembly: ${v}`);
+  for (const v of report.moduleBudgetViolations) console.log(`Module budget: ${v}`);
   console.log(
     `budget ${kb(report.budgetGzipBytes)} gzip: ${report.withinBudget ? 'within' : 'EXCEEDED'}`,
   );

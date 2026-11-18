@@ -417,6 +417,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         '/v1/keys',
         '/v1/quotas',
         '/v1/templates',
+        '/v1/history-visibility',
       ];
       // Every operation without a path parameter that reads is in the list above.
       const reads = operations.filter((o) => o.params.length === 0 && o.method === 'GET');
