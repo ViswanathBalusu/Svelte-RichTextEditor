@@ -57,7 +57,9 @@ export type ProfileRequirement =
   /** Servers in this mode (05 §2, §9). */
   | { readonly kind: 'mode'; readonly mode: 'authority' | 'relay' }
   /** Servers that announce every one of these features. */
-  | { readonly kind: 'features'; readonly features: readonly string[] };
+  | { readonly kind: 'features'; readonly features: readonly string[] }
+  /** A run that is given an authority service address (05 §10): it is not reached over DEP. */
+  | { readonly kind: 'authority-service' };
 
 export interface ProfileDef {
   readonly id: string;

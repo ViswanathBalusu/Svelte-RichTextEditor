@@ -7,7 +7,13 @@
 import { DEP1 } from '@docedit/protocol';
 import { KitFailure, isKitFailure, isKitSkip } from './assert.ts';
 import { resolveConfig, type KitConfig, type ResolvedConfig } from './config.ts';
-import { BootstrapError, ScenarioContext, bootstrap, type Target } from './context.ts';
+import {
+  BootstrapError,
+  ScenarioContext,
+  authorityOnlyTarget,
+  bootstrap,
+  type Target,
+} from './context.ts';
 import { PROFILES } from './profiles/index.ts';
 import type { KitReport, Outcome, ProfileResult, ScenarioResult } from './report.ts';
 import type { ProfileDef, ScenarioDef } from './scenario.ts';
@@ -18,10 +24,18 @@ export const KIT_VERSION = '0.1.0';
 export function notApplicable(
   p: ProfileDef,
   target: Pick<Target, 'discovery' | 'features'> & {
-    config: Pick<ResolvedConfig, 'readRestrictionsFeature'>;
+    config: Pick<ResolvedConfig, 'readRestrictionsFeature'> &
+      Partial<Pick<ResolvedConfig, 'authorityService'>>;
+    authorityOnly?: boolean;
   },
 ): string | null {
   const r = p.requires;
+  if (r.kind === 'authority-service')
+    return target.config.authorityService
+      ? null
+      : 'no authority service address was given (--authority-service; 05 §10)';
+  if (target.authorityOnly)
+    return 'the run is for the authority service only: no discovery URL was given';
   if (r.kind === 'always') return null;
   if (r.kind === 'mode')
     return target.discovery.mode === r.mode ? null : `the target is not in ${r.mode} mode (05 §2)`;
@@ -215,12 +229,19 @@ export async function runKit(
   };
   let target: Target | null = null;
   try {
-    target = await bootstrap(config);
+    if (config.discovery === '') {
+      if (!config.authorityService)
+        throw new BootstrapError(
+          'neither a discovery URL nor an authority service address was given',
+          'one of them',
+        );
+      target = authorityOnlyTarget(config);
+    } else target = await bootstrap(config);
     report.target = {
-      discovery: target.discoveryUrl,
-      mode: target.discovery.mode,
-      versions: [...target.discovery.versions],
-      features: [...target.discovery.features],
+      discovery: target.authorityOnly ? '' : target.discoveryUrl,
+      mode: target.authorityOnly ? null : target.discovery.mode,
+      versions: target.authorityOnly ? [] : [...target.discovery.versions],
+      features: target.authorityOnly ? [] : [...target.discovery.features],
     };
   } catch (e) {
     const failure: NonNullable<KitReport['bootstrap']['failure']> = {

@@ -19,6 +19,7 @@ import { Observed, operationOf } from './coverage.ts';
 import { contractDocument } from './documents.ts';
 import { responseProblems } from './registry-oracle.ts';
 import { Http, ServiceClient, expectStatus, type GrantSpec } from './rest.ts';
+import { AuthorityClient } from './authority-client.ts';
 import { Wire, type WireOptions } from './wire.ts';
 
 /** What the context needs to know of its scenario (scenario.ts depends on this file, not back). */
@@ -42,6 +43,8 @@ export interface Target {
   readonly service: ServiceClient;
   /** The `welcome` of the probe session: limits and features. */
   readonly welcome: Welcome;
+  /** The run has no DEP server: it is for the authority service alone (05 §10). */
+  readonly authorityOnly?: boolean;
 }
 
 export class BootstrapError extends Error {
@@ -127,6 +130,25 @@ export async function bootstrap(config: ResolvedConfig): Promise<Target> {
   }
 }
 
+/**
+ * The target of a run that names no discovery URL (the authority service alone, 05 §10). It holds
+ * nothing of a DEP server: a profile that reads it is skipped by notApplicable, so no scenario of
+ * such a profile runs on it.
+ */
+export function authorityOnlyTarget(config: ResolvedConfig): Target {
+  const http = new Http();
+  return {
+    config,
+    discoveryUrl: '',
+    discovery: { mode: 'authority', versions: [], features: [], rest: '', ws: '' } as never,
+    features: new Set(),
+    http,
+    service: new ServiceClient(http, '', config.credential),
+    welcome: {} as never,
+    authorityOnly: true,
+  };
+}
+
 /** What one scenario works with. */
 export class ScenarioContext {
   readonly target: Target;
@@ -138,6 +160,7 @@ export class ScenarioContext {
   readonly restProblems: string[] = [];
   private readonly cleanups: Array<() => Promise<void> | void> = [];
   private users = 0;
+  private authorityClient: AuthorityClient | undefined;
   private readonly stopObserving: () => void;
 
   constructor(target: Target, scenario: ScenarioRef) {
@@ -168,6 +191,22 @@ export class ScenarioContext {
 
   get timeoutMs(): number {
     return this.target.config.timeoutMs;
+  }
+
+  /** The authority service of the run (05 §10); a scenario that needs it is skipped without one. */
+  get authority(): AuthorityClient {
+    const a = this.config.authorityService;
+    if (!a) return this.skip('no authority service address was given (--authority-service)');
+    this.authorityClient ??= new AuthorityClient(a.url, a.token);
+    return this.authorityClient;
+  }
+
+  /** Restarts the authority service, when the caller gave a way to (AuthorityServiceInput.restart). */
+  async restartAuthority(): Promise<void> {
+    const restart = this.config.authorityService?.restart;
+    if (!restart) this.skip('the run has no way to restart the authority service');
+    const url = await restart();
+    if (typeof url === 'string') this.authority.url = url;
   }
 
   /** Whether the server announces a feature (05 §1 rule 4). */

@@ -5,8 +5,27 @@
  * with the reason (ADR 0042).
  */
 
+/**
+ * The authority service the `authority-service` profile runs against (05 §10, §11; PRO-125). It is
+ * not a DEP server, so it has an address of its own. A run may name it with or without a discovery URL.
+ */
+export interface AuthorityServiceInput {
+  /** The service's base URL, without the `/v1/authority` path. */
+  url: string;
+  /** The bearer token its calls need, when the operator set one. */
+  token?: string;
+  /**
+   * Restarts the service and returns its new URL when that changed. Only a caller that controls the
+   * service can give it (the kit's own tests do); without it the restart scenario is skipped.
+   */
+  restart?: () => Promise<string | undefined>;
+}
+
 export interface KitConfig {
-  /** `{endpoint}/.well-known/dep`, or the endpoint itself. */
+  /**
+   * `{endpoint}/.well-known/dep`, or the endpoint itself. Empty when the run is for the authority
+   * service alone: every DEP profile is then skipped.
+   */
   discovery: string;
   /** A service credential of the tenant the kit may use (05 §3.2). */
   credential: string;
@@ -17,6 +36,8 @@ export interface KitConfig {
    * half of the `Origin` check are skipped.
    */
   origin?: string;
+  /** The authority service for the `authority-service` profile; without it the profile is skipped. */
+  authorityService?: AuthorityServiceInput;
   /** Run only these profiles (default: all of them). */
   profiles?: readonly string[];
   /** Run only scenarios whose identifier starts with one of these. */
@@ -46,9 +67,10 @@ export interface KitConfig {
 }
 
 export interface ResolvedConfig extends Required<
-  Omit<KitConfig, 'origin' | 'profiles' | 'scenarios' | 'fuzz' | 'property'>
+  Omit<KitConfig, 'origin' | 'profiles' | 'scenarios' | 'fuzz' | 'property' | 'authorityService'>
 > {
   origin: string | undefined;
+  authorityService: AuthorityServiceInput | undefined;
   profiles: readonly string[] | undefined;
   scenarios: readonly string[] | undefined;
   fuzz: { budgetMs: number; seed: number; maxRuns: number };
@@ -63,6 +85,7 @@ export function resolveConfig(c: KitConfig): ResolvedConfig {
     credential: c.credential,
     testMode: c.testMode,
     origin: c.origin,
+    authorityService: c.authorityService,
     profiles: c.profiles,
     scenarios: c.scenarios,
     timeoutMs: c.timeoutMs ?? 10_000,
