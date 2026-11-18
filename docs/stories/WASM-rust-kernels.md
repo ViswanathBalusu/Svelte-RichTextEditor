@@ -291,7 +291,7 @@ As a maintainer, I want the kernel's boundary and build documented, so that the 
 - [ ] It states what belongs in the kernel (shaping, segmentation, line breaking, hyphenation) and what stays in TypeScript (pagination, the layout tree, the painter).
 - [ ] A contributor without a Rust toolchain can run the whole layout test suite against the published kernel package.
 
-**Notes:** C-RUST, phase 3.
+**Notes:** C-RUST, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold (see WASM-013 and WASM-001). A guide for the kernel's build and boundary would describe a kernel the project does not ship. The third criterion needs a published kernel package, which does not exist. The guide reopens if SPK-013 says yes and a later measurement changes S10's answer.
 
 ## Reach (phase 4)
 
