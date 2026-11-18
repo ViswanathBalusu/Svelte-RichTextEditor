@@ -332,6 +332,8 @@ Callers are end users (every request is checked against that user's permissions)
 | `/origins/{origin}` | DELETE | Service credential only. Removes an allowed origin (percent-encoded in the path); audited. 05, section 4; 13, section 10 |
 | `/keys` | GET, POST | Service credential only. GET lists the public keys registered for the tenant, user keys then service keys. POST registers one public key (ES256, EdDSA or RS256 only; a private or symmetric key is refused) and is audited. 05, section 3.2; 13, section 10 |
 | `/keys/{kid}` | DELETE | Service credential only. Removes a key; tokens it signed are refused at once; audited. 05, section 3.2; 13, section 10 |
+| `/history-visibility` | GET, PUT | Service credential only. The tenant's setting of who sees full history (`editors`, `all` or `since_access`); `editors` when none is set. PUT takes `If-Match` and is audited with the actor. 08, section 9; 13, section 10 |
+| `/documents/{id}/history-visibility` | GET, PUT | Service credential only. The document's own setting, the effective setting and its source (the document's wins over the tenant's). PUT takes `If-Match` and is audited with the actor; it applies to the next request. 08, section 9; 13, section 10 |
 | `/quotas` | GET, PUT | Service credential only. The tenant's quota values, null when unset; PUT names the dimensions to set, takes `If-Match`, and is audited. 06, section 12; 13, section 10 |
 
 Resources for fields, workflow, templates and bulk sends are listed in 12, section 10. Administration resources are outlined in 13, section 10.

@@ -406,7 +406,7 @@ export class Room {
   private readonly attachedAssets: ReadonlySet<string> | undefined;
   private readonly mathGate: RoomInit['mathGate'];
   private readonly baseSeq: number;
-  private readonly historyVisibility: HistoryVisibility;
+  private historyVisibility: HistoryVisibility;
   private readonly commitsResource: boolean;
   private readonly admission: Admission | null;
   private readonly ruleBudget: number;
@@ -801,6 +801,14 @@ export class Room {
       if (bytes > maxBytes) return page;
     }
     return 'stream';
+  }
+
+  /**
+   * The history visibility setting changed (HIS-025 criterion 5; 08 §9). The gate of the next
+   * request uses it; nothing already delivered is recalled (ADR 0034 section 2).
+   */
+  setHistoryVisibility(setting: HistoryVisibility): void {
+    this.historyVisibility = setting;
   }
 
   /** The user's visibility gate now (07 §8; 08 §9; HIS-023). */

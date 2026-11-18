@@ -1029,6 +1029,11 @@ ecentHead, keeping one entry older than the window. */
     }
   }
 
+  /** The effective history visibility setting, read again for this request (HIS-025). */
+  setHistoryVisibility(setting: string | null | undefined): void {
+    if (!this.#stopped) this.#room.setHistoryVisibility(historySetting(setting));
+  }
+
   // --- Permissions (07 §9; 05 §5.5) ------------------------------------------------------------
 
   /** The control plane changed permission data and read the new state back (BE-026; PRM-019). */
@@ -1901,7 +1906,7 @@ export class RoomHost {
     if (this.#deps.faults.databaseDown)
       return Promise.reject(new Refusal('unavailable', 'the database is unreachable'));
     const known = this.get(ref);
-    if (known) return Promise.resolve(known);
+    if (known) return this.#withFreshSetting(ref, known);
     const k = refKey(ref);
     let p = this.#loading.get(k);
     if (!p) {
@@ -1914,6 +1919,21 @@ export class RoomHost {
       this.#loading.set(k, p);
     }
     return p;
+  }
+
+  /**
+   * A room that is already open takes the history visibility setting stored now, so a change made
+   * on any node applies to the next channel (HIS-025 criterion 5). A failed read keeps the setting
+   * the room has; the gate then still holds what it held.
+   */
+  async #withFreshSetting(ref: DocRef, room: HostedRoom): Promise<HostedRoom> {
+    try {
+      const record = await this.#deps.documents.get(ref);
+      if (record) room.setHistoryVisibility(record.historyVisibility);
+    } catch {
+      // The room keeps its setting.
+    }
+    return room;
   }
 
   #acquireAfter(ref: DocRef): Promise<HostedRoom> {
@@ -2118,6 +2138,7 @@ export class RoomHost {
         await room.shutdown('the document was deleted', true);
         return;
       }
+      room.setHistoryVisibility(record.historyVisibility);
       const perms = await this.#deps.grants.current(ref);
       if (perms.revision > room.permissions.revision) room.permissionsChanged(perms);
       // The document resource changed (metadata or state): open channels may re-read it (05 §5.6).
@@ -2265,6 +2286,8 @@ export class RoomHost {
       const room = this.get(ref);
       if (room) {
         const head = room.head;
+        if (seq !== undefined && seq !== head)
+          room.setHistoryVisibility((await d.documents.get(ref))?.historyVisibility);
         if (
           seq !== undefined &&
           seq !== head &&
@@ -2362,6 +2385,7 @@ export class RoomHost {
       let hides: boolean;
       if (room && room.head === head.seq) {
         if (stored.revision > room.permissions.revision) room.permissionsChanged(stored);
+        room.setHistoryVisibility(record.historyVisibility);
         gate = room.minVisibleSeq(conn);
         hides = d.restricted && room.hidesFor(conn);
       } else {
