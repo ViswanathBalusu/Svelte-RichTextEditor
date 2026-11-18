@@ -119,7 +119,16 @@ export async function patchCases(): Promise<PatchCase[]> {
       check: (out) => {
         const doc = text(readZip(out.bytes), 'word/document.xml');
         const n = doc.split(`w14:paraId="${paraId}"`).length - 1;
-        return [...(n === 1 ? [] : [`paraId ${paraId} appears ${n} times`]), ...integrity(out)];
+        // EXP-118, criterion 4: the copy has a paraId of its own, valid and unique in the part.
+        const before = text(readZip(bytes), 'word/document.xml').match(/w14:paraId="[0-9A-F]{8}"/g);
+        const after = doc.match(/w14:paraId="[0-9A-F]{8}"/g) ?? [];
+        const problems: string[] = [];
+        if (after.length !== (before?.length ?? 0) + 1)
+          problems.push(`${after.length} paraIds after, ${before?.length} before: one expected more`);
+        if (new Set(after).size !== after.length) problems.push('a paraId occurs twice');
+        for (const a of after)
+          if (parseInt(a.slice(11, 19), 16) >= 0x80000000) problems.push(`${a} is not below 0x80000000`);
+        return [...(n === 1 ? [] : [`paraId ${paraId} appears ${n} times`]), ...problems, ...integrity(out)];
       },
     });
   }
