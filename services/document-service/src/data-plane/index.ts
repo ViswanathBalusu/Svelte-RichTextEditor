@@ -29,6 +29,7 @@ import type {
 import type { DocRef } from '../storage/types.ts';
 import { Auditor } from './audit.ts';
 import { Checkpointer } from './checkpoints.ts';
+import { derivedCommitId } from './commit-id.ts';
 import { Faults, testHooks } from './hooks.ts';
 import { NodeLease } from './lease.ts';
 import { RateLimits } from './limits.ts';
@@ -349,14 +350,20 @@ class DepDataPlane implements DataPlane {
     ref: DocRef,
     content: JsonEnvelope,
     actor: string,
-    opts: { traceparent?: string; reason?: 'import' | 'restore' } = {},
+    opts: { traceparent?: string; reason?: 'import' | 'restore'; requestId?: string } = {},
   ): Promise<{ seq: number }> {
     if (this.#closing || this.#host.draining)
       throw new DataPlaneError('unavailable', 'the service is stopping', 1000);
     const encoded = await this.#host.encode(content);
     if (encoded.bytes > CANONICAL_LIMIT)
       throw new DataPlaneError('too_large', 'the content is larger than 16 MiB (I7)');
-    const id = uuid7();
+    // With a request identifier (the caller's own: an import job, an idempotency key) the commit
+    // identifier is derived from it, so a retry of the request is one commit (SYN-030 criterion 3;
+    // ADR 0377, proposed). Without one there is nothing that names "the same request", and it is random.
+    const id =
+      opts.requestId === undefined
+        ? uuid7()
+        : derivedCommitId(opts.reason ?? 'import', ref.tenant, ref.doc, actor, opts.requestId);
     const trace = parseTraceparent(opts.traceparent);
     // HIS-019 criterion 1: a whole-document restore is a snapshot commit with reason `restore`.
     const reason = opts.reason ?? 'import';

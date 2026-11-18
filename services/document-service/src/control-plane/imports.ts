@@ -133,7 +133,8 @@ export function importJobHandler(o: ImportJobDeps): JobHandler {
     if (!replace) throw new JobFailure('unavailable', 'this server does not replace content');
     let seq: number;
     try {
-      ({ seq } = await replace(ref, envelope, job.createdBy));
+      // The job is the request: a retry of it after a crash is the same commit (SYN-030 criterion 3).
+      ({ seq } = await replace(ref, envelope, job.createdBy, { requestId: job.id }));
     } catch (e) {
       const code = (e as { code?: unknown } | null)?.code;
       throw new JobFailure(typeof code === 'string' ? code : 'internal', reasonOf(e));

@@ -202,6 +202,7 @@ import {
   placeholderAt,
   regionAt,
   regionClamp,
+  regionTitleKey,
   regionParagraphs,
   withParagraphsAfterRegions,
 } from './regions.ts';
@@ -702,6 +703,12 @@ export class DocumentCore implements DocumentApi {
   readonly access: ReadValue<AccessSummary>;
   readonly saveState: ReadValue<SaveState>;
   readonly confirmedSeq: ReadValue<number>;
+  /**
+   * The titles of the regions in the confirmed document, as one string that changes when a region is
+   * renamed, added or removed there (PRM-034 criterion 1). The element re-reads the region list when it
+   * changes, so a rename reaches the permissions pane and the lock indicators of everyone.
+   */
+  readonly regionTitles: ReadValue<string>;
   readonly connection: ReadValue<ConnectionState>;
   readonly status: ReadValue<StatusSummary>;
   readonly commands: ReadValue<Readonly<Record<CommandName, CommandState>>>;
@@ -746,6 +753,8 @@ export class DocumentCore implements DocumentApi {
   readonly #schema: Schema;
   #state: EditorState;
   #sync: SyncState;
+  /** The confirmed document `regionTitles` was last computed from. */
+  #titledDoc: PMNode | null = null;
   /**
    * Whether the last items of the undo history are the unconfirmed steps, one item per step, so that
    * a rebuild may rebase the history through its pairing (remote.ts). Undo and redo, local steps the
@@ -822,6 +831,7 @@ export class DocumentCore implements DocumentApi {
     );
     this.saveState = new ReadValue<SaveState>('saved', Object.is, hub);
     this.confirmedSeq = new ReadValue<number>(0, Object.is, hub);
+    this.regionTitles = new ReadValue<string>('', Object.is, hub);
     this.connection = new ReadValue<ConnectionState>('detached', Object.is, hub);
     this.status = new ReadValue<StatusSummary>(
       { connection: 'offline', sync: 'saved' },
@@ -1398,6 +1408,10 @@ export class DocumentCore implements DocumentApi {
   #publishSync(): void {
     const s = this.#sync;
     this.confirmedSeq.set(s.seq);
+    if (s.confirmed !== this.#titledDoc) {
+      this.#titledDoc = s.confirmed;
+      this.regionTitles.set(regionTitleKey(s.confirmed));
+    }
     this.syncSummary.set({
       seq: s.seq,
       incarnation: s.incarnation,
@@ -2526,6 +2540,15 @@ export class DocumentCore implements DocumentApi {
       return reason === null
         ? { enabled: false, active: false }
         : { enabled: false, active: false, reason };
+    }
+    if (name === 'renameRegion' && args?.region !== undefined) {
+      // A rename says why it is unavailable (PRM-034 criterion 5): a lock first, then the rights
+      // `region.retitle` needs, `structure` and `edit` in the region (07 §2).
+      if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      const permitted =
+        (this.#accessValue?.caps.includes('structure') ?? false) &&
+        this.canEdit(`region:${args.region}`);
+      if (!permitted) return { enabled: false, active: false, reason: 'no-access' };
     }
     const command = this.#command(name, args);
     const applicable = command !== null && command(state);

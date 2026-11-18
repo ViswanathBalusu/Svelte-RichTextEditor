@@ -47,6 +47,8 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'resumeSync'
       // SYN-036: the peers of `presence` with their positions in the visible document.
       | 'peerSelections'
+      // PRM-034: the element re-reads the region list when a region is renamed, added or removed.
+      | 'regionTitles'
       // FRW-004: the entries of form fields, for the field controls of the web view. The fill
       // methods of the embedding API (12 §10) are FRW-069's and are not on the document API yet.
       | 'fieldEntry'
