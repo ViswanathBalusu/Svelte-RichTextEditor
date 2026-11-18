@@ -32,9 +32,9 @@ export const BLOCK_FORMAT_ATTRS: ReadonlySet<string> = new Set(['style', 'align'
 const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Records the attribute steps of paragraphs as a block formatting suggestion by `author`. Returns
- * null when a step is not a paragraph's style, alignment or list level change, or when it names a
- * node that is not a paragraph. `handled` counts the paragraphs whose formatting was recorded.
+ * Records the attribute steps of paragraphs, and the style of a table, as a block formatting
+ * suggestion by `author`. Returns null when a step is not a paragraph's style, alignment or list
+ * level change or a table's style change, or when it names any other node. `handled` counts the paragraphs whose formatting was recorded.
  */
 export function suggestBlockFormat(
   state: EditorState,
@@ -47,7 +47,10 @@ export function suggestBlockFormat(
   for (const step of steps) {
     if (!BLOCK_FORMAT_ATTRS.has(step.attr)) return null;
     const node = state.doc.nodeAt(step.pos);
-    if (!node || node.type.name !== 'paragraph') return null;
+    // A paragraph's style, alignment or list level; a table's style (UX-022 criterion 4).
+    const recordable =
+      node?.type.name === 'paragraph' || (node?.type.name === 'table' && step.attr === 'style');
+    if (!node || !recordable) return null;
     const previous = node.attrs[step.attr];
     if (sameValue(previous, step.value)) continue;
     changing.push(step);

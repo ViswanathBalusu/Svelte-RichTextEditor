@@ -18,14 +18,15 @@ const core = () =>
     schedule: microtask,
   });
 
+type Json = { type: string; text?: string; attrs?: Record<string, unknown>; content?: Json[] };
+
 const flush = () => new Promise<void>((r) => setTimeout(r, 0));
 
 /** The styled document with `n` more plain paragraphs and a heading every 50th, after the others. */
 function bigCore(n: number): DocumentCore {
   const env = styledDocument();
-  const doc = env.doc as { content: Array<{ type: string; content?: unknown[] }> };
-  const body = doc.content.find((c) => c.type === 'body')!;
-  const extra = [];
+  const body = (env.doc as Json).content!.find((c) => c.type === 'body')!;
+  const extra: Json[] = [];
   for (let i = 0; i < n; i++) {
     const heading = i % 50 === 0;
     extra.push({

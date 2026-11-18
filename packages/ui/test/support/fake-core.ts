@@ -38,6 +38,9 @@ import type {
   ShellCounts,
   ShellRect,
   StatusSummary,
+  StyleEditCheck,
+  StyleEditOp,
+  StyleEditReason,
   StyleSummary,
   ThreadOutcome,
   ThreadRequest,
@@ -110,6 +113,17 @@ export interface FakeCoreOptions {
   views?: readonly ViewName[];
   permissions?: AccessObject | null;
   styles?: readonly StyleSummary[];
+  /**
+   * Offers `styleEdit` (UX-022): `reason` refuses every edit, `blocked` names the regions a user may
+   * not edit that use a style, `uses` the regions that use it (the user may edit them), `builtIn`
+   * the styles that cannot be renamed or deleted.
+   */
+  styleEdit?: {
+    reason?: StyleEditReason;
+    blocked?: Readonly<Record<string, readonly string[]>>;
+    uses?: Readonly<Record<string, readonly string[]>>;
+    builtIn?: readonly string[];
+  };
   regions?: readonly RegionSummary[];
   stats?: DocumentStats;
   language?: string | null;
@@ -177,6 +191,10 @@ export const FAKE_COMMANDS = [
   'pasteFormat',
   'paragraphStyle',
   'characterStyle',
+  'tableStyle',
+  'createStyle',
+  'changeStyle',
+  'deleteStyle',
   'setLanguage',
   'markRegion',
   'setRegionPolicy',
@@ -462,6 +480,20 @@ export class FakeCore implements CoreApi {
       notify,
     );
     this.styles = new Value<readonly StyleSummary[]>(options.styles ?? [], notify);
+    if (options.styleEdit) {
+      const cfg = options.styleEdit;
+      Object.assign(this, {
+        styleEdit: (op: StyleEditOp, id?: string): StyleEditCheck => {
+          this.#record('styleEdit', op, id);
+          if (cfg.reason) return { ok: false, reason: cfg.reason, regions: [] };
+          if (op === 'create' || id === undefined) return { ok: true, regions: [] };
+          const blocked = cfg.blocked?.[id];
+          if (blocked) return { ok: false, reason: 'region', regions: blocked };
+          if (cfg.builtIn?.includes(id)) return { ok: false, reason: 'built-in', regions: [] };
+          return { ok: true, regions: cfg.uses?.[id] ?? [] };
+        },
+      });
+    }
     this.regions = new Value<readonly RegionSummary[]>(options.regions ?? [], notify);
     this.carets = new Value<readonly PeerCaret[]>(options.carets ?? [], notify);
     this.fill = new Value<FillSummary | null>(options.fill ?? null, notify);
@@ -558,7 +590,44 @@ export class FakeCore implements CoreApi {
         return true;
       }
       case 'characterStyle':
-        return this.#canChange();
+        if (!this.#canChange()) return false;
+        this.selection.set({ ...s, charStyleId: String(a['style']) });
+        this.#bump();
+        return true;
+      case 'tableStyle':
+        if (!this.#canChange()) return false;
+        this.selection.set({ ...s, tableStyleId: String(a['style']) });
+        this.#bump();
+        return true;
+      case 'createStyle': {
+        const list = this.styles?.get() ?? [];
+        this.styles?.set([
+          ...list,
+          {
+            id: `s${list.length + 1}`,
+            name: String(a['name']),
+            kind: a['kind'] as StyleSummary['kind'],
+            basedOn: typeof a['basedOn'] === 'string' ? a['basedOn'] : null,
+          },
+        ]);
+        return true;
+      }
+      case 'changeStyle':
+        this.styles?.set(
+          (this.styles.get() ?? []).map((x) =>
+            x.id === a['id']
+              ? {
+                  ...x,
+                  name: typeof a['name'] === 'string' ? a['name'] : x.name,
+                  basedOn: 'basedOn' in a ? (a['basedOn'] as string | null) : (x.basedOn ?? null),
+                }
+              : x,
+          ),
+        );
+        return true;
+      case 'deleteStyle':
+        this.styles?.set((this.styles.get() ?? []).filter((x) => x.id !== a['id']));
+        return true;
       case 'setLanguage':
         if (!this.#canChange()) return false;
         this.selection.set({ ...s, lang: (a['lang'] as string | null) ?? null });

@@ -12,7 +12,7 @@
 import { outlineLevelOf, paragraphStyleOf, styleTable, type StyleTable } from '@docedit/model';
 import type { Node } from 'prosemirror-model';
 import { type Command, type EditorState, TextSelection } from 'prosemirror-state';
-import type { OutlineItem, StyleInfo } from './api.ts';
+import type { OutlineItem, StyleInfo, StyleKind, StyleSummary } from './api.ts';
 import { bodyRange } from './body.ts';
 
 const tables = new WeakMap<Node, StyleTable>();
@@ -40,6 +40,21 @@ export function paragraphStyles(doc: Node): StyleInfo[] {
       id,
       name: typeof attrs['name'] === 'string' ? attrs['name'] : id,
       outlineLevel: outlineLevelOf(table, { style: id }),
+    });
+  }
+  return out;
+}
+
+/** Every style the document defines, whatever its kind, in definition order (UX-022). */
+export function styleSummaries(doc: Node): StyleSummary[] {
+  const out: StyleSummary[] = [];
+  for (const [id, attrs] of stylesOf(doc).styles) {
+    const kind = (attrs['kind'] as StyleKind | null | undefined) ?? 'paragraph';
+    out.push({
+      id,
+      name: typeof attrs['name'] === 'string' ? attrs['name'] : id,
+      kind,
+      basedOn: typeof attrs['basedOn'] === 'string' ? attrs['basedOn'] : null,
     });
   }
   return out;
