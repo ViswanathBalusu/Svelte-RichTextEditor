@@ -102,6 +102,24 @@ function docedit.str(hex)
   tex.sprint(-2, decode(hex))
 end
 
+-- The same text for the contexts that turn a title into a PDF string (bookmarks, link contents,
+-- metadata). hyperref reads a catcode-12 backslash there as the start of an escape and garbles the
+-- rest of the string, so a backslash is written as \textbackslash, which every such context knows.
+function docedit.strexp(hex)
+  local s = decode(hex)
+  local pos = 1
+  while true do
+    local i = s:find("\\", pos, true)
+    if not i then
+      tex.sprint(-2, s:sub(pos))
+      return
+    end
+    tex.sprint(-2, s:sub(pos, i - 1))
+    tex.sprint("\\textbackslash ")
+    pos = i + 1
+  end
+end
+
 -- Sets \DE@altlabel globally to the decoded text, as catcode-12 characters: the alternative text
 -- of a tagged form field (EXP-033). \directlua is not expandable, so the text is set, not printed.
 function docedit.altdef(hex)

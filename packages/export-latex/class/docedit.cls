@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-18 v0.2.13 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-18 v0.2.14 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -150,10 +150,13 @@
 
 % Hex-encoded strings: inert characters when typeset, written to auxiliary files as hex.
 \protected\def\DEstr#1{\directlua{docedit.str("#1")}}
-\def\DE@strexp#1{\directlua{docedit.str("#1")}}
+% \pdfstringdef (bookmarks) needs a backslash as \textbackslash; the text purifier (link contents)
+% takes the character itself and would print the name of the command.
+\def\DE@strexp#1{\directlua{docedit.strexp("#1")}}
+\def\DE@strpur#1{\directlua{docedit.str("#1")}}
 \pdfstringdefDisableCommands{\let\DEstr\DE@strexp}
 \ExplSyntaxOn
-\text_declare_purify_equivalent:Nn \DEstr { \DE@strexp }
+\text_declare_purify_equivalent:Nn \DEstr { \DE@strpur }
 \ExplSyntaxOff
 
 % Links: the url emitter has applied the scheme allow-list; docedit.href passes catcode-12 text.
