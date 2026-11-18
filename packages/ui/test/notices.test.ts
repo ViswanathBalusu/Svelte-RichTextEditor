@@ -86,6 +86,44 @@ describe('work set aside', () => {
     expect(general).toMatchObject({ key: 'notice.rejected.conflict' });
   });
 
+  it('tells a fill that a rule of the document stopped in the rule’s own words (FRW-023)', () => {
+    const tracker = new NoticeTracker(null, { count: 0, items: [] });
+    const tr = new Strings().current;
+    const withMessage = tracker.recovered({
+      count: 1,
+      items: [
+        { ...item('permission_denied'), rule: { id: 'r_amount', message: 'Enter at least 10.' } },
+      ],
+    });
+    expect(withMessage).toMatchObject({
+      kind: 'rejection',
+      key: 'notice.rejected.rule',
+      params: { rule: 'Enter at least 10.' },
+    });
+    expect(tr.t('notice.rejected.rule', { count: 1, ...withMessage!.params })).toMatch(
+      /a rule of this document stopped it: Enter at least 10\./,
+    );
+    // A rule with no message of its own is named by its identifier.
+    const bare = tracker.recovered({
+      count: 2,
+      items: [
+        { ...item('permission_denied'), rule: { id: 'r_amount', message: 'Enter at least 10.' } },
+        { ...item('permission_denied'), rule: { id: 'rHideName', message: null } },
+      ],
+    });
+    expect(bare).toMatchObject({ key: 'notice.rejected.rule', params: { rule: 'rHideName' } });
+    // A permission refusal that named no rule keeps the general words.
+    const plain = tracker.recovered({
+      count: 3,
+      items: [
+        { ...item('permission_denied'), rule: { id: 'r_amount', message: 'Enter at least 10.' } },
+        { ...item('permission_denied'), rule: { id: 'rHideName', message: null } },
+        item('permission_denied'),
+      ],
+    });
+    expect(plain).toMatchObject({ key: 'notice.rejected.permission' });
+  });
+
   it('explains the rejection codes of 05 §5.8 and the reasons of the sync client', () => {
     expect(rejectionKey('permission_denied')).toBe('notice.rejected.permission');
     expect(rejectionKey('read_only')).toBe('notice.rejected.readOnly');
@@ -102,7 +140,8 @@ describe('the words of a notice', () => {
     expect(keys.length).toBeGreaterThan(10);
     for (const key of keys) {
       // `skipped` is the second number of the replace report (FE-060 criterion 3).
-      const text = tr.text(key, { count: 2, skipped: 1 });
+      // `rule` is the rule's own words (FRW-023 criterion 5).
+      const text = tr.text(key, { count: 2, skipped: 1, rule: 'Enter at least 10.' });
       expect(text, key).not.toMatch(/\{/);
       expect(text, key).not.toMatch(/region:|story:|field:/);
     }

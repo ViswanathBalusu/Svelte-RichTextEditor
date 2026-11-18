@@ -179,7 +179,7 @@ import {
   picturePlaceholderPlugin,
   removePlaceholder,
 } from './picture-placeholder.ts';
-import { FieldRules, type FieldRuleState } from './field-rules.ts';
+import { FieldRules, ruleWords, type FieldRuleState } from './field-rules.ts';
 import type { RuleParts } from '@docedit/rules';
 import {
   editRule,
@@ -1850,6 +1850,17 @@ export class DocumentCore implements DocumentApi {
       changedBy: i.change?.user ?? null,
       changedAt: i.change?.time ?? null,
     };
+  }
+
+  /**
+   * The rule a rejection named, with the words the rule carries, read from the confirmed document
+   * (FRW-023 criterion 5). Nothing when the rejection named no rule, or named one the document does
+   * not have (an invariant such as `I15`).
+   */
+  #ruleOf(i: Discarded): Pick<RecoveredItem, 'rule'> | Record<string, never> {
+    if (i.rule === undefined) return {};
+    const words = ruleWords(this.#sync.confirmed, i.rule);
+    return words === null ? {} : { rule: words };
   }
 
   /**
@@ -4403,6 +4414,7 @@ one or original. It is a
               seq: i.seq,
               ...words,
               ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
+              ...this.#ruleOf(i),
             };
           }),
         ];

@@ -95,7 +95,12 @@ function pairsIn(text: string): number {
 }
 
 interface Refreshable {
-  refresh(doc: PMNode): void;
+  /**
+   * Draws the view again from `doc`. With `valuesOnly`, the change was of field values and nothing
+   * else (the access, the mode, the definitions and the structure are as they were), so a view
+   * whose field and rule state are as it drew them has nothing to draw (FRW-023 criterion 6).
+   */
+  refresh(doc: PMNode, valuesOnly?: boolean): void;
 }
 
 /** The live field and mirror views of one editor view, so that they can be drawn again. */
@@ -141,9 +146,12 @@ export class FormFieldViews {
     return this.#texts;
   }
 
-  /** Draws every live view again from `doc`: after a change of the document, the access or the mode. */
-  refresh(doc: PMNode): void {
-    for (const view of this.#views) view.refresh(doc);
+  /**
+   * Draws every live view again from `doc`: after a change of the document, the access or the mode.
+   * With `valuesOnly`, only the views whose field or rule state changed are drawn (see `Refreshable`).
+   */
+  refresh(doc: PMNode, valuesOnly = false): void {
+    for (const view of this.#views) view.refresh(doc, valuesOnly);
   }
 }
 
@@ -186,10 +194,19 @@ class FormFieldView implements NodeView, Refreshable {
   #role: string | null = null;
   /** The control's type is being changed: the focus events of that are not the person's. */
   #swapping = false;
+  /** The definitions the roles were read from. */
+  #defs: PMNode | null = null;
+  /** What the last draw used; null before the first. */
+  #drawn: {
+    readonly node: PMNode;
+    readonly rule: FieldRuleState | null;
+    readonly defs: PMNode | null;
+  } | null = null;
 
   constructor(node: PMNode, doc: PMNode, port: FormFieldPort, views: FormFieldViews) {
     this.#node = node;
     this.#role = this.#roleIn(doc);
+    this.#defs = doc.firstChild;
     this.#port = port;
     this.#views = views;
     const kind = String(node.attrs['kind']);
@@ -436,8 +453,17 @@ class FormFieldView implements NodeView, Refreshable {
     this.#message.hidden = false;
   }
 
-  /** Draws the control from what the core says the field shows. */
+  /** Draws the control from what the core says the field shows, and notes what it drew from. */
   #draw(): void {
+    this.#paint();
+    this.#drawn = {
+      node: this.#node,
+      rule: this.#port.rules?.(this.#id) ?? null,
+      defs: this.#defs,
+    };
+  }
+
+  #paint(): void {
     const node = this.#node;
     const c = this.#control;
     const state = this.#port.entry(this.#id);
@@ -513,8 +539,20 @@ class FormFieldView implements NodeView, Refreshable {
     this.#showProblems(problems);
   }
 
-  refresh(doc: PMNode): void {
+  refresh(doc: PMNode, valuesOnly = false): void {
+    // What a draw reads that a change of values can change: the node, and what the rules say of it.
+    // The access, the mode, the roles and the structure are the same, as `valuesOnly` says.
+    if (
+      valuesOnly &&
+      !this.#dirty &&
+      this.#drawn !== null &&
+      this.#drawn.node === this.#node &&
+      this.#drawn.rule === (this.#port.rules?.(this.#id) ?? null) &&
+      this.#drawn.defs === doc.firstChild
+    )
+      return;
     this.#role = this.#roleIn(doc);
+    this.#defs = doc.firstChild;
     this.#draw();
   }
 
