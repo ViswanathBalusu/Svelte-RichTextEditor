@@ -1909,6 +1909,8 @@ As an integrating developer, I want a `config` property for feature switches, fo
 
 **Notes:** 05 names only the categories (feature switches, fonts, shortcuts, limits, a style nonce); the keys are not specified (Open questions). Phase inferred: the 1b component needs it and 11 does not list it. "Published" is read as reachable by a consumer through the package's `exports` (`@docedit/element` for the type, `@docedit/element/config.schema.json` for the schema). This is a proposed reading (ADR 0109 item 28); the spec does not say how, and the owner may choose a generator or a file under `spec/` instead.
 
+Lane w5 (2026-11-17): criterion 4 stays open, and the reason is an open question, not missing code. 05 §8.1 names the categories but no feature-switch key, so which keys are switches is not decided. `src/config.ts` has boolean keys that could be read as switches (`pageGuides`, `deferRemoteWhileComposing`, `forceStyleFallback`), but none is named as a feature switch, and the reading is the owner's to give. Proposed: the owner names the switches, and the element then tests that each one removes its controls.
+
 ### PRO-082 Register host extensions through the `extensions` property
 
 | Type | Phase | Size | Priority | Persona |
