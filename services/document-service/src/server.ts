@@ -40,6 +40,12 @@ import { DebouncedEventSink } from './control-plane/event-throttle.ts';
 import { CompileBudget } from './control-plane/exp-009-compile-budget.ts';
 import { EXPORT_KIND, PREVIEW_KIND, exportHooks } from './control-plane/exports.ts';
 import {
+  IMPORT_KIND,
+  importHooks,
+  importJobHandler,
+  type DocxImporter,
+} from './control-plane/imports.ts';
+import {
   LIVE_QUOTA_COUNT_RETRY_MS,
   LIVE_QUOTA_WINDOW_MS,
   LiveQuotas,
@@ -70,6 +76,11 @@ import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
 import { HoldService, MemoryHoldStore, type HoldStore } from './control-plane/holds.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
+import {
+  MemoryWorkflowResourceStore,
+  type WorkflowResourceStore,
+} from './workflow/workflow-resource.ts';
+import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
 import { Cursors } from './control-plane/http.ts';
@@ -187,6 +198,8 @@ export interface ServiceParts {
   retention?: RetentionService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080). Absent: the routes are not offered. */
   holds?: HoldService;
+  /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
+  workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
   quotaAdmin?: QuotaAdminService;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: none is asked. */
@@ -232,6 +245,12 @@ export interface StartOptions {
    * `preview` when no handler of its own is given) and anything else. None: no export runner.
    */
   jobHandlers?: Readonly<Record<string, JobHandler>>;
+  /**
+   * Reads a `.docx` file into CDM content (EXP-098). With it, this node offers `/imports` and runs
+   * the import job in process; without it, the routes are `not_found`. The package of the importer
+   * is not a dependency of this service, so a host passes it in.
+   */
+  importer?: DocxImporter;
   /**
    * The asset worker in this process (PRO-061): its sandbox, or `unsandboxed()` with
    * `allowUnsandboxed` in tests. Default: `podmanSandbox()` when `config.assetWorker` is set.
@@ -389,6 +408,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     audit,
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
+    workflows: new PgWorkflowResourceStore(pool, { now }),
     quotaAdmin: quotaAdminOver(
       new PgQuotaStore(pool, (tenant) =>
         // `tenants` is under row-level security, so the question runs in the tenant's own context.
@@ -432,6 +452,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     audit,
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
+    workflows: new MemoryWorkflowResourceStore(),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
       // reaches it is registered; the memory store has no other tenant table to ask.
@@ -649,6 +670,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
           config.externalWorkers
             ? ['assets']
             : []),
+          ...(parts.workflows ? ['workflow'] : []),
         ]),
       ],
       // Errors of the data plane go to the same structured log, by name only, with the tenant,
@@ -808,6 +830,36 @@ export async function startService(opts: StartOptions): Promise<Service> {
       }),
     });
 
+  // Word imports (EXP-098): one runner of kind `import`, with the notifications and the version.
+  if (opts.importer)
+    runnerFor(
+      {
+        [IMPORT_KIND]: importJobHandler({
+          importer: opts.importer,
+          assets,
+          registry: parts.assetRegistry,
+          grants: parts.grants,
+          content,
+          dataPlane,
+        }),
+      },
+      {
+        hooks: importHooks({
+          notify,
+          events,
+          now,
+          ...(parts.versions ? { versions: parts.versions } : {}),
+          versionFailed: (job) =>
+            logger.error({
+              event: 'import.version',
+              tenant: job.tenant,
+              job: job.id,
+              message: 'import version not stored',
+            }),
+        }),
+      },
+    );
+
   // Scheduled maintenance (BE-052): one job per task and slot in the queue.
   const tasks: ScheduledTask[] = [
     {
@@ -903,6 +955,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       // `exports` only when a compile worker can serve the queue (ADR 0054; `exports.states`).
       ...(exportHandlers[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
       ...(assetWorker || config.externalWorkers ? ['assets'] : []),
+      ...(parts.workflows ? ['workflow'] : []),
     ]),
   ];
 
@@ -993,12 +1046,14 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
+    ...(parts.workflows ? { workflows: parts.workflows } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),
     compileBudget,
     ...(liveQuotas ? { liveQuotas } : {}),
     ...(quotaSource ? { quotaSource } : {}),
     ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
+    ...(opts.importer ? { importsOffered: true } : {}),
   });
 
   const ready = () => readiness(parts.pool);

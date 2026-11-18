@@ -164,3 +164,18 @@ describe('nextEditableRegionStart', () => {
     expect(nextEditableRegionStart(doc, textStart(c, IDS.inB), onlyB)).toBeNull();
   });
 });
+
+describe('the named query behind the command (PRM-027 criterion 1, lane w4)', () => {
+  it('lists hasNextEditableRegion among the queries the core answers', () => {
+    const c = core();
+    expect(c.queryNames).toContain('hasNextEditableRegion');
+  });
+
+  it('answers true while a later region may be edited, and false after the last one', () => {
+    const c = core();
+    caretAt(c, textStart(c, IDS.before));
+    expect(c.query('hasNextEditableRegion')).toBe(true);
+    caretAt(c, textStart(c, IDS.inC));
+    expect(c.query('hasNextEditableRegion')).toBe(false);
+  });
+});

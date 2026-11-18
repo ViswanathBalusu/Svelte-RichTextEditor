@@ -127,7 +127,9 @@ describe('field values (I15)', () => {
         const model = fieldValueProblem(kind, value, { options });
         const rules = checkFieldValue({ kind, options: ['yes', 'no'] }, value);
         // The attachment kind is reserved in rules for any value; the model reports its own type problem.
-        expect(rules === null, `${kind} ${JSON.stringify(value).slice(0, 30)}`).toBe(model === null);
+        expect(rules === null, `${kind} ${JSON.stringify(value).slice(0, 30)}`).toBe(
+          model === null,
+        );
       }
   });
 

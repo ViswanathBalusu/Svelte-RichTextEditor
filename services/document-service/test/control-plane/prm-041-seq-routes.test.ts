@@ -20,6 +20,10 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
   'GET /documents/{id}/commits': { file: 'control-plane/commit-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/exports': { file: 'control-plane/export-routes.ts', gate: CONTROL_GATE },
   'GET /documents/{id}/field-values': { file: 'control-plane/field-routes.ts', gate: CONTROL_GATE },
+  // PRO-055 and PRO-056: the history reads and the restore read the gate through `historyViewOf`
+  // and `minVisibleSeqOf`, and refuse with `checkSeq` or `planRestore`.
+  'GET /documents/{id}/diff': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
+  'GET /documents/{id}/attribution': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/versions': { file: 'control-plane/versions-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/restore': { file: 'control-plane/restore-route.ts', gate: CONTROL_GATE },
 };
@@ -30,10 +34,8 @@ const OPEN: Record<string, { file: string; reason: string }> = {
     file: 'control-plane/history-routes.ts',
     reason: 'the fork applies no gate to atSeq (PRM-042 criterion 4)',
   },
-  'GET /documents/{id}/diff': { file: '', reason: 'route not built (HIS-026, phase 2)' },
   'GET /documents/{id}/history': { file: '', reason: 'route not built (HIS-026, phase 2)' },
   'GET /documents/{id}/threads': { file: '', reason: 'route not built (PRM-042 criterion 1)' },
-  'GET /documents/{id}/attribution': { file: '', reason: 'route not built (PRM-042 criterion 2)' },
 };
 
 const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');

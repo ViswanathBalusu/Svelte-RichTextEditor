@@ -425,7 +425,9 @@ export type CoreQueryName =
   | 'hasHeader'
   | 'canInsertField'
   // PRM-033 and FE-044 criterion 5: the selection's whole body blocks may become a region.
-  | 'canMarkRegion';
+  | 'canMarkRegion'
+  // PRM-027 criterion 1: a region after the caret that the user may edit exists.
+  | 'hasNextEditableRegion';
 
 /** `de-status.connection` (05 §8.1), plus `detached` before any channel is attached. */
 export type ConnectionState = 'detached' | 'online' | 'reconnecting' | 'offline';
