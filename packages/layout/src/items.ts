@@ -40,6 +40,7 @@ import type {
   ParagraphInput,
 } from './lines.ts';
 import type { TextMeasurer } from './measure.ts';
+import type { MathMeasurer } from './math-measure.ts';
 import type {
   NoteItem,
   NoteRef,
@@ -73,6 +74,11 @@ export interface ItemProviders {
    * ignored and the editor's own break stays there. Absent: no line starts are adopted.
    */
   readonly forcedLines?: ReadonlyMap<string, readonly number[]>;
+  /**
+   * Sizes equations from the screen fonts (FE-064 criterion 4; `math-measure.ts`). Absent, or where
+   * it answers `null`, an equation keeps the stand-in size of `flow.ts`.
+   */
+  readonly math?: MathMeasurer;
 }
 
 export interface PageItems {
@@ -160,10 +166,16 @@ export function paragraphItem(
       notes.push({ offset: inline.offset, id: inline.ref });
     const text = inlineText(inline);
     if (text.length === 0) continue;
+    const math =
+      inline.kind === 'text' && inline.role === 'equation' && inline.latex !== undefined
+        ? providers.math?.measure(inline.latex, false, inline.font)
+        : null;
     runs.push({
       text,
       font: inline.font,
       ...(inline.kind === 'box' && inline.exactWidth ? { width: inline.width } : {}),
+      // An equation the math measurer sizes takes that width and height (FE-064 criterion 4).
+      ...(math ? { width: math.width, height: math.height } : {}),
     });
     const exact = inline.kind === 'text' && inline.role === 'text' && inline.size === text.length;
     spans.push({ t0: t, t1: t + text.length, cdm: inline.offset, size: inline.size, exact });
@@ -320,15 +332,21 @@ export function pageItems(
       case 'paragraph':
         items.push(paragraphItem(b, columnWidth, providers, defaultTabStop));
         break;
-      case 'box':
+      case 'box': {
+        // A display equation the math measurer sizes takes that size, as wide as the column at most.
+        const math =
+          b.what === 'equation' && b.latex !== undefined && b.font
+            ? providers.math?.measure(b.latex, true, b.font)
+            : null;
         items.push({
           kind: 'box',
           blockId: b.id,
-          width: b.width,
-          height: b.height,
+          width: math ? Math.min(math.width, columnWidth) : b.width,
+          height: math ? math.height : b.height,
           keepNext: b.keepNext,
         });
         break;
+      }
       case 'pageBreak':
         items.push({ kind: 'pageBreak' });
         break;

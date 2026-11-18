@@ -13,6 +13,7 @@ import type { FaceArrivals } from './font-arrivals.ts';
 import { FontEpoch } from './font-epoch.ts';
 import { flowParagraphs, type FlowBlock, type FlowDocument } from './flow.ts';
 import type { ItemProviders } from './items.ts';
+import { notingMathMeasurer, type MathMeasurer } from './math-measure.ts';
 import type { FontKey, TextMeasurer } from './measure.ts';
 
 /**
@@ -89,6 +90,12 @@ export interface FontAwareLayoutOptions {
   readonly measurer: TextMeasurer;
   readonly arrivals: FaceArrivals;
   readonly epoch?: FontEpoch;
+  /**
+   * Sizes equations from the screen math fonts (FE-064 criterion 4). Like the text measurer it is
+   * cached per epoch, and its fonts are noted as it measures, so that their arrival advances the
+   * epoch and the next pass measures the equations again.
+   */
+  readonly math?: MathMeasurer;
 }
 
 /** Layout passes over one measurer, one font source and one font epoch. */
@@ -96,12 +103,15 @@ export class FontAwareLayout {
   readonly #inner: TextMeasurer;
   readonly #arrivals: FaceArrivals;
   readonly #epoch: FontEpoch;
+  readonly #math: MathMeasurer | undefined;
   #cached: { readonly epoch: number; readonly measurer: TextMeasurer } | null = null;
+  #cachedMath: { readonly epoch: number; readonly math: MathMeasurer } | null = null;
 
   constructor(options: FontAwareLayoutOptions) {
     this.#inner = options.measurer;
     this.#arrivals = options.arrivals;
     this.#epoch = options.epoch ?? new FontEpoch();
+    this.#math = options.math;
   }
 
   /** The font epoch. */
@@ -115,6 +125,15 @@ export class FontAwareLayout {
     if (this.#cached?.epoch !== epoch)
       this.#cached = { epoch, measurer: this.#epoch.measurer(this.#inner) };
     return this.#cached.measurer;
+  }
+
+  /** The math measurer of the current epoch, or undefined when none was given. */
+  mathMeasurer(): MathMeasurer | undefined {
+    if (!this.#math) return undefined;
+    const epoch = this.#epoch.value;
+    if (this.#cachedMath?.epoch !== epoch)
+      this.#cachedMath = { epoch, math: this.#epoch.mathMeasurer(this.#math) };
+    return this.#cachedMath.math;
   }
 
   /**
@@ -141,7 +160,9 @@ export class FontAwareLayout {
     const epoch = this.#epoch.value;
     const aliases = new Set<string>();
     const measurer = notingMeasurer(this.measurer(), this.#arrivals, aliases);
-    const result = layoutFlow(doc, { ...providers, measurer }, options);
+    const cachedMath = this.mathMeasurer();
+    const math = cachedMath ? notingMathMeasurer(cachedMath, this.#arrivals, aliases) : undefined;
+    const result = layoutFlow(doc, { ...providers, measurer, ...(math ? { math } : {}) }, options);
     const fonts = this.#epoch
       .track(this.#arrivals, [...aliases])
       .then(() => this.#epoch.value !== epoch);
