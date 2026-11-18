@@ -422,6 +422,19 @@ export interface OutboxStore {
   unlock(item: Pick<OutboxItem, 'tenant' | 'id'>, node: string): Promise<void>;
 }
 
+/**
+ * Writes outbox items together with the control-plane state they rely on, as one unit (BE-039
+ * criterion 1; 06 §3): the items and the audit events are all stored or none is, so an operator's
+ * request is on the audit trail exactly when its item is in the outbox. In PostgreSQL this is one
+ * transaction under the tenant (`insertOutboxItem` and `insertAuditEvent`).
+ */
+export interface OutboxWriter {
+  write(
+    tenant: string,
+    unit: { items: readonly NewOutboxItem[]; events: readonly AuditEvent[] },
+  ): Promise<OutboxItem[]>;
+}
+
 /** Node-level liveness leases (06 §2.1; BE-018). Expiry is judged by the database clock only. */
 export interface NodeLeaseStore {
   /** Takes or renews the lease of `node` until `leaseMs` from now by the database clock. */

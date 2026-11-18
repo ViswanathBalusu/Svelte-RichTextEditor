@@ -310,7 +310,7 @@ export class Session {
       return this.#hello(m);
     }
     // The chunks of one message count as that message (BE-030).
-    if (!reassembled && m.t !== 'chunk' && !UNLIMITED.has(m.t) && !this.#admit(m)) return;
+    if (!reassembled && m.t !== 'chunk' && !UNLIMITED.has(m.t) && !(await this.#admit(m))) return;
     switch (m.t) {
       case 'hello':
         return this.#error('bad_message', 'the session is already open', m.id);
@@ -346,14 +346,15 @@ export class Session {
    * tenant's. A refused message is answered and dropped; too many refusals in a row end the
    * connection with 4429.
    */
-  #admit(m: { t: string; id?: string; ch?: number; d?: unknown }): boolean {
+  async #admit(m: { t: string; id?: string; ch?: number; d?: unknown }): Promise<boolean> {
     const now = Date.now();
     const id = this.#identity!;
     const own = this.#bucket?.take(now) ?? 0;
     const shared =
       own > 0
         ? { scope: 'connection' as const, waitMs: own }
-        : this.#deps.limits.message(id.tenant, id.connection.sub, now);
+        : await this.#deps.limits.message(id.tenant, id.connection.sub, now);
+    if (this.#state === 'closed') return false;
     if (!shared) {
       this.#refusals = 0;
       return true;

@@ -226,6 +226,29 @@ function fieldsDocument(): CdmEnvelope {
 const fieldsDocId = service.createDocument(fieldsDocument());
 
 /**
+ * The regions document with two role placeholders (FRW-012): regions to grant, and roles to grant
+ * them to. It lists the feature `fields`, which a role definition needs (I1).
+ */
+function regionRolesDocument(): CdmEnvelope {
+  const envelope = regionDocument() as unknown as {
+    requires: string[];
+    doc: { content: Array<{ type: string; content: Array<Record<string, unknown>> }> };
+  };
+  envelope.requires = [...new Set([...envelope.requires, 'fields'])];
+  const defs = envelope.doc.content.find((n) => n.type === 'defs');
+  if (!defs) throw new Error('the regions document has no definitions');
+  const after = defs.content.findLastIndex((n) => n['type'] === 'page_setup') + 1;
+  defs.content.splice(
+    after,
+    0,
+    { type: 'role_def', attrs: { id: FIELD_IDS.tenant, name: 'Tenant', color: '#1F77B4' } },
+    { type: 'role_def', attrs: { id: FIELD_IDS.landlord, name: 'Landlord', color: '#FF7F0E' } },
+  );
+  return envelope as unknown as CdmEnvelope;
+}
+const regionRolesDocId = service.createDocument(regionRolesDocument());
+
+/**
  * The identifiers of the document with a field of every kind (FRW-079): a required text field with
  * a length limit, a number with a format, a date with a pattern, a checkbox and a choice.
  */
@@ -413,6 +436,7 @@ Object.assign(globalThis, {
     regionsDocId,
     rtlDocId,
     fieldsDocId,
+    regionRolesDocId,
     kindsDocId,
     KIND_IDS,
     FIELD_IDS,

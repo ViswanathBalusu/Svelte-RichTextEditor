@@ -124,7 +124,7 @@ export interface PipelineOptions {
       tenant: string,
       user: string,
       now: number,
-    ): { scope: string; retryAfterSeconds: number } | null;
+    ): Promise<{ scope: string; retryAfterSeconds: number } | null>;
   };
   /** Prefix routes outside DEP, such as the font files (`/fonts/`); the longest prefix wins. */
   prefixes?: Readonly<Record<string, PlainHandler>>;
@@ -276,7 +276,7 @@ export class Pipeline {
         // BE-030 criterion 2: the user's and the tenant's buckets, shared with the sockets.
         const limited =
           caller.kind === 'user' && this.#o.rateLimits
-            ? this.#o.rateLimits.rest(caller.tenant, caller.identity!.sub, this.#o.now())
+            ? await this.#o.rateLimits.rest(caller.tenant, caller.identity!.sub, this.#o.now())
             : null;
         if (limited)
           throw new ApiError('rate_limited', `the ${limited.scope} limit is reached`, {

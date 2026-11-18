@@ -1,11 +1,13 @@
 /**
  * Line and page breaks stay the same while a field with a `width` is filled (FRW-080 criteria 1,
- * 2 and 5-in-layout; 12 §3.2 `width`). The layout reads the field's box from `width` alone (flow.ts,
- * `form_field`), so the value cannot change the surrounding breaks. Node.js only: no DOM is needed.
- * Criterion 3 (a default width) and the PDF comparison of criterion 5 (EXP-033) are not met here.
+ * 2 and 3; 12 §3.2 `width`). The layout reads the field's box from `width`, or from the default of
+ * its kind, and never from the value (flow.ts, `form_field`); the line breaker sets that box at exactly
+ * its width (lines.ts, `BreakRun.width`). Node.js only: no DOM is needed. The PDF comparison of
+ * criterion 5 is `packages/export-latex/src/frw-080-page-starts.compile.test.ts`.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { FIELD_DEFAULT_WIDTH, FIELD_KINDS } from '@docedit/model/definition';
 import { layoutFlow } from './engine.ts';
 import { toFlow, type CdmEnvelopeLike, type CdmNode } from './flow.ts';
 import { firstFitBreaker, type BreakOpportunities, type ItemProviders } from './items.ts';
@@ -121,6 +123,11 @@ function breaksOf(tree: LayoutTree): string {
     .join('\n');
 }
 
+/** The whole geometry of the tree: every line's offsets, position and size, and every page's fragments. */
+function geometryOf(env: CdmEnvelopeLike): string {
+  return JSON.stringify(layoutFlow(toFlow(env), providers).tree.pages);
+}
+
 const breaksWith = (node: CdmNode): string =>
   breaksOf(layoutFlow(toFlow(documentWith(node)), providers).tree);
 
@@ -148,11 +155,53 @@ describe('a field with a width keeps the breaks while it is filled (FRW-080)', (
     expect(breaksWith(field({ width: WIDTH, value: long }))).toBe(empty);
   });
 
-  it('is sensitive to the value when there is no width, so the test would catch a reflow (control)', () => {
-    // Without a width the value is laid out as text, so a long value moves the breaks. If this
-    // stopped holding, the property above would prove nothing.
-    const empty = breaksWith(field({ value: null }));
+  it('draws the box at exactly the width on the line, whatever the value (criteria 1 and 2, on the layout)', () => {
+    // A paragraph that holds only the field: its one line is as wide as the box.
+    const lineWidth = (f: CdmNode): number => {
+      const tree = layoutFlow(toFlow(envelope([paragraph('p0', [f])])), providers).tree;
+      const frag = tree.pages[0]!.fragments[0]!;
+      if (frag.kind !== 'paragraph') throw new Error('not a paragraph');
+      expect(frag.lines).toHaveLength(1);
+      return frag.lines[0]!.width;
+    };
+    fc.assert(
+      fc.property(fc.string({ maxLength: 300 }), (value) => {
+        expect(lineWidth(field({ width: WIDTH, value }))).toBe(WIDTH / 20);
+      }),
+      { numRuns: 100 },
+    );
     const long = 'Mrs Alexandria Tenant-Hyphenated Longname '.repeat(20);
-    expect(breaksWith(field({ value: long }))).not.toBe(empty);
+    expect(lineWidth(field({ width: WIDTH, value: long }))).toBe(WIDTH / 20);
+  });
+
+  it('keeps every line and fragment exactly where it is, not only the breaks (criterion 1, geometry)', () => {
+    const empty = geometryOf(documentWith(field({ width: WIDTH, value: null })));
+    const long = 'Mrs Alexandria Tenant-Hyphenated Longname '.repeat(20);
+    expect(geometryOf(documentWith(field({ width: WIDTH, value: long })))).toBe(empty);
+    expect(geometryOf(documentWith(field({ width: WIDTH, value: 'Ada' })))).toBe(empty);
+  });
+
+  it('gives a field with no width the fixed default of its kind, so the breaks hold too (criterion 3)', () => {
+    for (const kind of FIELD_KINDS) {
+      const empty = breaksWith(field({ kind, value: null }));
+      const long = 'Mrs Alexandria Tenant-Hyphenated Longname '.repeat(20);
+      expect(breaksWith(field({ kind, value: long })), kind).toBe(empty);
+    }
+    const lineWidth = (f: CdmNode): number => {
+      const tree = layoutFlow(toFlow(envelope([paragraph('p0', [f])])), providers).tree;
+      const frag = tree.pages[0]!.fragments[0]!;
+      if (frag.kind !== 'paragraph') throw new Error('not a paragraph');
+      return frag.lines[0]!.width;
+    };
+    for (const kind of FIELD_KINDS)
+      expect(lineWidth(field({ kind, value: 'Ada' })), kind).toBe(FIELD_DEFAULT_WIDTH[kind] / 20);
+  });
+
+  it('is sensitive to the width, so the comparison would catch a reflow (control)', () => {
+    // A wider box moves the breaks. If this stopped holding, the properties above would prove
+    // nothing: the document would not be one in which a box can move a break.
+    const narrow = geometryOf(documentWith(field({ width: 720 })));
+    const wide = geometryOf(documentWith(field({ width: 7200 })));
+    expect(wide).not.toBe(narrow);
   });
 });

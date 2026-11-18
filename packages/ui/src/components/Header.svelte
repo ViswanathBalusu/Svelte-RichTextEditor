@@ -28,6 +28,11 @@
   const snapshot = live(shell.registry.view);
   const features = core.features ? live(core.features) : null;
   const counts = core.counts ? live(core.counts) : null;
+  // The catch-up count comes from the host's counts when it gives one, else from the catch-up the
+  // shell reads itself (HIS-028).
+  const catchUp = shell.catchUp;
+  let catchUpBadge = $state(catchUp?.state().badge ?? 0);
+  $effect(() => catchUp?.subscribe(() => (catchUpBadge = catchUp.state().badge)));
 
   const presenceOn = $derived((features?.current ?? []).includes('presence'));
   const actions = $derived(
@@ -42,8 +47,11 @@
   function countOf(action: CommandView): number | undefined {
     const spec = COUNT_KEYS[action.id];
     if (!spec) return undefined;
-    const value = counts?.current[spec.count];
-    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+    const hosted = counts?.current[spec.count];
+    const value = spec.count === 'catchUp' && hosted === undefined && catchUp ? catchUpBadge : hosted;
+    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+    // No activity is no badge: a count of nothing is not shown on the catch-up control (HIS-028).
+    return spec.count === 'catchUp' && value === 0 ? undefined : value;
   }
 
   function nameOf(action: CommandView): string | undefined {

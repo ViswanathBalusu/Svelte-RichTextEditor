@@ -33,6 +33,39 @@ export const FIELD_KINDS = [
 ] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 
+/**
+ * The width, in twips, of a field that states no `width` (12 §3.2: fields have a fixed width by
+ * default; FRW-080 criterion 3). The table is the schema's: the layout, the web view and the PDF
+ * export all read it through `fieldWidth`, so a field never takes its width from its value.
+ * The figures are a proposed default (docs/adr/0380-w4-FRW-080-default-field-width.md), not a
+ * measurement; the owner has not chosen them.
+ */
+export const FIELD_DEFAULT_WIDTH: Readonly<Record<FieldKind, number>> = {
+  text: 2880,
+  number: 1440,
+  date: 1800,
+  checkbox: 288,
+  choice: 2880,
+  signature: 3600,
+  initials: 1440,
+  dateSigned: 1800,
+  formula: 1440,
+};
+
+/** Used for a kind this version does not know (a reserved or future kind). */
+const FALLBACK_FIELD_WIDTH = 2880;
+
+/**
+ * The width in twips of a field's box: its `width` when it has one, else the default of its kind.
+ * The value of the field never enters it.
+ */
+export function fieldWidth(kind: unknown, width: unknown): number {
+  if (typeof width === 'number' && Number.isInteger(width) && width > 0) return width;
+  return typeof kind === 'string' && Object.hasOwn(FIELD_DEFAULT_WIDTH, kind)
+    ? FIELD_DEFAULT_WIDTH[kind as FieldKind]
+    : FALLBACK_FIELD_WIDTH;
+}
+
 /** Kinds that 12 §3.2 reserves for a later version; version 1 refuses them (FRW-002). */
 export const RESERVED_FIELD_KINDS = ['attachment'] as const;
 

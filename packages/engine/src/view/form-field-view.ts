@@ -10,6 +10,9 @@
  *   entry for a number, a calendar date for a date, a checkbox, or a list of the option labels for
  *   a choice whose stored value is the option's id (FRW-079 criterion 2). A control is described by
  *   its kind and by the role it belongs to, and by the message of its problem (criterion 3).
+ * - The field's box is as wide as its `width`, or the default width of its kind, whatever the
+ *   control holds (FRW-080 criteria 1 to 3). A paste into a text field with a `maxLength` is cut at
+ *   the limit and a live region says so (criterion 4).
  * - `format` changes the display only: while nobody edits the control it shows the formatted text,
  *   and while it is edited it shows the stored value (criterion 4).
  * - An entry is checked while it is typed and submitted when the control reports a change. The
@@ -22,7 +25,7 @@
  * Kept out of the core so that the headless entry builds no DOM (FE-121).
  */
 import { type FormFieldValue, type JsonValue, fieldText } from '@docedit/model';
-import { isRedactionMarker } from '@docedit/model/definition';
+import { fieldWidth, isRedactionMarker } from '@docedit/model/definition';
 import { DOMSerializer, type Node as PMNode } from 'prosemirror-model';
 import type { NodeView, NodeViewConstructor } from 'prosemirror-view';
 import { formatFieldValue, type FieldFormat } from '../field-display.ts';
@@ -51,6 +54,27 @@ const KIND_NAMES: Readonly<Record<string, string>> = {
   checkbox: 'Checkbox field',
   choice: 'Choice field',
 };
+
+/** The number of code points in `text`. */
+function codePointsIn(text: string): number {
+  return text.length - pairsIn(text);
+}
+
+/** The first `count` code points of `text` (none for a count of zero or less). */
+function firstCodePoints(text: string, count: number): string {
+  let out = '';
+  let n = 0;
+  for (const ch of text) {
+    if (n >= count) break;
+    out += ch;
+    n++;
+  }
+  return out;
+}
+
+/** The notice of a paste that was cut at the limit; the limit is in code points (FRW-080 criterion 4). */
+const cutNotice = (limit: number): string =>
+  `The pasted text was cut at ${limit} character${limit === 1 ? '' : 's'}.`;
 
 /** The number of pairs of UTF-16 units in `text`: code points beyond U+FFFF. */
 function pairsIn(text: string): number {
@@ -127,6 +151,8 @@ class FormFieldView implements NodeView, Refreshable {
   readonly #views: FormFieldViews;
   readonly #control: Control;
   readonly #message: HTMLElement;
+  /** Says that a paste was cut at the limit (a polite live region). */
+  readonly #notice: HTMLElement;
   #node: PMNode;
   /** The person typed since the last submitted entry. */
   #dirty = false;
@@ -156,14 +182,55 @@ class FormFieldView implements NodeView, Refreshable {
     message.setAttribute('role', 'alert');
     message.hidden = true;
     this.#message = message;
-    dom.append(this.#control, message);
+    const notice = document.createElement('span');
+    notice.className = 'de-form-field-notice';
+    notice.setAttribute('role', 'status');
+    notice.hidden = true;
+    this.#notice = notice;
+    dom.append(this.#control, message, notice);
+    this.#box(dom, message, notice);
 
+    this.#control.addEventListener('paste', this.#pasted);
     this.#control.addEventListener('input', this.#typed);
     this.#control.addEventListener('change', this.#changed);
     this.#control.addEventListener('focus', this.#focused);
     this.#control.addEventListener('blur', this.#blurred);
     views.add(this);
     this.#draw();
+  }
+
+  /**
+   * The field's box (12 §3.2; FRW-080): as wide as its `width`, or the default of its kind, whatever
+   * the control holds, and no wider. The control fills the box and cannot grow it. The messages are
+   * taken out of the flow, so a problem or a notice moves no line of the text around the field.
+   * Set through the style object, which a content security policy does not restrict.
+   */
+  #box(dom: HTMLElement, ...floating: HTMLElement[]): void {
+    const kind = String(this.#node.attrs['kind']);
+    const twips = fieldWidth(kind, this.#node.attrs['width']);
+    dom.style.display = 'inline-block';
+    dom.style.position = 'relative';
+    dom.style.verticalAlign = 'baseline';
+    dom.style.boxSizing = 'border-box';
+    dom.style.width = `${twips / 20}pt`;
+    dom.style.maxWidth = 'none';
+    this.#control.style.boxSizing = 'border-box';
+    this.#control.style.width = '100%';
+    this.#control.style.maxWidth = '100%';
+    for (const el of floating) {
+      el.style.position = 'absolute';
+      el.style.left = '0';
+      el.style.top = '100%';
+      el.style.zIndex = '1';
+      el.style.width = 'max-content';
+      el.style.maxWidth = '24em';
+      el.style.font = 'inherit';
+      el.style.fontSize = '0.85em';
+      el.style.background = 'Canvas';
+      el.style.color = 'CanvasText';
+      el.style.border = '1px solid currentColor';
+      el.style.padding = '0 0.25em';
+    }
   }
 
   #makeControl(kind: string): Control {
@@ -206,10 +273,57 @@ class FormFieldView implements NodeView, Refreshable {
     const kind = String(this.#node.attrs['kind']);
     if (kind !== 'text' && kind !== 'number') return;
     if (!this.#port.fillable(this.#id)) return this.#draw();
+    this.#clearNotice();
     this.#dirty = true;
     this.#limitLength();
     this.#showProblems(this.#port.check(this.#id, this.#entry()));
   };
+
+  /** The limit of a text field's entry, in code points; null when it has none or is not text. */
+  #limit(): number | null {
+    const limit = (this.#node.attrs['validation'] as { maxLength?: unknown } | null)?.maxLength;
+    return this.#node.attrs['kind'] === 'text' && typeof limit === 'number' ? limit : null;
+  }
+
+  /**
+   * A paste into a text field with a `maxLength` is set by this code and not by the browser, which
+   * counts UTF-16 units: what fits is kept, the rest is cut, and a live region says so (FRW-080
+   * criterion 4). A paste that fits is set the same way, so one rule counts both. Line breaks in
+   * the pasted text become spaces, as a single-line control would have them.
+   */
+  readonly #pasted = (e: Event): void => {
+    const event = e as ClipboardEvent;
+    const c = this.#control;
+    const limit = this.#limit();
+    if (limit === null || !(c instanceof HTMLInputElement) || c.readOnly) return;
+    if (!this.#port.fillable(this.#id)) return;
+    const pasted = (event.clipboardData?.getData('text/plain') ?? '').replace(/\r\n|[\r\n]/g, ' ');
+    event.preventDefault();
+    const start = c.selectionStart ?? c.value.length;
+    const end = c.selectionEnd ?? start;
+    const kept = c.value.slice(0, start) + c.value.slice(end);
+    const room = Math.max(0, limit - codePointsIn(kept));
+    const inserted = firstCodePoints(pasted, room);
+    if (inserted !== '') {
+      // `setRangeText` does not apply `maxlength`, and the control then reports an input.
+      c.setRangeText(inserted, start, end, 'end');
+      c.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (codePointsIn(inserted) < codePointsIn(pasted)) this.#say(cutNotice(limit));
+  };
+
+  /** Shows a notice in the field's live region; the next entry or leaving the field clears it. */
+  #say(text: string): void {
+    this.#notice.hidden = false;
+    this.#notice.textContent = '';
+    this.#notice.textContent = text;
+  }
+
+  #clearNotice(): void {
+    if (this.#notice.hidden) return;
+    this.#notice.textContent = '';
+    this.#notice.hidden = true;
+  }
 
   readonly #focused = (): void => {
     if (this.#swapping) return;
@@ -221,6 +335,10 @@ class FormFieldView implements NodeView, Refreshable {
   readonly #blurred = (): void => {
     if (this.#swapping) return;
     this.#editing = false;
+    this.#clearNotice();
+    // A paste set by `#pasted` is not an edit by the person for the control: it reports no change of
+    // its own, so the entry is submitted here. After typing, the control reported it before this.
+    if (this.#dirty) return this.#changed();
     this.#draw();
   };
 
@@ -349,6 +467,7 @@ class FormFieldView implements NodeView, Refreshable {
     if (node.attrs['id'] !== this.#node.attrs['id']) return false;
     if (isRedactionMarker(node.attrs['value'] as JsonValue | undefined)) return false;
     this.#node = node;
+    this.dom.style.width = `${fieldWidth(node.attrs['kind'], node.attrs['width']) / 20}pt`;
     this.#draw();
     return true;
   }
@@ -364,6 +483,7 @@ class FormFieldView implements NodeView, Refreshable {
 
   destroy(): void {
     this.#views.remove(this);
+    this.#control.removeEventListener('paste', this.#pasted);
     this.#control.removeEventListener('input', this.#typed);
     this.#control.removeEventListener('change', this.#changed);
     this.#control.removeEventListener('focus', this.#focused);

@@ -16,7 +16,7 @@
  *   document's `settings.defaultTabStop`) past the last one (FE-081 criterion 3). A numbering
  *   label's tab goes to the hanging indent, which is taken as a left stop (docs/adr/0120, item 48);
  * - an inline image or preserved box is measured as one character, and its height does not raise
- *   its line;
+ *   its line; a form field's box is the exception, set at exactly its width (FRW-080);
  * - a table is not paginated (FE-083): its identifier is returned in `unplaced`;
  * - paragraphs are broken to the column width of their own section, also after a `continuous`
  *   break, whose page width applies from the next page.
@@ -160,7 +160,11 @@ export function paragraphItem(
       notes.push({ offset: inline.offset, id: inline.ref });
     const text = inlineText(inline);
     if (text.length === 0) continue;
-    runs.push({ text, font: inline.font });
+    runs.push({
+      text,
+      font: inline.font,
+      ...(inline.kind === 'box' && inline.exactWidth ? { width: inline.width } : {}),
+    });
     const exact = inline.kind === 'text' && inline.role === 'text' && inline.size === text.length;
     spans.push({ t0: t, t1: t + text.length, cdm: inline.offset, size: inline.size, exact });
     t += text.length;
