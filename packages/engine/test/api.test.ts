@@ -76,6 +76,10 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'fieldValues'
       | 'fillField'
       | 'onFieldChange'
+      // FRW-075: the preview of the document as a role.
+      | 'rolePreview'
+      | 'startRolePreview'
+      | 'endRolePreview'
       // FRW-074: the roles of the document and the changes to them, for the roles manager.
       | 'roles'
       | 'nextRoleId'

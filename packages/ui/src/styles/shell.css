@@ -1171,7 +1171,8 @@
 }
 
 /* The fill bar (FRW-076). */
-.de-fill-bar {
+.de-fill-bar,
+.de-role-preview-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

@@ -872,6 +872,15 @@ export interface CoreApi {
   readonly fill?: ReadView<FillSummary | null>;
   /** Moves focus to a field and scrolls it into view (FRW-078); false when it is gone. */
   focusField?(id: string): boolean;
+  /**
+   * The role the author previews the document as (FRW-075), or null. While it is set the core is in
+   * fill mode for a participant who holds only that role, and what is entered is never committed.
+   */
+  readonly rolePreview?: ReadView<string | null>;
+  /** Starts, or switches, the preview as `role`; false for a role the document does not define. */
+  startRolePreview?(role: string): boolean;
+  /** Leaves the preview; the caret returns to where it was. False when none is active. */
+  endRolePreview?(): boolean;
   /** Comment threads (UX-028; 05 §6.2), when the backend announces `comments`. */
   readonly threads?: ThreadsService;
   /**

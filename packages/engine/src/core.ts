@@ -770,8 +770,36 @@ function verticalAlignCommand(type: MarkType, value: 'super' | 'sub'): Command {
   };
 }
 
+/** A preview as a role (FRW-075): what to put back when it ends. */
+interface RolePreviewState {
+  role: string;
+  /** The selection when the preview began, so that leaving puts the caret back. */
+  readonly selection: unknown;
+  /** What the person had before the preview: the access and the mode the host asked for. */
+  saved: { access: Access | null; readonly requested: EditMode };
+  /** The value each field had before the preview changed it, by field identifier. */
+  readonly originals: Map<string, JsonValue>;
+}
+
+/** The value of each form field of `doc`, by field identifier. */
+function formFieldValues(doc: PMNode): Map<string, JsonValue> {
+  const out = new Map<string, JsonValue>();
+  doc.descendants((node) => {
+    if (node.type.name !== 'form_field') return true;
+    const id = node.attrs['id'];
+    if (typeof id === 'string') out.set(id, (node.attrs['value'] ?? null) as JsonValue);
+    return false;
+  });
+  return out;
+}
+
 export class DocumentCore implements DocumentApi {
   readonly #hub: ViewHub;
+  /** The role the author previews, or null (FRW-075). */
+  readonly rolePreview: ReadValue<string | null>;
+  #preview: RolePreviewState | null = null;
+  /** True while the preview itself sets values, so that they are not taken for the author's entries. */
+  #previewInternal = false;
   readonly selection: ReadValue<SelectionSummary>;
   readonly panel: ReadValue<PanelInfo | null>;
   readonly outline: ReadValue<readonly OutlineItem[]>;
@@ -968,6 +996,7 @@ export class DocumentCore implements DocumentApi {
       sameJson,
       hub,
     );
+    this.rolePreview = new ReadValue<string | null>(null, Object.is, hub);
     this.suggestion = new ReadValue<SuggestionModeInfo>(
       { on: false, locked: false, reason: null, scope: 'body' },
       sameJson,
@@ -1080,17 +1109,21 @@ export class DocumentCore implements DocumentApi {
     if (this.#destroyed) return;
     const tr = this.#asSuggestion(input);
     if (tr === null) return; // suggestion mode could not record it, and refused it
+    // A local change while the author previews a role is shown but never sent or remembered (FRW-075).
+    const previewEdit = this.#preview !== null && tr.getMeta(REMOTE) !== true;
+    if (previewEdit) tr.setMeta('addToHistory', false);
     const before = this.#state;
     const { state, transactions } = before.applyTransaction(tr);
     if (state === before) return; // filtered out by the guard (or a sub-editor limit)
     this.#state = state;
+    if (previewEdit && !this.#previewInternal) this.#notePreviewChange(before.doc, state.doc);
     const trimmed = tr.getMeta(trimKey) as { skipped: readonly string[] } | undefined;
     if (trimmed) this.trimmed.set({ n: ++this.#trims, skipped: [...trimmed.skipped] });
     // Local steps go to the queue: the root unless it is remote, and anything appended to it.
     const localSteps: Step[] = [];
     for (const t of transactions)
       if (t.docChanged && t.getMeta(REMOTE) !== true) localSteps.push(...t.steps);
-    if (localSteps.length) {
+    if (localSteps.length && !previewEdit) {
       // `markSet` (exact mark inverses, used by undo) is sent as its inner steps, and an `id`
       // step on a node the same change removes is not sent at all (steps.ts).
       const steps =
@@ -1708,6 +1741,11 @@ export class DocumentCore implements DocumentApi {
   }
 
   setAccess(access: Access | null): void {
+    // While the author previews a role the access in force is the role's; the real one waits (FRW-075).
+    if (this.#preview !== null) {
+      this.#preview.saved = { ...this.#preview.saved, access };
+      return;
+    }
     this.#accessValue = access;
     this.permissions.set(access);
     this.#proofing?.accessChanged();
@@ -1757,6 +1795,11 @@ export class DocumentCore implements DocumentApi {
    * criterion 7).
    */
   setMode(mode: EditMode): void {
+    if (this.#preview !== null) {
+      // The preview is the fill mode; the mode asked for now comes back when it ends.
+      this.#preview = { ...this.#preview, saved: { ...this.#preview.saved, requested: mode } };
+      return;
+    }
     this.#requested = mode;
     this.#refreshMode();
     this.#publish();
@@ -1960,7 +2003,145 @@ export class DocumentCore implements DocumentApi {
    * the field and the state of the entry and never the value (`de-field-change`, 12 §10; FRW-070).
    */
   onFieldChange(listener: (change: FieldChange) => void): () => void {
-    return this.#fieldEntries.onChange(listener);
+    // An entry made in a preview as a role is not the person's fill, so it is not reported (FRW-075).
+    return this.#fieldEntries.onChange((change) => {
+      if (this.#preview === null) listener(change);
+    });
+  }
+
+  // --- Preview as a role (FRW-075) -----------------------------------------------------------
+
+  /**
+   * Shows the document as a participant who holds only `role` would fill it (12 §11): the body is
+   * read-only, the role's fields are fillable, other roles' fields are not, and the rules see
+   * `role` for their `role` operand. Values entered are shown but never sent as commits and never
+   * join the undo history; `endRolePreview` takes them back. False for a role the document does not
+   * define. Starting again with another role switches it and keeps the caret of the first start.
+   */
+  startRolePreview(role: string): boolean {
+    if (this.#destroyed || !this.roles().some((r) => r.id === role)) return false;
+    const current = this.#preview;
+    if (current !== null) {
+      this.#previewRevert();
+      this.#fieldEntries.clear();
+      current.role = role;
+    } else {
+      this.#preview = {
+        role,
+        selection: this.#state.selection.toJSON(),
+        saved: { access: this.#accessValue, requested: this.#requested },
+        originals: new Map(),
+      };
+    }
+    const real = this.#preview!.saved.access;
+    const access: Access = {
+      rev: real?.rev ?? 0,
+      asOfSeq: real?.asOfSeq ?? 0,
+      docRole: 'filler',
+      caps: ['view', 'fill'],
+      scopes: {},
+      leases: {},
+      fill: { participant: 'preview', roles: [role], active: true },
+      restrictions: real?.restrictions ?? [],
+    };
+    this.#accessValue = access;
+    this.#requested = 'fill';
+    this.permissions.set(access);
+    this.#proofing?.accessChanged();
+    this.#refreshMode();
+    this.rolePreview.set(role);
+    this.#publish();
+    for (const b of this.#bridges) b.accessChanged?.();
+    return true;
+  }
+
+  /**
+   * Leaves the preview: the values entered in it are dropped, the access and the mode the person
+   * had come back, and the caret returns to where it was. False when no preview is active.
+   */
+  endRolePreview(): boolean {
+    const preview = this.#preview;
+    if (preview === null) return false;
+    this.#previewRevert();
+    this.#preview = null;
+    this.#fieldEntries.clear();
+    this.#requested = preview.saved.requested;
+    this.rolePreview.set(null);
+    this.setAccess(preview.saved.access);
+    try {
+      const selection = Selection.fromJSON(
+        this.#state.doc,
+        preview.selection as Parameters<typeof Selection.fromJSON>[1],
+      );
+      this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
+    } catch {
+      // the position no longer exists: the caret stays where it is
+    }
+    this.focus();
+    return true;
+  }
+
+  /** Remembers the value a field had before the preview changed it (FRW-075). */
+  #notePreviewChange(before: PMNode, after: PMNode): void {
+    const preview = this.#preview;
+    if (preview === null) return;
+    const was = formFieldValues(before);
+    for (const [id, value] of formFieldValues(after)) {
+      const old = was.get(id);
+      if (old !== undefined && !sameJson(old, value) && !preview.originals.has(id))
+        preview.originals.set(id, old);
+    }
+  }
+
+  /** Sets form field values without sending or remembering them: the preview's own changes. */
+  #setPreviewValues(values: ReadonlyMap<string, JsonValue>): void {
+    const tr = this.#state.tr;
+    this.#state.doc.descendants((node, pos) => {
+      if (node.type.name !== 'form_field') return true;
+      const id = node.attrs['id'];
+      if (typeof id !== 'string' || !values.has(id)) return false;
+      const value = values.get(id) as JsonValue;
+      if (!sameJson((node.attrs['value'] ?? null) as JsonValue, value))
+        tr.setNodeAttribute(pos, 'value', value);
+      return false;
+    });
+    if (tr.steps.length === 0) return;
+    this.#previewInternal = true;
+    try {
+      this.dispatchTransaction(tr.setMeta(INTERNAL, true).setMeta('addToHistory', false));
+    } finally {
+      this.#previewInternal = false;
+    }
+  }
+
+  /** Puts back what the preview changed; returns what it had entered, by field identifier. */
+  #previewRevert(): Map<string, JsonValue> {
+    const preview = this.#preview;
+    const entered = new Map<string, JsonValue>();
+    if (preview === null) return entered;
+    const now = formFieldValues(this.#state.doc);
+    for (const id of preview.originals.keys()) {
+      const value = now.get(id);
+      if (value !== undefined) entered.set(id, value);
+    }
+    this.#setPreviewValues(preview.originals);
+    preview.originals.clear();
+    return entered;
+  }
+
+  /** Shows the entries again after a remote change was taken in (FRW-075). */
+  #previewReplay(entered: ReadonlyMap<string, JsonValue>): void {
+    const preview = this.#preview;
+    if (preview === null || entered.size === 0) return;
+    const now = formFieldValues(this.#state.doc);
+    const show = new Map<string, JsonValue>();
+    for (const [id, value] of entered) {
+      const current = now.get(id);
+      if (current === undefined) continue;
+      preview.originals.set(id, current);
+      show.set(id, value);
+    }
+    this.#setPreviewValues(show);
   }
 
   canEdit(scope: string): boolean {
@@ -4267,10 +4448,14 @@ one or original. It is a
       this.#presenceConfirmed(t, seqBefore);
       return true;
     }
+    // The values entered in a preview as a role are taken out while the change is applied to the
+    // document the service holds, and shown again after (FRW-075).
+    const entered = this.#preview !== null ? this.#previewRevert() : null;
     const aligned = this.#historyAligned || unconfirmed(this.#sync).length === 0;
     const tr = effect.kind === 'rebuild' ? rebuildTransaction(this.#state, effect, aligned) : null;
     if (this.#deferRemote && this.#touchesComposition(tr, effect)) {
       this.#deferrals++;
+      if (entered) this.#previewReplay(entered);
       return false;
     }
     this.#sync = t.state;
@@ -4285,6 +4470,7 @@ one or original. It is a
         effect.afterOrigins.every((o) => o >= 0);
       this.dispatchTransaction(tr);
     }
+    if (entered) this.#previewReplay(entered);
     this.#publishSync();
     this.#presenceConfirmed(t, seqBefore);
     return true;

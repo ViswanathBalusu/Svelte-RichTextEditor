@@ -1098,6 +1098,16 @@ export const EN_GB = {
   'fill.why.range': 'Out of the allowed range',
   'fill.why.other': 'Not valid',
   'fill.finished': 'You have finished.',
+
+  // Preview as a role (FRW-075). Role names are content.
+  'rolePreview.label': 'Preview as a role',
+  'rolePreview.active': 'Previewing as {role}. What you enter here is not saved.',
+  'rolePreview.leave': 'Leave preview',
+  'announce.rolePreview.on': 'Preview as {role} started. What you enter here is not saved.',
+  'announce.rolePreview.off': 'Preview ended. The document is as it was.',
+  'announce.rolePreview.failed': 'The preview could not start.',
+  'roles.preview': 'Preview',
+  'roles.preview.name': 'Preview as {role}',
   'fill.finishFailed': 'Finishing did not work.',
 
   // Role markers of fields (FRW-074, FRW-077). The palette's names are `command.insert.field.*`.

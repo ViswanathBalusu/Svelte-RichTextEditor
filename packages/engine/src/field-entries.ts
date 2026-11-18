@@ -142,6 +142,11 @@ export class FieldEntries {
     this.#host = host;
   }
 
+  /** Forgets every kept entry: what the fields show is what they store (the end of a preview, FRW-075). */
+  clear(): void {
+    this.#kept.clear();
+  }
+
   /** The kept entry of a field, dropped once someone else changed the stored value. */
   #keptFor(id: string, stored: JsonValue): Kept | null {
     const kept = this.#kept.get(id);
