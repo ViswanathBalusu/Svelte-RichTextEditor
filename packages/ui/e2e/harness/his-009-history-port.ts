@@ -14,10 +14,68 @@ import type {
   HistoryPaneQuery,
   HistoryPaneResult,
   HistoryPort,
+  HistoryVersionOpen,
   ResolveUsers,
 } from '../../src/core-api.ts';
 
-export type HistoryHarnessMode = 'full' | 'named' | 'failing' | 'refusing' | 'empty' | 'slow';
+export type HistoryHarnessMode =
+  'full' | 'named' | 'failing' | 'refusing' | 'empty' | 'slow' | 'versions';
+
+/** What the harness records of the versions the pane opens (HIS-010). */
+export interface VersionLog {
+  opened: number[];
+  mounted: number;
+  unmounted: number;
+  closed: number;
+  /** The outcome the next `openVersion` gives; absent: the version opens. */
+  outcome?: 'forbidden' | 'not_found' | 'failed';
+}
+
+/** Groups end at a state a reader can open, in the `versions` mode. */
+const GROUP_SEQ: Readonly<Record<string, number>> = { g1: 8, g2: 15 };
+
+function versionLog(): VersionLog {
+  const g = globalThis as { __versionLog?: VersionLog };
+  g.__versionLog ??= { opened: [], mounted: 0, unmounted: 0, closed: 0 };
+  return g.__versionLog;
+}
+
+/**
+ * The `openVersion` of the `versions` mode. The pane cannot import the engine (`ui` never imports
+ * `prosemirror-*`), so the harness draws plain text in the host element; the engine's own state is
+ * tested in Node (`packages/engine/src/version-view.test.ts`). What this run checks is the pane's
+ * side: the name, the focus, the leave and the refusal.
+ */
+function openVersion(
+  seq: number,
+  label: { time: string; name: string | null },
+): Promise<HistoryVersionOpen> {
+  const log = versionLog();
+  log.opened.push(seq);
+  if (log.outcome !== undefined) return Promise.resolve({ ok: false, reason: log.outcome });
+  return Promise.resolve({
+    ok: true,
+    view: {
+      seq,
+      time: label.time,
+      name: label.name,
+      mount(target) {
+        log.mounted++;
+        const body = document.createElement('div');
+        body.setAttribute('data-version-body', String(seq));
+        body.textContent = `The document at version ${seq}.`;
+        target.append(body);
+        return () => {
+          log.unmounted++;
+          body.remove();
+        };
+      },
+      close() {
+        log.closed++;
+      },
+    },
+  });
+}
 
 /** The regions and fields each item touched; the service reads them from the per-scope table. */
 const SCOPES: Readonly<Record<string, { regions: readonly string[]; fields: readonly string[] }>> =
@@ -77,10 +135,14 @@ export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers
     released = true;
     release();
   };
-  const items: HistoryPaneItem[] = [...ITEMS];
+  const items: HistoryPaneItem[] = ITEMS.map((item) =>
+    mode === 'versions' && item.kind === 'group' && GROUP_SEQ[item.id] !== undefined
+      ? { ...item, toSeq: GROUP_SEQ[item.id] as number }
+      : item,
+  );
   const listeners = new Set<() => void>();
   const createVersion: HistoryPort['createVersion'] =
-    mode === 'full' || mode === 'refusing'
+    mode === 'full' || mode === 'refusing' || mode === 'versions'
       ? (input) => {
           if (mode === 'refusing') return Promise.resolve({ ok: false, reason: 'forbidden' });
           items.push({
@@ -99,6 +161,7 @@ export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers
   return {
     resolveUsers,
     ...(createVersion ? { createVersion } : {}),
+    ...(mode === 'versions' ? { openVersion } : {}),
     onChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

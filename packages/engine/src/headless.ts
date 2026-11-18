@@ -15,6 +15,17 @@ export {
 } from './core.ts';
 export type * from './api.ts';
 export {
+  VersionDocument,
+  openVersion,
+  refusalOf,
+  versionCoreConfig,
+  type VersionCoreOptions,
+  type VersionInput,
+  type VersionOpen,
+  type VersionOpener,
+  type VersionRefusal,
+} from './version-view.ts';
+export {
   ReadValue,
   ViewHub,
   nextFrame,
