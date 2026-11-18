@@ -191,8 +191,13 @@ export function gateOf(conn: RoomConnection, s: StoredState): number {
 }
 
 /** Whether the content at `seq` may be read (a single state). */
-export function stateAllowed(gate: number, seq: number, head: number): boolean {
-  return stateVisible(gate, seq, head);
+export function stateAllowed(
+  gate: number,
+  seq: number,
+  head: number,
+  named?: (seq: number) => boolean,
+): boolean {
+  return stateVisible(gate, seq, head, named);
 }
 
 /** Whether the commits after `from` may be sent (a run). */

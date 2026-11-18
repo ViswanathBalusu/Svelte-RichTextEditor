@@ -15,7 +15,7 @@
  *   of the source are not copied.
  */
 import { formatTimestamp, uuid7, type JsonEnvelope } from '@docedit/model';
-import { minVisibleSeqOf, refuseBelowGate, regionInfosOfJson } from './gate.ts';
+import { actingConnection, refuseSeqBelowGate } from './gate.ts';
 import { json, type Kit } from './kit.ts';
 import { guard, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
@@ -74,23 +74,14 @@ export function historyRoutes(k: Kit): Record<string, Handler> {
     if (body.atSeq > head.seq)
       throw new ApiError('not_found', `no content at seq ${body.atSeq}; the head is ${head.seq}`);
     // A fork reveals the state at `atSeq`: the same gate as every other seq (HIS-024). A service
-    // credential passes it; a user credential is refused above, and would meet it here.
-    const atHead = await d.content.rebuild(ref, head.incarnation, head.seq);
-    refuseBelowGate(
-      body.atSeq,
-      await minVisibleSeqOf({
-        caller: ctx.caller,
-        ref,
-        record: sourceRecord,
-        head: head.seq,
-        regions: regionInfosOfJson(atHead.doc),
-        perms: await d.grants.current(ref),
-        logs: d.logs,
-        now: d.now(),
-      }),
-      head.seq,
-      'atSeq',
-    );
+    // credential reads full history, unless it names the user it acts for in `DEP-Actor`: then
+    // `atSeq` must be visible to that user (PRM-042 criterion 4; ADR 0379, proposed).
+    // The actor is the user's surrogate, which is what stored grants name.
+    const named = ctx.req.headers['dep-actor'] !== undefined;
+    await refuseSeqBelowGate(d, ctx.caller, ref, sourceRecord, head.seq, body.atSeq, {
+      what: 'atSeq',
+      ...(named ? { as: actingConnection(ctx.caller.actor) } : {}),
+    });
     // The content as it was at `atSeq`, read from the source's own log (the same read as a pinned
     // content read, without the caller's projection: a service credential sees full history).
     const full = await d.content.rebuild(ref, head.incarnation, body.atSeq);
