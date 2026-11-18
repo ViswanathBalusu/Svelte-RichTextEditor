@@ -5,6 +5,13 @@
  * suggestion; a property test of random commits from a suggestion-only user is judged by the
  * reference outcome check (PRM-009). The profile runs only for a server that announces
  * `suggest-enforced`.
+ *
+ * Scope (PRM-062; ADR 0146, proposed): the suggestion marks `ins`, `del` and `fmt` on text, in a
+ * body paragraph. Suggested block-level changes (node marks on paragraphs, whole table rows and
+ * whole tables) follow the same rule P4 and are tested against the oracle in `packages/authority`;
+ * the profile has no scenario for them yet. Table cells and columns, figures, equations, `toc`,
+ * extension blocks and regions are not supported in version 1, and a server refuses a suggestion
+ * on them with `invalid_op`; the profile does not test that either.
  */
 import type { Step } from '@docedit/protocol';
 import fc from 'fast-check';

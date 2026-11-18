@@ -125,7 +125,19 @@ export function fragmentOf(
   requires: readonly string[],
 ): CdmFragment {
   if (from === to) return emptyFragment(cdm, requires);
-  const slice = doc.slice(from, to);
+  return fragmentOfSlice(doc, doc.slice(from, to), cdm, requires);
+}
+
+/**
+ * The fragment that carries `slice`: its content, how far it is open, and the style and numbering
+ * definitions it refers to, read from `doc` (the document that holds the definitions).
+ */
+export function fragmentOfSlice(
+  doc: PMNode,
+  slice: Slice,
+  cdm: number,
+  requires: readonly string[],
+): CdmFragment {
   const content = (slice.content.toJSON() ?? []) as CdmJsonNode[];
   const table = styleTable(doc);
   const styles = styleClosure(doc, referencedStyles(content, table.defaultParagraphStyle));

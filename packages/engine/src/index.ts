@@ -30,6 +30,11 @@ export {
   type VersionRefusal,
 } from './version-view.ts';
 export { VersionView, makeWebVersion } from './view/version-web.ts';
+export {
+  comparisonSpecs,
+  type ComparisonChange,
+  type ComparisonSpec,
+} from './comparison-markup.ts';
 export type {
   AccessLimit,
   AccessSummary,
@@ -52,6 +57,8 @@ export type {
   DocumentApi,
   EditMode,
   EquationConfirmation,
+  FieldFillOutcome,
+  FieldsApi,
   EquationRequest,
   EquationTarget,
   FieldArgs,

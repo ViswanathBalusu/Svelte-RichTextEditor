@@ -115,30 +115,26 @@ describe('SEC-014 revocation holds on both planes (memory)', () => {
     }
   });
 
-  // Criterion 2, the `ch.open` clause. The old token is refused, but the channel answer is
-  // `forbidden`, not `revoked`: `#openChannel` maps every failure of a channel token to
-  // `forbidden` (services/document-service/src/data-plane/session.ts, the `d.token` branch). This
-  // test records that gap. `it.fails` passes while the assertion fails; when the service answers
-  // `revoked`, this test fails and the marker must be removed.
-  it.fails(
-    'refuses ch.open with the old token with `revoked` (the service answers `forbidden` today)',
-    async () => {
-      const doc = await h.createDocument(h.a, documentWithRegions());
-      const old = await h.mintToken(h.a, 'ruth3', { [doc]: 'editor' });
-      await sleep(1100);
-      await revoke('ruth3');
-      const fresh = await h.mintToken(h.a, 'ruth3', { [doc]: 'editor' });
-      const bare = await WireClient.connect(h.wsUrl, { origin: h.a.origin });
-      try {
-        expect((await bare.hello(fresh)).t).toBe('welcome');
-        const opened: Received = await bare.open(1, doc, { token: old });
-        expect(opened.t).toBe('ch.rejected');
-        expect(opened.d?.['code']).toBe('revoked');
-      } finally {
-        bare.terminate();
-      }
-    },
-  );
+  // Criterion 2, the `ch.open` clause. The codes of `ch.rejected` do not include `revoked` (05
+  // §5.2), so the service answers the `ch.open` with an `error` of code `revoked` (05 §5.2 lists
+  // `error` among the replies; ADR 0379). Any other refusal of a channel token stays `forbidden`.
+  it('refuses ch.open with the old token with an error of code `revoked`', async () => {
+    const doc = await h.createDocument(h.a, documentWithRegions());
+    const old = await h.mintToken(h.a, 'ruth3', { [doc]: 'editor' });
+    await sleep(1100);
+    await revoke('ruth3');
+    const fresh = await h.mintToken(h.a, 'ruth3', { [doc]: 'editor' });
+    const bare = await WireClient.connect(h.wsUrl, { origin: h.a.origin });
+    try {
+      expect((await bare.hello(fresh)).t).toBe('welcome');
+      const opened: Received = await bare.open(1, doc, { token: old });
+      expect(opened.t).toBe('error');
+      expect(opened.d?.['code']).toBe('revoked');
+      expect(opened.d?.['fatal']).toBe(false);
+    } finally {
+      bare.terminate();
+    }
+  });
 
   it('ends only the named document’s channel with forbidden, and leaves the other channel open', async () => {
     const docA = await h.createDocument(h.a, documentWithRegions());

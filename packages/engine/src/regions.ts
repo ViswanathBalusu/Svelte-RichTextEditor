@@ -61,6 +61,19 @@ export function regionAt($pos: ResolvedPos): RegionSpan | null {
 }
 
 /**
+ * The DEP scope of a position of `doc` (05 §5.3): the definitions (`defs`), a story (`story:<id>`),
+ * a region (`region:<id>`) or the body (`body`).
+ */
+export function scopeOfPosition(doc: Node, pos: number): string {
+  const $pos = doc.resolve(pos);
+  const top = $pos.depth > 0 ? $pos.node(1) : null;
+  if (top?.type.name === 'defs') return 'defs';
+  if (top?.type.name === 'story') return `story:${String(top.attrs['id'])}`;
+  const r = regionAt($pos);
+  return r ? `region:${r.id ?? ''}` : 'body';
+}
+
+/**
  * The identifier of the `hidden_region` placeholder that follows a body-level position (ADR 0019),
  * or null. A placeholder is a leaf child of the body, so a selection that selects it starts there.
  */

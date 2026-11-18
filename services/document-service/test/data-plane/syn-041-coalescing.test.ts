@@ -109,6 +109,30 @@ describe('the room coalesces its broadcasts on a window (SYN-041)', () => {
     expect(commitBatches(frank)).toEqual([[1, 2, 3]]);
   });
 
+  it('sends at most one message per 40 ms window when commits arrive faster than it (criterion 1)', async () => {
+    // 40 ms is inside the 30 to 50 ms target of 04 §12. Eight commits follow one another as fast
+    // as the author's acknowledgements allow; the viewer's channel gets them in a few messages.
+    const windowMs = 40;
+    const p = await plane({ settings: { coalescing: { windowMs, minSubscribers: 3 } } });
+    const { alice, frank } = await room(p);
+    const commits = 8;
+    const started = Date.now();
+    for (let i = 0; i < commits; i++)
+      expect((await alice.submit(1, { base: i, steps: [insertText(intro(), `${i}`)] })).t).toBe(
+        'sync.ack',
+      );
+    const elapsed = Date.now() - started;
+    await until(() => commitBatches(frank).flat().length === commits, 5000, 'eight commits');
+    const batches = commitBatches(frank);
+    // Every commit arrives once, in ascending seq, with no gap between or inside the messages.
+    expect(batches.flat()).toEqual(Array.from({ length: commits }, (_, i) => i + 1));
+    // A window holds a message for 40 ms from its first commit, so a run of `elapsed` ms is sent
+    // in at most one message per window, plus the one that was open when the run ended.
+    expect(batches.length).toBeLessThanOrEqual(Math.floor(elapsed / windowMs) + 2);
+    expect(batches.length).toBeLessThan(commits);
+    expect(p.errors).toEqual([]);
+  });
+
   it('holds nothing below the subscriber threshold: each commit goes at once (criterion 4)', async () => {
     // A window far longer than the wait below: a held commit could not arrive in time.
     const p = await plane({ settings: { coalescing: { windowMs: 10_000, minSubscribers: 4 } } });

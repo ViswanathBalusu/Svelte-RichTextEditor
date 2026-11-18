@@ -26,6 +26,11 @@ export {
   type VersionRefusal,
 } from './version-view.ts';
 export {
+  comparisonSpecs,
+  type ComparisonChange,
+  type ComparisonSpec,
+} from './comparison-markup.ts';
+export {
   ReadValue,
   ViewHub,
   nextFrame,

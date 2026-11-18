@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-15 v0.2.9 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-17 v0.2.10 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -64,6 +64,9 @@
 \def\DE@tmp{report}%
 \ifx\DE@opt@glyphs\DE@tmp \tracinglostchars=2 \else \tracinglostchars=3 \fi
 \setcounter{secnumdepth}{-10} % heading numbers are literal labels from the converter
+% Bookmarks follow \c@tocdepth: with the article default of 3 a heading of level 4 to 9 has no
+% bookmark (EXP-022 criterion 4). The table of contents sets its own depth when it is printed.
+\setcounter{tocdepth}{9}
 \setlength\parskip{0pt}
 \setlength\parindent{0pt}
 \frenchspacing
