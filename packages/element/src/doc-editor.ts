@@ -40,6 +40,7 @@ import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './conf
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
+import type { CompleteFillingOutcome } from './fill-actions.ts';
 import type { PrintOutcome } from './print.ts';
 import {
   elementMethods,
@@ -878,6 +879,26 @@ export class DocEditorElement extends Base {
    */
   validateFields(): FieldReport[] {
     return this.#methods.validateFields();
+  }
+
+  /**
+   * Validates the fields and completes this participant's part (FRW-071). When a field fails, focus
+   * moves to the first problem and the promise resolves `{ ok: false, failures }` without calling the
+   * server; otherwise it calls the participant's `/complete` endpoint and resolves `{ ok: true, result }`.
+   * It rejects with a `FillActionError` (its `reason` says why) when the participant is not active, and
+   * with the port's error when the server refuses.
+   */
+  completeFilling(): Promise<CompleteFillingOutcome> {
+    return this.#methods.completeFilling();
+  }
+
+  /**
+   * Declines the workflow as this participant (FRW-071). Rejects with a `FillActionError` of reason
+   * `reason_required`, and calls nothing, when no reason is given; rejects the same way when the
+   * participant is not active.
+   */
+  decline(reason: string): Promise<unknown> {
+    return this.#methods.decline(reason);
   }
 
   /** The selection as a CDM fragment (PRO-084); null when no document is loaded. */

@@ -11,6 +11,12 @@ export { DEFAULT_TAG, defineDocEditor, type DefineResult } from './register.ts';
 export { EMBEDDING_VERSION, RELEASE } from './version.ts';
 export type { DocEditorConfig } from './config.ts';
 export {
+  FillActionError,
+  type CompleteFillingOutcome,
+  type FillActionReason,
+  type FillFailure,
+} from './fill-actions.ts';
+export {
   EVENT_NAMES,
   type Connection,
   type DocEditorEventMap,
