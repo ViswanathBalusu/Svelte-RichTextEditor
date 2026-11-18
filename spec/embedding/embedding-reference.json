@@ -697,6 +697,13 @@
       "aliases": []
     },
     {
+      "id": "view.assistant",
+      "group": "view",
+      "capability": "assistant",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "view.catchUp",
       "group": "header",
       "capability": "catch-up",

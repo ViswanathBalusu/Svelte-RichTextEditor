@@ -1555,3 +1555,13 @@
   outline: 2px solid var(--_de-focus);
   outline-offset: 1px;
 }
+
+/* The assistant pane (UX-045): the answer is content, shown as written. */
+.de-assistant-response {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-block: 0.5rem;
+  padding-inline: 0.5rem;
+  border: 1px solid var(--_de-border);
+  border-radius: 4px;
+}

@@ -640,7 +640,7 @@
   $effect(() => {
     const open = pane?.id ?? null;
     shellQueries.set('shell.outlineOpen', open === 'outline');
-    for (const id of ['styles', 'recovered', 'shortcuts', 'permissions', 'fill', 'checker', 'sources', 'review', 'roles', 'fields', 'rules'])
+    for (const id of ['styles', 'recovered', 'shortcuts', 'permissions', 'fill', 'checker', 'sources', 'review', 'roles', 'fields', 'rules', 'assistant'])
       shellQueries.set(`shell.pane.${id}`, open === id);
     shellQueries.set('shell.painterArmed', painterArmed);
     shellQueries.set('shell.zoomInPossible', canZoom(zoom, 'in'));
@@ -999,6 +999,26 @@
       unregister.push(() => {
         stop();
         for (const off of held) off();
+      });
+    }
+    // The assistant command exists only while an assistant port is attached (UX-045 criterion 5).
+    const assistant = core.assistant;
+    if (assistant) {
+      let held: (() => void) | null = null;
+      const sync = () => {
+        const attached = assistant.available.get();
+        const entry = host1b['view.assistant'];
+        if (attached && !held && entry && registry.backs(entry)) held = registry.register(entry);
+        else if (!attached && held) {
+          held();
+          held = null;
+        }
+      };
+      sync();
+      const stop = assistant.available.subscribe(sync);
+      unregister.push(() => {
+        stop();
+        held?.();
       });
     }
     // The review commands (UX-036). Stepping is always offered with the list; accept and reject
