@@ -51,7 +51,6 @@ export interface HostApi {
   getSelectionContent(): CdmFragment | null;
   /** Inserts a fragment at the selection through the guards as typing (PRO-084, FE-027). */
   insertContent(fragment: CdmFragment): InsertResult;
-<<<<<<< HEAD
   /**
    * Runs a command through the path the toolbar uses; false when nothing ran: the command is
    * unknown, not enabled for this user and mode, or had no effect (PRO-085, UX-005).
@@ -59,11 +58,6 @@ export interface HostApi {
   exec(command: CommandName | (string & {}), args?: CommandArgs): boolean;
   /** Whether a command is enabled and active for the user's current access (PRO-085, UX-005). */
   queryCommand(command: CommandName | (string & {}), args?: CommandArgs): CommandState;
-=======
-  /** Runs a command through the path the toolbar uses; false when it does not apply (PRO-085). */
-  exec(command: CommandName, args?: CommandArgs): boolean;
-  /** Whether a command is enabled and active for the user's current access (PRO-085). */
-  queryCommand(command: CommandName, args?: CommandArgs): CommandState;
   /** Moves focus to the next field the user may fill; false when no field took focus (FRW-069). */
   nextField(): boolean;
   /** Moves focus to the field with `key`; false, and no error, for a key no field has (FRW-069). */
@@ -74,7 +68,6 @@ export interface HostApi {
   setFieldValue(key: string, value: unknown): Promise<FieldFillOutcome>;
   /** The fields that are required and empty or invalid, with keys and reasons; changes nothing (FRW-069). */
   validateFields(): FieldReport[];
->>>>>>> stories/w4
 }
 
 /** Never offered, never enabled: what an unknown identifier reports. */
@@ -91,7 +84,6 @@ export function hostApi(core: CoreHostApi, registry?: HostRegistry): HostApi {
     getContent: async () => core.confirmedContent(),
     getSelectionContent: () => core.getSelectionContent(),
     insertContent: (fragment) => core.insertContent(fragment),
-<<<<<<< HEAD
     exec: (command, args) => {
       if (registry?.get(command) !== undefined) return registry.exec(command, args).ran;
       try {
@@ -111,15 +103,11 @@ export function hostApi(core: CoreHostApi, registry?: HostRegistry): HostApi {
         return UNKNOWN_COMMAND;
       }
     },
-=======
-    exec: (command, args) => core.exec(command, args),
-    queryCommand: (command, args) => core.queryCommand(command, args),
     nextField: () => core.nextFillableField?.() ?? false,
     focusField: (key) => core.focusFieldByKey?.(key) ?? false,
     getFieldValues: () => core.fieldValues?.() ?? {},
     setFieldValue: (key, value) => core.fillField?.(key, value) ?? Promise.resolve(NOT_LOADED_FILL),
     validateFields: () => core.validateFields?.() ?? [],
->>>>>>> stories/w4
   };
 }
 
