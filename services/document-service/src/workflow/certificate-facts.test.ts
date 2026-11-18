@@ -32,8 +32,12 @@ async function ledger(captureNetworkIdentity: boolean) {
     () => ({ captureNetworkIdentity }),
   );
   const net = { ipAddress: '203.0.113.9', userAgent: 'Agent/9' };
-  const rec = (participant: string, kind: 'signer' | 'approver', item: string, items: object) =>
-    l.record(TENANT, { doc: DOC, participant, kind, item, facts: { items, ...net } });
+  const rec = (
+    participant: string,
+    kind: 'signer' | 'approver',
+    item: string,
+    items: Record<string, unknown>,
+  ) => l.record(TENANT, { doc: DOC, participant, kind, item, facts: { items, ...net } });
   await rec('p1', 'signer', 'viewed', { viewedAtMs: 1_100 });
   await rec('p1', 'signer', 'consent', {
     consent: { textId: 't', version: 1, hash: 'h', atMs: 1_200 },

@@ -131,7 +131,7 @@ const isText = (v: unknown, max = 1024): v is string => typeof v === 'string' &&
 const isSeq = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
 
 /**
- * The certificate facts of a job payload: null when the payload carries none, `invalid` when it
+ * The certificate facts of a job: null when the job carries none, `invalid` when it
  * carries something that is not the shape the control plane writes. A worker refuses `invalid`
  * rather than print it.
  */
