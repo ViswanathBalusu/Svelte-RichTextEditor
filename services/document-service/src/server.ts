@@ -93,6 +93,8 @@ import {
 import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
 import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-store.ts';
 import { PgReminderStore } from './workflow/reminder-store-pg.ts';
+import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
+import { PgEvidenceLedger } from './workflow/evidence-ledger-pg.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
@@ -251,6 +253,8 @@ export interface ServiceParts {
   workflows?: WorkflowResourceStore;
   /** The count of scheduled reminders raised per participant (FRW-034). Absent: none are raised. */
   reminders?: ReminderStore;
+  /** The workflow evidence ledger (FRW-041): evidence in its own workflow table, hashes for the chain. */
+  evidence?: EvidenceLedger;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
   quotaAdmin?: QuotaAdminService;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: none is asked. */
@@ -483,6 +487,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
     workflows: new PgWorkflowResourceStore(pool, { now }),
     reminders: new PgReminderStore(pool),
+    evidence: new PgEvidenceLedger(pool, { now }),
     quotaAdmin: quotaAdminOver(
       new PgQuotaStore(pool, (tenant) =>
         // `tenants` is under row-level security, so the question runs in the tenant's own context.
@@ -528,6 +533,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
     workflows: new MemoryWorkflowResourceStore(),
     reminders: new MemoryReminderStore(),
+    evidence: new MemoryEvidenceLedger(now),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
       // reaches it is registered; the memory store has no other tenant table to ask.
