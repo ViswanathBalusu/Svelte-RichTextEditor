@@ -13,6 +13,7 @@
 -->
 <script lang="ts">
   import { useShell } from '../context.ts';
+  import { live } from '../live.ts';
   import type {
     CommentBodyPart,
     CommentView,
@@ -65,8 +66,27 @@
   let message = $state<StringKey | null>(null);
   let busy = $state(false);
 
+  // A mention stores the principal only; the name shown comes from the host's `resolveUsers`
+  // through the people directory (UX-031 criterion 3), and the neutral label until it answers or
+  // when the host does not know the person (or the principal is a group, which has no lookup).
+  const directory = shell.people;
+  const names = live(directory.view);
+  const subOf = (principal: string): string | null =>
+    principal.startsWith('user:') ? principal.slice('user:'.length) : null;
+  $effect(() => {
+    const ids = shown.comments.flatMap((c) =>
+      c.body.flatMap((p) => (p.type === 'mention' ? [subOf(p.principal) ?? ''] : [])),
+    );
+    directory.request(ids.filter((id) => id !== ''));
+  });
+  function mentionName(principal: string): string {
+    void names.current;
+    const sub = subOf(principal);
+    return (sub === null ? null : directory.lookup(sub).name) ?? tr.t('people.fallback');
+  }
+
   function plain(parts: readonly CommentBodyPart[]): string {
-    return parts.map((p) => (p.type === 'text' ? p.text : `@${p.principal.replace(/^user:/, '')}`)).join('');
+    return parts.map((p) => (p.type === 'text' ? p.text : `@${mentionName(p.principal)}`)).join('');
   }
 
   function time(c: CommentView): string {
@@ -231,7 +251,14 @@
             >{tr.t('comments.thread.edit.cancel')}</button
           >
         {:else}
-          <p class="de-comment-text" data-content>{plain(c.body)}</p>
+          <p class="de-comment-text" data-content>
+            {#each c.body as part, i (i)}
+              {#if part.type === 'text'}{part.text}{:else}<span
+                  class="de-mention"
+                  data-principal={part.principal}>@{mentionName(part.principal)}</span
+                >{/if}
+            {/each}
+          </p>
           {#if canEditComment(self, c.author, caps).allowed}
             <button type="button" class="de-list-button" data-comment-edit onclick={() => startEdit(c)}
               >{tr.t('comments.thread.edit')}</button

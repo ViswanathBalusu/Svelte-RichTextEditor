@@ -708,6 +708,8 @@ export const EN_GB = {
     'Your permissions changed, so the comment was not added. Your text is kept.',
   'comment.refused.baseSeqOutOfWindow':
     'The document changed too much since you made the selection. Select the text again; your text is kept.',
+  'comment.refused.mentionHidden':
+    'A person you mentioned cannot see the part of the document this comment is on, so it was not added. Remove the mention to post it. Your text is kept.',
   'comment.refused.failed': 'The comment could not be added. Your text is kept.',
 
   // The comments pane (UX-030). The thread text and the names are content.
