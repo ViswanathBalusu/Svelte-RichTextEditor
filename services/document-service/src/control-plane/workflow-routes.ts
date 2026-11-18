@@ -30,6 +30,7 @@ import { createHash } from 'node:crypto';
 import { canonicalize } from '@docedit/model';
 import { recordCorrection, recordResume } from '../workflow/correction.ts';
 import { recordDecline, recordVoid, type StopOutcome } from '../workflow/stop.ts';
+import { recordRemind } from '../workflow/schedule-sweep.ts';
 import { recordOf } from '../workflow/record.ts';
 import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
@@ -437,10 +438,37 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     });
   };
 
+  /**
+   * `POST /documents/{id}/workflow/remind` (12 §6.2 `remind`; FRW-034; method and path assumed,
+   * G95). Needs `manage`. Raises `reminder_due` at once for each active participant who has not
+   * completed; the workflow is not changed and the schedule's count of reminders is not touched. A
+   * workflow that is not `sent` or `in_progress` is `conflict`.
+   */
+  const remindWorkflowRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const workflows = store();
+    guard(ctx.caller, 'manage', doc);
+    await liveDocument(ctx, doc);
+    const out = await recordRemind({ workflows }, { ref: k.refOf(ctx, doc), manage: true });
+    if (!out.ok) throw problemOf(doc, out.problem);
+    await raiseAll(ctx, doc, {
+      ok: true,
+      changed: false,
+      resource: out.resource,
+      control: null,
+      raised: out.raised,
+    });
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-cache',
+    });
+  };
+
   return {
     getWorkflow,
     putWorkflow,
     sendWorkflow: sendWorkflowRoute,
+    remindWorkflow: remindWorkflowRoute,
     voidWorkflow: voidWorkflowRoute,
     participantDecline: declineRoute,
     correctWorkflow: correctWorkflowRoute,

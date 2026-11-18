@@ -11,6 +11,8 @@
  *    same total order as content commits (04 §3.2; 07 §9). The commit has a deterministic
  *    identifier, so a repeat cannot append it twice.
  * 3. The workflow row moves to the new state in one conditional write (`WorkflowResourceStore.transition`).
+ *    A participant who is active after the transition and was not before gets `activatedAt`, the
+ *    server time: the anchor of the reminders (FRW-034).
  * 4. A `workflow.transition` audit entry names the states and the revision, so a transition that
  *    changes no lock (`sent` to `in_progress`) is audited too.
  * 5. The commit that records the transition is read back, when a room is open to write it, so that
@@ -85,6 +87,24 @@ export type TransitionOutcome =
 const POLL_MS = 15;
 
 /**
+ * The participants as a transition leaves them, with `activatedAt` set to `at` (ISO 8601 UTC) for
+ * each one who is active now and was not before (FRW-034). Everything else is kept as written.
+ */
+function withActivation(
+  before: WorkflowResourceView['participants'],
+  after: WorkflowResourceView['participants'],
+  at: string,
+): WorkflowResourceView['participants'] {
+  return after.map((p) => {
+    const prior = before.find((b) => b.id === p.id);
+    if (p.state !== 'active') return p;
+    if (prior?.state === 'active')
+      return { ...p, activatedAt: p.activatedAt ?? prior.activatedAt ?? at };
+    return { ...p, activatedAt: at };
+  });
+}
+
+/**
  * Reads the control commit of grants revision `revision` back from the log, waiting up to `waitMs`.
  * A room that is not open writes it when it next opens (07 §9), so null is not an error.
  */
@@ -147,7 +167,16 @@ export async function recordTransition(
     ref.tenant,
     ref.doc,
     { state: from.state, rev: from.rev },
-    write,
+    write.participants === undefined
+      ? write
+      : {
+          ...write,
+          participants: withActivation(
+            from.participants,
+            write.participants,
+            new Date(deps.now()).toISOString(),
+          ),
+        },
   );
   if (!moved.ok) {
     // The lock is stored but the state did not move: the room still learns of the lock.

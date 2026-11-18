@@ -169,6 +169,7 @@ function bodyFor(operationId: string): unknown {
     participantVerify: {},
     participantComplete: {},
     participantDecline: { reason: 'sweep' },
+    remindWorkflow: {},
     voidWorkflow: { reason: 'sweep' },
     signField: {},
   };

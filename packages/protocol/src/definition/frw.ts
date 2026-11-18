@@ -116,6 +116,10 @@ export const FRW_EXTENSION: DepExtension = {
                   timestamp(),
                   'When the participant first opened the document (12 §6.3; FRW-031).',
                 ),
+                activatedAt: opt(
+                  timestamp(),
+                  'When the participant last became active: the anchor of the reminders (FRW-034).',
+                ),
               }),
             ),
           ),
@@ -284,6 +288,22 @@ export const FRW_EXTENSION: DepExtension = {
       path: '/documents/{id}/workflow/resume',
       summary:
         'Resumes a corrected workflow: compares the document with its sent version, resets the participants the change concerns and locks the document again (12 §6.2). The method and path are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    {
+      operationId: 'remindWorkflow',
+      method: 'POST',
+      path: '/documents/{id}/workflow/remind',
+      summary:
+        'Raises `reminder_due` now for each active participant who has not completed, without waiting for the schedule (12 §6.2). The method and path are assumed.',
       spec: '12 §6.2, §10',
       security: ['user', 'service'],
       feature: 'workflow',
