@@ -14,6 +14,7 @@ Measured with `pnpm build` on Windows 11, Node.js zlib, gzip level 9, minified l
 | Integration `ccd52bb` (w5 and unblock worktree builds) | 250.3 kB | 307.5 kB |
 | Integration after the batch 5 merges | 276.6 kB | 315.4 kB |
 | Integration after the batch 6 merges (same method; `bundle-report.json` of 2026-11-17) | 291.4 kB | 330.5 kB |
+| Integration after the batch 1 merges (same method; build log of 2026-11-17) | 291.5 kB | 330.6 kB |
 
 So the DEP configuration was already over the budget at `ccd52bb` and is 15.4 kB over now. The host-backend configuration is within it. The growth since `ccd52bb` comes mostly from the engine and the shell: form field views and entries, the field and role editing, fill mode, and the panes' glue (`packages/engine/src/field-entries.ts`, `field-edit.ts`, `role-edit.ts`, `view/form-field-view.ts`).
 
