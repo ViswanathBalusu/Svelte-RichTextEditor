@@ -104,6 +104,7 @@ import {
   type PurgeStore,
   type SearchPurge,
 } from './control-plane/document-purge.ts';
+import { PgPurgeStore } from './control-plane/document-purge-pg.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
 import {
   MemoryWorkflowResourceStore,
@@ -753,6 +754,12 @@ export async function startService(opts: StartOptions): Promise<Service> {
       versions: new PgVersionStore(replicaDb),
     };
   }
+  // The purge of deleted documents (HIS-039) connects as a member of docedit_purge, a pool of its own.
+  const purgeDb =
+    db && config.purgeDatabaseUrl
+      ? createPool({ connectionString: config.purgeDatabaseUrl, connectionTimeoutMillis: 5000 })
+      : null;
+  if (purgeDb) base.purgeStore = new PgPurgeStore(purgeDb);
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
@@ -1652,6 +1659,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         await pool.close();
         if (db) await db.end().catch(() => undefined);
         if (replicaDb) await replicaDb.end().catch(() => undefined);
+        if (purgeDb) await purgeDb.end().catch(() => undefined);
       })()),
   };
 }
