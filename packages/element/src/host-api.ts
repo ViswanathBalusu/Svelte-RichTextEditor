@@ -40,8 +40,31 @@ export type ConfirmedContent = CdmEnvelope & { seq: number };
 export interface HostRegistry {
   get(idOrAlias: string): unknown;
   state(idOrAlias: string): { readonly enabled: boolean; readonly active: boolean | null };
-  exec(idOrAlias: string, args?: unknown): { readonly ran: boolean };
+  exec(
+    idOrAlias: string,
+    args?: unknown,
+  ): { readonly ran: boolean; readonly reason?: string | null };
 }
+
+/**
+ * Why `exec` ran nothing, as a code (never a message, never content). `unknown`: no command has the
+ * name (a name of the registry's form, `area.name`, that the registry lacks; the core does not say
+ * which of its own names it knows, so a core name it does not know is `not-applicable`). `unannounced`: the backend does not announce the feature the command needs. `no-access`: the
+ * user's access does not allow it. `mode`: it changes content and the mode in effect is `view` or
+ * `fill`. `not-applicable`: it is not available at the selection. `no-effect`: it was enabled and
+ * changed nothing, or failed. `not-loaded`: no document is loaded. The first six are the command
+ * registry's own (ui `Unavailable`).
+ */
+export type ExecReason =
+  'unknown' | 'unannounced' | 'no-access' | 'mode' | 'not-applicable' | 'no-effect' | 'not-loaded';
+
+/**
+ * What `exec` answers (05 §8.1; owner decision 188 in docs/owner-decisions-2026-11-15.md: `{ ok, reason }`,
+ * not a boolean). `reason` is null when `ok` is true.
+ */
+export type ExecOutcome =
+  | { readonly ok: true; readonly reason: null }
+  | { readonly ok: false; readonly reason: ExecReason };
 
 export interface HostApi {
   /** Resolves when nothing is in flight or queued; rejects at `timeoutMs` (PRO-083, FE-012). */
@@ -53,10 +76,11 @@ export interface HostApi {
   /** Inserts a fragment at the selection through the guards as typing (PRO-084, FE-027). */
   insertContent(fragment: CdmFragment): InsertResult;
   /**
-   * Runs a command through the path the toolbar uses; false when nothing ran: the command is
-   * unknown, not enabled for this user and mode, or had no effect (PRO-085, UX-005).
+   * Runs a command through the path the toolbar uses. `ok` is false when nothing ran: the command is
+   * unknown, not enabled for this user and mode, or had no effect, and `reason` says which
+   * (PRO-085, UX-005; decision 188).
    */
-  exec(command: CommandName | (string & {}), args?: CommandArgs): boolean;
+  exec(command: CommandName | (string & {}), args?: CommandArgs): ExecOutcome;
   /** Whether a command is enabled and active for the user's current access (PRO-085, UX-005). */
   queryCommand(command: CommandName | (string & {}), args?: CommandArgs): CommandState;
   /** Moves focus to the next field the user may fill; false when no field took focus (FRW-069). */
@@ -79,6 +103,40 @@ export interface HostApi {
   decline(reason: string): Promise<unknown>;
 }
 
+const OK: ExecOutcome = { ok: true, reason: null };
+
+const refused = (reason: ExecReason): ExecOutcome => ({ ok: false, reason });
+
+const REASONS: readonly string[] = [
+  'unknown',
+  'unannounced',
+  'no-access',
+  'mode',
+  'not-applicable',
+  'no-effect',
+];
+
+/** The registry's result as the host sees it: a code from the list, never free text. */
+function outcomeOf(result: {
+  readonly ran: boolean;
+  readonly reason?: string | null;
+}): ExecOutcome {
+  if (result.ran) return OK;
+  const reason = result.reason ?? 'no-effect';
+  return refused(REASONS.includes(reason) ? (reason as ExecReason) : 'no-effect');
+}
+
+function coreEnabled(core: CoreHostApi, command: string, args: CommandArgs | undefined): boolean {
+  try {
+    return core.queryCommand(command as CommandName, args).enabled;
+  } catch {
+    return false;
+  }
+}
+
+/** What `exec` answers when no document is loaded: nothing ran. */
+export const NOT_LOADED_EXEC: ExecOutcome = { ok: false, reason: 'not-loaded' };
+
 /** Never offered, never enabled: what an unknown identifier reports. */
 export const UNKNOWN_COMMAND: CommandState = { enabled: false, active: false };
 
@@ -98,12 +156,17 @@ export function hostApi(
     getSelectionContent: () => core.getSelectionContent(),
     insertContent: (fragment) => core.insertContent(fragment),
     exec: (command, args) => {
-      if (registry?.get(command) !== undefined) return registry.exec(command, args).ran;
+      if (registry?.get(command) !== undefined) return outcomeOf(registry.exec(command, args));
+      // An identifier of the registry's form (`area.name`) that the registry does not have is unknown.
+      // The core's own names have no dot, and the core does not say which names it knows.
+      if (command.includes('.')) return refused('unknown');
       try {
-        return core.exec(command as CommandName, args);
+        if (core.exec(command as CommandName, args)) return OK;
       } catch {
-        return false;
+        return refused('unknown');
       }
+      // The core says only false. Whether the command was enabled tells a refusal from no effect.
+      return refused(coreEnabled(core, command, args) ? 'no-effect' : 'not-applicable');
     },
     queryCommand: (command, args) => {
       if (registry?.get(command) !== undefined) {
@@ -157,7 +220,7 @@ export interface MountedSession {
  * `getContent`, `exec` and `queryCommand` are one line each over this, so the whole path from the
  * element to the core (session, mounted editor, its `api`) runs in Node.js tests. With no session,
  * no mounted editor or an editor without `api`: `flush` resolves (nothing can be unconfirmed),
- * `getContent` rejects, `exec` answers false and `queryCommand` disabled and inactive.
+ * `getContent` rejects, `exec` answers `not-loaded` and `queryCommand` disabled and inactive.
  */
 export function elementMethods(current: () => MountedSession | null): HostApi {
   const api = () => current()?.editor?.api ?? null;
@@ -169,7 +232,7 @@ export function elementMethods(current: () => MountedSession | null): HostApi {
     },
     getSelectionContent: () => api()?.getSelectionContent() ?? null,
     insertContent: (fragment) => api()?.insertContent(fragment) ?? NOT_LOADED_INSERT,
-    exec: (command, args) => api()?.exec(command, args) ?? false,
+    exec: (command, args) => api()?.exec(command, args) ?? NOT_LOADED_EXEC,
     queryCommand: (command, args) => api()?.queryCommand(command, args) ?? NOT_LOADED_COMMAND,
     nextField: () => api()?.nextField() ?? false,
     focusField: (key) => api()?.focusField(key) ?? false,

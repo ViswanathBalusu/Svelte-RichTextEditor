@@ -37,6 +37,7 @@ import type {
 } from '@docedit/engine/headless';
 import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
+import type { HostExtension } from './extensions.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
@@ -45,6 +46,7 @@ import type { PrintOutcome } from './print.ts';
 import {
   elementMethods,
   type ConfirmedContent,
+  type ExecOutcome,
   type FieldFillOutcome,
   type FieldReport,
   type HostApi,
@@ -156,7 +158,7 @@ export class DocEditorElement extends Base {
   #config: NormalConfig = normaliseConfig(null);
   #resolveUsers: ResolveUsers | null = null;
   #searchPrincipals: SearchPrincipals | null = null;
-  #extensions: readonly unknown[] = [];
+  #extensions: readonly HostExtension[] = [];
   #strings: StringOverrides | null = null;
   #icons: IconOverrides | null = null;
 
@@ -325,12 +327,15 @@ export class DocEditorElement extends Base {
     this.#mounted?.setIcons(this.#icons);
   }
 
-  /** Host-registered extensions (13 §7, 05 §8.1). A change while the shell is mounted is applied at once (UX-050). */
-  get extensions(): readonly unknown[] {
+  /**
+   * Host-registered extensions (13 §7, 05 §8.1; the entry type is `HostExtension`). A change while the
+   * shell is mounted is applied at once (UX-050). A value that is not an array gives no extensions.
+   */
+  get extensions(): readonly HostExtension[] {
     return this.#extensions;
   }
 
-  set extensions(value: readonly unknown[]) {
+  set extensions(value: readonly HostExtension[]) {
     this.#extensions = Array.isArray(value) ? Object.freeze([...value]) : [];
     this.#mounted?.setExtensions(this.#extensions);
   }
@@ -877,11 +882,13 @@ export class DocEditorElement extends Base {
   }
 
   /**
-   * Runs a command through the path the toolbar uses; false when it does not apply, is unknown or
-   * no document is loaded (PRO-085). `command` is an identifier of the command registry such as
-   * `format.bold` (UX-005), or a name of the editing core such as `bold`.
+   * Runs a command through the path the toolbar uses (PRO-085). The answer is `{ ok, reason }`
+   * (owner decision 188): `ok` is false when the command is unknown, is not allowed for this user or
+   * mode, changed nothing, or no document is loaded, and `reason` is a code that says which (see
+   * `ExecReason`). `command` is an identifier of the command registry such as `format.bold` (UX-005),
+   * or a name of the editing core such as `bold`.
    */
-  exec(command: CommandName | (string & {}), args?: CommandArgs): boolean {
+  exec(command: CommandName | (string & {}), args?: CommandArgs): ExecOutcome {
     return this.#methods.exec(command, args);
   }
 

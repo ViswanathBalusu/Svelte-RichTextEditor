@@ -47,8 +47,10 @@ test.describe('FE-026 criterion 3: selectionScope() reports the story of a focus
 
     // Open the header; its sub-editor takes the focus.
     const ran = await page.evaluate((sel) => {
-      const el = document.querySelector(sel) as unknown as { exec(name: string): boolean };
-      return el.exec('editHeader');
+      const el = document.querySelector(sel) as unknown as {
+        exec(name: string): { ok: boolean };
+      };
+      return el.exec('editHeader').ok;
     }, editor);
     expect(ran).toBe(true);
     // The header's sub-editor holds the caret once it is focused: the scope is its story.

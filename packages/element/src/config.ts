@@ -1,3 +1,10 @@
+import {
+  ALL_FEATURES_ON,
+  FEATURE_GROUPS,
+  type FeatureGroup,
+  type FeatureSwitches,
+} from './feature-switches.ts';
+
 /**
  * The `config` property (05 §8.1; PRO-081). 05 names only its categories (feature switches, fonts,
  * shortcuts, limits, a style nonce); this release reads the keys below and ignores every other key
@@ -29,6 +36,12 @@ export interface DocEditorConfig {
   forceStyleFallback?: boolean;
   /** Draws page guides in the web view where the last compile started a page (FE-068). Default off. */
   pageGuides?: boolean;
+  /**
+   * Feature switches (PRO-081; owner decision 89). Each group is on unless its key is `false`: `comments`
+   * (comments and suggestions), `export` (export and print), `history` and `assistant` (assistant and
+   * proofing). A group that is off has no controls when the editor loads. It is not a permission.
+   */
+  features?: { [G in FeatureGroup]?: boolean };
 }
 
 export interface NormalConfig {
@@ -42,6 +55,8 @@ export interface NormalConfig {
   forceStyleFallback: boolean;
   /** Page guides in the web view (FE-068). Only the boolean `true` turns them on. */
   pageGuides: boolean;
+  /** Which feature groups are on (every group by default). */
+  features: FeatureSwitches;
 }
 
 /** 02 §2.1: "after a grace period (default 30 seconds)". */
@@ -66,5 +81,17 @@ export function normaliseConfig(value: unknown): NormalConfig {
     deferRemoteWhileComposing: flag(v['deferRemoteWhileComposing'], true),
     forceStyleFallback: flag(v['forceStyleFallback'], false),
     pageGuides: v['pageGuides'] === true,
+    features: normaliseFeatures(v['features']),
   };
+}
+
+/** Reads the `features` switches: only the boolean `false` of a known group switches it off. */
+function normaliseFeatures(value: unknown): FeatureSwitches {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    return { ...ALL_FEATURES_ON };
+  const own = value as Record<string, unknown>;
+  const out = { ...ALL_FEATURES_ON };
+  for (const group of FEATURE_GROUPS)
+    if (Object.hasOwn(own, group) && own[group] === false) out[group] = false;
+  return out;
 }

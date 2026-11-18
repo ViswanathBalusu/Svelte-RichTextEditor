@@ -1565,6 +1565,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         }
       : {}),
     uploadSeconds: config.uploadSeconds,
+    ...(timers ? { regionLeaseMs: timers.regionLeaseMs } : {}),
     fonts: () => fonts,
     exportPolicy: {
       previewWindowMs: timers?.previewWindowMs ?? config.previewWindowMs,

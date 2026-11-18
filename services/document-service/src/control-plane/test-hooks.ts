@@ -42,6 +42,8 @@ export interface TestTimers {
   previewWindowMs: number;
   /** The node lease (06 §2.1). */
   nodeLeaseMs: number;
+  /** A region lease, per acquisition or heartbeat (07 §10: five minutes). */
+  regionLeaseMs: number;
 }
 
 export const TEST_TIMERS: TestTimers = {
@@ -52,6 +54,7 @@ export const TEST_TIMERS: TestTimers = {
   idempotencyTtlMs: 5_000,
   previewWindowMs: 1_000,
   nodeLeaseMs: 3_000,
+  regionLeaseMs: 3_000,
 };
 
 const reply = (status: number, body: unknown): Reply => ({
