@@ -327,7 +327,7 @@ describe.skipIf(!hasWord)(
       );
       const problems: string[] = [];
       for (const c of cases) {
-        const raw = readFileSync(`${WORK_DIR}${c.id}.word.json`, 'utf8').replace(/^﻿/, '');
+        const raw = readFileSync(`${WORK_DIR}${c.id}.word.json`, 'utf8').replace(/^\uFEFF/, '');
         problems.push(...compare(c, JSON.parse(raw) as WordRead));
       }
       expect(problems).toEqual([]);
