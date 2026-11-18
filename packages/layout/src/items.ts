@@ -290,7 +290,15 @@ export function tableItem(
         if (item.notes) return null;
         paragraphs.push(item);
       }
-      cells.push({ cellId: cell.id, x: cellX, width, margins: cell.margins, paragraphs });
+      cells.push({
+        cellId: cell.id,
+        x: cellX,
+        width,
+        margins: cell.margins,
+        paragraphs,
+        ...(cell.start !== undefined ? { from: cell.start } : {}),
+        ...(cell.end !== undefined ? { to: cell.end } : {}),
+      });
       cellX += width;
     }
     // The row is as tall as its tallest cell with the cell's margins, or as its height rule says.
@@ -313,9 +321,25 @@ export function tableItem(
         : row.heightRule === 'atLeast'
           ? Math.max(content, own)
           : content;
-    rows.push({ rowId: row.id, header: row.header, cantSplit: row.cantSplit, height, cells });
+    rows.push({
+      rowId: row.id,
+      header: row.header,
+      cantSplit: row.cantSplit,
+      height,
+      cells,
+      ...(row.start !== undefined ? { from: row.start } : {}),
+      ...(row.end !== undefined ? { to: row.end } : {}),
+    });
   }
-  return { kind: 'table', blockId: t.id, x, width: total, rows };
+  return {
+    kind: 'table',
+    blockId: t.id,
+    x,
+    width: total,
+    rows,
+    ...(t.start !== undefined ? { from: t.start } : {}),
+    ...(t.end !== undefined ? { to: t.end } : {}),
+  };
 }
 
 /** Converts the flow blocks of one section into pagination items, in order. */
@@ -344,6 +368,8 @@ export function pageItems(
           width: math ? Math.min(math.width, columnWidth) : b.width,
           height: math ? math.height : b.height,
           keepNext: b.keepNext,
+          ...(b.start !== undefined ? { from: b.start } : {}),
+          ...(b.end !== undefined ? { to: b.end } : {}),
         });
         break;
       }
@@ -414,7 +440,16 @@ export function flowStoryResolver(doc: FlowDocument, providers: ItemProviders): 
           fragments.push({ ...item.fragment, y });
           y += item.fragment.height + item.spaceAfter;
         } else if (b.kind === 'box') {
-          fragments.push({ kind: 'box', blockId: b.id, x: 0, y, width: b.width, height: b.height });
+          fragments.push({
+            kind: 'box',
+            blockId: b.id,
+            ...(b.start !== undefined ? { from: b.start } : {}),
+            ...(b.end !== undefined ? { to: b.end } : {}),
+            x: 0,
+            y,
+            width: b.width,
+            height: b.height,
+          });
           y += b.height;
         }
       }

@@ -12,7 +12,12 @@
  * margin. A paragraph cut in two loses its space after in the head and its space before in the tail.
  */
 import type { FlowInsets } from './flow.ts';
-import type { ParagraphItem, TableCellItem, TableRowItem } from './page-items.ts';
+import {
+  rangeOf,
+  type ParagraphItem,
+  type TableCellItem,
+  type TableRowItem,
+} from './page-items.ts';
 
 const NO_MARGINS: FlowInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -105,6 +110,7 @@ function cutAt(
       width: cell.width,
       margins: headMargins,
       paragraphs: headParas,
+      ...rangeOf(cell),
     });
     tailCells.push({
       cellId: cell.cellId,
@@ -112,6 +118,7 @@ function cutAt(
       width: cell.width,
       margins: tailMargins,
       paragraphs: tailParas,
+      ...rangeOf(cell),
     });
   }
   const height = (cells: readonly TableCellItem[]): number =>
@@ -122,6 +129,7 @@ function cutAt(
     cantSplit: false,
     height: height(headCells),
     cells: headCells,
+    ...rangeOf(row),
   };
   const tail: TableRowItem = {
     rowId: row.rowId,
@@ -129,6 +137,7 @@ function cutAt(
     cantSplit: false,
     height: height(tailCells),
     cells: tailCells,
+    ...rangeOf(row),
   };
   return { head, tail };
 }

@@ -158,6 +158,12 @@ export interface FlowBox {
    * parentheses the painter shows around it (03 §4.3).
    */
   readonly number?: string;
+  /**
+   * The CDM range the block covers, as offsets inside it: 0 to the size of its content, or to 1 for
+   * an atom (FE-078 criterion 2; `blockSpan`).
+   */
+  readonly start?: number;
+  readonly end?: number;
 }
 
 export interface FlowBreak {
@@ -173,6 +179,9 @@ export interface FlowCell {
   readonly vAlign: 'top' | 'center' | 'bottom';
   readonly margins: FlowInsets;
   readonly blocks: readonly FlowBlock[];
+  /** The CDM range of the cell inside its table's content (FE-078 criterion 2). */
+  readonly start?: number;
+  readonly end?: number;
 }
 
 export interface FlowRow {
@@ -182,6 +191,9 @@ export interface FlowRow {
   readonly cantSplit: boolean;
   readonly header: boolean;
   readonly cells: readonly FlowCell[];
+  /** The CDM range of the row inside its table's content (FE-078 criterion 2). */
+  readonly start?: number;
+  readonly end?: number;
 }
 
 export interface FlowInsets {
@@ -201,6 +213,9 @@ export interface FlowTable {
   readonly bordered: boolean;
   readonly rows: readonly FlowRow[];
   readonly regionId: string | null;
+  /** The CDM range of the table: 0 to the size of its rows (FE-078 criterion 2). */
+  readonly start?: number;
+  readonly end?: number;
 }
 
 export type FlowBlock = FlowParagraph | FlowTable | FlowBox | FlowBreak;
@@ -304,6 +319,22 @@ function inlineSize(node: CdmNode): number {
     return 2 + (node.content ?? []).reduce((s, c) => s + inlineSize(c), 0);
   return 1;
 }
+
+/**
+ * A node's size in CDM positions: text by UTF-16 length, a node with content by its content plus two
+ * (its open and close), any other node one.
+ */
+function nodeSize(node: CdmNode): number {
+  if (node.type === 'text') return node.text?.length ?? 0;
+  if (node.content === undefined) return 1;
+  return 2 + contentSize(node);
+}
+
+const contentSize = (node: CdmNode): number =>
+  (node.content ?? []).reduce((sum, child) => sum + nodeSize(child), 0);
+
+/** The range a box or table covers inside its block: its content, or 1 for an atom (FE-078). */
+const blockSpan = (node: CdmNode): number => (node.content === undefined ? 1 : contentSize(node));
 
 // ---------------------------------------------------------------------------------------------
 // Numbering (03 §7). The labels come from the shared algorithm (`computeLabels`, packages/model);
@@ -923,27 +954,40 @@ function tableOf(ctx: Context, node: CdmNode, regionId: string | null): FlowTabl
   const grid = Array.isArray(node.attrs?.['grid'])
     ? (node.attrs?.['grid'] as number[]).map(pt)
     : [];
-  const rows: FlowRow[] = (node.content ?? []).map((row, r) => ({
-    id: str(row.attrs?.['id']) ?? `${id}/r${r}`,
-    height: num(row.attrs?.['height']) !== null ? pt(num(row.attrs?.['height']) ?? 0) : null,
-    heightRule: ((): FlowRow['heightRule'] => {
-      const rule = str(attr(row, 'heightRule'));
-      return rule === 'atLeast' || rule === 'exact' ? rule : 'auto';
-    })(),
-    cantSplit: bool(attr(row, 'cantSplit')) ?? false,
-    header: r < headerRows,
-    cells: (row.content ?? []).map((cell, c) => {
-      const v = str(attr(cell, 'vAlign'));
-      return {
-        id: str(cell.attrs?.['id']) ?? `${id}/r${r}c${c}`,
-        colspan: num(attr(cell, 'colspan')) ?? 1,
-        rowspan: num(attr(cell, 'rowspan')) ?? 1,
-        vAlign: v === 'center' || v === 'bottom' ? v : 'top',
-        margins: insetsOf(cell.attrs?.['margins'], cellMargins),
-        blocks: blocksOf(ctx, cell.content ?? [], tableStyle ?? 'TableNormal', regionId),
-      };
-    }),
-  }));
+  // Row and cell ranges are offsets inside the table's content.
+  let rowStart = 0;
+  const rows: FlowRow[] = (node.content ?? []).map((row, r) => {
+    const start = rowStart;
+    rowStart += nodeSize(row);
+    let cellStart = start + 1;
+    return {
+      start,
+      end: rowStart,
+      id: str(row.attrs?.['id']) ?? `${id}/r${r}`,
+      height: num(row.attrs?.['height']) !== null ? pt(num(row.attrs?.['height']) ?? 0) : null,
+      heightRule: ((): FlowRow['heightRule'] => {
+        const rule = str(attr(row, 'heightRule'));
+        return rule === 'atLeast' || rule === 'exact' ? rule : 'auto';
+      })(),
+      cantSplit: bool(attr(row, 'cantSplit')) ?? false,
+      header: r < headerRows,
+      cells: (row.content ?? []).map((cell, c) => {
+        const v = str(attr(cell, 'vAlign'));
+        const from = cellStart;
+        cellStart += nodeSize(cell);
+        return {
+          start: from,
+          end: cellStart,
+          id: str(cell.attrs?.['id']) ?? `${id}/r${r}c${c}`,
+          colspan: num(attr(cell, 'colspan')) ?? 1,
+          rowspan: num(attr(cell, 'rowspan')) ?? 1,
+          vAlign: v === 'center' || v === 'bottom' ? v : 'top',
+          margins: insetsOf(cell.attrs?.['margins'], cellMargins),
+          blocks: blocksOf(ctx, cell.content ?? [], tableStyle ?? 'TableNormal', regionId),
+        };
+      }),
+    };
+  });
   const align = str(node.attrs?.['align']);
   return {
     kind: 'table',
@@ -955,6 +999,8 @@ function tableOf(ctx: Context, node: CdmNode, regionId: string | null): FlowTabl
     bordered: (format.ok ? format.value.borders : null) !== null,
     rows,
     regionId,
+    start: 0,
+    end: rowStart,
   };
 }
 
@@ -973,7 +1019,22 @@ function lineHeightOf(font: FlowFont): number {
   return font.sizePt * 1.2;
 }
 
+/** The flow blocks of one CDM block; each box it makes covers the block's range (FE-078). */
 function blockOf(
+  ctx: Context,
+  node: CdmNode,
+  tableStyle: string | null,
+  regionId: string | null,
+): FlowBlock[] {
+  const id = str(node.attrs?.['id']) ?? 'unidentified';
+  return blocksFor(ctx, node, tableStyle, regionId).map((b) =>
+    b.kind === 'box' && b.id === id && b.start === undefined
+      ? { ...b, start: 0, end: blockSpan(node) }
+      : b,
+  );
+}
+
+function blocksFor(
   ctx: Context,
   node: CdmNode,
   tableStyle: string | null,

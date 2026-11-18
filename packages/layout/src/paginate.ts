@@ -65,15 +65,16 @@ import {
   placeNotes,
   type NotePiece,
 } from './notes.ts';
-import type {
-  NoteItem,
-  NoteRef,
-  PageFrame,
-  PageMargins,
-  PaginatedPage,
-  ParagraphItem,
-  TableCellItem,
-  TableRowItem,
+import {
+  rangeOf,
+  type NoteItem,
+  type NoteRef,
+  type PageFrame,
+  type PageMargins,
+  type PaginatedPage,
+  type ParagraphItem,
+  type TableCellItem,
+  type TableRowItem,
 } from './page-items.ts';
 import { judgePins, type PagePin, type PinJudgement } from './reconcile.ts';
 import { splitRowAt } from './row-split.ts';
@@ -85,6 +86,7 @@ import {
   type LayoutLine,
   type LayoutRow,
   type TableFragment,
+  pageRange,
 } from './tree.ts';
 
 // The shared item and page types live in page-items.ts, so that notes.ts and row-split.ts do not
@@ -196,6 +198,9 @@ export interface BoxItem {
   readonly width: number;
   readonly height: number;
   readonly keepNext: boolean;
+  /** The block's CDM range (FE-078 criterion 2). */
+  readonly from?: number;
+  readonly to?: number;
 }
 
 export interface PageBreakItem {
@@ -221,6 +226,9 @@ export interface TableItem {
   readonly x: number;
   readonly width: number;
   readonly rows: readonly TableRowItem[];
+  /** The table's CDM range (FE-078 criterion 2). */
+  readonly from?: number;
+  readonly to?: number;
 }
 
 export type PageItem =
@@ -677,6 +685,7 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
     }
     pages.push({
       index: pages.length,
+      ...pageRange(cur.fragments),
       section: cur.section,
       width: setup.width,
       height: setup.height,
@@ -989,6 +998,7 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
     addFragment({
       kind: 'box',
       blockId: item.blockId,
+      ...rangeOf(item),
       x: colX(cur.column),
       y: cur.geo.top + used(),
       width: item.width,
@@ -1035,11 +1045,19 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
       const x = colX(cur.column) + item.x;
       const cells: LayoutCell[] = row.cells.map((c) => ({
         cellId: c.cellId,
+        ...rangeOf(c),
         x: x + c.x,
         width: c.width,
         fragments: cellFragments(c, x + c.x, top),
       }));
-      const laid: LayoutRow = { rowId: row.rowId, repeated, y: top, height: row.height, cells };
+      const laid: LayoutRow = {
+        rowId: row.rowId,
+        ...rangeOf(row),
+        repeated,
+        y: top,
+        height: row.height,
+        cells,
+      };
       if (!onPiece()) piece = { page: cur, column: cur.column, index: -1, rows: [] };
       const open = piece!;
       open.rows.push(laid);
@@ -1048,6 +1066,8 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
       const fragment: TableFragment = {
         kind: 'table',
         blockId: item.blockId,
+        ...(first.from !== undefined ? { from: first.from } : {}),
+        ...(last.to !== undefined ? { to: last.to } : {}),
         x,
         y: first.y,
         width: item.width,
