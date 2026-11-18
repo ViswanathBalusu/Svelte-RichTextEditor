@@ -38,6 +38,8 @@ interface Durable {
   tenant: string;
   memory: MemoryStore;
   checkpoints: MemoryCheckpoints;
+  /** The deployment's view key (DOCEDIT_VIEW_KEY), the same on every node. */
+  viewKey: Uint8Array;
 }
 
 function durable(): Durable {
@@ -45,6 +47,7 @@ function durable(): Durable {
     tenant: crypto.randomUUID(),
     memory: new MemoryStore(),
     checkpoints: new MemoryCheckpoints(),
+    viewKey: crypto.getRandomValues(new Uint8Array(32)),
   };
 }
 
@@ -71,7 +74,7 @@ async function boot(
     checkpoints: d.checkpoints,
     tenant: d.tenant,
     node,
-    settings: { testMode: true },
+    settings: { testMode: true, viewKey: d.viewKey },
     deps: o.leases ? { leases: o.leases } : {},
   });
   planes.push(p);
@@ -136,6 +139,7 @@ describe('recovery after a room host crash (BE-076)', () => {
       const alice = await a.client('alice', { [doc]: 'owner' });
       const first = await alice.open(1, doc);
       const incarnation = first.d!['incarnation'] as string;
+      const view = first.d!['view'];
       const firstId = uuid7();
       expect(
         (await alice.submit(1, { id: firstId, base: 0, steps: [insertText(intro(), 'one')] })).t,
@@ -154,17 +158,25 @@ describe('recovery after a room host crash (BE-076)', () => {
       const b = await boot(d, 'node-b');
       const bob = await b.client('alice', { [doc]: 'owner' });
       const o = await bob.open(1, doc, {
-        resume: { seq: 1, incarnation, inflight },
+        resume: { seq: 1, incarnation, view, inflight },
       });
       expect(o.t).toBe('ch.opened');
       expect(o.d!['inflight']).toEqual(
         storedBeforeKill ? { state: 'accepted', seq: 2 } : { state: 'unknown' },
       );
-      // The reconnect answers `reload` (the view class moved with the head), so no sync.caughtUp
-      // follows; the resubmission below is answered after ch.opened (see the story Notes).
-      expect(o.d!['catchUp']).toBe('reload');
+      // The client sent the view token it was given, so the new node streams what the client
+      // missed and then says `sync.caughtUp`.
+      expect(o.d!['catchUp']).toBe('stream');
+      const caught = await bob.take((m) => m.t === 'sync.caughtUp');
+      expect(caught.d).toMatchObject({ seq: storedBeforeKill ? 2 : 1 });
+      const streamed = bob
+        .all('sync.commit', 1)
+        .flatMap((m) => m.d!['commits'] as Array<{ id: string }>)
+        .map((c) => c.id);
+      expect(streamed).toEqual(storedBeforeKill ? [inflight] : []);
 
-      // The client resubmits the same commit; it is stored once, whatever the answer was.
+      // After sync.caughtUp the client resubmits the same commit; it is stored once, whatever the
+      // answer was.
       const r = await bob.submit(1, { id: inflight, base: 1, steps: [insertText(intro(), 'two')] });
       expect(r.t).toBe('sync.ack');
       expect(r.d).toMatchObject({ id: inflight, seq: 2 });
