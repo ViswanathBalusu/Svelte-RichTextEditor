@@ -53,7 +53,7 @@ As an integrating developer, I want the kernel downloaded and compiled only when
 - [ ] The directives a host must allow for the module, as recorded by S2, appear in the integration guide.
 - [ ] Load time and load failures are reported through the component's diagnostic events.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold yet, because the page-view gate (SPK-013) is not held and the owner decides it from customer evidence. S5 did choose measurement from the font files, so the module would be harfbuzzjs's WebAssembly build (ADR 0016, "Result of S10"). The dependencies are largely built (FE-076 6 of 7 ticked, PRO-087 all ticked), so they do not block it. What blocks it is that no page view or read-only painter exists to request a module: every criterion asks for a loader in the element that fetches, compiles and reports on a module, and with nothing to load that loader would be scaffolding built ahead of the gate. S2's directives are recorded in the S2 report (SPK-015) for the integration guide when this story runs.
 
 ### WASM-003 Keep editing when the host blocks WebAssembly
 
