@@ -166,7 +166,8 @@ export function suggestReplace(
  * records the run's non-suggestion marks; then the change is made. A run that already carries the
  * author's own `fmt` keeps it, so that `before` still records the formatting before any of the
  * author's changes. Other users' `fmt` marks stay, so two users' suggestions coexist (FE-043
- * criterion 2). Rejecting the suggestion puts `before` back (FE-043 criterion 3).
+ * criterion 2); a run that already carries another user's `fmt` gives the new mark that `before`, so
+ * the baseline does not depend on the order of the marks (PRM-013). Rejecting the suggestion puts `before` back (FE-043 criterion 3).
  */
 export function suggestFormat(
   state: EditorState,
@@ -203,7 +204,14 @@ export function suggestFormat(
     handled++;
     if (was.marks.some((m) => m.type.name === 'fmt' && m.attrs['user'] === author.user)) continue;
     id ??= author.nextId();
-    const before = { marks: plain(was.marks).map((m) => m.toJSON() as unknown), attrs: {} };
+    // A run that already carries another user's `fmt` takes that `before`: the baseline is recorded
+    // when the first suggestion is made, so every `fmt` of a run agrees and the baseline does not
+    // depend on the order of the marks (PRM-013 criterion 4; owner decision 79, ADR 0378 option ii).
+    const earlier = was.marks.find((m) => m.type.name === 'fmt' && m.attrs['user'] !== author.user);
+    const before = (earlier?.attrs['before'] as { marks?: unknown; attrs?: unknown } | null) ?? {
+      marks: plain(was.marks).map((m) => m.toJSON() as unknown),
+      attrs: {},
+    };
     tr.addMark(a, b, state.schema.marks['fmt']!.create({ id, user: author.user, before }));
   }
   for (const step of steps) tr.step(step);
