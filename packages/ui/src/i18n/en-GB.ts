@@ -212,6 +212,17 @@ export const EN_GB = {
       'That change was not made: {count} cross-references still point to what you tried to delete.',
   },
   'notice.action.showReferences': 'Show references',
+  // The report of Replace and Replace all (FE-060 criterion 3). `count` is the number replaced;
+  // `skipped` is the number left alone. The second message is shown only when something was skipped.
+  'notice.replaced.done': {
+    one: 'Replaced {count} match.',
+    other: 'Replaced {count} matches.',
+  },
+  'notice.replaced.skipped': {
+    one: 'Replaced {count} match. Skipped {skipped}: you cannot change those parts of the document.',
+    other:
+      'Replaced {count} matches. Skipped {skipped}: you cannot change those parts of the document.',
+  },
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {

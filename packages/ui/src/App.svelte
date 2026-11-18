@@ -432,20 +432,29 @@
   // Changes that did not happen: a refusal of the region guard, work the server rejected or the
   // client set aside (11 §3; 07 §9). Shown in the status bar and announced; never naming content.
   let notice: Notice | null = $state.raw(null);
-  if (core.refusal || core.recovered || core.trimmed) {
+  if (core.refusal || core.recovered || core.trimmed || core.replaced) {
     const refusal = core.refusal;
     const recovered = core.recovered;
     const trimmed = core.trimmed;
-    const tracker = new NoticeTracker(refusal?.get(), recovered?.get(), trimmed?.get());
+    const replaced = core.replaced;
+    const tracker = new NoticeTracker(
+      refusal?.get(),
+      recovered?.get(),
+      trimmed?.get(),
+      replaced?.get(),
+    );
     const show = (next: Notice | null) => {
       if (!next) return;
       notice = next;
-      announce(next.key, { count: next.count });
+      announce(next.key, { count: next.count, ...next.params });
     };
     const stops: Array<() => void> = [];
     if (refusal) stops.push(refusal.subscribe(() => show(tracker.refusal(refusal.get()))));
     if (recovered) stops.push(recovered.subscribe(() => show(tracker.recovered(recovered.get()))));
     if (trimmed) stops.push(trimmed.subscribe(() => show(tracker.trimmed(trimmed.get()))));
+    // After the refusal: a Replace all that skipped matches records a refusal first, and the report
+    // with the counts is the notice that stays (FE-060 criterion 3).
+    if (replaced) stops.push(replaced.subscribe(() => show(tracker.replaced(replaced.get()))));
     onDestroy(() => {
       for (const stop of stops) stop();
     });

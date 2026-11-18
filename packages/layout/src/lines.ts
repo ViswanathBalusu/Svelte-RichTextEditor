@@ -34,6 +34,11 @@ import { freezeTree, type LayoutLine, type ParagraphFragment } from './tree.ts';
 export interface BreakRun {
   readonly text: string;
   readonly font: FontKey;
+  /**
+   * Set for a run that stands for a box of a fixed width (a form field, FRW-080): the run is then
+   * `width` points wide whatever its text is. Absent for text, which the measurer measures.
+   */
+  readonly width?: number;
 }
 
 /**
@@ -98,6 +103,7 @@ interface Segment {
   readonly start: number;
   readonly end: number;
   readonly font: FontKey;
+  readonly width?: number;
 }
 
 const SPACE = 0x20;
@@ -154,7 +160,12 @@ export function breakParagraph(
   let offset = 0;
   for (const run of input.runs) {
     if (run.text.length === 0) continue;
-    segments.push({ start: offset, end: offset + run.text.length, font: run.font });
+    segments.push({
+      start: offset,
+      end: offset + run.text.length,
+      font: run.font,
+      ...(run.width !== undefined ? { width: run.width } : {}),
+    });
     offset += run.text.length;
   }
 
@@ -172,7 +183,7 @@ export function breakParagraph(
       if (s.end <= a || s.start >= b) continue;
       const lo = Math.max(a, s.start);
       const hi = Math.min(b, s.end);
-      w += measurer.advance(s.font, text.slice(lo, hi));
+      w += s.width ?? measurer.advance(s.font, text.slice(lo, hi));
     }
     return w;
   };
@@ -385,7 +396,12 @@ function sliceRuns(runs: readonly BreakRun[], a: number, b: number): BreakRun[] 
   for (const run of runs) {
     const lo = Math.max(a, offset);
     const hi = Math.min(b, offset + run.text.length);
-    if (lo < hi) out.push({ text: run.text.slice(lo - offset, hi - offset), font: run.font });
+    if (lo < hi)
+      out.push({
+        text: run.text.slice(lo - offset, hi - offset),
+        font: run.font,
+        ...(run.width !== undefined ? { width: run.width } : {}),
+      });
     offset += run.text.length;
   }
   return out;

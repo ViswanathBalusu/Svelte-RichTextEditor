@@ -7,7 +7,7 @@
  *   the large documents need not be generated to disk;
  * - every response is cross-origin isolated (COOP and COEP), so that the pages can call
  *   `performance.measureUserAgentSpecificMemory()`, and is sent with `Cache-Control: no-store`,
- *   so that every load is a cold load.
+ *   so that every load is a cold load (unless `DOCEDIT_PERF_CACHE=1`, see CACHE_ENABLED).
  *
  * Harness only: it serves on loopback addresses and trusts its paths only within its roots.
  */
@@ -39,11 +39,18 @@ const TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+/**
+ * `DOCEDIT_PERF_CACHE=1` lets the browser keep what it fetched (`max-age` of one hour), so that a
+ * second visit in the same context has a warm HTTP cache (FE-119 criterion 4). Without it, every
+ * load is cold. The harness specs of FND-007 never set it.
+ */
+export const CACHE_ENABLED = process.env['DOCEDIT_PERF_CACHE'] === '1';
+
 const ISOLATION = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
   'Cross-Origin-Resource-Policy': 'same-origin',
-  'Cache-Control': 'no-store',
+  'Cache-Control': CACHE_ENABLED ? 'public, max-age=3600' : 'no-store',
 };
 
 const corpus = new Map<string, Promise<string>>();

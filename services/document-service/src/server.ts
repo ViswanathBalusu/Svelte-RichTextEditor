@@ -16,6 +16,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { podmanSandbox, type AssetUrlKeys, type Sandbox } from '@docedit/asset-worker';
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
 import { RateLimits } from './data-plane/limits.ts';
+import { ValkeyTokenBuckets } from './data-plane/valkey-buckets.ts';
 import { DEFAULT_FEATURES, DEFAULT_RATES } from './data-plane/settings.ts';
 import {
   MemoryAudit,
@@ -630,7 +631,20 @@ export async function startService(opts: StartOptions): Promise<Service> {
     responseEntries: config.responseEntries,
   });
 
-  const rateLimits = opts.rateLimits ?? new RateLimits(DEFAULT_RATES);
+  // BE-030 criterion 3: each tenant's own limits are read from its registration (BE-012), so that
+  // one tenant at its limit leaves another's alone and a changed limit applies without a restart.
+  // Stage 2 (BE-030 criterion 5, BE-063): with `DOCEDIT_VALKEY_URL` the tenant and user counters
+  // are shared between nodes. Without it they are in this process's memory.
+  const sharedRateStore =
+    opts.rateLimits === undefined && config.valkeyUrl !== null
+      ? new ValkeyTokenBuckets({ url: config.valkeyUrl })
+      : undefined;
+  const rateLimits =
+    opts.rateLimits ??
+    new RateLimits(DEFAULT_RATES, {
+      tenantLimits: (tenant) => parts.registry.rateLimits(tenant),
+      ...(sharedRateStore ? { store: sharedRateStore } : {}),
+    });
   // BE-091: the live-use quotas of the tenants (connections, commit rate) gate the data plane, and
   // their refusals are counted in this node's metrics. Absent when the node composes no quotas.
   // The values come from the parts' quota source when it has one, else from the administration
@@ -1158,6 +1172,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         await exportWorkers?.stop();
         await Promise.all(runners.map((r) => r.stop()));
         await dataPlane.close().catch(() => undefined);
+        sharedRateStore?.close();
         // The last change of a burst that still waits for its window is raised before the sends drain.
         events.close();
         // Sends already started finish; each is bounded by the egress timeout (BE-056).

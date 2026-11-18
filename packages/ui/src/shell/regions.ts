@@ -100,8 +100,24 @@ export function scopeAnnouncement(
 }
 
 /**
- * The candidates the permissions pane offers for a grant (07 §1, §7). The pane offers users and
- * groups. On a `restricted` region it never offers `everyone`, even if the host's directory
+ * The role placeholders whose name contains `text`, as grant candidates (`role:<id>`; 07 §1, 12
+ * §4.3; FRW-012 criterion 4). They come from the document's own role definitions, so the host's
+ * directory is not asked for them. The pane lists them beside the users and groups it finds.
+ */
+export function roleCandidates(
+  roles: readonly { readonly id: string; readonly name: string }[],
+  text: string,
+): Array<{ principal: string; name: string }> {
+  const needle = text.trim().toLocaleLowerCase();
+  if (needle === '') return [];
+  return roles
+    .filter((r) => r.name.toLocaleLowerCase().includes(needle))
+    .map((r) => ({ principal: `role:${r.id}`, name: r.name }));
+}
+
+/**
+ * The candidates the permissions pane offers for a grant (07 §1, §7): what the host's directory
+ * found. On a `restricted` region it never offers `everyone`, even if the host's directory
  * returns it: grant validation refuses it (PRM-061; owner decision 12 of 2026-11-15).
  */
 export function grantableCandidates<T extends { principal: unknown }>(

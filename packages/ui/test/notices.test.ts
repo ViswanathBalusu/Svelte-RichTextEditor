@@ -90,8 +90,9 @@ describe('the words of a notice', () => {
     const keys = Object.keys(EN_GB).filter((k) => k.startsWith('notice.'));
     expect(keys.length).toBeGreaterThan(10);
     for (const key of keys) {
-      const text = tr.text(key, { count: 2 });
-      expect(text, key).not.toMatch(/\{(?!count)/);
+      // `skipped` is the second number of the replace report (FE-060 criterion 3).
+      const text = tr.text(key, { count: 2, skipped: 1 });
+      expect(text, key).not.toMatch(/\{/);
       expect(text, key).not.toMatch(/region:|story:|field:/);
     }
     expect(tr.t('notice.rejected.permission', { count: 1 })).toMatch(

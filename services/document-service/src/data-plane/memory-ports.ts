@@ -15,6 +15,7 @@ import type {
   NodeLeaseStore,
   OutboxItem,
   OutboxStore,
+  OutboxWriter,
 } from '../storage/types.ts';
 
 const refKey = (ref: DocRef) => `${ref.tenant}/${ref.doc}`;
@@ -179,6 +180,31 @@ export class MemoryOutbox implements OutboxStore {
   /** Every item, for tests. */
   get all(): OutboxItem[] {
     return [...this.#items.values()].map((h) => this.#copy(h));
+  }
+}
+
+/**
+ * Outbox items and audit events as one unit in process (BE-039 criterion 1). The events are
+ * written first: when the audit store refuses them nothing reaches the outbox, as a rolled-back
+ * transaction leaves neither in PostgreSQL.
+ */
+export class MemoryOutboxWriter implements OutboxWriter {
+  readonly #outbox: OutboxStore;
+  readonly #audit: AuditStore;
+
+  constructor(outbox: OutboxStore, audit: AuditStore) {
+    this.#outbox = outbox;
+    this.#audit = audit;
+  }
+
+  async write(
+    _tenant: string,
+    unit: { items: readonly NewOutboxItem[]; events: readonly AuditEvent[] },
+  ): Promise<OutboxItem[]> {
+    await this.#audit.record(unit.events);
+    const out: OutboxItem[] = [];
+    for (const item of unit.items) out.push(await this.#outbox.enqueue(item));
+    return out;
   }
 }
 
