@@ -29,12 +29,18 @@ export const FIND_CURRENT_CLASS = 'de-find-current';
 export interface FindHighlight {
   readonly query: string;
   readonly current: number | null;
+  /** False when case does not matter (UX-020); absent means it does. */
+  readonly matchCase?: boolean;
 }
 
 /** The highlights of every body match of `find.query` in `doc`; none for an empty query. */
 export function findDecorations(doc: PMNode, find: FindHighlight): DecorationSet {
   if (find.query === '') return DecorationSet.empty;
-  const matches = findMatches(doc, find.query);
+  const matches = findMatches(
+    doc,
+    find.query,
+    find.matchCase === false ? { matchCase: false } : undefined,
+  );
   if (matches.length === 0) return DecorationSet.empty;
   return DecorationSet.create(
     doc,

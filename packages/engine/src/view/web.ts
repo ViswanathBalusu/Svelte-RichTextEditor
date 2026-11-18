@@ -450,7 +450,11 @@ export class EditorCore extends DocumentCore {
         // The suggestion marks in the `all` view are drawn too (FE-046 criterion 4; FE-045 criterion 1).
         decorations: (state) => {
           const f = this.findState.get();
-          return findDecorations(state.doc, { query: f.query, current: f.current })
+          return findDecorations(state.doc, {
+            query: f.query,
+            current: f.current,
+            ...(f.matchCase === false ? { matchCase: false } : {}),
+          })
             .add(state.doc, suggestionDecorations(state.doc, 'all').find())
             .add(state.doc, commentDecorations(state.doc, this.threadRanges.get()).find())
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
