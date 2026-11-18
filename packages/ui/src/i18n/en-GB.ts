@@ -512,6 +512,16 @@ export const EN_GB = {
     'The selected blocks become a region. You can then choose who may edit it in the permissions pane.',
   'dialog.region.empty': 'Enter a title.',
   'dialog.region.create': 'Make region',
+  'dialog.version.title': 'Name this version',
+  'dialog.version.name': 'Name',
+  'dialog.version.note': 'Note (optional)',
+  'dialog.version.hint':
+    'The name and the note are kept with the document as it is now. You can find the version again in the history.',
+  'dialog.version.empty': 'Enter a name.',
+  'dialog.version.save': 'Name version',
+  'dialog.version.forbidden': 'You cannot name a version of this document.',
+  'dialog.version.failed': 'The version could not be named. Try again.',
+  'announce.version.named': 'Version named.',
   'announce.region.created': 'Region made.',
   'announce.region.failed': 'The region could not be made.',
   'announce.language.set': 'Language set.',
@@ -781,6 +791,7 @@ export const EN_GB = {
 
   // The history pane (HIS-009; 08 §4).
   'command.view.history': 'History',
+  'command.history.nameVersion': 'Name this version',
   'history.label': 'History',
   'history.unavailable': 'History is not available for this document.',
   'history.loading': 'Loading history.',

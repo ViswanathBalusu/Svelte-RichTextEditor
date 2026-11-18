@@ -482,7 +482,9 @@
   }
 
   // Dialogs of the shell.
-  let dialog = $state<'language' | 'region' | 'export' | 'comment' | 'math' | null>(null);
+  let dialog = $state<'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | null>(
+    null,
+  );
   // The equation the math editor is open on (FE-070): taken when the request arrives.
   let equation = $state.raw<EquationRef | null>(null);
   if (core.mathEditor) {
@@ -793,6 +795,7 @@
     if (paneRegistry.get('comments')?.load) add(host1a.comments);
     if (paneRegistry.get('catch-up')?.load) add(host1a.catchUp);
     if (offered('history')) add(host1a.history);
+    if (offered('history') && core.history?.createVersion) add(host1b['history.nameVersion']);
     if (props.onShareRequest) add(host1a.share);
     if (core.search) add(host1b['view.find']);
     if (offered('styles')) add(host1b['view.styles']);
@@ -1247,7 +1250,14 @@
     <MiniToolbar anchor={miniAnchor} />
   {/if}
   {#if dialogs}
-    {@const { LanguageDialog, RegionDialog, CommentBox, ExportDialog, MathEditorDialog } = dialogs}
+    {@const {
+      LanguageDialog,
+      RegionDialog,
+      CommentBox,
+      ExportDialog,
+      MathEditorDialog,
+      VersionDialog,
+    } = dialogs}
     {#if dialog === 'math' && core.mathEditor && equation}
       <MathEditorDialog
         editor={core.mathEditor}
@@ -1263,6 +1273,15 @@
       <LanguageDialog
         initial={selection.current.lang ?? null}
         onApply={applyLanguage}
+        onClose={() => (dialog = null)}
+      />
+    {:else if dialog === 'version' && core.history?.createVersion}
+      <VersionDialog
+        history={core.history}
+        onNamed={() => {
+          dialog = null;
+          announce('announce.version.named');
+        }}
         onClose={() => (dialog = null)}
       />
     {:else if dialog === 'region'}

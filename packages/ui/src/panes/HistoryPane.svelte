@@ -50,7 +50,12 @@
       snapshot = ctl.state();
     });
     void ctl.reload();
-    return off;
+    // A version named from the command shows at once (HIS-006): the host says the list changed.
+    const offChange = port.onChange?.(() => void ctl.reload());
+    return () => {
+      off();
+      offChange?.();
+    };
   });
 
   function when(iso: string): string {
