@@ -10,7 +10,6 @@ const HISTORY = 'history resources of phase 2 (PRO-119)';
 const LEASES = 'leases of phase 2 (PRO-122)';
 
 export const PENDING: Readonly<Record<string, string>> = {
-  'message goaway': `a draining server: ${FAULTS}`,
   'message sync.check': `sync.check is optional and follows a checkpoint (04 §13): ${FAULTS}`,
   'message wf.changed': WORKFLOW,
   'field error.retryAfterMs': `only rate-limited errors carry it: ${FAULTS}`,
@@ -49,7 +48,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation GET /documents/{id}/workflow/final': `sealing (12 §8.2): ${WORKFLOW}`,
   'close 4429': `rate limits: ${FAULTS}`,
   'close 4500': `an internal error: ${FAULTS}`,
-  'close 4503': `a draining server: ${FAULTS}`,
   'error rate_limited': `load beyond a conformance run: ${FAULTS}`,
   'error quota_exceeded': `tenant quotas are operator settings (06 §12): ${FAULTS}`,
   'error slow_consumer': `a client that stops reading: ${FAULTS}`,

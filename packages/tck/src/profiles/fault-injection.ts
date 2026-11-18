@@ -16,6 +16,7 @@
  * | kill the room | `POST /_test/documents/{id}/kill-room` | the room stops as a crash would; its channels close `unavailable` |
  * | drop a grant announcement | `POST /_test/documents/{id}/drop-announcement` | the next announcement of a grants change is lost |
  * | rewind the log | `POST /_test/documents/{id}/rewind` `{ to }` | the log is cut at `to` and gets a new incarnation; `404` when the store cannot |
+ * | restart the node | `POST /_test/restart-node` | the node drains (`goaway`, then 4503) and a new node takes over in the same process |
  * | read the state | `GET /_test/documents/{id}/state` | `seq`, `epoch`, `owner`, `incarnation`, `chainHead` |
  *
  * A write conflict is forced the way the server forces a fence: the room that is killed has lost its
@@ -435,6 +436,93 @@ export const FAULT_INJECTION: ProfileDef = {
           'no such id',
           stored.length,
         );
+      },
+    }),
+    s({
+      id: 'rolling-restart',
+      title:
+        'a node that drains sends goaway and closes with 4503, and a client that follows the hint loses no acknowledged commit',
+      spec: '05 §5.1, §5.2; 06 §2.2; 04 §9',
+      covers: {
+        messages: ['goaway', 'sync.submit', 'sync.ack', 'ch.open', 'ch.opened'],
+        fields: ['ch.open.resume'],
+        closeCodes: [4503],
+      },
+      async run(ctx) {
+        const doc = await ctx.document();
+        const m = await join(ctx, 'restarted', doc, 'editor');
+        const at = posIn(m.content.doc, IDS.end);
+        let head = m.content.seq;
+        const confirmed: Array<{ id: string; seq: number }> = [];
+        for (const text of ['a', 'b', 'c']) {
+          const ack = await acked(m.wire, 1, { base: head, steps: [insertText(at, text)] });
+          head = ack.seq;
+          confirmed.push({ id: ack.id, seq: ack.seq });
+        }
+
+        // The node is restarted as a rolling restart does it: it drains, and a new node takes over.
+        const from = m.wire.mark();
+        expectStatus(await hook(ctx, 'POST', '/restart-node'), 204, 'restart-node');
+        const goaway = await m.wire.next<Extract<ServerMessage, { t: 'goaway' }>>(
+          (x) => x.t === 'goaway',
+          'goaway from the draining node',
+          { from },
+        );
+        check(
+          Number.isInteger(goaway.d.reconnectInMs) && goaway.d.reconnectInMs >= 0,
+          'goaway carries reconnectInMs, a number of milliseconds',
+          'a non-negative integer',
+          goaway.d.reconnectInMs,
+        );
+        check(
+          typeof goaway.d.reason === 'string' && goaway.d.reason.length > 0,
+          'goaway carries a reason',
+          'a string',
+          goaway.d.reason,
+        );
+        check(
+          !m.wire.messages.slice(from).some((x) => x.t === 'ch.closed'),
+          'goaway is for the whole connection: no channel gets ch.closed',
+          'no ch.closed',
+          'ch.closed',
+        );
+        const closed = await m.wire.closes('close 4503 after goaway');
+        equal(closed.code, 4503, 'the draining node closes the connection with 4503');
+
+        // The client follows the hint: it waits reconnectInMs and connects again. The hint is at most
+        // a few seconds (05 §5.1); a longer one is not waited for.
+        await ctx.sleep(Math.min(goaway.d.reconnectInMs, 10_000));
+        const token = await ctx.service.token(m.sub, { [doc]: 'editor' });
+        const wire = await ctx.connect({ label: 'after-restart' });
+        await ctx.hello(wire, token);
+        const view = m.content.view !== undefined ? { view: m.content.view } : {};
+        const o = await opened(ctx, wire, 1, doc, {
+          resume: { seq: head, incarnation: m.content.incarnation, ...view },
+        });
+        oneOf(o.catchUp, ['stream', 'page'], 'a restart does not make the client reload');
+        check(
+          o.head >= head,
+          'the new node is at or past the last acknowledged commit',
+          head,
+          o.head,
+        );
+
+        // No acknowledged commit is lost, none is stored twice, and the new node accepts commits.
+        const stored = (await storedCommits(ctx, token, doc)).filter((c) => c.kind === 'steps');
+        for (const c of confirmed) {
+          equal(
+            stored.filter((x) => x.id === c.id && x.seq === c.seq).length,
+            1,
+            `acknowledged commit ${c.id} is in the log once, at seq ${c.seq}`,
+          );
+        }
+        equal(
+          new Set(stored.map((x) => x.id)).size,
+          stored.length,
+          'no commit identifier is in the log twice',
+        );
+        const next = await acked(wire, 1, { base: o.head, steps: [insertText(at, 'd')] });
+        equal(next.seq, o.head + 1, 'the new node stores the next commit at the next seq');
       },
     }),
   ],

@@ -20,6 +20,7 @@ import {
   type Sandbox,
 } from '@docedit/asset-worker';
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
+import { planeOf } from './data-plane/restartable.ts';
 import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
 import { AnnouncingNotifier, listenForAnnouncements } from './data-plane/announcements.ts';
@@ -894,7 +895,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
       parts.search = { search: async (tenant, q, query) => index.search(tenant, q, query) };
     if (!parts.searchPurge) parts.searchPurge = index;
   }
-  const dataPlane = (opts.createDataPlane ?? defaultDataPlane)({
+  // In test mode the node can be restarted in place by a hook (PRO-024 criterion 6; PRO-126).
+  const dataPlane = planeOf(config.testMode, opts.createDataPlane ?? defaultDataPlane, {
     ...(searchTarget
       ? {
           onCheckpoint: async (ref: DocRef, seq: number) => {
