@@ -449,6 +449,7 @@ export {
   type Span,
   type StepRoute,
 } from './projection/projection.ts';
+export { projectCommitPage, visibleScopes } from './projection/page.ts';
 export {
   ProjectionGateway,
   viewToken,

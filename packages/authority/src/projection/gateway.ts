@@ -37,6 +37,7 @@ import {
   isSnapshot,
 } from '../room/types.ts';
 import { stepsToJson } from '../steps.ts';
+import { visibleScopes as visibleScopesOf } from './page.ts';
 import {
   type HiddenSet,
   type Projection,
@@ -307,11 +308,7 @@ export class ProjectionGateway {
   }
 
   private visibleScopes(scopes: readonly string[], hidden: HiddenSet): string[] {
-    return scopes.filter(
-      (s) =>
-        !(s.startsWith('region:') && hidden.regions.has(s.slice(7))) &&
-        !(s.startsWith('field:') && hidden.values.has(s.slice(6))),
-    );
+    return visibleScopesOf(scopes, hidden);
   }
 
   /** Rewrites the messages of one channel for its visibility class. */
