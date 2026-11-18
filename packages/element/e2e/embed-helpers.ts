@@ -45,7 +45,7 @@ export async function mountEditor(
     role?: string;
     name?: string;
     target?: string;
-    doc?: 'first' | 'second' | 'regions' | 'rtl';
+    doc?: 'first' | 'second' | 'regions' | 'rtl' | 'rtl-regions';
     /** The `mode` attribute, set before the element connects (05 §8.1). */
     mode?: string;
     /** Further attributes, set before the element connects (for example `toolbar`, `theme`). */
@@ -60,6 +60,7 @@ export async function mountEditor(
         secondDocId: string;
         regionsDocId: string;
         rtlDocId: string;
+        rtlRegionsDocId: string;
       };
       const el = document.createElement('doc-editor') as HTMLElement & { backend: unknown };
       el.dataset['test'] = name;
@@ -84,7 +85,9 @@ export async function mountEditor(
             ? e.regionsDocId
             : doc === 'rtl'
               ? e.rtlDocId
-              : e.docId,
+              : doc === 'rtl-regions'
+                ? e.rtlRegionsDocId
+                : e.docId,
       );
       document.getElementById(target)!.append(el);
       await ready;
