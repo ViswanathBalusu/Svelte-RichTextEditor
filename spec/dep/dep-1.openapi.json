@@ -6067,6 +6067,172 @@
         ]
       }
     },
+    "/documents/{id}/workflow/correct": {
+      "post": {
+        "operationId": "correctWorkflow",
+        "summary": "Corrects a document that is in progress: pauses every participant and unlocks the document for the owner (12 §6.2). The method and path are assumed.",
+        "description": "Corrects a document that is in progress: pauses every participant and unlocks the document for the owner (12 §6.2). The method and path are assumed. Requires: manage (07 §12). Only when the server announces the feature `workflow`. Specified in 12 §6.2, §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Success. No status code is defined for this route yet.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workflow"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §6.2, §10",
+        "x-dep-owner": "FRW",
+        "x-dep-requires": "manage",
+        "x-dep-feature": "workflow",
+        "x-dep-codes": [
+          "conflict"
+        ],
+        "x-dep-gaps": [
+          "G95"
+        ]
+      }
+    },
+    "/documents/{id}/workflow/resume": {
+      "post": {
+        "operationId": "resumeWorkflow",
+        "summary": "Resumes a corrected workflow: compares the document with its sent version, resets the participants the change concerns and locks the document again (12 §6.2). The method and path are assumed.",
+        "description": "Resumes a corrected workflow: compares the document with its sent version, resets the participants the change concerns and locks the document again (12 §6.2). The method and path are assumed. Requires: manage (07 §12). Only when the server announces the feature `workflow`. Specified in 12 §6.2, §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Success. No status code is defined for this route yet.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workflow"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §6.2, §10",
+        "x-dep-owner": "FRW",
+        "x-dep-requires": "manage",
+        "x-dep-feature": "workflow",
+        "x-dep-codes": [
+          "conflict"
+        ],
+        "x-dep-gaps": [
+          "G95"
+        ]
+      }
+    },
     "/documents/{id}/workflow/participants/{pid}/consent": {
       "post": {
         "operationId": "participantConsent",
@@ -13094,10 +13260,31 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead"
             ]
           }
         },
@@ -13166,10 +13353,37 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "participant": {
+                "description": "The participant identifier (12 §6.1), so that the host can invite the person and mint their token.",
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead",
+              "participant"
             ]
           }
         },
@@ -13238,10 +13452,37 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "participant": {
+                "description": "The participant identifier (12 §6.1), so that the host can invite the person and mint their token.",
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead",
+              "participant"
             ]
           }
         },
@@ -13310,10 +13551,37 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "participant": {
+                "description": "The participant identifier (12 §6.1), so that the host can invite the person and mint their token.",
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead",
+              "participant"
             ]
           }
         },
@@ -13382,10 +13650,37 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "participant": {
+                "description": "The participant identifier (12 §6.1), so that the host can invite the person and mint their token.",
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead",
+              "participant"
             ]
           }
         },
@@ -13454,10 +13749,37 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "participant": {
+                "description": "The participant identifier (12 §6.1), so that the host can invite the person and mint their token.",
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead",
+              "participant"
             ]
           }
         },
@@ -13526,10 +13848,37 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "participant": {
+                "description": "The participant identifier (12 §6.1), so that the host can invite the person and mint their token.",
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead",
+              "participant"
             ]
           }
         },
@@ -13598,10 +13947,37 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "participant": {
+                "description": "The participant identifier (12 §6.1), so that the host can invite the person and mint their token.",
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead",
+              "participant"
             ]
           }
         },
@@ -13670,10 +14046,31 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead"
             ]
           }
         },
@@ -13742,10 +14139,31 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead"
             ]
           }
         },
@@ -13814,10 +14232,31 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead"
             ]
           }
         },
@@ -13886,10 +14325,31 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead"
             ]
           }
         },
@@ -13958,10 +14418,31 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "workflow": {
+                "description": "The workflow identifier (12 §6.1).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "document": {
+                "description": "The document identifier, as `subject`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "chainHead": {
+                "description": "The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.",
+                "$comment": "gaps: G83",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
               }
             },
             "required": [
-              "seq"
+              "seq",
+              "workflow",
+              "document",
+              "chainHead"
             ]
           }
         },

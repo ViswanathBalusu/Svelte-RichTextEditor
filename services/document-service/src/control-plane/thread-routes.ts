@@ -25,7 +25,8 @@
  * - a comment's author is the connection's `sub`, as the thread's first comment is; a service
  *   credential writes no comment and edits none, but may delete one, as it may delete a thread.
  * - a thread's state notice and webhook: `resolved` and `reopened` have both; an assignee change
- *   has only the `thread.updated` notice, since webhooks have no `thread.updated` (gaps.ts).
+ *   has the `thread.updated` notice, since webhooks have no `thread.updated` (gaps.ts), and, when it
+ *   names a person, the `dep.task.assigned` webhook (UX-032 criterion 1).
  * - mentions (PRO-060 criterion 4): the mention nodes of a new comment, and of the first comment of
  *   a new thread, raise `dep.comment.mentioned` once for each distinct principal (mentions.ts,
  *   docs/adr/0375-w5-PRO-060-comment-mentions.md). An edit of a comment raises none.
@@ -524,6 +525,14 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
         { type: 'thread.updated', resource: `/threads/${t.id}`, data: told.data },
         { scopes: told.scopes },
       );
+      // A thread given to a person is a task: the host sends the notification (UX-032 criterion 1;
+      // 05 section 7). Clearing the assignee raises nothing, as 05 names no event for it.
+      if (typeof body.assignee === 'string')
+        emit(ctx, 'dep.task.assigned', t.docId, {
+          thread: t.id,
+          assignee: body.assignee,
+          seq: (await d.logs.head(refOf(ctx, t.docId))).seq,
+        });
     }
     return json(200, threadBody(updated), {
       ETag: threadTag(updated),

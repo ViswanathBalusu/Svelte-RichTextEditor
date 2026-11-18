@@ -19,12 +19,23 @@ import {
   ref,
   req,
   seq,
+  str,
   text,
   timestamp,
   uuid7,
 } from './shapes.ts';
 
 const FRW = 'FRW';
+/** The workflow events that concern one participant: their data names the participant (FRW-036). */
+const PARTICIPANT_EVENTS = [
+  'participant_activated',
+  'participant_viewed',
+  'field_completed',
+  'participant_completed',
+  'participant_declined',
+  'auth_failed',
+  'reminder_due',
+];
 const FIELD_KINDS = [
   'text',
   'number',
@@ -234,6 +245,38 @@ export const FRW_EXTENSION: DepExtension = {
       gaps: ['G95'],
       owner: FRW,
     },
+    {
+      operationId: 'correctWorkflow',
+      method: 'POST',
+      path: '/documents/{id}/workflow/correct',
+      summary:
+        'Corrects a document that is in progress: pauses every participant and unlocks the document for the owner (12 §6.2). The method and path are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    {
+      operationId: 'resumeWorkflow',
+      method: 'POST',
+      path: '/documents/{id}/workflow/resume',
+      summary:
+        'Resumes a corrected workflow: compares the document with its sent version, resets the participants the change concerns and locks the document again (12 §6.2). The method and path are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
     ...(['consent', 'verify', 'complete', 'decline'] as const).map((action) => ({
       operationId: `participant${action.charAt(0).toUpperCase()}${action.slice(1)}`,
       method: 'POST' as const,
@@ -305,7 +348,25 @@ export const FRW_EXTENSION: DepExtension = {
     version: 1,
     when: `Workflow event \`${name}\` (12 §6.3, §10).`,
     spec: '12 §10',
-    data: {},
+    // Identifiers, the `seq` of the control commit and the chain head: no contact detail and no
+    // evidence personal data (12 §6.3; FRW-036 criteria 1, 2 and 4). `seq` is added to every event.
+    data: {
+      workflow: req(uuid7(), 'The workflow identifier (12 §6.1).'),
+      document: req(uuid7(), 'The document identifier, as `subject`.'),
+      chainHead: req(
+        str({ format: 'sha256' }),
+        'The hash-chain head after the control commit that records the transition (08 §12). Placeholder name.',
+        { gaps: ['G83'] },
+      ),
+      ...(PARTICIPANT_EVENTS.includes(name)
+        ? {
+            participant: req(
+              text({ minLength: 1 }),
+              'The participant identifier (12 §6.1), so that the host can invite the person and mint their token.',
+            ),
+          }
+        : {}),
+    },
     gaps: name === 'sent' ? [] : ['G85'],
     decisions: name === 'sent' ? [] : ['D17'],
     owner: FRW,

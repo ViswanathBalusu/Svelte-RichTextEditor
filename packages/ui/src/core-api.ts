@@ -1063,6 +1063,16 @@ export type WorkflowSendOutcome =
     }
   | { readonly ok: false; readonly reason: 'forbidden' | 'not_draft' | 'failed' };
 
+/** A participant of the workflow as the lock banner names them; the name is the owner's text. */
+export interface WorkflowParticipantView {
+  readonly id: string;
+  /** The name the owner gave; null when none. */
+  readonly name: string | null;
+  readonly roles: readonly string[];
+  /** The participant's state in the workflow resource; null when the resource does not say. */
+  readonly state: string | null;
+}
+
 /**
  * The send dialog's port over the core and the backend's workflow port (FRW-028; 12 §6.2). The
  * checks run over the document the reader holds and the participants the workflow resource lists.
@@ -1072,6 +1082,11 @@ export interface WorkflowSendService {
   readonly state: ReadView<string | null>;
   /** The failures of the editor's own checks; empty when every check passes. */
   readonly failures: ReadView<readonly SendFailure[]>;
+  /**
+   * The people bound to the workflow and where each stands (`active`, `pending`, `completed`, ...),
+   * for the lock banner: who may still act (FRW-029 criterion 6). Empty until the resource is read.
+   */
+  readonly participants: ReadView<readonly WorkflowParticipantView[]>;
   /** Reads the workflow resource again (the participants and the state). */
   refresh(): Promise<void>;
   /** Moves to the form field with this key; false when there is none. */
@@ -1080,6 +1095,8 @@ export interface WorkflowSendService {
   showSuggestion(id: string): boolean;
   /** Asks the server to send; the state follows the answer. */
   send(): Promise<WorkflowSendOutcome>;
+  /** Stops following the workflow; called when the editor is destroyed. */
+  dispose?(): void;
 }
 
 /** A role of the document as the roles manager and the legend show it (FRW-074; 12 §3.1). */
@@ -1438,6 +1455,8 @@ export interface ThreadDetail {
   readonly author: string;
   /** True once the commented text was removed; the thread stays readable and is not re-attached. */
   readonly detached: boolean;
+  /** The person the thread is assigned to as a task, `user:<sub>`; null or absent when nobody (UX-032). */
+  readonly assignee?: string | null;
   readonly caps: readonly Capability[];
   readonly comments: readonly CommentView[];
   readonly etag: string;
@@ -1460,6 +1479,13 @@ export interface ThreadsService {
    * `comment.*` events), so the pane reads `list` and `detail` again (UX-029 criteria 1 and 3).
    */
   readonly changes?: ReadView<number>;
+  /**
+   * Marks the thread in the document and brings its range or block into view (UX-030 criterion 2).
+   * A reader's setting: no step, no commit. Called with the row the pane's reader chose.
+   */
+  reveal?(thread: ThreadSummary): void;
+  /** The thread whose highlight the reader chose in the page; `n` counts the choices (UX-030). */
+  readonly picked?: ReadView<{ readonly id: string; readonly n: number } | null>;
   /** One thread with its comments; null when it is gone or the reader may not see it. */
   detail?(id: string): ThreadDetail | null;
   /** Adds a reply (`POST .../comments`, `If-Match` with `etag`). */
@@ -1480,6 +1506,11 @@ export interface ThreadsService {
   ): Promise<{ readonly ok: boolean; readonly code?: string }>;
   /** Resolves or reopens a thread. */
   setState?(id: string, state: 'open' | 'resolved', etag: string): Promise<ThreadWrite>;
+  /**
+   * Gives the thread to a person as a task, or clears the assignee with null (`PATCH` of `assignee`,
+   * `If-Match` with `etag`; UX-032). The service raises `dep.task.assigned` for a person named.
+   */
+  assign?(id: string, assignee: string | null, etag: string): Promise<ThreadWrite>;
   /** The anchor for the current selection; null when nothing that can carry a thread is selected. */
   anchor(): CommentAnchor | null;
   /** The threads the document holds now, open or resolved (the 5,000 limit of UX-028). */

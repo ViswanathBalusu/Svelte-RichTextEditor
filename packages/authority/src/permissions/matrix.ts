@@ -153,6 +153,8 @@ export const MATRIX: readonly MatrixRow[] = [
       'DELETE /documents/{id}/regions/{rid}/lease',
       'PUT /documents/{id}/workflow',
       'POST /documents/{id}/workflow/send',
+      'POST /documents/{id}/workflow/correct',
+      'POST /documents/{id}/workflow/resume',
       'DELETE /documents/{id}',
     ],
     messages: [],

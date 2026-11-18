@@ -13,10 +13,13 @@
  * - `draft` leaves the document active: no workflow runs yet;
  * - `completed` keeps the lock and ends fill, as `declined` and `voided` do (12 §6.2: terminal states
  *   keep the lock; FRW-031 criterion 6; docs/adr/0384-w4-FRW-031-progression.md, proposed);
- * - `correcting`, `finalised` and `expired` are not decided here. 12 does not say whether
- *   `correcting` lets the owner edit the body (FRW-032 criterion 3 implies it) and whether the terminal
- *   states are locked (FRW-029 Open questions). `lockFor` returns null for them, so no caller can
- *   take a default by accident.
+ * - `correcting` leaves the document active with no workflow running, as a draft does: the owner
+ *   corrects the body and the fields as an editor of a draft would (FRW-032 criterion 3), and no
+ *   participant fills, because a participant of a `correcting` workflow is paused
+ *   (docs/adr/0385-w4-FRW-032-correct-and-resume.md, proposed);
+ * - `finalised` and `expired` are not decided here. 12 does not say whether the terminal states
+ *   are locked (FRW-029 Open questions). `lockFor` returns null for them, so no caller can take a
+ *   default by accident.
  */
 import type { WorkflowStateName } from './lifecycle.ts';
 
@@ -39,6 +42,7 @@ export function lockFor(state: WorkflowStateName): WorkflowLock | null {
     case 'completed':
       return { documentState: 'locked', workflowActive: false };
     case 'correcting':
+      return { documentState: 'active', workflowActive: false };
     case 'finalised':
     case 'expired':
       return null;

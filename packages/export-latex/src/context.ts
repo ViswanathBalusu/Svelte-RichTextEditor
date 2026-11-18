@@ -82,6 +82,8 @@ export interface Ctx {
   readonly blocks: Array<string | null>;
   readonly kinds: string[];
   readonly owners: Array<string | null>;
+  /** Block ranges of the rows of each table, by table identifier (map.json `tables`; EXP-057). */
+  readonly tableRows: Map<string, Array<[number, number]>>;
   out: Out;
   /** Generated identifiers of hyperref targets, by anchor name or by `node:`/`eq:` target. */
   readonly anchors: Map<string, number>;

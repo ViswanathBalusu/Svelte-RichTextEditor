@@ -18,6 +18,15 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 /** The class of a thread's range over its text. The element's style sheet names it. */
 export const COMMENT_RANGE_CLASS = 'de-comment-range';
 
+/** The class of the thread the comments pane chose (UX-030); a heavier line, not a colour alone. */
+export const COMMENT_SELECTED_CLASS = 'de-comment-selected';
+
+/** The thread chosen in the comments pane: its id, and the block it targets when it has no range. */
+export interface ThreadSelection {
+  readonly id: string;
+  readonly block: string | null;
+}
+
 /** A thread range as the core holds it: the thread, its range in document positions, and detached. */
 export interface CommentRangeDraw {
   readonly id: string;
@@ -33,6 +42,7 @@ export interface CommentRangeDraw {
 export function commentDecorations(
   doc: PMNode,
   ranges: readonly CommentRangeDraw[],
+  selected: ThreadSelection | null = null,
 ): DecorationSet {
   const size = doc.content.size;
   const decorations: Decoration[] = [];
@@ -41,9 +51,26 @@ export function commentDecorations(
     const from = Math.min(Math.max(0, r.from), size);
     const to = Math.min(Math.max(0, r.to), size);
     if (to <= from) continue;
+    const chosen = selected !== null && selected.id === r.id;
     decorations.push(
-      Decoration.inline(from, to, { class: COMMENT_RANGE_CLASS, 'data-thread-id': r.id }),
+      Decoration.inline(from, to, {
+        class: chosen ? `${COMMENT_RANGE_CLASS} ${COMMENT_SELECTED_CLASS}` : COMMENT_RANGE_CLASS,
+        'data-thread-id': r.id,
+      }),
     );
+  }
+  // A thread on a block (a figure, a table or an equation) marks the block while it is chosen.
+  if (selected !== null && selected.block !== null) {
+    doc.descendants((node, pos) => {
+      if (node.attrs['id'] !== selected.block) return true;
+      decorations.push(
+        Decoration.node(pos, pos + node.nodeSize, {
+          class: COMMENT_SELECTED_CLASS,
+          'data-thread-id': selected.id,
+        }),
+      );
+      return false;
+    });
   }
   return DecorationSet.create(doc, decorations);
 }

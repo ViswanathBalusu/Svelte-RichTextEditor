@@ -29,7 +29,8 @@ export type CreateRefusal =
   | 'emptyBody'
   | 'threadLimit'
   | 'permissionsChanged'
-  | 'baseSeqOutOfWindow';
+  | 'baseSeqOutOfWindow'
+  | 'mentionHidden';
 
 export type CreateResult =
   | { readonly ok: true; readonly target: ThreadTarget; readonly body: string }
@@ -93,8 +94,14 @@ export function refuseFromServer(
  * 5,000-thread limit is refused by the room with `quota_exceeded` (05 §5.8; PRM-040 criterion 2),
  * which is `threadLimit` here; `threadLimit` itself is kept as the editor's working name. Any other
  * code is `failed`. The typed text is kept in every case.
+ *
+ * A mention of a person who cannot see the part of the document the comment is on is refused, with a
+ * message and no request for access (owner decision 35, docs/owner-decisions-2026-11-15.md; SR-M5
+ * of the second review). The service's code for it is not named in 05 section 5.8: `mention_hidden`
+ * is the editor's working code, proposed, and the room is the one that decides who may see what.
  */
 export function serverRefusal(code: string): CreateRefusal | 'failed' {
+  if (code === 'mention_hidden') return 'mentionHidden';
   if (code === 'permission_denied') return 'permissionsChanged';
   if (code === 'stale_base') return 'baseSeqOutOfWindow';
   if (code === 'threadLimit' || code === 'quota_exceeded') return 'threadLimit';

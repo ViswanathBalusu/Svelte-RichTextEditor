@@ -157,6 +157,13 @@ export interface SourceMap {
    * when the document has no form field.
    */
   fields?: Array<string | null>;
+  /**
+   * The rows of each table in the body flow, by table identifier: for each row, the half-open range
+   * `[from, to)` of block numbers its cells registered (nested tables included). The page of a
+   * row is the page of the first block of its range that the class reports (EXP-057). Absent when
+   * the document has no table. A repeated header row is not listed again.
+   */
+  tables?: Record<string, Array<[number, number]>>;
 }
 
 /** One thing a projection hid from the requester (ADR 0019; EXP-123). */
