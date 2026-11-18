@@ -176,6 +176,10 @@ export function renderReleaseNotes(n: NotesInput): string {
     p.push('');
   }
   p.push(
+    '## Accessibility',
+    '',
+    'The accessibility conformance report of this release is `ACCESSIBILITY-CONFORMANCE-REPORT.md` (and `accessibility-conformance-report.json`), beside these notes. It states for each WCAG 2.2 and ATAG 2.0 criterion of level A and AA whether it is supported, with the tests behind each statement and the known issues. It does not claim conformance. The integration guide links to it (UX-069).',
+    '',
     '## Changes',
     '',
     `${n.changes.length} stories changed; the criteria, per package, are in \`CHANGELOG.md\`.`,
