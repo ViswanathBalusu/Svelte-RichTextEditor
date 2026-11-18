@@ -37,7 +37,7 @@ export interface PackageInfo {
   licence: string | undefined;
 }
 
-export type AttributionMethod = 'source-map' | 'identical-file' | 'own-name';
+export type AttributionMethod = 'source-map' | 'identical-file' | 'own-name' | 'import-stub';
 
 export interface FileAttribution {
   file: string;
@@ -196,6 +196,19 @@ class IdenticalFiles {
 const VITE_HASH = /^(.*)-[A-Za-z0-9_-]{8}(\.[^.]+)$/;
 const CODE = new Set(['.js', '.mjs', '.cjs', '.css']);
 
+/** One statement of an import stub: a bare import, or a re-export, of a relative file. */
+const STUB_STATEMENT =
+  /^(?:import\s+(?:[\w*\s{},$]+\s+from\s+)?|export\s+(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s+from\s+)(["'])\.{1,2}\/[^"']+\1\s*;?$/;
+
+/** Whether a script is nothing but static imports and re-exports of relative files (and comments). */
+export function isImportStub(text: string): boolean {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l !== '' && !l.startsWith('//'));
+  return lines.length > 0 && lines.every((l) => STUB_STATEMENT.test(l));
+}
+
 export function analyseBundle(root: string, options: AnalyseOptions): BundleContents {
   const resolver = new PackageResolver();
   const own = resolver.packageOf(join(options.ownPackageDir, 'package.json'));
@@ -307,6 +320,14 @@ export function analyseBundle(root: string, options: AnalyseOptions): BundleCont
     if (byName) {
       remember(own);
       contents.attributions.push({ file: f.rel, method: 'own-name', packages: [own.key] });
+      continue;
+    }
+    // A script of nothing but static imports and re-exports of sibling files, which the bundler writes
+    // for an entry whose code sits in a shared chunk. It holds no code of its own, so it is the
+    // distributable's: the code it pulls in is attributed through its own file.
+    if (CODE.has(extname(name)) && isImportStub(readFileSync(f.abs, 'utf8'))) {
+      remember(own);
+      contents.attributions.push({ file: f.rel, method: 'import-stub', packages: [own.key] });
       continue;
     }
     contents.unattributed.push(f.rel);
