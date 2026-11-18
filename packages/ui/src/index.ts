@@ -97,6 +97,8 @@ export type {
   WorkflowParticipantView,
   WorkflowSendOutcome,
   WorkflowSendService,
+  AccessCodeOutcome,
+  AccessCodeService,
   MathEditorService,
   MathFieldHandle,
   MathFieldOptions,

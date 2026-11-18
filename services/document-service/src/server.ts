@@ -20,6 +20,7 @@ import {
   type Sandbox,
 } from '@docedit/asset-worker';
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
+import { planeOf } from './data-plane/restartable.ts';
 import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
 import { AnnouncingNotifier, listenForAnnouncements } from './data-plane/announcements.ts';
@@ -84,6 +85,13 @@ import {
   type RetentionStore,
 } from './control-plane/retention.ts';
 import { PgRetentionStore } from './control-plane/retention-pg.ts';
+import {
+  HistoryVisibilityService,
+  MemoryVisibilityStore,
+  withEffectiveHistoryVisibility,
+  type VisibilityStore,
+} from './control-plane/history-visibility.ts';
+import { PgVisibilityStore } from './control-plane/history-visibility-pg.ts';
 import { QuotaAdminService, type QuotaAdminStore } from './control-plane/quota-admin.ts';
 import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
@@ -96,6 +104,7 @@ import {
   type PurgeStore,
   type SearchPurge,
 } from './control-plane/document-purge.ts';
+import { PgPurgeStore } from './control-plane/document-purge-pg.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
 import {
   MemoryWorkflowResourceStore,
@@ -143,6 +152,12 @@ import {
 } from './control-plane/metrics.ts';
 import { Pipeline, type PlainHandler, type Reply } from './control-plane/pipeline.ts';
 import { auditPartitionsTask } from './control-plane/audit-partitions-task.ts';
+import {
+  CheckpointThinning,
+  checkpointThinningTask,
+  type CheckpointThinningStore,
+} from './control-plane/checkpoint-thinning.ts';
+import { gateThinning } from './data-plane/recovery.ts';
 import {
   PayloadThinning,
   payloadThinningTask,
@@ -257,6 +272,8 @@ export interface ServiceParts {
   webhookStore?: SubscriptionStore;
   /** The retention policies of `/retention` (UX-080). Absent: the routes are not offered. */
   retention?: RetentionService;
+  /** The history visibility settings of /history-visibility (HIS-025). Absent: not offered. */
+  historyVisibility?: HistoryVisibilityService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080). Absent: the routes are not offered. */
   holds?: HoldService;
   /**
@@ -276,6 +293,11 @@ export interface ServiceParts {
    * connects as a member of `docedit_purge`. Absent: no thinning task runs.
    */
   thinningStore?: ThinningStore;
+  /**
+   * The rows of the thinning of old checkpoints (HIS-030). Like `purgeStore` it needs a pool that
+   * connects as a member of `docedit_purge`. Absent: no checkpoint thinning task runs.
+   */
+  checkpointThinningStore?: CheckpointThinningStore;
   /**
    * Per-document keys (HIS-041). With both `documentKeyStore` and `keyService`, the service seals
    * the payloads and objects of documents that have a key and builds `documentKeys` to give and
@@ -480,6 +502,30 @@ function retentionOver(
 }
 
 /**
+ * The history visibility settings of `/history-visibility` (HIS-025) over a settings store, the
+ * document store and the audit trail. The document store given to the gate and the rooms is wrapped
+ * by withEffectiveHistoryVisibility over the same settings store, so that a change applies to the
+ * next request.
+ */
+function visibilityOver(
+  store: VisibilityStore,
+  documents: DocumentStore,
+  audit: AuditStore,
+  now: () => number,
+): HistoryVisibilityService {
+  return new HistoryVisibilityService({
+    store,
+    audit,
+    documentExists: async (tenant, doc) => {
+      if (!isUuid(doc)) return false;
+      const record = await documents.get({ tenant, doc });
+      return record !== null && record.deletedAt === null;
+    },
+    now,
+  });
+}
+
+/**
  * The legal holds of `/holds` (UX-080 criteria 2 and 3) over a hold store, the parts' document
  * store and audit trail. The same rule as `retentionOver` applies to the stores it keeps.
  */
@@ -535,17 +581,23 @@ function quotaAdminOver(
   return new QuotaAdminService({ store, audit, now });
 }
 
+/** The registry of a data plane that has one (the shipped one does; a test double may not). */
+interface DataPlaneRegistry {
+  metricsRegistry?: { checkpointMismatches: { inc(labels: Record<string, string>): void } };
+}
+
 /** Parts over PostgreSQL with the service role (06 §4.1; BE-011). */
 export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts {
   const grants = new PgGrantStore(pool);
   const logs = new PgLogStore(pool, { permissions: (ref) => grants.current(ref) });
   const documents = new PgDocumentStore(pool);
+  const visibility = new PgVisibilityStore(pool);
   const audit = new PgAuditStore(pool);
   return {
     logs,
     ownership: logs,
     grants,
-    documents,
+    documents: withEffectiveHistoryVisibility(documents, visibility),
     objects: new MemoryObjectStore(),
     registry: new PgTenantRegistry(pool),
     users: new PgUserDirectory(pool),
@@ -556,6 +608,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     checkpointIndex: new PgCheckpointIndex(pool),
     audit,
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
+    historyVisibility: visibilityOver(visibility, documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
     workflows: new PgWorkflowResourceStore(pool, { now }),
     templates: new PgTemplateStore(pool),
@@ -590,11 +643,12 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
 export function memoryParts(now: () => number = Date.now): ServiceParts {
   const store = new MemoryStore();
   const audit = new MemoryAudit();
+  const visibility = new MemoryVisibilityStore();
   return {
     logs: store,
     ownership: store,
     grants: store,
-    documents: store,
+    documents: withEffectiveHistoryVisibility(store, visibility),
     objects: new MemoryObjectStore(),
     registry: new MemoryTenantRegistry(now),
     users: new MemoryUserDirectory(),
@@ -605,6 +659,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     checkpointIndex: new MemoryCheckpointIndex(now),
     audit,
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
+    historyVisibility: visibilityOver(visibility, store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
     workflows: new MemoryWorkflowResourceStore(),
     templates: new MemoryTemplateStore(),
@@ -707,11 +762,20 @@ export async function startService(opts: StartOptions): Promise<Service> {
     const replicaGrants = new PgGrantStore(replicaDb);
     base.replica = {
       logs: new PgLogStore(replicaDb, { permissions: (ref) => replicaGrants.current(ref) }),
-      documents: new PgDocumentStore(replicaDb),
+      documents: withEffectiveHistoryVisibility(
+        new PgDocumentStore(replicaDb),
+        new PgVisibilityStore(replicaDb),
+      ),
       grants: replicaGrants,
       versions: new PgVersionStore(replicaDb),
     };
   }
+  // The purge of deleted documents (HIS-039) connects as a member of docedit_purge, a pool of its own.
+  const purgeDb =
+    db && config.purgeDatabaseUrl
+      ? createPool({ connectionString: config.purgeDatabaseUrl, connectionTimeoutMillis: 5000 })
+      : null;
+  if (purgeDb) base.purgeStore = new PgPurgeStore(purgeDb);
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
@@ -894,7 +958,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
       parts.search = { search: async (tenant, q, query) => index.search(tenant, q, query) };
     if (!parts.searchPurge) parts.searchPurge = index;
   }
-  const dataPlane = (opts.createDataPlane ?? defaultDataPlane)({
+  // In test mode the node can be restarted in place by a hook (PRO-024 criterion 6; PRO-126).
+  const dataPlane = planeOf(config.testMode, opts.createDataPlane ?? defaultDataPlane, {
     ...(searchTarget
       ? {
           onCheckpoint: async (ref: DocRef, seq: number) => {
@@ -1197,7 +1262,51 @@ export async function startService(opts: StartOptions): Promise<Service> {
           now,
         })
       : null;
+  // Thinning of old checkpoints (HIS-030): a checkpoint that replaces older ones is compared with a
+  // replay of the log first (BE-020 criterion 5), and a mismatch raises the alert counter.
+  const checkpointThinning =
+    parts.checkpointThinningStore && parts.audit
+      ? new CheckpointThinning({
+          store: parts.checkpointThinningStore,
+          objects: parts.objects,
+          audit: parts.audit,
+          now,
+          verify: async (ref, seq) =>
+            (
+              await gateThinning(
+                {
+                  logs,
+                  checkpoints,
+                  index: parts.checkpointIndex,
+                  audit: parts.audit,
+                },
+                ref,
+                seq,
+                (verdict) => {
+                  // The alert counter lives in the data plane's registry (BE-020 criterion 5).
+                  (
+                    dataPlane as unknown as DataPlaneRegistry
+                  ).metricsRegistry?.checkpointMismatches.inc({
+                    tenant: ref.tenant,
+                  });
+                  logger.error({
+                    event: 'checkpoint.mismatch',
+                    tenant: ref.tenant,
+                    message: `checkpoint ${verdict.seq} of ${ref.doc} differs from its replay`,
+                  });
+                },
+              )
+            ).proceed,
+          onUnverifiable: (ref, seq, error) =>
+            logger.error({
+              event: 'checkpoints.thin.unverifiable',
+              tenant: ref.tenant,
+              message: `${ref.doc} at ${seq}: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+        })
+      : null;
   const tasks: ScheduledTask[] = [
+    ...(checkpointThinning ? [checkpointThinningTask(checkpointThinning)] : []),
     // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
     // scheduler hands the task the documents under a legal hold, and the task leaves them alone.
     ...(thinning ? [payloadThinningTask(thinning)] : []),
@@ -1471,6 +1580,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.webhooks ? { webhooks: parts.webhooks } : {}),
     ...(webhooks ? { webhookDispatcher: webhooks.dispatcher } : {}),
     ...(parts.retention ? { retention: parts.retention } : {}),
+    ...(parts.historyVisibility ? { historyVisibility: parts.historyVisibility } : {}),
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
@@ -1609,6 +1719,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         await pool.close();
         if (db) await db.end().catch(() => undefined);
         if (replicaDb) await replicaDb.end().catch(() => undefined);
+        if (purgeDb) await purgeDb.end().catch(() => undefined);
       })()),
   };
 }

@@ -191,8 +191,13 @@ function validSteps(doc: Node): Array<Record<string, unknown>> {
   tr.insert(intro, schema.text('hello'));
   tr.addMark(intro, intro + 5, bold);
   tr.removeMark(intro, intro + 2, bold);
-  tr.addNodeMark(p, del);
-  tr.removeNodeMark(p, del);
+  // A block takes no node mark (its suggestions are in `suggest`); an inline node still does.
+  tr.insert(intro, schema.nodes['tab']!.create());
+  tr.addNodeMark(intro, del);
+  tr.removeNodeMark(intro, del);
+  tr.setNodeAttribute(p, 'suggest', [
+    { type: 'del', attrs: { id: 'sSuggestion00001', user: 'alice' } },
+  ]);
   tr.setNodeAttribute(p, 'style', 'Heading1');
   tr.setNodeMarkup(p, null, { ...tr.doc.nodeAt(p)!.attrs, style: 'Normal' });
   tr.delete(intro, intro + 3);

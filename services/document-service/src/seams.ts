@@ -319,6 +319,12 @@ export interface DataPlaneTestHooks {
   }>;
   /** The audit events of a document. */
   auditEvents(ref: DocRef): Promise<AuditEvent[]>;
+  /**
+   * Restarts the node in place, as a rolling restart does (PRO-024 criterion 6): it drains, so each
+   * connection gets `goaway` and 4503 and ownership is released, and a new data plane takes over
+   * in the same process. Resolves when the new one is serving. Absent where the data plane cannot.
+   */
+  restartNode?(): Promise<void>;
 }
 
 /** Lookups between host `sub` values and per-tenant surrogates (BE-013). Added by packet A2. */

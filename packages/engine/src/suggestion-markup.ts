@@ -25,13 +25,12 @@
  * Universal logic over ProseMirror state only: no Node.js or browser API.
  */
 import type { Node as PMNode } from 'prosemirror-model';
+import { suggestionsOf } from './block-suggestion.ts';
 
 /** The markup views of the review tools (13 §3). */
 export type MarkupView = 'all' | 'simple' | 'none' | 'original';
 
 /** The suggestion mark types and the block types that may carry them. */
-const SUGGESTION_MARKS: ReadonlySet<string> = new Set(['ins', 'del', 'fmt']);
-
 /** The classes a suggestion of `kind` gets in `view`; an empty list means no decoration. */
 export function suggestionClasses(view: MarkupView, kind: 'ins' | 'del' | 'fmt'): string[] {
   switch (view) {
@@ -86,10 +85,9 @@ export function suggestionSpecs(
 ): SuggestionSpec[] {
   const specs: SuggestionSpec[] = [];
   doc.descendants((node, pos) => {
-    for (const mark of node.marks) {
-      const kind = mark.type.name;
-      if (!SUGGESTION_MARKS.has(kind)) continue;
-      const classes = suggestionClasses(view, kind as 'ins' | 'del' | 'fmt');
+    for (const mark of suggestionsOf(node)) {
+      const kind = mark.type;
+      const classes = suggestionClasses(view, kind);
       if (classes.length === 0) continue;
       specs.push({
         from: pos,
@@ -97,17 +95,12 @@ export function suggestionSpecs(
         block: node.isBlock,
         attrs: {
           class: classes.join(' '),
-          'data-suggestion-user': String(mark.attrs['user'] ?? ''),
-          'data-suggestion-id': String(mark.attrs['id'] ?? ''),
-          'data-suggestion-tone': String(authorTone(String(mark.attrs['user'] ?? ''))),
+          'data-suggestion-user': mark.attrs.user,
+          'data-suggestion-id': mark.attrs.id,
+          'data-suggestion-tone': String(authorTone(mark.attrs.user)),
           // The words a screen reader hears before the run; the stylesheet draws them out of sight.
           ...(label && view !== 'none'
-            ? {
-                'data-suggestion-label': label(
-                  kind as 'ins' | 'del' | 'fmt',
-                  String(mark.attrs['user'] ?? ''),
-                ),
-              }
+            ? { 'data-suggestion-label': label(kind, mark.attrs.user) }
             : {}),
         },
       });

@@ -40,6 +40,7 @@ import type { EventSink } from '../control-plane/events.ts';
 import type { DocRef, GrantStore, LogStore, OutboxStore } from '../storage/types.ts';
 import type { ContentReader } from '../control-plane/content.ts';
 import { consentVerdict, type ConsentDeps } from './consent-service.ts';
+import { anchorEvidence } from './evidence-anchor.ts';
 import type { EvidenceLedger } from './evidence-ledger.ts';
 import { raiseWorkflowEvents } from './raise-events.ts';
 import { recordOf } from './record.ts';
@@ -236,7 +237,7 @@ export async function signField(
 
   // The evidence of this signing, once: a repeat records it only when the first attempt stopped
   // before it did.
-  const recorded = (await deps.evidence.list(ref.tenant, ref.doc)).some(
+  const recorded = (await deps.evidence.list(ref.tenant, ref.doc)).find(
     (r) =>
       r.participant === participant &&
       r.item === 'signed' &&
@@ -245,12 +246,14 @@ export async function signField(
           Array<{ seq?: number }> | undefined
       )?.some((s) => s.seq === seq) === true,
   );
-  if (!recorded) {
-    await deps.evidence.record(ref.tenant, {
+  let evidenceHash = recorded?.hash ?? null;
+  if (recorded === undefined) {
+    const made = await deps.evidence.record(ref.tenant, {
       doc: ref.doc,
       participant,
       kind: who.kind as ParticipantKind,
       item: 'signed',
+      origin: 'sign',
       facts: {
         items: {
           signings: [
@@ -269,6 +272,7 @@ export async function signField(
         userAgent: req.facts.userAgent,
       },
     });
+    evidenceHash = made.hash;
     await raiseWorkflowEvents(
       deps,
       ref,
@@ -277,6 +281,9 @@ export async function signField(
       [{ name: 'field_completed', participant }],
     );
   }
+  // The salted hash of the evidence enters the chain in a control commit after the signing (12 §7;
+  // FRW-041). A repeat anchors the same hash under the same commit identifier, so it is one commit.
+  if (evidenceHash !== null) await anchorEvidence(deps, ref, { origin: 'sign', evidenceHash });
   return {
     ok: true,
     signed: {

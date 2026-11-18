@@ -14,6 +14,8 @@ export const MOCK_KNOWN: Readonly<Record<string, string>> = {
   'perm-doc.role-change':
     'MockBackend.refresh keeps the access of the old role (05 §3.1: perm.changed)',
   'authz.read.history': 'the mock serves content at any seq to any reader: no history gate (07 §8)',
+  'authz.actor.opaque':
+    'the mock reads no DEP-Actor header and so does not refuse a malformed one (05 §3.2; UX-096)',
   'semantics.steps':
     'apply-020: the room refuses a step that removes one boundary of a region (P3) and the pure engine applies it (SYN-002 vs 04 §4); the same on the reference service, reported to the authority',
 };

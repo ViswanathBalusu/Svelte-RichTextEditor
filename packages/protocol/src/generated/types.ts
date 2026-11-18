@@ -339,6 +339,8 @@ export interface Discovery {
   engines: Array<"pm-steps/1" | (string & {})>;
   cdm: CdmRange;
   features: FeatureName[];
+  /** The export targets the deployment offers (`pdf`, `tex`, and others by name), present when the `exports` feature is announced. A client offers these and no other; a service refuses a target that is not in the list with `validation_failed`. Absent: the deployment does not say, and a client offers the PDF and the LaTeX bundle (UX-101; ADR 0382). */
+  exportTargets?: string[];
   /** A relay never announces `regions`, `suggest-enforced` or `fields` (04 §14). */
   mode: "authority" | "relay";
   /** The public keys of the tokens the service mints (`POST /tokens`), so that a host can check them. Never used to verify a host-signed token, whose keys come from the tenant registration (05 §3.1). */
@@ -818,6 +820,59 @@ export interface RetentionView {
   effective: RetentionPolicy;
   /** Where the effective policy comes from. */
   source: "document" | "tenant" | "default";
+}
+
+/** A history visibility setting (08 section 9; HIS-025). */
+export interface HistoryVisibilitySetting {
+  /** editors: people with edit somewhere see full history and the rest named versions only (the default). all: everyone with view sees full history. since_access: history from the state current when the person was given access. */
+  setting: "editors" | "all" | "since_access";
+}
+
+/** A document history visibility setting with the effective one (HIS-025). */
+export interface HistoryVisibilityView {
+  /** The setting the document carries, or null when it carries none. */
+  setting: ("editors" | "all" | "since_access") | null;
+  /** The setting that applies: the document setting, else the tenant setting, else editors. */
+  effective: "editors" | "all" | "since_access";
+  /** Where the effective setting comes from. */
+  source: "document" | "tenant" | "default";
+}
+
+/** A log segment for third-party verification (08 section 12; HIS-037). */
+export interface AuditSegment {
+  /** The segment format, docedit-audit-segment/1. */
+  format: string;
+  /** The document. */
+  doc: string;
+  /** The first seq held, not below the caller gate. */
+  from: number;
+  /** The last seq held. */
+  to: number;
+  /** The head of the segment: the last seq and that record hash. */
+  head: {
+    seq: number;
+    chainHead: string | null;
+  };
+  /** The hashed metadata of each record, its payload hash, the link to the previous hash and its own hash. */
+  commits: Array<{ [key: string]: unknown }>;
+  /** The anchor records whose seq lies in the range. */
+  anchors: Array<{ [key: string]: unknown }>;
+  /** How to verify the segment offline. */
+  instructions: string;
+}
+
+/** The commit that introduced a suggestion (08 section 14; HIS-042). */
+export interface SuggestionIntroduction {
+  /** The suggestion identifier. */
+  suggestion: string;
+  /** The server time of the introducing commit, ISO 8601 UTC. */
+  time: string;
+  /** The user who introduced it, as `sub`. */
+  user: string;
+  /** The origin of the introducing commit. */
+  origin: string;
+  /** The seq of the introducing commit; absent when it lies below the caller gate. */
+  seq?: number;
 }
 
 /** A registered public key of a tenant (UX-077; 05 section 3.2). */
@@ -1710,6 +1765,24 @@ export interface Operations {
     body: never;
     response: List<RemoteCommit>;
   };
+  /** GET /documents/{id}/audit-segment: A segment of the hash chain for third-party verification: metadata and hashes, no payloads (HIS-037). (08 §12; 13 §10) */
+  getAuditSegment: {
+    method: "GET";
+    path: "/documents/{id}/audit-segment";
+    params: { id: string };
+    query: { fromSeq?: number; toSeq?: number };
+    body: never;
+    response: AuditSegment;
+  };
+  /** GET /documents/{id}/suggestions/{sid}/introduction: The commit that introduced a suggestion, answered from an index, with its server time (HIS-042). (08 §14) */
+  getSuggestionIntroduction: {
+    method: "GET";
+    path: "/documents/{id}/suggestions/{sid}/introduction";
+    params: { id: string; sid: string };
+    query: Record<string, never>;
+    body: never;
+    response: SuggestionIntroduction;
+  };
   /** GET /documents/{id}/regions: Derived list: identifier, title, policy, order, state, who can edit. (05 §6.2) */
   listRegions: {
     method: "GET";
@@ -2147,6 +2220,42 @@ export interface Operations {
     query: Record<string, never>;
     body: RetentionPolicy;
     response: RetentionView;
+  };
+  /** GET /history-visibility: The tenant history visibility setting; editors when none is set (HIS-025). (08 §9; 13 §10) */
+  getTenantHistoryVisibility: {
+    method: "GET";
+    path: "/history-visibility";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: never;
+    response: HistoryVisibilitySetting;
+  };
+  /** PUT /history-visibility: Sets the tenant history visibility setting; audited (HIS-025). (08 §9; 13 §10) */
+  setTenantHistoryVisibility: {
+    method: "PUT";
+    path: "/history-visibility";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: HistoryVisibilitySetting;
+    response: HistoryVisibilitySetting;
+  };
+  /** GET /documents/{id}/history-visibility: A document history visibility setting and the effective setting that applies (HIS-025). (08 §9; 13 §10) */
+  getDocumentHistoryVisibility: {
+    method: "GET";
+    path: "/documents/{id}/history-visibility";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: HistoryVisibilityView;
+  };
+  /** PUT /documents/{id}/history-visibility: Sets the history visibility of one document; audited (HIS-025). (08 §9; 13 §10) */
+  setDocumentHistoryVisibility: {
+    method: "PUT";
+    path: "/documents/{id}/history-visibility";
+    params: { id: string };
+    query: Record<string, never>;
+    body: HistoryVisibilitySetting;
+    response: HistoryVisibilityView;
   };
   /** GET /origins: The origins the tenant allows (UX-077). (05 §4; 13 §10) */
   getTenantOrigins: {

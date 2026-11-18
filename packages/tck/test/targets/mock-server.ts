@@ -295,6 +295,16 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
     if (!path.startsWith('/v1/')) throw new Problem('not_found', 'no such route');
     const parts = path.slice(4).split('/').map(decodeURIComponent);
     const c = caller(req);
+    // A service credential names the actor by an opaque identifier in DEP-Actor: 1 to 255
+    // characters, no whitespace, no control characters (05 §3.2; UX-096). The mock does not act as
+    // that user; it only refuses a header that is not an identifier, as the protocol requires.
+    const actor = req.headers['dep-actor'];
+    if (
+      c.kind === 'service' &&
+      actor !== undefined &&
+      (typeof actor !== 'string' || !/^[^\s\p{Cc}]{1,255}$/u.test(actor))
+    )
+      throw new Problem('validation_failed', 'DEP-Actor names a user by an opaque identifier');
     const svc = () => {
       if (c.kind !== 'service')
         throw new Problem('forbidden', 'the route takes a service credential');

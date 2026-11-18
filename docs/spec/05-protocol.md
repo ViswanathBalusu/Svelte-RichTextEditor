@@ -36,12 +36,13 @@ The reasons for this shape are in [ADR 0008](../adr/0008-protocol-planes-and-enc
   "engines": ["pm-steps/1"],
   "cdm": { "min": 1, "max": 1 },
   "features": ["presence", "regions", "suggest-enforced", "history", "comments", "assets", "exports", "leases", "fields", "read-restrictions"],
+  "exportTargets": ["pdf", "tex"],
   "mode": "authority",
   "jwks_uri": "https://docs.example.com/.well-known/jwks.json"
 }
 ```
 
-`rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
+`rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `exportTargets` is optional and present when `exports` is announced: the export targets the deployment offers (`pdf`, `tex`, and others by name; ADR 0382, option 1, with the other proposed defaults accepted by the owner's decisions 116 to 220). A client offers these targets and no others, and a service refuses a target that is not in the list with `validation_failed`. When it is absent the deployment does not say, and a client offers the PDF and the LaTeX bundle. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
 
 `read-restrictions` says that the server hides content from readers by projection (ADR 0019, proposed): the view token of section 5.2, the empty `steps` of section 5.3 and the `access_changed` cause of `ch.closed` apply only to a server that announces it. The name is a proposal of the conformance kit (ADR 0042, item 4), not yet a decision of the owner. The CDM schema for projections, `spec/cdm/cdm-1.projection.json`, adds the `hidden_region` placeholder node, which stands where a reader may not see a region.
 
@@ -79,7 +80,12 @@ Region grants are not in the token. They are stored by the document service and 
 
 ### 3.2 Service credentials
 
-Host backends call the control plane with a service credential: an API key, or a JWT with the type header `dep-svc+jwt`, signed with keys that are registered separately from user-token keys. A user token can never become a service credential through a claim. A service call that acts for a user names that user in the `DEP-Actor` header, and history attributes the change to them.
+Host backends call the control plane with a service credential: an API key, or a JWT with the type header `dep-svc+jwt`, signed with keys that are registered separately from user-token keys. A user token can never become a service credential through a claim. A service call that acts for a user names that user in the `DEP-Actor` header, and history attributes the change to them. The header follows these rules (owner decision 174; ADR 0114, UX-096):
+
+- **Which calls.** The service reads `DEP-Actor` on every call that carries a service credential. It names the user by `sub`, which is an opaque identifier of 1 to 255 characters with no whitespace or control characters. Any other value is refused with `validation_failed` (400). The service maps the `sub` to the tenant's surrogate identifier, and creations, content changes (a prefill, a content replacement) and grant changes record that surrogate. Without the header the actor is `system`, never a person.
+- **Whose rights bound the call.** The rights of the named user bound the call, and the service credential does not widen them. A service credential cannot be used to do what the user it names may not do. Where the service does not hold a right of the user (a document role and groups are claims of the user's tokens, 3.3), it takes the narrower reading and fails closed (ADR 0379 for the history gate).
+- **What is recorded.** The surrogate of the named user is the actor of the commit. The audit entry records the user and the service credential that made the call, and the commit's origin (07 section 14). History and the audit trail therefore name both the person and the integration.
+- **A user token.** `DEP-Actor` on a call made with a user token is ignored. The caller stays the holder of the token. A user can never become another person by a header.
 
 ### 3.2.1 Agent tokens
 
@@ -296,6 +302,8 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/regions/{rid}/lease` | POST, PUT, DELETE | Optional exclusive-edit lease with heartbeat. Feature `leases` |
 | `/documents/{id}/grants` | GET, PATCH | Region grants. The response to PATCH carries the new grants revision, and once it has returned, no commit can be stored under the old revision (04, G7) |
 | `/sessions/revoke` | POST | Service credential only. Section 3.3 |
+| `/documents/{id}/audit-segment` | GET | `fromSeq`, `toSeq`. A segment of the hash chain for third-party verification: the metadata rows, the payload hashes, the anchor records of the range and the verification instructions, with no payloads (08, section 12). Subject to history visibility (07, section 8): records below the caller's gate are left out, and only the chain hash of the record just below it is given, as the first record's link. Refused with `forbidden` for a range that ends below the gate and for a caller whose view hides content |
+| `/documents/{id}/suggestions/{sid}/introduction` | GET | The commit that introduced the suggestion, answered from an index that is written as the commit is stored, not by a scan of the log: the suggestion identifier, the server time of that commit (the date of a suggestion, 08, section 14), its user and origin, and its `seq` when the `seq` is not below the caller's gate. `not_found` for an identifier no commit introduced. Subject to history visibility (07, section 8): a suggestion below the gate is answered only while it is in the document the caller reads |
 | `/documents/{id}/history` | GET | Grouped commits. Filters: `region`, `field`, `user`, `fromSeq`, `toSeq`, `namedOnly` |
 | `/documents/{id}/versions` | GET, POST | Named versions. POST body: `seq` (default head), `name`, `note` |
 | `/documents/{id}/diff` | GET | `fromSeq`, `toSeq`, optional `region`, `granularity` (`word`, `char`) |
@@ -332,6 +340,8 @@ Callers are end users (every request is checked against that user's permissions)
 | `/origins/{origin}` | DELETE | Service credential only. Removes an allowed origin (percent-encoded in the path); audited. 05, section 4; 13, section 10 |
 | `/keys` | GET, POST | Service credential only. GET lists the public keys registered for the tenant, user keys then service keys. POST registers one public key (ES256, EdDSA or RS256 only; a private or symmetric key is refused) and is audited. 05, section 3.2; 13, section 10 |
 | `/keys/{kid}` | DELETE | Service credential only. Removes a key; tokens it signed are refused at once; audited. 05, section 3.2; 13, section 10 |
+| `/history-visibility` | GET, PUT | Service credential only. The tenant's setting of who sees full history (`editors`, `all` or `since_access`); `editors` when none is set. PUT takes `If-Match` and is audited with the actor. 08, section 9; 13, section 10 |
+| `/documents/{id}/history-visibility` | GET, PUT | Service credential only. The document's own setting, the effective setting and its source (the document's wins over the tenant's). PUT takes `If-Match` and is audited with the actor; it applies to the next request. 08, section 9; 13, section 10 |
 | `/quotas` | GET, PUT | Service credential only. The tenant's quota values, null when unset; PUT names the dimensions to set, takes `If-Match`, and is audited. 06, section 12; 13, section 10 |
 
 Resources for fields, workflow, templates and bulk sends are listed in 12, section 10. Administration resources are outlined in 13, section 10.
@@ -408,6 +418,7 @@ All events are `CustomEvent`s with `bubbles: true` and `composed: true`. They ca
 | `de-export-progress`, `de-export-completed`, `de-export-failed` | Job state |
 | `de-auth-required` | `getToken` failed or the token was refused |
 | `de-share-request`, `de-fork-request` | The user asked for something the host owns. `de-fork-request` carries `{ docId, atSeq }` (HIS-022) |
+| `de-diagnostic` | `{ feature, kind, ms, bytes, streaming, code, directive, fallback }`: a lazily loaded feature loaded, failed to load or is not available, and which directive the host lacks (WASM-002, WASM-003; proposed, ADR 0410). No content |
 | `de-error` | `{ code, message, fatal }` |
 
 Fill-mode methods and events are in 12, section 10. Theming uses CSS custom properties with the prefix `--de-` and `::part()` names listed in 02. An iframe variant of this API over `postMessage` is deferred.

@@ -54,6 +54,10 @@ Bad:
 - The hidden input element was given three conflicting jobs: whole-document accessibility tree, input-method anchor at the caret, and keyboard handling. `prosemirror-view` also has no EditContext support, so that would be a second input pipeline. The design of the bridge is now the subject of spike S9.
 - Canvas gives no control over ligatures anywhere and none over kerning in Safari, so the painter follows canvas defaults, and spike S5 also evaluates measuring from font files with HarfBuzz.
 
+## Where layout and measurement run (FE-075, 2026-11-18)
+
+The layout engine and the text-measurement kernel run in one worker from the start, and the tree crosses to the main thread as plain data, in slices; the main thread runs the same engine as a fallback. This answers the open question of 02 §15. The grounds, the measurement of the crossing and the way back are in [ADR 0390](0390-w1-FE-075-layout-placement.md), which is proposed: the owner has not answered the question in so many words.
+
 ## Revisit when
 
 EditContext ships in all supported browsers, or the measurements of spike S5 show that canvas measurement cannot match painted text closely enough.

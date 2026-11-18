@@ -729,6 +729,20 @@
   content: '! ';
 }
 
+/* A live region that is in the page before it has anything to say shows no mark (FRW-039). */
+.de-error:empty::before {
+  content: none;
+}
+
+/* The access code input of the fill bar (FRW-039): the label, the input and the button on a line. */
+.de-access-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-2) var(--_de-space-3);
+  margin: 0;
+}
+
 .de-subhead {
   margin-block: var(--_de-space-3) var(--_de-space-1);
   font-size: 1em;

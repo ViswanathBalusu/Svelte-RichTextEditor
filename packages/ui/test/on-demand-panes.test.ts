@@ -18,6 +18,9 @@ const paneTable = readFileSync(
   'utf8',
 );
 
+/** Panes that an extension contributes, loaded by the host that installs it (UX-060). */
+const EXTENSION_PANES = ['SandboxPane.svelte'];
+
 /** Every component and module of the shell's source, by path relative to `src`. */
 function shellSources(): Array<{ file: string; text: string }> {
   return readdirSync(srcDir, { recursive: true })
@@ -38,7 +41,25 @@ describe('each pane loads on demand, as its own chunk (UX-070, criterion 1)', ()
 
   it('every pane component is reached through a dynamic import in the pane table', () => {
     for (const file of paneFiles) {
+      if (EXTENSION_PANES.includes(file)) continue;
       expect(paneTable).toContain(`import('../panes/${file}')`);
+    }
+  });
+
+  it('a pane an extension contributes is not in the table, and the shell imports it nowhere', () => {
+    // The sandbox panel (UX-060) is a pane descriptor the host builds for each installed extension
+    // (`props`, `load` from the installing host), so it has no entry of its own in the table. The
+    // check below still refuses any static import of it.
+    // The table is `BUILT_IN_PANES`. The sandbox pane has a loader of its own below it, for the
+    // host to pass to `sandboxedExtension`; the loader is a lazy `import()`, never a static import.
+    const table = paneTable.slice(0, paneTable.indexOf('export const loadSandboxPane'));
+    expect(table).toContain('BUILT_IN_PANES');
+    expect(paneTable).toContain(
+      "export const loadSandboxPane: PaneLoader = () => load(import('../panes/SandboxPane.svelte'));",
+    );
+    for (const file of EXTENSION_PANES) {
+      expect(paneFiles).toContain(file);
+      expect(table).not.toContain(`panes/${file}`);
     }
   });
 

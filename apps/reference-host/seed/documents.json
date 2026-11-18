@@ -12,6 +12,15 @@
       ]
     }
   ],
+  "serviceTemplates": [
+    {
+      "key": "lease",
+      "name": "Lease agreement",
+      "description": "A lease with a tenant and a landlord: names, rent and start date can be filled in at the start; the signature and the date signed are set when it is signed.",
+      "content": "lease-template.cdm.json",
+      "creator": "u-olivia"
+    }
+  ],
   "documents": [
     {
       "externalId": "demo-supply-agreement",

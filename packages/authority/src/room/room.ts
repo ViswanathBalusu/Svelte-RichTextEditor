@@ -51,7 +51,7 @@ import { outcomeCheck } from '../permissions/outcome.ts';
 import { authoriseThread, type ThreadAction } from '../permissions/comments.ts';
 import { PermissionIndex } from '../permissions/indexes.ts';
 import { NodeIndex } from './node-index.ts';
-import { isSuggestionMark } from '../permissions/suggestions.ts';
+import { suggestionsOn } from '../permissions/suggestions.ts';
 import { mapRanges } from '../ranges.ts';
 import { applySteps, mapsOf, rebaseOver } from '../rebase.ts';
 import { commitBytes, parseSteps, stepsToJson } from '../steps.ts';
@@ -86,6 +86,7 @@ import {
   type CloseReason,
   type CommitInput,
   type Effects,
+  type EvidenceAnchor,
   type LogCommit,
   type Resume,
   type RoomConnection,
@@ -154,6 +155,16 @@ export interface AuthoredRequest {
    * anything else is refused with `permission_denied`, however the steps were computed.
    */
   region?: string;
+}
+
+/**
+ * A control commit that anchors the workflow evidence of one signing or completion (12 §7; ADR 0013;
+ * FRW-041). It carries the origin and the salted hash and nothing else, and records no revision.
+ */
+export interface AnchorRequest {
+  /** A deterministic UUID version 7, so that a retry cannot anchor the same evidence twice. */
+  id: string;
+  evidence: EvidenceAnchor;
 }
 
 /** A snapshot commit the control plane authors (04 §3.2, §10; SYN-005). */
@@ -300,9 +311,8 @@ const AUTHORED_ORIGINS: readonly string[] = SERVER_ORIGINS.filter((o) => o !== '
 function suggestionUsers(doc: Node): Map<string, string> {
   const out = new Map<string, string>();
   const visit = (n: Node) => {
-    for (const m of n.marks)
-      if (isSuggestionMark(m) && !out.has(String(m.attrs['id'])))
-        out.set(String(m.attrs['id']), String(m.attrs['user']));
+    for (const m of suggestionsOn(n))
+      if (!out.has(String(m.attrs['id']))) out.set(String(m.attrs['id']), String(m.attrs['user']));
   };
   visit(doc);
   doc.descendants((n) => {
@@ -406,7 +416,7 @@ export class Room {
   private readonly attachedAssets: ReadonlySet<string> | undefined;
   private readonly mathGate: RoomInit['mathGate'];
   private readonly baseSeq: number;
-  private readonly historyVisibility: HistoryVisibility;
+  private historyVisibility: HistoryVisibility;
   private readonly commitsResource: boolean;
   private readonly admission: Admission | null;
   private readonly ruleBudget: number;
@@ -606,7 +616,8 @@ export class Room {
     for (const r of c.retired) this.retired.add(r);
     for (const id of c.claimed)
       if (!this.owners.has(id)) this.owners.set(id, claimedBy?.get(id) ?? c.user);
-    if (c.kind === 'control') this.recordedRevision = c.revision;
+    // A control commit that only anchors evidence records no grants revision.
+    if (c.kind === 'control' && c.evidence === undefined) this.recordedRevision = c.revision;
     if (isSnapshot(c)) this.snapshotSeqs.push(c.seq);
     if (c.requires) this.durableRequires = [...c.requires];
   }
@@ -801,6 +812,14 @@ export class Room {
       if (bytes > maxBytes) return page;
     }
     return 'stream';
+  }
+
+  /**
+   * The history visibility setting changed (HIS-025 criterion 5; 08 §9). The gate of the next
+   * request uses it; nothing already delivered is recalled (ADR 0034 section 2).
+   */
+  setHistoryVisibility(setting: HistoryVisibility): void {
+    this.historyVisibility = setting;
   }
 
   /** The user's visibility gate now (07 §8; 08 §9; HIS-023). */
@@ -1383,6 +1402,69 @@ export class Room {
       ...(typeof request.region === 'string' ? { restoreRegion: request.region } : {}),
       ...(request.preconditions ? { preconditions: request.preconditions } : {}),
     });
+  }
+
+  /**
+   * A control commit that anchors the salted hash of the workflow evidence of one signing or
+   * completion (12 §7; FRW-041). It is the control plane's housekeeping, like a grants revision, so
+   * it needs no permission and is not refused for the state of the document. A retry of the same
+   * identifier is acknowledged at the stored sequence number.
+   */
+  anchor(requester: string, request: AnchorRequest): Effects {
+    const fx = this.fx();
+    const id = isObject(request) && typeof request.id === 'string' ? request.id : '';
+    const reject = this.requesterReject(fx, requester, id);
+    if (this.stopped) return reject('unavailable', 'the room has stopped serving this document');
+    if (!isObject(request) || !isUuid7(request.id))
+      return reject('invalid_op', 'an evidence anchor needs a deterministic UUID version 7 id');
+    const ev = request.evidence as Partial<EvidenceAnchor> | undefined;
+    if (
+      !isObject(ev) ||
+      (ev.origin !== 'sign' && ev.origin !== 'rules') ||
+      typeof ev.evidenceHash !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(ev.evidenceHash)
+    )
+      return reject('invalid_op', 'an evidence anchor holds an origin and a SHA-256 hash');
+    const waiting = this.pending().find((p) => p.stored.id === request.id);
+    if (waiting) {
+      waiting.requesters.add(requester);
+      return fx;
+    }
+    const stored = this.byId.get(request.id);
+    if (stored) {
+      fx.send.push({ channel: requester, msg: this.rebuiltAck(stored) });
+      return fx;
+    }
+    const seq = this.tentativeSeq + 1;
+    const commit: StoredCommit = {
+      seq,
+      id: request.id,
+      kind: 'control',
+      steps: [],
+      user: SYSTEM_USER,
+      session: SERVER_SESSION,
+      time: this.now(),
+      origin: 'control',
+      scopes: [],
+      revision: this.perms.revision,
+      cdm: 1,
+      engine: ENGINE,
+      retired: [],
+      claimed: [],
+      evidence: { origin: ev.origin, evidenceHash: ev.evidenceHash },
+    };
+    this.queued.push({
+      stored: commit,
+      channel: null,
+      waiters: new Set(),
+      requesters: new Set([requester]),
+      rebased: false,
+      docAfter: this.tentativeDoc,
+      maps: [],
+    });
+    this.tentativeSeq = seq;
+    this.startWrite(fx);
+    return fx;
   }
 
   /**
@@ -2066,7 +2148,10 @@ export class Room {
     if (this.stopped || this.perms.revision === this.recordedRevision) return;
     if (
       this.pending().some(
-        (p) => p.stored.kind === 'control' && p.stored.revision === this.perms.revision,
+        (p) =>
+          p.stored.kind === 'control' &&
+          p.stored.evidence === undefined &&
+          p.stored.revision === this.perms.revision,
       )
     )
       return;

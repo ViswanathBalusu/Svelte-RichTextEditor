@@ -66,6 +66,9 @@ import { ApiError } from './problems.ts';
 import { projectRegionTitle, readerView } from './visibility.ts';
 import { quotaRoutes } from './quota-admin-routes.ts';
 import { registryRoutes } from './registry-routes.ts';
+import { auditSegmentRoutes } from './audit-segment-route.ts';
+import { suggestionRoutes } from './suggestion-routes.ts';
+import { historyVisibilityRoutes } from './history-visibility-routes.ts';
 import { retentionRoutes } from './retention-routes.ts';
 import { holdRoutes } from './hold-routes.ts';
 import { eraseRoutes } from './erase-routes.ts';
@@ -154,6 +157,8 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
       engines: ['pm-steps/1'],
       cdm: { min: 1, max: 1 },
       features: [...d.features],
+      // The targets a client may ask for, with the `exports` feature (05 §2; UX-101).
+      ...(d.features.includes('exports') ? { exportTargets: [...d.exportTargets] } : {}),
       mode: 'authority',
       jwks_uri: `${d.publicUrl}/.well-known/jwks.json`,
     });
@@ -829,6 +834,9 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...auditRoutes(k),
     ...webhookRoutes(k),
     ...retentionRoutes(k),
+    ...historyVisibilityRoutes(k),
+    ...auditSegmentRoutes(k),
+    ...suggestionRoutes(k),
     ...quotaRoutes(k),
     ...registryRoutes(k),
     ...holdRoutes(k),

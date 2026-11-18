@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { analyseBundle, packageAt } from './bundle.ts';
+import { analyseBundle, isImportStub, packageAt } from './bundle.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'docedit-bundle-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -43,6 +43,14 @@ put('pkg/dist/data.bin', 'DATA-B');
 put('pkg/dist/page.html', '<!doctype html><script type="module" src="./app.js"></script>');
 put('pkg/dist/mystery.txt', 'from nowhere');
 put('pkg/dist/report.json', '{}');
+// An entry that only imports a shared chunk, a re-export stub, and two scripts that are not stubs.
+put('pkg/dist/entry-AbCdEf12.js', 'import "./app.js";\n');
+put(
+  'pkg/dist/reexport-AbCdEf12.js',
+  '// stub\nexport * from "./app.js";\nexport { a as b } from "./app.js";\n',
+);
+put('pkg/dist/code-AbCdEf12.js', 'import "./app.js";\nfetch("/x");\n');
+put('pkg/dist/remote-AbCdEf12.js', 'import "https://cdn.example/x.js";\n');
 
 const contents = analyseBundle(join(root, 'pkg/dist'), {
   ownPackageDir: join(root, 'pkg'),
@@ -79,8 +87,25 @@ describe('bundle contents', () => {
     });
   });
 
+  it('attributes a script of nothing but relative imports and re-exports to the distributable', () => {
+    for (const file of ['entry-AbCdEf12.js', 'reexport-AbCdEf12.js'])
+      expect(contents.attributions.find((a) => a.file === file)).toMatchObject({
+        method: 'import-stub',
+        packages: ['@docedit/fixture@0.0.0'],
+      });
+    // A script with code of its own, or an import of another origin, is not a stub.
+    expect(isImportStub('import "./a.js";\nfetch(1);')).toBe(false);
+    expect(isImportStub('import "https://x.example/y.js";')).toBe(false);
+    expect(isImportStub('')).toBe(false);
+    expect(isImportStub('import { a } from "./a.js";')).toBe(true);
+  });
+
   it('reports what nothing explains, and leaves excluded output out', () => {
-    expect(contents.unattributed).toEqual(['mystery.txt']);
+    expect(contents.unattributed).toEqual([
+      'code-AbCdEf12.js',
+      'mystery.txt',
+      'remote-AbCdEf12.js',
+    ]);
     expect(contents.files.map((f) => f.path)).not.toContain('report.json');
     expect(contents.problems).toEqual([]);
   });

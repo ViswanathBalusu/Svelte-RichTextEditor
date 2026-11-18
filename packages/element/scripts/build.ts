@@ -56,9 +56,15 @@ export async function buildLibrary(): Promise<boolean> {
   console.log(`library build: done in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   for (const violation of report.wasmViolations)
     console.error(`WebAssembly must load lazily, as a file of its own (FND-008): ${violation}`);
+  for (const violation of report.moduleBudgetViolations)
+    console.error(`A lazy module is over its own budget (WASM-012): ${violation}`);
   if (!report.withinBudget)
     console.error('The first interactive editor is over its size budget (13 §9; FE-002).');
-  return report.withinBudget && report.wasmViolations.length === 0;
+  return (
+    report.withinBudget &&
+    report.wasmViolations.length === 0 &&
+    report.moduleBudgetViolations.length === 0
+  );
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

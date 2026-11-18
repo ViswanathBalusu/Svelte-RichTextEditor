@@ -20,6 +20,7 @@ import type {
   ExportJobView,
   ExportTarget,
   FillSummary,
+  AccessCodeOutcome,
   PeerCaret,
   ProofingFindingView,
   ProofingStatus,
@@ -41,7 +42,7 @@ import { FilterRegistry } from '../../src/extensions/filters.ts';
 import type { DocumentChangedEvent, HookQueueStats } from '../../src/extensions/hooks.ts';
 import { StatusItemRegistry, contributePanel } from '../../src/extensions/contributions.ts';
 import { sandboxedExtension } from '../../src/extensions/sandbox-extension.ts';
-import { PaneRegistry, type PaneComponent } from '../../src/shell/panes.ts';
+import { PaneRegistry, loadSandboxPane, type PaneComponent } from '../../src/shell/panes.ts';
 
 /** The identifier of the extension panel the harness contributes (UX-052). */
 export const EXTENSION_PANE = 'ext-notes';
@@ -153,6 +154,8 @@ export interface MountOptions {
   projected?: boolean;
   grants?: RegionGrant[] | null;
   fill?: FillSummary | null;
+  /** The core takes an access code (FRW-039): the outcomes it answers with, in order; the last repeats. */
+  accessCode?: AccessCodeOutcome[];
   /** The core offers the preview as a role (FRW-075) over two roles; the real roles pane is offered. */
   rolePreview?: boolean;
   carets?: PeerCaret[];
@@ -325,6 +328,8 @@ let checkerAltFixed = false;
 const checkerSelected: string[] = [];
 /** What the core was asked to do for the preview as a role (FRW-075). */
 const rolePreviewLog: string[] = [];
+/** The access codes the shell submitted (FRW-039), as typed; test values only. */
+const accessCodeLog: string[] = [];
 /** The assistant's scripted behaviour and what it was asked (UX-045). */
 type AssistantMode = 'ok' | 'rate_limited' | 'quota_exceeded' | 'fail' | 'hang' | 'inject';
 let assistantMode: AssistantMode = 'ok';
@@ -618,6 +623,18 @@ function mountShell(options: MountOptions = {}): void {
     // The roles and the rules panes are stand-ins here; they need only be offered for the links.
     Object.assign(core, { workflowSend: sendHandle, roles: {}, rules: {} });
   }
+  if (options.accessCode) {
+    accessCodeLog.length = 0;
+    const answers = options.accessCode;
+    Object.assign(core, {
+      accessCode: {
+        submit: async (code: string): Promise<AccessCodeOutcome> => {
+          const n = accessCodeLog.push(code);
+          return answers[Math.min(n, answers.length) - 1] ?? { ok: false, reason: 'failed' };
+        },
+      },
+    });
+  }
   if (options.rolePreview) {
     rolePreviewLog.length = 0;
     const listeners = new Set<() => void>();
@@ -858,8 +875,7 @@ function mountShell(options: MountOptions = {}): void {
       panel: {
         registry: paneRegistry,
         id: SANDBOX_PANE,
-        load: async () =>
-          (await import('../../src/panes/SandboxPane.svelte')).default as unknown as PaneComponent,
+        load: loadSandboxPane,
       },
       suggesting: () => false,
       log: (entry) => void sandboxLog.push(entry),
@@ -961,6 +977,8 @@ const harness = {
   openPane: (id: string) => (need().app['openPaneById'] as (id: string) => Promise<boolean>)(id),
   /** What the core was asked to do for the preview as a role, in order (FRW-075). */
   rolePreviewLog: () => [...rolePreviewLog],
+  /** The codes the shell submitted, in order (FRW-039). */
+  accessCodeLog: () => [...accessCodeLog],
   /** Follows a link to a comment (UX-034): the shell's entry, as the host's call would reach it. */
   openLinkedComment: (id: string) =>
     (need().app['openLinkedComment'] as (id: string) => Promise<string>)(id),

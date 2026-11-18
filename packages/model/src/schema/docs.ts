@@ -112,7 +112,7 @@ export function generateDocs(def: CdmDefinition): string {
       n.atom ? 'atom' : '',
       n.isolating ? 'isolating' : '',
       n.selectable === false ? 'not selectable' : '',
-      n.marks !== undefined ? `node marks on children: \`${n.marks}\`` : '',
+      n.marks !== undefined ? `marks on children: \`${n.marks}\`` : '',
       n.feature ? `feature \`${n.feature}\`` : '',
     ].filter(Boolean);
     out.push(

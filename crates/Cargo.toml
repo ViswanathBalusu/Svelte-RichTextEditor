@@ -1,0 +1,33 @@
+# The Rust workspace of the product's WebAssembly kernels (ADR 0016; owner decision 27 in
+# docs/owner-decisions-2026-11-15.md). It sits in its own folder, away from the pnpm workspace, so
+# that Cargo never sees the spike crate under packages/perf/wasm. The npm side is
+# packages/layout-kernel (`@docedit/layout-kernel`), which builds this workspace with
+# `pnpm --filter @docedit/layout-kernel build`.
+[workspace]
+resolver = "2"
+members = ["layout-kernel"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+publish = false
+
+# The project's own crates forbid unsafe code (ADR 0016, decision 5). `forbid` cannot be lowered in
+# a crate, and `crates/layout-kernel/src/lib.rs` repeats it as an attribute.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+
+# The release profile is part of what makes the build reproducible: no debug information, one code
+# generation unit, and no paths in the output (build.sh remaps the rest). wasm-opt strips the
+# symbols, after wasm-bindgen has read the target features.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false

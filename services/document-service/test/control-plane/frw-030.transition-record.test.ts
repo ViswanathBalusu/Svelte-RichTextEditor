@@ -110,7 +110,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
-      'records a second transition (a void) the same way, after the send, and a transition that changes no lock adds no control commit (criterion 4)',
+      'records a second and a third transition (a first view, a void) the same way, after the send, one control commit each, also the one that changes no lock (criteria 1 and 4)',
       async () => {
         const { doc, ref, view } = await draft();
         const sent = await recordTransition(deps(), {
@@ -121,7 +121,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         });
         expect(sent.ok).toBe(true);
         if (!sent.ok) return;
-        // `in_progress` has the lock of `sent`: no grants change, no new control commit.
+        // `in_progress` has the lock of `sent`: the lock does not change, and the transition still
+        // has its own control commit (FRW-030 criterion 1).
         const open = await recordTransition(deps(), {
           ref,
           actor: 'alice',
@@ -130,9 +131,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         });
         expect(open.ok).toBe(true);
         if (!open.ok) return;
-        expect(open.revision).toBeNull();
-        expect(open.control).toBeNull();
-        expect(await controls(ref)).toHaveLength(1);
+        expect(open.revision).toBe(3);
+        expect(open.control).not.toBeNull();
+        expect(await controls(ref)).toHaveLength(2);
         // `voided` keeps the document locked and ends the fill: one more grants revision and commit.
         const voided = await recordTransition(deps(), {
           ref,
@@ -144,8 +145,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         if (!voided.ok) return;
         expect(voided.control).not.toBeNull();
         const found = await controls(ref);
-        expect(found.map((c) => c.revision)).toEqual([2, 3]);
+        expect(found.map((c) => c.revision)).toEqual([2, 3, 4]);
+        expect(found.every((c) => c.steps.length === 0)).toBe(true);
         expect(found[1]!.seq).toBeGreaterThan(found[0]!.seq);
+        expect(found[2]!.seq).toBeGreaterThan(found[1]!.seq);
         const kinds = (
           await h.parts.audit!.query(h.tenant, { doc, kind: 'workflow.transition', limit: 10 })
         ).map((e) => e.data['to']);

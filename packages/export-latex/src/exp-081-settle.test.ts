@@ -124,7 +124,7 @@ describe('EXP-081 a mark that cannot be verified', () => {
 
   it('keeps a paragraph whose deletion has no author under accept, and names the block', async () => {
     const unverified = { ...markedPara('Unverified struck paragraph.', [noAuthor]) } as J;
-    unverified['attrs'] = { id: P2 };
+    unverified['attrs'] = { id: P2, suggest: [noAuthor] };
     const body = [para('Before.'), unverified, markedPara('Verified struck.', [delMark(6)])];
     const bundle = await run(doc(body), { suggestions: 'accept' });
     expect(printed(bundle)).toContain('Unverified struck paragraph.');

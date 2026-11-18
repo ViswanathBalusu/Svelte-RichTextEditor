@@ -29,9 +29,10 @@ async function mountWithExports(
   page: Page,
   blocks: { here: string; gone: string },
   hold: boolean,
+  announced: readonly string[] | null = null,
 ): Promise<void> {
   await page.evaluate(
-    async ({ blocks: ids, hold: keep }) => {
+    async ({ blocks: ids, hold: keep, announced: targets }) => {
       const e = (
         window as unknown as {
           __embed: { backend(sub: string, role: string): unknown; docId: string };
@@ -86,6 +87,8 @@ async function mountWithExports(
         createdAt: '2026-11-17T10:00:00Z',
         updatedAt: '2026-11-17T10:00:00Z',
       });
+      // What the deployment's discovery document announced (05 §2), or null when it does not say.
+      (backend as { exportTargets?: () => readonly string[] | null }).exportTargets = () => targets;
       backend.exports = {
         request: async (
           _docId: string,
@@ -122,7 +125,7 @@ async function mountWithExports(
       document.getElementById('mount')!.append(el);
       await ready;
     },
-    { blocks, hold },
+    { blocks, hold, announced },
   );
   await expect(page.locator(`${EDITOR} .de-editing-surface`)).toBeVisible();
 }
@@ -184,6 +187,35 @@ test.describe('the export dialog in the element (UX-101)', () => {
         },
       },
     ]);
+  });
+
+  test('offers the targets the deployment announced, and only those (criterion 1)', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mountWithExports(page, { here: SPIKE_IDS.last, gone: 'b-not-there' }, false, [
+      'docx',
+      'tex',
+      'pdf',
+    ]);
+    expect(await openDialog(page)).toBe(true);
+    const dialog = page.locator(`${EDITOR} dialog`);
+    const targets = dialog.getByRole('group', { name: 'Format' }).getByRole('radio');
+    await expect(targets).toHaveCount(3);
+    await expect(targets.nth(0)).toHaveAccessibleName('PDF');
+    await expect(targets.nth(1)).toHaveAccessibleName('LaTeX bundle');
+    await expect(targets.nth(2)).toHaveAccessibleName('Word file');
+  });
+
+  test('a deployment that announces only the PDF shows no LaTeX bundle', async ({ page }) => {
+    await openEmbed(page);
+    await mountWithExports(page, { here: SPIKE_IDS.last, gone: 'b-not-there' }, false, ['pdf']);
+    expect(await openDialog(page)).toBe(true);
+    const dialog = page.locator(`${EDITOR} dialog`);
+    const targets = dialog.getByRole('group', { name: 'Format' }).getByRole('radio');
+    await expect(targets).toHaveCount(1);
+    await expect(targets.first()).toHaveAccessibleName('PDF');
+    await expect(dialog.getByRole('radio', { name: 'LaTeX bundle' })).toHaveCount(0);
   });
 
   test('leaves the options without a value out of the request', async ({ page }) => {

@@ -58,6 +58,8 @@ export const MATRIX: readonly MatrixRow[] = [
     routes: [
       'GET /documents/{id}/content',
       'GET /documents/{id}/commits',
+      'GET /documents/{id}/audit-segment',
+      'GET /documents/{id}/suggestions/{sid}/introduction',
       'GET /documents/{id}/history',
       'GET /documents/{id}/versions',
       'GET /documents/{id}/diff',
@@ -184,7 +186,7 @@ export const MATRIX: readonly MatrixRow[] = [
     row: 13,
     id: 'service',
     operation:
-      'Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, holds',
+      'Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds',
     requirement: { kind: 'service' },
     conditions: [],
     routes: [
@@ -207,6 +209,11 @@ export const MATRIX: readonly MatrixRow[] = [
       // Bulk sends (12 §9; FRW-063): started and read with a service credential.
       'POST /bulk-sends',
       'GET /bulk-sends/{bid}',
+      // Who sees full history, per tenant and per document (08 §9; HIS-025), with a service credential.
+      'GET /history-visibility',
+      'PUT /history-visibility',
+      'GET /documents/{id}/history-visibility',
+      'PUT /documents/{id}/history-visibility',
       // Tenant quotas (06 §12; UX-078 criterion 1): read and set with a service credential.
       'GET /quotas',
       'PUT /quotas',

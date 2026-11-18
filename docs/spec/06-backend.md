@@ -106,6 +106,10 @@ create table doc_checkpoints (
   bytes int not null, content_hash bytea not null, created_at timestamptz not null,
   primary key (doc_id, seq));
 
+create table suggestion_introductions (          -- the commit that introduced each suggestion (08 §14; owner decision 86)
+  tenant_id uuid not null, doc_id uuid not null, suggestion_id text not null, seq bigint not null,
+  primary key (tenant_id, doc_id, suggestion_id));      -- the lowest seq wins; written in the transaction that stores the commit
+
 create table versions (
   doc_id uuid not null, seq bigint not null, kind text not null,   -- named | export | restore | pre-restore | import | sent | completed
   name text, note text, created_by text not null, created_at timestamptz not null,

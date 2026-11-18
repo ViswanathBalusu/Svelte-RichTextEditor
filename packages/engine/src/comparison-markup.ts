@@ -57,11 +57,15 @@ const markAttrs = (
   classes: readonly string[],
   user: string | undefined,
   index: number,
+  seq?: number,
 ): Record<string, string> => ({
   class: classes.join(' '),
   'data-suggestion-user': user ?? '',
   'data-suggestion-tone': String(authorTone(user ?? '')),
   'data-change-index': String(index),
+  // The commit that made the change: the same `seq` the history index gives for the suggestion
+  // that the change introduced, so one change has one identity in both drawings (HIS-042).
+  ...(seq !== undefined ? { 'data-change-seq': String(seq) } : {}),
 });
 
 /** The position and node of every identified block and field of `doc`, by identifier. */
@@ -128,7 +132,12 @@ export function comparisonSpecs(
               from: at,
               to: end,
               index,
-              attrs: markAttrs(suggestionClasses('all', 'ins'), span.user ?? change.user, index),
+              attrs: markAttrs(
+                suggestionClasses('all', 'ins'),
+                span.user ?? change.user,
+                index,
+                span.seq ?? change.seq,
+              ),
             });
         } else if (options.showDeleted) {
           specs.push({
@@ -136,7 +145,12 @@ export function comparisonSpecs(
             at: Math.min(at, to - 1),
             index,
             text: span.text,
-            attrs: markAttrs(suggestionClasses('all', 'del'), span.user ?? change.user, index),
+            attrs: markAttrs(
+              suggestionClasses('all', 'del'),
+              span.user ?? change.user,
+              index,
+              span.seq ?? change.seq,
+            ),
           });
         }
       }

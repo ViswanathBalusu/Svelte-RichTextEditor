@@ -450,6 +450,38 @@
       "owner": "PRO"
     },
     {
+      "operationId": "getAuditSegment",
+      "method": "GET",
+      "path": "/documents/{id}/audit-segment",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "requires": "view and the history-visibility gate (07 §8)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §12; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "getSuggestionIntroduction",
+      "method": "GET",
+      "path": "/documents/{id}/suggestions/{sid}/introduction",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "requires": "view and the history-visibility gate (07 §8)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §14",
+      "owner": "HIS"
+    },
+    {
       "operationId": "listRegions",
       "method": "GET",
       "path": "/documents/{id}/regions",
@@ -1170,6 +1202,62 @@
       "success": "200",
       "spec": "08 §11; 13 §10",
       "owner": "UX"
+    },
+    {
+      "operationId": "getTenantHistoryVisibility",
+      "method": "GET",
+      "path": "/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "setTenantHistoryVisibility",
+      "method": "PUT",
+      "path": "/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "getDocumentHistoryVisibility",
+      "method": "GET",
+      "path": "/documents/{id}/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "setDocumentHistoryVisibility",
+      "method": "PUT",
+      "path": "/documents/{id}/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
     },
     {
       "operationId": "getTenantOrigins",

@@ -27,6 +27,7 @@ import {
 } from '@docedit/authority';
 import { createHash } from 'node:crypto';
 import { zstdDecompressSync } from 'node:zlib';
+import type { LogBundle } from '@docedit/history';
 import type { JsonEnvelope } from '@docedit/model';
 import {
   DocumentKeyDestroyedError,
@@ -239,6 +240,13 @@ const INSERT_DOC_ASSETS = `
   SELECT $1, $2, x.asset, x.seq FROM unnest($3::uuid[], $4::bigint[]) AS x(asset, seq)
   ON CONFLICT (tenant_id, doc_id, asset_id) DO NOTHING`;
 
+/** The commit that introduced each suggestion, kept as the commit is stored (HIS-042; migration 0062). The lowest seq wins. */
+const INSERT_SUGGESTION_INTRODUCTIONS = `
+  INSERT INTO suggestion_introductions (tenant_id, doc_id, suggestion_id, seq)
+  SELECT $1, $2, x.id, x.seq FROM unnest($3::text[], $4::bigint[]) AS x(id, seq)
+  ON CONFLICT (tenant_id, doc_id, suggestion_id) DO UPDATE
+    SET seq = least(suggestion_introductions.seq, excluded.seq)`;
+
 /** The index row of the checkpoint written for a snapshot (BE-020; ADR 0034 §3). */
 const INSERT_CHECKPOINT_ROW = `
   INSERT INTO doc_checkpoints (doc_id, seq, tenant_id, object_key, bytes, content_hash, created_at)
@@ -353,6 +361,7 @@ function toStoredCommit(row: CommitRow): LogCommit {
   if (row.base !== null) c.base = int(row.base);
   if (row.rebased !== null) c.rebased = row.rebased;
   if (row.token_jti !== null) c.jti = row.token_jti;
+  if (payload.evidence !== undefined) c.evidence = payload.evidence;
   return c;
 }
 
@@ -553,6 +562,15 @@ export class PgLogStore implements LogStore, OwnershipStore {
           hooks.attachments.map((a) => a.asset),
           hooks.attachments.map((a) => a.seq),
         ]);
+      // The suggestions this batch claims first are indexed in the same transaction (HIS-042).
+      const claims = commits.flatMap((c) => c.claimed.map((id) => [id, c.seq] as const));
+      if (claims.length)
+        await client.query(INSERT_SUGGESTION_INTRODUCTIONS, [
+          ref.tenant,
+          ref.doc,
+          claims.map(([id]) => id),
+          claims.map(([, seq]) => seq),
+        ]);
       const snap = req.snapshot ? hooks.snapshot : undefined;
       if (req.snapshot && snap) {
         const hash = Buffer.from(snap.hash, 'hex');
@@ -676,6 +694,102 @@ export class PgLogStore implements LogStore, OwnershipStore {
           origin: row.origin,
           scopes: row.scopes,
         }));
+      },
+      true,
+    );
+  }
+
+  /**
+   * The records `fromSeq` to `toSeq` as the log bundle holds them, read from the stored rows (the
+   * same columns `verify` reads), with the head and no payloads (HIS-037).
+   */
+  async chainRange(ref: DocRef, fromSeq: number, toSeq: number): Promise<LogBundle> {
+    return this.#inTenant(
+      ref,
+      async (c) => {
+        const rows = await c.query<{
+          seq: string;
+          kind: string;
+          commit_id: string;
+          user_id: string;
+          session_id: string | null;
+          agent: string | null;
+          server_ts: Date;
+          origin: string;
+          base: string | null;
+          rebased: boolean | null;
+          access_rev: string;
+          token_jti: string | null;
+          cdm_version: number;
+          engine: string;
+          size: number;
+          payload_hash: Buffer;
+          prev_hash: Buffer | null;
+          hash: Buffer;
+          scopes: string[];
+        }>(
+          `SELECT c.*, coalesce(s.scopes, '{}') AS scopes
+             FROM doc_commits c
+             LEFT JOIN LATERAL (
+               SELECT array_agg(cs.scope ORDER BY cs.scope COLLATE "C") AS scopes
+                 FROM commit_scopes cs WHERE cs.doc_id = c.doc_id AND cs.seq = c.seq
+             ) s ON true
+            WHERE c.doc_id = $1 AND c.seq BETWEEN $2 AND $3 ORDER BY c.seq`,
+          [ref.doc, fromSeq, toSeq],
+        );
+        const head = await c.query<{ head_seq: string; chain_head: Buffer | null }>(
+          'SELECT head_seq, chain_head FROM doc_heads WHERE doc_id = $1',
+          [ref.doc],
+        );
+        const hr = head.rows[0];
+        if (!hr) throw new DocumentNotFoundError(`no document ${ref.doc}`);
+        return {
+          format: 'docedit-log-bundle/1',
+          doc: ref.doc,
+          head: {
+            seq: int(hr.head_seq),
+            chainHead: hr.chain_head ? hr.chain_head.toString('hex') : null,
+          },
+          commits: rows.rows.map((r) => ({
+            meta: {
+              doc: ref.doc,
+              seq: int(r.seq),
+              kind: r.kind,
+              id: r.commit_id,
+              user: r.user_id,
+              session: r.session_id,
+              agent: r.agent,
+              time: r.server_ts.toISOString(),
+              origin: r.origin,
+              scopes: r.scopes,
+              base: r.base === null ? null : int(r.base),
+              rebased: r.rebased,
+              revision: int(r.access_rev),
+              jti: r.token_jti,
+              cdm: r.cdm_version,
+              engine: r.engine,
+              size: r.size,
+            },
+            payloadHash: r.payload_hash.toString('hex'),
+            prevHash: r.prev_hash ? r.prev_hash.toString('hex') : null,
+            hash: r.hash.toString('hex'),
+          })),
+        };
+      },
+      true,
+    );
+  }
+  /** The `seq` of the commit that introduced a suggestion, from the index; not a scan of the log (HIS-042). */
+  async introducedBy(ref: DocRef, suggestionId: string): Promise<number | undefined> {
+    return this.#inTenant(
+      ref,
+      async (c) => {
+        const r = await c.query<{ seq: string }>(
+          `SELECT seq FROM suggestion_introductions
+            WHERE tenant_id = $1 AND doc_id = $2 AND suggestion_id = $3`,
+          [ref.tenant, ref.doc, suggestionId],
+        );
+        return r.rows[0] === undefined ? undefined : int(r.rows[0].seq);
       },
       true,
     );

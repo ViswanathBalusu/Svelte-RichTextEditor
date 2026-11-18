@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { type ComparisonChange, comparisonSpecs } from './comparison-markup.ts';
 import { editingSchema } from './schema.ts';
 import { SPIKE_IDS, spikeDocument } from './spike-document.ts';
-import { authorTone, suggestionClasses } from './suggestion-markup.ts';
+import { authorTone, suggestionClasses, suggestionSpecs } from './suggestion-markup.ts';
 
 const doc = PMNode.fromJSON(editingSchema(), spikeDocument().doc);
 
@@ -87,5 +87,42 @@ describe('a comparison drawn over the newer version (HIS-013)', () => {
     const title = block(SPIKE_IDS.title);
     const ins = a.find((s) => s.type === 'inline');
     expect(ins && ins.type === 'inline' && ins.to).toBe(title.pos + title.size - 1);
+  });
+});
+
+describe('one change, one identity in both drawings (HIS-042 criterion 3)', () => {
+  it('draws an insertion as the mark of the same user is drawn, and names the commit that introduced it', () => {
+    // The paragraph's text carries a suggested insertion `sgAAAAAAAAAAAAAA` by ada.
+    const json = structuredClone(spikeDocument().doc) as unknown as {
+      attrs?: { id?: string };
+      content?: Array<{ type?: string; marks?: unknown[] }>;
+    };
+    const mark = (n: typeof json): boolean => {
+      if (n.attrs?.id === SPIKE_IDS.intro) {
+        for (const c of n.content ?? [])
+          if (c.type === 'text')
+            c.marks = [{ type: 'ins', attrs: { id: 'sgAAAAAAAAAAAAAA', user: 'ada' } }];
+        return true;
+      }
+      return (n.content ?? []).some((c) => mark(c as typeof json));
+    };
+    mark(json);
+    const marked = PMNode.fromJSON(editingSchema(), json);
+
+    const asMark = suggestionSpecs(marked, 'all').find((s) => s.attrs['data-suggestion-id'])!;
+    const asChange = comparisonSpecs(marked, [modified], { showDeleted: false }).find(
+      (s) => s.type === 'inline',
+    )!;
+    // The same rendering: the classes, the author and the tone are those of the mark.
+    for (const name of ['class', 'data-suggestion-user', 'data-suggestion-tone'])
+      expect(asChange.attrs[name], name).toBe(asMark.attrs[name]);
+    // The same identity: a user, and the suggestion identifier on the mark against the commit on
+    // the change. The history index (@docedit/history, suggestionIndex, kept by the service)
+    // maps the identifier to the commit that introduced it, here commit 3, so a change and the
+    // suggestion it introduced are found by each other.
+    const introducedBy = new Map([['sgAAAAAAAAAAAAAA', 3]]);
+    expect(String(introducedBy.get(asMark.attrs['data-suggestion-id']!))).toBe(
+      asChange.attrs['data-change-seq'],
+    );
   });
 });

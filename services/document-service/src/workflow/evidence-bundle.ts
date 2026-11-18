@@ -52,7 +52,22 @@ export async function buildWorkflowEvidenceBundle(
         prevHash: prev === null ? null : prev.toString('hex'),
         hash: hash.toString('hex'),
         ...(c.kind === 'control'
-          ? { payload: { steps: c.steps, retired: c.retired, claimed: c.claimed } }
+          ? {
+              payload: {
+                steps: c.steps,
+                retired: c.retired,
+                claimed: c.claimed,
+                // The salted hash an evidence anchor carries, the origin and nothing else.
+                ...(c.evidence !== undefined
+                  ? {
+                      evidence: {
+                        origin: c.evidence.origin,
+                        evidenceHash: c.evidence.evidenceHash,
+                      },
+                    }
+                  : {}),
+              },
+            }
           : {}),
       });
     prev = hash;

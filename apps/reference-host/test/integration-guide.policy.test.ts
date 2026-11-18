@@ -45,7 +45,7 @@ describe('integration guide: strict content security policy (UX-090 criterion 4)
       '### Math display (KaTeX)',
       '### Math editor (MathLive)',
       '### PDF panel (PDF.js)',
-      '### WebAssembly kernels (ADR 0016, later)',
+      '### Layout kernel (WebAssembly; ADR 0016, WASM-002)',
     ]) {
       expect(SECTION, heading).toContain(heading);
     }

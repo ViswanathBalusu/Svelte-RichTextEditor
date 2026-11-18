@@ -4,7 +4,8 @@
  * text builders of `suggestion-edit.ts`: it returns the transaction, and the caller decides when to
  * dispatch it.
  *
- * The paragraph gains one `fmt` node mark naming the user, with one identifier, and its `before`
+ * The paragraph gains one `fmt` entry in its `suggest` attribute (03 §5; owner decision 92) naming the
+ * user, with one identifier, and its `before`
  * records the previous values of the attributes the change alters, from
  * `{ attrs: { style, align, numbering } }` (CDM-040; the list level is the `numbering` attribute's
  * `level`; the validator checks that shape). The attribute change is then made, so the paragraph
@@ -13,16 +14,16 @@
  * Decisions taken here, not in the spec (see the story Notes and docs/adr/0132-engine-3-backlog-batch.md):
  * - only `style`, `align` and `numbering` may change under a block suggestion; any other attribute, the
  *   identifier above all (I2), makes the builder return null, so the core refuses the change;
- * - a paragraph that already carries this user's `fmt` keeps one `fmt` for the user: the old mark is
+ * - a paragraph that already carries this user's `fmt` keeps one `fmt` for the user: the old entry is
  *   replaced by one whose `before` also records any attribute the earlier suggestion did not, so that
  *   `before` still holds the values from before any of the user's changes;
  * - a step that sets an attribute to the value it already has is no change and is not recorded.
  *
  * Universal logic over ProseMirror state only: no Node.js or browser API.
  */
-import type { Mark } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
-import { AddNodeMarkStep, type AttrStep, RemoveNodeMarkStep } from 'prosemirror-transform';
+import type { AttrStep } from 'prosemirror-transform';
+import { blockEntries, entry, setBlockEntries } from './block-suggestion.ts';
 import type { SuggestionAuthor } from './suggestion-author.ts';
 
 /** The paragraph attributes a block suggestion may record and change (CDM-040). */
@@ -63,27 +64,26 @@ export function suggestBlockFormat(
   }
   const tr = state.tr;
   if (changing.length === 0) return { tr, handled: 0 };
-  const fmt = state.schema.marks['fmt'];
-  if (!fmt) return null;
   for (const [pos, changed] of groups) {
     const node = state.doc.nodeAt(pos)!;
-    const own: Mark | undefined = node.marks.find(
-      (m) => m.type.name === 'fmt' && m.attrs['user'] === author.user,
-    );
+    const entries = blockEntries(node);
+    const own = entries.find((e) => e.type === 'fmt' && e.attrs.user === author.user);
     const recorded = new Map<string, unknown>();
     let id: string;
     if (own) {
-      id = String(own.attrs['id']);
-      const before = own.attrs['before'] as { attrs?: Record<string, unknown> } | null | undefined;
+      id = own.attrs.id;
+      const before = own.attrs.before as { attrs?: Record<string, unknown> } | null | undefined;
       for (const [k, v] of Object.entries(before?.attrs ?? {})) recorded.set(k, v);
       for (const [k, v] of changed) if (!recorded.has(k)) recorded.set(k, v);
-      tr.step(new RemoveNodeMarkStep(pos, own));
     } else {
       id = author.nextId();
       for (const [k, v] of changed) recorded.set(k, v);
     }
     const before = { attrs: Object.fromEntries(recorded) };
-    tr.step(new AddNodeMarkStep(pos, fmt.create({ id, user: author.user, before })));
+    setBlockEntries(tr, pos, [
+      ...entries.filter((e) => e !== own),
+      entry('fmt', id, author.user, before),
+    ]);
   }
   for (const step of changing) tr.step(step);
   return { tr, handled: groups.size };

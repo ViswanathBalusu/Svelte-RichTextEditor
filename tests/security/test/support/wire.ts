@@ -33,6 +33,8 @@ export interface ConnectOptions {
   perMessageDeflate?: boolean;
   /** The local source address, for per-address limits (U-SEC-017-032, SEC-018); omit for the default. */
   localAddress?: string;
+  /** Extra headers of the upgrade request (a User-Agent, a forwarded address). */
+  headers?: Record<string, string>;
 }
 
 export class WireClient {
@@ -92,6 +94,7 @@ export class WireClient {
       ...(opts.origin !== undefined ? { origin: opts.origin } : {}),
       perMessageDeflate: opts.perMessageDeflate ?? false,
       ...(opts.localAddress !== undefined ? { localAddress: opts.localAddress } : {}),
+      ...(opts.headers !== undefined ? { headers: opts.headers } : {}),
     });
     const c = new WireClient(ws);
     return new Promise((resolve, reject) => {

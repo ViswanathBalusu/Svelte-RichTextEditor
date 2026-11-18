@@ -47,6 +47,12 @@ export interface Backend {
    * present (05 §8.3; see hasPort()).
    */
   readonly features: ReadonlySet<string>;
+  /**
+   * The export targets the deployment announced in its discovery document (`exportTargets`, 05 §2;
+   * UX-101), or null when it does not say or before `connect()` has read it. Absent on a backend
+   * that has no discovery (a stand-in); the interface then offers the PDF and the LaTeX bundle.
+   */
+  exportTargets?(): readonly string[] | null;
   /** Opens the session (`hello`, `welcome`). Rejects with a PortError (`unauthenticated`, `revoked`, `unsupported_version`, …). */
   connect(): Promise<void>;
   /** Closes every channel and the session. Idempotent. */

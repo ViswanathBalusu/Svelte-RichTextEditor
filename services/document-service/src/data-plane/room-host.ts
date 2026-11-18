@@ -42,6 +42,7 @@ import {
   type CloseReason,
   type Connection,
   type Effects,
+  type EvidenceAnchor,
   type LogCommit,
   type PermissionState,
   type Preconditions,
@@ -235,6 +236,14 @@ export type ServerOp =
       base: number;
       steps: unknown;
       preconditions?: Preconditions;
+      trace?: TraceContext | null;
+    }
+  | {
+      /** A control commit that anchors the salted hash of workflow evidence (FRW-041). */
+      kind: 'anchor';
+      id: string;
+      actor: 'system';
+      evidence: EvidenceAnchor;
       trace?: TraceContext | null;
     };
 
@@ -524,7 +533,8 @@ export class HostedRoom {
     // control commit goes first, before any channel can submit, so that every commit checked
     // against a revision follows that revision's control commit (04 G7; 07 §9; PRM-019).
     let recorded = init.initialRevision;
-    for (const c of init.log) if (c.kind === 'control') recorded = c.revision;
+    for (const c of init.log)
+      if (c.kind === 'control' && c.evidence === undefined) recorded = c.revision;
     if (init.perms.revision !== recorded) this.#apply(this.#gateway.permissionsChanged(init.perms));
     this.#scheduleExpiry();
     this.#scheduleCheckpoint();
@@ -954,6 +964,7 @@ ecentHead, keeping one entry older than the window. */
       );
     // BE-044: the assets the operation references are looked up first (a snapshot's for anyone
     // who uploaded them for this document, a step commit's for its actor).
+    if (op.kind === 'anchor') return this.#requestNow(op);
     if (this.#assets) {
       const refs = assetRefsIn(op.kind === 'snapshot' ? op.content.envelope.doc : op.steps);
       const unknown = [...refs].filter((id) => !this.#known.has(id));
@@ -987,7 +998,9 @@ ecentHead, keeping one entry older than the window. */
       this.#requests.set(key, { resolve, reject, actor: op.actor });
       const as = requesterOf(op.actor);
       let fx: Effects;
-      if (op.kind === 'snapshot') {
+      if (op.kind === 'anchor') {
+        fx = this.#gateway.anchor(key, { id: op.id, evidence: op.evidence });
+      } else if (op.kind === 'snapshot') {
         let content: Doc;
         try {
           content = schemaOf().nodeFromJSON(op.content.envelope.doc);
@@ -1031,6 +1044,11 @@ ecentHead, keeping one entry older than the window. */
       this.#auditRejection(r.actor, undefined, null, msg);
       r.reject(new RequestRefused({ code: msg.code, action: msg.action, reason: msg.reason }));
     }
+  }
+
+  /** The effective history visibility setting, read again for this request (HIS-025). */
+  setHistoryVisibility(setting: string | null | undefined): void {
+    if (!this.#stopped) this.#room.setHistoryVisibility(historySetting(setting));
   }
 
   // --- Permissions (07 §9; 05 §5.5) ------------------------------------------------------------
@@ -1910,7 +1928,7 @@ export class RoomHost {
     if (this.#deps.faults.databaseDown)
       return Promise.reject(new Refusal('unavailable', 'the database is unreachable'));
     const known = this.get(ref);
-    if (known) return Promise.resolve(known);
+    if (known) return this.#withFreshSetting(ref, known);
     const k = refKey(ref);
     let p = this.#loading.get(k);
     if (!p) {
@@ -1923,6 +1941,21 @@ export class RoomHost {
       this.#loading.set(k, p);
     }
     return p;
+  }
+
+  /**
+   * A room that is already open takes the history visibility setting stored now, so a change made
+   * on any node applies to the next channel (HIS-025 criterion 5). A failed read keeps the setting
+   * the room has; the gate then still holds what it held.
+   */
+  async #withFreshSetting(ref: DocRef, room: HostedRoom): Promise<HostedRoom> {
+    try {
+      const record = await this.#deps.documents.get(ref);
+      if (record) room.setHistoryVisibility(record.historyVisibility);
+    } catch {
+      // The room keeps its setting.
+    }
+    return room;
   }
 
   #acquireAfter(ref: DocRef): Promise<HostedRoom> {
@@ -2128,6 +2161,7 @@ export class RoomHost {
         await room.shutdown('the document was deleted', true);
         return;
       }
+      room.setHistoryVisibility(record.historyVisibility);
       const perms = await this.#deps.grants.current(ref);
       if (perms.revision > room.permissions.revision) room.permissionsChanged(perms);
       // The document resource changed (metadata or state): open channels may re-read it (05 §5.6).
@@ -2275,6 +2309,8 @@ export class RoomHost {
       const room = this.get(ref);
       if (room) {
         const head = room.head;
+        if (seq !== undefined && seq !== head)
+          room.setHistoryVisibility((await d.documents.get(ref))?.historyVisibility);
         if (
           seq !== undefined &&
           seq !== head &&
@@ -2372,6 +2408,7 @@ export class RoomHost {
       let hides: boolean;
       if (room && room.head === head.seq) {
         if (stored.revision > room.permissions.revision) room.permissionsChanged(stored);
+        room.setHistoryVisibility(record.historyVisibility);
         gate = room.minVisibleSeq(conn);
         hides = d.restricted && room.hidesFor(conn);
       } else {
