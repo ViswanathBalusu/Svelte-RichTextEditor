@@ -410,15 +410,21 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
         `the workflow is ${current.state}; only a corrected one is resumed`,
       );
     const head = await d.logs.head(ref);
-    const [sent, now] = await Promise.all([
+    const [sent, now, perms] = await Promise.all([
       d.content.rebuild(ref, head.incarnation, current.sentSeq),
       d.content.rebuild(ref, head.incarnation, head.seq),
+      d.grants.current(ref),
     ]);
+    // The regions granted to a role may be edited by that role's participant while the workflow runs
+    // (07 §4 limit 1; FRW-086), so their content is not compared with the document as sent.
+    const granted = new Set(
+      perms.grants.filter((g) => g.principal.startsWith('role:')).map((g) => g.region),
+    );
     const out = await recordResume(transitionDeps(), {
       ref,
       actor: ctx.caller.actor,
-      sent: snapshotOf({ cdm: sent.cdm, requires: sent.requires, doc: sent.doc }),
-      head: snapshotOf({ cdm: now.cdm, requires: now.requires, doc: now.doc }),
+      sent: snapshotOf({ cdm: sent.cdm, requires: sent.requires, doc: sent.doc }, granted),
+      head: snapshotOf({ cdm: now.cdm, requires: now.requires, doc: now.doc }, granted),
       owners: fieldOwnersOf(
         { cdm: now.cdm, requires: now.requires, doc: now.doc },
         current.participants,
