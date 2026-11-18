@@ -80,7 +80,7 @@ An extension is a manifest plus code. It can contribute commands, toolbar groups
 | Tier | How it runs | Use |
 |---|---|---|
 | 1. Host-registered | In the page, registered by the host through the element's `extensions` property | The host's own features. Same trust as the host page |
-| 2. Sandboxed (later) | In a sandboxed iframe, talking to the editor over message passing, with declared read and write levels | Third-party add-ins |
+| 2. Sandboxed (phase 4) | In a sandboxed iframe, talking to the editor over message passing, with declared read and write levels | Third-party add-ins |
 
 Extension hooks are asynchronous and never sit on the typing path. Extension panels are held to the same accessibility bar as built-in ones.
 
@@ -152,5 +152,5 @@ Service credentials name the acting user with the `DEP-Actor` header, so history
 - The product's own visual design and interaction design are not specified here and need a designer.
 - Citations are built in since the owner's decision of 2026-11-06 (03, section 13). Which citation styles the house class offers, and how the editor renders them, is open (CDM-052).
 - The exact document API offered to extensions, and how it is versioned.
-- Whether sandboxed extensions are worth their cost before there is an ecosystem.
+- Sandboxed extensions are built, by the owner's decision of 2026-11-15 ([ADR 0393](../adr/0393-w3-UX-059-sandboxed-extensions.md)). No evidence of partners, tier 1 usage or review cost backs it; the security review of the sandbox is still to be done.
 - Dictionaries and their licences for a built-in fallback spell checker.
