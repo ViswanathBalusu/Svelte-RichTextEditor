@@ -1,6 +1,6 @@
 // FRW-067 criterion 2 (reference service half): the `fields` profile of the conformance kit runs
 // against the reference service, started as an operator runs it, and reports its scenarios. Lane
-// U-FRW-055-072. The mock backend half is not run here: it does not announce `fields` (MOCK skip).
+// U-FRW-055-072. The mock backend half is in mock.test.ts (lane w4, 2026-11-17).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runKit } from '../src/runner.ts';
 import type { KitReport } from '../src/report.ts';
@@ -45,5 +45,7 @@ describe.skipIf(skip)('FRW-067: the fields profile against the reference service
       (p?.scenarios ?? []).map((s) => `${s.id}=${s.outcome}`),
     );
     expect(failed).toEqual([]);
+    // The scenario of I14 (lane w4, 2026-11-17) is among those that ran and passed.
+    expect(p?.scenarios.find((s) => s.id === 'fields.i14.targets')?.outcome).toBe('passed');
   }, 900_000);
 });

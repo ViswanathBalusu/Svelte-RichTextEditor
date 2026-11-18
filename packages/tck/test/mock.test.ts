@@ -62,13 +62,12 @@ describe.skipIf(skip)('the kit against the mock backend over DEP', () => {
       'registry',
       'fuzz',
       'semantics',
+      'fields',
     ])
       expect(byId[id]!.outcome, id).not.toBe('skipped');
     for (const id of [
       'exports',
       'assets',
-      'fields',
-      'perm-fill',
       'perm-read',
       'history',
       'comments',
@@ -79,6 +78,24 @@ describe.skipIf(skip)('the kit against the mock backend over DEP', () => {
       expect(byId[id]!.outcome, id).toBe('skipped');
       expect(byId[id]!.reason, id).toBeTruthy();
     }
+    // `perm-fill` needs a fill participant, which a server gets from the workflow (G95): the profile
+    // runs on a server announcing `fields`, and its one scenario is skipped with the reason.
+    expect(byId['perm-fill']!.outcome).toBe('skipped');
+    expect(byId['perm-fill']!.scenarios.map((x) => x.reason)).toEqual([expect.any(String)]);
+  });
+
+  it('passes every scenario of the fields profile (FRW-067 criterion 2, mock half)', () => {
+    const p = report.profiles.find((x) => x.id === 'fields');
+    const outcomes = Object.fromEntries((p?.scenarios ?? []).map((x) => [x.id, x.outcome]));
+    expect(outcomes).toEqual({
+      'fields.announce': 'passed',
+      'fields.i13.keys': 'passed',
+      'fields.i14.targets': 'passed',
+      'fields.i15.values': 'passed',
+      'fields.p8.server-only': 'passed',
+      'fields.p9.conflict': 'passed',
+      'fields.prefill': 'passed',
+    });
   });
 
   it('exercises in its traffic what every passing scenario declares (PRO-117)', () => {
