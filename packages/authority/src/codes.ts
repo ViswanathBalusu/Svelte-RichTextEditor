@@ -63,6 +63,8 @@ export const CLIENT_ORIGINS = [
   'suggestion.reject',
   'fill',
   'assistant',
+  // A change made by an extension through the document API (UX-049; owner decision 173).
+  'extension',
 ] as const;
 
 /** Origins reserved for commits the server authors (04 §3.1, §10). */

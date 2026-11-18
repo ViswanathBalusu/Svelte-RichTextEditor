@@ -88,7 +88,7 @@ export interface Step {
 }
 
 /** Origin of a commit: a client hint (recorded, never trusted) or a server-reserved origin (04 §3.1). */
-export type Origin = "input" | "paste" | "format" | "undo" | "redo" | "suggestion.accept" | "suggestion.reject" | "fill" | "assistant" | "restore" | "import" | "migration" | "repair" | "sign" | "rules" | "prefill" | "control" | (string & {});
+export type Origin = "input" | "paste" | "format" | "undo" | "redo" | "suggestion.accept" | "suggestion.reject" | "fill" | "assistant" | "extension" | "restore" | "import" | "migration" | "repair" | "sign" | "rules" | "prefill" | "control" | (string & {});
 
 /** A step commit as submitted: the payload of `sync.submit` (04 §3.1; 05 §5.3). */
 export interface Commit {
