@@ -515,10 +515,7 @@ describe('re-checking restores (HIS-020)', () => {
       [USERS.bob, ['style_def/LegalQuote']],
       [USERS.gina, []],
     ] as const) {
-      const dry = planRestore(
-        { toSeq: 1, region: 'rTerms000000000A', dryRun: true },
-        ctx(b, who),
-      );
+      const dry = planRestore({ toSeq: 1, region: 'rTerms000000000A', dryRun: true }, ctx(b, who));
       const real = planRestore({ toSeq: 1, region: 'rTerms000000000A' }, ctx(b, who));
       if (!dry.ok) throw new Error(dry.reason);
       if (!real.ok) throw new Error(real.reason);
