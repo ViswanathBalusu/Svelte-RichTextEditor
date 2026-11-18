@@ -31,6 +31,9 @@ export function imageView(lookup: AssetImageLookup | undefined): NodeViewConstru
     dom.setAttribute('aria-label', String(node.attrs['alt'] ?? ''));
     let current = node;
     let destroyed = false;
+    // The stored size and the handle are drawn once a picture is shown: a placeholder keeps the
+    // size it has always had, which is the page's flow and not the picture's (FE-132 criterion 2).
+    let shown = false;
 
     const asset = assetOf(node);
     if (lookup && asset !== undefined) {
@@ -46,6 +49,9 @@ export function imageView(lookup: AssetImageLookup | undefined): NodeViewConstru
           img.decoding = 'async';
           img.src = src;
           dom.append(img);
+          shown = true;
+          drawSize(dom, sizeOf(current, 'width'), sizeOf(current, 'height'));
+          dom.append(handle.dom);
         })
         .catch(() => {});
     }
@@ -59,8 +65,6 @@ export function imageView(lookup: AssetImageLookup | undefined): NodeViewConstru
       },
       preview: (width, height) => drawSize(dom, width, height),
     });
-    dom.append(handle.dom);
-    drawSize(dom, sizeOf(node, 'width'), sizeOf(node, 'height'));
 
     return {
       dom,
@@ -70,7 +74,7 @@ export function imageView(lookup: AssetImageLookup | undefined): NodeViewConstru
         if (assetOf(next) !== assetOf(current) || next.attrs['alt'] !== current.attrs['alt'])
           return false;
         current = next;
-        drawSize(dom, sizeOf(next, 'width'), sizeOf(next, 'height'));
+        if (shown) drawSize(dom, sizeOf(next, 'width'), sizeOf(next, 'height'));
         handle.sync(next);
         return true;
       },

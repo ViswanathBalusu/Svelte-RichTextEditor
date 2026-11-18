@@ -61,6 +61,11 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'checkFieldEntry'
       | 'fieldFillable'
       | 'fieldRuleState'
+      | 'ruleDefs'
+      | 'ruleItems'
+      | 'saveRuleParts'
+      | 'nextRuleId'
+      | 'editRule'
       | 'enterFieldValue'
       | 'validateFields'
       // FRW-070, FRW-078: the fields of fill mode without their values, and the entries a person made.
@@ -99,7 +104,8 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // UX-035: the markup view of suggestions and the label that names one for assistive technology.
       | 'markupView'
       | 'setMarkupView'
-      | 'setSuggestionLabel';
+      | 'setSuggestionLabel'
+      | 'suggestionLabel';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed

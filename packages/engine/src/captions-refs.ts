@@ -158,8 +158,10 @@ export function staleCaches(doc: PMNode): StaleCache[] {
  * as it moves; nothing is written into the document (decision 90 of
  * `docs/owner-decisions-2026-11-15.md`: refreshed texts are computed when shown and when exported).
  */
-export function fieldTexts(doc: PMNode): StaleCache[] {
-  const labels = computeLabels(doc);
+export function fieldTexts(
+  doc: PMNode,
+  labels: ReturnType<typeof computeLabels> = computeLabels(doc),
+): StaleCache[] {
   const out: StaleCache[] = [];
   const counts = new Map<string, number>();
 

@@ -592,6 +592,20 @@ class Writer {
           return [po.bytes.subarray(src!.start, src!.end)];
         return this.tableish(node, src, po, plan);
       }
+      case 'region': {
+        // A region imported from editable ranges (EXP-104) is a container of its own in the source
+        // map. Unchanged, it is copied; changed, its blocks are written one by one, and the
+        // markers around them stay where they were (they are in the body's gaps).
+        // A region whose block is regenerated is in `force` as an ancestor; it is still written
+        // from its container, so only the copy of the whole region is skipped then.
+        if (!src || src.part !== po.part || !this.sm.containers[`region:${id}`])
+          throw new ExportError(
+            `the patching writer cannot write a region without a source (${id})`,
+          );
+        if (!this.force.has(id) && (await this.unchanged(node, src)))
+          return [po.bytes.subarray(src.start, src.end)];
+        return this.container(`region:${id}`, node.content ?? [], po, plan);
+      }
       case 'preserved_block':
         return [await this.preservedBlock(node, local ? src : undefined, po, plan)];
       default:

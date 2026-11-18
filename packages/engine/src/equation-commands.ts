@@ -67,6 +67,52 @@ export function latexRefusal(latex: string): 'too-long' | 'too-deep' | null {
   return null;
 }
 
+export type EquationInsertRefusal = 'not-here' | 'read-only';
+
+export type EquationInsertResult =
+  | { readonly ok: true; readonly pos: number }
+  | { readonly ok: false; readonly reason: EquationInsertRefusal };
+
+/**
+ * Inserts an empty equation (FE-136 criterion 5): an inline `equation` at the caret, replacing a
+ * selection, or a block `equation_block` after the block the caret is in. The source is empty, which
+ * the CDM admits; the shell then opens the math editor on it (the core does, `requestEquationEdit`).
+ * `id` names the block (an inline equation has none). Nothing changes on a refusal, and without
+ * `dispatch` the call only checks. The result's `pos` is the equation's position after the change.
+ */
+export function insertEquation(
+  state: EditorState,
+  display: boolean,
+  options: { readonly writable: (pos: number) => boolean; readonly id: string },
+  dispatch?: (tr: Transaction) => void,
+): EquationInsertResult {
+  const { $from } = state.selection;
+  const type = state.schema.nodes[display ? 'equation_block' : 'equation'];
+  if (!type) return { ok: false, reason: 'not-here' };
+  let at = -1;
+  if (display) {
+    // The innermost ancestor block whose parent takes a block equation after it.
+    for (let d = $from.depth; d >= 1 && at < 0; d--) {
+      const parent = $from.node(d - 1);
+      const index = $from.index(d - 1) + 1;
+      if (parent.canReplaceWith(index, index, type)) at = $from.after(d);
+    }
+  } else if (
+    $from.parent.inlineContent &&
+    $from.parent.canReplaceWith($from.index(), $from.index(), type)
+  ) {
+    at = state.selection.from;
+  }
+  if (at < 0) return { ok: false, reason: 'not-here' };
+  if (!options.writable($from.pos)) return { ok: false, reason: 'read-only' };
+  if (dispatch) {
+    const node = display ? type.create({ id: options.id, latex: '' }) : type.create({ latex: '' });
+    const tr = display ? state.tr.insert(at, node) : state.tr.replaceSelectionWith(node);
+    dispatch(tr.scrollIntoView());
+  }
+  return { ok: true, pos: at };
+}
+
 /**
  * Stores `latex` on the equation at `pos`. Nothing changes when the node is not an equation, the
  * source is refused, or `writable` refuses the position. With `dispatch` absent the call only
