@@ -19,7 +19,7 @@
  * - the wire shapes are `{ fromSeq, toSeq, method, granularity, region?, changes }` and
  *   `{ seq, spans }`; the schemas of `spec/dep` leave the attribution result open.
  */
-import { stateVisible } from '@docedit/authority';
+import { stateVisible, type HiddenSet } from '@docedit/authority';
 import {
   AttributionMap,
   STEP_LIMIT,
@@ -70,6 +70,27 @@ export function problemOf(e: HistoryError): ApiError {
   return new ApiError(e.code, e.reason);
 }
 
+/**
+ * The hidden set with the fields inside its hidden regions added to `values`. The projection does
+ * not list them, because the placeholder of the region hides them already (`hiddenSetOf`), but the
+ * history of such a field would name its authors and times, so history refuses it as if the field
+ * did not exist (HIS-046 criterion 2).
+ */
+export function withFieldsOfHiddenRegions(hidden: HiddenSet, doc: JsonNode): HiddenSet {
+  if (hidden.regions.size === 0) return hidden;
+  const values = new Set(hidden.values);
+  const collect = (n: JsonNode): void => {
+    if (n.type === 'form_field' && typeof n.attrs?.['id'] === 'string') values.add(n.attrs['id']);
+    for (const c of n.content ?? []) collect(c);
+  };
+  const walk = (n: JsonNode): void => {
+    if (n.type === 'region' && hidden.regions.has(String(n.attrs?.['id']))) collect(n);
+    else for (const c of n.content ?? []) walk(c);
+  };
+  walk(doc);
+  return { regions: hidden.regions, values, titles: hidden.titles };
+}
+
 /** Everything the history routes read before they look at a `seq` (also used by the restore route). */
 export async function historyViewOf(k: Kit, ctx: Ctx, doc: string) {
   const { d } = k;
@@ -95,7 +116,9 @@ export async function historyViewOf(k: Kit, ctx: Ctx, doc: string) {
   const conn = connectionOn(ctx.caller, doc);
   /** What the caller's current access hides in any of the documents (ADR 0019; HIS-046). */
   const hiddenIn = (...docs: JsonNode[]) =>
-    unionHidden(...docs.map((j) => readerView(d.views, conn, j, perms).hidden));
+    unionHidden(
+      ...docs.map((j) => withFieldsOfHiddenRegions(readerView(d.views, conn, j, perms).hidden, j)),
+    );
   return {
     record,
     ref,
