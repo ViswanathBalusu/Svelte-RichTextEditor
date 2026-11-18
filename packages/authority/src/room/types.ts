@@ -12,6 +12,7 @@ import type { Access } from '../permissions/access.ts';
 import type { Connection, PermissionState } from '../permissions/model.ts';
 import type { StepJson } from '../steps.ts';
 import type { ThreadAnchor } from './threads.ts';
+import type { WorkflowStatusMessage } from '../workflow/state-view.ts';
 
 export const ENGINE = 'pm-steps/1';
 
@@ -195,6 +196,11 @@ export type ToClient =
       catchUp: 'stream' | 'page' | 'reload';
       inflight: null | { state: 'accepted'; seq: number } | { state: 'unknown' };
       access: Access;
+      /**
+       * The workflow of the document, for this connection (12 §10; FRW-035): its state and the
+       * connection's own participant status. Present only when the document has a workflow.
+       */
+      workflow?: WorkflowStatusMessage;
       /** Content at `head` when the client has none or must reload (REST in DEP; inline here). */
       content?: InlineContent;
       /** The view token of the projection this channel serves (ADR 0019); echoed in a later resume. */
@@ -211,6 +217,12 @@ export type ToClient =
    * control commit follows it, so a bridge that holds `perm.changed` for one sends it at once.
    */
   | { t: 'perm.changed'; revision: number; access: Access; refresh?: true }
+  /**
+   * The workflow state or the connection's own participant status changed (12 §10; FRW-035): a
+   * complete object, sent like `perm.changed`. When the change alters what the connection may do,
+   * `perm.changed` is sent as well, ahead of it.
+   */
+  | { t: 'wf.changed'; workflow: WorkflowStatusMessage }
   | { t: 'ch.closed'; code: 'unavailable'; reason?: CloseReason };
 
 export interface Outbound {

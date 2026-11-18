@@ -274,7 +274,8 @@ export interface WorkflowStatus {
   /** The receiving participant's status. */
   participant?: {
     id: string;
-    state: "active" | "completed" | (string & {});
+    /** The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's. */
+    state: "active" | "completed" | "waiting" | "paused" | "copy" | "closed" | (string & {});
   };
 }
 
