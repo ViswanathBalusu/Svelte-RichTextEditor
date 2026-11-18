@@ -35,6 +35,8 @@ interface MemoryDocument {
   log: LogCommit[];
   /** The content of each stored snapshot commit, by `seq` (packet A, phase 1b; BE-037). */
   snapshots?: Map<number, JsonEnvelope>;
+  /** Assets attached to the document, with the seq that first referenced each (BE-044). */
+  assets?: Map<string, number>;
   epoch: number;
   owner: string | null;
   perms: PermissionState;
@@ -254,12 +256,19 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
       perms: d.perms,
       retired: new Map(d.retired),
       snapshot: snap?.seq,
+      assets: d.assets ? new Map(d.assets) : undefined,
     };
     const result = this.#insert(d, req, options);
+    // The attachments are part of the same write (BE-044 criterion 1): kept when it is stored.
+    if (result.status === 'ok')
+      for (const a of options.attachments ?? [])
+        if (!(d.assets ??= new Map()).has(a.asset)) d.assets.set(a.asset, a.seq);
     if (options.fault === 'after-insert' && result.status === 'ok') {
       d.log.length = undo.length;
       d.perms = undo.perms;
       d.retired = undo.retired;
+      if (undo.assets) d.assets = undo.assets;
+      else delete d.assets;
       if (undo.snapshot !== undefined) d.snapshots?.delete(undo.snapshot);
       return { status: 'failed' };
     }
@@ -306,6 +315,11 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     const d = this.#find(ref);
     if (!d) return [];
     return clone(d.log.filter((c) => c.seq >= fromSeq && (toSeq === undefined || c.seq <= toSeq)));
+  }
+
+  /** The assets attached to the document and the seq that first referenced each (BE-044). */
+  async attachedAssets(ref: DocRef): Promise<ReadonlyMap<string, number>> {
+    return new Map(this.#find(ref)?.assets ?? []);
   }
 
   /** The stored commit with this identifier, as PgLogStore.byId finds it (BE-039). */

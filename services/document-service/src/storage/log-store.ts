@@ -204,6 +204,15 @@ const INSERT_SNAPSHOT = `
   INSERT INTO doc_snapshots (doc_id, seq, tenant_id, content, content_hash)
   VALUES ($1, $2, $3, $4, $5)`;
 
+/**
+ * The attachments of a request (BE-044 criterion 1): an asset is attached to the document from the
+ * first commit that references it, and a row that exists is kept (criterion 5).
+ */
+const INSERT_DOC_ASSETS = `
+  INSERT INTO doc_assets (tenant_id, doc_id, asset_id, first_seq)
+  SELECT $1, $2, x.asset, x.seq FROM unnest($3::uuid[], $4::bigint[]) AS x(asset, seq)
+  ON CONFLICT (tenant_id, doc_id, asset_id) DO NOTHING`;
+
 /** The index row of the checkpoint written for a snapshot (BE-020; ADR 0034 §3). */
 const INSERT_CHECKPOINT_ROW = `
   INSERT INTO doc_checkpoints (doc_id, seq, tenant_id, object_key, bytes, content_hash, created_at)
@@ -461,6 +470,13 @@ export class PgLogStore implements LogStore, OwnershipStore {
         req.fromSeq + commits.length - 1,
         hashes[hashes.length - 1],
       ]);
+      if (hooks.attachments?.length)
+        await client.query(INSERT_DOC_ASSETS, [
+          ref.tenant,
+          ref.doc,
+          hooks.attachments.map((a) => a.asset),
+          hooks.attachments.map((a) => a.seq),
+        ]);
       const snap = req.snapshot ? hooks.snapshot : undefined;
       if (req.snapshot && snap) {
         const hash = Buffer.from(snap.hash, 'hex');
@@ -558,6 +574,21 @@ export class PgLogStore implements LogStore, OwnershipStore {
 
   async read(ref: DocRef, fromSeq = 1, toSeq?: number): Promise<LogCommit[]> {
     return this.#inTenant(ref, (c) => this.#select(c, ref.doc, fromSeq, toSeq ?? null), true);
+  }
+
+  /** The assets attached to the document and the seq that first referenced each (BE-044). */
+  async attachedAssets(ref: DocRef): Promise<ReadonlyMap<string, number>> {
+    return this.#inTenant(
+      ref,
+      async (c) => {
+        const r = await c.query<{ asset_id: string; first_seq: string }>(
+          'SELECT asset_id, first_seq FROM doc_assets WHERE tenant_id = $1 AND doc_id = $2',
+          [ref.tenant, ref.doc],
+        );
+        return new Map(r.rows.map((x) => [x.asset_id, int(x.first_seq)] as const));
+      },
+      true,
+    );
   }
 
   /** The stored commit with this identifier (04 §5 step 2; BE-039), by the (doc_id, commit_id) key. */
