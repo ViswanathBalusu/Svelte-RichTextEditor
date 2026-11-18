@@ -1611,7 +1611,7 @@ As an operator at very large scale, I want the gateway, room and API tiers scale
 - [ ] Given the API tier is scaled to zero, when clients edit, then rooms keep serving.
 - [ ] Given the charts, when they are rendered, then each tier has its own deployment and scaling rules.
 
-**Notes:** Phase `cond`: stage 3 is driven by demand and not scheduled (11 §7). 01 §9 leaves open whether to split earlier.
+**Notes:** Phase `cond`: stage 3 is driven by demand and not scheduled (11 §7). 01 §9 leaves open whether to split earlier. Lane w5, 2026-11-18: nothing ticked (blocked), nothing built. Phase `cond`, stage 3, and BE-066 (its dependency) has not been run: it needs several room hosts, a Redis or Valkey and a load client, none of which exist here (BE-066 Notes). Criterion 1 needs three deployables run together and the kit passed against them, criterion 2 and 3 need a restarted gateway and an API tier scaled to zero under editing clients, and criterion 4 needs charts with a deployment per tier; the repository has one service image (`services/document-service/Containerfile`) and no charts. Owner decision 139 puts stage 3 at "on demand". Splitting the tiers would also need the ADR that 01 §9 leaves open (whether to split earlier), which no one has decided. What would be built first: a start-up setting that makes the document service serve only the gateway, only the rooms or only the REST API, with the others reached over the bus and the lease table that BE-060 to BE-063 provide.
 
 ### BE-069 Design the placement service
 
