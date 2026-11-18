@@ -1,0 +1,164 @@
+/**
+ * How a workflow moves once it is sent (12 §6.1, §6.2; FRW-031): the first view of the document by
+ * a participant, and the completion of a participant. Both go through `recordTransition`, so each
+ * is a control commit, a stored state and a push to the room (`wf.changed`, FRW-035).
+ *
+ * - `recordFirstView`: the first time a participant opens the document the time is stored once and
+ *   `participant_viewed` is raised. While the workflow is `sent` the first view of anyone moves it
+ *   to `in_progress`. A later call for the same participant changes nothing.
+ * - `recordCompletion`: an active participant completes (`completeParticipant` of the authority).
+ *   The participants of the next order become active together and `participant_activated` is raised
+ *   for each; the last participant who must act moves the workflow to `completed`
+ *   (`workflow_completed` is raised). A `cc` participant is never active, so never completes. An
+ *   approver completes as any other: it has no fields to check. The checks of the participant's
+ *   own fields and the `rules` commit belong to the `/complete` route (FRW-047), which calls this
+ *   after they pass.
+ *
+ * The events are returned, not raised: the route that calls these functions has the request
+ * context that `emit` needs. Decisions: docs/adr/0384-w4-FRW-031-progression.md (proposed).
+ */
+import {
+  activeParticipantIds,
+  completeParticipant,
+  openWorkflow,
+  type WorkflowEventName,
+} from '@docedit/authority';
+import type { DocRef } from '../storage/types.ts';
+import { recordOf } from './record.ts';
+import {
+  recordTransition,
+  type ControlRecord,
+  type TransitionDeps,
+  type TransitionOutcome,
+} from './transitions.ts';
+import type { WorkflowResourceView } from './workflow-resource.ts';
+
+/** One event for the caller to raise, with the participant it names (when it names one). */
+export interface RaisedEvent {
+  readonly name: WorkflowEventName;
+  readonly participant?: string;
+}
+
+export type ProgressOutcome =
+  | {
+      readonly ok: true;
+      /** False when nothing was stored (a repeated first view). */
+      readonly changed: boolean;
+      readonly resource: WorkflowResourceView;
+      readonly control: ControlRecord | null;
+      readonly raised: readonly RaisedEvent[];
+    }
+  | {
+      readonly ok: false;
+      readonly problem:
+        | { readonly code: 'not_found' }
+        | { readonly code: 'forbidden' }
+        | { readonly code: 'invalid_state'; readonly state: string }
+        | { readonly code: 'conflict'; readonly state: string; readonly rev: number };
+    };
+
+const fail = (outcome: Extract<TransitionOutcome, { ok: false }>): ProgressOutcome => ({
+  ok: false,
+  problem: outcome.problem,
+});
+
+export async function recordFirstView(
+  deps: TransitionDeps,
+  req: { ref: DocRef; actor: string; participant: string },
+): Promise<ProgressOutcome> {
+  const { ref, actor, participant } = req;
+  const current = await deps.workflows.read(ref.tenant, ref.doc);
+  if (current === null) return { ok: false, problem: { code: 'not_found' } };
+  const who = current.participants.find((p) => p.id === participant);
+  if (who === undefined) return { ok: false, problem: { code: 'forbidden' } };
+  // A document that is not running shows no first view: a draft is not sent, and an ended one has
+  // nobody to ask. A repeated view stores nothing.
+  const running = current.state === 'sent' || current.state === 'in_progress';
+  if (!running) return { ok: false, problem: { code: 'invalid_state', state: current.state } };
+  if (who.firstViewedAt !== undefined)
+    return { ok: true, changed: false, resource: current, control: null, raised: [] };
+
+  let to = current.state;
+  if (current.state === 'sent') {
+    const opened = openWorkflow(recordOf(current));
+    if (!opened.ok) return { ok: false, problem: { code: 'invalid_state', state: current.state } };
+    to = opened.record.state;
+  }
+  const at = new Date(deps.now()).toISOString();
+  const out = await recordTransition(deps, {
+    ref,
+    actor,
+    from: current,
+    write: {
+      to,
+      participants: current.participants.map((p) =>
+        p.id === participant ? { ...p, firstViewedAt: at } : p,
+      ),
+    },
+  });
+  if (!out.ok) return fail(out);
+  return {
+    ok: true,
+    changed: true,
+    resource: out.resource,
+    control: out.control,
+    raised: [{ name: 'participant_viewed', participant }],
+  };
+}
+
+export async function recordCompletion(
+  deps: TransitionDeps,
+  req: {
+    ref: DocRef;
+    actor: string;
+    participant: string;
+    /** The `seq` of the commit that completes the participant (FRW-047); default: none stored. */
+    completedSeq?: number;
+  },
+): Promise<ProgressOutcome> {
+  const { ref, actor, participant } = req;
+  const current = await deps.workflows.read(ref.tenant, ref.doc);
+  if (current === null) return { ok: false, problem: { code: 'not_found' } };
+  const record = recordOf(current);
+  const done = completeParticipant(record, participant);
+  if (!done.ok) {
+    // A participant who has completed already, or who is not active (an earlier order first, a
+    // `cc`), is refused; another state of the workflow is `invalid_state`.
+    return {
+      ok: false,
+      problem:
+        done.refusal === 'forbidden'
+          ? { code: 'forbidden' }
+          : { code: 'invalid_state', state: current.state },
+    };
+  }
+  const nowActive = new Set(activeParticipantIds(done.record.participants));
+  const out = await recordTransition(deps, {
+    ref,
+    actor,
+    from: current,
+    write: {
+      to: done.record.state,
+      participants: current.participants.map((p) => {
+        if (p.id === participant)
+          return {
+            ...p,
+            state: 'completed',
+            ...(req.completedSeq !== undefined ? { completedSeq: req.completedSeq } : {}),
+          };
+        if (p.state === 'completed') return p;
+        return { ...p, state: nowActive.has(p.id) ? 'active' : 'pending' };
+      }),
+    },
+  });
+  if (!out.ok) return fail(out);
+  const raised: RaisedEvent[] = [
+    { name: 'participant_completed', participant },
+    ...done.completion.activated.map((id) => ({
+      name: 'participant_activated' as const,
+      participant: id,
+    })),
+    ...(done.completion.completedWorkflow ? [{ name: 'completed' as const }] : []),
+  ];
+  return { ok: true, changed: true, resource: out.resource, control: out.control, raised };
+}

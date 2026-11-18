@@ -26,6 +26,7 @@
 import { lockFor, type WorkflowStateName } from '@docedit/authority';
 import { uuid7 } from '@docedit/model';
 import type { RoomNotifier } from '../seams.ts';
+import { recordOf } from './record.ts';
 import type { AuditStore, DocRef, GrantStore, LogStore } from '../storage/types.ts';
 import type {
   WorkflowResourceStore,
@@ -129,7 +130,10 @@ export async function recordTransition(
       ifRevision: before.revision,
     });
     revision = after.revision;
-    deps.notifier.permissionsChanged(ref, after);
+    // A notifier that pushes the workflow (FRW-035) is told once, after the state moves, with the
+    // record and these permissions together: the room then sends `perm.changed` and `wf.changed` in
+    // order, with the access the new record implies. Any other is told of the lock now.
+    if (deps.notifier.workflowChanged === undefined) deps.notifier.permissionsChanged(ref, after);
   }
   await deps.afterLock?.();
 
@@ -140,7 +144,14 @@ export async function recordTransition(
     { state: from.state, rev: from.rev },
     write,
   );
-  if (!moved.ok) return { ok: false, problem: moved.problem } as TransitionOutcome;
+  if (!moved.ok) {
+    // The lock is stored but the state did not move: the room still learns of the lock.
+    if (deps.notifier.workflowChanged !== undefined && revision !== null)
+      deps.notifier.permissionsChanged(ref, await deps.grants.current(ref));
+    return { ok: false, problem: moved.problem } as TransitionOutcome;
+  }
+  // FRW-035: the room learns of the new state and, in step with it, of the permission state.
+  deps.notifier.workflowChanged?.(ref, recordOf(moved.resource), await deps.grants.current(ref));
 
   // 4: the audit entry of the transition itself.
   await deps.audit?.record([

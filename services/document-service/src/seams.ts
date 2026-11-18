@@ -8,7 +8,14 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { Connection, DocRole, PermissionState, Visibility } from '@docedit/authority';
+import type {
+  Connection,
+  DocRole,
+  PermissionState,
+  Visibility,
+  WorkflowRecord,
+} from '@docedit/authority';
+import type { WorkflowResourceStore } from './workflow/workflow-resource.ts';
 import type { EventSink } from './control-plane/events.ts';
 import type { JsonEnvelope } from '@docedit/model';
 import type { RateLimits } from './data-plane/limits.ts';
@@ -90,6 +97,12 @@ export interface RoomNotifier {
   permissionsChanged(ref: DocRef, perms: PermissionState): void;
   /** The document was locked, archived, unlocked or deleted: the room re-reads it or closes. */
   documentChanged(ref: DocRef): void;
+  /**
+   * The workflow moved (FRW-035): `record` is its new state and `perms` the permission state stored
+   * with the transition, when the lock changed. The room sends `perm.changed` and `wf.changed`.
+   * Optional: a notifier that does not implement it leaves the room as it is.
+   */
+  workflowChanged?(ref: DocRef, record: WorkflowRecord, perms?: PermissionState): void;
 }
 
 /** What the data plane needs from the composition. */
@@ -129,6 +142,11 @@ export interface DataPlaneDeps {
    * presence all go through it, one visibility class at a time. Without it nothing is hidden.
    */
   readonly visibility?: Visibility;
+  /**
+   * The workflow resources (FRW-035): a room reads the workflow of its document when it starts, so
+   * that `ch.opened` carries it. Without it no room has a workflow.
+   */
+  readonly workflows?: WorkflowResourceStore;
   // --- Added by packet A2 (additive). ---------------------------------------------------------
   /**
    * The per-tenant user mapping (BE-013; S6 gap G11): storage and rooms hold surrogates, the wire

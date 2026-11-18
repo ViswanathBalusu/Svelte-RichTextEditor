@@ -668,6 +668,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     node: config.node,
     limits: rateLimits,
     ...(liveQuotas ? { quotas: liveQuotas } : {}),
+    ...(parts.workflows ? { workflows: parts.workflows } : {}),
     now,
     checkpoints,
     settings: {

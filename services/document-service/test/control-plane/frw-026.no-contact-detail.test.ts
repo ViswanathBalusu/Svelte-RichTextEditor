@@ -46,7 +46,18 @@ describe('the published schema holds no contact detail (FRW-026 criterion 4)', (
 
   it('names exactly the identifying members of a participant: id, roles, kind, order, sub, name and the rest of the resource', () => {
     expect(Object.keys(participant.properties!).sort()).toEqual(
-      ['auth', 'completedSeq', 'id', 'kind', 'name', 'order', 'roles', 'state', 'sub'].sort(),
+      [
+        'auth',
+        'completedSeq',
+        'firstViewedAt',
+        'id',
+        'kind',
+        'name',
+        'order',
+        'roles',
+        'state',
+        'sub',
+      ].sort(),
     );
   });
 
@@ -59,7 +70,15 @@ describe('the published schema holds no contact detail (FRW-026 criterion 4)', (
   it('would notice one (control)', () => {
     for (const bad of ['email', 'eMail', 'phone_number', 'telephone', 'mobile', 'contactDetails'])
       expect(isContact(bad), bad).toBe(true);
-    for (const fine of ['sub', 'name', 'order', 'roles', 'timeZone', 'completedSeq'])
+    for (const fine of [
+      'sub',
+      'name',
+      'order',
+      'roles',
+      'timeZone',
+      'completedSeq',
+      'firstViewedAt',
+    ])
       expect(isContact(fine), fine).toBe(false);
   });
 });

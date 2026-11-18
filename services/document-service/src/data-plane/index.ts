@@ -13,7 +13,7 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { PermissionState } from '@docedit/authority';
+import type { PermissionState, WorkflowRecord } from '@docedit/authority';
 import { uuid7, type JsonEnvelope } from '@docedit/model';
 import type { Notification } from '@docedit/protocol';
 import { WebSocketServer } from 'ws';
@@ -194,6 +194,7 @@ class DepDataPlane implements DataPlane {
       lease: this.#lease,
       leases: deps.leases,
       restricted: deps.visibility !== undefined,
+      ...(deps.workflows ? { workflows: deps.workflows } : {}),
     });
     this.#outbox = deps.outbox
       ? new OutboxDelivery({
@@ -315,6 +316,10 @@ class DepDataPlane implements DataPlane {
 
   documentChanged(ref: DocRef): void {
     void this.#host.documentChanged(ref);
+  }
+
+  workflowChanged(ref: DocRef, record: WorkflowRecord, perms?: PermissionState): void {
+    this.#host.workflowChanged(ref, record, perms);
   }
 
   sessionsRevoked(tenant: string, user: string, doc: string | null): void {

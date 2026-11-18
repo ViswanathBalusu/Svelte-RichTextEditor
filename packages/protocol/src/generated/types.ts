@@ -908,6 +908,8 @@ export interface Workflow {
     };
     state?: string;
     completedSeq?: number;
+    /** When the participant first opened the document (12 §6.3; FRW-031). */
+    firstViewedAt?: string;
   }>;
   routing?: Array<{ [key: string]: unknown }>;
   deadline?: string;
