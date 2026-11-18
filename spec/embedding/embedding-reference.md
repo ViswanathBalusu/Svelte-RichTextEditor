@@ -143,6 +143,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `view.outline` | view | navigation-pane |  | `outline` |
 | `view.permissions` | review | regions-and-permissions |  |  |
 | `view.recovered` | view | recovery-journal |  |  |
+| `view.review` | view | suggestions |  |  |
 | `view.roles` | view | fields-and-forms |  |  |
 | `view.rules` | view | fields-and-forms |  |  |
 | `view.shortcuts` | view | keyboard-shortcuts |  |  |

@@ -290,6 +290,7 @@ export const SHELL_QUERY_NAMES = [
   'shell.pane.fill',
   'shell.pane.checker',
   'shell.pane.sources',
+  'shell.pane.review',
   'shell.pane.roles',
   'shell.pane.fields',
   'shell.pane.rules',
@@ -449,6 +450,17 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       changesContent: false,
       capability: 'accessibility-checker',
       run: () => host.togglePane('checker'),
+    },
+    // The review pane (UX-037): the suggestions by kind, author and words, with accept and reject.
+    'view.review': {
+      id: 'view.review',
+      label: 'command.view.review',
+      icon: 'review',
+      group: 'view',
+      active: 'shell.pane.review',
+      changesContent: false,
+      capability: 'suggestions',
+      run: () => host.togglePane('review'),
     },
     'view.sources': {
       id: 'view.sources',

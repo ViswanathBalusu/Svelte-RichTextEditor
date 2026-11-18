@@ -609,7 +609,7 @@
   $effect(() => {
     const open = pane?.id ?? null;
     shellQueries.set('shell.outlineOpen', open === 'outline');
-    for (const id of ['styles', 'recovered', 'shortcuts', 'permissions', 'fill', 'checker', 'sources', 'roles', 'fields', 'rules'])
+    for (const id of ['styles', 'recovered', 'shortcuts', 'permissions', 'fill', 'checker', 'sources', 'review', 'roles', 'fields', 'rules'])
       shellQueries.set(`shell.pane.${id}`, open === id);
     shellQueries.set('shell.painterArmed', painterArmed);
     shellQueries.set('shell.zoomInPossible', canZoom(zoom, 'in'));
@@ -928,6 +928,7 @@
     if (offered('recovered')) add(host1b['view.recovered']);
     if (offered('checker')) add(host1b['view.checker']);
     if (offered('sources')) add(host1b['view.sources']);
+    if (offered('review')) add(host1b['view.review']);
     if (offered('roles')) add(host1b['view.roles']);
     if (offered('fields')) add(host1b['view.fieldProperties']);
     if (offered('rules')) add(host1b['view.rules']);
