@@ -19,6 +19,7 @@ const PARA = 'pOpen00000000001';
 interface Node {
   type?: string;
   attrs?: Record<string, unknown>;
+  text?: string;
   content?: Node[];
 }
 
