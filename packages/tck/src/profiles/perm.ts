@@ -28,6 +28,7 @@ import { capabilityFixtures, type CapabilityCase } from '../fixtures.ts';
 import { judge, permissionState, type OracleGrant } from '../oracle.ts';
 import { scenario, type ProfileDef, type ScenarioDef } from '../scenario.ts';
 import { PERM_DOC_MATRIX, PERM_REGION_MATRIX } from './perm-matrix.ts';
+import { PERM_REGION_STRUCTURE } from './perm-structure.ts';
 import {
   acked,
   join,
@@ -206,6 +207,7 @@ export const PERM_REGION: ProfileDef = {
   requires: { kind: 'features', features: ['regions'] },
   scenarios: [
     ...PERM_REGION_MATRIX,
+    ...PERM_REGION_STRUCTURE,
     reg({
       id: 'capabilities',
       title:
