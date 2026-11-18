@@ -98,13 +98,10 @@ export function clientSeqFieldsOf(def: {
 const listed = (): Set<string> => new Set(SEQ_INPUTS.map((i) => `${i.where}|${i.field}`));
 
 /**
- * Listed inputs the definition does not declare yet. The attribution route takes no `atSeq` in
- * the definition (its operation names gap G68), so the listing is kept and marked here, not
- * deleted; the walk still fails on any other listed input the definition lacks.
+ * Listed inputs the definition does not declare yet. None: the attribution route takes `seq` (PRO-055),
+ * so every listed input is a field of the definition.
  */
-const NOT_IN_DEFINITION: ReadonlySet<string> = new Set([
-  'GET /documents/{id}/attribution|query.atSeq',
-]);
+const NOT_IN_DEFINITION: ReadonlySet<string> = new Set<string>();
 
 describe('the sequence inputs of the protocol are one table (HIS-024 criterion 4)', () => {
   it('every client-supplied sequence field of the definition is gated or exempt in SEQ_INPUTS', () => {
@@ -121,8 +118,7 @@ describe('the sequence inputs of the protocol are one table (HIS-024 criterion 4
     const found = clientSeqFieldsOf(DEP1);
     const stale = [...listed()].filter((k) => !found.has(k) && !NOT_IN_DEFINITION.has(k));
     expect(stale).toEqual([]);
-    // The exception is kept visible: the definition still lacks the member (gap G68).
-    expect(found.has('GET /documents/{id}/attribution|query.atSeq')).toBe(false);
+    expect(found.has('GET /documents/{id}/attribution|query.seq')).toBe(true);
   });
 
   it('a new ungated sequence field fails the walk', () => {

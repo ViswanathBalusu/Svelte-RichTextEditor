@@ -25,12 +25,18 @@
  * The schema names `RestoreResult` as a placeholder, so the members are a decision of this lane
  * (docs/adr/0358-lane-V-HIS-017-032.md).
  */
-import { type Connection, editsSomewhere } from '@docedit/authority';
+import type { Connection } from '@docedit/authority';
 import { planRestore } from '@docedit/history';
 import { canonicalize, uuid7 } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { regionNodeOf } from './content.ts';
-import { accessOf, minVisibleSeqOf, regionInfosOfJson } from './gate.ts';
+import {
+  accessOf,
+  holdsEditSomewhere,
+  minVisibleSeqOf,
+  refuseBelowGate,
+  regionInfosOfJson,
+} from './gate.ts';
 import { checkSeq, historyViewOf, nameUsers, problemOf } from './history-reads.ts';
 import { json, type Kit } from './kit.ts';
 import { guard, type Ctx, type Handler, type Reply } from './pipeline.ts';
@@ -169,7 +175,7 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       const regions = regionInfosOfJson(v.headDoc);
       // Nobody who lacks `edit` everywhere can restore a region, so such a caller learns nothing
       // about the region (HIS-018; 07 §12); the plan then checks `edit` in that region.
-      if (v.conn && !editsSomewhere(v.conn, regions, v.perms, now))
+      if (v.conn && !holdsEditSomewhere(v.conn, regions, v.perms, now))
         throw new ApiError('forbidden', 'restoring a region needs edit in it (07 §12)');
       if (!regions.some((r) => r.id === body.region))
         throw new ApiError('not_found', `no region ${body.region}`);
@@ -282,11 +288,7 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       logs: d.logs,
       now: d.now(),
     });
-    if (body.toSeq < min)
-      throw new ApiError(
-        'forbidden',
-        `seq ${body.toSeq} is hidden from you by the history gate (07 section 8)`,
-      );
+    refuseBelowGate(body.toSeq, min, head.seq, 'toSeq');
     const target = await d.content.rebuild(ref, head.incarnation, body.toSeq);
 
     // An approved region must stay exactly as approved, even for a restore (07 section 11).

@@ -190,6 +190,7 @@ export {
   HISTORY_VISIBILITIES,
   editsSomewhere,
   minVisibleSeq,
+  minVisibleSeqAsync,
   rangeVisible,
   stateVisible,
   type GateInput,
