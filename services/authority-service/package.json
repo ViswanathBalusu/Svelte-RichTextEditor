@@ -21,6 +21,7 @@
     "@docedit/authority": "workspace:*",
     "@docedit/history": "workspace:*",
     "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*",
     "@docedit/rules": "workspace:*",
     "prosemirror-model": "1.25.12",
     "prosemirror-transform": "1.12.5"

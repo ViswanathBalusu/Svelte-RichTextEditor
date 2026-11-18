@@ -11,6 +11,7 @@
  * | `materialise` | `GET /v1/authority/states/{stateId}/content?seq=N` |
  * | `migrate` | `POST /v1/authority/states/{stateId}/migrate` |
  * | `evaluateRules` | `POST /v1/authority/states/{stateId}/evaluate-rules` |
+ * | what the service supports | `GET /v1/authority/capabilities` |
  *
  * A failed call is `application/problem+json` with the service's `code` (RFC 9457). Probes are
  * `GET /v1/authority/health` (the process is up) and `GET /v1/authority/ready` (it can serve).
@@ -18,6 +19,7 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { canonicalize } from '@docedit/model';
+import { capabilities } from './capabilities.ts';
 import type { Answer, AuthorityService, ServiceError, ServiceErrorCode } from './service.ts';
 
 /** The status of each failure. A rejection of a commit is an answer, not an error (not here yet). */
@@ -128,6 +130,7 @@ export async function route(routes: Routes, req: HttpRequest): Promise<HttpRespo
     const ready = routes.ready?.() ?? true;
     return json(ready ? 200 : 503, { status: ready ? 'ready' : 'not ready' });
   }
+  if (path === `${API}/capabilities` && method === 'GET') return json(200, capabilities());
   const open = /^\/v1\/authority\/documents\/([^/]+)\/open$/.exec(path);
   if (open) {
     if (method !== 'POST') return methodNotAllowed('POST');

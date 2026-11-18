@@ -642,6 +642,9 @@ importers:
       '@docedit/model':
         specifier: workspace:*
         version: link:../../packages/model
+      '@docedit/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@docedit/rules':
         specifier: workspace:*
         version: link:../../packages/rules

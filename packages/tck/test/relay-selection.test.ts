@@ -68,4 +68,12 @@ describe('relay without an authority service (PRO-101 criterion 4)', () => {
     expect(notApplicable(byId('exports'), relay(['exports']))).toBeNull();
     expect(notApplicable(byId('history'), relay(['exports']))).toMatch(/`history`/);
   });
+
+  it('selects core-relay for a relay and core for an authority (PRO-101 criterion 3, selection half)', () => {
+    expect(notApplicable(byId('core-relay'), relay([]))).toBeNull();
+    expect(notApplicable(byId('core'), relay([]))).toMatch(/authority mode/);
+    const authority = { ...relay([]), discovery: { mode: 'authority' } as never };
+    expect(notApplicable(byId('core'), authority)).toBeNull();
+    expect(notApplicable(byId('core-relay'), authority)).toMatch(/relay mode/);
+  });
 });
