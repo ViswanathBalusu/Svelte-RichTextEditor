@@ -229,6 +229,8 @@ The `suggestions` option chooses `accept` (as if all were accepted), `reject` (a
 | `docx` | An OOXML writer from the CDM in `export-docx`. Suggestions become `w:ins` and `w:del` with author and date; comments become Word comments; regions follow 07, section 15; fields follow 12, section 12. For a document imported from Word, the writer patches the original package, as [ADR 0017](../adr/0017-lossless-docx-preservation-layer.md) describes. It copies unedited parts and elements verbatim, writes preserved properties back onto edited elements, and re-inserts preserved fragments, so that the file round-trips without loss |
 | `cdm` | The canonical JSON |
 | `html`, `md` | Direct writers, in phase 2, because pasting into and out of other tools is part of everyday use |
+
+The classification label (13 §10) is carried as follows (ADR 0414, proposed). PDF and DOCX: in the header and the footer of every page. HTML: a `header` and a `footer` element of class `de-classification` around the content, and a `classification` meta element. Markdown: the label in bold as the first and the last paragraph. `cdm`: not in the file, which is fixed by the content; the label stays on the document record. A document without a label has no marking. A change of label changes the export request key, so the next export is a new job.
 | EPUB | Later, through a Pandoc JSON writer |
 
 ## 12. DOCX import

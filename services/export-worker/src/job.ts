@@ -414,6 +414,8 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       const html = htmlText(htmlEnvelope, {
         suggestions: htmlPlan.plan.suggestions,
         ...(htmlContent.title !== null ? { title: htmlContent.title } : {}),
+        // The classification marking (EXP-089): before and after the content, when there is a label.
+        classification: htmlContent.classification,
       });
       const htmlDiagnostics: Diagnostic[] = [...htmlPlan.plan.diagnostics, ...html.diagnostics];
       if (!html.ok)
@@ -463,7 +465,11 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
           mdPlan.diagnostics,
         );
       const mdChainHead = await chainHeadOf(deps.stores, { tenant, doc: payload.doc }, payload.seq);
-      const md = markdownText(mdEnvelope, { suggestions: mdPlan.plan.suggestions });
+      const md = markdownText(mdEnvelope, {
+        suggestions: mdPlan.plan.suggestions,
+        // The classification marking (EXP-089): a line before and a line after the content.
+        classification: mdContent.classification,
+      });
       const mdDiagnostics: Diagnostic[] = [...mdPlan.plan.diagnostics, ...md.diagnostics];
       if (!md.ok)
         throw failed('unsupported_feature', 'the writer cannot write this document', mdDiagnostics);
