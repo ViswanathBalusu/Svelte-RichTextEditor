@@ -65,6 +65,11 @@
   let profile = $state<NonNullable<ExportOptions['profile']>>('preview');
   let tagging = $state<NonNullable<ExportOptions['tagging']>>('on');
   let fields = $state<NonNullable<ExportOptions['fields']>>('flatten');
+  // The options that have no value of their own: left empty, the request omits them and the
+  // service applies the schema's defaults (EXP-005 criterion 4).
+  let standard = $state<'' | NonNullable<ExportOptions['pdfStandard']>>('');
+  let locale = $state('');
+  let timeZone = $state('');
 
   let job = $state.raw<ExportJobView | null>(null);
   let failedToStart = $state(false);
@@ -156,8 +161,18 @@
     failedToStart = false;
     gone = null;
     moved = null;
-    const options: ExportOptions =
+    let options: ExportOptions =
       chosen === 'pdf' ? { profile, tagging, fields } : chosen === 'tex' ? { fields } : {};
+    if (chosen === 'pdf' || chosen === 'tex') {
+      const tag = locale.trim();
+      const zone = timeZone.trim();
+      options = {
+        ...options,
+        ...(chosen === 'pdf' && standard ? { pdfStandard: standard } : {}),
+        ...(tag ? { locale: tag } : {}),
+        ...(zone ? { timeZone: zone } : {}),
+      };
+    }
     // The preflight runs before any job is created (EXP-003 criterion 3). With warnings the author
     // chooses to continue or not; a preflight that fails does not stop the export, since the job
     // reports the same things.
@@ -308,6 +323,37 @@
           <option value={f}>{tr.t(`export.fields.${f}`)}</option>
         {/each}
       </select>
+    {/if}
+    {#if chosen === 'pdf'}
+      <label class="de-field" for={`${id}-standard`}>{tr.t('dialog.export.standard')}</label>
+      <select id={`${id}-standard`} class="de-input" bind:value={standard} disabled={running}>
+        <option value="">{tr.t('export.standard.default')}</option>
+        {#each ['ua-2', 'a-4'] as const as s (s)}
+          <option value={s}>{tr.t(`export.standard.${s}`)}</option>
+        {/each}
+      </select>
+    {/if}
+    {#if chosen === 'pdf' || chosen === 'tex'}
+      <label class="de-field" for={`${id}-locale`}>{tr.t('dialog.export.locale')}</label>
+      <input
+        id={`${id}-locale`}
+        class="de-input"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        bind:value={locale}
+        disabled={running}
+      />
+      <label class="de-field" for={`${id}-time-zone`}>{tr.t('dialog.export.timeZone')}</label>
+      <input
+        id={`${id}-time-zone`}
+        class="de-input"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        bind:value={timeZone}
+        disabled={running}
+      />
     {/if}
     <div class="de-dialog-actions">
       {#if running}
