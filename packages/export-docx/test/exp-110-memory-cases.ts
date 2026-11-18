@@ -9,7 +9,15 @@ import { corpusFiles, readFile } from './corpus.ts';
 
 const SAMPLE = corpusFiles().find((f) => f.name === 'docx4j/sample-docx.docx')!;
 
-export const CASES = ['zip-bomb', 'deep-nesting', 'large-table'] as const;
+export const CASES = [
+  'zip-bomb',
+  'dtd-entities',
+  'macro-enabled',
+  'external-relationship',
+  'embedded-object',
+  'deep-nesting',
+  'large-table',
+] as const;
 export type CaseName = (typeof CASES)[number];
 
 function withParts(changes: Record<string, Uint8Array | string>): Uint8Array {
@@ -42,6 +50,34 @@ function documentXml(): string {
 export function buildCase(name: CaseName): Uint8Array {
   if (name === 'zip-bomb')
     return withParts({ 'customXml/bomb.xml': new Uint8Array(40 * 1024 * 1024) });
+  if (name === 'dtd-entities') {
+    const dtd =
+      '<!DOCTYPE w:document [' +
+      '<!ENTITY a "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">' +
+      '<!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">' +
+      '<!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">' +
+      ']>';
+    return withParts({
+      'word/document.xml': documentXml().replace(/^(<?xml[^>]*?>)?/, (m) => `${m}${dtd}`),
+    });
+  }
+  if (name === 'macro-enabled')
+    return withParts({ 'word/vbaProject.bin': new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]) });
+  if (name === 'external-relationship') {
+    const zip = readZip(readFile(SAMPLE));
+    const rels = new TextDecoder().decode(
+      entryData(zip, zip.byName.get('word/_rels/document.xml.rels')!),
+    );
+    const extra =
+      '<Relationship Id="rIdHostile1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="http://example.invalid/steal" TargetMode="External"/>';
+    return withParts({
+      'word/_rels/document.xml.rels': rels.replace('</Relationships>', `${extra}</Relationships>`),
+    });
+  }
+  if (name === 'embedded-object') {
+    const inner = writeZip([{ name: 'word/document.xml', data: new TextEncoder().encode('<x') }]);
+    return withParts({ 'word/embeddings/Microsoft_Word_Document1.docx': inner });
+  }
   if (name === 'deep-nesting') {
     const depth = 20_000;
     const open = '<w:ins w:id="1" w:author="a">'.repeat(depth);

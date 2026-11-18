@@ -106,6 +106,8 @@ export function exportRequestKey(parts: {
   options: Record<string, unknown>;
   full: boolean;
   classVersion: string;
+  /** The document's classification label (EXP-089): printed on the PDF, so part of the key. */
+  classification?: string | null;
 }): string {
   return createHash('sha256')
     .update(
@@ -120,6 +122,8 @@ export function exportRequestKey(parts: {
         options: parts.options,
         full: parts.full,
         classVersion: parts.classVersion,
+        // Left out when there is no label, so the keys of unlabelled documents do not change.
+        ...(parts.classification ? { classification: parts.classification } : {}),
       }),
       'utf8',
     )

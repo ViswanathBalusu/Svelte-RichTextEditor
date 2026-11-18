@@ -503,6 +503,20 @@
       "aliases": []
     },
     {
+      "id": "insert.caption",
+      "group": "insert",
+      "capability": "editing",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.crossReference",
+      "group": "insert",
+      "capability": "editing",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "insert.field.checkbox",
       "group": "insert",
       "capability": "fields-and-forms",

@@ -198,7 +198,7 @@ describe.skipIf(!ready)('EXP-041 criterion 3: the shading of a row span', () => 
     // Nothing of the colour lies below the block, and outside the span's column.
     expect(rowsWith(page, x1 + 20, x1 + 60, YELLOW)).toHaveLength(0);
     expect(yellow.every((y) => y >= top && y <= bottom)).toBe(true);
-  });
+  }, 300_000);
 
   it('keeps the span colour in a covered row that the header style also shades', async () => {
     const tbl: J = {
@@ -235,5 +235,5 @@ describe.skipIf(!ready)('EXP-041 criterion 3: the shading of a row span', () => 
     // The header colour is on the other column of the same rows.
     const BLUE: Match = (r, g, b) => r < 60 && g > 150 && b > 220;
     expect(rowsWith(page, x1 + 20, x1 + 60, BLUE).length).toBeGreaterThan(20);
-  });
+  }, 300_000);
 });

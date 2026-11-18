@@ -129,6 +129,38 @@ const CASES: Record<string, Case> = {
       expect(r.text).not.toContain(MARKER);
     },
   },
+  'GET /documents/{id}/audit-segment|query.fromSeq': {
+    async below(rig, as) {
+      // The range ends below the gate, so the segment holds nothing the caller may read.
+      refused(
+        await call(rig, 'GET', `/v1/documents/${rig.doc}/audit-segment?fromSeq=1&toSeq=1`, as),
+      );
+    },
+    async at(rig) {
+      const r = await call(
+        rig,
+        'GET',
+        `/v1/documents/${rig.doc}/audit-segment?fromSeq=${rig.head}&toSeq=${rig.head}`,
+        rig.viewer,
+      );
+      expect(r.status, r.text).toBe(200);
+      expect(r.text).not.toContain(MARKER);
+    },
+  },
+  'GET /documents/{id}/audit-segment|query.toSeq': {
+    async below(rig, as) {
+      refused(await call(rig, 'GET', `/v1/documents/${rig.doc}/audit-segment?toSeq=1`, as));
+    },
+    async at(rig) {
+      const r = await call(
+        rig,
+        'GET',
+        `/v1/documents/${rig.doc}/audit-segment?fromSeq=${rig.head}&toSeq=${rig.head}`,
+        rig.viewer,
+      );
+      expect(r.status, r.text).toBe(200);
+    },
+  },
   'GET /documents/{id}/history|query.fromSeq': {
     async below(rig, as) {
       refused(await call(rig, 'GET', `/v1/documents/${rig.doc}/history?fromSeq=1`, as));

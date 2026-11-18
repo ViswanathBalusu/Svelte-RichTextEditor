@@ -157,7 +157,7 @@ describe('EXP-046 criterion 5: stored failures are replayed', () => {
           'text',
           fc.property(fc.string({ minLength: 1, maxLength: 12 }), (v) => !v.includes('%')),
           { seed: 46, numRuns: 400, examples: [['ab%cd']] },
-          ([v]) => v,
+          ([v]) => String(v),
           dir,
         );
       } catch (e) {
@@ -179,7 +179,7 @@ describe('EXP-046 criterion 5: stored failures are replayed', () => {
           'text',
           fc.property(fc.string(), () => true),
           { numRuns: 20 },
-          ([v]) => v,
+          ([v]) => String(v),
           clear,
         );
         expect(readdirSync(clear)).toEqual([]);

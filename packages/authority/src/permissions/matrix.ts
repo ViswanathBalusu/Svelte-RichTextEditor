@@ -195,8 +195,9 @@ export const MATRIX: readonly MatrixRow[] = [
       'PUT /retention',
       'GET /documents/{id}/retention',
       'PUT /documents/{id}/retention',
-      // Legal holds (08 §11; UX-080 criteria 2 and 3): place and list with a service credential.
+      // Legal holds (08 §11; UX-080 criteria 2 and 3; HIS-031): place, release and list with a service credential.
       'POST /documents/{id}/holds',
+      'DELETE /documents/{id}/holds/{holdId}',
       'GET /holds',
       // The erasure of a person (08 §13; HIS-038 criterion 6): a service credential.
       'POST /users/erase',

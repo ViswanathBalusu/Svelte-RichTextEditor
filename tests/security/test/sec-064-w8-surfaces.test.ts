@@ -288,6 +288,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             `/documents/${doc}/attribution?atSeq=${seq}`,
             `/documents/${doc}/attribution?region=${CONF}&atSeq=${seq}`,
             `/documents/${doc}/diff?fromSeq=0&toSeq=${seq}`,
+            `/documents/${doc}/audit-segment?fromSeq=0&toSeq=${seq}`,
           );
         }
         urls.push(
@@ -296,6 +297,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           `/documents/${doc}/history?region=${CONF}`,
           `/documents/${doc}/history?field=${SENS}`,
           `/documents/${doc}/activity`,
+          `/documents/${doc}/suggestions/ssSuggest0000001/introduction`,
           `/documents/${doc}/connect`,
           `/documents/${doc}/versions`,
           `/documents/${doc}/regions`,

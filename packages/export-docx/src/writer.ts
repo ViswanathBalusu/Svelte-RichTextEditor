@@ -114,6 +114,11 @@ export interface WriteOptions {
   timeZone?: string;
   /** The document's title, for title fields (control-plane metadata, 03 §2). */
   title?: string;
+  /**
+   * The document's classification label (EXP-089): written as a centred line in the header and in
+   * the footer of every page (owner decision 51), whichever variants the sections use.
+   */
+  classification?: string | null;
   /** The face of the font registry's default (`fontFamily` null), stated in the document defaults. */
   defaultFont?: string;
   /**
@@ -350,6 +355,8 @@ class DirectWriter {
   private readonly redacted: string[] = [];
   private readonly suggestionDates: ReadonlyMap<string, string>;
   private readonly watermarks = new Map<string, string>();
+  /** Header and footer slots that the classification marking added to a page setup, by its id (EXP-089). */
+  private readonly slotOverrides = new Map<string, Record<string, string>>();
   /** Identifiers of the source definitions, so a citation of an undefined source is reported (EXP-122). */
   private readonly sourceIds = new Set<string>();
   private nextId = 1;
@@ -602,6 +609,67 @@ class DirectWriter {
         else this.watermarks.set(id, text);
       }
     }
+    const label = this.opts.classification?.trim();
+    if (label) this.planClassification(setups, label);
+  }
+
+  /**
+   * The classification marking (EXP-089; owner decision 51): one paragraph with the label at the end
+   * of every header and footer story the page setups use, and a default header and footer where a
+   * setup has none, so that every page of every section carries it. A story shared by several
+   * setups is marked once. The caller's document is not changed: marked stories are copies.
+   */
+  planClassification(setups: readonly JsonNode[], label: string): void {
+    if (setups.length === 0) {
+      this.warn('the classification label is not written: the document has no page setup');
+      return;
+    }
+    const marked = new Set<string>();
+    for (const s of setups) {
+      const extra: Record<string, string> = {};
+      for (const kind of ['header', 'footer'] as const) {
+        const needed = [
+          'Default',
+          ...(s.attrs?.['differentFirstPage'] === true ? ['First'] : []),
+          ...(s.attrs?.['differentOddEven'] === true ? ['Even'] : []),
+        ];
+        for (const slot of ['Default', 'First', 'Even']) {
+          const key = `${kind}${slot}`;
+          let id = extra[key] ?? s.attrs?.[key];
+          if (typeof id !== 'string' || !this.stories.has(id)) {
+            if (!needed.includes(slot)) continue;
+            id = `classification${kind}${this.nextStory}`;
+            this.stories.set(id, { type: 'story', attrs: { id, kind }, content: [] });
+            const part = `word/${kind}${this.nextStory++}.xml`;
+            this.storyPart.set(id, part);
+            this.storyRel.set(
+              id,
+              this.rel(
+                'word/document.xml',
+                kind === 'footer' ? REL.footer : REL.header,
+                part.slice(5),
+              ),
+            );
+            extra[key] = id;
+          }
+          if (marked.has(id)) continue;
+          marked.add(id);
+          const story = this.stories.get(id)!;
+          this.stories.set(id, {
+            ...story,
+            content: [
+              ...(story.content ?? []),
+              {
+                type: 'paragraph',
+                attrs: { id: `${id}p`.padEnd(16, '0').slice(-16), align: 'center' },
+                content: [{ type: 'text', text: label }],
+              },
+            ],
+          });
+        }
+      }
+      if (Object.keys(extra).length > 0) this.slotOverrides.set(String(s.attrs?.['id']), extra);
+    }
   }
 
   /** Bookmarks for `ref` fields that point at a node or an equation, so Word's REF fields resolve. */
@@ -679,7 +747,7 @@ class DirectWriter {
     const node = defs?.content?.find(
       (n) => n.type === 'page_setup' && n.attrs?.['id'] === psId,
     ) ?? { type: 'page_setup', attrs: { id: psId } };
-    const v = withDefaults(node);
+    const v = { ...withDefaults(node), ...(this.slotOverrides.get(psId) ?? {}) };
     if (this.evenAndOdd && v['differentOddEven'] !== true) {
       // Word sets odd and even pages for the whole document (ADR 0032 §6): a section without them
       // shows its default header on even pages too.

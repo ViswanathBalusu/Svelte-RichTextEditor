@@ -1,5 +1,5 @@
 /**
- * EXP-110, criterion 2 (memory half): each hostile package of `hostile-corpus.test.ts` is imported in
+ * EXP-110, criterion 2 (memory half): each of the seven hostile packages of `hostile-corpus.test.ts` is imported in
  * a fresh Node.js process (`exp-110-memory-child.ts`), and the growth of the peak resident set size
  * during the import is measured. The bound is a test bound chosen here, not a figure of the spec.
  * Measured on the machine that runs the test; the numbers are printed in the test output.

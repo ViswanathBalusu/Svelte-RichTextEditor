@@ -112,6 +112,8 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'setMarkupView'
       | 'setSuggestionLabel'
       | 'suggestionLabel'
+      // FE-134: what a cross-reference may point at, for the dialog.
+      | 'referenceTargets'
       // FE-088: the ids of the blocks that changes touched, for the layout's dirty set.
       | 'takeLayoutDirty';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();

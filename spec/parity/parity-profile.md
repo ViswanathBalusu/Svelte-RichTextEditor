@@ -104,6 +104,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `navigate.nextEditableRegion` | regions-and-permissions |
 | `edit.insertRecovered` | recovery-journal |
 | `edit.discardRecovered` | recovery-journal |
+| `insert.caption` | editing |
 | `insert.field.text` | fields-and-forms |
 | `insert.field.number` | fields-and-forms |
 | `insert.field.date` | fields-and-forms |
@@ -135,6 +136,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `format.painter` | format-painter |
 | `format.applyFormat` | format-painter |
 | `format.language` | character-and-paragraph-formatting |
+| `insert.crossReference` | editing |
 | `insert.region` | regions-and-permissions |
 | `history.nameVersion` | version-history |
 | `workflow.send` | fields-and-forms |

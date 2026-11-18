@@ -532,8 +532,33 @@
 
   // Dialogs of the shell.
   let dialog = $state<
-    'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | 'send' | null
+    | 'language'
+    | 'region'
+    | 'export'
+    | 'comment'
+    | 'math'
+    | 'version'
+    | 'send'
+    | 'alt'
+    | 'crossReference'
+    | null
   >(null);
+  // The picture that was just inserted without alternative text (FE-132 criterion 5).
+  let altAsset = $state<string | null>(null);
+  if (core.altRequest) {
+    const requests = core.altRequest;
+    let seen = requests.get()?.n ?? 0;
+    const stop = requests.subscribe(() => {
+      const request = requests.get();
+      if (!request || request.n === seen) return;
+      seen = request.n;
+      // Another dialog stays; the picture then goes to the checker's list.
+      if (dialog !== null) return;
+      altAsset = request.asset;
+      dialog = 'alt';
+    });
+    onDestroy(stop);
+  }
   // The equation the math editor is open on (FE-070): taken when the request arrives.
   let equation = $state.raw<EquationRef | null>(null);
   if (core.mathEditor) {
@@ -623,6 +648,20 @@
     dialog = null;
     const done = core.runNamed?.('setLanguage', { lang }) ?? false;
     announce(done ? 'announce.language.set' : 'announce.language.failed');
+  }
+
+  function insertCrossReference(target: string, format: string | null): void {
+    dialog = null;
+    const done = core.runNamed?.('insertCrossReference', { target, format }) ?? false;
+    announce(done ? 'announce.crossRef.inserted' : 'announce.crossRef.failed');
+  }
+
+  function applyAltText(alt: string): void {
+    const asset = altAsset;
+    dialog = null;
+    altAsset = null;
+    const done = asset !== null && (core.runNamed?.('setAltText', { asset, alt }) ?? false);
+    announce(done ? 'announce.altText.set' : 'announce.altText.failed');
   }
 
   function markRegion(title: string): void {
@@ -995,6 +1034,7 @@
     add(host1b['format.applyFormat']);
     add(host1b['format.language']);
     add(host1b['insert.region']);
+    if (core.referenceTargets) add(host1b['insert.crossReference']);
     if (core.threads) add(host1b['review.comment']);
     // The proofing commands exist only while a proofing port is attached (UX-041 criterion 5).
     const proofing = core.proofing;
@@ -1585,6 +1625,8 @@
   {/if}
   {#if dialogs}
     {@const {
+      AltTextDialog,
+      CrossReferenceDialog,
       LanguageDialog,
       RegionDialog,
       CommentBox,
@@ -1603,6 +1645,14 @@
         }}
         onRejected={() => announce('announce.equation.rejected')}
         onClose={closeMath}
+      />
+    {:else if dialog === 'alt'}
+      <AltTextDialog
+        onApply={applyAltText}
+        onClose={() => {
+          dialog = null;
+          altAsset = null;
+        }}
       />
     {:else if dialog === 'language'}
       <LanguageDialog
@@ -1623,6 +1673,12 @@
       <SendDialog
         service={core.workflowSend}
         onNavigate={goToCheck}
+        onClose={() => (dialog = null)}
+      />
+    {:else if dialog === 'crossReference'}
+      <CrossReferenceDialog
+        targets={core.referenceTargets?.() ?? []}
+        onInsert={insertCrossReference}
         onClose={() => (dialog = null)}
       />
     {:else if dialog === 'region'}

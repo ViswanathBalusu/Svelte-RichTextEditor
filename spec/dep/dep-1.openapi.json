@@ -6000,11 +6000,90 @@
         "x-dep-requires": "Service credential"
       }
     },
+    "/documents/{id}/holds/{holdId}": {
+      "delete": {
+        "operationId": "releaseHold",
+        "summary": "Releases one legal hold; audited with the actor and the time as the placement is. When no hold is left on the document, the normal schedule resumes and the erasures that waited for it run (owner decision 85; HIS-031). A hold that is not in force is `not_found`.",
+        "description": "Releases one legal hold; audited with the actor and the time as the placement is. When no hold is left on the document, the normal schedule resumes and the erasures that waited for it run (owner decision 85; HIS-031). A hold that is not in force is `not_found`. Requires: Service credential (07 §12). Specified in 08 §11; 13 §10.",
+        "tags": [
+          "holds"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "name": "holdId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The hold identifier, as placeHold and listHolds answer it.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "The hold identifier, as placeHold and listHolds answer it."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hold"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §11; 13 §10",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "Service credential"
+      }
+    },
     "/holds": {
       "get": {
         "operationId": "listHolds",
-        "summary": "The legal holds of the tenant, one page at a time (UX-080).",
-        "description": "The legal holds of the tenant, one page at a time (UX-080). Requires: Service credential (07 §12). Specified in 08 §11; 13 §10.",
+        "summary": "The legal holds in force for the tenant, one page at a time (UX-080).",
+        "description": "The legal holds in force for the tenant, one page at a time (UX-080). Requires: Service credential (07 §12). Specified in 08 §11; 13 §10.",
         "tags": [
           "holds"
         ],
@@ -6723,8 +6802,8 @@
     "/documents/{id}/field-values": {
       "get": {
         "operationId": "getFieldValues",
-        "summary": "Field values by key; `?seq` reads them at a pinned seq.",
-        "description": "Field values by key; `?seq` reads them at a pinned seq. Only when the server announces the feature `fields`. Specified in 12 §10.",
+        "summary": "Field values by key; `?seq` reads them at a pinned seq. `?format=csv` answers `text/csv` instead of the JSON body: one row of key and value for each field, with a leading `=`, `+`, `-` or `@` neutralised by an apostrophe (12 §9; FRW-064; proposed, ADR 0410).",
+        "description": "Field values by key; `?seq` reads them at a pinned seq. `?format=csv` answers `text/csv` instead of the JSON body: one row of key and value for each field, with a leading `=`, `+`, `-` or `@` neutralised by an apostrophe (12 §9; FRW-064; proposed, ADR 0410). Only when the server announces the feature `fields`. Specified in 12 §10.",
         "tags": [
           "field"
         ],
@@ -6757,6 +6836,18 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
             }
           },
           {
@@ -6836,6 +6927,9 @@
           },
           {
             "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
           },
           {
             "$ref": "#/components/parameters/DepActor"
@@ -10779,6 +10873,15 @@
           "wfp": {
             "description": "Workflow participant (12 §7).",
             "type": "string"
+          },
+          "wfr": {
+            "description": "Role placeholders the user may fill outside a workflow, in the documents named by `docs` (12 §3.1, §13). The service writes them under the claim name the tenant configures, `wfr` by default (05 §3.1).",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
           },
           "amr": {
             "description": "Authentication methods (12 §7).",

@@ -1,6 +1,6 @@
 # ADR 0404: Comments while a workflow runs (FRW-085)
 
-**Status:** proposed, 2026-11-18. Written by lane w4. The owner has not settled it: Part B of `docs/owner-blockers-2026-11-17.md` lists "FRW-085 comments while out for signing: always on" as a proposed default for the owner to review, and `docs/owner-decisions-2026-11-15.md` does not list it. Nothing in the code or in the spec text changes because of this record.
+**Status:** accepted, 2026-11-18. Written by lane w4 as a proposal. The owner settled it as decision 131 of `docs/owner-decisions-2026-11-15.md` ("Comments while a document is out for signing: Always on"). Option (a) applies. The only spec change is the answer to question 9 in 12 §15; no code changes, because always on is the current behaviour.
 
 ## Context
 
@@ -11,11 +11,11 @@
 - **(a) Always on** (the current behaviour). Comments follow the roles of 07 §4 whatever the workflow state.
 - **(b) A setting can switch them off** while the workflow is `sent` or `in_progress`.
 
-## Proposed default: (a)
+## Decision: (a)
 
 Comments are always on. The reasons are that they never change the document or what a participant signs, that a participant who has a question about a field has no other channel inside the document, and that a switch adds a state the room, the editor and the conformance profile must all agree on.
 
-If the owner chooses (b), this record proposes the following, so that the choice is cheap to apply:
+If the owner ever reverses this and chooses (b), the following is the design to start from. It is not in force:
 
 - **Place of the setting:** the workflow resource (`comments: "on" | "off"` on the workflow created by `send`), with a tenant default. A per-document place would let a participant's document differ from the tenant's policy without the tenant's knowledge. It is read when the workflow is sent and fixed until the workflow ends, so a participant is never surprised mid-way.
 - **Default:** `on`, the tenant default being `on` unless the tenant sets otherwise.
@@ -30,4 +30,4 @@ If the owner chooses (b), this record proposes the following, so that the choice
 
 ## Consequences
 
-Until the owner decides, FRW-085 stays open and FRW-029 criterion 3 stands as written and tested.
+FRW-029 criterion 3 stands as written and tested. No setting exists, so there is no place, default or treatment of existing threads to implement: existing threads follow the roles of 07 §4 as at any other time. The `workflow` profile is not written yet (FRW-068); its one case is recorded in FRW-068's Notes.

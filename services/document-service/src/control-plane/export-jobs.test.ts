@@ -265,6 +265,52 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
+      'compiles again when the classification label changed, and answers from the first result when it did not (EXP-089 criterion 3)',
+      async () => {
+        const doc = await h.createDocument({ content: documentWithRegions() });
+        const editor = h.userToken({ [doc]: 'editor' });
+        const setLabel = async (classification: string | null) => {
+          const etag = (
+            await h.call('GET', `/v1/documents/${doc}`, { token: h.apiKey })
+          ).headers.get('etag')!;
+          const r = await h.call('PATCH', `/v1/documents/${doc}`, {
+            token: h.apiKey,
+            body: { classification },
+            headers: { 'If-Match': etag },
+          });
+          expect(r.status).toBe(200);
+        };
+        const options = { profile: 'final' };
+        await setLabel('Internal');
+        const first = (await post(doc, editor, options)).json.id as string;
+        await reach(editor, first, ['completed']);
+        const before = ran.length;
+        // Same content, same label: the first result answers.
+        const same = await post(doc, editor, options);
+        expect(same.json.state).toBe('completed');
+        expect(ran.length).toBe(before);
+        // Another label with the same content is another request: a new job compiles.
+        await setLabel('Secret');
+        const changed = (await post(doc, editor, options)).json.id as string;
+        await reach(editor, changed, ['completed']);
+        expect(ran.length).toBe(before + 1);
+        const read = await h.call('GET', `/v1/exports/${changed}`, { token: editor });
+        expect(read.json.result.url).toContain(
+          objectKeys
+            .exportFile(h.tenant, changed, 'output.pdf')
+            .split('/')
+            .map(encodeURIComponent)
+            .join('/'),
+        );
+        // Removing the label is a change too, and the unlabelled request has its own result.
+        await setLabel(null);
+        const cleared = (await post(doc, editor, options)).json.id as string;
+        await reach(editor, cleared, ['completed']);
+        expect(ran.length).toBe(before + 2);
+      },
+    );
+
+    it.skipIf(skip)(
       'cancels a queued preview when its viewer closes it, and holds later previews inside the window (EXP-008 criteria 2, 4)',
       async () => {
         const doc = await h.createDocument({ content: documentWithRegions() });

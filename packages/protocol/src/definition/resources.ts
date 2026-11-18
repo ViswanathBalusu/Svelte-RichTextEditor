@@ -115,6 +115,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
         name: opt(text()),
         grp: opt(arr(text()), 'Group identifiers.'),
         wfp: opt(text(), 'Workflow participant (12 §7).'),
+        wfr: opt(
+          arr(text({ minLength: 1 }), { unique: true }),
+          'Role placeholders the user may fill outside a workflow, in the documents named by `docs` (12 §3.1, §13). The service writes them under the claim name the tenant configures, `wfr` by default (05 §3.1).',
+        ),
         amr: opt(arr(text()), 'Authentication methods (12 §7).'),
         auth_time: opt(count(), 'When the host authenticated the participant (12 §7).'),
         access_since: opt(
@@ -2163,10 +2167,23 @@ export const OPERATIONS: readonly OperationDef[] = [
     owner: 'UX',
   }),
   op({
+    operationId: 'releaseHold',
+    method: 'DELETE',
+    path: '/documents/{id}/holds/{holdId}',
+    params: { holdId: req(uuid7(), 'The hold identifier, as placeHold and listHolds answer it.') },
+    summary:
+      'Releases one legal hold; audited with the actor and the time as the placement is. When no hold is left on the document, the normal schedule resumes and the erasures that waited for it run (owner decision 85; HIS-031). A hold that is not in force is `not_found`.',
+    spec: '08 §11; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    success: ok(ref('Hold')),
+    owner: 'HIS',
+  }),
+  op({
     operationId: 'listHolds',
     method: 'GET',
     path: '/holds',
-    summary: 'The legal holds of the tenant, one page at a time (UX-080).',
+    summary: 'The legal holds in force for the tenant, one page at a time (UX-080).',
     spec: '08 §11; 13 §10',
     security: SERVICE,
     requires: 'Service credential',

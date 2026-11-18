@@ -314,11 +314,15 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
     if (!r.ok) throw problemOf(r);
     const name = await k.subsOf(
       ctx.caller.tenant,
-      r.spans.flatMap((s) => [s.user, ...(s.restoredBy ? [s.restoredBy] : [])]),
+      r.spans.flatMap((s) => [
+        ...(s.unknown ? [] : [s.user]),
+        ...(s.restoredBy ? [s.restoredBy] : []),
+      ]),
     );
     const spans = r.spans.map((s) => ({
       ...s,
-      user: name(s.user),
+      // An unknown person (written below the gate) keeps the empty user and seq -1.
+      user: s.unknown ? '' : name(s.user),
       ...(s.restoredBy ? { restoredBy: name(s.restoredBy) } : {}),
     }));
     return json(200, { seq: r.seq, spans }, { 'Cache-Control': 'private, no-cache' });

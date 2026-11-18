@@ -95,6 +95,7 @@ const KNOWN_PARAMS = [
   'jid',
   'pid',
   'fid',
+  'sid',
   'kid',
   'origin',
   'seq',
@@ -126,6 +127,9 @@ const NOT_OFFERED = 'this server does not offer the route';
 const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   createImport: 'this server does not import Word files',
   getImport: 'no import job',
+  // HIS-042: the handler exists; no commit of B's document introduced the suggestion that the
+  // sweep names, and the route answers that with not_found for the owner as well.
+  getSuggestionIntroduction: 'no commit introduced this suggestion',
   // ADR 0330 §2 (decision 177): this composition has no webhook dispatcher to send with.
   pingWebhook: 'this server does not send webhook deliveries',
   replayWebhookDelivery: 'this server does not send webhook deliveries',
@@ -363,6 +367,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       ids['import'] = uuid7();
       ids['pid'] = 'participant-1';
       ids['fid'] = 'ffField000000001';
+      ids['sid'] = 'ssSuggest0000001';
       ids['deliveryId'] = uuid7();
       ids['bid'] = uuid7();
     });
