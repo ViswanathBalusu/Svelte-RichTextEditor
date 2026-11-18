@@ -28,6 +28,7 @@ import { EQUATION_NODES } from '../equation-commands.ts';
 import { equationBlockView, equationNumbersPlugin, equationView } from './equation-view.ts';
 import { figureView } from './figure-view.ts';
 import { imageView } from './image-view.ts';
+import { preservedView } from './preserved-view.ts';
 import { coreKeys } from '../keys.ts';
 import { commentDecorations } from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
@@ -442,6 +443,9 @@ export class EditorCore extends DocumentCore {
           image: imageView(this.#assetImage),
           // FE-132: the figure's stored size and its resize handle.
           figure: figureView,
+          // FE-139: the preserved atom's label, fallback picture and display size.
+          preserved_block: preservedView('div', this.#assetImage),
+          preserved_inline: preservedView('span', this.#assetImage),
           equation: equationView(this.#drawEquation),
           equation_block: equationBlockView(this.#drawEquation),
         },
