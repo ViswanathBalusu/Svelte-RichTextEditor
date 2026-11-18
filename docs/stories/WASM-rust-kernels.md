@@ -72,7 +72,7 @@ As an author on a site with a strict security policy, I want the editor to keep 
 - [ ] Given the same failure, then an event tells the host which feature degraded and which directive was missing, so the integrating developer can fix the policy.
 - [ ] Given a page whose policy lacks `'wasm-unsafe-eval'`, when the Playwright suite runs, then editing, saving, collaboration and the typeset PDF in the read view all pass.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold, because the page-view gate (SPK-013) is not held. The owner has not decided it, and `docs/owner-decisions-2026-11-15.md` does not list it. The story also depends on WASM-002, which is blocked for the same reason. No page view or read-only painter exists to fall back from, so the fallback paths and the event would be built against nothing.
 
 ### WASM-004 A layout worker that hosts the kernel
 
