@@ -51,6 +51,7 @@
     threadLimit: 'comment.refused.threadLimit',
     permissionsChanged: 'comment.refused.permissionsChanged',
     baseSeqOutOfWindow: 'comment.refused.baseSeqOutOfWindow',
+    mentionHidden: 'comment.refused.mentionHidden',
     failed: 'comment.refused.failed',
   };
 

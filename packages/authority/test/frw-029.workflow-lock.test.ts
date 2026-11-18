@@ -45,12 +45,12 @@ describe('the lock a workflow state implies (FRW-029 criteria 2, 3 and 5)', () =
     expect(lockFor('draft')).toEqual({ documentState: 'active', workflowActive: false });
   });
 
-  it('decides no lock for the states 12 leaves open, and never a lock that is not a state of 12', () => {
+  it('decides no lock for the terminal states 12 leaves open, and never a lock that is not a state of 12', () => {
     fc.assert(
       fc.property(fc.constantFrom(...WORKFLOW_STATE_NAMES), (state) => {
         const lock = lockFor(state);
         if (lock === null) {
-          expect(['correcting', 'completed', 'finalised', 'expired']).toContain(state);
+          expect(['finalised', 'expired']).toContain(state);
         } else {
           expect(['active', 'locked']).toContain(lock.documentState);
           // A workflow that is not running never lets anyone fill.

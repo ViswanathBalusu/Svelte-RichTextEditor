@@ -19,7 +19,9 @@ import {
   type FieldReport,
   type StepJson,
   definitionUse,
+  sendChecklist,
   stepsToJson,
+  type SendProblem,
 } from '@docedit/authority';
 import type { RemoteCommit } from '@docedit/protocol';
 import type { EquationDrawer } from './equation-draw.ts';
@@ -220,6 +222,7 @@ import {
 } from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
+import type { ThreadSelection } from './comment-decorations.ts';
 import {
   type AssistantRequest,
   type HostAttachment,
@@ -816,6 +819,10 @@ export class DocumentCore implements DocumentApi {
   readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
+  readonly selectedThread: ReadValue<ThreadSelection | null>;
+  /** The thread whose highlight the reader chose in the body; `n` counts the choices (UX-030). */
+  readonly pickedThread: ReadValue<{ readonly id: string; readonly n: number } | null>;
   /** The markup view the body shows for suggestions (UX-035); ll until it is set. */
   readonly markupView: ReadValue<MarkupView>;
   /** Names a suggestion for assistive technology (UX-035 criterion 4); the shell sets it. */
@@ -985,6 +992,12 @@ export class DocumentCore implements DocumentApi {
       hub,
     );
     this.markupView = new ReadValue<MarkupView>('all', Object.is, hub);
+    this.selectedThread = new ReadValue<ThreadSelection | null>(null, sameJson, hub);
+    this.pickedThread = new ReadValue<{ readonly id: string; readonly n: number } | null>(
+      null,
+      sameJson,
+      hub,
+    );
     this.#deferRemote = config.deferRemoteWhileComposing ?? true;
     this.#requires = [...config.doc.requires];
     const doc = readEnvelope(config.doc, this.#schema);
@@ -2471,6 +2484,21 @@ one or original. It is a
   }
 
   /**
+   * Chooses a thread in the comments pane (UX-030): the body marks its range, or its block, and
+   * brings it into view. A setting of this reader: no step, no commit. Null clears the choice.
+   */
+  selectThread(selection: ThreadSelection | null): void {
+    this.selectedThread.set(
+      selection === null ? null : { id: selection.id, block: selection.block },
+    );
+  }
+
+  /** Records that the reader chose a thread's highlight in the body; the pane selects that thread (UX-030). */
+  pickThread(id: string): void {
+    this.pickedThread.set({ id, n: (this.pickedThread.get()?.n ?? 0) + 1 });
+  }
+
+  /**
    * Sets the function that names a suggestion for assistive technology, or clears it (UX-035
    * criterion 4). The body view draws the text it returns, and draws again when this is called, so
    * a change of names is shown by setting the function again.
@@ -3720,6 +3748,53 @@ one or original. It is a
     this.focus();
     this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
     return true;
+  }
+
+  /**
+   * Selects the text that carries the suggestion mark with this identifier and scrolls it into view
+   * (FRW-028 criterion 2: a failed check of the send dialog links to the suggestion). False, and
+   * nothing changes, when no mark has the identifier or the reader may not view where it is.
+   */
+  selectSuggestion(id: string): boolean {
+    const doc = this.#state.doc;
+    let from = -1;
+    let to = -1;
+    doc.descendants((node, pos) => {
+      if (from >= 0 && to >= 0 && pos >= to) return false;
+      if (!node.isInline) return true;
+      const hit = node.marks.some(
+        (m) => ['ins', 'del', 'fmt'].includes(m.type.name) && m.attrs['id'] === id,
+      );
+      if (!hit) return true;
+      if (from < 0) from = pos;
+      to = Math.max(to, pos + node.nodeSize);
+      return true;
+    });
+    if (from < 0) return false;
+    if (!this.#canView(this.#scopeIn(doc, from))) return false;
+    this.focus();
+    this.dispatchTransaction(
+      this.#state.tr.setSelection(TextSelection.create(doc, from, to)).scrollIntoView(),
+    );
+    return true;
+  }
+
+  /**
+   * The pre-send checks over the document as this reader holds it (FRW-027 criterion 1; FRW-028):
+   * the authority's checklist, given the participants the workflow resource lists. An empty list
+   * means every check passed. It changes nothing.
+   */
+  sendChecklist(participants: readonly { readonly roles: readonly string[] }[]): SendProblem[] {
+    return sendChecklist(
+      this.getContent(),
+      participants.map((p, i) => ({
+        id: `p${i}`,
+        roles: p.roles,
+        kind: 'filler' as const,
+        order: 1,
+        completed: false,
+      })),
+    );
   }
 
   focus(): void {

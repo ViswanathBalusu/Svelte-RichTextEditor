@@ -120,6 +120,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const regions = new Set(r.json.comparison.changes.map((c: { region?: string }) => c.region));
       expect(regions).toEqual(new Set([OPEN]));
       expect((await head()).seq).toBe(2);
+      // HIS-021 criterion 2: no version and no event either.
+      expect(await h.parts.versions!.list(ref, { kind: 'pre-restore' })).toEqual([]);
+      expect(await h.parts.versions!.list(ref, { kind: 'restore' })).toEqual([]);
+      expect(restoredEvents()).toEqual([]);
       expect(textOf((await head()).doc, 'pOpen00000000001')).toBe('Open v2');
     });
 

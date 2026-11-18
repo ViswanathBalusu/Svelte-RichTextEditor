@@ -34,6 +34,15 @@
   let catchUpBadge = $state(catchUp?.state().badge ?? 0);
   $effect(() => catchUp?.subscribe(() => (catchUpBadge = catchUp.state().badge)));
 
+  // Without a count from the host, the comments button counts the open threads the core lists
+  // (UX-030 criterion 5); it follows the port's changes, so a thread opened or resolved moves it.
+  const threadPort = core.threads;
+  const threadChanges = threadPort?.changes ? live(threadPort.changes) : null;
+  const openThreads = $derived.by(() => {
+    void threadChanges?.current;
+    return threadPort ? threadPort.list().filter((t) => t.state === 'open').length : undefined;
+  });
+
   const presenceOn = $derived((features?.current ?? []).includes('presence'));
   const actions = $derived(
     snapshot.current.commands.filter((c) => c.offered && c.entry.group === HEADER_GROUP),
@@ -48,7 +57,12 @@
     const spec = COUNT_KEYS[action.id];
     if (!spec) return undefined;
     const hosted = counts?.current[spec.count];
-    const value = spec.count === 'catchUp' && hosted === undefined && catchUp ? catchUpBadge : hosted;
+    const value =
+      spec.count === 'catchUp' && hosted === undefined && catchUp
+        ? catchUpBadge
+        : spec.count === 'comments' && hosted === undefined
+          ? openThreads
+          : hosted;
     if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
     // No activity is no badge: a count of nothing is not shown on the catch-up control (HIS-028).
     return spec.count === 'catchUp' && value === 0 ? undefined : value;

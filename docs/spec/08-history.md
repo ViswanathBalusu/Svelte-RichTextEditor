@@ -189,7 +189,7 @@ The hash chain makes silent edits to stored history detectable, including by the
 
 - The log holds per-tenant surrogate identifiers, not the host's `sub` values. The mapping is one row per user in the document service. Erasing a person deletes that row: their contributions remain, attributed to an identifier that no longer leads anywhere. Hosts are asked not to use e-mail addresses as `sub` in any case.
 - Erasing content means deleting the document: commits, segments, checkpoints, assets not used elsewhere, exports and search entries, with backups ageing out on their schedule. A single commit's payload can be replaced by a tombstone without breaking the chain.
-- Optional per-document encryption keys allow deletion by destroying the key.
+- Optional per-document encryption keys allow deletion by destroying the key. A document with its own key has its commit payloads, snapshot contents and stored objects sealed with a data key that only the key service can unwrap. Destroying the key makes them unreadable in the database, in object storage and in backups; the commit rows, the payload hashes and the hash chain stay. The option is per tenant and off by default (owner decision 43; ADR 0385, proposed).
 
 Whether these measures satisfy a particular regulation is a legal question for the operator.
 

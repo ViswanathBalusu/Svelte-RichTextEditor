@@ -643,6 +643,17 @@ export class Room {
     return active === conn.participantActive ? conn : { ...conn, participantActive: active };
   }
 
+  /**
+   * Whether the connection is a participant of a workflow that is being corrected: paused, so that
+   * it may not change anything until the owner resumes (FRW-032 criterion 2).
+   */
+  private isPaused(conn: Connection): boolean {
+    const record = this.workflow;
+    if (record === null || record.state !== 'correcting' || conn.participant === undefined)
+      return false;
+    return record.participants.some((p) => p.id === conn.participant);
+  }
+
   /** The workflow object for a connection, as JSON text for comparison, or null without a workflow. */
   private workflowFor(conn: Connection) {
     return this.workflow === null ? null : workflowStatus(this.workflow, conn.participant);
@@ -1036,6 +1047,20 @@ export class Room {
     // that keeps `fill` under a lock passes step 1, so the question is asked here: a change the
     // same connection could make were the document active with no workflow running is one the
     // state forbids; any other refusal stays `permission_denied` (ADR 0363).
+    // A participant of a workflow that is being corrected is paused (12 §6.2): everything they send
+    // is refused as `read_only`, whatever the change (FRW-032 criterion 2).
+    if (
+      !verdict.ok &&
+      verdict.code === 'permission_denied' &&
+      !s.serverAuthored &&
+      this.isPaused(s.conn)
+    )
+      return reject(
+        'read_only',
+        'the workflow is being corrected',
+        DEFAULT_ACTION['read_only'],
+        verdict.scopes,
+      );
     if (
       !verdict.ok &&
       verdict.code === 'permission_denied' &&

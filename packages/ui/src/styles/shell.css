@@ -454,6 +454,25 @@
   box-shadow: var(--_de-shadow);
 }
 
+/* The icon of a command (UX-063): follows the text colour, so forced-colors and themes apply. */
+.de-icon {
+  inline-size: 1.1em;
+  block-size: 1.1em;
+  margin-inline-end: 0.4em;
+  vertical-align: -0.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.de-icon.de-icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
 .de-menu-item {
   font: inherit;
   min-block-size: var(--_de-control-size);
@@ -1131,6 +1150,22 @@
 .de-zoom-level {
   min-inline-size: 3.5em;
   text-align: center;
+}
+
+/* The lock a workflow puts on the document (FRW-029). */
+.de-workflow-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-2) var(--_de-space-3);
+  padding-block: var(--_de-space-2);
+  padding-inline: var(--_de-space-4);
+  background: var(--_de-surface-raised);
+  border-block-end: 1px solid var(--_de-border);
+}
+
+.de-workflow-icon {
+  flex: none;
 }
 
 /* The fill bar (FRW-076). */

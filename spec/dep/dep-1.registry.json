@@ -1389,6 +1389,38 @@
       "owner": "FRW"
     },
     {
+      "operationId": "correctWorkflow",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/correct",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "manage",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "2XX",
+      "spec": "12 §6.2, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "resumeWorkflow",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/resume",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "manage",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "2XX",
+      "spec": "12 §6.2, §10",
+      "owner": "FRW"
+    },
+    {
       "operationId": "participantConsent",
       "method": "POST",
       "path": "/documents/{id}/workflow/participants/{pid}/consent",

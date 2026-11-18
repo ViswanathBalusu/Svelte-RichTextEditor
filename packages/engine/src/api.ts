@@ -7,7 +7,7 @@
  * `outline()` of 02 §5.1 is `outline.get()`: the outline is a read view, so that the interface can
  * subscribe to it.
  */
-import type { FieldReport, StepJson } from '@docedit/authority';
+import type { FieldReport, SendProblem, StepJson } from '@docedit/authority';
 
 export type { FieldReport };
 import type {
@@ -842,6 +842,7 @@ import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
 import type { MarkupView, SuggestionLabel, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
+import type { ThreadSelection } from './comment-decorations.ts';
 import type { SectionWarning } from './breaks-sections.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
 import type { LocatedFinding, ProofingClock, ProofingInfo, ProofingPort } from './proofing.ts';
@@ -938,6 +939,10 @@ export interface DocumentApi {
   closePanel(): void;
   /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
   selectBlock(id: string): boolean;
+  /** Selects the text of the suggestion with this identifier and scrolls it into view; false when it cannot (FRW-028). */
+  selectSuggestion(id: string): boolean;
+  /** The pre-send checks over the visible document, given the roles each participant holds; empty when all pass (FRW-028). */
+  sendChecklist(participants: readonly { readonly roles: readonly string[] }[]): SendProblem[];
   /**
    * After a deletion was refused with reason `referenced`, selects one of the cross-references that
    * name the target, the next at each call (FE-133 criterion 5); false when there is none to show.
@@ -1053,6 +1058,14 @@ export interface DocumentApi {
   setSuggestionLabel(label: SuggestionLabel | null): void;
   /** The client's copy of every thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadView<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
+  readonly selectedThread: ReadView<ThreadSelection | null>;
+  /** The thread whose highlight the reader chose in the body; `n` counts the choices (UX-030). */
+  readonly pickedThread: ReadView<{ readonly id: string; readonly n: number } | null>;
+  /** Chooses a thread in the pane: the body marks and shows it. No step, no commit (UX-030). */
+  selectThread(selection: ThreadSelection | null): void;
+  /** Records that the reader chose a thread's highlight in the body (UX-030). */
+  pickThread(id: string): void;
   /** Sets a thread's range as the service reports it at `seq` (FE-048). */
   setThreadRange(threadId: string, range: { from: number; to: number }, seq: number): void;
   /** Removes a thread's range (the thread was deleted) (FE-048). */
