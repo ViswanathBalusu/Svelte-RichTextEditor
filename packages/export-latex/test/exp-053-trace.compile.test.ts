@@ -28,6 +28,7 @@ import { convert } from '../src/index.ts';
 import { ALLOW_LIST } from '../src/math/allow-list.ts';
 import { mathGate } from '../src/math/gate.ts';
 import { classFiles, compileBundle, imageFonts, sandboxReady } from './harness.ts';
+import { DANGEROUS } from './trace-denylist.ts';
 import { doc, nid, para } from './docs.ts';
 
 const ready = (await sandboxReady()).ok;
@@ -38,26 +39,8 @@ const BEGIN = '<<TRACE-BEGIN>>';
 const END = '<<TRACE-END>>';
 const OUT = join(tmpdir(), 'docedit-v-exp-049-064-053');
 
-/** Primitives with I/O, shell, catcode, or engine-level effects. None may appear in a value's trace. */
-export const DANGEROUS: ReadonlySet<string> = new Set([
-  'input',
-  'endinput',
-  'openin',
-  'openout',
-  'closein',
-  'closeout',
-  'read',
-  'readline',
-  'write',
-  'immediate',
-  'special',
-  'directlua',
-  'latelua',
-  'luaexec',
-  'catcode',
-  'shellescape',
-  'pdfshellescape',
-]);
+/** Primitives with I/O, shell, catcode, or engine-level effects (decision 212, ADR 0320): `trace-denylist.ts`. */
+export { DANGEROUS };
 
 /** Control words of a TeX log segment (a backslash and its letters or `@`). */
 const CONTROL_WORD = /\\([A-Za-z@]+)/g;
