@@ -161,8 +161,10 @@ export const EN_GB = {
   'reason.query.none': 'There is no further part you can edit.',
   'reason.query.noFormat': 'Select the text whose formatting you want to copy.',
   'reason.query.noEdit': 'You do not have permission to edit this document.',
-  'reason.query.no-export': 'Your access does not allow export.',
-  'reason.query.no-print': 'Your access does not allow printing.',
+  'reason.query.no-export':
+    'Your access does not allow export. Restrictions deter casual copying and are not a security boundary.',
+  'reason.query.no-print':
+    'Your access does not allow printing. Restrictions deter casual copying and are not a security boundary.',
   'reason.query.noSuggest': 'You do not have permission to suggest changes in this document.',
   'reason.query.noFill': 'You have no fields to fill in this document.',
   'reason.query.suggestOnly':
