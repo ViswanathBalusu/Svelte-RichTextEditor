@@ -1,6 +1,7 @@
 /**
  * The field routes of 12 §10 (FRW-060, FRW-061; D145). See fields.ts for the rules.
  */
+import { uuid7 } from '@docedit/model';
 import { derivedCommitId, stableJson } from '../data-plane/commit-id.ts';
 import { prefillSteps, projectedFields, valuesByKey } from './fields.ts';
 import { checkIfMatch, pageLimit, seqParam } from './http.ts';
@@ -148,6 +149,25 @@ export function fieldRoutes(k: Kit): Record<string, Handler> {
         },
       },
     });
+    // The audit trail names the person the change is attributed to and the credential that made it
+    // (owner decision 174; UX-097 criterion 1; 07 §14). Identifiers and the origin only, never a value.
+    if (d.audit)
+      await d.audit.record([
+        {
+          id: uuid7(),
+          tenant: ref.tenant,
+          doc: ref.doc,
+          actor: ctx.caller.actor,
+          kind: 'commit.service',
+          data: {
+            origin: 'prefill',
+            credential: ctx.caller.credential,
+            commit: item.id,
+            scopes: [],
+          },
+          at: d.now(),
+        },
+      ]);
     // Wait for the room (or a transient authority) to store the commit (06 §2.2, §3).
     const deadline = d.now() + (d.outboxWaitMs ?? 10_000);
     let settled = item;

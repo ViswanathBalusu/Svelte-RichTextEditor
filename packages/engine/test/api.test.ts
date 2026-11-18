@@ -94,7 +94,12 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'words'
       // UX-017: the recovered edits pane puts an item back into the document or drops it.
       | 'insertRecovered'
-      | 'discardRecovered';
+      | 'discardRecovered'
+      // UX-035: the markup view of suggestions, and the words that name a suggestion for assistive technology.
+      | 'markupView'
+      | 'setMarkupView'
+      | 'suggestionLabel'
+      | 'setSuggestionLabel';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed
