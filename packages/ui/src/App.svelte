@@ -532,7 +532,16 @@
 
   // Dialogs of the shell.
   let dialog = $state<
-    'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | 'send' | 'alt' | null
+    | 'language'
+    | 'region'
+    | 'export'
+    | 'comment'
+    | 'math'
+    | 'version'
+    | 'send'
+    | 'alt'
+    | 'crossReference'
+    | null
   >(null);
   // The picture that was just inserted without alternative text (FE-132 criterion 5).
   let altAsset = $state<string | null>(null);
@@ -639,6 +648,12 @@
     dialog = null;
     const done = core.runNamed?.('setLanguage', { lang }) ?? false;
     announce(done ? 'announce.language.set' : 'announce.language.failed');
+  }
+
+  function insertCrossReference(target: string, format: string | null): void {
+    dialog = null;
+    const done = core.runNamed?.('insertCrossReference', { target, format }) ?? false;
+    announce(done ? 'announce.crossRef.inserted' : 'announce.crossRef.failed');
   }
 
   function applyAltText(alt: string): void {
@@ -1019,6 +1034,7 @@
     add(host1b['format.applyFormat']);
     add(host1b['format.language']);
     add(host1b['insert.region']);
+    if (core.referenceTargets) add(host1b['insert.crossReference']);
     if (core.threads) add(host1b['review.comment']);
     // The proofing commands exist only while a proofing port is attached (UX-041 criterion 5).
     const proofing = core.proofing;
@@ -1610,6 +1626,7 @@
   {#if dialogs}
     {@const {
       AltTextDialog,
+      CrossReferenceDialog,
       LanguageDialog,
       RegionDialog,
       CommentBox,
@@ -1656,6 +1673,12 @@
       <SendDialog
         service={core.workflowSend}
         onNavigate={goToCheck}
+        onClose={() => (dialog = null)}
+      />
+    {:else if dialog === 'crossReference'}
+      <CrossReferenceDialog
+        targets={core.referenceTargets?.() ?? []}
+        onInsert={insertCrossReference}
         onClose={() => (dialog = null)}
       />
     {:else if dialog === 'region'}

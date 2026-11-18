@@ -4,6 +4,7 @@
  * is needed for the first interaction (13 §9; FE-002).
  */
 export { default as AltTextDialog } from './AltTextDialog.svelte';
+export { default as CrossReferenceDialog } from './CrossReferenceDialog.svelte';
 export { default as CommentBox } from './CommentBox.svelte';
 export { default as ExportDialog } from './ExportDialog.svelte';
 export { default as LanguageDialog } from './LanguageDialog.svelte';

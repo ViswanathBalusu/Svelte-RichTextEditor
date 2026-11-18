@@ -1420,6 +1420,10 @@
       "capability": "recovery-journal"
     },
     {
+      "id": "insert.caption",
+      "capability": "editing"
+    },
+    {
       "id": "insert.field.text",
       "capability": "fields-and-forms"
     },
@@ -1542,6 +1546,10 @@
     {
       "id": "format.language",
       "capability": "character-and-paragraph-formatting"
+    },
+    {
+      "id": "insert.crossReference",
+      "capability": "editing"
     },
     {
       "id": "insert.region",

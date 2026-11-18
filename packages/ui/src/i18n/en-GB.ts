@@ -46,6 +46,8 @@ export const EN_GB = {
   'command.format.language': 'Language',
   'command.navigate.nextEditableRegion': 'Next part I can edit',
   'command.insert.region': 'Region',
+  'command.insert.caption': 'Caption',
+  'command.insert.crossReference': 'Cross-reference',
   'command.review.comment': 'New comment',
   'command.insert.field.text': 'Text field',
   'command.insert.field.number': 'Number field',
@@ -763,6 +765,24 @@ export const EN_GB = {
   'dialog.altText.hint':
     'Say what the picture shows, for people who cannot see it. If you leave it for later, the accessibility checker lists the picture.',
   'dialog.altText.later': 'Later',
+  'dialog.crossRef.title': 'Insert a cross-reference',
+  'dialog.crossRef.kind': 'Refer to',
+  'dialog.crossRef.kind.all': 'Everything',
+  'dialog.crossRef.kind.heading': 'Headings',
+  'dialog.crossRef.kind.numbered': 'Numbered paragraphs',
+  'dialog.crossRef.kind.caption': 'Captions',
+  'dialog.crossRef.kind.equation': 'Equations',
+  'dialog.crossRef.kind.bookmark': 'Bookmarks',
+  'dialog.crossRef.list': 'Targets',
+  'dialog.crossRef.item': '{text}, prints {label}',
+  'dialog.crossRef.empty':
+    'There is nothing to refer to yet. A heading, paragraph or equation needs a number, and a caption or a bookmark needs a numbered block.',
+  'dialog.crossRef.format': 'Insert as',
+  'dialog.crossRef.format.number': 'The number',
+  'dialog.crossRef.format.page': 'The page number',
+  'dialog.crossRef.hint':
+    'The reference prints the number of its target and follows it when content moves. The page number shows in the PDF; the web view has no pages and shows the number.',
+  'dialog.crossRef.insert': 'Insert',
   'dialog.region.title': 'Make a region',
   'dialog.region.field': 'Title of the region',
   'dialog.region.hint':
@@ -850,6 +870,8 @@ export const EN_GB = {
   'announce.region.failed': 'The region could not be made.',
   'announce.language.set': 'Language set.',
   'announce.language.failed': 'The language could not be set here.',
+  'announce.crossRef.inserted': 'Cross-reference inserted.',
+  'announce.crossRef.failed': 'The cross-reference could not be inserted here.',
   'announce.altText.set': 'Alternative text set.',
   'announce.altText.failed': 'The alternative text could not be set here.',
 

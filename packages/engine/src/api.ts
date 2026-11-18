@@ -241,6 +241,13 @@ export interface CommandArgs {
   symbol?: string;
   /** For `insertCaption`: the identifier of the figure that gets a numbered caption (FE-134). */
   figure?: string;
+  /**
+   * For `insertCaption`, in place of `figure` (FE-134 criterion 1): `table` numbers the table at the
+   * caret in the `Table` sequence, `equation` numbers the equation block with `id` (or the selected
+   * one) in the `Equation` sequence, `here` takes whichever of figure, table or selected equation
+   * the selection is in.
+   */
+  caption?: { kind: 'table' | 'equation' | 'here'; id?: string };
   /** For `insertReference`: the target (`node:`, `bookmark:` or `eq:`) and the field's format. */
   reference?: { target: string; format?: string | null };
   /**

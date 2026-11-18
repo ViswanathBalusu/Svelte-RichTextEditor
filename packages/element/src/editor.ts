@@ -380,6 +380,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // The document as this reader holds it: the accessibility checker reads it (UX-066), so a
     // picture without alternative text is listed (FE-132 criterion 5).
     getContent: () => core.getContent(),
+    // The cross-reference dialog's list (FE-134 criterion 2).
+    referenceTargets: () => core.referenceTargets(),
     // The navigation pane's search (UX-020 criterion 3): the core's find over the body this reader
     // holds, with the text around each match; choosing a result selects that match and scrolls to it.
     // The pane's "match case" is the find's option (the engine's own default stays case-sensitive).
@@ -442,6 +444,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       'nextEditableRegion',
       'showReferences',
       'setAltText',
+      'insertCaption',
+      'insertCrossReference',
       'copyFormat',
       'pasteFormat',
       'insertRecovered',
@@ -456,6 +460,15 @@ export function mountEditor(options: MountOptions): MountedEditor {
     ],
     runNamed: (name, args) => {
       if (name === 'showReferences') return core.showReferences();
+      // FE-134: `insertCaption` numbers the figure, table or selected equation the selection is on;
+      // `insertCrossReference` takes the dialog's `{ target, format }` and inserts a `ref` field.
+      if (name === 'insertCaption') return core.run('insertCaption', { caption: { kind: 'here' } });
+      if (name === 'insertCrossReference') {
+        const a = args as { target?: unknown; format?: unknown } | undefined;
+        if (typeof a?.target !== 'string') return false;
+        const format = typeof a.format === 'string' ? a.format : null;
+        return core.run('insertReference', { reference: { target: a.target, format } });
+      }
       // The alternative text dialog (FE-132 criterion 5): `{ asset, alt }` for a picture just inserted.
       if (name === 'setAltText') {
         const a = args as { asset?: unknown; alt?: unknown } | undefined;

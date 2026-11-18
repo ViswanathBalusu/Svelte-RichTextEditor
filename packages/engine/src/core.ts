@@ -153,7 +153,14 @@ import {
 } from './breaks-sections.ts';
 import { type InsertFieldOptions, insertField, insertSymbol, insertToc } from './fields-toc.ts';
 import { formFieldCount } from './frw-072-form-fields.ts';
-import { insertCaption, insertReference } from './captions-refs.ts';
+import {
+  insertCaption,
+  insertCaptionHere,
+  insertEquationCaption,
+  insertReference,
+  insertTableCaption,
+} from './captions-refs.ts';
+import { type ReferenceTarget, referenceTargets } from './reference-targets.ts';
 import { referenceGuardPlugin, referencePositions } from './referenced-targets.ts';
 import {
   EQUATION_NODES,
@@ -624,7 +631,7 @@ function hasAuthoringArgs(name: CommandName, args: CommandArgs): boolean {
     case 'insertSymbol':
       return args.symbol !== undefined;
     case 'insertCaption':
-      return args.figure !== undefined;
+      return args.figure !== undefined || args.caption !== undefined;
     case 'insertReference':
       return args.reference !== undefined;
     case 'insertEquation':
@@ -1727,6 +1734,15 @@ export class DocumentCore implements DocumentApi {
    * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
    * no reference is left to show.
    */
+  /**
+   * What a cross-reference may point at, in this reader's document (FE-134 criterion 2): headings,
+   * numbered paragraphs, captions, labelled equations and bookmarks, each with the text a reference
+   * to it prints. Computed at each call; nothing is stored.
+   */
+  referenceTargets(): ReferenceTarget[] {
+    return referenceTargets(this.#state.doc);
+  }
+
   showReferences(): boolean {
     if (this.#referencedTargets.length === 0) return false;
     const doc = this.#state.doc;
@@ -2313,10 +2329,19 @@ export class DocumentCore implements DocumentApi {
         return args.symbol === undefined
           ? null
           : insertSymbol(state, args.symbol, { writable }, dispatch);
-      case 'insertCaption':
-        return args.figure === undefined
-          ? null
-          : insertCaption(state, args.figure, { writable }, dispatch);
+      case 'insertCaption': {
+        const caption = args.caption;
+        if (caption === undefined) {
+          return args.figure === undefined
+            ? null
+            : insertCaption(state, args.figure, { writable }, dispatch);
+        }
+        if (caption.kind === 'table')
+          return insertTableCaption(state, { writable, id: this.#newId() }, dispatch);
+        if (caption.kind === 'equation')
+          return insertEquationCaption(state, caption.id, { writable }, dispatch);
+        return insertCaptionHere(state, { writable, id: this.#newId() }, dispatch);
+      }
       case 'insertReference': {
         const ref = args.reference;
         if (ref === undefined) return null;
