@@ -16,8 +16,6 @@ export const MOCK_KNOWN: Readonly<Record<string, string>> = {
   'authz.read.history': 'the mock serves content at any seq to any reader: no history gate (07 §8)',
   'authz.actor.opaque':
     'the mock reads no DEP-Actor header and so does not refuse a malformed one (05 §3.2; UX-096)',
-  'semantics.steps':
-    'apply-020: the room refuses a step that removes one boundary of a region (P3) and the pure engine applies it (SYN-002 vs 04 §4); the same on the reference service, reported to the authority',
 };
 
 const skip = process.env['DOCEDIT_TCK_SKIP_TARGETS'] === '1';
@@ -51,6 +49,14 @@ describe.skipIf(skip)('the kit against the mock backend over DEP', () => {
     console.log('mock backend:', v.counts);
     if (v.fixed.length) console.log('known gaps of the mock that now pass:', v.fixed);
     expect(v.unexpected).toEqual([]);
+  });
+
+  it('passes the step-semantics and conversation fixtures through the server (PRO-110 criterion 5)', () => {
+    const semantics = report.profiles.find((p) => p.id === 'semantics')!;
+    expect(semantics.scenarios.map((s) => [s.id, s.outcome])).toEqual([
+      ['semantics.conversation', 'passed'],
+      ['semantics.steps', 'passed'],
+    ]);
   });
 
   it('runs the profiles of the announced features and skips the others with the reason (PRO-108 criterion 3)', () => {
