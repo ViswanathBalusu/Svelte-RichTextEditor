@@ -155,7 +155,7 @@ As a maintainer, I want line-break opportunities and grapheme clusters computed 
 - [ ] The same segmentation is callable from TypeScript tests, so the layout engine and the kernel can be checked against each other.
 - [ ] Data for scripts the corpus does not use does not count against the module's size budget (WASM-012).
 
-**Notes:** C-RUST, phase 3.
+**Notes:** C-RUST, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold. S10 (SPK-023) recommends harfbuzzjs with segmentation and line breaking in TypeScript, and the Rust module gave no material gain (ADR 0016, "Result of S10"). The story also depends on WASM-001, the Rust workspace, which is blocked for the same reason. Every criterion says "in the kernel", and the kernel crate does not exist. The segmentation that S10 chose stays in TypeScript and belongs to the FE stories (FE-080, FE-096), not here. A UAX #14 library is on the owner's list of new third-party libraries still to be decided (`docs/owner-decisions-2026-11-15.md`, last paragraph), so adding one for this story would decide that silently. The story reopens if a later measurement changes S10's answer.
 
 ### WASM-008 First-fit line breaking in the kernel
 
