@@ -254,7 +254,7 @@ As a maintainer, I want the kernel held to budgets in CI, so that it never quiet
 - [ ] Kernel time per keystroke in a 100-page document is measured against the share of the 16 ms budget that S10 set.
 - [ ] A regression beyond the agreed tolerance fails the scheduled run.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold (SPK-013 is not held, see WASM-003). The budgets are for a module the project may never ship. S10's figures are for prototypes (ADR 0016, "Result of S10"), and a budget set from them would fix numbers for an artefact that does not exist. The story depends on FND-007 and FND-008, which are outside this lane. It reopens if SPK-013 says yes.
 
 ### WASM-013 Rust supply chain and licences
 
