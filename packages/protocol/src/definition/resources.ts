@@ -84,6 +84,7 @@ export const PATH_PARAMS: Readonly<Record<string, Prop>> = {
   jid: req(uuid7(), 'Job identifier.'),
   pid: req(text({ minLength: 1 }), 'Participant identifier.', { gaps: ['G59'] }),
   fid: req(nodeId(), 'Field identifier.'),
+  bid: req(uuid7(), 'Bulk send identifier.'),
 };
 
 const PRO = 'PRO';

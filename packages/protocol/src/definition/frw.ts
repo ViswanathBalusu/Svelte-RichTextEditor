@@ -141,6 +141,109 @@ export const FRW_EXTENSION: DepExtension = {
       ),
     },
     {
+      name: 'BulkSendRow',
+      owner: FRW,
+      shape: obj(
+        {
+          participants: opt(
+            arr(
+              obj({
+                id: req(text({ minLength: 1 })),
+                roles: req(arr(text())),
+                kind: req(enm(['filler', 'signer', 'approver', 'cc'])),
+                order: req(count()),
+                sub: opt(text()),
+                name: opt(text()),
+                auth: opt(obj({ require: opt(arr(text())) })),
+              }),
+            ),
+            "The recipient's participants, bound to the roles of the template.",
+          ),
+          values: opt(map(any(), { keys: text() }), "The recipient's values, prefilled by key."),
+          title: opt(text({ maxLength: 1000 })),
+          externalId: opt(text({ minLength: 1, maxLength: 255 })),
+          properties: opt(obj({})),
+          classification: opt(text({ minLength: 1, maxLength: 200 })),
+        },
+        {
+          doc: 'One recipient row of a bulk send: what a document made from the template takes (FRW-063).',
+          spec: '12 §9',
+          gaps: ['G96'],
+        },
+      ),
+    },
+    {
+      name: 'BulkSendCreate',
+      owner: FRW,
+      shape: obj(
+        {
+          template: req(uuid7(), 'The template (`POST /templates`).'),
+          templateSeq: opt(
+            seq(),
+            'The seq of the template document to fork at. Default: the head.',
+          ),
+          rows: req(arr(ref('BulkSendRow')), 'One document is made for each row, in order.'),
+        },
+        {
+          doc: 'The body of `POST /bulk-sends` (12 §9; FRW-063).',
+          spec: '12 §9, §10',
+          gaps: ['G96'],
+        },
+      ),
+    },
+    {
+      name: 'BulkSendRowResult',
+      owner: FRW,
+      shape: obj(
+        {
+          index: req(count(), 'The position of the row in the request, from 0.'),
+          document: req(nullable(uuid7()), 'The document made for the row; null when it failed.'),
+          error: opt(
+            obj({
+              code: req(ref('ErrorCode')),
+              message: req(text()),
+              violations: opt(arr(obj({ path: req(text()), rule: req(text()) }))),
+            }),
+            'Why the row failed: the code and the violations the single call would have answered.',
+          ),
+        },
+        {
+          doc: 'The outcome of one row of a bulk send (FRW-063).',
+          spec: '12 §9',
+          gaps: ['G96'],
+        },
+      ),
+    },
+    {
+      name: 'BulkSend',
+      owner: FRW,
+      shape: obj(
+        {
+          id: req(uuid7()),
+          template: req(uuid7()),
+          seq: req(
+            seq(),
+            'The seq of the template the documents are forked at: pinned and recorded.',
+          ),
+          state: req(enm(['queued', 'running', 'completed', 'failed', 'cancelled'])),
+          total: req(count(), 'The number of rows.'),
+          done: req(count(), 'The rows handled so far.'),
+          rows: opt(
+            arr(ref('BulkSendRowResult')),
+            'Each row with the new document or the failure; set when `state` is `completed`.',
+          ),
+          error: opt(obj({ code: req(ref('ErrorCode')), message: req(text()) })),
+          createdAt: req(timestamp()),
+          finishedAt: opt(timestamp()),
+        },
+        {
+          doc: 'A bulk send: a job that makes one fork of a template for each recipient row (12 §9; FRW-063).',
+          spec: '12 §9, §10',
+          gaps: ['G96'],
+        },
+      ),
+    },
+    {
       name: 'Template',
       owner: FRW,
       shape: obj(
@@ -273,6 +376,34 @@ export const FRW_EXTENSION: DepExtension = {
       body: ref('TemplateCreate'),
       success: { status: '201', body: ref('Template') },
       codes: ['conflict'],
+      gaps: ['G96'],
+      owner: FRW,
+    },
+    {
+      operationId: 'createBulkSend',
+      method: 'POST',
+      path: '/bulk-sends',
+      summary:
+        'Starts a job that makes one fork of a template for each recipient row (12 §9; FRW-063). Answers 202.',
+      spec: '12 §9, §10',
+      security: ['service'],
+      feature: 'workflow',
+      idempotencyKey: true,
+      body: ref('BulkSendCreate'),
+      success: { status: '202', body: ref('BulkSend') },
+      codes: ['idempotency_mismatch'],
+      gaps: ['G96'],
+      owner: FRW,
+    },
+    {
+      operationId: 'getBulkSend',
+      method: 'GET',
+      path: '/bulk-sends/{bid}',
+      summary: 'State, progress and result of a bulk send (12 §9; FRW-063).',
+      spec: '12 §9, §10',
+      security: ['service'],
+      feature: 'workflow',
+      success: { status: '2XX', body: ref('BulkSend') },
       gaps: ['G96'],
       owner: FRW,
     },

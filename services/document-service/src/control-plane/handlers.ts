@@ -45,6 +45,7 @@ import { exportRoutes } from './export-routes.ts';
 import { fieldRoutes } from './field-routes.ts';
 import { workflowRoutes } from './workflow-routes.ts';
 import { instantiateTemplate, templateRoutes } from './template-routes.ts';
+import { bulkSendRoutes } from './bulk-send.ts';
 import { historyListRoutes } from './history-list-route.ts';
 import { historyReadRoutes } from './history-reads.ts';
 import { historyRoutes } from './history-routes.ts';
@@ -836,6 +837,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...searchRoutes(k),
     ...workflowRoutes(k),
     ...templateRoutes(k),
+    ...bulkSendRoutes(k),
     getFonts,
   };
 }

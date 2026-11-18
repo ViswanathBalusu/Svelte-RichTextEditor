@@ -40,7 +40,6 @@ import {
   type AssetRegistry,
 } from './control-plane/assets.ts';
 import { ContentReader } from './control-plane/content.ts';
-import type { HandlerDeps } from './control-plane/kit.ts';
 import { Placement } from './control-plane/room-routing.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
 import { DebouncedEventSink } from './control-plane/event-throttle.ts';
@@ -65,6 +64,8 @@ import {
   type FontCatalogue,
 } from './control-plane/fonts.ts';
 import { createHandlers } from './control-plane/handlers.ts';
+import type { HandlerDeps } from './control-plane/kit.ts';
+import { BULK_SEND_KIND, bulkSendHandler } from './control-plane/bulk-send.ts';
 import type {
   SubscriptionStore,
   WebhookSubscriptions,
@@ -1042,6 +1043,11 @@ export async function startService(opts: StartOptions): Promise<Service> {
     return r;
   };
 
+  // The bulk sends of templates (FRW-063): a job that makes one document for each row. The handler
+  // reads the control plane's dependencies when a job runs; they are built after the runners.
+  let bulkSendDeps: HandlerDeps | null = null;
+  if (parts.templates) runnerFor({ [BULK_SEND_KIND]: bulkSendHandler(() => bulkSendDeps) });
+
   const exportHandlers: Record<string, JobHandler> = { ...(opts.jobHandlers ?? {}) };
   if (exportHandlers[EXPORT_KIND] && !exportHandlers[PREVIEW_KIND])
     exportHandlers[PREVIEW_KIND] = exportHandlers[EXPORT_KIND]!;
@@ -1391,7 +1397,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       })
     : null;
 
-  const handlers = createHandlers({
+  const controlDeps: HandlerDeps = {
     ...(reads ? { reads } : {}),
     ...(readSessions ? { readSessions } : {}),
     ...(replicaDeps ? { replicaDeps } : {}),
@@ -1464,7 +1470,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(quotaSource ? { quotaSource } : {}),
     ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
     ...(opts.importer ? { importsOffered: true } : {}),
-  });
+  };
+  bulkSendDeps = controlDeps;
+  const handlers = createHandlers(controlDeps);
 
   const ready = () => (parts.readiness ? parts.readiness() : readiness(parts.pool));
   const probe =

@@ -3944,6 +3944,279 @@
         "participants"
       ]
     },
+    "BulkSendRow": {
+      "title": "BulkSendRow",
+      "description": "One recipient row of a bulk send: what a document made from the template takes (FRW-063).",
+      "$comment": "12 §9; gaps: G96",
+      "type": "object",
+      "properties": {
+        "participants": {
+          "description": "The recipient's participants, bound to the roles of the template.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "filler",
+                  "signer",
+                  "approver",
+                  "cc"
+                ]
+              },
+              "order": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "sub": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "auth": {
+                "type": "object",
+                "properties": {
+                  "require": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "id",
+              "roles",
+              "kind",
+              "order"
+            ]
+          }
+        },
+        "values": {
+          "description": "The recipient's values, prefilled by key.",
+          "type": "object",
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string"
+          }
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "externalId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "properties": {
+          "type": "object",
+          "properties": {}
+        },
+        "classification": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "BulkSendCreate": {
+      "title": "BulkSendCreate",
+      "description": "The body of `POST /bulk-sends` (12 §9; FRW-063).",
+      "$comment": "12 §9, §10; gaps: G96",
+      "type": "object",
+      "properties": {
+        "template": {
+          "description": "The template (`POST /templates`).",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "templateSeq": {
+          "description": "The seq of the template document to fork at. Default: the head.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rows": {
+          "description": "One document is made for each row, in order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BulkSendRow"
+          }
+        }
+      },
+      "required": [
+        "template",
+        "rows"
+      ]
+    },
+    "BulkSendRowResult": {
+      "title": "BulkSendRowResult",
+      "description": "The outcome of one row of a bulk send (FRW-063).",
+      "$comment": "12 §9; gaps: G96",
+      "type": "object",
+      "properties": {
+        "index": {
+          "description": "The position of the row in the request, from 0.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "document": {
+          "description": "The document made for the row; null when it failed.",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "description": "Why the row failed: the code and the violations the single call would have answered.",
+          "type": "object",
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            "message": {
+              "type": "string"
+            },
+            "violations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "rule": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "rule"
+                ]
+              }
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "document"
+      ]
+    },
+    "BulkSend": {
+      "title": "BulkSend",
+      "description": "A bulk send: a job that makes one fork of a template for each recipient row (12 §9; FRW-063).",
+      "$comment": "12 §9, §10; gaps: G96",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "template": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "seq": {
+          "description": "The seq of the template the documents are forked at: pinned and recorded.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "total": {
+          "description": "The number of rows.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "done": {
+          "description": "The rows handled so far.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rows": {
+          "description": "Each row with the new document or the failure; set when `state` is `completed`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BulkSendRowResult"
+          }
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        },
+        "finishedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        }
+      },
+      "required": [
+        "id",
+        "template",
+        "seq",
+        "state",
+        "total",
+        "done",
+        "createdAt"
+      ]
+    },
     "Template": {
       "title": "Template",
       "description": "A template: a document with role placeholders, fields and rules, and no participants (12 §9; FRW-062). The members are the lane's proposal (docs/adr/0406-w4-FRW-062-templates.md).",

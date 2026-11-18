@@ -1383,6 +1383,34 @@
       "owner": "FRW"
     },
     {
+      "operationId": "createBulkSend",
+      "method": "POST",
+      "path": "/bulk-sends",
+      "security": [
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "202",
+      "spec": "12 §9, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "getBulkSend",
+      "method": "GET",
+      "path": "/bulk-sends/{bid}",
+      "security": [
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "2XX",
+      "spec": "12 §9, §10",
+      "owner": "FRW"
+    },
+    {
       "operationId": "getTemplate",
       "method": "GET",
       "path": "/templates/{tid}",

@@ -333,6 +333,8 @@
         "POST /templates",
         "GET /templates",
         "GET /templates/{tid}",
+        "POST /bulk-sends",
+        "GET /bulk-sends/{bid}",
         "GET /quotas",
         "PUT /quotas",
         "GET /origins",

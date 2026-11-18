@@ -240,6 +240,9 @@ const OTHER_ROUTES = [
   'POST /templates',
   'GET /templates',
   'GET /templates/{tid}',
+  // FRW-063 (12 §9): bulk sends, service credential only.
+  'POST /bulk-sends',
+  'GET /bulk-sends/{bid}',
 ];
 
 describe('the DEP definition', () => {
@@ -327,6 +330,8 @@ describe('the DEP definition', () => {
         'POST /templates',
         'GET /templates',
         'GET /templates/{tid}',
+        'POST /bulk-sends',
+        'GET /bulk-sends/{bid}',
         'GET /quotas',
         'PUT /quotas',
         'GET /origins',

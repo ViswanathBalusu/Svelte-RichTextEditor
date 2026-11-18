@@ -1002,6 +1002,76 @@ export interface Workflow {
   };
 }
 
+/** One recipient row of a bulk send: what a document made from the template takes (FRW-063). */
+export interface BulkSendRow {
+  /** The recipient's participants, bound to the roles of the template. */
+  participants?: Array<{
+    id: string;
+    roles: string[];
+    kind: "filler" | "signer" | "approver" | "cc";
+    order: number;
+    sub?: string;
+    name?: string;
+    auth?: {
+      require?: string[];
+    };
+  }>;
+  /** The recipient's values, prefilled by key. */
+  values?: { [key: string]: unknown };
+  title?: string;
+  externalId?: string;
+  properties?: { [key: string]: unknown };
+  classification?: string;
+}
+
+/** The body of `POST /bulk-sends` (12 §9; FRW-063). */
+export interface BulkSendCreate {
+  /** The template (`POST /templates`). */
+  template: string;
+  /** The seq of the template document to fork at. Default: the head. */
+  templateSeq?: number;
+  /** One document is made for each row, in order. */
+  rows: BulkSendRow[];
+}
+
+/** The outcome of one row of a bulk send (FRW-063). */
+export interface BulkSendRowResult {
+  /** The position of the row in the request, from 0. */
+  index: number;
+  /** The document made for the row; null when it failed. */
+  document: string | null;
+  /** Why the row failed: the code and the violations the single call would have answered. */
+  error?: {
+    code: ErrorCode;
+    message: string;
+    violations?: Array<{
+      path: string;
+      rule: string;
+    }>;
+  };
+}
+
+/** A bulk send: a job that makes one fork of a template for each recipient row (12 §9; FRW-063). */
+export interface BulkSend {
+  id: string;
+  template: string;
+  /** The seq of the template the documents are forked at: pinned and recorded. */
+  seq: number;
+  state: "queued" | "running" | "completed" | "failed" | "cancelled";
+  /** The number of rows. */
+  total: number;
+  /** The rows handled so far. */
+  done: number;
+  /** Each row with the new document or the failure; set when `state` is `completed`. */
+  rows?: BulkSendRowResult[];
+  error?: {
+    code: ErrorCode;
+    message: string;
+  };
+  createdAt: string;
+  finishedAt?: string;
+}
+
 /** A template: a document with role placeholders, fields and rules, and no participants (12 §9; FRW-062). The members are the lane's proposal (docs/adr/0406-w4-FRW-062-templates.md). */
 export interface Template {
   id: string;
@@ -2210,6 +2280,24 @@ export interface Operations {
     query: Record<string, never>;
     body: TemplateCreate;
     response: Template;
+  };
+  /** POST /bulk-sends: Starts a job that makes one fork of a template for each recipient row (12 §9; FRW-063). Answers 202. (12 §9, §10) */
+  createBulkSend: {
+    method: "POST";
+    path: "/bulk-sends";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: BulkSendCreate;
+    response: BulkSend;
+  };
+  /** GET /bulk-sends/{bid}: State, progress and result of a bulk send (12 §9; FRW-063). (12 §9, §10) */
+  getBulkSend: {
+    method: "GET";
+    path: "/bulk-sends/{bid}";
+    params: { bid: string };
+    query: Record<string, never>;
+    body: never;
+    response: BulkSend;
   };
   /** GET /templates/{tid}: One template (12 §9; FRW-062). (12 §9, §10) */
   getTemplate: {

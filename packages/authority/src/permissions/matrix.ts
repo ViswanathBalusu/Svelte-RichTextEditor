@@ -204,6 +204,9 @@ export const MATRIX: readonly MatrixRow[] = [
       'POST /templates',
       'GET /templates',
       'GET /templates/{tid}',
+      // Bulk sends (12 §9; FRW-063): started and read with a service credential.
+      'POST /bulk-sends',
+      'GET /bulk-sends/{bid}',
       // Tenant quotas (06 §12; UX-078 criterion 1): read and set with a service credential.
       'GET /quotas',
       'PUT /quotas',
