@@ -179,6 +179,14 @@ export class DocEditorElement extends Base {
   #webLabel: HTMLElement | null = null;
   #readViewOf: { docId: string; key: unknown } | null = null;
   #readToken: object | null = null;
+  /**
+   * The view the element shows in place of the one the `view` attribute asks for, after the user
+   * selected an export diagnostic in the read view (FE-072 criterion 4). The attribute keeps the
+   * host's value; setting it again clears this.
+   */
+  #viewOverride: ViewName | null = null;
+  /** The block the editor moves to as soon as the web view is shown (FE-072 criterion 4). */
+  #pendingBlock: string | null = null;
   #grace: ReturnType<typeof setTimeout> | null = null;
   /** flush, getContent, exec and queryCommand over the current session (src/host-api.ts). */
   readonly #methods: HostApi = elementMethods(() => this.#session);
@@ -379,6 +387,8 @@ export class DocEditorElement extends Base {
       case 'view':
         // A change of `view` is reflected by the reconcile a new document takes (FE-065). Between web and
         // print the session is kept; the read view has no core, so a change to or from it is a new mount.
+        this.#viewOverride = null;
+        this.#pendingBlock = null;
         this.#scheduleLoad();
         break;
       default:
@@ -465,6 +475,7 @@ export class DocEditorElement extends Base {
       // Back from the read view: the same core is shown again (FE-065 criterion 3).
       this.#setEditorHidden(false);
       if (this.#mounted !== null) this.#showWebLabel();
+      this.#revealPendingBlock();
       return;
     }
     this.#reload = false;
@@ -517,8 +528,31 @@ export class DocEditorElement extends Base {
 
   /** The view the `view` attribute asks for now (FE-065; view-select.ts). Touch devices get the web view. */
   #viewChoice(): ViewName {
+    if (this.#viewOverride !== null) return this.#viewOverride;
     const touch = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches;
     return selectView(this.getAttribute('view'), { touch, pageViewAvailable: false }).view;
+  }
+
+  /**
+   * The user selected a diagnostic of the read view's export and may edit (FE-072 criterion 4): the
+   * web view is shown in place of the read view and moves its caret to the block. The core is the
+   * session's own, kept behind the read view or started now.
+   */
+  #openBlockInEditor(blockId: string): void {
+    this.#viewOverride = 'web';
+    this.#pendingBlock = blockId;
+    this.#scheduleLoad();
+  }
+
+  /** Moves the editor to the block a selected diagnostic named, once the web view is shown. */
+  #revealPendingBlock(): void {
+    const blockId = this.#pendingBlock;
+    const mounted = this.#mounted;
+    if (blockId === null || mounted === null || this.#readViewOf !== null) return;
+    this.#pendingBlock = null;
+    // False when the block is not in the body or a region the reader can see; the web view then
+    // stays where it was.
+    mounted.core.selectBlock(blockId);
   }
 
   /**
@@ -575,6 +609,9 @@ export class DocEditorElement extends Base {
         backend,
         viewerUrl: this.#config.pdfViewerUrl ?? new URL(VIEWER_PAGE, import.meta.url).href,
         ownsBackend,
+        onOpenInEditor: (blockId) => {
+          if (this.#readToken === token) this.#openBlockInEditor(blockId);
+        },
       });
     })().catch(() => {});
   }
@@ -716,6 +753,7 @@ export class DocEditorElement extends Base {
     if (this.#readViewOf !== null) this.#setEditorHidden(true);
     else this.#showWebLabel();
     this.#applyPageGuides();
+    this.#revealPendingBlock();
     return mounted;
   }
 
@@ -918,6 +956,8 @@ export class DocEditorElement extends Base {
     document.removeEventListener('pointerdown', this.#onOutsidePress, true);
     this.#suspended = false;
     this.#reload = false;
+    this.#viewOverride = null;
+    this.#pendingBlock = null;
     this.#closeReadView();
     this.#hideWebLabel();
     const session = this.#session;
