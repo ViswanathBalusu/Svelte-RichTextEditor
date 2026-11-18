@@ -793,6 +793,27 @@ export class SyncSession {
       );
   }
 
+  /**
+   * Takes one set-aside item out of the journal's recovered edits (UX-017): the person discarded it,
+   * so it is not listed again when the document is opened later. The item is the one with this
+   * commit, `seq` and text.
+   */
+  forgetRecovered(item: { commit: string | null; seq: number; text: string }): void {
+    const journal = this.#journal;
+    const kept = this.#recoveredKept.filter(
+      (d) => !(d.commit === item.commit && d.seq === item.seq && d.text === item.text),
+    );
+    if (kept.length === this.#recoveredKept.length) return;
+    this.#recoveredKept = kept;
+    if (!journal?.setRecovered || this.#ended) return;
+    this.#journalChain = this.#journalChain
+      .then(() => journal.setRecovered!(this.docId, this.#recoveredKept.slice()))
+      .then(
+        () => this.#setJournalOk(true, ''),
+        (e: unknown) => this.#setJournalOk(false, journalReason(e)),
+      );
+  }
+
   /** Keeps set-aside work in the journal, as recovered edits, until it is written (FE-010). */
   #recordRecovered(items: readonly Discarded[]): void {
     const journal = this.#journal;

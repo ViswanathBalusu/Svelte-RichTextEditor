@@ -1939,6 +1939,27 @@ export class DocumentCore implements DocumentApi {
   }
 
   /**
+   * Puts a set-aside item's text at the selection through the guards, as typing would (UX-017
+   * criterion 3). The item stays in the list: only a deliberate discard removes it.
+   */
+  insertRecovered(id: string): boolean {
+    const item = this.recovered.get().items.find((i) => i.id === id);
+    if (item === undefined || item.text === '') return false;
+    return this.pastePlainText(item.text);
+  }
+
+  /** Removes a set-aside item from the list and from the journal (UX-017 criteria 4 and 5). */
+  discardRecovered(id: string): boolean {
+    const { items } = this.recovered.get();
+    const item = items.find((i) => i.id === id);
+    if (item === undefined) return false;
+    const rest = items.filter((i) => i !== item);
+    this.recovered.set({ count: rest.length, items: rest });
+    this.#session?.forgetRecovered(item);
+    return true;
+  }
+
+  /**
    * The format painter's paste (UX-009). The character formatting and the paragraph properties go
    * through the guard like any change. Where suggestion mode records the change, each part is a
    * transaction of its own, because a suggestion is built from mark steps or from attribute steps,
@@ -3291,11 +3312,13 @@ export class DocumentCore implements DocumentApi {
         this.#publishSync();
         return;
       case 'discarded': {
+        const before = this.recovered.get().items;
         const items = [
-          ...this.recovered.get().items,
-          ...e.items.map((i) => ({
+          ...before,
+          ...e.items.map((i, n) => ({
             reason: i.reason,
             commit: i.commit,
+            id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
             text: i.text,
             seq: i.seq,
             ...this.#rejectionWords(i),

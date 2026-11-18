@@ -305,14 +305,29 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // Named commands of phase 1b that the shell runs (ui CoreCommandName). `insertField` takes the
     // palette's `{ kind }` and inserts that form field kind at the caret (FRW-072).
     // `setRegionPolicy` takes `{ region, policy }` (PRM-036); the engine refuses it without `manage`.
-    // `copyFormat` and `pasteFormat` are the format painter's (UX-009).
+    // `copyFormat` and `pasteFormat` are the format painter's (UX-009); `insertRecovered` and
+    // `discardRecovered` take `{ id }` and are the recovered edits pane's (UX-017).
     // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
     // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
-    commandNames: ['insertField', 'setRegionPolicy', 'markRegion', 'copyFormat', 'pasteFormat'],
+    commandNames: [
+      'insertField',
+      'setRegionPolicy',
+      'markRegion',
+      'copyFormat',
+      'pasteFormat',
+      'insertRecovered',
+      'discardRecovered',
+    ],
     runNamed: (name, args) => {
       // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
       // puts it on the selection through the guards; neither takes an argument.
       if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
+      // The recovered edits pane (UX-017): `{ id }` names an item of the core's recovered view.
+      if (name === 'insertRecovered' || name === 'discardRecovered') {
+        const id = (args as { id?: unknown } | undefined)?.id;
+        if (typeof id !== 'string') return false;
+        return name === 'insertRecovered' ? core.insertRecovered(id) : core.discardRecovered(id);
+      }
       if (name === 'markRegion') {
         const title = (args as { title?: unknown } | undefined)?.title;
         if (typeof title !== 'string') return false;

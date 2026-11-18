@@ -472,6 +472,8 @@ export interface RecoveredItem {
   /** The rejection code, or `rebase`, `reload`, `reset`, `stale`. */
   reason: string;
   commit: string | null;
+  /** Names the item for `insertRecovered` and `discardRecovered` (UX-017): the commit, else the `seq` and its place. */
+  id?: string;
   /** The text it inserted. */
   text: string;
   seq: number;
