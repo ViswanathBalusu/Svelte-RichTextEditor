@@ -516,11 +516,11 @@ As an editor, I want to see what a restore would change before I do it, so that 
 **Acceptance criteria**
 
 - [x] Given a restore request with `dryRun`, when it is made, then the response is the comparison the restore would produce, in the format of HIS-011, between the current content and the result.
-- [ ] Given a dry run, when it completes, then no commit, no version and no event has been created.
+- [x] Given a dry run, when it completes, then no commit, no version and no event has been created.
 - [x] Given a dry run, when it is requested, then it needs the same permission and the same visibility as the real restore, so that it cannot be used to read what the gate hides.
 - [ ] Given the history pane, when the user chooses restore, then the dry-run comparison is shown with the comparison view and the user confirms before the real restore.
 
-**Evidence:** `packages/history/test/restore.test.ts`: "returns the comparison the restore would produce, in the format of HIS-011" (criterion 1; the dry run is the aligned comparison of HIS-012 with the `fromSeq`, `toSeq` and `changes` of HIS-011, so it inherits the open field-span shape of HIS-011 criterion 2); "needs the same permission and the same visibility as the restore itself" (criterion 3; the `forbidden` and `not_found` cases of the restore). Not ticked: criterion 2. `planRestore` is a pure function and builds no commit, version or event, but the test "creates nothing" only checks a room that the plan never touches, so it does not prove the service path; a test through the service is needed. Criterion 4 is the history pane's (HIS-009 and UX).
+**Evidence:** `packages/history/test/restore.test.ts`: "returns the comparison the restore would produce, in the format of HIS-011" (criterion 1; the dry run is the aligned comparison of HIS-012 with the `fromSeq`, `toSeq` and `changes` of HIS-011, so it inherits the open field-span shape of HIS-011 criterion 2); "needs the same permission and the same visibility as the restore itself" (criterion 3; the `forbidden` and `not_found` cases of the restore). Criterion 2 (lane w7, 2026-11-18): `services/document-service/test/control-plane/pro-056-restore-region-dryrun.test.ts`, "a dry run of one region compares only that region (criterion 1)" now also checks, over HTTP with the real data plane, that no `pre-restore` or `restore` version and no `dep.version.restored.v1` event is recorded (the whole-document dry run already checked this); the head stays at seq 2. Ran with `pnpm exec vitest run --project node` (16 tests pass). Not ticked: criterion 4, which is the history pane's (HIS-009 and UX).
 
 ### HIS-022 Copy a version into a new document
 
