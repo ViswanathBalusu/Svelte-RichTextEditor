@@ -13,7 +13,7 @@
  */
 
 /** The version of the kernel's call interface that this package expects of the crate. */
-export const KERNEL_ABI_VERSION = 2;
+export const KERNEL_ABI_VERSION = 3;
 
 /** The files that `build:wasm` writes to `dist/`, by role. */
 export const KERNEL_FILES = {
@@ -43,6 +43,37 @@ export interface KernelGlue {
   faces_count(): number;
   faces_bytes_held(): number;
   font_epoch(): number;
+  advance_units_per_point(): number;
+  shape_advances(
+    alias: string,
+    size_twips: number,
+    language: string,
+    features: string,
+    text: Uint16Array,
+  ): Int32Array;
+  shape_width(
+    alias: string,
+    size_twips: number,
+    language: string,
+    features: string,
+    text: Uint16Array,
+  ): number;
+  face_line_metrics(alias: string, size_twips: number): Int32Array;
+  shape_cache_stats(): Uint32Array;
+  shape_cache_clear(): void;
+}
+
+/** The codes of a run that was not shaped (crates/layout-kernel/src/shaping.rs). */
+export type ShapeErrorCode = 'unknown_face' | 'bad_feature' | 'shape_failed' | 'bad_size';
+
+/** A run the kernel did not shape. `code` is the crate's code. */
+export class KernelShapeError extends Error {
+  override name = 'KernelShapeError';
+  readonly code: string;
+  constructor(code: string) {
+    super(code);
+    this.code = code;
+  }
 }
 
 /** The codes of a refused face (crates/layout-kernel/src/faces.rs). */
@@ -81,6 +112,55 @@ export interface KernelFaces {
   epoch(): number;
 }
 
+/** What a run is shaped with: the face, the size, the language and the features of the painter. */
+export interface RunStyle {
+  /** The face's alias (`de-font-<hash>`). */
+  readonly alias: string;
+  /** The size in twentieths of a point (a whole number, at least 1). */
+  readonly sizeTwips: number;
+  /** A BCP 47 language tag, or the empty string. */
+  readonly language: string;
+  /** OpenType features in HarfBuzz syntax, comma separated (`kern=0,liga=0`), or the empty string. */
+  readonly features: string;
+}
+
+/** Line metrics of a face at a size, in advance units. */
+export interface RunLineMetrics {
+  readonly ascent: number;
+  /** Positive: the depth below the baseline. */
+  readonly descent: number;
+  readonly lineGap: number;
+}
+
+/** What the shaping cache has done (02 §9.3). */
+export interface ShapeCacheStats {
+  readonly hits: number;
+  readonly misses: number;
+  readonly entries: number;
+  /** The code units of text the cache holds. */
+  readonly units: number;
+}
+
+/**
+ * Shaping and measurement (WASM-006; 02 §9.1, §9.3). An advance is a whole number of
+ * `unitsPerPoint` (1280) to the point, which is 64 to the twentieth of a point; it is the font's
+ * value scaled to the size and rounded half up in integer arithmetic, so it is the same in every
+ * runtime. The advance of a cluster is on its first UTF-16 code unit; the other units of the
+ * cluster, and the second unit of a surrogate pair, are 0; the units sum to the run's width.
+ */
+export interface KernelShaper {
+  /** Advance units in one point. */
+  readonly unitsPerPoint: number;
+  /** The advance of each UTF-16 code unit of `text`. Throws `KernelShapeError`. */
+  advances(style: RunStyle, text: string | Uint16Array): Int32Array;
+  /** The width of `text`: the sum of `advances`. Throws `KernelShapeError`. */
+  width(style: RunStyle, text: string | Uint16Array): number;
+  /** The face's ascent, descent and line gap at a size. Throws `KernelShapeError`. */
+  lineMetrics(alias: string, sizeTwips: number): RunLineMetrics;
+  cacheStats(): ShapeCacheStats;
+  clearCache(): void;
+}
+
 /** A started kernel. */
 export interface LayoutKernel {
   /** The version of the crate that was built. */
@@ -92,6 +172,7 @@ export interface LayoutKernel {
   /** The SHA-256 of the bytes as lowercase hexadecimal, computed inside the module. */
   sha256(data: Uint8Array): string;
   readonly faces: KernelFaces;
+  readonly shaper: KernelShaper;
   /**
    * The size of the module's linear memory in bytes (faces included), or `null` when the start did
    * not hand it over.
@@ -144,6 +225,22 @@ function faceCall<T>(call: () => T): T {
   }
 }
 
+/** UTF-16 code units of a string, as the kernel reads them. */
+export function utf16Units(text: string): Uint16Array {
+  const units = new Uint16Array(text.length);
+  for (let i = 0; i < text.length; i++) units[i] = text.charCodeAt(i);
+  return units;
+}
+
+/** Calls a shaping function, turning the crate's error into a `KernelShapeError`. */
+function shapeCall<T>(call: () => T): T {
+  try {
+    return call();
+  } catch (error) {
+    throw new KernelShapeError(error instanceof Error ? error.message : String(error));
+  }
+}
+
 /**
  * Checks the interface version of a started module and wraps its calls. `output` is what the
  * glue's start returned (the module's exports); it is only read for the size of the memory.
@@ -170,6 +267,40 @@ export function finishKernel(glue: Omit<KernelGlue, 'initSync'>, output?: unknow
       count: () => glue.faces_count(),
       bytesHeld: () => glue.faces_bytes_held(),
       epoch: () => glue.font_epoch(),
+    },
+    shaper: {
+      unitsPerPoint: glue.advance_units_per_point(),
+      advances: (s, text) =>
+        shapeCall(() =>
+          glue.shape_advances(
+            s.alias,
+            s.sizeTwips,
+            s.language,
+            s.features,
+            typeof text === 'string' ? utf16Units(text) : text,
+          ),
+        ),
+      width: (s, text) =>
+        shapeCall(() =>
+          glue.shape_width(
+            s.alias,
+            s.sizeTwips,
+            s.language,
+            s.features,
+            typeof text === 'string' ? utf16Units(text) : text,
+          ),
+        ),
+      lineMetrics: (alias, sizeTwips) => {
+        const [ascent = 0, descent = 0, lineGap = 0] = shapeCall(() =>
+          glue.face_line_metrics(alias, sizeTwips),
+        );
+        return { ascent, descent, lineGap };
+      },
+      cacheStats: () => {
+        const [hits = 0, misses = 0, entries = 0, units = 0] = glue.shape_cache_stats();
+        return { hits, misses, entries, units };
+      },
+      clearCache: () => glue.shape_cache_clear(),
     },
     memoryBytes: () => memoryOf(output)?.buffer.byteLength ?? null,
   };

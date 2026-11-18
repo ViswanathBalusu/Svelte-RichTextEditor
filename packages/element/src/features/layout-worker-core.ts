@@ -9,6 +9,8 @@
  *   page can hand it to the next worker instead of compiling again.
  * - `batch`: runs one operation on a batch of whole blocks and answers with one `Uint32Array`, whose
  *   buffer is transferred.
+ * - `measure`: shapes the blocks of a batch, one run each, and answers with every code unit's advance
+ *   (WASM-006).
  * - `faces`, `release`, `status`: the font faces (WASM-005). The worker fetches the manifest's file
  *   for each face it does not hold, once however many requests ask, and gives the bytes to the
  *   kernel, which refuses a file whose SHA-256 is not the manifest's. Nothing is loaded ahead: a
@@ -22,6 +24,7 @@ import {
   blockBytes,
   blockCount,
   KernelFaceError,
+  KernelShapeError,
   type FaceFailure,
   type FaceRequest,
   type FaceStatus,
@@ -118,6 +121,54 @@ export function createWorkerCore(options: WorkerCoreOptions): (message: ToWorker
         },
         [],
       );
+    }
+  }
+
+  function measure(message: Extract<ToWorker, { type: 'measure' }>): void {
+    const started = now();
+    const fail = (code: string, text: string): void =>
+      options.post(
+        {
+          type: 'error',
+          id: message.id,
+          code,
+          message: text,
+          directive: null,
+          bytes: null,
+          streaming: null,
+        },
+        [],
+      );
+    if (message.offsets.length !== message.runs.length + 1) {
+      fail('bad_request', 'a run is needed for each block');
+      return;
+    }
+    try {
+      if (kernel === null || broken) throw new Error('the kernel is not running');
+      const values = new Int32Array(message.text.length);
+      for (let i = 0; i < message.runs.length; i++) {
+        const from = message.offsets[i] ?? 0;
+        const to = message.offsets[i + 1] ?? from;
+        if (to < from || to > message.text.length) throw new RangeError(`block ${i} is outside`);
+        values.set(kernel.shaper.advances(message.runs[i]!, message.text.subarray(from, to)), from);
+      }
+      options.post(
+        {
+          type: 'advances',
+          id: message.id,
+          values,
+          ms: Math.round((now() - started) * 1000) / 1000,
+        },
+        [values.buffer as ArrayBuffer],
+      );
+    } catch (error) {
+      // A refused run (an unknown face, a bad feature) is the caller's to fix; anything else is a trap.
+      if (error instanceof KernelShapeError) {
+        fail(error.code, error.message);
+        return;
+      }
+      broken = true;
+      fail('kernel_trap', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -224,6 +275,8 @@ export function createWorkerCore(options: WorkerCoreOptions): (message: ToWorker
         return init(message);
       case 'batch':
         return batch(message);
+      case 'measure':
+        return measure(message);
       case 'faces':
         return faces(message);
       case 'release':

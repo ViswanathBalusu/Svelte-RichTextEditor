@@ -249,7 +249,7 @@ test.describe('the layout worker (WASM-004)', () => {
     });
     expect(result).toMatchObject({
       type: 'ready',
-      abi: 2,
+      abi: 3,
       isModule: true,
       detached: true,
       matches: true,
