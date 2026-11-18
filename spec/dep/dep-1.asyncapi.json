@@ -820,6 +820,7 @@
           "sign",
           "seal",
           "read-restrictions",
+          "test-hooks",
           "extensions",
           "preserve"
         ]

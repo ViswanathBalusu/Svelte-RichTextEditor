@@ -29,6 +29,7 @@ function orderSection(): string {
 function requirementText(req: ProfileRequirement): readonly string[] {
   if (req.kind === 'always') return ['always'];
   if (req.kind === 'mode') return [req.mode];
+  if (req.kind === 'authority-service') return ['--authority-service'];
   return req.features;
 }
 

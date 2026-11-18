@@ -4,6 +4,7 @@
  * scenarios yet, so that a report shows it as skipped rather than leaving it out.
  */
 import type { ProfileDef } from '../scenario.ts';
+import { AUTHORITY_SERVICE } from './authority-service.ts';
 import { AUTHZ } from './authz.ts';
 import { COMMENTS } from './comments.ts';
 import { CORE_CHANNELS } from './core-channels.ts';
@@ -83,13 +84,6 @@ export const PROFILES: readonly ProfileDef[] = [
     ['PRO-122'],
     'PRO-122: phase 2',
   ),
-  later(
-    'authority-service',
-    'The authority service interface',
-    '05 §10',
-    { kind: 'always' },
-    ['PRO-125'],
-    'PRO-125: not reachable over DEP (05 §10)',
-  ),
+  AUTHORITY_SERVICE,
   FAULT_INJECTION,
 ];

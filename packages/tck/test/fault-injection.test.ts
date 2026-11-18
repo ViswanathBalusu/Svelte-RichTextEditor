@@ -33,10 +33,15 @@ describe('the optional fault-injection profile (PRO-126 criterion 5)', () => {
     expect(notApplicable(FAULT_INJECTION, target([], 'relay'))).toMatch(/`test-hooks`/);
   });
 
-  it('applies to a server that announces the hooks, and then reports why it has no scenarios', () => {
+  it('applies to a server that announces the hooks, and has a scenario for each of the four faults', () => {
     expect(notApplicable(FAULT_INJECTION, target([TEST_HOOKS_FEATURE]))).toBeNull();
-    expect(FAULT_INJECTION.scenarios).toEqual([]);
-    expect(FAULT_INJECTION.pending).toMatch(/PRO-126/);
+    expect(FAULT_INJECTION.pending).toBeUndefined();
+    expect(FAULT_INJECTION.scenarios.map((x) => x.id)).toEqual([
+      'fault-injection.durability',
+      'fault-injection.fencing',
+      'fault-injection.rewind',
+      'fault-injection.grants-revision',
+    ]);
   });
 
   it('states in the README what a server without the hooks leaves unproven', () => {

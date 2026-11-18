@@ -2,9 +2,13 @@
 /**
  * The kit as a command (05 §11; PRO-108): the entry point of its container image.
  *
- *   docedit-tck --discovery https://docs.example.com [--test-mode] [--origin https://app.example]
+ *   docedit-tck --discovery https://docs.example.com [--authority-service http://authority:8090] [--test-mode] [--origin https://app.example]
  *               [--profile core,presence] [--scenario core.sync] [--json report.json] [--text report.txt]
  *               [--timeout 10000] [--scenario-timeout 60000] [--fuzz-ms 20000] [--seed 42] [--runs 25]
+ *
+ * --authority-service names an authority service (05 §10) for the `authority-service` profile. Its
+ * bearer token, when it needs one, is read from DEP_TCK_AUTHORITY_TOKEN. A run may name it without
+ * --discovery: every DEP profile is then skipped.
  *
  * The service credential is read from the environment (DEP_TCK_CREDENTIAL, or the variable named by
  * --credential-env) or from a file (--credential-file), never from the command line, so that it does
@@ -15,9 +19,10 @@ import { parseArgs } from 'node:util';
 import { renderText } from './report.ts';
 import { runKit } from './runner.ts';
 
-const usage = `usage: docedit-tck --discovery <url> [--test-mode] [--origin <url>] [--profile <ids>] [--scenario <prefixes>]
+const usage = `usage: docedit-tck [--discovery <url>] [--authority-service <url>] [--test-mode] [--origin <url>] [--profile <ids>] [--scenario <prefixes>]
                    [--json <file>] [--text <file>] [--timeout <ms>] [--scenario-timeout <ms>]
                    [--fuzz-ms <ms>] [--seed <n>] [--runs <n>] [--credential-env <name>] [--credential-file <file>] [--quiet]
+One of --discovery and --authority-service is required. The authority service's bearer token comes from DEP_TCK_AUTHORITY_TOKEN.
 The service credential comes from DEP_TCK_CREDENTIAL unless --credential-env or --credential-file says otherwise.`;
 
 function fail(message: string): never {
@@ -30,6 +35,7 @@ try {
   args = parseArgs({
     options: {
       discovery: { type: 'string' },
+      'authority-service': { type: 'string' },
       'test-mode': { type: 'boolean', default: false },
       origin: { type: 'string' },
       profile: { type: 'string' },
@@ -55,11 +61,12 @@ if (args.help) {
   console.log(usage);
   process.exit(0);
 }
-if (!args.discovery) fail('--discovery is required');
+if (!args.discovery && !args['authority-service'])
+  fail('--discovery or --authority-service is required');
 const credential = args['credential-file']
   ? readFileSync(args['credential-file'], 'utf8').trim()
   : process.env[args['credential-env'] ?? 'DEP_TCK_CREDENTIAL'];
-if (!credential)
+if (!credential && args.discovery)
   fail(
     'no service credential: set DEP_TCK_CREDENTIAL or pass --credential-env or --credential-file',
   );
@@ -87,10 +94,20 @@ const profiles = list(args.profile);
 const scenarios = list(args.scenario);
 
 const report = await runKit({
-  discovery: args.discovery,
-  credential,
+  discovery: args.discovery ?? '',
+  credential: credential ?? '',
   testMode: args['test-mode'] === true,
   ...(args.origin ? { origin: args.origin } : {}),
+  ...(args['authority-service']
+    ? {
+        authorityService: {
+          url: args['authority-service'],
+          ...(process.env['DEP_TCK_AUTHORITY_TOKEN']
+            ? { token: process.env['DEP_TCK_AUTHORITY_TOKEN'] }
+            : {}),
+        },
+      }
+    : {}),
   ...(profiles ? { profiles } : {}),
   ...(scenarios ? { scenarios } : {}),
   ...(timeoutMs !== undefined ? { timeoutMs } : {}),

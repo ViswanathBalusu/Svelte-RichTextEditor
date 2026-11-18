@@ -122,6 +122,13 @@ export const FEATURES: readonly FeatureDef[] = [
     owner: 'PRO',
   },
   {
+    name: 'test-hooks',
+    doc: 'Fault-injection hooks for the conformance kit, announced only by a server in test mode (05 §11; ADR 0219, accepted as owner decision 192; ADR 0398). Never announced in production.',
+    spec: '05 §2, §11',
+    relayForbidden: false,
+    owner: 'PRO',
+  },
+  {
     name: 'extensions',
     doc: 'Host-registered extension nodes; a CDM feature (03 §11, 13 §7.3).',
     spec: '03 §11',

@@ -10,6 +10,7 @@ import { IDS, insertText, posIn } from '../documents.ts';
 import { ALLOWED_ALGS, verifyJws } from '../jwt.ts';
 import { scenario, type ScenarioDef } from '../scenario.ts';
 import type { Wire } from '../wire.ts';
+import { TEST_HOOKS_FEATURE } from './fault-injection.ts';
 import { claimsOf, openChannel, opened, problemOf } from './support.ts';
 
 const s = (def: Omit<ScenarioDef, 'id'> & { id: string }) => scenario('core', def);
@@ -140,12 +141,23 @@ export const CORE_SESSION: ScenarioDef[] = [
         text,
       );
       const w = await welcomed(ctx);
+      // `test-hooks` says that fault-injection hooks exist (ADR 0219, owner decision 192; PRO-126).
+      // It is not a switch: a client cannot use it to turn test mode on, and a server announces it
+      // only while its own switch is on.
+      const announced = w.welcome.features.filter((f) => f !== TEST_HOOKS_FEATURE);
       check(
-        !w.welcome.features.some((f) => suspicious.test(f)),
+        !announced.some((f) => suspicious.test(f)),
         'no announced feature is a test switch',
         'none',
         w.welcome.features,
       );
+      if (w.welcome.features.includes(TEST_HOOKS_FEATURE))
+        check(
+          ctx.config.testMode,
+          'a server announces test-hooks only while its test-mode switch is on (ADR 0219)',
+          'test-hooks only with the switch on',
+          w.welcome.features,
+        );
       if (ctx.config.testMode) ctx.note('checked with the test-mode switch on');
     },
   }),

@@ -46,6 +46,10 @@ function stubHooks(): { hooks: DataPlaneTestHooks; calls: string[] } {
     dropNextAnnouncement: (ref) => {
       calls.push(`dropNextAnnouncement:${ref.doc}`);
     },
+    rewind: async (ref, head) => {
+      calls.push(`rewind:${ref.doc}:${head}`);
+      return { head, incarnation: 'inc-2' };
+    },
     state: async (ref) => {
       calls.push(`state:${ref.doc}`);
       return { seq: 7, epoch: 3, owner: 'node-a', incarnation: 'inc-1', chainHead: 'c0ffee' };
@@ -121,6 +125,19 @@ describe('fault-injection hooks (BE-079)', () => {
     expect(logged[2]).toMatchObject({ doc: DOC });
   });
 
+  it('rewinds a log to a sequence number and answers the new incarnation, and refuses a bad number (ADR 0398)', async () => {
+    const { hooks, calls } = stubHooks();
+    const { call, logged } = build(hooks);
+    const done = await call('POST', `/documents/${DOC}/rewind`, { to: 2 });
+    expect(done.status).toBe(200);
+    expect(done.body).toEqual({ head: 2, incarnation: 'inc-2' });
+    for (const bad of [{ to: -1 }, { to: 1.5 }, { to: '2' }, {}]) {
+      const r = await call('POST', `/documents/${DOC}/rewind`, bad);
+      expect(r.status, JSON.stringify(bad)).toBe(400);
+    }
+    expect(calls).toEqual([`rewind:${DOC}:2`]);
+    expect(logged.map((f) => f.message)).toContain('rewind');
+  });
   it('kills a room, drops one grant announcement, reads the chain head, epoch and audit events, and logs each use (criteria 3, 4, 5)', async () => {
     const { hooks, calls } = stubHooks();
     const { call, logged } = build(hooks);
