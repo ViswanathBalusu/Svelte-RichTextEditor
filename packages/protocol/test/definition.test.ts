@@ -213,6 +213,7 @@ const OTHER_ROUTES = [
   'PATCH /documents/{id}/field-values',
   'GET /documents/{id}/workflow',
   'PUT /documents/{id}/workflow',
+  'POST /documents/{id}/workflow/send',
   'POST /documents/{id}/workflow/participants/{pid}/consent',
   'POST /documents/{id}/workflow/participants/{pid}/verify',
   'POST /documents/{id}/workflow/participants/{pid}/complete',

@@ -5828,6 +5828,91 @@
         ]
       }
     },
+    "/documents/{id}/workflow/send": {
+      "post": {
+        "operationId": "sendWorkflow",
+        "summary": "Sends the document for completion: checks the send list, locks the document, activates the first participants (12 §6.2). The method and path are assumed.",
+        "description": "Sends the document for completion: checks the send list, locks the document, activates the first participants (12 §6.2). The method and path are assumed. Requires: manage (07 §12). Only when the server announces the feature `workflow`. Specified in 12 §6.2, §10.",
+        "tags": [
+          "workflow"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Success. No status code is defined for this route yet.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workflow"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "12 §6.2, §10",
+        "x-dep-owner": "FRW",
+        "x-dep-requires": "manage",
+        "x-dep-feature": "workflow",
+        "x-dep-codes": [
+          "validation_failed",
+          "pending_suggestions",
+          "conflict"
+        ],
+        "x-dep-gaps": [
+          "G95"
+        ]
+      }
+    },
     "/documents/{id}/workflow/participants/{pid}/consent": {
       "post": {
         "operationId": "participantConsent",

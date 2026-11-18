@@ -1345,6 +1345,22 @@
       "owner": "FRW"
     },
     {
+      "operationId": "sendWorkflow",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/send",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "manage",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "2XX",
+      "spec": "12 §6.2, §10",
+      "owner": "FRW"
+    },
+    {
       "operationId": "participantConsent",
       "method": "POST",
       "path": "/documents/{id}/workflow/participants/{pid}/consent",
