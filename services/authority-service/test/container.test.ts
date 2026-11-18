@@ -167,7 +167,15 @@ describe.skipIf(!enabled)('the authority service container (BE-007)', () => {
     const caps = (await (await fetch(`${url}/v1/authority/capabilities`)).json()) as {
       calls: string[];
     };
-    expect(caps.calls).toEqual(['open', 'materialise', 'applyCommit', 'evaluateRules']);
+    expect(caps.calls).toEqual([
+      'open',
+      'materialise',
+      'applyCommit',
+      'restoreSteps',
+      'diff',
+      'attribution',
+      'evaluateRules',
+    ]);
 
     // Killed and started again: it holds nothing, and open with the same inputs gives the same bytes.
     await run(cli, ['kill', NAME]);

@@ -2466,12 +2466,13 @@ As an integrating developer, I want restore, comparison and attribution computed
 
 **Acceptance criteria**
 
-- [ ] Given `restoreSteps`, when it is called for a document or a region and a target `seq`, then it returns the steps or snapshot that restore it, equal to the in-process result on fixtures.
-- [ ] Given `diff`, when it is called for two states with `word` or `char` granularity, then it returns the comparison equal to the in-process result.
-- [ ] Given `attribution`, when it is called for a region or a block range, then it returns who wrote which spans, equal to the in-process result.
+- [x] Given `restoreSteps`, when it is called for a document or a region and a target `seq`, then it returns the steps or snapshot that restore it, equal to the in-process result on fixtures.
+- [x] Given `diff`, when it is called for two states with `word` or `char` granularity, then it returns the comparison equal to the in-process result.
+- [x] Given `attribution`, when it is called for a region or a block range, then it returns who wrote which spans, equal to the in-process result.
 - [ ] Given the three calls, when they are read, then each has a documented request and response in the interface definition.
 
-**Notes:** 05 §10 names the calls "as named" and gives no signatures (Open questions).
+**Evidence:** services/authority-service/test/history-calls.test.ts (Node.js, 10 cases, ephemeral port), code in services/authority-service/src/history-calls.ts, src/service.ts, src/http.ts. The fixture is four commits by two users on the contract document, made through `applyCommit`; the reference is `planRestore`, `compare` and `attributionAt` of `@docedit/history` called by the test on the same log. Criterion 1: a region restore to seq 0 gives the same steps, preconditions and `unchanged` as the in-process plan; a whole-document dry run gives the same kind, the same comparison and the same snapshot content (canonical form); refusals are answers (`forbidden` for a non-manager and for a seq below the gate, `not_found` past the head, `workflow_active`). Criterion 2: `diff` from 0 to 4 at `word` and at `char` equals the in-process comparison, with spans naming both users; a region limit works; the gate and a seq past the head are refused. Criterion 3: `attribution` equals the in-process map block by block; the intro block shows olivia (created), alice (seq 1 and 3); a region, a list of blocks and a past `seq` work; a state opened from a checkpoint at seq 2 with the saved map gives the same answer as one opened from 0, and a map that does not cover the checkpoint is refused at `open`. HTTP routes: `POST /v1/authority/states/{stateId}/restore-steps`, `/diff`, `/attribution`; the capabilities list the three calls and now offer `history`. Choices: docs/adr/0395-w5-PRO-106-history-calls.md (proposed).
+**Notes:** 05 §10 names the calls "as named" and gives no signatures (Open questions). Lane w5, 2026-11-18: criteria 1 to 3 ticked. Criterion 4 stays unticked: there is no interface definition of the authority service to document the calls in (the generated artifacts of `spec/dep` cover DEP, not 05 §10, and are not hand-edited); the requests and responses are written in ADR 0395 and in the module comment of `history-calls.ts`. Not covered: reader projection of a restore for a requester who may not see everything is the hidden-set rule of `@docedit/history` only (ADR 0019 projection calls are not in 05 §10); the baseline attribution of a checkpoint above seq 0 must be given by the caller (HIS-014 criterion 4 is open).
 
 ### PRO-107 Migrate documents and evaluate rules in the authority service
 
@@ -2848,12 +2849,13 @@ As an integrating developer, I want a profile for relay servers, so that a relay
 
 **Acceptance criteria**
 
-- [ ] Given a server with `mode` `relay`, when the kit selects profiles, then it runs `core-relay` and not the profiles that need document semantics.
+- [x] Given a server with `mode` `relay`, when the kit selects profiles, then it runs `core-relay` and not the profiles that need document semantics.
 - [ ] Given a commit whose `base` is not the head, when it is submitted to a relay, then it is rejected with `stale_base`.
 - [ ] Given commits from a client at the head, when they are submitted, then they are stored and relayed unchanged.
-- [ ] Given discovery of a relay, when features are read, then `regions`, `suggest-enforced` and `fields` are absent.
+- [x] Given discovery of a relay, when features are read, then `regions`, `suggest-enforced` and `fields` are absent.
 
-**Notes:** Phase inferred: relay mode has no phase in 11; it is placed with the published kit in phase 4.
+**Evidence:** packages/tck/test/pro-124-core-relay.test.ts (Node.js, 7 cases), code in packages/tck/src/profiles/core-relay.ts and index.ts (the profile replaces the pending entry). Criterion 1: `notApplicable` gives null for `core-relay` on a server with `mode: relay` and a reason on an authority server; the profiles applicable to a relay include `core-relay` and none of `core`, `semantics`, `perm-doc`, `authz`, `registry`, `fuzz` (also packages/tck/test/relay-selection.test.ts, PRO-101). Criterion 4: the scenario `core-relay.discovery.mode-and-features` passes for a discovery with `mode: relay` and none of `regions`, `suggest-enforced`, `fields`, and fails for each of them and for `mode: authority`; the discovery is a document the test serves to the scenario, not a relay's.
+**Notes:** Phase inferred: relay mode has no phase in 11; it is placed with the published kit in phase 4. Lane w5, 2026-11-18: criteria 1 and 4 ticked. Criteria 2 and 3 stay unticked: they submit commits to a relay, and no relay server that speaks DEP exists to run scenarios against. `Relay` in `@docedit/authority` (SYN-044) is a library (the room-side of 04 §14), and `services/document-service` and the kit's mock target are in authority mode. A scenario written without a relay to run it against would be untested; a relay target built here only for the kit would be scaffolding. Needed: a relay server (a DEP front over `Relay`, with the bootstrap contract of 05 §11).
 
 ### PRO-125 Provide the `authority-service` profile
 
