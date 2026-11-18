@@ -105,7 +105,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'markupView'
       | 'setMarkupView'
       | 'setSuggestionLabel'
-      | 'suggestionLabel';
+      | 'suggestionLabel'
+      // FE-088: the ids of the blocks that changes touched, for the layout's dirty set.
+      | 'takeLayoutDirty';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed
