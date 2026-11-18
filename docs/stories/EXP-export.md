@@ -1404,7 +1404,7 @@ As the owner, I want a recorded decision on whether the class should force the e
 - [ ] Given a decision to build, when it is scoped, then it keeps the constraints of 09 §7: the same fonts, no hyphenation, fixed leading, breaks forced with penalties before TeX's own line breaker runs, and the line breaker is not replaced.
 - [ ] Given a decision to build, when it is announced, then the mode is labelled experimental, with the loss of TeX's paragraph quality stated.
 
-**Notes:** 09 §15 lists this as open. No implementation story is written until the decision says build. Lane U-EXP-049-064, round 8 (2026-11-13): the owner's decision is still missing, and the lane may not make it. The options, the spec default (L2 not built) and the evidence gap (S4 has no reference-machine measurement, see EXP-060) are set out in `docs/adr/0320-lane-U-EXP-049-064.md`, section "Round 8". Nothing is ticked.
+**Notes:** 09 §15 lists this as open. No implementation story is written until the decision says build. Lane U-EXP-049-064, round 8 (2026-11-13): the owner's decision is still missing, and the lane may not make it. The options, the spec default (L2 not built) and the evidence gap (S4 has no reference-machine measurement, see EXP-060) are set out in `docs/adr/0320-lane-U-EXP-049-064.md`, section "Round 8". Nothing is ticked. Lane w2 (2026-11-18): `docs/owner-decisions-2026-11-15.md` (answers 1 to 42) does not list this decision, so it is still open. The spec default (L2 not built) is not applied as a decision: all three criteria need the owner's own word, and criteria 2 and 3 apply only after a "build" decision. Blocked on the owner.
 
 
 ## Engine and performance
