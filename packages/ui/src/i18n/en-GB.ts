@@ -772,6 +772,14 @@ export const EN_GB = {
   'comments.thread.threadDeleted': 'Thread deleted.',
   'comments.thread.resolved': 'Thread resolved.',
   'comments.thread.reopened': 'Thread reopened.',
+  // The thread as a task (UX-032). The assignee is shown as text.
+  'comments.thread.task.assigned': 'Task, assigned to {name}.',
+  'comments.thread.task.none': 'Not assigned to anyone.',
+  'comments.thread.assign.label': 'Assign to',
+  'comments.thread.assign.results': 'People to assign the thread to',
+  'comments.thread.assign.clear': 'Clear assignee',
+  'comments.thread.assigned': 'Thread assigned.',
+  'comments.thread.unassigned': 'Assignee cleared.',
 
   // Export (UX-101). Diagnostics' messages come from the service.
   'dialog.export.title': 'Export',

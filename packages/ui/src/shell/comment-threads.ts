@@ -129,6 +129,8 @@ export interface ThreadInput {
   readonly excerpt: string | null;
   /** The block kind (figure, table, equation, ...), when the target is a block. */
   readonly blockKind: string | null;
+  /** The person the thread is assigned to as a task (`user:<sub>`), when it is (UX-032). */
+  readonly assignee?: string | null;
 }
 
 export type TargetLabel =
@@ -144,6 +146,8 @@ export interface PaneRow {
   readonly state: ThreadState;
   readonly replyCount: number;
   readonly target: TargetLabel;
+  /** The task's assignee, or null when the thread is not assigned (UX-032). */
+  readonly assignee: string | null;
   /** The parts a screen reader name is made from (UX-030 criterion 6): author, state, replies. */
   readonly accessibleName: {
     readonly author: string;
@@ -174,6 +178,7 @@ export function paneRows(threads: readonly ThreadInput[]): PaneRow[] {
       state: t.state,
       replyCount: t.replyCount,
       target: targetLabel(t),
+      assignee: t.assignee ?? null,
       accessibleName: { author: t.author, state: t.state, replyCount: t.replyCount },
     }));
 }

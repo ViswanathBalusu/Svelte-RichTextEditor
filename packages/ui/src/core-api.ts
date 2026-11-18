@@ -1403,6 +1403,8 @@ export interface ThreadDetail {
   readonly author: string;
   /** True once the commented text was removed; the thread stays readable and is not re-attached. */
   readonly detached: boolean;
+  /** The person the thread is assigned to as a task, `user:<sub>`; null or absent when nobody (UX-032). */
+  readonly assignee?: string | null;
   readonly caps: readonly Capability[];
   readonly comments: readonly CommentView[];
   readonly etag: string;
@@ -1452,6 +1454,11 @@ export interface ThreadsService {
   ): Promise<{ readonly ok: boolean; readonly code?: string }>;
   /** Resolves or reopens a thread. */
   setState?(id: string, state: 'open' | 'resolved', etag: string): Promise<ThreadWrite>;
+  /**
+   * Gives the thread to a person as a task, or clears the assignee with null (`PATCH` of `assignee`,
+   * `If-Match` with `etag`; UX-032). The service raises `dep.task.assigned` for a person named.
+   */
+  assign?(id: string, assignee: string | null, etag: string): Promise<ThreadWrite>;
   /** The anchor for the current selection; null when nothing that can carry a thread is selected. */
   anchor(): CommentAnchor | null;
   /** The threads the document holds now, open or resolved (the 5,000 limit of UX-028). */

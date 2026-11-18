@@ -197,6 +197,7 @@ export class FakeThreads implements ThreadsService {
         ...summary,
         state: next.state,
         replyCount: Math.max(0, next.comments.length - 1),
+        assignee: next.assignee !== undefined ? next.assignee : summary.assignee,
         excerpt: next.detached ? null : summary.excerpt,
       };
     }
@@ -292,6 +293,16 @@ export class FakeThreads implements ThreadsService {
 
   async setState(id: string, state: 'open' | 'resolved', etag: string): Promise<ThreadWrite> {
     return this.#write('state', id, etag, { state }, (d) => ({ ...d, state }));
+  }
+
+  async assign(id: string, assignee: string | null, etag: string): Promise<ThreadWrite> {
+    return this.#write('assign', id, etag, { assignee }, (d) => ({ ...d, assignee }));
+  }
+
+  /** Another client assigns or clears the thread: the copy changes and the pane is told (`thread.updated`). */
+  remoteAssign(id: string, assignee: string | null): void {
+    const d = this.details.get(id)!;
+    this.put({ ...d, assignee });
   }
   anchor(): CommentAnchor | null {
     return this.current;

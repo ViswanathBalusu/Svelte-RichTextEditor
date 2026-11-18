@@ -14,6 +14,7 @@
 <script lang="ts">
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
+  import { createAssigneeSearch, type AssigneeState } from '../shell/assignee-search.ts';
   import type {
     CommentBodyPart,
     CommentView,
@@ -77,8 +78,59 @@
     const ids = shown.comments.flatMap((c) =>
       c.body.flatMap((p) => (p.type === 'mention' ? [subOf(p.principal) ?? ''] : [])),
     );
+    if (shown.assignee) ids.push(subOf(shown.assignee) ?? '');
     directory.request(ids.filter((id) => id !== ''));
   });
+
+  // The task (UX-032): who the thread is assigned to, shown as text, and the field that changes it.
+  const assigneeName = $derived(shown.assignee ? mentionName(shown.assignee) : null);
+  const assignSearch = createAssigneeSearch({
+    docId: shell.docId ?? '',
+    searchPrincipals: shell.searchPrincipals,
+  });
+  const mayAssign = $derived(mayReply && !!threads.assign && assignSearch.offered);
+  let assignText = $state('');
+  let assignList = $state.raw<AssigneeState>(assignSearch.state());
+
+  async function lookUpAssignee(): Promise<void> {
+    const shownNow = await assignSearch.update(assignText);
+    assignList = assignSearch.state();
+    if (shownNow) shell.announce('comment.mention.results', { count: assignList.results.length });
+  }
+
+  async function assignTo(person: string | null): Promise<void> {
+    const ok = await send(
+      () => threads.assign?.(shown.id, person, shown.etag),
+      person === null ? 'comments.thread.unassigned' : 'comments.thread.assigned',
+    );
+    if (ok) {
+      assignText = '';
+      void assignSearch.update('');
+      assignList = assignSearch.state();
+    }
+  }
+
+  function chooseAssignee(index?: number): void {
+    const picked = assignSearch.choose(index);
+    assignList = assignSearch.state();
+    if (picked) void assignTo(picked.principal);
+  }
+
+  function onAssignKey(event: KeyboardEvent): void {
+    if (!assignList.open) return;
+    const any = assignList.results.length > 0;
+    if (event.key === 'ArrowDown' && any) assignSearch.move(1);
+    else if (event.key === 'ArrowUp' && any) assignSearch.move(-1);
+    else if (event.key === 'Enter' && any) {
+      event.preventDefault();
+      chooseAssignee();
+      return;
+    } else if (event.key === 'Escape') assignSearch.close();
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+    assignList = assignSearch.state();
+  }
   function mentionName(principal: string): string {
     void names.current;
     const sub = subOf(principal);
@@ -220,6 +272,75 @@
   {#if shown.detached}
     <p class="de-hint" data-detached-note>{tr.t('comments.thread.detached')}</p>
   {/if}
+
+  <div class="de-thread-task" data-task data-assigned={shown.assignee ? 'true' : undefined}>
+    <p class="de-comment-assignee" data-assignee>
+      {#if assigneeName}
+        {tr.t('comments.thread.task.assigned', { name: assigneeName })}
+      {:else}
+        {tr.t('comments.thread.task.none')}
+      {/if}
+    </p>
+    {#if mayAssign}
+      <label for={`${id}-assignee`}>{tr.t('comments.thread.assign.label')}</label>
+      <input
+        id={`${id}-assignee`}
+        type="text"
+        class="de-input"
+        role="combobox"
+        autocomplete="off"
+        aria-autocomplete="list"
+        aria-expanded={assignList.open && assignList.results.length > 0}
+        aria-controls={`${id}-assignees`}
+        aria-activedescendant={assignList.open && assignList.active !== null
+          ? `${id}-assignee-${assignList.active}`
+          : undefined}
+        bind:value={assignText}
+        oninput={() => void lookUpAssignee()}
+        onkeydown={onAssignKey}
+        onblur={() => {
+          assignSearch.close();
+          assignList = assignSearch.state();
+        }}
+        data-assign-field
+      />
+      <ul
+        id={`${id}-assignees`}
+        class="de-listbox"
+        role="listbox"
+        aria-label={tr.t('comments.thread.assign.results')}
+        hidden={!assignList.open || assignList.results.length === 0}
+      >
+        {#each assignList.results as p, i (p.principal)}
+          <!-- The keys are handled by the field, which owns the list. -->
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <li
+            id={`${id}-assignee-${i}`}
+            role="option"
+            class="de-option"
+            aria-selected={i === assignList.active}
+            data-principal={p.principal}
+            onmousedown={(e) => e.preventDefault()}
+            onclick={() => chooseAssignee(i)}
+          >
+            <span data-content>{p.name}</span>
+          </li>
+        {/each}
+      </ul>
+      {#if assignList.open && assignList.results.length === 0}
+        <p class="de-hint" role="status">{tr.t('dialog.comment.mentionNone')}</p>
+      {/if}
+      {#if shown.assignee}
+        <button
+          type="button"
+          class="de-list-button"
+          data-assign-clear
+          disabled={busy}
+          onclick={() => assignTo(null)}>{tr.t('comments.thread.assign.clear')}</button
+        >
+      {/if}
+    {/if}
+  </div>
 
   <ul class="de-list de-thread-comments">
     {#each shown.comments as c (c.id)}

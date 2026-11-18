@@ -142,6 +142,23 @@
     all: 'comments.filter.all',
   };
 
+  // An assignee is a principal; its name comes from the host's `resolveUsers` (UX-032 criterion 5:
+  // the assignee is exposed as text). A value that is not a `user:` principal is shown as it is.
+  const people = shell.people;
+  const peopleNames = live(people.view);
+  const subOf = (who: string): string => (who.startsWith('user:') ? who.slice(5) : who);
+  $effect(() => {
+    people.request(
+      threads.flatMap((t) => (t.assignee !== null && t.assignee.startsWith('user:') ? [subOf(t.assignee)] : [])),
+    );
+  });
+  function assigneeLabel(who: string): string {
+    void peopleNames.current;
+    const name = people.lookup(subOf(who)).name;
+    if (name !== null) return name;
+    return who.startsWith('user:') ? tr.t('people.fallback') : who;
+  }
+
   const assignees = $derived(
     [...new Set(threads.map((t) => t.assignee).filter((a): a is string => a !== null))].sort(),
   );
@@ -212,7 +229,7 @@
     <select id="de-comments-assignee" bind:value={assignee}>
       <option value="">{tr.t('comments.filter.anyone')}</option>
       {#each assignees as who (who)}
-        <option value={who}>{who}</option>
+        <option value={who}>{assigneeLabel(who)}</option>
       {/each}
     </select>
   </div>
@@ -239,6 +256,11 @@
             <span class="de-comment-replies">{replies(row.replyCount)}</span>
           </div>
           <p class="de-comment-target" data-content>{targetText(row)}</p>
+          {#if row.assignee !== null}
+            <p class="de-comment-assignee" data-assignee>
+              {tr.t('comments.thread.task.assigned', { name: assigneeLabel(row.assignee) })}
+            </p>
+          {/if}
           {#if service?.reveal}
             <button
               type="button"

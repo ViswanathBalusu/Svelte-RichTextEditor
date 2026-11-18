@@ -828,6 +828,9 @@ const harness = {
   /** Another client replies (comment.created): the pane is told and shows it without a reload. */
   remoteReply: (id: string, author: string, text: string) =>
     need().core.threads!.remoteReply(id, author, text),
+  /** Another client assigns the thread, or clears it with null (thread.updated; UX-032 criterion 2). */
+  remoteAssign: (id: string, assignee: string | null) =>
+    need().core.threads!.remoteAssign(id, assignee),
   /** The next write finds the thread changed: another client replied first (If-Match fails). */
   staleNextThread: (author: string, text: string) => {
     need().core.threads!.staleNext = {
