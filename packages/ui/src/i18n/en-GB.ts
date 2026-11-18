@@ -254,6 +254,13 @@ export const EN_GB = {
   'review.pane.rejectAll': 'Reject all',
   'review.pane.acceptAllBy': 'Accept all by {author}',
   'review.pane.rejectAllBy': 'Reject all by {author}',
+  'review.pane.filter.region': 'Region',
+  'review.pane.filter.allRegions': 'The whole document',
+  'review.pane.region.untitled': 'Untitled region',
+  'review.pane.acceptAllIn': 'Accept all in {region}',
+  'review.pane.rejectAllIn': 'Reject all in {region}',
+  'review.pane.acceptAllByIn': 'Accept all by {author} in {region}',
+  'review.pane.rejectAllByIn': 'Reject all by {author} in {region}',
   'review.nothingHere': 'No suggestion at the cursor or in the selection.',
   'review.accepted': {
     one: '{count} suggestion accepted.',
@@ -316,6 +323,14 @@ export const EN_GB = {
     one: 'This field was changed by someone else, so your entry was not saved. The field now shows the current value. Your entry is kept in recovered edits.',
     other:
       '{count} fields were changed by someone else, so your entries were not saved. The fields now show the current values. Your entries are kept in recovered edits.',
+  },
+  // A fill the service refused because a rule of the document stopped it (12 §5.3; FRW-023): {rule}
+  // is the rule's own message, or its identifier when it has none. The field shows the confirmed
+  // document again, and the entry is kept in recovered edits.
+  'notice.rejected.rule': {
+    one: 'Your entry was not saved because a rule of this document stopped it: {rule} The field follows the document as it stands. Your entry is kept in recovered edits.',
+    other:
+      '{count} entries were not saved because a rule of this document stopped them, the first one: {rule} The fields follow the document as it stands. Your entries are kept in recovered edits.',
   },
   'notice.rejected.field': {
     one: 'A field value could not be saved because it is not valid. It is kept in recovered edits.',
@@ -1259,6 +1274,7 @@ export const EN_GB = {
     other: '{count} changes',
   },
   'history.group.authors': 'Authors: {authors}',
+  'history.group.assisted': 'Written by an assistant for {name}: {agent}',
   'history.group.origins': 'Origins: {origins}',
   'history.group.named': 'Named version',
   'history.version.by': 'Named by {name} at {time}',
@@ -1289,7 +1305,7 @@ export const EN_GB = {
     one: '{name}: {count} passage, from {first} to {last}.',
     other: '{name}: {count} passages, from {first} to {last}.',
   },
-  'history.who.assistant': 'An assistant acted for this person.',
+  'history.who.assistant': 'Written by an assistant ({agent}) for this person.',
   'history.who.restored': 'Brought back by {by}.',
 
   // Comparing two versions (HIS-013; 08 §6).
@@ -1309,6 +1325,11 @@ export const EN_GB = {
   'history.compare.next': 'Next change',
   'history.compare.deletions': 'Show deleted text',
   'history.compare.announce': 'Change {n} of {m}: {kind}, by {name}',
+  'history.compare.announce.assistant':
+    'Change {n} of {m}: {kind}, written by an assistant ({agent}) for {name}',
+  'history.compare.assistant.title': 'Written by assistants',
+  'history.compare.assistant.row':
+    'Change {n}: {kind}, written by an assistant ({agent}) for {name}',
   'history.compare.announce.nobody': 'Change {n} of {m}: {kind}',
   'history.compare.kind.modified': 'text changed',
   'history.compare.kind.added': 'added',

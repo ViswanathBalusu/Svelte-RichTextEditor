@@ -710,7 +710,9 @@ export interface ExportOptions {
   fields?: "flatten" | "blank";
   tagging?: "on" | "draft" | "off";
   pdfStandard?: "ua-2" | "a-4" | (string & {});
+  /** Default: the document's language (`settings.lang`), else `en-GB`. The job records the value it used. */
   locale?: string;
+  /** An IANA zone name. Default `UTC`. The job records the value it used. */
   timeZone?: string;
   /** Append the certificate of completion (12). */
   certificate?: boolean;

@@ -3,7 +3,7 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "fe99d38917c801d5173cd701c13886ea08f140d44b5814e9a8961a3250883b93",
+  "definitionHash": "fd036ad7f49ca51f76f0ef094196fd58d0940b0426ce651681cc06ff47ec8fd9",
   "cdm": {
     "min": 1,
     "max": 1,
@@ -60,7 +60,7 @@
     "spec/dep/webhooks/dep.workflow.completed.v1.schema.json": "ed324ab76a9225e8f652b3f1cfc201a31929cdf80777f1bdc4e44b60d34c4dca",
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "9152416acc7809df32797943418c7a08be2f0169dd5f581a6c712d938774b333",
     "spec/dep/dep-1.registry.json": "801c9f5540b6269276d76d6bbb62fa03e0752463b443373d6995a2a5893123be",
-    "spec/dep/dep-1.gaps.json": "50f64c79e1c56b3b666b9e55e28867668e1a42da5a9881160f824a396f94fc64",
+    "spec/dep/dep-1.gaps.json": "9f39f72f4a6e61ac2a30bf96e95cda034772f01351a6f23e8d5da99ab4c13533",
     "packages/protocol/src/generated/types.ts": "80fd6a530acaa034ac2a4546ed8190d366f449073eaf3dbe4336515d987b335b"
   }
 }

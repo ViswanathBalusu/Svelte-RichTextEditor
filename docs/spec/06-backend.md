@@ -63,7 +63,7 @@ Each channel has a bounded send queue. A consumer that falls behind its bound ge
 
 ### 4.1 PostgreSQL
 
-Every table carries `tenant_id` and is protected by row-level security; the sketch below omits the column for brevity except where it is part of a key. User identifiers in all tables are per-tenant surrogates (08, section 13).
+Every table that holds tenant data carries `tenant_id` and is protected by row-level security. `node_leases` holds no tenant data (a lease names a node, not a tenant) and has neither (owner decision 195, ADR 0332); the sketch below omits the column for brevity except where it is part of a key. User identifiers in all tables are per-tenant surrogates (08, section 13).
 
 ```sql
 create table documents (

@@ -278,7 +278,7 @@ S  {"t":"event","ch":1,"d":{"type":"export.completed","resource":"/exports/0192f
 - **Idempotency.** `POST` requests that create something accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
 - **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200.
 - **Tracing.** Requests may carry `traceparent`; responses carry a request identifier.
-- **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document.
+- **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A user token that does not cover it, and a user who is not the requester of an export or import job, get `not_found`, so that the identifier is not confirmed (owner decision 57; a service credential covers every document of its tenant). The same holds for comments and imports (`/comments/{cid}`, `/imports/{jid}`).
 
 Callers are end users (every request is checked against that user's permissions) and host backends (service credential). The authorisation matrix in 07, section 12, lists the capability each resource needs.
 

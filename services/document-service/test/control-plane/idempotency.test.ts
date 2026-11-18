@@ -101,7 +101,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(a.status).toBe(202);
         expect(b.status).toBe(202);
         expect(b.json.id).not.toBe(a.json.id);
-        expect((await h.call('GET', `/v1/exports/${a.json.id}`, { token: ben })).status).toBe(403);
+        expect((await h.call('GET', `/v1/exports/${a.json.id}`, { token: ben })).status).toBe(404);
         const again = await exp(ann, { target: 'pdf' });
         expect(again.json.id).toBe(a.json.id);
         // The service used the key on POST /documents; on another route it is a new key.

@@ -111,7 +111,7 @@ The rules are in 09, sections 4, 6.3 and 9.3. In short: only machine-generated L
 
 ### 3.7 Data and tenancy
 
-- Row-level security and a tenant identifier on every table, object path and cache key; per-tenant encryption keys; optional dedicated deployments.
+- Row-level security and a tenant identifier on every table that holds tenant data (not `node_leases`: 06, section 4.1), and on every object path and cache key; per-tenant encryption keys; optional dedicated deployments.
 - Signed URLs are short-lived, scoped to one object, and issued only after a permission check.
 - Logs and metrics never contain document content or tokens. Support works from structural dumps without text (06, section 11).
 - Secrets are held in a secret manager and rotated. Webhook secrets and service credentials have overlap periods for rotation.

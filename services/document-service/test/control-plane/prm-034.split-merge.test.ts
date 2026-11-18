@@ -22,6 +22,7 @@ const FRESH = 'rSplit0000000001';
 
 interface Json {
   type: string;
+  text?: string;
   attrs?: Record<string, unknown>;
   content?: Json[];
 }

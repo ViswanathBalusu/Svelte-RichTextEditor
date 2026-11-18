@@ -44,7 +44,10 @@ export class ObjectCheckpointStore implements CheckpointStore {
     );
   }
 
-  /** The side object of a checkpoint (comment ranges; 06 §8 `checkpoints/{seq}.side.json.zst`). */
+  /**
+   * The side object of a checkpoint (comment ranges and attribution map; 06 §4.2, §8
+   * `checkpoints/{seq}.side.json.zst`; SYN-032, ADR 0377).
+   */
   async putSide(ref: DocRef, seq: number, bytes: Uint8Array): Promise<void> {
     await new TenantObjects(this.#store, ref.tenant).put(
       objectKeys.checkpointSide(ref.tenant, ref.doc, seq),
@@ -107,18 +110,19 @@ export class ObjectCheckpointStore implements CheckpointStore {
           contentType: 'application/zstd',
         });
       await objects.delete(key);
-      // The side object goes with its checkpoint: it describes content that no longer counts.
-      const side = objectKeys.checkpointSide(ref.tenant, ref.doc, seq);
-      const sideBytes = await objects.get(side);
-      if (sideBytes) {
+      // The side object goes with its checkpoint: it describes content that no longer counts
+      // (ADR 0377).
+      const sideKey = objectKeys.checkpointSide(ref.tenant, ref.doc, seq);
+      const side = await objects.get(sideKey);
+      if (side) {
         await objects.put(
           objectKeys
             .checkpointAside(ref.tenant, ref.doc, seq, tag)
-            .replace(/.cdm.json.zst$/, '.side.json.zst'),
-          sideBytes,
+            .replace(/\.cdm\.json\.zst$/, '.side.json.zst'),
+          side,
           { contentType: 'application/zstd' },
         );
-        await objects.delete(side);
+        await objects.delete(sideKey);
       }
       moved.push(seq);
     }

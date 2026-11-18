@@ -599,6 +599,12 @@ export interface RecoveredItem {
    * first (12 §4.2, P9; FRW-010 criterion 5). Absent for any other reason.
    */
   fields?: string[];
+  /**
+   * For a rejection that named a rule of the document (05 §5.3 `rule`; 12 §5.3): the rule and the
+   * words it carries, so that the editor can explain the refusal (FRW-023 criterion 5). `message`
+   * is the rule's first `validate` message, or null for a rule that has none.
+   */
+  rule?: { id: string; message: string | null };
 }
 
 /** Work set aside so far: `de-recovered-edits` carries `count` (05 §8.1). */

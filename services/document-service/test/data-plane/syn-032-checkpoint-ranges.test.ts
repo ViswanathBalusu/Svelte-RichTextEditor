@@ -77,7 +77,7 @@ describe('a checkpoint is written with the comment ranges (SYN-032 criterion 6)'
     expect(p.errors).toEqual([]);
   }, 30_000);
 
-  it('writes no side object when the room holds no ranges', async () => {
+  it('saves no ranges when the room holds none (a side object may still hold the attribution map)', async () => {
     const mem = new MemoryStore();
     const checkpoints = new MemoryCheckpoints();
     const p = await startPlane({
@@ -97,7 +97,7 @@ describe('a checkpoint is written with the comment ranges (SYN-032 criterion 6)'
     );
     alice.terminate();
     await until(() => p.plane.host.rooms.length === 0, 3000, 'the idle room to close');
-    expect(checkpoints.sides.size).toBe(0);
+    for (const bytes of checkpoints.sides.values()) expect(decodeSide(bytes).threads).toEqual([]);
     expect(p.errors).toEqual([]);
   }, 30_000);
 });
