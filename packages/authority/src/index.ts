@@ -349,6 +349,7 @@ export {
   type EvidenceCommitPayload,
 } from './workflow/evidence.ts';
 export {
+  EVIDENCE_RETENTION_DEFAULT,
   planPurge,
   type EvidenceRow,
   type PurgeAudit,

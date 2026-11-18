@@ -1918,8 +1918,12 @@ As a maintainer, I want a default retention period for evidence, so that the pur
 **Acceptance criteria**
 
 - [ ] Given the owner decides, then the default period, the range a tenant may choose, and the relation to legal hold are recorded.
-- [ ] Given the decision, then it is recorded whether the period counts from `completedSeq`, from finalisation or from the last reminder of a stopped workflow, and what applies to declined, voided and expired workflows.
+- [x] Given the decision, then it is recorded whether the period counts from `completedSeq`, from finalisation or from the last reminder of a stopped workflow, and what applies to declined, voided and expired workflows.
 - [ ] Given the decision, then the legal basis and the tenant-facing wording are agreed with counsel (FRW-087).
+
+**Evidence (criterion 2):** owner decision 31 (docs/owner-decisions-2026-11-15.md, 2026-11-17): signing evidence is kept as long as the signed document exists and is deleted with it. Recorded in docs/adr/0394-w4-FRW-084-evidence-retention.md, in 12 §7 and §15 (question 7) and in 08 §2: there is no period and no clock, so the question of `completedSeq`, finalisation or the last reminder does not arise, and a declined, voided or expired workflow keeps its evidence as long as its document does. `EVIDENCE_RETENTION_DEFAULT` (`null`) and `planPurge` with `retentionMs: null` (`packages/authority/src/workflow/retention.ts`) remove nothing by age; `packages/authority/test/retention.test.ts`, "the default keeps evidence for the life of the document" (property, passed).
+
+**Notes:** Lane w4 (2026-11-18). Criterion 1 stays open: the owner's rule fixes the default and its relation to a hold (the hold keeps the evidence; it never outlives the document), but names no range a tenant may choose. ADR 0394 item 5 proposes no tenant period in version 1 and says what a period would be if the owner wants one; nothing is decided. Criterion 3 needs counsel (FRW-087), which has not taken place; ADR 0394 item 6 only names it.
 
 ### FRW-085 Decide whether comments are switched off during a workflow
 
