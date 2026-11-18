@@ -37,6 +37,7 @@ import type {
 } from '@docedit/engine/headless';
 import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
+import type { HostExtension } from './extensions.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
@@ -155,7 +156,7 @@ export class DocEditorElement extends Base {
   #config: NormalConfig = normaliseConfig(null);
   #resolveUsers: ResolveUsers | null = null;
   #searchPrincipals: SearchPrincipals | null = null;
-  #extensions: readonly unknown[] = [];
+  #extensions: readonly HostExtension[] = [];
   #strings: StringOverrides | null = null;
   #icons: IconOverrides | null = null;
 
@@ -324,12 +325,15 @@ export class DocEditorElement extends Base {
     this.#mounted?.setIcons(this.#icons);
   }
 
-  /** Host-registered extensions (13 §7, 05 §8.1). A change while the shell is mounted is applied at once (UX-050). */
-  get extensions(): readonly unknown[] {
+  /**
+   * Host-registered extensions (13 §7, 05 §8.1; the entry type is `HostExtension`). A change while the
+   * shell is mounted is applied at once (UX-050). A value that is not an array gives no extensions.
+   */
+  get extensions(): readonly HostExtension[] {
     return this.#extensions;
   }
 
-  set extensions(value: readonly unknown[]) {
+  set extensions(value: readonly HostExtension[]) {
     this.#extensions = Array.isArray(value) ? Object.freeze([...value]) : [];
     this.#mounted?.setExtensions(this.#extensions);
   }
