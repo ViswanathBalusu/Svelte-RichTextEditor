@@ -107,7 +107,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'focusField'
       // FRW-069: focus by key, and the next field the person may fill.
       | 'focusFieldByKey'
-      | 'nextFillableField';
+      | 'nextFillableField'
+      // HIS-013: a read-only version view draws a comparison over its document.
+      | 'setComparison';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });
