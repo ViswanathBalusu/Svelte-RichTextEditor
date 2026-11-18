@@ -264,8 +264,8 @@ describe('the direct DOCX writer: rows, pictures, captions, suggestions and form
   it('writes a whole-table suggestion as a tracked change on every row, with the commit date (EXP-093)', async () => {
     const env = newDocument();
     const cells = (s: string): JsonNode[] => [cell([p([t(s)])]), cell([p([t(`${s} 2`)])])];
-    const del: JsonMark = { type: 'del', attrs: { id: 'delTable0001', user: 'user-0001' } };
-    const ins: JsonMark = {
+    const del = { type: 'del', attrs: { id: 'delTable0001', user: 'user-0001' } };
+    const ins = {
       type: 'ins',
       attrs: { id: 'insTable0002', user: 'word:Ada Lovelace' },
     };

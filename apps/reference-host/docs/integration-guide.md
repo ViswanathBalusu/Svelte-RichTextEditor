@@ -247,10 +247,15 @@ Hosts that serve a strict policy must allow what the component needs, feature by
 - A worker script served without a policy is not restricted at all.
 - Production puts the viewer in a sandboxed cross-origin frame (09 section 9.3, rule 7; FE-071). Then the host needs `frame-src` for the viewer's origin, and the lines above apply to the frame's own policy. That frame is not built yet.
 
-### WebAssembly kernels (ADR 0016, later)
+### Layout kernel (WebAssembly; ADR 0016, WASM-002)
 
-- In a same-origin worker, the worker script's response policy needs `'wasm-unsafe-eval'`, and the page needs nothing. In a `blob:` worker, the page's `script-src` needs `'wasm-unsafe-eval'` and `worker-src` needs `blob:`.
-- WebKit does not report a refused compilation, so the kernel detects the failure itself and uses its fallback.
+The page view's text kernel is a WebAssembly file of about 14 kB today. It is loaded only when the page view is asked for (`view="print"`); a session that stays in the web or read view fetches and compiles nothing.
+
+- The file is served next to the component's chunks, in their `assets/` folder, and is found from the chunk's own URL. Serve the component's folder from one origin, and nothing else needs allowing for the fetch: `connect-src 'self'` (or your component origin) covers it.
+- Serve `.wasm` as `application/wasm`. The browser then compiles it while it downloads. Under any other media type the component reads the file whole and compiles it from the bytes, which is slower but works. The event below says which path ran.
+- `script-src 'wasm-unsafe-eval'` in the page's policy, because the module is compiled on the page's thread for now. When the layout worker of WASM-004 takes it over, the directive moves to the worker script's own response policy and the page needs nothing; in a `blob:` worker the page's `script-src` keeps it and `worker-src` needs `blob:` (spike S2, section 6). Without it the page view is not available and the editor stays in the web view; see below.
+- WebKit refuses a compilation without sending a report, so the component notices the failure itself.
+- `de-diagnostic` (proposed event, ADR 0410) reports the load: `kind: 'loaded'` with `ms` and `streaming`, or `kind: 'load-failed'` with a `code` (`blocked_by_policy`, `fetch_failed`, `bad_module`, `abi_mismatch`, `chunk_failed`, `compile_failed`) and, for a policy refusal, the `directive` to add. The detail carries no document content.
 
 ### Your own Svelte or framework
 

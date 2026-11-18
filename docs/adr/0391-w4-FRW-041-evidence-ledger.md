@@ -9,3 +9,13 @@
 5. **Size.** A row's `data` is at most 4096 bytes (the table's check); a larger event is refused before the write with a `RangeError`.
 6. **Where the table is named.** Only the evidence modules and the document purge name `workflow_evidence`. A test scans the source for it, so that a module which builds an export, a checkpoint, a webhook or a search entry cannot start to read it unseen.
 7. **Retention.** The retention period is a tenant setting (FRW-043 criterion 5) whose default and starting point are the owner's (FRW-084). 08 §2 says so; no setting is invented here.
+
+## Second pass, 2026-11-18: the commit that carries the hash
+
+Item 3 is now built. The routes it waited for exist (FRW-045 to FRW-047). Decisions, none the owner's, proposed:
+
+8. **A control commit after the event, not the event's own commit.** The evidence of a signing names the `seq` and the chain hash of the signing commit (FRW-040), so its hash cannot be inside that commit. A control commit that follows the signing or the completion carries it. The completion's own transition commit is not used for this: a completion that leaves the lock as it was still gets one, but the transition and the evidence are two facts and the transition may be skipped (`anchor: false`).
+9. **The form.** The payload of such a commit has one more member, `evidence: { origin, evidenceHash }`, present on no other commit, so no earlier hash changes. `Room.anchor` writes it. It records no grants revision: the room does not count it as the commit of a revision, and a revision still gets its own control commit. It needs no permission and is not refused for the state of the document, as the commit of a revision is not.
+10. **Delivery.** The route puts the request in the outbox with a commit identifier derived from the hash, so a repeat is one item and one commit. The route waits two seconds to report; an item the room has not stored by then stays queued and is delivered later (the outbox is durable). A stop between the evidence row and the outbox write loses the anchor; the repeat of a signing writes it again from the row, and a completion that has completed answers without writing (as FRW-047 already says of its evidence row).
+11. **Clients.** The projection removes the member from `sync.commit` messages: the hash is for verifiers, not for a connected client.
+12. **A side effect of opening a room.** The control commit makes the document service open a room for the anchor, so a revision whose control commit had not been written yet is written then, after the signing commit it was checked against (as it was after any later commit before).

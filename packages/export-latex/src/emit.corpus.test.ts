@@ -2,43 +2,33 @@
  * EXP-046 criterion 5 (Node.js only): a failing input is stored as a fixture of the emitter corpus,
  * and every stored fixture is replayed through the grammar checks of the string emitters on every run.
  *
- * - The corpus folder is `test/emitter-corpus/` in this package. The shared `corpus` package is not
- *   in this lane, so the location is a proposal (ADR 0143, item 3).
+ * - The corpus folder is `test/emitter-corpus/` in this package (ADR 0143, item 3: the shared
+ *   `corpus` package holds documents, so the folder stays here).
  * - A fixture is `{ "emitter": <name>, "input": <string> }`, one JSON file per input, named by the
- *   first 16 hex digits of the SHA-256 of the emitter and the input.
- * - No failure has been found, so the folder holds no fixture yet. The replay test then checks only
- *   the folder's format and the store helper, and says so. Criterion 5 stays unticked until a failure
- *   is found and stored.
+ *   first 16 hex digits of the SHA-256 of the emitter and the input (`test/emitter-corpus.ts`).
+ * - The store is automatic: `assertStoring` runs a fuzz property, and on a failure writes the shrunk
+ *   counterexample as a fixture before it reports the failure. `emit.fuzz.test.ts` runs its string
+ *   properties through it, and `emit.compile.fuzz.test.ts` stores the strings the compile lost.
+ * - No failure has been found, so the folder holds no fixture yet. The replay test then checks the
+ *   folder's format, and the store is tested here with a property that fails on purpose, in a
+ *   temporary folder.
  *
  * The grammar checks repeat those of `emit.fuzz.test.ts` (which does not export them).
  */
-import { createHash } from 'node:crypto';
+import fc from 'fast-check';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { clean, pdfString, kvValue, text, url } from './emit.ts';
-
-const CORPUS_EMITTERS = ['text', 'pdfString', 'kvValue', 'url'] as const;
-type CorpusEmitter = (typeof CORPUS_EMITTERS)[number];
-
-interface CorpusFixture {
-  emitter: CorpusEmitter;
-  input: string;
-}
-
-const CORPUS_DIR = fileURLToPath(new URL('../test/emitter-corpus/', import.meta.url));
-
-/** Writes one fixture; the file name is derived from the emitter and the input, so no duplicate is stored twice. */
-function storeFixture(dir: string, fixture: CorpusFixture): string {
-  const digest = createHash('sha256')
-    .update(`${fixture.emitter}\0${fixture.input}`, 'utf8')
-    .digest('hex');
-  const path = join(dir, `${fixture.emitter}-${digest.slice(0, 16)}.json`);
-  writeFileSync(path, `${JSON.stringify(fixture, null, 2)}\n`, 'utf8');
-  return path;
-}
+import {
+  assertStoring,
+  CORPUS_DIR,
+  CORPUS_EMITTERS,
+  storeFixture,
+  type CorpusEmitter,
+  type CorpusFixture,
+} from '../test/emitter-corpus.ts';
 
 /** Reads one fixture and rejects a file that does not have the format. */
 function readFixture(path: string): CorpusFixture {
@@ -157,6 +147,50 @@ describe('EXP-046 criterion 5: stored failures are replayed', () => {
     }
   });
 
+  it('a failing fuzz property stores its shrunk counterexample as a fixture, and the error names the file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'emit-corpus-store-'));
+    try {
+      // A property that fails on purpose: any string with a `%` fails, and the example `ab%cd` is shrunk.
+      let message = '';
+      try {
+        assertStoring(
+          'text',
+          fc.property(fc.string({ minLength: 1, maxLength: 12 }), (v) => !v.includes('%')),
+          { seed: 46, numRuns: 400, examples: [['ab%cd']] },
+          ([v]) => v,
+          dir,
+        );
+      } catch (e) {
+        message = String(e);
+      }
+      expect(message).toMatch(/Stored as an emitter-corpus fixture: /);
+      const files = readdirSync(dir);
+      expect(files).toHaveLength(1);
+      expect(message).toContain(files[0]!);
+      const stored = readFixture(join(dir, files[0]!));
+      expect(stored.emitter).toBe('text');
+      // The input is the failing one, and it was shrunk from the 5-character example.
+      expect(stored.input).toContain('%');
+      expect(stored.input.length).toBeLessThan(5);
+      // A property that holds stores nothing.
+      const clear = mkdtempSync(join(tmpdir(), 'emit-corpus-clear-'));
+      try {
+        assertStoring(
+          'text',
+          fc.property(fc.string(), () => true),
+          { numRuns: 20 },
+          ([v]) => v,
+          clear,
+        );
+        expect(readdirSync(clear)).toEqual([]);
+      } finally {
+        rmSync(clear, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a fixture with an emitter outside the string emitters or a non-string input', () => {
     const dir = mkdtempSync(join(tmpdir(), 'emit-corpus-bad-'));
     try {
@@ -177,7 +211,7 @@ describe('EXP-046 criterion 5: stored failures are replayed', () => {
     }
   });
 
-  it('replays every fixture in test/emitter-corpus/ (none stored yet, so this checks the format only)', () => {
+  it('replays every fixture in test/emitter-corpus/ (none is stored yet, so this checks the format of the folder)', () => {
     for (const path of corpusFiles(CORPUS_DIR)) {
       const fixture = readFixture(path);
       expect(problems(fixture), path).toEqual([]);

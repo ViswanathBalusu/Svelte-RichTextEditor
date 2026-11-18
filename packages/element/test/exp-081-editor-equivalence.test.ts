@@ -22,10 +22,10 @@ interface JsonNode {
 const mark = (type: 'ins' | 'del', id: string) => ({ type, attrs: { id, user: 'alice' } });
 const run = (text: string, marks?: JsonNode['marks']): JsonNode =>
   marks ? { type: 'text', text, marks } : { type: 'text', text };
-// A paragraph that is suggested whole keeps the suggestion in `suggest` (owner decision 92).
+/** A paragraph; its suggestions are in the `suggest` attribute (03 §5; owner decision 92). */
 const paragraph = (id: string, content: JsonNode[], suggest?: JsonNode['marks']): JsonNode => ({
   type: 'paragraph',
-  attrs: { id, ...(suggest ? { suggest } : {}) },
+  attrs: suggest ? { id, suggest } : { id },
   content,
 });
 

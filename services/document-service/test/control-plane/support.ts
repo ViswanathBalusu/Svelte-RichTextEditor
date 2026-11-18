@@ -7,10 +7,12 @@
 import { generateKeyPairSync, randomUUID, type KeyObject } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import pg from 'pg';
 import type { PermissionState } from '@docedit/authority';
 import { uuid7 } from '@docedit/model';
 import type { Notification } from '@docedit/protocol';
 import { configFromEnv, type ServiceConfig } from '../../src/config.ts';
+import { PgPurgeStore } from '../../src/control-plane/document-purge-pg.ts';
 import { MemoryEventSink } from '../../src/control-plane/events.ts';
 import type { JobHandler } from '../../src/control-plane/jobs/runner.ts';
 import { b64url, signJws, type Algorithm, type PublicJwk } from '../../src/control-plane/jwt.ts';
@@ -27,7 +29,12 @@ import {
   type StartOptions,
 } from '../../src/server.ts';
 import type { DocRef } from '../../src/storage/types.ts';
-import { createTestDatabase, postgresUnavailable, type TestDatabase } from '../support/env.ts';
+import {
+  ADMIN,
+  createTestDatabase,
+  postgresUnavailable,
+  type TestDatabase,
+} from '../support/env.ts';
 import { startOnFetchablePort } from '../support/ports.ts';
 
 export type Storage = 'memory' | 'postgres';
@@ -169,6 +176,12 @@ export async function startHarness(
     onSpan?: StartOptions['onSpan'];
     /** The node's rate limits (BE-030): the REST pipeline and the stub data plane share them. */
     rateLimits?: StartOptions['rateLimits'];
+    /**
+     * PostgreSQL only: the service also gets a purge store over a pool that works as a member of `docedit_purge`
+     * (`parts.purgeStore`), so the scheduled purge of deleted documents runs (HIS-039). The login is
+     * the admin login with its role set to the purge role on each connection.
+     */
+    purgeRole?: boolean;
     /** The real data plane (BE-079 idle test) instead of the stub; the stub is the default. */
     realDataPlane?: boolean;
     /** Overrides of the composed webhook dispatcher (`config.webhooks` set); its dispatcher is the sink. */
@@ -180,10 +193,20 @@ export async function startHarness(
   /** The last move of the PostgreSQL jobs' times by `advance`; `call` waits for it. */
   let shifted: Promise<void> = Promise.resolve();
   let db: TestDatabase | null = null;
+  let purgePool: pg.Pool | null = null;
   let parts: ServiceParts;
   if (storage === 'postgres') {
     db = await createTestDatabase();
     parts = pgParts(db.service);
+    if (opts.purgeRole) {
+      // The admin login with its role set to the purge role, as an operator's login would be a member.
+      purgePool = new pg.Pool({ ...ADMIN, database: db.name, max: 3 });
+      purgePool.on('error', () => {});
+      purgePool.on('connect', (c) => {
+        void c.query('SET ROLE docedit_purge');
+      });
+      parts.purgeStore = new PgPurgeStore(purgePool);
+    }
   } else parts = memoryParts(now);
   Object.assign(parts, opts.parts ?? {});
   const stub = new StubDataPlane();
@@ -344,6 +367,7 @@ export async function startHarness(
     async close() {
       await shifted.catch(() => undefined);
       await service.close();
+      await purgePool?.end().catch(() => undefined);
       await db?.drop();
     },
   };

@@ -81,9 +81,9 @@ describe('EXP-015 criterion 2: tab stops are implemented in Lua', () => {
 });
 
 describe('EXP-015 criterion 2: row spans do not use multirow', () => {
-  it('defines \\DErowspan from \\vbox and never loads or calls multirow', () => {
+  it('defines \\DErowspan from \\vtop and \\vbox and never loads or calls multirow', () => {
     expect(CLS).toMatch(
-      /\\newcommand\\DErowspan\[2\]\{\\par\\ifdefined\\tagpdfsetup\\tagpdfsetup\{table\/multirow=#1\}\\fi\\vbox to\\z@\{#2\\vss\}\}/,
+      /\\newcommand\\DErowspan\[2\]\{\\par\\ifdefined\\tagpdfsetup\\tagpdfsetup\{table\/multirow=#1\}\\fi\s*\\setbox\\@tempboxa\\vtop\{#2\}\\vbox to\\z@\{\\kern-\\ht\\@tempboxa\\box\\@tempboxa\\vss\}\}/,
     );
     expect(CLS).not.toMatch(/\\multirow/);
     expect(LUA_CODE).not.toMatch(/multirow/);

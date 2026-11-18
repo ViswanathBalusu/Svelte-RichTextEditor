@@ -26,12 +26,12 @@ const FILES = ['pm-steps-1.json', 'golden/apply.json', 'golden/map.json', 'golde
  * is a new engine identifier, never a silent upgrade).
  */
 const RECORDED: Readonly<Record<string, string>> = {
-  // Re-recorded on 2026-11-18 by lane w1 (FE-044, FE-045), under the same identifier, because owner
-  // decision 92 moved block suggestions from node marks to the `suggest` attribute of the CDM
-  // schema, which is still a draft (`status: draft` in pm-steps-1.json, nothing released). The
-  // fixtures were regenerated against that schema; the behaviour of the step library did not
-  // change. The previous digest was 014ca7714178e880a393e9572693400792299e6a0dbd96e036bc44276dd14498.
-  // Whether a change of a draft schema needs `pm-steps/2` is for the owner of SYN-002 to say.
+  // Re-recorded by the integrator of batch 4 (2026-11-18), not by a rule change. FE-044 (owner
+  // decision 92) moved block suggestions from node marks to a `suggest` attribute. That changes
+  // the CDM 1 ProseMirror artifact the definition names and the golden inputs, not the step
+  // library. CDM 1 and `pm-steps/1` are still `draft`, so no document holds a commit made under
+  // the old digest (earlier digest: 014ca7714178e880a393e9572693400792299e6a0dbd96e036bc44276dd14498).
+  // Whether such a change after release needs `pm-steps/2` is the owner's (ADR 0257 point 1).
   'pm-steps/1': 'e371cf5f8ca8bc843be32d14347a873d68915d12a01cd9570d07af647bb66a81',
 };
 

@@ -324,7 +324,9 @@
                     "type": "table_row",
                     "attrs": {
                       "id": "trBody0000000001",
-                      "suggest": [{ "type": "ins", "attrs": { "id": "sAliceInsert0002", "user": "alice" } }]
+                      "suggest": [
+                        { "type": "ins", "attrs": { "id": "sAliceInsert0002", "user": "alice" } }
+                      ]
                     },
                     "content": [
                       {

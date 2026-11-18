@@ -42,6 +42,7 @@ import {
   type CloseReason,
   type Connection,
   type Effects,
+  type EvidenceAnchor,
   type LogCommit,
   type PermissionState,
   type Preconditions,
@@ -235,6 +236,14 @@ export type ServerOp =
       base: number;
       steps: unknown;
       preconditions?: Preconditions;
+      trace?: TraceContext | null;
+    }
+  | {
+      /** A control commit that anchors the salted hash of workflow evidence (FRW-041). */
+      kind: 'anchor';
+      id: string;
+      actor: 'system';
+      evidence: EvidenceAnchor;
       trace?: TraceContext | null;
     };
 
@@ -524,7 +533,8 @@ export class HostedRoom {
     // control commit goes first, before any channel can submit, so that every commit checked
     // against a revision follows that revision's control commit (04 G7; 07 §9; PRM-019).
     let recorded = init.initialRevision;
-    for (const c of init.log) if (c.kind === 'control') recorded = c.revision;
+    for (const c of init.log)
+      if (c.kind === 'control' && c.evidence === undefined) recorded = c.revision;
     if (init.perms.revision !== recorded) this.#apply(this.#gateway.permissionsChanged(init.perms));
     this.#scheduleExpiry();
     this.#scheduleCheckpoint();
@@ -954,6 +964,7 @@ ecentHead, keeping one entry older than the window. */
       );
     // BE-044: the assets the operation references are looked up first (a snapshot's for anyone
     // who uploaded them for this document, a step commit's for its actor).
+    if (op.kind === 'anchor') return this.#requestNow(op);
     if (this.#assets) {
       const refs = assetRefsIn(op.kind === 'snapshot' ? op.content.envelope.doc : op.steps);
       const unknown = [...refs].filter((id) => !this.#known.has(id));
@@ -987,7 +998,9 @@ ecentHead, keeping one entry older than the window. */
       this.#requests.set(key, { resolve, reject, actor: op.actor });
       const as = requesterOf(op.actor);
       let fx: Effects;
-      if (op.kind === 'snapshot') {
+      if (op.kind === 'anchor') {
+        fx = this.#gateway.anchor(key, { id: op.id, evidence: op.evidence });
+      } else if (op.kind === 'snapshot') {
         let content: Doc;
         try {
           content = schemaOf().nodeFromJSON(op.content.envelope.doc);

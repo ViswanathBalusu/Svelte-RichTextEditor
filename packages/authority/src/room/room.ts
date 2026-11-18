@@ -86,6 +86,7 @@ import {
   type CloseReason,
   type CommitInput,
   type Effects,
+  type EvidenceAnchor,
   type LogCommit,
   type Resume,
   type RoomConnection,
@@ -154,6 +155,16 @@ export interface AuthoredRequest {
    * anything else is refused with `permission_denied`, however the steps were computed.
    */
   region?: string;
+}
+
+/**
+ * A control commit that anchors the workflow evidence of one signing or completion (12 §7; ADR 0013;
+ * FRW-041). It carries the origin and the salted hash and nothing else, and records no revision.
+ */
+export interface AnchorRequest {
+  /** A deterministic UUID version 7, so that a retry cannot anchor the same evidence twice. */
+  id: string;
+  evidence: EvidenceAnchor;
 }
 
 /** A snapshot commit the control plane authors (04 §3.2, §10; SYN-005). */
@@ -605,7 +616,8 @@ export class Room {
     for (const r of c.retired) this.retired.add(r);
     for (const id of c.claimed)
       if (!this.owners.has(id)) this.owners.set(id, claimedBy?.get(id) ?? c.user);
-    if (c.kind === 'control') this.recordedRevision = c.revision;
+    // A control commit that only anchors evidence records no grants revision.
+    if (c.kind === 'control' && c.evidence === undefined) this.recordedRevision = c.revision;
     if (isSnapshot(c)) this.snapshotSeqs.push(c.seq);
     if (c.requires) this.durableRequires = [...c.requires];
   }
@@ -1393,6 +1405,69 @@ export class Room {
   }
 
   /**
+   * A control commit that anchors the salted hash of the workflow evidence of one signing or
+   * completion (12 §7; FRW-041). It is the control plane's housekeeping, like a grants revision, so
+   * it needs no permission and is not refused for the state of the document. A retry of the same
+   * identifier is acknowledged at the stored sequence number.
+   */
+  anchor(requester: string, request: AnchorRequest): Effects {
+    const fx = this.fx();
+    const id = isObject(request) && typeof request.id === 'string' ? request.id : '';
+    const reject = this.requesterReject(fx, requester, id);
+    if (this.stopped) return reject('unavailable', 'the room has stopped serving this document');
+    if (!isObject(request) || !isUuid7(request.id))
+      return reject('invalid_op', 'an evidence anchor needs a deterministic UUID version 7 id');
+    const ev = request.evidence as Partial<EvidenceAnchor> | undefined;
+    if (
+      !isObject(ev) ||
+      (ev.origin !== 'sign' && ev.origin !== 'rules') ||
+      typeof ev.evidenceHash !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(ev.evidenceHash)
+    )
+      return reject('invalid_op', 'an evidence anchor holds an origin and a SHA-256 hash');
+    const waiting = this.pending().find((p) => p.stored.id === request.id);
+    if (waiting) {
+      waiting.requesters.add(requester);
+      return fx;
+    }
+    const stored = this.byId.get(request.id);
+    if (stored) {
+      fx.send.push({ channel: requester, msg: this.rebuiltAck(stored) });
+      return fx;
+    }
+    const seq = this.tentativeSeq + 1;
+    const commit: StoredCommit = {
+      seq,
+      id: request.id,
+      kind: 'control',
+      steps: [],
+      user: SYSTEM_USER,
+      session: SERVER_SESSION,
+      time: this.now(),
+      origin: 'control',
+      scopes: [],
+      revision: this.perms.revision,
+      cdm: 1,
+      engine: ENGINE,
+      retired: [],
+      claimed: [],
+      evidence: { origin: ev.origin, evidenceHash: ev.evidenceHash },
+    };
+    this.queued.push({
+      stored: commit,
+      channel: null,
+      waiters: new Set(),
+      requesters: new Set([requester]),
+      rebased: false,
+      docAfter: this.tentativeDoc,
+      maps: [],
+    });
+    this.tentativeSeq = seq;
+    this.startWrite(fx);
+    return fx;
+  }
+
+  /**
    * A snapshot commit (04 §3.2; SYN-005): an import, a whole-document restore, a migration or a
    * repair replaces the document with the content of a checkpoint. It passes the invariant and
    * permission checks of any commit, including the refusal to change an approved region (07 §11),
@@ -2073,7 +2148,10 @@ export class Room {
     if (this.stopped || this.perms.revision === this.recordedRevision) return;
     if (
       this.pending().some(
-        (p) => p.stored.kind === 'control' && p.stored.revision === this.perms.revision,
+        (p) =>
+          p.stored.kind === 'control' &&
+          p.stored.evidence === undefined &&
+          p.stored.revision === this.perms.revision,
       )
     )
       return;

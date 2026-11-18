@@ -59,7 +59,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           body: { filename: 'a.png', mime: 'image/png', size: 10 },
         });
         expect(declared.status, declared.text).toBe(201);
-        id = declared.json.asset as string;
+        id = declared.json.asset as ReturnType<typeof uuid7>;
       } else
         await h.parts.assetRegistry.create(
           tenant,

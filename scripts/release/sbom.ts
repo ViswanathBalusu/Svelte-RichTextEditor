@@ -43,6 +43,7 @@ import {
   type SpdxRelationship,
 } from './spdx.ts';
 import { parseTlmgrInfo, texliveEntries, type FontManifest, type TexPackage } from './texlive.ts';
+import { cargoEntry, type ModuleCrate } from './crates.ts';
 import { conclude, type Dependency } from './walk.ts';
 
 export interface SbomContext {
@@ -188,6 +189,8 @@ export interface BundleSbomInput {
   walk: readonly Dependency[];
   /** Files the release adds next to the build output (manifest, licence, notices), as packed. */
   extraFiles?: readonly BundleFile[];
+  /** The Rust crates compiled into a WebAssembly module of the bundle (WASM-013), when it has one. */
+  crates?: readonly ModuleCrate[];
   /** Checksums of the packed tarball, when it exists. */
   tarball?: { sha256: string; sha512: string; fileName: string };
   ctx: SbomContext;
@@ -243,6 +246,16 @@ export function bundleSbom(input: BundleSbomInput): SbomResult {
       notes.push(
         `${p.key} is in the bundle but is not a production dependency of ${input.packageName}'s workspace closure, so the licence gate's walk does not see it; this bill concludes its licence with the same policy`,
       );
+  }
+  for (const crate of input.crates ?? []) {
+    const entry = cargoEntry(crate, ctx.policy, ctx.exceptions, ctx.today);
+    problems.push(...entry.problems);
+    packages.push(entry.pkg);
+    relationships.push({
+      spdxElementId: root.SPDXID,
+      relationshipType: 'CONTAINS',
+      relatedSpdxElement: entry.pkg.SPDXID,
+    });
   }
   const shipped = new Set(bundled.map((p) => p.key));
   const unbundled = input.walk.filter((d) => !shipped.has(lockKey(d.name, d.version)));
@@ -367,7 +380,13 @@ export function compareWithContents(
 ): string[] {
   const listed = new Set(
     [...doc.packages]
-      .filter((p) => p.name !== ownName && p.versionInfo)
+      .filter(
+        (p) =>
+          p.name !== ownName &&
+          p.versionInfo &&
+          // Crates of a WebAssembly module are compared with Cargo.lock (crates.ts).
+          !p.externalRefs?.some((r) => r.referenceLocator.startsWith('pkg:cargo/')),
+      )
       .map((p) => `${p.name}@${p.versionInfo}`),
   );
   const found = new Set(

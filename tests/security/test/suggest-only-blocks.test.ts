@@ -1,14 +1,15 @@
 /**
  * SEC-023 criterion 5 (10 §5; 03 §5; 07 §5.2, §17): suggestions on blocks other than paragraphs,
  * whole table rows and whole tables are refused. Owner decision 7 of 2026-11-15
- * (docs/owner-decisions-2026-11-15.md) settles the set, and decision 92 the form: a block suggestion is
- * an entry of the `suggest` attribute, which only `paragraph`, `table_row` and `table` have, and
- * no block takes a node mark (invariant I1, `node_mark_host`).
+ * (docs/owner-decisions-2026-11-15.md) settles the set, and owner decision 92 settles the form:
+ * a paragraph, a table row and a table keep their suggestions in the `suggest` attribute, and no
+ * block takes a node mark (invariant I1, `node_mark_host`).
  *
  * The room applies the steps, runs the outcome check (P4) and then the invariants of the result.
- * A node mark on any block is refused at the first stage, because the schema lets no parent hold a
- * marked block; `model.validate()` is the second guard and is tested directly. A suggestion on the
- * three hosts is an attribute step, which the pipeline accepts. The proof drives all stages.
+ * A node mark on a block is refused at the first stage, because the schema lets no container hold
+ * a marked child. A `suggest` attribute step on a block without that attribute changes nothing, so
+ * it is never an accepted suggestion. `model.validate()` is the second guard and is tested
+ * directly. The proof drives all stages.
  */
 import {
   applySteps,
@@ -97,24 +98,19 @@ function markOf(kind: 'ins' | 'del' | 'fmt', user: string) {
   return schema.marks[kind]!.create({ id: sid(), user });
 }
 
-/** The entry of `suggest` that says the same as a suggestion mark. */
-function entryOf(kind: 'ins' | 'del' | 'fmt', user: string): J {
-  const attrs: J = { id: sid(), user };
+/** The step that suggests a change to the whole block at `pos`: its `suggest` attribute (03 §5). */
+function suggestStep(pos: number, kind: 'ins' | 'del' | 'fmt', user: string): Step {
+  const attrs: Record<string, unknown> = { id: sid(), user };
   if (kind === 'fmt') attrs['before'] = { attrs: { align: 'left' } };
-  return { type: kind, attrs };
-}
-
-/** The step a suggester makes: an attribute step on a host, a node mark (which fails) elsewhere. */
-function suggestionStep(t: Target, kind: 'ins' | 'del' | 'fmt'): Step {
-  return HOSTS.includes(t.type)
-    ? new AttrStep(t.pos, 'suggest', [entryOf(kind, SAM.sub)])
-    : new AddNodeMarkStep(t.pos, markOf(kind, SAM.sub));
+  return new AttrStep(pos, 'suggest', [{ type: kind, attrs }]);
 }
 
 /** The room's pipeline: outcome check, then the invariants of the result. */
 function pipeline(before: Node, steps: Step[]) {
   const applied = applySteps(before, steps);
-  if (!applied.ok) return { stage: 'apply' as const, code: 'not_applied', reason: applied.reason };
+  if (!applied.ok)
+    return { stage: 'apply' as const, code: 'not_applied', reason: applied.reason, changed: false };
+  const changed = !applied.value.doc.eq(before);
   const outcome = outcomeCheck({
     before,
     after: applied.value.doc,
@@ -128,11 +124,21 @@ function pipeline(before: Node, steps: Step[]) {
     rules: STANDARD_RULES,
   });
   if (!outcome.ok)
-    return { stage: 'outcome' as const, code: outcome.code as string, reason: outcome.reason };
+    return {
+      stage: 'outcome' as const,
+      code: outcome.code as string,
+      reason: outcome.reason,
+      changed,
+    };
   const inv = checkInvariants(before, applied.value.doc, steps, applied.value.docs, ctx);
   if (!inv.ok)
-    return { stage: 'invariants' as const, code: inv.code as string, reason: inv.reason };
-  return { stage: 'accepted' as const, code: 'ok', reason: '' };
+    return {
+      stage: 'invariants' as const,
+      code: inv.code as string,
+      reason: inv.reason,
+      changed,
+    };
+  return { stage: 'accepted' as const, code: 'ok', reason: '', changed };
 }
 
 describe('SEC-023 criterion 5: block suggestions beyond paragraphs, table rows and tables are refused', () => {
@@ -148,24 +154,27 @@ describe('SEC-023 criterion 5: block suggestions beyond paragraphs, table rows a
 
   it.each(HOSTS)('a suggested deletion on a whole %s is accepted (the control)', (type) => {
     const t = byType(type);
-    const r = pipeline(doc, [suggestionStep(t, 'del')]);
-    expect(r).toEqual({ stage: 'accepted', code: 'ok', reason: '' });
+    const r = pipeline(doc, [suggestStep(t.pos, 'del', SAM.sub)]);
+    expect(r).toEqual({ stage: 'accepted', code: 'ok', reason: '', changed: true });
   });
 
-  it.each(HOSTS)(
-    'a node mark on a whole %s is refused: a block suggestion is an attribute',
-    (type) => {
-      const t = byType(type);
-      const r = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf('del', SAM.sub))]);
-      expect(r.stage).toBe('apply');
-    },
-  );
+  it.each(HOSTS)('a node mark on a whole %s is refused: no block takes a node mark', (type) => {
+    const t = byType(type);
+    const r = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf('del', SAM.sub))]);
+    expect(r.stage).not.toBe('accepted');
+  });
 
   it('a suggested deletion on a table cell is refused: the schema does not let a row hold a marked cell', () => {
     const t = byType('table_cell');
     const r = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf('del', SAM.sub))]);
     expect(r.stage).toBe('apply');
     expect(r.reason).toContain('Invalid content for node table_row');
+  });
+
+  it('a suggest attribute on a table cell is never kept: the cell has no such attribute', () => {
+    const t = byType('table_cell');
+    const r = pipeline(doc, [suggestStep(t.pos, 'del', SAM.sub)]);
+    expect(r.changed).toBe(false);
   });
 
   it('a document whose table cell carries a suggestion mark fails model validation (I1, node_mark_host)', () => {
@@ -187,15 +196,17 @@ describe('SEC-023 criterion 5: block suggestions beyond paragraphs, table rows a
     const t = byType('body');
     const r = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf('del', SAM.sub))]);
     expect(r.stage).not.toBe('accepted');
+    expect(pipeline(doc, [suggestStep(t.pos, 'del', SAM.sub)]).changed).toBe(false);
   });
 
   it('a formatting suggestion on a table cell is refused', () => {
     const t = byType('table_cell');
     const r = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf('fmt', SAM.sub))]);
     expect(r.stage).not.toBe('accepted');
+    expect(pipeline(doc, [suggestStep(t.pos, 'fmt', SAM.sub)]).changed).toBe(false);
   });
 
-  it('property: whatever node and suggestion mark a suggester picks, only a paragraph, a table row or a table is accepted', () => {
+  it('property: whatever node and suggestion a suggester picks, only a paragraph, a table row or a table takes it', () => {
     let accepted = 0;
     let refusedOther = 0;
     fc.assert(
@@ -204,11 +215,15 @@ describe('SEC-023 criterion 5: block suggestions beyond paragraphs, table rows a
         fc.constantFrom<'ins' | 'del' | 'fmt'>('ins', 'del', 'fmt'),
         (i, kind) => {
           const t = all[i]!;
-          const r = pipeline(doc, [suggestionStep(t, kind)]);
-          if (r.stage === 'accepted') {
+          const viaMark = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf(kind, SAM.sub))]);
+          expect(viaMark.stage, 'no block takes a node mark').not.toBe('accepted');
+          const r = pipeline(doc, [suggestStep(t.pos, kind, SAM.sub)]);
+          if (r.stage === 'accepted' && r.changed) {
             accepted++;
             expect(HOSTS).toContain(t.type);
-          } else if (!HOSTS.includes(t.type)) refusedOther++;
+          } else if (!HOSTS.includes(t.type)) {
+            refusedOther++;
+          }
         },
       ),
       { numRuns: 300 },

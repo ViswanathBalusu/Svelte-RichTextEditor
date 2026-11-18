@@ -1113,6 +1113,17 @@ export const EN_GB = {
   'fill.summary': 'What is left',
   'fill.waiting': 'It is not your turn yet. Your fields open when it is.',
   'fill.paused': 'Filling in is paused.',
+  // The access code of a participant (FRW-039). The code is never shown back or kept.
+  'accessCode.label': 'Access code',
+  'accessCode.hint': 'Enter the code you were given to start filling in.',
+  'accessCode.submit': 'Submit code',
+  'accessCode.wrong': 'That code is not right. Check it and try again.',
+  'accessCode.rateLimited': {
+    one: 'Too many attempts. Try again in {count} second.',
+    other: 'Too many attempts. Try again in {count} seconds.',
+  },
+  'accessCode.failed': 'The code could not be checked. Try again.',
+  'accessCode.accepted': 'Code accepted. You can fill in the document.',
   'fill.done': 'All required fields are filled.',
   'fill.summary.empty': 'Nothing is left to fill.',
   'fill.why.required': 'Required, not filled',

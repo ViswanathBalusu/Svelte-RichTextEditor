@@ -33,6 +33,11 @@ export interface CommitPayload {
   claimed: string[];
   /** A snapshot commit's checkpoint reference and reason. Absent for every other commit. */
   snapshot?: { checkpoint: string; reason: SnapshotReason };
+  /**
+   * The salted hash of the workflow evidence a control commit anchors (12 §7; FRW-041): the origin
+   * (`sign` or `rules`) and the hash, nothing else. Absent from every other commit.
+   */
+  evidence?: { origin: 'sign' | 'rules'; evidenceHash: string };
 }
 
 /** The hashed metadata of one commit: the fields 08 §2 lists, in canonical form. */
@@ -90,6 +95,9 @@ export function encodeCommit(doc: string, c: LogCommit): EncodedCommit {
   // hashes, are what they were before snapshot commits existed.
   if (isSnapshot(c))
     payload.snapshot = { checkpoint: c.snapshot.checkpoint, reason: c.snapshot.reason };
+  // Likewise only an evidence anchor has this member, so no earlier hash changes.
+  if (c.evidence !== undefined)
+    payload.evidence = { origin: c.evidence.origin, evidenceHash: c.evidence.evidenceHash };
   const payloadJson = utf8(canonicalize(payload));
   const meta: CommitMetadata = {
     doc,
@@ -123,6 +131,7 @@ export function decodePayload(stored: Uint8Array): CommitPayload {
   const value = JSON.parse(zstdDecompressSync(stored).toString('utf8')) as CommitPayload;
   const out: CommitPayload = { steps: value.steps, retired: value.retired, claimed: value.claimed };
   if (value.snapshot) out.snapshot = value.snapshot;
+  if (value.evidence) out.evidence = value.evidence;
   return out;
 }
 

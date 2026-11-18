@@ -46,11 +46,34 @@ export interface LayoutKernel {
 }
 
 /**
+ * What the generated ES module exports as its default: the asynchronous start. `module_or_path` is
+ * a `Response` (compiled with `WebAssembly.instantiateStreaming`), bytes (`WebAssembly.instantiate`)
+ * or a compiled module. It is typed `unknown` because this package has no DOM types (FND-004).
+ */
+export interface KernelGlueModule extends Omit<KernelGlue, 'initSync'> {
+  default(input: { module_or_path: unknown }): Promise<unknown>;
+}
+
+/** The same as `createKernel`, through the module's asynchronous start (WASM-002). */
+export async function startKernel(
+  glue: KernelGlueModule,
+  moduleOrPath: unknown,
+): Promise<LayoutKernel> {
+  await glue.default({ module_or_path: moduleOrPath });
+  return finishKernel(glue);
+}
+
+/**
  * Starts the kernel from the generated module and the WebAssembly bytes. Refuses a module whose
  * interface version differs from the one this package expects, so that a stale `dist/` never runs.
  */
 export function createKernel(glue: KernelGlue, wasm: KernelWasm): LayoutKernel {
   glue.initSync({ module: wasm });
+  return finishKernel(glue);
+}
+
+/** Checks the interface version of a started module and wraps its calls. */
+export function finishKernel(glue: Omit<KernelGlue, 'initSync'>): LayoutKernel {
   const abi = glue.abi_version();
   if (abi !== KERNEL_ABI_VERSION)
     throw new Error(

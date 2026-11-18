@@ -10,6 +10,7 @@
  *
  *   GET  /_test/timers                               the shortened timers in force
  *   POST /_test/database          { "down": true }   every write fails as if the database were down
+ *   POST /_test/restart-node                         the node drains (goaway, 4503) and a new data plane takes over in this process
  *   POST /_test/documents/{id}/fail-next-write { "at": "before-insert" | "after-insert" }
  *   POST /_test/documents/{id}/kill-room             the room stops as a crash would
  *   POST /_test/documents/{id}/drop-announcement     the next grant announcement is lost
@@ -84,6 +85,13 @@ export function testHooks(opts: {
         const body = (await readJsonBody(req, 4096)) as { down?: unknown } | undefined;
         log(body?.down === false ? 'database.up' : 'database.down');
         hooks.dropDatabase(body?.down !== false);
+        return reply(204, undefined);
+      }
+      if (req.method === 'POST' && path === '/restart-node') {
+        if (!hooks.restartNode)
+          throw new ApiError('not_found', 'this node cannot restart in place');
+        log('restart-node');
+        await hooks.restartNode();
         return reply(204, undefined);
       }
       const m = /^\/documents\/([0-9a-f-]{36})\/([a-z-]+)$/.exec(path);
