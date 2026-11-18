@@ -105,7 +105,11 @@ directive is S2's (section 6); the load itself is measured in `e2e/wasm-002-kern
 - Trusted Types names: none. Global side effects: none.
 - Events: `de-diagnostic` carries the load time or the failure code and, for a policy refusal, the
   directive to add.
-- Omit: nothing, if you never use `view="print"`. The editor works without the directive.
+- Omit: the directive, if you accept a degraded page view. Editing, saving, collaboration and the read view
+  work without it (WASM-003; `e2e/wasm-003-blocked.spec.ts`). A refused compile is reported as
+  `de-diagnostic` `load-failed` (`blocked_by_policy`, with the directive) and `degraded` (with the
+  fallback: `canvas-measurement` in Chromium, Edge and WebKit, `web-view` in Firefox, where a message
+  with buttons for the web view and the read view is shown).
 
 ## Math display (KaTeX)
 

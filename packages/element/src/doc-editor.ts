@@ -67,6 +67,7 @@ import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
 import { selectView, VIEW_STRINGS, type ViewName } from './view-select.ts';
 import { frameScheduler } from './status.ts';
+import { fallbackFor, noticeReason, showPageViewNotice } from './kernel-fallback.ts';
 import { requestLayoutKernel } from './layout-kernel-request.ts';
 import { EMBEDDING_VERSION, RELEASE } from './version.ts';
 
@@ -190,6 +191,8 @@ export class DocEditorElement extends Base {
    * host's value; setting it again clears this.
    */
   #viewOverride: ViewName | null = null;
+  /** The message that says the page view is not available because the kernel did not start (WASM-003). */
+  #kernelNotice: HTMLElement | null = null;
   /** The block the editor moves to as soon as the web view is shown (FE-072 criterion 4). */
   #pendingBlock: string | null = null;
   #grace: ReturnType<typeof setTimeout> | null = null;
@@ -426,9 +429,30 @@ export class DocEditorElement extends Base {
    * the web view meanwhile and the kernel waits for it. Touch devices never get the page view (FE-113).
    */
   #prepareKernel(view: string | null): void {
+    this.#kernelNotice?.remove();
+    this.#kernelNotice = null;
     if (view !== 'print') return;
     if (typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches) return;
-    void requestLayoutKernel((detail) => this.#emit('de-diagnostic', detail));
+    void requestLayoutKernel((detail) => {
+      this.#emit('de-diagnostic', detail);
+      if (detail.kind === 'load-failed') this.#degradeKernel(detail);
+    });
+  }
+
+  /**
+   * The kernel did not start (WASM-003). The host hears which feature degraded and which directive it
+   * lacks. Where canvas measurement is an acceptable fallback (S5), the page view will use it and
+   * nothing is shown; in Firefox the page view is not available, and a plain message says why and
+   * offers the web view and the read view. Editing, saving and the read view are not affected.
+   */
+  #degradeKernel(failure: DocEditorEventMap['de-diagnostic']): void {
+    const fallback = fallbackFor(navigator.userAgent);
+    this.#emit('de-diagnostic', { ...failure, kind: 'degraded', ms: null, fallback });
+    if (fallback !== 'web-view' || this.getAttribute('view') !== 'print') return;
+    this.#kernelNotice?.remove();
+    this.#kernelNotice = showPageViewNotice(this.#root, noticeReason(failure), (view) =>
+      this.setAttribute('view', view),
+    );
   }
 
   #attributes(): {
