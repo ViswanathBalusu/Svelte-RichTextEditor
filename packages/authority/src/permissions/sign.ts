@@ -30,6 +30,38 @@ export function checkSign(field: FieldChange, ctx: FillContext): RuleVerdict {
   return checkFill(field, ctx);
 }
 
+/** What the sign endpoint knows of one request (FRW-046 criterion 2), apart from the document. */
+export interface SignConditions {
+  /** The field's kind. */
+  readonly kind: string;
+  /** The field's assignee (a role), or null. */
+  readonly assignee: string | null;
+  readonly readOnly: boolean;
+  /** The roles the participant holds in the workflow. */
+  readonly participantRoles: readonly string[];
+  /** Whether the participant is active now (`fillActive`: state, order, access code). */
+  readonly active: boolean;
+  /** Whether the field is visible and enabled under the rules (12 §5). */
+  readonly enabled: boolean;
+}
+
+/**
+ * The P7 conditions for a signing, stated from what the endpoint knows rather than from a commit
+ * (the sign endpoint writes the commit itself): the kind is `signature` or `initials`, the assignee
+ * is one of the participant's roles, the participant is active, the field is not read-only and it is
+ * visible and enabled. The first condition that fails names the reason. It is the same decision as
+ * `checkSign`, which the room applies to a commit.
+ */
+export function checkSignConditions(c: SignConditions): RuleVerdict {
+  if (!SIGN_KINDS.has(c.kind)) return no('only a signature or initials field is signed');
+  if (c.assignee === null || !c.participantRoles.includes(c.assignee))
+    return no('the field is assigned to a role the participant does not hold');
+  if (!c.active) return no('the participant is not active now');
+  if (c.readOnly) return no('the field is read-only');
+  if (!c.enabled) return no('the field is hidden or disabled by a rule');
+  return { ok: true };
+}
+
 /** The ids of the `dateSigned` fields whose assignee is `role`, in document order. */
 export function fieldsToDateSign(doc: Node, role: string): string[] {
   const ids: string[] = [];

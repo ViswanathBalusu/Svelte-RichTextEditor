@@ -30,7 +30,7 @@ describe('adopting a signature image (FRW-045)', () => {
     await h?.close();
   });
 
-  const deps = () => ({ assets: h.parts.assetRegistry, objects: h.parts.objects });
+  const deps = () => ({ assets: h.parts.assetRegistry, finals: h.service.assets });
   const surrogateOf = async (sub: string) => (await h.parts.users.resolve(h.tenant, sub)).surrogate;
 
   async function upload(doc: string, sub: string, bytes: Buffer, mime = 'image/png') {

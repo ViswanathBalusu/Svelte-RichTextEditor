@@ -377,6 +377,20 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     return { ...head, chainHead: prev ? prev.toString('hex') : null };
   }
 
+  /**
+   * The hash of the stored commit at `seq`, lower-case hex, or null when there is none: the chain
+   * head of the state at that `seq` (as `PgLogStore.chainHeadAt` answers it).
+   */
+  async chainHeadAt(ref: DocRef, seq: number): Promise<string | null> {
+    let prev: Buffer | null = null;
+    for (const c of this.#get(ref).log) {
+      const e = encodeCommit(ref.doc, c);
+      prev = chainHash(prev, e.metaBytes, e.payloadHash);
+      if (c.seq === seq) return prev.toString('hex');
+    }
+    return null;
+  }
+
   async claim(ref: DocRef, node: string): Promise<number> {
     const d = this.#get(ref);
     d.epoch++;

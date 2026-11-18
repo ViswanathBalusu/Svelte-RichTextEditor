@@ -20,7 +20,7 @@
  */
 import { signatureImageHash } from '@docedit/authority';
 import type { AssetRegistry } from '../control-plane/assets.ts';
-import type { ObjectStore } from '../objects/store.ts';
+import type { AssetStore } from '../storage/types.ts';
 
 export const SIGNATURE_MODES = ['typed', 'drawn', 'uploaded'] as const;
 export type SignatureMode = (typeof SIGNATURE_MODES)[number];
@@ -29,7 +29,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface AdoptionDeps {
   readonly assets: Pick<AssetRegistry, 'get'>;
-  readonly objects: Pick<ObjectStore, 'get'>;
+  readonly finals: Pick<AssetStore, 'getFinal'>;
 }
 
 export type AdoptionProblem =
@@ -79,7 +79,7 @@ export async function adoptSignature(
   if (row.state !== 'ready') return { ok: false, problem: { code: 'not_ready', state: row.state } };
   if (row.contentType === null || !row.contentType.startsWith('image/'))
     return { ok: false, problem: { code: 'not_an_image' } };
-  const bytes = row.objectKey === null ? null : await deps.objects.get(row.objectKey);
+  const bytes = row.sha256 === null ? null : await deps.finals.getFinal(req.tenant, row.sha256);
   if (bytes === null || bytes.length === 0) return { ok: false, problem: { code: 'corrupt' } };
   const imageHash = await signatureImageHash(bytes);
   if (row.sha256 !== null && row.sha256 !== imageHash)
