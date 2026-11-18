@@ -89,7 +89,7 @@ describe('closing a slow consumer leaves the other channels alone (BE-027 criter
     expect(fast.all('ch.closed')).toHaveLength(0);
 
     // Its latency stayed in the range of the first phase.
-    const allowance =Math.max(5 * baselineLatency, baselineLatency + 50);
+    const allowance = Math.max(5 * baselineLatency, baselineLatency + 50);
     expect(
       slowLatency,
       `median latency with a slow reader ${slowLatency.toFixed(1)} ms, without ${baselineLatency.toFixed(1)} ms`,
@@ -99,7 +99,10 @@ describe('closing a slow consumer leaves the other channels alone (BE-027 criter
     await until(() => queued() === baselineQueued, 5000, 'the send queues to return to baseline');
     expect(queued()).toBe(baselineQueued);
     expect(p.plane.metrics()).toMatch(
-      new RegExp(`^dep_send_queue_bytes\\{[^}]*tenant="${p.tenant}"[^}]*\\} ${baselineQueued}$`, 'm'),
+      new RegExp(
+        `^dep_send_queue_bytes\\{[^}]*tenant="${p.tenant}"[^}]*\\} ${baselineQueued}$`,
+        'm',
+      ),
     );
   }, 60_000);
 });

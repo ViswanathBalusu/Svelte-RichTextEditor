@@ -169,12 +169,13 @@ describe('per-tenant metrics from the call sites (BE-086 criterion 2)', () => {
     );
 
     // Every metric the node declares was written by a call site above, except the slow-consumer
-    // counter (the next test): the check covers the whole registry, not a list kept by hand.
+    // counter (the next test) and the checkpoint-mismatch counter (raised by the thinning gate,
+    // `gateThinning`, tested in `recovery.test.ts`): the check covers the whole registry, not a
+    // list kept by hand.
     const declared = declaredIn(open);
     const written = new Set([...series(open), ...series(closed)].map((l) => metricOf(l, declared)));
-    const missing = [...declared].filter(
-      (n) => !written.has(n) && n !== 'dep_slow_consumers_total',
-    );
+    const notFromHere = new Set(['dep_slow_consumers_total', 'dep_checkpoint_mismatches_total']);
+    const missing = [...declared].filter((n) => !written.has(n) && !notFromHere.has(n));
     expect(missing).toEqual([]);
   }, 30_000);
 
