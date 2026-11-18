@@ -204,6 +204,10 @@ export const EN_GB = {
   'notice.refused.step': 'That change was not made: this kind of change cannot be saved.',
   'notice.refused.invariant':
     'That change was not made: it would break the structure of the document.',
+  // A change suggestion mode cannot record, such as a column, a merge or a split in a table
+  // (FE-045 criterion 5): block suggestions for cells and columns are not defined in version 1.
+  'notice.refused.suggestion':
+    'That change was not made: suggestion mode cannot record it as a suggestion. Turn suggestion mode off to make it.',
   'notice.refused.noCopy':
     'Nothing was copied: your access does not allow copying from this document. Restrictions deter casual copying and are not a security boundary.',
   'notice.refused.uploadFailed':
