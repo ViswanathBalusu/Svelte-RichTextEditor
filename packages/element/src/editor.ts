@@ -147,6 +147,12 @@ export interface MountedEditor extends EditorHandle {
   openPane(id: string): Promise<boolean>;
   /** Replaces the host's string replacements while the shell is mounted (UX-063, UX-064). */
   setStrings(overrides: StringOverrides): void;
+  /**
+   * A message of the shell's catalogue in the locale in use, with the host's replacements applied
+   * (UX-064); null for a key the catalogue does not have. The announcer reads its sentences here
+   * (FE-107 criterion 6).
+   */
+  text(key: string, params: Readonly<Record<string, string | number>>): string | null;
   /** Brings the host's extensions in line with the list the element holds (UX-050). */
   setExtensions(list: readonly unknown[]): void;
 }
@@ -448,6 +454,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     setStrings(overrides: StringOverrides) {
       strings.setOverrides(overrides);
+    },
+    text(key, params) {
+      return strings.current.has(key) ? strings.current.text(key, params) : null;
     },
     setExtensions(list: readonly unknown[]) {
       app.setExtensions(list);
