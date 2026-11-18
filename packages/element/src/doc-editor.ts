@@ -63,6 +63,7 @@ import type { AssetImageLookup } from '@docedit/engine';
 import { assetImageLookup } from './assets.ts';
 import { equationDrawer } from './equation-drawer.ts';
 import { Session } from './session.ts';
+import { failureView, mountFailure, type FailureInfo, type FailureSurface } from './failure.ts';
 import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
 import { selectView, VIEW_STRINGS, type ViewName } from './view-select.ts';
@@ -181,6 +182,8 @@ export class DocEditorElement extends Base {
   #layout: LayoutReport | null = null;
   /** The web view's label, while the web view is shown (FE-065 criterion 1). */
   #webLabel: HTMLElement | null = null;
+  /** The message of a load that failed (PRO-039; failure.ts); removed when a new load starts. */
+  #failure: FailureSurface | null = null;
   #readViewOf: { docId: string; key: unknown } | null = null;
   #readToken: object | null = null;
   /**
@@ -500,6 +503,7 @@ export class DocEditorElement extends Base {
       return;
     }
     this.#reload = false;
+    this.#clearFailure();
     void current?.close();
     const session: Session = new Session({
       docId,
@@ -511,6 +515,9 @@ export class DocEditorElement extends Base {
           if (this.#session === session) this.#emit(name, detail);
         },
         mount: (content, fontAlias) => this.#mount(content, docId, fontAlias),
+        failed: (info) => {
+          if (this.#session === session) this.#showFailure(info);
+        },
       },
       // Arrivals and departures of other sessions are announced (FE-107 criterion 3); the
       // announcer is the one of the current session, as the session is torn down with its own.
@@ -545,6 +552,28 @@ export class DocEditorElement extends Base {
       // The shell's catalogue, once the shell exists: the locale and the host's strings apply.
       translate: (key, params) => this.#mounted?.text(key, params) ?? null,
     });
+  }
+
+  /**
+   * The load failed and the host has its fatal `de-error`: the editor area says why, with one
+   * action (PRO-039 criteria 2 to 4; decision 45). The action asks for the document again, or, when
+   * the component is too old for the document, loads the page again.
+   */
+  #showFailure(info: FailureInfo): void {
+    this.#clearFailure();
+    this.#failure = mountFailure(
+      this.#root as unknown as Parameters<typeof mountFailure>[0],
+      failureView(info.code, info.retryAfterMs),
+      (action) => {
+        if (action === 'reload-page') location.reload();
+        else this.load();
+      },
+    );
+  }
+
+  #clearFailure(): void {
+    this.#failure?.remove();
+    this.#failure = null;
   }
 
   /** The view the `view` attribute asks for now (FE-065; view-select.ts). Touch devices get the web view. */
@@ -1024,6 +1053,7 @@ export class DocEditorElement extends Base {
     this.#pendingBlock = null;
     this.#closeReadView();
     this.#hideWebLabel();
+    this.#clearFailure();
     const session = this.#session;
     this.#session = null;
     this.#sessionKey = null;

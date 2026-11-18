@@ -66,6 +66,57 @@
   border: 1px solid var(--de-border, #d0d7de);
 }
 
+/*
+ * The message of a document that could not be opened (PRO-039; failure.ts): a title, a message and
+ * one action, in the editor area.
+ */
+.de-failure {
+  all: initial;
+  display: block;
+  box-sizing: border-box;
+  margin: 1rem;
+  padding: 1.25rem;
+  background: var(--de-sheet, #fff);
+  border: 1px solid var(--de-border, #d0d7de);
+  color: var(--de-text, #1f2328);
+  font-family: var(--de-font-ui, system-ui, sans-serif);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.de-failure-title {
+  display: block;
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.de-failure-message {
+  display: block;
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.de-failure-action {
+  font: inherit;
+  padding: 0.375rem 0.875rem;
+  color: inherit;
+  background: var(--de-field-background, #eaeef2);
+  border: 1px solid var(--de-border, #d0d7de);
+  cursor: pointer;
+}
+
+.de-failure-action:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.de-failure-action:focus-visible {
+  outline: 2px solid var(--de-focus, #0969da);
+  outline-offset: 2px;
+}
+
 /* ProseMirror's required rules (prosemirror-view 1.42.9). */
 .ProseMirror {
   position: relative;
