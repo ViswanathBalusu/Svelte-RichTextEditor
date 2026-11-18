@@ -1160,6 +1160,8 @@ As a participant who uses only a keyboard or a screen reader, I want to complete
 
 **Notes:** Host-side one-time passcode pages are the host's responsibility (12 §7).
 
+**Notes (lane w4, 2026-11-18, blocked):** No criterion is ticked. Every criterion describes the screens of the signing ceremony: the consent text and its accept control, the adoption step with typed as the default, the sign and initials steps and the completion. None of those screens exists. The editor has no ceremony (FRW-044 criteria 1 and 4, FRW-045 criteria 1, 4 and 6 and FRW-046 criterion 1 are open for that reason), and the host's participant pages (UX-099 criterion 7) are not built. The service half is built and tested: consent, adoption, signing and completion (`POST .../consent`, `POST /documents/{id}/fields/{fid}/sign`, `POST .../complete`; FRW-044 to FRW-047). There is nothing to run a keyboard path, a live region, axe or a zoom check against, and building the screens here would be building those three stories' unticked criteria under this identifier, with decisions that are open (how a typed name becomes the image asset, FRW-045 Notes; where the ceremony is mounted, in the component or in the host's pages). When the screens exist, this story is the accessibility pass over them; the live-region wording, the typed alternative to the drawing canvas and the forced-colors states listed above are its test list.
+
 ## Final PDF and sealing (12 §8.2)
 
 ### FRW-049 Produce the final PDF at completion
