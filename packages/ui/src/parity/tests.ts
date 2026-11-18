@@ -81,6 +81,15 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/test/ux-009-format-painter.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-010 closed (2026-11-18): the toolbar next to a selection in the element, and the shell's.
+  [
+    'mini-toolbar',
+    [
+      { path: 'packages/element/e2e/ux-010-mini-toolbar.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-010-mini-toolbar.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/mini-toolbar.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-018 closed (2026-11-17): the element's browser runs of the counts and the language.
   [
     'status-bar',
