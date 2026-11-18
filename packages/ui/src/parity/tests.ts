@@ -118,6 +118,14 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/his-028-catch-up.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-011 closed (2026-11-17): the search over the registry in Node, and the dialog in a browser run.
+  [
+    'command-search',
+    [
+      { path: 'packages/ui/e2e/ux-011-command-search.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/command-search.test.ts', kind: 'unit' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);
