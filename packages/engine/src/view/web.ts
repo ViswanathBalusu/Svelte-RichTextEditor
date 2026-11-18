@@ -26,6 +26,7 @@ import type { AssetImageLookup } from '../image-source.ts';
 import type { EquationDrawer } from '../equation-draw.ts';
 import { EQUATION_NODES } from '../equation-commands.ts';
 import { equationBlockView, equationNumbersPlugin, equationView } from './equation-view.ts';
+import { figureView } from './figure-view.ts';
 import { imageView } from './image-view.ts';
 import { coreKeys } from '../keys.ts';
 import { commentDecorations } from '../comment-decorations.ts';
@@ -45,6 +46,7 @@ import type { ComparisonSpec } from '../comparison-markup.ts';
 import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
+import { sectionWarningPlugin } from './section-warning-view.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
 function viewPlugins(schema: Schema): Plugin[] {
@@ -55,6 +57,8 @@ function viewPlugins(schema: Schema): Plugin[] {
     dropCursor(),
     footnoteNumbers(),
     listSemanticsPlugin(),
+    // FE-135 criterion 6: a note after a continuous section break that changes the margins.
+    sectionWarningPlugin(),
     // FE-069 criterion 5: the numbers of numbered equation blocks, from the shared labels.
     equationNumbersPlugin(),
     // FE-131 criterion 1: the borders and shading a table takes from its table style.
@@ -424,6 +428,8 @@ export class EditorCore extends DocumentCore {
           field: fieldView(this.#fieldViews),
           bibliography: bibliographyView,
           image: imageView(this.#assetImage),
+          // FE-132: the figure's stored size and its resize handle.
+          figure: figureView,
           equation: equationView(this.#drawEquation),
           equation_block: equationBlockView(this.#drawEquation),
         },

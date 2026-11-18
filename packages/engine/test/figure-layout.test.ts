@@ -112,6 +112,25 @@ describe('figure size (FE-132 criterion 2)', () => {
     expect(figureAttrs(c)['width']).toBe(1000);
   });
 
+  it('resizes an inline image too, but gives it no placement (FE-132 criterion 2, lane w1)', () => {
+    const c = core();
+    const i = internals(c);
+    const image = i.schema.nodes['image']!.create({ asset: ASSET, width: 1000, height: 500 });
+    i.dispatch(i.state.tr.insert(bodyRange(i.state.doc).end - 1, image));
+    let pos = -1;
+    i.state.doc.descendants((node, at) => {
+      if (node.type.name === 'image') pos = at;
+      return pos < 0;
+    });
+    expect(pos).toBeGreaterThan(0);
+    expect(resizeFigure(pos, { width: 2000 })(i.state, i.dispatch)).toBe(true);
+    expect(internals(c).state.doc.nodeAt(pos)!.attrs).toMatchObject({ width: 2000, height: 1000 });
+    // A layout change is for figures only.
+    expect(figureRefusal(internals(c).state, pos, { layout: { placement: 'float' } })).toBe(
+      'not-a-figure',
+    );
+  });
+
   it('stores the new size on the figure through exec', () => {
     const c = core();
     withFigure(c, 1000, 500);
