@@ -1,6 +1,6 @@
 # ADR 0381: A long formatted answer in a locked document (FRW-086)
 
-**Status:** proposed, 2026-11-17. Written by lane w4. The owner has not settled it: Part B of `docs/owner-blockers-2026-11-17.md` lists it as a proposed default for the owner to review, and `docs/owner-decisions-2026-11-15.md` does not list it. No spec text was changed. The wording to apply once the owner confirms is below.
+**Status:** accepted, 2026-11-18. Written by lane w4 on 2026-11-17 as a proposal. The owner settled it as decision 132 of `docs/owner-decisions-2026-11-15.md` ("The participant may edit their granted region while the document is locked (review SR-M26, option a)"). Lane w4 applied option (a) on 2026-11-18: 07 §4 limit 1 and the 12 §6.2 row now carry the wording below, and `computeAccess` (`packages/authority/src/permissions/access.ts`) implements it. Still not done: the comparison of `resume` against `sentSeq` does not yet leave out the regions granted to roles (see "Effect on the freeze"); until it does, an edit in such a region counts as a change of the body at `resume` and resets the participants who had completed, which fails on the safe side.
 
 ## Context
 
