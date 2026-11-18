@@ -7,12 +7,12 @@
   on demand (02 §2); heading texts and matches are the document's content.
 -->
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { useShell } from '../context.ts';
   import type { CoreApi, OutlineItem, SearchMatch, SearchResults } from '../core-api.ts';
   import { sourceTranslator } from '../i18n/strings.ts';
   import { live } from '../live.ts';
-  import { outlineTree, type TreeNode } from '../shell/outline.ts';
+  import { outlineTree, placeAfter, type TreeNode } from '../shell/outline.ts';
 
   // The tree is rendered flat; `TreeNode.children` only says whether an item can expand.
 
@@ -43,16 +43,44 @@
   const visible = $derived(flat.filter((n) => n.ancestors.every((a) => !collapsed[a])));
   const current = $derived(visible.find((n) => n.item.id === activeId) ?? visible[0] ?? null);
 
+  // The author's place survives a change of the outline (UX-020 criterion 2): the focused or chosen
+  // heading stays by its identifier; when it is removed, the place moves to the nearest heading before
+  // it and, if the tree had focus, focus moves with it instead of falling to the page.
+  let listed: readonly string[] = [];
+  $effect.pre(() => {
+    const ids = flat.map((n) => n.item.id);
+    untrack(() => {
+      const place = placeAfter(listed, activeId, ids);
+      if (place !== activeId) {
+        const root = treeEl?.getRootNode() as Document | ShadowRoot | undefined;
+        const hadFocus = !!treeEl && !!root?.activeElement && treeEl.contains(root.activeElement);
+        activeId = place;
+        if (hadFocus && place !== null) void tick().then(() => focusId(place));
+      }
+      listed = ids;
+    });
+  });
+
+  function focusId(itemId: string): void {
+    treeEl?.querySelector<HTMLElement>(`[data-id="${CSS.escape(itemId)}"]`)?.focus();
+  }
+
   async function focusItem(node: TreeNode | undefined): Promise<void> {
     if (!node) return;
     activeId = node.item.id;
     await tick();
-    treeEl?.querySelector<HTMLElement>(`[data-id="${CSS.escape(node.item.id)}"]`)?.focus();
+    focusId(node.item.id);
   }
 
   function choose(node: TreeNode): void {
     activeId = node.item.id;
     core?.selectBlock?.(node.item.id);
+  }
+
+  // Focus is the author's place, however it got there (a click, a key, a screen reader's cursor).
+  function onTreeFocus(event: FocusEvent): void {
+    const item = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-id]');
+    if (item?.dataset['id']) activeId = item.dataset['id'];
   }
 
   function onTreeKeydown(event: KeyboardEvent): void {
@@ -95,6 +123,8 @@
     const text = query.trim();
     if (!core?.search || !text) {
       results = null;
+      // An empty search clears the marks the last one left in the document.
+      if (core?.search) void core.search('');
       return;
     }
     const mine = ++serial;
@@ -107,6 +137,11 @@
       if (mine === serial) searching = false;
     }
   }
+
+  // Closing the pane takes the search's marks out of the document.
+  onDestroy(() => {
+    if (query.trim()) void core?.search?.('');
+  });
 
   function goTo(match: SearchMatch): void {
     gone = !(core?.selectMatch?.(match) ?? false);
@@ -168,6 +203,7 @@
       role="tree"
       aria-label={tr.t('outline.label')}
       onkeydown={onTreeKeydown}
+      onfocusin={onTreeFocus}
     >
       {#each visible as node (node.item.id)}
         <!-- The tree pattern: the keys are handled once, on the tree, for the focused item. -->

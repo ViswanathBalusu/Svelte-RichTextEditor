@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { DEP1 } from './index.ts';
-import { DEP1_WIRE } from './wire.ts';
+import { DEP1_WIRE, DEP1_WIRE_NOTIFICATION_TYPES } from './wire.ts';
 
 describe('the run-time part of the DEP definition', () => {
   it('holds the same version, engines, CDM range, shapes, messages and features as DEP1', () => {
@@ -14,6 +14,10 @@ describe('the run-time part of the DEP definition', () => {
     expect(DEP1_WIRE.shapes).toEqual(DEP1.shapes);
     expect(DEP1_WIRE.messages).toEqual(DEP1.messages);
     expect(DEP1_WIRE.features).toEqual(DEP1.features);
+  });
+
+  it('lists the same notification types as DEP1', () => {
+    expect(DEP1_WIRE_NOTIFICATION_TYPES).toEqual(DEP1.notifications.map((n) => n.type));
   });
 
   it('has no member that DEP1 lacks', () => {

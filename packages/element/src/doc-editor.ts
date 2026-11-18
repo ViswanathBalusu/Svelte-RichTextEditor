@@ -31,7 +31,13 @@ import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import type { PrintOutcome } from './print.ts';
-import { elementMethods, type ConfirmedContent, type HostApi } from './host-api.ts';
+import {
+  elementMethods,
+  type ConfirmedContent,
+  type FieldFillOutcome,
+  type FieldReport,
+  type HostApi,
+} from './host-api.ts';
 import type * as EditorChunk from './editor.ts';
 import type { MountedEditor, SettingsStore, StringOverrides } from './editor.ts';
 
@@ -761,6 +767,44 @@ export class DocEditorElement extends Base {
   /** Whether a command is enabled and active for the user's access now (PRO-085). */
   queryCommand(command: CommandName | (string & {}), args?: CommandArgs): CommandState {
     return this.#methods.queryCommand(command, args);
+  }
+
+  /**
+   * Moves focus to the next field the user may fill, after the one that last had focus (the first
+   * when none had). False when no field took focus, and with no document loaded (FRW-069).
+   */
+  nextField(): boolean {
+    return this.#methods.nextField();
+  }
+
+  /**
+   * Moves focus to the field with `key`. For a key no field has it throws nothing and answers false,
+   * as it does with no document loaded (FRW-069).
+   */
+  focusField(key: string): boolean {
+    return this.#methods.focusField(key);
+  }
+
+  /** The values of the form fields by key, as the document holds them now (FRW-069). */
+  getFieldValues(): Record<string, unknown> {
+    return this.#methods.getFieldValues();
+  }
+
+  /**
+   * Fills the field with `key` as the current user, as typing into its control does; the server's
+   * permissions apply. Resolves with `{ ok: true, confirmed }`, or `{ ok: false, code, message }` with
+   * `permission_denied`, `field_invalid`, `conflict` or `not_found`; it does not reject (FRW-069).
+   */
+  setFieldValue(key: string, value: unknown): Promise<FieldFillOutcome> {
+    return this.#methods.setFieldValue(key, value);
+  }
+
+  /**
+   * The fields that are required and empty, or whose entry has a problem, in document order, with
+   * keys and reasons. It changes nothing (FRW-069).
+   */
+  validateFields(): FieldReport[] {
+    return this.#methods.validateFields();
   }
 
   /** The selection as a CDM fragment (PRO-084); null when no document is loaded. */

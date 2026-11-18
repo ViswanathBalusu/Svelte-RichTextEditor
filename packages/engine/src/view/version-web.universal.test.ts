@@ -110,4 +110,36 @@ describe.skipIf(!isBrowser)('an old version in the web view (HIS-010)', () => {
       host.remove();
     }
   });
+
+  it('reports the blocks the user selected, for "who wrote this" (HIS-015)', async () => {
+    const view = VersionView.open(
+      { seq: 2, content: spikeDocument(), time: '2026-11-01T10:00:00Z' },
+      { schedule: (run) => queueMicrotask(run) },
+    );
+    const host = document.createElement('div');
+    document.body.append(host);
+    const unmount = view.mount(host);
+    try {
+      expect(view.selectedBlocks()).toEqual([]);
+      // A real selection over the text of the first body paragraph, as a reader makes it.
+      const p = [...host.querySelectorAll('p')].find((el) => el.textContent?.includes('Alpha'));
+      expect(p).toBeTruthy();
+      const text = p!.firstChild!;
+      const range = document.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, 3);
+      const selection = document.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+      await tick(100);
+      const ids = view.selectedBlocks();
+      expect(ids.length).toBe(1);
+      expect(typeof ids[0]).toBe('string');
+    } finally {
+      unmount();
+      view.destroy();
+      host.remove();
+    }
+  });
 });

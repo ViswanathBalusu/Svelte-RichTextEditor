@@ -76,6 +76,7 @@ import type {
   DocumentApi,
   EditMode,
   EquationConfirmation,
+  FieldFillOutcome,
   EquationRequest,
   EquationTarget,
   FindResult,
@@ -101,6 +102,7 @@ import type {
   SyncSummary,
 } from './api.ts';
 import { buildFragment, fragmentOf, fragmentProblem, isFragmentProblem } from './content.ts';
+import { fragmentOfSteps, recoveredKind } from './recovered-fragment.ts';
 import { bodyGuard, initialSelection, selectAllInBody } from './body.ts';
 import { effectiveMode, modeLocks } from './mode.ts';
 import { insertFootnote } from './footnote.ts';
@@ -202,6 +204,7 @@ import { ReadValue, type Schedule, ViewHub, sameJson } from './read-value.ts';
 import {
   placeholderAt,
   regionAt,
+  scopeOfPosition,
   regionClamp,
   regionTitleKey,
   regionParagraphs,
@@ -342,6 +345,20 @@ export interface CoreConfig {
 }
 
 /** A document the core cannot open (03 §2, §11.1): the codes are DEP's (05 §5.8). */
+/** What a fill the service refused is told as (12 §4.2, §10). */
+function refusalText(code: string): string {
+  switch (code) {
+    case 'conflict':
+      return 'someone else changed the field first, so the value was not saved (12 §4.2, P9)';
+    case 'field_invalid':
+      return 'the value does not fit the field (12 §3.3, I15)';
+    case 'permission_denied':
+      return 'the user may not fill this field (12 §4.2, P7)';
+    default:
+      return `the service refused the value (${code})`;
+  }
+}
+
 export class UnsupportedDocumentError extends Error {
   readonly code: 'unsupported_cdm' | 'unsupported_feature' | 'validation_failed';
   readonly missing: readonly string[];
@@ -756,10 +773,16 @@ export class DocumentCore implements DocumentApi {
   #problems = 0;
   #equationRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
-  #find: { query: string; matches: SearchMatch[]; current: number | null } = {
+  #find: {
+    query: string;
+    matches: SearchMatch[];
+    current: number | null;
+    matchCase: boolean;
+  } = {
     query: '',
     matches: [],
     current: null,
+    matchCase: true,
   };
   #presenceClient: PresenceClient | null = null;
 
@@ -1590,12 +1613,7 @@ export class DocumentCore implements DocumentApi {
    * The authoring commands ask the guard about this scope, so a page setup is checked as `defs`.
    */
   #scopeIn(doc: PMNode, pos: number): string {
-    const $pos = doc.resolve(pos);
-    const top = $pos.depth > 0 ? $pos.node(1) : null;
-    if (top?.type.name === 'defs') return 'defs';
-    if (top?.type.name === 'story') return `story:${String(top.attrs['id'])}`;
-    const r = regionAt($pos);
-    return r ? `region:${r.id ?? ''}` : 'body';
+    return scopeOfPosition(doc, pos);
   }
 
   /**
@@ -1672,6 +1690,74 @@ export class DocumentCore implements DocumentApi {
    */
   validateFields(): FieldReport[] {
     return this.#fieldEntries.validate();
+  }
+
+  /**
+   * `getFieldValues()` of the embedding API (12 §10; FRW-069): the value of each form field by key,
+   * as the document holds it now. A key that two fields share (which I13 refuses) is the first's.
+   */
+  fieldValues(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    this.#state.doc.descendants((node) => {
+      if (node.type.name !== 'form_field') return true;
+      const key = node.attrs['key'];
+      if (typeof key === 'string' && !Object.hasOwn(out, key))
+        out[key] = node.attrs['value'] ?? null;
+      return false;
+    });
+    return out;
+  }
+
+  /**
+   * `setFieldValue(key, value)` of the embedding API (12 §10; FRW-069): the same fill a person makes
+   * in the control, as the current user. The guard refuses a field the person may not fill
+   * (`permission_denied`, P7), and the answer of the document service decides the rest: a value
+   * that does not fit is `field_invalid`, a field someone else changed first is `conflict`. The
+   * promise resolves with the code, or with `confirmed: false` when the service did not answer in
+   * `timeoutMs` (default 15 s) and the change stays queued.
+   */
+  async fillField(
+    key: string,
+    value: unknown,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<FieldFillOutcome> {
+    const missing: FieldFillOutcome = {
+      ok: false,
+      code: 'not_found',
+      message: `the document has no field with the key ${key}`,
+    };
+    let id: string | null = null;
+    this.#state.doc.descendants((node) => {
+      if (id !== null || node.type.name !== 'form_field') return id === null;
+      if (node.attrs['key'] === key && typeof node.attrs['id'] === 'string') id = node.attrs['id'];
+      return false;
+    });
+    if (id === null) return missing;
+    if (!this.fieldFillable(id))
+      return {
+        ok: false,
+        code: 'permission_denied',
+        message: 'this field is not one the current user may fill (12 §4.2, P7)',
+      };
+    const kept = this.recovered.get().items.length;
+    const entered = this.enterFieldValue(id, value as JsonValue);
+    if (!entered.ok)
+      return entered.reason === 'no-field'
+        ? missing
+        : {
+            ok: false,
+            code: 'permission_denied',
+            message: 'the change to this field was refused (12 §4.2, P7)',
+          };
+    try {
+      await this.flush({ timeoutMs: options.timeoutMs ?? 15_000 });
+    } catch {
+      return { ok: true, confirmed: false };
+    }
+    // Work the service refused is set aside with its code (04 §8): the first item set aside since.
+    const refused = this.recovered.get().items.slice(kept)[0];
+    if (refused) return { ok: false, code: refused.reason, message: refusalText(refused.reason) };
+    return { ok: true, confirmed: true };
   }
 
   /**
@@ -2641,7 +2727,7 @@ export class DocumentCore implements DocumentApi {
   /** Recomputes the matches after a change of the document; the current one stays in range. */
   #refreshFind(): void {
     const f = this.#find;
-    f.matches = findMatches(this.#state.doc, f.query);
+    f.matches = findMatches(this.#state.doc, f.query, { matchCase: f.matchCase });
     if (f.matches.length === 0) f.current = null;
     else if (f.current !== null) f.current = Math.min(f.current, f.matches.length - 1);
     this.#publishFind();
@@ -2653,6 +2739,7 @@ export class DocumentCore implements DocumentApi {
       query: f.query,
       count: f.matches.length,
       current: f.current === null ? null : f.current + 1,
+      ...(f.matchCase ? {} : { matchCase: false }),
     });
   }
 
@@ -2661,14 +2748,15 @@ export class DocumentCore implements DocumentApi {
     return skippedPreservedAtoms(this.#state.doc, this.#find.query);
   }
 
-  findText(query: string): FindState {
-    this.#find = { query, matches: findMatches(this.#state.doc, query), current: null };
+  findText(query: string, options?: { readonly matchCase?: boolean }): FindState {
+    const matchCase = options?.matchCase !== false;
+    this.#find = { query, matches: findMatches(this.#state.doc, query, { matchCase }), current: null, matchCase };
     this.#publishFind();
     return this.findState.get();
   }
 
   clearFind(): void {
-    this.#find = { query: '', matches: [], current: null };
+    this.#find = { query: '', matches: [], current: null, matchCase: true };
     this.#publishFind();
   }
 
@@ -2694,6 +2782,25 @@ export class DocumentCore implements DocumentApi {
     const m = f.matches[next]!;
     const selection = TextSelection.create(this.#state.doc, m.from, m.to);
     // The match scrolls into view in the web view (FE-059 criterion 2).
+    this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
+    this.#publishFind();
+    return true;
+  }
+
+  /**
+   * Selects match `index` of the current find and scrolls it into view (UX-020 criterion 3). When the
+   * caller names what it expects there (the block and the matched text it read), a match that is
+   * now another one is refused, so that a result list that went stale moves nowhere wrong.
+   */
+  selectFindMatch(index: number, expected?: { blockId: string | null; text: string }): boolean {
+    const f = this.#find;
+    const m = f.matches[index];
+    if (!m) return false;
+    if (expected && (m.blockId !== expected.blockId || m.text !== expected.text)) return false;
+    f.current = index;
+    const selection = TextSelection.create(this.#state.doc, m.from, m.to);
+    // The view scrolls relative to the DOM selection, which is in the editor only once it has focus.
+    this.focus();
     this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
     this.#publishFind();
     return true;
@@ -3481,15 +3588,27 @@ export class DocumentCore implements DocumentApi {
         const before = this.recovered.get().items;
         const items = [
           ...before,
-          ...e.items.map((i, n) => ({
-            reason: i.reason,
-            commit: i.commit,
-            id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
-            text: i.text,
-            seq: i.seq,
-            ...this.#rejectionWords(i),
-            ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
-          })),
+          ...e.items.map((i, n): RecoveredItem => {
+            const words = this.#rejectionWords(i);
+            return {
+              reason: i.reason,
+              kind: recoveredKind(i.reason),
+              commit: i.commit,
+              id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
+              text: i.text,
+              fragment: fragmentOfSteps(
+                this.#state.doc,
+                i.steps,
+                this.#state.schema,
+                CDM_VERSION,
+                this.#requires,
+              ),
+              region: words.scope ?? i.region ?? null,
+              seq: i.seq,
+              ...words,
+              ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
+            };
+          }),
         ];
         this.recovered.set({ count: items.length, items });
         return;

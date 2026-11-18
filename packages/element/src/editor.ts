@@ -287,6 +287,25 @@ export function mountEditor(options: MountOptions): MountedEditor {
     focus: () => core.focus(),
     // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
     selectBlock: (id) => core.selectBlock(id),
+    // The navigation pane's search (UX-020 criterion 3): the core's find over the body this reader
+    // holds, with the text around each match; choosing a result selects that match and scrolls to it.
+    // The pane's "match case" is the find's option (the engine's own default stays case-sensitive).
+    search: (query, options) => {
+      const state = core.findText(query, { matchCase: options?.matchCase === true });
+      return Promise.resolve({
+        query,
+        total: state.count,
+        matches: core.findResults().map((r) => ({
+          index: r.index,
+          blockId: r.blockId ?? '',
+          before: r.before,
+          text: r.text,
+          after: r.after,
+        })),
+      });
+    },
+    selectMatch: (match) =>
+      core.selectFindMatch(match.index, { blockId: match.blockId || null, text: match.text }),
     // Where a menu asked for from the keyboard opens (UX-008 criterion 1).
     caretRect: () => core.caretRect(),
     mountBody: (target) => core.mountBody(target),

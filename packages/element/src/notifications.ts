@@ -11,14 +11,16 @@
  *
  * No DOM and no Node.js API: this runs in Node.js tests.
  */
-import { DEP1, type Notification, type Unsubscribe } from '@docedit/protocol';
+import {
+  DEP1_WIRE_NOTIFICATION_TYPES,
+  type Notification,
+  type Unsubscribe,
+} from '@docedit/protocol';
 
 export type NotificationHandler = (notification: Notification) => void;
 
-/** The notification types of the protocol definition this build knows (DEP1 and its extensions). */
-export const KNOWN_NOTIFICATION_TYPES: ReadonlySet<string> = new Set(
-  DEP1.notifications.map((n) => n.type),
-);
+/** The notification types of the protocol definition this build knows (DEP1 and its extensions, read from the run-time part of the definition). */
+export const KNOWN_NOTIFICATION_TYPES: ReadonlySet<string> = new Set(DEP1_WIRE_NOTIFICATION_TYPES);
 
 export class NotificationDispatcher {
   readonly #handlers = new Map<string, Set<NotificationHandler>>();

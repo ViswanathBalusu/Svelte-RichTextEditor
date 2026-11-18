@@ -1933,6 +1933,12 @@
       "owner": "FRW"
     },
     {
+      "name": "read-restrictions",
+      "relayForbidden": false,
+      "spec": "05 §2, §5.2, §5.3",
+      "owner": "PRO"
+    },
+    {
       "name": "extensions",
       "relayForbidden": false,
       "spec": "03 §11",
