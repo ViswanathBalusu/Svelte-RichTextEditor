@@ -1725,13 +1725,15 @@ As a tenant administrator, I want my data kept in one home region while my users
 
 **Acceptance criteria**
 
-- [ ] Given a tenant, and optionally a document, when a home region is assigned, then it is stored and used for routing.
-- [ ] Given a client connects to the nearest gateway, when it opens a channel, then the gateway forwards it to the home region's room.
+- [x] Given a tenant, and optionally a document, when a home region is assigned, then it is stored and used for routing.
+- [x] Given a client connects to the nearest gateway, when it opens a channel, then the gateway forwards it to the home region's room.
 - [ ] Given a tenant's content, history, evidence and control-plane metadata, when they are written, then they are stored only in the home region.
-- [ ] Given the home region is unreachable, when a client connects, then the channel fails with `unavailable` and no data is written elsewhere.
+- [x] Given the home region is unreachable, when a client connects, then the channel fails with `unavailable` and no data is written elsewhere.
 - [ ] Given several regions, when each is deployed, then each has its own object storage, Redis or Valkey and autoscaled export worker pool with a warm floor (06 §6, stage 3).
 
-**Notes:** `cond`: several regions belong to stage 3. Local application of edits (hiding the round trip) is in the client (FE).
+**Evidence:** Lane w5 (2026-11-18): `services/document-service/test/data-plane/be-073-074-placement.test.ts` ("a tenant with a home region is served by the nodes of that region") and `test/postgres/be-074-home-regions.pg.test.ts` (4 tests on PostgreSQL). Criterion 1: `PgHomeRegions` stores the region of a tenant and of one document (migration 0092, under row-level security); a document's own region wins; assignments are replaced, listed and cleared; another tenant sees none; `eligibleHosts` and `Placement.route` use the region with the regions the nodes wrote on their lease rows (migration 0091). Criterion 2: with the tenant assigned `eu`, a client that connects to the node in `us` has its channel forwarded to the node in `eu`: the room is there, the other node has none, the commit is acknowledged and the head names the `eu` node as owner. Criterion 4: with only the `us` node live, the channel is refused `unavailable` before any room opens; the head (owner, epoch) and the log are unchanged. The connect route is written to answer `unavailable` in the same case (`connect-route.ts`); that branch has no test of its own. The nodes of the tests are data planes in one process over shared in-memory stores, so the test shows the routing and the refusal, not a network between regions.
+
+**Notes:** `cond`: several regions belong to stage 3. Local application of edits (hiding the round trip) is in the client (FE). Lane w5 (2026-11-18): the design is in `docs/adr/0403-w5-BE-074-home-region.md` (proposed). Criterion 3 stays open: the writes of a forwarded channel are made by the home region's room and the refused channel writes nothing, but the gateway still reads the document's head and the tenant's region from the stores it is given, so a gateway outside the region is not kept from the tenant's rows (open question 2 of the ADR, an owner's decision), and the per-region databases are composed by hand from BE-070's routed parts, not tested here as regions. Criterion 5 stays open: it needs several regions deployed, each with its own object storage, Valkey and export worker pool with a warm floor, which needs the separate tiers of BE-068 (not built). Moving a tenant to another region is not designed (ADR 0403 item 5).
 
 ### BE-075 Cache version-pinned content and assets near users
 
