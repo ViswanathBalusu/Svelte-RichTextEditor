@@ -31,6 +31,24 @@ describe('scripts', () => {
     ).toEqual(['computed-import', 'remote-import']);
   });
 
+  it('finds a script element given a computed address, and not an image or a literal', () => {
+    expect(rules('const s = document.createElement("script"); s.src = entry;')).toEqual([
+      'computed-script',
+    ]);
+    expect(rules('const s = document.createElement("script"); s.setAttribute("src", u);')).toEqual([
+      'computed-script',
+    ]);
+    expect(rules('document.createElement("script").src = u;')).toEqual(['computed-script']);
+    // An address that is a literal is judged as an address (a remote one is found as such).
+    expect(rules('const s = document.createElement("script"); s.src = "/own.js";')).toEqual([]);
+    expect(
+      rules('const s = document.createElement("script"); s.src = "https://cdn.example/x.js";'),
+    ).toEqual(['remote-address']);
+    // Not a script element: an image, an iframe, an unknown receiver.
+    expect(rules('const i = document.createElement("img"); i.src = u;')).toEqual([]);
+    expect(rules('frame.src = u; other.setAttribute("src", u);')).toEqual([]);
+  });
+
   it('finds eval-like code: eval, the Function constructor, string timers, imports of generated code', () => {
     expect(rules('eval("1")')).toEqual(['eval']);
     expect(rules('window.eval(s); globalThis.eval(s); (0, eval)(s)')).toEqual([
@@ -181,6 +199,15 @@ describe('the check over a bundle', () => {
     expect(checkOrigins(contents, [exception({ package: 'other' })], '2026-11-06').ok).toBe(false);
     expect(checkOrigins(contents, [exception({ file: 'viewer/' })], '2026-11-06').ok).toBe(false);
     expect(checkOrigins(contents, [exception({ file: 'app' })], '2026-11-06').ok).toBe(true);
+  });
+
+  it('an exception with a detail excuses only the finding that contains it', () => {
+    expect(checkOrigins(contents, [exception({ detail: 'import(u)' })], '2026-11-06').ok).toBe(
+      true,
+    );
+    expect(checkOrigins(contents, [exception({ detail: 'import(v)' })], '2026-11-06').ok).toBe(
+      false,
+    );
   });
 
   it('refuses exceptions without a reason, a decision or a live expiry, and lists unused ones', () => {
