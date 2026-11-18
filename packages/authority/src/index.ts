@@ -395,6 +395,30 @@ export {
 // FRW-038). Exported for the workflow service (FRW-030), which is not built yet: nothing raises,
 // signs or delivers these events today.
 export { lockFor, type WorkflowLock } from './workflow/lock.ts';
+// The send transition, the order of activation and the refusals' registry codes (FRW-027, FRW-030),
+// for the document service's workflow routes.
+export {
+  sendChecklist,
+  sendWorkflow,
+  type SendProblem,
+  type SendResult,
+  type SentHead,
+} from './workflow/send.ts';
+export { activeParticipantIds } from './workflow/order.ts';
+export {
+  sendProblem,
+  transitionProblem,
+  WORKFLOW_PROBLEM_STATUS,
+  type ChecklistFailure,
+  type WorkflowProblem,
+  type WorkflowProblemCode,
+} from './workflow/problems.ts';
+export type {
+  Caller as WorkflowCaller,
+  WorkflowParticipant,
+  WorkflowRecord,
+  WorkflowStateName,
+} from './workflow/lifecycle.ts';
 export {
   WORKFLOW_EVENTS,
   WORKFLOW_EVENT_PREFIX,

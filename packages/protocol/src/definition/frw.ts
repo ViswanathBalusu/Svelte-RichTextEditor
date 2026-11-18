@@ -214,6 +214,22 @@ export const FRW_EXTENSION: DepExtension = {
       codes: ['workflow_active'],
       owner: FRW,
     },
+    {
+      operationId: 'sendWorkflow',
+      method: 'POST',
+      path: '/documents/{id}/workflow/send',
+      summary:
+        'Sends the document for completion: checks the send list, locks the document, activates the first participants (12 §6.2). The method and path are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['validation_failed', 'pending_suggestions', 'conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
     ...(['consent', 'verify', 'complete', 'decline'] as const).map((action) => ({
       operationId: `participant${action.charAt(0).toUpperCase()}${action.slice(1)}`,
       method: 'POST' as const,
