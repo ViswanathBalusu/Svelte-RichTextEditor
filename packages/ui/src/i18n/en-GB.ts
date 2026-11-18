@@ -197,6 +197,10 @@ export const EN_GB = {
     'That change was not made: it would break the structure of the document.',
   'notice.refused.noCopy':
     'Nothing was copied: your access does not allow copying from this document. Restrictions deter casual copying and are not a security boundary.',
+  'notice.refused.uploadFailed':
+    'The picture was not added: it could not be uploaded, or the asset service did not accept the file.',
+  'notice.refused.pictureSize':
+    'The picture was not added: its size could not be used in the document.',
   'notice.refused.other': 'That change was not made.',
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',

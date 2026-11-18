@@ -465,7 +465,11 @@ export type RefusalReason =
   | 'no-copy'
   | 'no-print'
   | 'suggestion'
-  | 'referenced';
+  | 'referenced'
+  // A pasted picture that was not added after its upload (FE-053 criterion 3): the upload failed or
+  // the asset service did not accept the file, or its size cannot be used. No content is named.
+  | 'upload-failed'
+  | 'invalid-size';
 
 /** The last local change the region guard refused (FE-036): `n` counts refusals. */
 export interface RefusalNotice {
