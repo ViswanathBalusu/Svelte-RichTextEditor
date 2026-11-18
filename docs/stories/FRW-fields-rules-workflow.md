@@ -1990,7 +1990,7 @@ As a maintainer, I want the owner to decide whether comments stay on while a wor
 - [ ] Given a setting is chosen, then its place (the workflow resource or the tenant), its default and the behaviour of existing threads are recorded.
 - [ ] Given the decision, then FRW-029 and the conformance profile `workflow` are updated to match.
 
-**Notes:** Comments never change the document, so they are technically harmless; some signing processes want a quiet document.
+**Notes:** Comments never change the document, so they are technically harmless; some signing processes want a quiet document. Lane w4, 2026-11-18: nothing is ticked, because every criterion records or follows the owner's decision and the owner has not made it. `docs/owner-decisions-2026-11-15.md` and the answers added on 2026-11-17 do not list this story. Part B of `docs/owner-blockers-2026-11-17.md` proposes "always on" (the current behaviour), which the owner is to review before it counts as settled. The default is written out, with a proposed place, default and treatment of existing threads in case the owner prefers a switch, in `docs/adr/0404-w4-FRW-085-comments-during-a-workflow.md` (proposed). The current behaviour is tested: FRW-029 criterion 3 (`packages/authority/test/frw-029.lock-comments.test.ts`). FRW-029 and the conformance profile `workflow` are not changed, because criterion 3 follows the decision.
 
 ### FRW-086 Decide how a role writes a long formatted answer in a locked document
 
