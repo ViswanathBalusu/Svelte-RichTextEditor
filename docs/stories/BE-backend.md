@@ -1574,6 +1574,8 @@ As an operator, I want the stage 2 load test run, so that 50,000 connections and
 - [ ] Given a host is killed during the run, when its leases expire, then its rooms are taken over by others and no acknowledged commit is lost.
 - [ ] Given Redis or Valkey is stopped during the run, when it returns, then rooms recover without a restart.
 
+**Notes:** Lane w5, 2026-11-18: nothing ticked (blocked). Every criterion asks for a measurement of a real run: 50,000 connections and 10,000 open documents on several room hosts, with typists, a killed host and a stopped Redis or Valkey. No such environment exists here: there is one shared development machine, no reference runner (ADR 0037) and no set of room hosts, and BE-062 and BE-063 give the forwarding and lease code but not a deployment of several hosts. Criterion 1 also depends on the stage 1 targets of BE-058, which are not met yet (criteria 1 and 2 of BE-058 are unticked, with the measured figures in its Notes). A load test of one process on this machine would not be the stage 2 run, so no scaffolding was built and no figure is reported. Findings for other stories: none. What the run needs: several hosts or containers (Podman, one room host each), a Redis or Valkey instance, a load client able to hold 50,000 connections (file descriptor and port limits raised on the client hosts), and a report of the forwarded share (BE-062) and of the takeover time after a lease expires (BE-063).
+
 ### BE-067 Decide whether follower nodes are needed before stage 3
 
 | Type | Phase | Size | Priority | Persona |
