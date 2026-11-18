@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { readCompatibility, renderReleaseNotes, type NotesInput } from './notes.ts';
+import { parseRoundTrip, readCompatibility, renderReleaseNotes, type NotesInput } from './notes.ts';
 
 describe('release notes', () => {
   it('read the supported versions from spec/ and the element', () => {
@@ -130,5 +130,30 @@ describe('release notes', () => {
       '| Protocol (DEP) | not found: spec/dep/dep-1.manifest.json is missing | |',
     );
     expect(text).toContain('| Conformance kit | not part of this release | |');
+  });
+
+  // EXP-120, criterion 4: the notes state the corpus version and the pass rates of R0 and R1.
+  it('state the corpus version and the pass rate of R0 and R1 of the lossless round trip', () => {
+    const summary = parseRoundTrip(
+      JSON.stringify({
+        corpus: { files: 78, version: '0123456789abcdef' },
+        r0: { pass: 78, of: 78 },
+        r1: { pass: 380, of: 400 },
+        failures: ['x.docx R1 type: word/document.xml p1 changed'],
+        files: [],
+      }),
+    );
+    const text = renderReleaseNotes(input({ roundTrip: summary }));
+    expect(text).toContain('## Lossless DOCX round trip');
+    expect(text).toContain('Corpus version `0123456789abcdef` (78 files');
+    expect(text).toContain('| R0, import and export without edits | 78 | 78 | 100.0 % |');
+    expect(text).toContain('| R1, scripted edits | 380 | 400 | 95.0 % |');
+    expect(text).toContain('1 failure(s); the first: x.docx R1 type');
+  });
+
+  it('say that the round trip was not measured, rather than leave it out', () => {
+    expect(renderReleaseNotes(input())).toContain('Not measured for this release');
+    expect(parseRoundTrip('not json')).toBeNull();
+    expect(parseRoundTrip('{"corpus":{}}')).toBeNull();
   });
 });

@@ -718,7 +718,11 @@ class Writer {
     const local = new Map<string, string>();
     const open = this.startTag(
       'p',
-      { ...(src ? {} : await this.freshIdentity(node, po)), ...(src?.identity ?? {}), ...(preserved?.attrs ?? {}) },
+      {
+        ...(src ? {} : await this.freshIdentity(node, po)),
+        ...(src?.identity ?? {}),
+        ...(preserved?.attrs ?? {}),
+      },
       po,
       local,
     );

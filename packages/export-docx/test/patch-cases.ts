@@ -124,11 +124,18 @@ export async function patchCases(): Promise<PatchCase[]> {
         const after = doc.match(/w14:paraId="[0-9A-F]{8}"/g) ?? [];
         const problems: string[] = [];
         if (after.length !== (before?.length ?? 0) + 1)
-          problems.push(`${after.length} paraIds after, ${before?.length} before: one expected more`);
+          problems.push(
+            `${after.length} paraIds after, ${before?.length} before: one expected more`,
+          );
         if (new Set(after).size !== after.length) problems.push('a paraId occurs twice');
         for (const a of after)
-          if (parseInt(a.slice(11, 19), 16) >= 0x80000000) problems.push(`${a} is not below 0x80000000`);
-        return [...(n === 1 ? [] : [`paraId ${paraId} appears ${n} times`]), ...problems, ...integrity(out)];
+          if (parseInt(a.slice(11, 19), 16) >= 0x80000000)
+            problems.push(`${a} is not below 0x80000000`);
+        return [
+          ...(n === 1 ? [] : [`paraId ${paraId} appears ${n} times`]),
+          ...problems,
+          ...integrity(out),
+        ];
       },
     });
   }

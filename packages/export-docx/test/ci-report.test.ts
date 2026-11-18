@@ -14,6 +14,7 @@ import {
   readZip,
   writeZip,
 } from '../src/index.ts';
+import { r0Failures, r1Failures } from './ci-failure.ts';
 import { corpusFiles, readFile } from './corpus.ts';
 
 const FILE = corpusFiles().find((f) => f.name === 'docx4j/sample-docx.docx')!;
@@ -49,6 +50,36 @@ describe('EXP-120: a failure names the file, the part and the first differing el
     expect(r0.differences).toHaveLength(1);
     // The inserted paragraph changes the body's children, so the first differing element is the body.
     expect(r0.differences[0]).toMatch(/^word\/document\.xml: \/w:document\[1\]\/w:body\[1\]/);
+  });
+
+  it('the corpus tests word an R0 failure with the file, the part and the first differing element', async () => {
+    const bytes = readFile(FILE);
+    const imported = await importDocx(bytes);
+    const out = await exportDocx(imported.envelope, bytes, imported.sourceMap, imported.assets);
+    const zip = readZip(out.bytes);
+    const doc = new TextDecoder().decode(entryData(zip, zip.byName.get('word/document.xml')!));
+    const tampered = withPart(
+      out.bytes,
+      'word/document.xml',
+      doc.replace('<w:body>', '<w:body><w:p><w:r><w:t>TAMPERED</w:t></w:r></w:p>'),
+    );
+    const lines = r0Failures(FILE.name, checkR0(bytes, tampered));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(
+      /^docx4j\/sample-docx\.docx: R0, part word\/document\.xml: \/w:document\[1\]\/w:body\[1\]/,
+    );
+    // A part the export dropped or added is named too.
+    const dropped = writeZip(
+      readZip(out.bytes)
+        .entries.filter((e) => e.name !== 'word/styles.xml')
+        .map((e) => ({ name: e.name, copyOf: e, from: readZip(out.bytes) })),
+    );
+    expect(r0Failures(FILE.name, checkR0(bytes, dropped))).toEqual([
+      `${FILE.name}: R0, part word/styles.xml is missing from the export`,
+    ]);
+    expect(r1Failures('f.docx', 'type', ['word/document.xml p1: x'])).toEqual([
+      'f.docx: R1 after "type", word/document.xml p1: x',
+    ]);
   });
 
   it('reports R1 violations by part when a part outside every edit changes', async () => {
