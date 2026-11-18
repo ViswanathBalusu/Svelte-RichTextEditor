@@ -35,13 +35,15 @@ export async function mountFields(
     fill?: boolean;
     limit?: boolean;
     kinds?: boolean;
+    /** With `fill`: a participant who is not active (waiting for their turn). */
+    inactive?: boolean;
   } = {},
 ): Promise<void> {
   const name = opts.name ?? 'one';
   await page.evaluate(
-    async ({ name, sub, role, fill, limit, kinds }) => {
+    async ({ name, sub, role, fill, limit, kinds, inactive }) => {
       const e = (window as unknown as { __embed: Record<string, unknown> }).__embed as unknown as {
-        fillBackend(sub: string): unknown;
+        fillBackend(sub: string, roles?: string[], active?: boolean): unknown;
         backend(sub: string, role: string, docs: string[]): unknown;
         fieldsDocId: string;
         kindsDocId: string;
@@ -61,7 +63,7 @@ export async function mountFields(
           { once: true },
         );
       });
-      el.backend = fill ? e.fillBackend(sub) : e.backend(sub, role, [docId]);
+      el.backend = fill ? e.fillBackend(sub, undefined, !inactive) : e.backend(sub, role, [docId]);
       el.setAttribute('doc-id', docId);
       document.getElementById('mount')!.append(el);
       await ready;
@@ -73,6 +75,7 @@ export async function mountFields(
       fill: opts.fill ?? false,
       limit: opts.limit ?? false,
       kinds: opts.kinds ?? false,
+      inactive: opts.inactive ?? false,
     },
   );
   await expect(page.locator(`${editorOf(name)} .de-editing-surface`)).toBeVisible();
