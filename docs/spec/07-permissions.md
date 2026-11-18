@@ -61,6 +61,8 @@ For a connection with document role `R`, user `sub` and groups `grp`, the capabi
 
 A grant matches when its principal is `user:<sub>`, `group:<g>` for some `g` in `grp`, `everyone`, or a `role:` the user's participant holds, and it has not expired. The best match is the one with the most capabilities. The principal `everyone` is not allowed on a `restricted` region: a grant of that form is refused with `validation_failed`, the permissions pane does not offer it, and a stored one conveys nothing. Granted on an `inherit` region it matches every connection. (Owner decision 12 of 2026-11-15, `docs/owner-decisions-2026-11-15.md`; PRM-061; ADR 0146.)
 
+For an agent connection (05 section 3.2.1), the capabilities in every scope are the intersection of the capabilities the user `sub` would hold in that scope, by the rows above, and `{suggest}`. An agent connection never holds `edit`, `fill`, `structure` or `manage`, and holds `view` or `comment` only where the user does. It never gains a region grant the user lacks. The room computes this from the verified token, not from anything the client sends. A direct edit by an agent is refused by the server, not turned into a suggestion.
+
 Then apply these limits, in order:
 
 1. If the document's state is `locked` or `archived`: `view` only, plus `comment` when `locked`, plus `fill` where an active workflow allows it.

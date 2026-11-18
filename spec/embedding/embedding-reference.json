@@ -801,6 +801,13 @@
       "aliases": []
     },
     {
+      "id": "view.review",
+      "group": "view",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "view.roles",
       "group": "view",
       "capability": "fields-and-forms",

@@ -1504,6 +1504,12 @@ export interface ReviewItem {
   readonly to: number;
   /** The words the suggestion covers, cut when long; empty for a block with no text. */
   readonly text: string;
+  /**
+   * The server time of the commit that introduced it, when the core knows it (08 §14). Absent for
+   * a suggestion that was already in the document when it was loaded: the core has no record of
+   * its commit (the suggestion-to-commit index of HIS-042 would give it).
+   */
+  readonly committedAt?: string | null;
   /** The capabilities the user has in the suggestion's scope. */
   readonly caps: readonly Capability[];
   /** Whether the user may accept or reject it now (`edit` in its scope, document not locked). */

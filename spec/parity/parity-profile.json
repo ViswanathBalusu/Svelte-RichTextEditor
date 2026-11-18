@@ -1504,6 +1504,10 @@
       "capability": "accessibility-checker"
     },
     {
+      "id": "view.review",
+      "capability": "suggestions"
+    },
+    {
       "id": "view.sources",
       "capability": "citations"
     },
