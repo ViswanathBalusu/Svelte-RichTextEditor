@@ -1490,7 +1490,7 @@ As a relying party, I want to know whether history can be checked against someth
 
 **Evidence:** docs/adr/0156-security-3-backlog-batch.md (section SEC-063): compares the webhook and manifest heads and the write-once store with a public log, and gives the options with what each publishes and its privacy effect (option C publishes only a salted root). Proposed, not accepted by the owner.
 
-**Notes:** Decision 4 of 10 §6. The default taken, pending the owner: no public log in version 1 (option A). Criteria 1 and 2 are ticked on the proposed record. Criterion 3 stays open because it applies only if the owner says yes.
+**Notes:** Decision 4 of 10 §6. The default taken, pending the owner: no public log in version 1 (option A). Criteria 1 and 2 are ticked on the proposed record. Criterion 3 stays open because it applies only if the owner says yes. Lane w8 (2026-11-17), re-checked after the merge of stories/integration: no change. The owner's decisions of 2026-11-15 and 2026-11-17 do not cover a public transparency log, so the default (option A, no public log in version 1) stands as proposed and no stories are added.
 
 ## Read restrictions (ADR 0019)
 
