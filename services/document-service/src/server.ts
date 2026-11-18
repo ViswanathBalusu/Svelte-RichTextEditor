@@ -188,6 +188,7 @@ import { PgDocumentStore } from './storage/document-store.ts';
 import { PgGrantStore } from './storage/grant-store.ts';
 import { PgLogStore } from './storage/log-store.ts';
 import { MemoryStore } from './storage/memory.ts';
+import { MemoryHomeRegions, PgHomeRegions } from './storage/home-regions.ts';
 import { appliedMigrations, compatibility, loadMigrations } from './storage/migrate.ts';
 import {
   MemoryReadMarkerStore,
@@ -206,6 +207,7 @@ import type {
   DocRef,
   DocumentStore,
   GrantStore,
+  HomeRegionStore,
   LogStore,
   NodeLeaseStore,
   OutboxStore,
@@ -229,6 +231,8 @@ export interface ServiceParts {
    * replaces the probe over `pool`, which looks at one database only. Absent: `pool` is probed.
    */
   readiness?: () => Promise<Readiness>;
+  /** The home regions of tenants and documents (BE-074). Absent: no tenant has a home region. */
+  homeRegions?: HomeRegionStore;
   // --- Phase 1b. --------------------------------------------------------------------------------
   idempotency: IdempotencyStore;
   assetRegistry: AssetRegistry;
@@ -561,6 +565,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     ),
     outbox: new PgOutbox(pool),
     leases: new PgNodeLeases(pool),
+    homeRegions: new PgHomeRegions(pool),
     readMarkers: new PgReadMarkerStore(pool),
     threads: new PgThreadStore(pool),
     versions: new PgVersionStore(pool),
@@ -600,6 +605,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     ),
     outbox: new MemoryOutbox(now),
     leases: new MemoryNodeLeases(),
+    homeRegions: new MemoryHomeRegions(),
     readMarkers: new MemoryReadMarkerStore(),
     threads: new MemoryThreadStore(),
     versions: new MemoryVersionStore((ref) => store.head(ref).then((h) => h.seq)),
@@ -977,6 +983,16 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.leases ? { leases: parts.leases } : {}),
     ...(bus ? { bus } : {}),
     ...(config.nodeAddress !== null ? { address: config.nodeAddress } : {}),
+    // BE-073, BE-074: what the node announces on its lease row, and the regions that route by it.
+    ...(config.nodeRegion !== null || config.dedicatedDocument !== null
+      ? {
+          traits: {
+            ...(config.nodeRegion !== null ? { region: config.nodeRegion } : {}),
+            ...(config.dedicatedDocument !== null ? { dedicated: config.dedicatedDocument } : {}),
+          },
+        }
+      : {}),
+    ...(parts.homeRegions ? { homeRegions: parts.homeRegions } : {}),
     // The room raises refused commits here (PRM-053 criterion 3): the caller's sink or the dispatcher.
     ...(opts.events || webhooks ? { events } : {}),
   });
@@ -1392,6 +1408,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     restPath: REST_PATH,
     wsPath: WS_PATH,
     ...(parts.leases ? { placement: new Placement(parts.leases) } : {}),
+    ...(parts.homeRegions ? { homeRegions: parts.homeRegions } : {}),
     features: announced,
     exportTargets: config.exportTargets,
     signedUrlMs: config.signedUrlSeconds * 1000,

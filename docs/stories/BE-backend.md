@@ -1705,9 +1705,11 @@ As an operator, I want a document that saturates a core moved to its own process
 
 - [ ] Given a document marked hot, when its room opens, then it runs in a dedicated process on its own core.
 - [ ] Given the dedicated process, when other rooms on the node run, then their acknowledgement latency is not affected by it.
-- [ ] Given ownership, when the dedicated process starts, then it takes the epoch like any other owner.
+- [x] Given ownership, when the dedicated process starts, then it takes the epoch like any other owner.
 
-**Notes:** 06 §8 lists coalesced broadcasts and followers before a dedicated process.
+**Evidence:** Lane w5 (2026-11-18), criterion 3: `services/document-service/test/data-plane/be-073-074-placement.test.ts` ("a hot document runs on the node dedicated to it"). Three data planes (two general nodes and one dedicated to a document) run over one set of stores with node leases and a memory bus. A channel for the hot document, opened on a general node, is forwarded to the dedicated node, whose room is the only one for it; the head goes from owner null, epoch 0 to owner `node-h`, epoch 1, by the same `claimIfFree` path as any owner; a commit through the forwarded channel is acknowledged and stored. Code: `eligibleHosts` in `control-plane/room-routing.ts`, `Forwarder.route` in `data-plane/forwarding.ts`, `NodeTraits` on the lease row (`storage/types.ts`, `data-plane/pg/leases.ts`, migration 0091), `DOCEDIT_DEDICATED_DOCUMENT` in `config.ts`.
+
+**Notes:** 06 §8 lists coalesced broadcasts and followers before a dedicated process. Lane w5 (2026-11-18): the design is in docs/adr/0402-w5-BE-073-hot-document-node.md (proposed): a dedicated process is an ordinary node with a dedicated trait on its lease row, and a document is hot while such a node is live for it. Criterion 1 stays open: the nodes of the test are data planes in one operating-system process, so uns in a dedicated process on its own core is not shown; the process and the core belong to the deployment (BE-068, which is not built) and no core was pinned. Criterion 2 stays open: it needs a measurement of other rooms' acknowledgement latency while the hot document saturates its node, and none was made. Depends on BE-067 (not built; the decision on followers does not change this routing).
 
 ## Several regions
 

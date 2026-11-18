@@ -36,8 +36,14 @@ import {
   type ForwardClose,
   type ForwardWire,
 } from '../control-plane/channel-forward.ts';
-import { routeDocument } from '../control-plane/room-routing.ts';
-import type { DocRef, GrantStore, LogStore, NodeLeaseStore } from '../storage/types.ts';
+import { eligibleHosts, routeDocument } from '../control-plane/room-routing.ts';
+import type {
+  DocRef,
+  GrantStore,
+  HomeRegionStore,
+  LogStore,
+  NodeLeaseStore,
+} from '../storage/types.ts';
 import type { Bus } from './bus.ts';
 import type { Metrics } from './metrics.ts';
 import type { ChannelPort, HostedRoom, RoomHost } from './room-host.ts';
@@ -166,6 +172,11 @@ export interface ForwardingDeps {
   readonly logs: Pick<LogStore, 'head'>;
   readonly grants: Pick<GrantStore, 'current'>;
   readonly leases: Pick<NodeLeaseStore, 'live' | 'alive'>;
+  /**
+   * Home regions (BE-074). With it, a document of a tenant that has a home region is routed to
+   * the nodes of that region only, and is refused with `unavailable` when none is live.
+   */
+  readonly homeRegions?: Pick<HomeRegionStore, 'resolve'> | undefined;
   readonly settings?: Partial<ForwardingSettings>;
   readonly now: () => number;
   readonly metrics: Metrics;
@@ -221,14 +232,21 @@ export class Forwarder {
     this.#timer.unref?.();
   }
 
-  /** Where a channel for `ref` should be opened: another node, or null for this one. */
+  /**
+   * Where a channel for `ref` should be opened: another node, or null for this one. Throws a
+   * `Refusal` (`unavailable`) when no node may serve the document, for example when it has a home
+   * region and no live node is in it (BE-074 criterion 4): the channel is not served anywhere
+   * else, so nothing is written elsewhere.
+   */
   async route(ref: DocRef): Promise<{ node: string } | null> {
     if (this.#closed) return null;
     const me = this.#d.node;
     let head;
     let live;
+    let region: string | null = null;
     try {
       [head, live] = await Promise.all([this.#d.logs.head(ref), this.#d.leases.live()]);
+      if (this.#d.homeRegions) region = await this.#d.homeRegions.resolve(ref);
     } catch {
       return null;
     }
@@ -236,9 +254,19 @@ export class Forwarder {
     if (head.owner !== null && head.owner !== me && names.includes(head.owner))
       return { node: head.owner };
     if (head.owner === me) return null;
-    // No live owner: the host that rendezvous routing names tries to own it.
+    // No live owner: the host that rendezvous routing names tries to own it. A dedicated host
+    // takes its document, a general one never gets a hot document, and a home region limits the
+    // candidates to its own nodes (BE-073, BE-074).
     if (!names.includes(me) || names.length === 0) return null;
-    const named = routeDocument(ref.doc, names);
+    const eligible = eligibleHosts(ref.doc, live, region).map((n) => n.node);
+    if (eligible.length === 0)
+      throw new Refusal(
+        'unavailable',
+        region === null
+          ? 'no node may serve this document'
+          : `no live node in the home region ${region}`,
+      );
+    const named = routeDocument(ref.doc, eligible);
     return named === me ? null : { node: named };
   }
 
