@@ -199,6 +199,22 @@
       "summary": "The fields that are required and empty, or whose entry has a problem, in document order, with keys and reasons. It changes nothing (FRW-069)."
     },
     {
+      "name": "completeFilling",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "completeFilling(): Promise<CompleteFillingOutcome>",
+      "summary": "Validates the fields and completes this participant's part (FRW-071). When a field fails, focus moves to the first problem and the promise resolves `{ ok: false, failures }` without calling the server; otherwise it calls the participant's `/complete` endpoint and resolves `{ ok: true, result }`. It rejects with a `FillActionError` (its `reason` says why) when the participant is not active, and with the port's error when the server refuses."
+    },
+    {
+      "name": "decline",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "decline(reason: string): Promise<unknown>",
+      "summary": "Declines the workflow as this participant (FRW-071). Rejects with a `FillActionError` of reason `reason_required`, and calls nothing, when no reason is given; rejects the same way when the participant is not active."
+    },
+    {
       "name": "getSelectionContent",
       "kind": "method",
       "static": false,
@@ -335,6 +351,11 @@
       "name": "de-fill-progress",
       "detail": "FillProgressDetail",
       "summary": "The progress the guided bar of fill mode shows changed (12 §10; FRW-070)."
+    },
+    {
+      "name": "de-workflow-complete",
+      "detail": "WorkflowCompleteDetail",
+      "summary": "The workflow was reported `completed` to this session (12 §10; FRW-071)."
     },
     {
       "name": "de-error",

@@ -43,6 +43,8 @@ Set on the element in markup or with `setAttribute`. Changing one reconciles the
 | `getFieldValues` | method | call | `getFieldValues(): Record<string, unknown>` | The values of the form fields by key, as the document holds them now (FRW-069). |
 | `setFieldValue` | method | call | `setFieldValue(key: string, value: unknown): Promise<FieldFillOutcome>` | Fills the field with `key` as the current user, as typing into its control does; the server's permissions apply. Resolves with `{ ok: true, confirmed }`, or `{ ok: false, code, message }` with `permission_denied`, `field_invalid`, `conflict` or `not_found`; it does not reject (FRW-069). |
 | `validateFields` | method | call | `validateFields(): FieldReport[]` | The fields that are required and empty, or whose entry has a problem, in document order, with keys and reasons. It changes nothing (FRW-069). |
+| `completeFilling` | method | call | `completeFilling(): Promise<CompleteFillingOutcome>` | Validates the fields and completes this participant's part (FRW-071). When a field fails, focus moves to the first problem and the promise resolves `{ ok: false, failures }` without calling the server; otherwise it calls the participant's `/complete` endpoint and resolves `{ ok: true, result }`. It rejects with a `FillActionError` (its `reason` says why) when the participant is not active, and with the port's error when the server refuses. |
+| `decline` | method | call | `decline(reason: string): Promise<unknown>` | Declines the workflow as this participant (FRW-071). Rejects with a `FillActionError` of reason `reason_required`, and calls nothing, when no reason is given; rejects the same way when the participant is not active. |
 | `getSelectionContent` | method | call | `getSelectionContent(): CdmFragment \| null` | The selection as a CDM fragment (PRO-084); null when no document is loaded. |
 | `insertContent` | method | call | `insertContent(fragment: CdmFragment): InsertResult` | Inserts a CDM fragment at the selection through the same guards as typing (PRO-084). Nothing changes unless the result is `ok`; the result says why when it is not. |
 | `print` | method | call | `print(): Promise<PrintOutcome>` | Prints the typeset PDF of the loaded document (02 §9.8; FE-073). When the access lists `no-print`, nothing is requested and nothing is printed, and the outcome says why (FE-055; UX-040 criterion 3). Otherwise the export job runs and its PDF is printed through a hidden frame. Both print modules load on first use, so neither is on the connect-time path (FE-119). |
@@ -75,6 +77,7 @@ Raised on the element as `CustomEvent`s that bubble and are composed; `detail` i
 | `de-counts` | `CountsDetail` | The counts of the header's buttons changed; also raised once when the editor is live (UX-014; ADR 0361). |
 | `de-field-change` | `FieldChangeDetail` | This person changed the entry of a form field (12 §10; FRW-070). It carries no value. |
 | `de-fill-progress` | `FillProgressDetail` | The progress the guided bar of fill mode shows changed (12 §10; FRW-070). |
+| `de-workflow-complete` | `WorkflowCompleteDetail` | The workflow was reported `completed` to this session (12 §10; FRW-071). |
 | `de-error` | `ErrorDetail` |  |
 
 ## Commands
