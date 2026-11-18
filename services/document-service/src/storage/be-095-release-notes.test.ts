@@ -51,7 +51,9 @@ describe('release notes state the CDM steps (BE-095 criterion 2)', () => {
       'release 1.0.0 does not state its CDM steps (cdm.steps, cdm.rollback)',
     ]);
     expect(
-      releaseNoteProblems([{ version: '1.0.0', migrations: [], cdm: { steps: [], rollback: ' ' } }]),
+      releaseNoteProblems([
+        { version: '1.0.0', migrations: [], cdm: { steps: [], rollback: ' ' } },
+      ]),
     ).toEqual(['release 1.0.0 gives no rollback note for its CDM steps']);
   });
 
