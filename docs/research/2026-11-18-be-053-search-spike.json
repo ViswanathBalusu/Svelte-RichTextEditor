@@ -1,0 +1,373 @@
+{
+  "machine": {
+    "postgres": "17.11 (Debian 17.11-1.pgdg13+2)",
+    "sharedBuffers": "256MB",
+    "workMem": "4MB",
+    "cpus": 20,
+    "cpuModel": "Intel(R) Core(TM) i9-10900KF CPU @ 3.70GHz",
+    "memoryGiB": 127.8,
+    "node": "v22.18.0"
+  },
+  "results": [
+    {
+      "documents": 10000,
+      "loadSeconds": 1.93,
+      "indexBuildSeconds": 1.54,
+      "heapMiB": 13,
+      "ginMiB": 5,
+      "tokensLoadSeconds": 42.12,
+      "tokenRows": 891294,
+      "tokensTotalMiB": 136,
+      "queries": {
+        "one common word": {
+          "matchesOfFirstFive": [
+            1489,
+            1805,
+            1783,
+            1170,
+            1122
+          ],
+          "fts": {
+            "p50": 4.17,
+            "p95": 22.32,
+            "max": 37.81
+          },
+          "tokens": {
+            "p50": 108.9,
+            "p95": 119.14,
+            "max": 121.31
+          }
+        },
+        "two common words": {
+          "matchesOfFirstFive": [
+            81,
+            26,
+            23,
+            74,
+            26
+          ],
+          "fts": {
+            "p50": 1.14,
+            "p95": 1.83,
+            "max": 2.34
+          },
+          "tokens": {
+            "p50": 188.35,
+            "p95": 276.66,
+            "max": 278.85
+          }
+        },
+        "two middling words": {
+          "matchesOfFirstFive": [
+            1,
+            0,
+            2,
+            4,
+            1
+          ],
+          "fts": {
+            "p50": 0.69,
+            "p95": 2.13,
+            "max": 5.48
+          },
+          "tokens": {
+            "p50": 8.07,
+            "p95": 17.04,
+            "max": 18.75
+          }
+        },
+        "three middling words": {
+          "matchesOfFirstFive": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "fts": {
+            "p50": 0.67,
+            "p95": 0.91,
+            "max": 1.03
+          },
+          "tokens": {
+            "p50": 8.53,
+            "p95": 16.88,
+            "max": 17.81
+          }
+        },
+        "one rare word": {
+          "matchesOfFirstFive": [
+            17,
+            17,
+            15,
+            13,
+            12
+          ],
+          "fts": {
+            "p50": 0.72,
+            "p95": 1,
+            "max": 3.03
+          },
+          "tokens": {
+            "p50": 6.71,
+            "p95": 15.32,
+            "max": 15.58
+          }
+        },
+        "two rare words": {
+          "matchesOfFirstFive": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "fts": {
+            "p50": 0.68,
+            "p95": 0.98,
+            "max": 5.76
+          },
+          "tokens": {
+            "p50": 7.01,
+            "p95": 12.72,
+            "max": 14.31
+          }
+        }
+      },
+      "fullTextUpdateOneDocument": {
+        "p50": 22.87,
+        "p95": 46.19,
+        "max": 57.2
+      }
+    },
+    {
+      "documents": 100000,
+      "loadSeconds": 18.75,
+      "indexBuildSeconds": 11.96,
+      "heapMiB": 130,
+      "ginMiB": 35,
+      "tokensLoadSeconds": 455.31,
+      "tokenRows": 8915314,
+      "tokensTotalMiB": 1366,
+      "queries": {
+        "one common word": {
+          "matchesOfFirstFive": [
+            15249,
+            18639,
+            17861,
+            11443,
+            11039
+          ],
+          "fts": {
+            "p50": 31.5,
+            "p95": 61.19,
+            "max": 67.95
+          },
+          "tokens": {
+            "p50": 147.73,
+            "p95": 194.2,
+            "max": 202.1
+          }
+        },
+        "two common words": {
+          "matchesOfFirstFive": [
+            920,
+            228,
+            259,
+            692,
+            186
+          ],
+          "fts": {
+            "p50": 4.4,
+            "p95": 12.51,
+            "max": 12.58
+          },
+          "tokens": {
+            "p50": 139.36,
+            "p95": 197.09,
+            "max": 211.89
+          }
+        },
+        "two middling words": {
+          "matchesOfFirstFive": [
+            11,
+            4,
+            13,
+            29,
+            5
+          ],
+          "fts": {
+            "p50": 1.8,
+            "p95": 13.92,
+            "max": 17.06
+          },
+          "tokens": {
+            "p50": 64.1,
+            "p95": 86.42,
+            "max": 87.67
+          }
+        },
+        "three middling words": {
+          "matchesOfFirstFive": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "fts": {
+            "p50": 1.04,
+            "p95": 3.62,
+            "max": 4.85
+          },
+          "tokens": {
+            "p50": 77.78,
+            "p95": 146.62,
+            "max": 175.86
+          }
+        },
+        "one rare word": {
+          "matchesOfFirstFive": [
+            140,
+            137,
+            127,
+            135,
+            151
+          ],
+          "fts": {
+            "p50": 1.9,
+            "p95": 3.22,
+            "max": 3.57
+          },
+          "tokens": {
+            "p50": 4.18,
+            "p95": 6.77,
+            "max": 10.52
+          }
+        },
+        "two rare words": {
+          "matchesOfFirstFive": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "fts": {
+            "p50": 0.85,
+            "p95": 1.17,
+            "max": 2.35
+          },
+          "tokens": {
+            "p50": 53.58,
+            "p95": 77.35,
+            "max": 126.28
+          }
+        }
+      },
+      "fullTextUpdateOneDocument": {
+        "p50": 7.53,
+        "p95": 19.65,
+        "max": 36.23
+      }
+    },
+    {
+      "documents": 1000000,
+      "loadSeconds": 174.41,
+      "indexBuildSeconds": 158.47,
+      "heapMiB": 1302,
+      "ginMiB": 397,
+      "queries": {
+        "one common word": {
+          "matchesOfFirstFive": [
+            152703,
+            183852,
+            178220,
+            114930,
+            110080
+          ],
+          "fts": {
+            "p50": 358.29,
+            "p95": 497.39,
+            "max": 509.86
+          }
+        },
+        "two common words": {
+          "matchesOfFirstFive": [
+            9193,
+            2335,
+            2768,
+            6524,
+            1982
+          ],
+          "fts": {
+            "p50": 32.84,
+            "p95": 99.56,
+            "max": 121.36
+          }
+        },
+        "two middling words": {
+          "matchesOfFirstFive": [
+            107,
+            59,
+            111,
+            284,
+            53
+          ],
+          "fts": {
+            "p50": 3.23,
+            "p95": 7.5,
+            "max": 10.62
+          }
+        },
+        "three middling words": {
+          "matchesOfFirstFive": [
+            1,
+            0,
+            0,
+            1,
+            0
+          ],
+          "fts": {
+            "p50": 2.68,
+            "p95": 8.64,
+            "max": 9.69
+          }
+        },
+        "one rare word": {
+          "matchesOfFirstFive": [
+            1402,
+            1391,
+            1326,
+            1248,
+            1410
+          ],
+          "fts": {
+            "p50": 9.63,
+            "p95": 18.01,
+            "max": 24.21
+          }
+        },
+        "two rare words": {
+          "matchesOfFirstFive": [
+            1,
+            1,
+            1,
+            0,
+            0
+          ],
+          "fts": {
+            "p50": 1.22,
+            "p95": 3.84,
+            "max": 4.62
+          }
+        }
+      },
+      "fullTextUpdateOneDocument": {
+        "p50": 12.65,
+        "p95": 32.22,
+        "max": 99.66
+      }
+    }
+  ]
+}
