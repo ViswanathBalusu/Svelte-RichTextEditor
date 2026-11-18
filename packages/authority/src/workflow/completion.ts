@@ -115,3 +115,48 @@ export function hiddenValuesToClear(
   });
   return keys;
 }
+
+/** One value the completion commit writes: a formula result or the clearing of a hidden field. */
+export interface CompletionWrite {
+  /** The field key. */
+  key: string;
+  /** The value to store: the formula's result, or null for a hidden field or a formula with none. */
+  value: string | null;
+  reason: 'formula' | 'hidden';
+}
+
+export type CompletionWrites =
+  { ok: true; writes: CompletionWrite[] } | { ok: false; code: 'rules_unavailable' };
+
+/**
+ * What the `rules` commit of a completion writes (12 §5.3): the result of each formula field whose
+ * stored value differs from it, and null for each hidden field that holds a value (a hidden formula
+ * field is cleared, not computed). Evaluated under the participant's `roles` with the server's
+ * clock in `now`. A rule set that cannot be evaluated gives no writes (fail closed).
+ */
+export function completionWrites(
+  doc: Node,
+  roles: readonly string[],
+  now: Parameters<typeof evaluateDocument>[1]['now'] = null,
+  budget: number = COMPLETION_RULE_BUDGET,
+): CompletionWrites {
+  const evaluation = evaluateDocument(doc.toJSON(), { roles: [...roles], now, budget });
+  if (!evaluation.ok) return { ok: false, code: 'rules_unavailable' };
+  const hidden = new Set(hiddenValuesToClear(doc, evaluation));
+  const computed = new Map(evaluation.fields.map((f) => [f.key, f.value ?? null]));
+  const writes: CompletionWrite[] = [];
+  const seen = new Set<string>();
+  doc.descendants((n) => {
+    if (n.type.name !== 'form_field' || typeof n.attrs['key'] !== 'string') return true;
+    const key = n.attrs['key'];
+    if (seen.has(key)) return true;
+    seen.add(key);
+    if (hidden.has(key)) writes.push({ key, value: null, reason: 'hidden' });
+    else if (n.attrs['kind'] === 'formula') {
+      const value = computed.get(key) ?? null;
+      if (value !== (n.attrs['value'] ?? null)) writes.push({ key, value, reason: 'formula' });
+    }
+    return true;
+  });
+  return { ok: true, writes };
+}

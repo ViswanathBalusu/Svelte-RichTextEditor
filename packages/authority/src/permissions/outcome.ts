@@ -405,7 +405,17 @@ export function outcomeCheck(input: OutcomeInput): OutcomeVerdict {
         : f.container.startsWith('region:')
           ? regionCaps(f.container.slice(7))
           : access.structureScopes;
-    if (containerCaps.has('edit') && !perms.workflowActive && !everyone) {
+    if (
+      serverOrigin &&
+      input.origin === 'rules' &&
+      f.after === null &&
+      f.before !== null &&
+      f.before !== undefined
+    ) {
+      // A server-authored `rules` commit clears the value of a hidden field when a participant
+      // completes (12 §5.3; FRW-047). P7 would refuse it, since a hidden field is not fillable; the
+      // clearing is the service's, not the participant's, so the fill rule does not apply to it.
+    } else if (containerCaps.has('edit') && !perms.workflowActive && !everyone) {
       // An editor may change any attribute of a field while the document is a draft (12 §4.3).
     } else {
       const rule = rules.fill;

@@ -335,8 +335,11 @@ export {
 export {
   COMPLETION_RULE_BUDGET,
   completionCheck,
+  completionWrites,
   hiddenValuesToClear,
   type CompletionProblem,
+  type CompletionWrite,
+  type CompletionWrites,
   type CompletionVerdict,
 } from './workflow/completion.ts';
 export {
