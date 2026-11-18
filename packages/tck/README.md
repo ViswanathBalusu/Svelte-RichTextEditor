@@ -27,6 +27,14 @@ podman run --rm -e DEP_TCK_CREDENTIAL="$CREDENTIAL" -v "$PWD/out:/out" docedit-t
 
 Exit code 0 when the run passes, 1 when it fails, 2 on a usage error.
 
+To certify an authority service (05 §10) instead, give its address; a bearer token, when it needs
+one, goes in `DEP_TCK_AUTHORITY_TOKEN`:
+
+```sh
+podman run --rm -e DEP_TCK_AUTHORITY_TOKEN="$TOKEN" docedit-tck \
+  --authority-service http://authority.internal:8090 --profile authority-service
+```
+
 ## Which profiles apply
 
 A profile applies when the server announces what it maps to: a mode (`authority` or `relay`) or
@@ -54,8 +62,8 @@ profile whose requirement the server does not meet is reported as skipped, with 
 | `comments` | feature `comments` | Threads and comments; not yet built (PRO-120), except the rule that a thread or a comment is refused to a caller of another document (PRO-045). |
 | `webhooks` | feature `webhooks` | Signed webhooks; not yet built (PRO-121). |
 | `leases` | feature `leases` | Exclusive-edit leases; not yet built (PRO-122). |
-| `authority-service` | always | The authority service interface (05 §10); not reachable over DEP (PRO-125). |
-| `fault-injection` | feature `test-hooks` | Durability, fencing, log rewind and grants revision through test hooks (PRO-126). The feature name `test-hooks` is the kit's proposal (ADR 0219); no scenarios yet, the hook interface is not specified. Skipped without the hooks. |
+| `authority-service` | an address given with `--authority-service` | The authority service interface (05 §10), over its HTTP binding (ADR 0314). It is not reached over DEP, so the run needs the service's address and, when the service has one, its bearer token in `DEP_TCK_AUTHORITY_TOKEN`. The profile runs the calls, the step-semantics, canonical-hash and rules fixtures through the service, and a restart between calls when the caller can restart the service (a library caller gives `authorityService.restart`; the command line cannot). `mapRanges` has no route yet (PRO-105), so its scenario is skipped with that reason. A run may name no discovery URL; every DEP profile is then skipped. Built (PRO-125). |
+| `fault-injection` | feature `test-hooks` | Durability before acknowledgement, fencing, log rewind and the grants revision, through test hooks (PRO-126). A server announces `test-hooks` only while its test-mode switch is on (ADR 0219, ADR 0398). Four scenarios: a failed write is never acknowledged and an acknowledged commit survives a killed room; a fenced room closes its channels `unavailable` and no commit is stored twice; a rewound log gives `catchUp: "reload"` for the new incarnation (a server whose store cannot be rewound skips it); a lost grants announcement never lets a commit be stored under the old grants. The hook routes are the reference service's own (ADR 0398). Skipped without the hooks. |
 
 ## Implementation order
 

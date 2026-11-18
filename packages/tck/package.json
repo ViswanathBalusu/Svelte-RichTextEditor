@@ -1,6 +1,6 @@
 {
   "name": "@docedit/tck",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "The DEP conformance kit: black-box profiles, golden fixtures and fuzzers that certify any DEP backend from a discovery URL, a service credential and a test-mode switch (05 §11; R6).",
   "type": "module",

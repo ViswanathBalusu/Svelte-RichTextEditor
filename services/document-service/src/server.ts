@@ -225,6 +225,11 @@ export interface ServiceParts {
   queue: JobQueue;
   /** Set when the parts run on PostgreSQL: the readiness probe and `close()` use it. */
   pool: Pool | null;
+  /**
+   * The readiness probe, for parts that span several databases (sharded PostgreSQL, BE-070). It
+   * replaces the probe over `pool`, which looks at one database only. Absent: `pool` is probed.
+   */
+  readiness?: () => Promise<Readiness>;
   // --- Phase 1b. --------------------------------------------------------------------------------
   idempotency: IdempotencyStore;
   assetRegistry: AssetRegistry;
@@ -421,6 +426,20 @@ export interface Service {
 
 export const REST_PATH = '/v1';
 export const WS_PATH = '/dep';
+
+/**
+ * The features a service announces: the list it was given, and `test-hooks` while its test-mode
+ * switch is on (05 §2, §11; ADR 0219, ADR 0398). The configuration refuses test mode in production,
+ * so a production service never announces it.
+ */
+function withTestHooks(
+  config: { testMode: boolean },
+  features: readonly string[],
+): readonly string[] {
+  return config.testMode && !features.includes('test-hooks')
+    ? [...features, 'test-hooks']
+    : features;
+}
 
 /**
  * The retention policies of `/retention` (UX-080) over a policy store, the parts' document store
@@ -911,17 +930,20 @@ export async function startService(opts: StartOptions): Promise<Service> {
       // 05 §1 rule 4: discovery and `welcome` announce the same features, so the session accepts
       // in `hello` and `ch.open` what discovery announces (`exports` and `assets` come from the
       // workers, as in `announced` below; U-PRO-103-119, PRO-111 criterion 6).
-      features: config.features ?? [
-        ...new Set([
-          ...DEFAULT_FEATURES,
-          ...(opts.jobHandlers?.[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
-          ...((opts.assetWorker !== undefined ? opts.assetWorker : config.assetWorker) ||
-          config.externalWorkers
-            ? ['assets']
-            : []),
-          ...(parts.workflows ? ['workflow'] : []),
-        ]),
-      ],
+      features: withTestHooks(
+        config,
+        config.features ?? [
+          ...new Set([
+            ...DEFAULT_FEATURES,
+            ...(opts.jobHandlers?.[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
+            ...((opts.assetWorker !== undefined ? opts.assetWorker : config.assetWorker) ||
+            config.externalWorkers
+              ? ['assets']
+              : []),
+            ...(parts.workflows ? ['workflow'] : []),
+          ]),
+        ],
+      ),
       // Errors of the data plane go to the same structured log, by name only, with the tenant,
       // document and session they belong to (BE-088 criteria 1 and 2).
       onError: (e: unknown, where: string, context?: ErrorContext) =>
@@ -1291,15 +1313,18 @@ export async function startService(opts: StartOptions): Promise<Service> {
       ]),
   );
 
-  const announced = config.features ?? [
-    ...new Set([
-      ...(dataPlane.features ?? []),
-      // `exports` only when a compile worker can serve the queue (ADR 0054; `exports.states`).
-      ...(exportHandlers[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
-      ...(assetWorker || config.externalWorkers ? ['assets'] : []),
-      ...(parts.workflows ? ['workflow'] : []),
-    ]),
-  ];
+  const announced = withTestHooks(
+    config,
+    config.features ?? [
+      ...new Set([
+        ...(dataPlane.features ?? []),
+        // `exports` only when a compile worker can serve the queue (ADR 0054; `exports.states`).
+        ...(exportHandlers[EXPORT_KIND] || config.externalWorkers ? ['exports'] : []),
+        ...(assetWorker || config.externalWorkers ? ['assets'] : []),
+        ...(parts.workflows ? ['workflow'] : []),
+      ]),
+    ],
+  );
 
   // Read-only routes through a read replica (BE-064): the replica's own content reader, over the
   // same immutable checkpoints, answers a read only when its log holds what the read needs.
@@ -1417,7 +1442,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(opts.importer ? { importsOffered: true } : {}),
   });
 
-  const ready = () => readiness(parts.pool);
+  const ready = () => (parts.readiness ? parts.readiness() : readiness(parts.pool));
   const probe =
     (fn: () => Promise<Reply>): PlainHandler =>
     () =>

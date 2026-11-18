@@ -222,7 +222,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           .filter((f) => /evidence-ledger|parts\.evidence|\.evidence\./.test(f.text))
           .map((f) => f.path)
           .filter((p) => /export|checkpoint|webhook|search/.test(p));
-        expect(users).toEqual([]);
+        // The one reader is the start of the final export: it builds the facts the certificate
+        // of completion prints (FRW-050) and passes nothing else from the ledger to the job.
+        expect(users).toEqual(['services/document-service/src/workflow/final-export-start.ts']);
       },
     );
 
