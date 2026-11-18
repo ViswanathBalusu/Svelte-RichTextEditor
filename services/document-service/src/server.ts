@@ -77,6 +77,7 @@ import { PgQuotaStore } from './control-plane/quotas-pg.ts';
 import { HoldService, MemoryHoldStore, type HoldStore } from './control-plane/holds.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
+import type { SearchService } from './control-plane/search-routes.ts';
 import { Cursors } from './control-plane/http.ts';
 import {
   MemoryIdempotencyStore,
@@ -196,6 +197,8 @@ export interface ServiceParts {
   quotaAdmin?: QuotaAdminService;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: none is asked. */
   policyHook?: PolicyHookGate;
+  /** The index `GET /search` queries (UX-084). Absent: the route is not offered. */
+  search?: SearchService;
   outbox?: OutboxStore;
   leases?: NodeLeaseStore;
   /** The read markers of `/read-marker` (HIS-027). Absent: the route is not offered. */
@@ -1033,6 +1036,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
+    ...(parts.search ? { search: parts.search } : {}),
     compileBudget,
     ...(liveQuotas ? { liveQuotas } : {}),
     ...(quotaSource ? { quotaSource } : {}),

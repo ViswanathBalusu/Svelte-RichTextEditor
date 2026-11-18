@@ -852,8 +852,8 @@ export class DocumentCore implements DocumentApi {
     this.features = new ReadValue<readonly string[]>([], sameJson, hub);
     this.counts = new ReadValue<ShellCounts>({}, sameJson, hub);
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
-    this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
     this.proofing = new ReadValue<ProofingInfo>(NO_PROOFING, sameJson, hub);
+    this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
     this.findState = new ReadValue<FindState>(
       { query: '', count: 0, current: null },
       sameJson,
