@@ -2750,7 +2750,12 @@ export class DocumentCore implements DocumentApi {
 
   findText(query: string, options?: { readonly matchCase?: boolean }): FindState {
     const matchCase = options?.matchCase !== false;
-    this.#find = { query, matches: findMatches(this.#state.doc, query, { matchCase }), current: null, matchCase };
+    this.#find = {
+      query,
+      matches: findMatches(this.#state.doc, query, { matchCase }),
+      current: null,
+      matchCase,
+    };
     this.#publishFind();
     return this.findState.get();
   }
