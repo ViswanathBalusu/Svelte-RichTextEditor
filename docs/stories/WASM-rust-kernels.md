@@ -92,7 +92,7 @@ As a maintainer, I want the kernel to run in its own worker with a narrow, batch
 - [ ] Given the element suspends, the worker stops; given it is destroyed, the worker and its memory are released; given it resumes, the kernel is re-created on first use (02 §2.1).
 - [ ] Given the kernel traps, the error is caught and logged, the view falls back as in WASM-003, and no document state is lost, because the document lives in the editing core on the main thread.
 
-**Notes:** C-WASM, phase 3. Answers the open issue of 02 §15 for the page view only.
+**Notes:** C-WASM, phase 3. Answers the open issue of 02 §15 for the page view only. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold yet (the page-view gate, SPK-013, is not held), and the story depends on WASM-002, which is itself blocked, so there is no module for a worker to host. S10 chose harfbuzzjs with line breaking in TypeScript (ADR 0016, "Result of S10"), so the kernel is not Rust. The S10 prototype in `packages/perf/src/kernel/` ran in a layout worker as a measurement only; it is not the editor's worker. Building the worker, batching and lifecycle handling now would be a host with no guest.
 
 ## Text kernel
 
