@@ -32,6 +32,22 @@ test.describe('command search (UX-011)', () => {
     expect((await focused(page)).className).toContain('de-editing-surface');
   });
 
+  test('lists a command under a synonym from the locale table, and runs it (criterion 2)', async ({
+    page,
+  }) => {
+    const h = await open(page, { extended: true });
+    await focusSurface(page);
+    await page.keyboard.press('Alt+q');
+    // "slant" is a synonym of Italic in the en-GB table (`synonyms.format.italic`), not in its label.
+    await page.keyboard.type('slant');
+    const list = page.getByRole('listbox');
+    await expect(list.locator('[data-command-id="format.italic"]')).toBeVisible();
+    await expect(list.locator('[role="option"]')).toHaveCount(1);
+    await page.keyboard.press('Enter');
+    expect(await h.runs()).toEqual(['italic']);
+    expect((await focused(page)).className).toContain('de-editing-surface');
+  });
+
   test('arrow keys move the active result, and a click runs a result', async ({ page }) => {
     const h = await open(page, { extended: true });
     await focusSurface(page);

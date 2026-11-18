@@ -52,6 +52,7 @@ export {
   normaliseQuery,
   runSearchHit,
   searchCommands,
+  synonymsFromStrings,
   type CommandSearchHit,
   type CommandSearchOptions,
   type CommandSearchResults,
