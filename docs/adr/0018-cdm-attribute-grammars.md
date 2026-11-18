@@ -46,7 +46,7 @@ The schema forbids, by its content expressions:
 
 Bans that depend on an attribute stay in `model.validate()` under I10: page and column breaks in cells, captions and footnotes, floating figures in cells, and form fields in headers and footers.
 
-ProseMirror allows node marks on every child of a node that permits them. `body`, `region`, `story` and `table_cell` permit `ins`, `del` and `fmt` on their children, and `table` permits them on its rows. `model.validate()` then refuses them on any node other than `paragraph`, `table_row` and `table` (03 §5).
+**Amended by owner decision 92 (2026-11-15; applied 2026-11-18, story FE-044).** A block suggestion is no longer a node mark. ProseMirror puts an element around every node that carries a mark, which cannot be drawn without a box inside a table, so the state moved to an attribute. `paragraph`, `table_row` and `table` have a `suggest` attribute: an array of entries with the shape of a suggestion mark, `{ type: ins | del | fmt, attrs: { id, user, before? } }`, or null (at most 8 entries, `before` up to 4 KiB). No container allows marks on its children any more, so `model.validate()` refuses a mark on any block (`node_mark_host`, I1), and checks each entry as it checked a suggestion mark: the identifier belongs to one user (I2) and `fmt.before` names only `style`, `align` and `numbering` (I11). Inline nodes and text keep their marks. Decision 7 of that file, where it accepted node marks on these three block types, is replaced by this paragraph. There is no migration: version 1 of the CDM has no stored documents outside the repository's fixtures, which were rewritten.
 
 ### Table geometry (I6)
 
@@ -59,7 +59,7 @@ With row spans, positions covered from above have no cell. Each row's column spa
 | Empty `content`, `marks`, `attrs` | Omitted, as the example of 03 §12 omits `content` on an empty paragraph |
 | `requires` | Sorted by UTF-16 code units, without duplicates |
 | Defaults inside object attributes | Not stripped. The object is compared with the attribute's default as a whole |
-| Mark order | Position in the schema's mark list, then the RFC 8785 text of the canonical attributes. Node marks follow the same rule. The mark list order is part of the published schema and of its hash (CDM-008) |
+| Mark order | Position in the schema's mark list, then the RFC 8785 text of the canonical attributes. The `suggest` array of a block is not sorted by the canonical form (it is an attribute); the editor keeps it in the order `ins`, `del`, `fmt`, then the order added. The mark list order is part of the published schema and of its hash (CDM-008) |
 | Subtrees | The canonical form of a node alone, without the envelope, under the same rules. Approvals (07 §11) hash a region this way |
 | Versioning | The rules carry `CANONICAL_FORM_VERSION = 1`. Commits and checkpoints record it next to every hash they store, so that hashes stay checkable after the rules change |
 | Bytes | The UTF-8 encoding of the RFC 8785 text, hashed with SHA-256 |

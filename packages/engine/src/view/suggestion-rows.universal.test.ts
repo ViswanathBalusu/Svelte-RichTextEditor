@@ -1,6 +1,6 @@
 /**
  * A suggested table row in the mounted body view (FE-045 criterion 1, lane U-FE-033-048): a row that
- * a reviewer inserts carries one `ins` node mark, is drawn with the class `de-suggest-ins` as a node
+ * a reviewer inserts carries one `ins` entry in its `suggest` attribute, is drawn with the class `de-suggest-ins` as a node
  * decoration on its own `tr`, and adds no wrapper element: every child of the table's row container
  * is still a row. The same view draws a suggested text run as `de-suggest-ins` (FE-046 criterion 4).
  *
@@ -62,55 +62,45 @@ function cellTextPos(doc: PMNode, row: number, col: number): number {
 }
 
 describe.skipIf(!isBrowser)('suggested rows in the body view (FE-045 criterion 1)', () => {
-  // Known defect, found by this test (lane U-FE-033-048): the `ins` mark on the inserted row is
-  // rendered by the view as an `<ins>` element that wraps the `tr` inside `tbody`, so the row has a
-  // wrapper and the table is not valid markup. The test is `it.fails` until the rendering is fixed;
-  // when it passes, change `it.fails` back to `it` and tick the criterion. Lane w1: the element is
-  // still there (it cannot be removed, ADR 0385) but has `display: contents`, so the layout holds;
-  // that is tested in fe-045-block-suggestions.universal.test.ts.
-  it.fails(
-    'a row inserted in review mode is drawn as a decoration on its own row, with no wrapper',
-    async () => {
-      const host = document.createElement('div');
-      document.body.append(host);
-      let n = 0;
-      const core = new EditorCore({
-        doc: tableDocument(),
-        mode: 'review',
-        user: 'alice',
-        access: editorAccess(),
-        schedule: microtask,
-        generateId: () => `a${String(++n).padStart(15, '0')}`,
-      });
-      const unmount = core.mountBody(host);
-      try {
-        const surface = document.querySelector<HTMLElement>('.de-editing-surface');
-        if (!surface) throw new Error('the body surface was not mounted');
-        const i = internals(core);
-        i.dispatch(
-          i.state.tr.setSelection(
-            TextSelection.create(i.state.doc, cellTextPos(i.state.doc, 1, 0)),
-          ),
-        );
-        expect(core.run('insertRowBelow')).toBe(true);
+  // Found by lane U-FE-033-048 as a defect: while the suggestion was a node mark, `prosemirror-view`
+  // put the mark's `<ins>` element around the `tr` inside `tbody`. Owner decision 92 moved the block
+  // state to the `suggest` attribute, so the view has no mark to wrap and the test passes.
+  it('a row inserted in review mode is drawn as a decoration on its own row, with no wrapper', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    let n = 0;
+    const core = new EditorCore({
+      doc: tableDocument(),
+      mode: 'review',
+      user: 'alice',
+      access: editorAccess(),
+      schedule: microtask,
+      generateId: () => `a${String(++n).padStart(15, '0')}`,
+    });
+    const unmount = core.mountBody(host);
+    try {
+      const surface = document.querySelector<HTMLElement>('.de-editing-surface');
+      if (!surface) throw new Error('the body surface was not mounted');
+      const i = internals(core);
+      i.dispatch(
+        i.state.tr.setSelection(TextSelection.create(i.state.doc, cellTextPos(i.state.doc, 1, 0))),
+      );
+      expect(core.run('insertRowBelow')).toBe(true);
 
-        await vi.waitFor(() =>
-          expect(surface.querySelectorAll('tr.de-suggest-ins')).toHaveLength(1),
-        );
-        const row = surface.querySelector<HTMLElement>('tr.de-suggest-ins')!;
-        const container = row.parentElement!;
-        // No wrapper: every child of the row container is a table row, and the table has every row.
-        const rows = [...container.children];
-        expect(rows.every((el) => el.tagName === 'TR')).toBe(true);
-        expect(rows).toHaveLength(ROWS + 1);
-        expect(row.querySelectorAll('td, th')).toHaveLength(2);
-        // The row is one of the table's rows, not a copy inside a cell or a new table.
-        expect(surface.querySelectorAll('table')).toHaveLength(1);
-      } finally {
-        unmount();
-        core.destroy();
-        host.remove();
-      }
-    },
-  );
+      await vi.waitFor(() => expect(surface.querySelectorAll('tr.de-suggest-ins')).toHaveLength(1));
+      const row = surface.querySelector<HTMLElement>('tr.de-suggest-ins')!;
+      const container = row.parentElement!;
+      // No wrapper: every child of the row container is a table row, and the table has every row.
+      const rows = [...container.children];
+      expect(rows.every((el) => el.tagName === 'TR')).toBe(true);
+      expect(rows).toHaveLength(ROWS + 1);
+      expect(row.querySelectorAll('td, th')).toHaveLength(2);
+      // The row is one of the table's rows, not a copy inside a cell or a new table.
+      expect(surface.querySelectorAll('table')).toHaveLength(1);
+    } finally {
+      unmount();
+      core.destroy();
+      host.remove();
+    }
+  });
 });

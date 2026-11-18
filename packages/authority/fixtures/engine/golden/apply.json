@@ -5,7 +5,7 @@
   "library": { "prosemirror-transform": "1.12.5", "prosemirror-model": "1.25.12" },
   "schema": {
     "cdm": 1,
-    "sha256": "114aaf8efd1fcdc419226436613a8613f2954bfec5f9e393a714e3a66b841ca5"
+    "sha256": "6dd13c18b42c5604ca4e8aaa5a5f7b61984e686878462fc6a4b18926bc1f718a"
   },
   "docs": {
     "base": {
@@ -71,9 +71,11 @@
             },
             {
               "type": "paragraph",
-              "attrs": { "id": "pMiddle000000001" },
-              "content": [{ "type": "text", "text": "Between the region and the table." }],
-              "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+              "attrs": {
+                "id": "pMiddle000000001",
+                "suggest": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+              },
+              "content": [{ "type": "text", "text": "Between the region and the table." }]
             },
             {
               "type": "table",
@@ -151,7 +153,8 @@
                       "attrs": { "id": "pFootnote0000001" },
                       "content": [{ "type": "text", "text": "Footnote text." }]
                     }
-                  ]
+                  ],
+                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }]
                 },
                 { "type": "text", "text": "." }
               ]
@@ -241,9 +244,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -330,6 +337,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -340,7 +350,7 @@
             }
           ]
         },
-        "docSha256": "9838586bfc20ed71030583a37fa4df69a2193800f186bed6c4de6562a296c126"
+        "docSha256": "7c38bc964558cfa712ce99b2d863cf2a05c0c3da69abd09a23c06a128a1dd631"
       }
     },
     {
@@ -360,9 +370,9 @@
           "slice": { "content": [{ "type": "text", "text": "中" }] }
         },
         {
-          "stepType": "addNodeMark",
-          "pos": 160,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
+          "stepType": "removeNodeMark",
+          "pos": 198,
+          "mark": { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2", "ext": {} } }
         }
       ],
       "expected": {
@@ -429,9 +439,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -476,13 +490,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }],
-                              "marks": [
-                                {
-                                  "type": "del",
-                                  "attrs": { "id": "sSuggestion00001", "user": "u1" }
-                                }
-                              ]
+                              "content": [{ "type": "text", "text": "Deposit" }]
                             }
                           ]
                         },
@@ -525,7 +533,7 @@
             }
           ]
         },
-        "docSha256": "552a7e2a92aa2ec0d97d968425fb49cdfd454368cc1115005cc24c98f7d14ed0"
+        "docSha256": "e77aecc60945001308f88c7dd2664dcd111c798b3456ddf0d3e6fc63ca877bb2"
       }
     },
     {
@@ -533,16 +541,9 @@
       "doc": "base",
       "steps": [
         {
-          "stepType": "removeMark",
-          "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
-          "from": 40,
-          "to": 46
-        },
-        { "stepType": "attr", "pos": 77, "attr": "style", "value": null },
-        {
           "stepType": "replace",
-          "from": 173,
-          "to": 173,
+          "from": 181,
+          "to": 181,
           "slice": {
             "content": [
               {
@@ -569,6 +570,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -597,6 +599,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -607,7 +610,7 @@
           },
           "structure": true
         },
-        { "stepType": "attr", "pos": 174, "attr": "id", "value": "p000000000000001" }
+        { "stepType": "attr", "pos": 182, "attr": "id", "value": "p000000000000001" }
       ],
       "expected": {
         "ok": true,
@@ -650,7 +653,9 @@
                   "content": [
                     { "type": "text", "text": "Plain " },
                     { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": " and italic text." }
+                    { "type": "text", "text": " and " },
+                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
+                    { "type": "text", "text": " text." }
                   ]
                 },
                 {
@@ -671,9 +676,254 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
+                },
+                {
+                  "type": "table",
+                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
+                  "content": [
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000001" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000001" },
+                              "content": [{ "type": "text", "text": "Rent" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000001" },
+                              "content": [{ "type": "text", "text": "Monthly" }]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000002" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000002" },
+                              "content": [{ "type": "text", "text": "Deposit" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000002" },
+                              "content": [{ "type": "text", "text": "One month" }]
+                            },
+                            { "type": "paragraph", "attrs": { "id": "p000000000000001" } }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pNote00000000001" },
+                  "content": [
+                    { "type": "text", "text": "With a note" },
+                    {
+                      "type": "footnote",
+                      "attrs": { "id": "fnNote0000000001" },
+                      "content": [
+                        {
+                          "type": "paragraph",
+                          "attrs": { "id": "pFootnote0000001" },
+                          "content": [{ "type": "text", "text": "Footnote text." }]
+                        }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
+                      ]
+                    },
+                    { "type": "text", "text": "." }
+                  ]
+                },
+                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
+              ]
+            }
+          ]
+        },
+        "docSha256": "d7fd7e3d0c576abe40916be123d938f5d0fa6640d2fbc333064ecab4ab399210"
+      }
+    },
+    {
+      "id": "apply-004",
+      "doc": "base",
+      "steps": [
+        {
+          "stepType": "replace",
+          "from": 173,
+          "to": 173,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pB00000000000002",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pB00000000000002",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 174, "attr": "id", "value": "p000000000000002" }
+      ],
+      "expected": {
+        "ok": true,
+        "doc": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "defs",
+              "content": [
+                { "type": "settings", "attrs": { "lang": "en-GB" } },
+                {
+                  "type": "style_def",
+                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
+                },
+                {
+                  "type": "style_def",
+                  "attrs": {
+                    "id": "Heading1",
+                    "name": "Heading 1",
+                    "basedOn": "Normal",
+                    "outlineLevel": 1,
+                    "builtIn": true
+                  }
+                },
+                { "type": "page_setup", "attrs": { "id": "ps1" } }
+              ]
+            },
+            {
+              "type": "body",
+              "attrs": { "pageSetup": "ps1" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
+                  "content": [{ "type": "text", "text": "Engine fixtures" }]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pMarks0000000001" },
+                  "content": [
+                    { "type": "text", "text": "Plain " },
+                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
+                    { "type": "text", "text": " and " },
+                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
+                    { "type": "text", "text": " text." }
+                  ]
+                },
+                {
+                  "type": "region",
+                  "attrs": { "id": "rClause000000001", "title": "Clause" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000001" },
+                      "content": [{ "type": "text", "text": "Liability is limited." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000002" },
+                      "content": [{ "type": "text", "text": "Notice is in writing." }]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -733,7 +983,7 @@
                             },
                             {
                               "type": "paragraph",
-                              "attrs": { "id": "p000000000000001" },
+                              "attrs": { "id": "p000000000000002" },
                               "content": [{ "type": "text", "text": "ne month" }]
                             }
                           ]
@@ -756,6 +1006,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -766,11 +1019,11 @@
             }
           ]
         },
-        "docSha256": "771fd291caf92a7fcf047f01f37ca9caead9b0b8a939451d54bba1b2943baf56"
+        "docSha256": "8cede8022d5e562f88d6cef37a6bda23ba19be0182c9954cbddebacc06f7e12e"
       }
     },
     {
-      "id": "apply-004",
+      "id": "apply-005",
       "doc": "base",
       "steps": [
         {
@@ -815,6 +1068,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -843,6 +1097,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -853,7 +1108,7 @@
           },
           "structure": true
         },
-        { "stepType": "attr", "pos": 167, "attr": "id", "value": "p000000000000002" }
+        { "stepType": "attr", "pos": 167, "attr": "id", "value": "p000000000000003" }
       ],
       "expected": {
         "ok": true,
@@ -919,9 +1174,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -966,7 +1225,183 @@
                             { "type": "paragraph", "attrs": { "id": "pA00000000000002" } },
                             {
                               "type": "paragraph",
-                              "attrs": { "id": "p000000000000002" },
+                              "attrs": { "id": "p000000000000003" },
+                              "content": [{ "type": "text", "text": "Deposit" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000002" },
+                              "content": [{ "type": "text", "text": "One month" }]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pNote00000000001" },
+                  "content": [
+                    { "type": "text", "text": "With a note" },
+                    {
+                      "type": "footnote",
+                      "attrs": { "id": "fnNote0000000001" },
+                      "content": [
+                        {
+                          "type": "paragraph",
+                          "attrs": { "id": "pFootnote0000001" },
+                          "content": [{ "type": "text", "text": "Footnote text." }]
+                        }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
+                      ]
+                    },
+                    { "type": "text", "text": "." }
+                  ]
+                },
+                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
+              ]
+            }
+          ]
+        },
+        "docSha256": "f11cf5049845d916163f7ffbc5c91017ab2d6507fccb87ea38c06b0f3061e0fd"
+      }
+    },
+    {
+      "id": "apply-006",
+      "doc": "base",
+      "steps": [
+        { "stepType": "attr", "pos": 139, "attr": "style", "value": null },
+        {
+          "stepType": "removeNodeMark",
+          "pos": 197,
+          "mark": { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2", "ext": {} } }
+        },
+        { "stepType": "attr", "pos": 217, "attr": "style", "value": null }
+      ],
+      "expected": {
+        "ok": true,
+        "doc": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "defs",
+              "content": [
+                { "type": "settings", "attrs": { "lang": "en-GB" } },
+                {
+                  "type": "style_def",
+                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
+                },
+                {
+                  "type": "style_def",
+                  "attrs": {
+                    "id": "Heading1",
+                    "name": "Heading 1",
+                    "basedOn": "Normal",
+                    "outlineLevel": 1,
+                    "builtIn": true
+                  }
+                },
+                { "type": "page_setup", "attrs": { "id": "ps1" } }
+              ]
+            },
+            {
+              "type": "body",
+              "attrs": { "pageSetup": "ps1" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
+                  "content": [{ "type": "text", "text": "Engine fixtures" }]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pMarks0000000001" },
+                  "content": [
+                    { "type": "text", "text": "Plain " },
+                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
+                    { "type": "text", "text": " and " },
+                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
+                    { "type": "text", "text": " text." }
+                  ]
+                },
+                {
+                  "type": "region",
+                  "attrs": { "id": "rClause000000001", "title": "Clause" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000001" },
+                      "content": [{ "type": "text", "text": "Liability is limited." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000002" },
+                      "content": [{ "type": "text", "text": "Notice is in writing." }]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
+                },
+                {
+                  "type": "table",
+                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
+                  "content": [
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000001" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000001" },
+                              "content": [{ "type": "text", "text": "Rent" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000001" },
+                              "content": [{ "type": "text", "text": "Monthly" }]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000002" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000002" },
                               "content": [{ "type": "text", "text": "Deposit" }]
                             }
                           ]
@@ -1010,23 +1445,221 @@
             }
           ]
         },
-        "docSha256": "a64764e3e84da359689234989571cb79e7b79e39c7177ff4027546421c3f7653"
+        "docSha256": "2bed57be6620ed1a5e2c31a9ebd97f9d197be2833c467200d2a97d34cb4c0382"
       }
     },
     {
-      "id": "apply-005",
+      "id": "apply-007",
       "doc": "base",
       "steps": [
-        { "stepType": "attr", "pos": 139, "attr": "style", "value": null },
         {
-          "stepType": "addNodeMark",
-          "pos": 139,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
+          "stepType": "replace",
+          "from": 20,
+          "to": 20,
+          "slice": { "content": [{ "type": "text", "text": "中" }] }
         },
         {
-          "stepType": "addNodeMark",
-          "pos": 171,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 212,
+          "to": 215
+        },
+        {
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 212,
+          "to": 214
+        }
+      ],
+      "expected": {
+        "ok": true,
+        "doc": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "defs",
+              "content": [
+                { "type": "settings", "attrs": { "lang": "en-GB" } },
+                {
+                  "type": "style_def",
+                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
+                },
+                {
+                  "type": "style_def",
+                  "attrs": {
+                    "id": "Heading1",
+                    "name": "Heading 1",
+                    "basedOn": "Normal",
+                    "outlineLevel": 1,
+                    "builtIn": true
+                  }
+                },
+                { "type": "page_setup", "attrs": { "id": "ps1" } }
+              ]
+            },
+            {
+              "type": "body",
+              "attrs": { "pageSetup": "ps1" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
+                  "content": [{ "type": "text", "text": "Engine fixtu中res" }]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pMarks0000000001" },
+                  "content": [
+                    { "type": "text", "text": "Plain " },
+                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
+                    { "type": "text", "text": " and " },
+                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
+                    { "type": "text", "text": " text." }
+                  ]
+                },
+                {
+                  "type": "region",
+                  "attrs": { "id": "rClause000000001", "title": "Clause" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000001" },
+                      "content": [{ "type": "text", "text": "Liability is limited." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000002" },
+                      "content": [{ "type": "text", "text": "Notice is in writing." }]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
+                },
+                {
+                  "type": "table",
+                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
+                  "content": [
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000001" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000001" },
+                              "content": [{ "type": "text", "text": "Rent" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000001" },
+                              "content": [{ "type": "text", "text": "Monthly" }]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000002" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000002" },
+                              "content": [{ "type": "text", "text": "Deposit" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000002" },
+                              "content": [{ "type": "text", "text": "One month" }]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pNote00000000001" },
+                  "content": [
+                    { "type": "text", "text": "With a note" },
+                    {
+                      "type": "footnote",
+                      "attrs": { "id": "fnNote0000000001" },
+                      "content": [
+                        {
+                          "type": "paragraph",
+                          "attrs": { "id": "pFootnote0000001" },
+                          "content": [
+                            { "type": "text", "text": "Footnote tex" },
+                            {
+                              "type": "text",
+                              "text": "t.",
+                              "marks": [
+                                { "type": "link", "attrs": { "href": "https://example.org/" } }
+                              ]
+                            }
+                          ]
+                        }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
+                      ]
+                    },
+                    { "type": "text", "text": "." }
+                  ]
+                },
+                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
+              ]
+            }
+          ]
+        },
+        "docSha256": "3ff7e52931f52622d057d0d5a79f133aa49ecb6851f80175dc37c2d13da4853f"
+      }
+    },
+    {
+      "id": "apply-008",
+      "doc": "base",
+      "steps": [
+        { "stepType": "replace", "from": 165, "to": 168 },
+        {
+          "stepType": "replace",
+          "from": 148,
+          "to": 148,
+          "slice": { "content": [{ "type": "text", "text": "é" }] }
         }
       ],
       "expected": {
@@ -1093,9 +1726,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -1112,13 +1749,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "Rent" }],
-                              "marks": [
-                                {
-                                  "type": "del",
-                                  "attrs": { "id": "sSuggestion00001", "user": "u1" }
-                                }
-                              ]
+                              "content": [{ "type": "text", "text": "Rent" }]
                             }
                           ]
                         },
@@ -1129,7 +1760,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pB00000000000001" },
-                              "content": [{ "type": "text", "text": "Monthly" }]
+                              "content": [{ "type": "text", "text": "éMonthly" }]
                             }
                           ]
                         }
@@ -1146,7 +1777,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }]
+                              "content": [{ "type": "text", "text": "Depo" }]
                             }
                           ]
                         },
@@ -1157,13 +1788,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pB00000000000002" },
-                              "content": [{ "type": "text", "text": "One month" }],
-                              "marks": [
-                                {
-                                  "type": "del",
-                                  "attrs": { "id": "sSuggestion00001", "user": "u1" }
-                                }
-                              ]
+                              "content": [{ "type": "text", "text": "One month" }]
                             }
                           ]
                         }
@@ -1185,6 +1810,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -1195,26 +1823,27 @@
             }
           ]
         },
-        "docSha256": "1800b3ea9f9069d1652f22d0c543db7fd2a8d77aff8cc4fadc9b45743d30e444"
+        "docSha256": "f4c0e18e6db8e363316e6d6fb7a3fecba72c2d6e20bb6ea822316a347eaafdac"
       }
     },
     {
-      "id": "apply-006",
+      "id": "apply-009",
       "doc": "base",
       "steps": [
+        { "stepType": "replace", "from": 14, "to": 19 },
         {
           "stepType": "replaceAround",
-          "from": 185,
-          "to": 217,
-          "gapFrom": 185,
-          "gapTo": 217,
+          "from": 7,
+          "to": 19,
+          "gapFrom": 7,
+          "gapTo": 19,
           "insert": 1,
           "slice": {
             "content": [
               {
                 "type": "region",
                 "attrs": {
-                  "id": "r000000000000003",
+                  "id": "r000000000000004",
                   "title": null,
                   "policy": "inherit",
                   "preserved": null,
@@ -1224,14 +1853,7 @@
             ]
           },
           "structure": true
-        },
-        {
-          "stepType": "removeMark",
-          "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
-          "from": 40,
-          "to": 46
-        },
-        { "stepType": "attr", "pos": 147, "attr": "style", "value": "Heading1" }
+        }
       ],
       "expected": {
         "ok": true,
@@ -1264,197 +1886,21 @@
               "attrs": { "pageSetup": "ps1" },
               "content": [
                 {
-                  "type": "paragraph",
-                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                  "content": [{ "type": "text", "text": "Engine fixtures" }]
+                  "type": "region",
+                  "attrs": { "id": "r000000000000004" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
+                      "content": [{ "type": "text", "text": "Engineures" }]
+                    }
+                  ]
                 },
                 {
                   "type": "paragraph",
                   "attrs": { "id": "pMarks0000000001" },
                   "content": [
                     { "type": "text", "text": "Plain " },
-                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": " and italic text." }
-                  ]
-                },
-                {
-                  "type": "region",
-                  "attrs": { "id": "rClause000000001", "title": "Clause" },
-                  "content": [
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000001" },
-                      "content": [{ "type": "text", "text": "Liability is limited." }]
-                    },
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000002" },
-                      "content": [{ "type": "text", "text": "Notice is in writing." }]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
-                },
-                {
-                  "type": "table",
-                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
-                  "content": [
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000001" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "Rent" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000001", "style": "Heading1" },
-                              "content": [{ "type": "text", "text": "Monthly" }]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000002" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000002" },
-                              "content": [{ "type": "text", "text": "One month" }]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "region",
-                  "attrs": { "id": "r000000000000003" },
-                  "content": [
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pNote00000000001" },
-                      "content": [
-                        { "type": "text", "text": "With a note" },
-                        {
-                          "type": "footnote",
-                          "attrs": { "id": "fnNote0000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pFootnote0000001" },
-                              "content": [{ "type": "text", "text": "Footnote text." }]
-                            }
-                          ]
-                        },
-                        { "type": "text", "text": "." }
-                      ]
-                    }
-                  ]
-                },
-                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
-              ]
-            }
-          ]
-        },
-        "docSha256": "11d809df0fdd94c46969e3a259966a9bc390a838e4729744fcdc4ab49311f224"
-      }
-    },
-    {
-      "id": "apply-007",
-      "doc": "base",
-      "steps": [
-        {
-          "stepType": "replace",
-          "from": 18,
-          "to": 18,
-          "slice": { "content": [{ "type": "text", "text": "new " }] }
-        },
-        {
-          "stepType": "replace",
-          "from": 196,
-          "to": 202,
-          "slice": {
-            "content": [
-              {
-                "type": "footnote",
-                "attrs": { "id": "fnNote0000000001", "preserved": null, "origin": null, "ext": {} }
-              }
-            ],
-            "openEnd": 1
-          }
-        },
-        { "stepType": "replace", "from": 27, "to": 29, "structure": true }
-      ],
-      "expected": {
-        "ok": true,
-        "doc": {
-          "type": "doc",
-          "content": [
-            {
-              "type": "defs",
-              "content": [
-                { "type": "settings", "attrs": { "lang": "en-GB" } },
-                {
-                  "type": "style_def",
-                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
-                },
-                {
-                  "type": "style_def",
-                  "attrs": {
-                    "id": "Heading1",
-                    "name": "Heading 1",
-                    "basedOn": "Normal",
-                    "outlineLevel": 1,
-                    "builtIn": true
-                  }
-                },
-                { "type": "page_setup", "attrs": { "id": "ps1" } }
-              ]
-            },
-            {
-              "type": "body",
-              "attrs": { "pageSetup": "ps1" },
-              "content": [
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                  "content": [
-                    { "type": "text", "text": "Engine fixnew turesPlain " },
                     { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
                     { "type": "text", "text": " and " },
                     { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
@@ -1479,179 +1925,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
-                },
-                {
-                  "type": "table",
-                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
-                  "content": [
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000001" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "Rent" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000001" },
-                              "content": [{ "type": "text", "text": "Monthly" }]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000002" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000002" },
-                              "content": [{ "type": "text", "text": "One month" }]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pNote00000000001" },
-                  "content": [
-                    { "type": "text", "text": "With a" },
-                    {
-                      "type": "footnote",
-                      "attrs": { "id": "fnNote0000000001" },
-                      "content": [
-                        {
-                          "type": "paragraph",
-                          "attrs": { "id": "pFootnote0000001" },
-                          "content": [{ "type": "text", "text": "Footnote text." }]
-                        }
-                      ]
-                    },
-                    { "type": "text", "text": "." }
-                  ]
-                },
-                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
-              ]
-            }
-          ]
-        },
-        "docSha256": "8738ca08c3ebc1665e9c8138db98530c96d46ce9743745b9ccdc350894651168"
-      }
-    },
-    {
-      "id": "apply-008",
-      "doc": "base",
-      "steps": [
-        { "stepType": "replace", "from": 216, "to": 218, "structure": true },
-        {
-          "stepType": "replace",
-          "from": 70,
-          "to": 70,
-          "slice": { "content": [{ "type": "text", "text": "é" }] }
-        },
-        { "stepType": "replace", "from": 64, "to": 65 }
-      ],
-      "expected": {
-        "ok": true,
-        "doc": {
-          "type": "doc",
-          "content": [
-            {
-              "type": "defs",
-              "content": [
-                { "type": "settings", "attrs": { "lang": "en-GB" } },
-                {
-                  "type": "style_def",
-                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
-                },
-                {
-                  "type": "style_def",
                   "attrs": {
-                    "id": "Heading1",
-                    "name": "Heading 1",
-                    "basedOn": "Normal",
-                    "outlineLevel": 1,
-                    "builtIn": true
-                  }
-                },
-                { "type": "page_setup", "attrs": { "id": "ps1" } }
-              ]
-            },
-            {
-              "type": "body",
-              "attrs": { "pageSetup": "ps1" },
-              "content": [
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                  "content": [{ "type": "text", "text": "Engine fixtures" }]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMarks0000000001" },
-                  "content": [
-                    { "type": "text", "text": "Plain " },
-                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": " and " },
-                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
-                    { "type": "text", "text": " text." }
-                  ]
-                },
-                {
-                  "type": "region",
-                  "attrs": { "id": "rClause000000001", "title": "Clause" },
-                  "content": [
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000001" },
-                      "content": [{ "type": "text", "text": "Liabilityis liémited." }]
-                    },
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000002" },
-                      "content": [{ "type": "text", "text": "Notice is in writing." }]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -1729,32 +2009,48 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
                   ]
-                }
+                },
+                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
               ]
             }
           ]
         },
-        "docSha256": "f7920b6cefc69fc2c600629ac897ba14381cebc5f1cf585f4eeb69a23c1bd0b0"
+        "docSha256": "24394c525668d8e99525890d39d16f2a44c95b0ec724d61960f9c7ef981ac4ae"
       }
     },
     {
-      "id": "apply-009",
+      "id": "apply-010",
       "doc": "base",
       "steps": [
         {
+          "stepType": "removeNodeMark",
+          "pos": 197,
+          "mark": { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2", "ext": {} } }
+        },
+        {
+          "stepType": "removeMark",
+          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
+          "from": 31,
+          "to": 35
+        },
+        { "stepType": "replace", "from": 57, "to": 59 },
+        {
           "stepType": "replace",
-          "from": 82,
-          "to": 82,
+          "from": 140,
+          "to": 140,
           "slice": {
             "content": [
               {
                 "type": "paragraph",
                 "attrs": {
-                  "id": "pClause000000002",
+                  "id": "pA00000000000001",
                   "style": null,
                   "numbering": null,
                   "numberingRestart": null,
@@ -1775,6 +2071,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -1782,7 +2079,7 @@
               {
                 "type": "paragraph",
                 "attrs": {
-                  "id": "pClause000000002",
+                  "id": "pA00000000000001",
                   "style": null,
                   "numbering": null,
                   "numberingRestart": null,
@@ -1803,6 +2100,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -1813,7 +2111,7 @@
           },
           "structure": true
         },
-        { "stepType": "attr", "pos": 83, "attr": "id", "value": "p000000000000004" }
+        { "stepType": "attr", "pos": 137, "attr": "id", "value": "p000000000000005" }
       ],
       "expected": {
         "ok": true,
@@ -1854,9 +2152,7 @@
                   "type": "paragraph",
                   "attrs": { "id": "pMarks0000000001" },
                   "content": [
-                    { "type": "text", "text": "Plain " },
-                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": " and " },
+                    { "type": "text", "text": "Plain bold and " },
                     { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
                     { "type": "text", "text": " text." }
                   ]
@@ -1868,25 +2164,24 @@
                     {
                       "type": "paragraph",
                       "attrs": { "id": "pClause000000001" },
-                      "content": [{ "type": "text", "text": "Liability is limited." }]
+                      "content": [{ "type": "text", "text": "Liility is limited." }]
                     },
                     {
                       "type": "paragraph",
                       "attrs": { "id": "pClause000000002" },
-                      "content": [{ "type": "text", "text": "Noti" }]
-                    },
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "p000000000000004" },
-                      "content": [{ "type": "text", "text": "ce is in writing." }]
+                      "content": [{ "type": "text", "text": "Notice is in writing." }]
                     }
                   ]
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -1902,8 +2197,13 @@
                           "content": [
                             {
                               "type": "paragraph",
+                              "attrs": { "id": "p000000000000005" },
+                              "content": [{ "type": "text", "text": "Re" }]
+                            },
+                            {
+                              "type": "paragraph",
                               "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "Rent" }]
+                              "content": [{ "type": "text", "text": "nt" }]
                             }
                           ]
                         },
@@ -1974,30 +2274,299 @@
             }
           ]
         },
-        "docSha256": "7cc0a75f3c4dcf968d1462a52fb70e510b2a17bf964b94f6e2a92c153017988b"
+        "docSha256": "989b5e0fbfb99ad1ed6ff7baf21850a72ff044e4add81b13e35b088230085a9f"
       }
     },
     {
-      "id": "apply-010",
+      "id": "apply-011",
       "doc": "base",
       "steps": [
         {
-          "stepType": "replace",
-          "from": 155,
-          "to": 155,
-          "slice": { "content": [{ "type": "text", "text": "x" }] }
+          "stepType": "removeMark",
+          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
+          "from": 31,
+          "to": 35
         },
         {
-          "stepType": "replace",
-          "from": 141,
-          "to": 141,
-          "slice": { "content": [{ "type": "text", "text": "中" }] }
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 190,
+          "to": 195
         },
+        { "stepType": "attr", "pos": 171, "attr": "style", "value": "Heading1" },
+        {
+          "stepType": "replace",
+          "from": 103,
+          "to": 103,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pMiddle000000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": [
+                    { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                  ],
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pMiddle000000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": [
+                    { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                  ],
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 104, "attr": "id", "value": "p000000000000006" }
+      ],
+      "expected": {
+        "ok": true,
+        "doc": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "defs",
+              "content": [
+                { "type": "settings", "attrs": { "lang": "en-GB" } },
+                {
+                  "type": "style_def",
+                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
+                },
+                {
+                  "type": "style_def",
+                  "attrs": {
+                    "id": "Heading1",
+                    "name": "Heading 1",
+                    "basedOn": "Normal",
+                    "outlineLevel": 1,
+                    "builtIn": true
+                  }
+                },
+                { "type": "page_setup", "attrs": { "id": "ps1" } }
+              ]
+            },
+            {
+              "type": "body",
+              "attrs": { "pageSetup": "ps1" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
+                  "content": [{ "type": "text", "text": "Engine fixtures" }]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pMarks0000000001" },
+                  "content": [
+                    { "type": "text", "text": "Plain bold and " },
+                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
+                    { "type": "text", "text": " text." }
+                  ]
+                },
+                {
+                  "type": "region",
+                  "attrs": { "id": "rClause000000001", "title": "Clause" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000001" },
+                      "content": [{ "type": "text", "text": "Liability is limited." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000002" },
+                      "content": [{ "type": "text", "text": "Notice is in writing." }]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "B" }]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "id": "p000000000000006",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "etween the region and the table." }]
+                },
+                {
+                  "type": "table",
+                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
+                  "content": [
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000001" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000001" },
+                              "content": [{ "type": "text", "text": "Rent" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000001" },
+                              "content": [{ "type": "text", "text": "Monthly" }]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000002" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000002" },
+                              "content": [{ "type": "text", "text": "Deposit" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000002", "style": "Heading1" },
+                              "content": [{ "type": "text", "text": "One month" }]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pNote00000000001" },
+                  "content": [
+                    { "type": "text", "text": "With" },
+                    {
+                      "type": "text",
+                      "text": " a no",
+                      "marks": [{ "type": "link", "attrs": { "href": "https://example.org/" } }]
+                    },
+                    { "type": "text", "text": "te" },
+                    {
+                      "type": "footnote",
+                      "attrs": { "id": "fnNote0000000001" },
+                      "content": [
+                        {
+                          "type": "paragraph",
+                          "attrs": { "id": "pFootnote0000001" },
+                          "content": [{ "type": "text", "text": "Footnote text." }]
+                        }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
+                      ]
+                    },
+                    { "type": "text", "text": "." }
+                  ]
+                },
+                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
+              ]
+            }
+          ]
+        },
+        "docSha256": "12fca3943d09675141c4bd8cbb31d4c164f408cc8cad1694c93b63628f094070"
+      }
+    },
+    {
+      "id": "apply-012",
+      "doc": "base",
+      "steps": [
+        { "stepType": "attr", "pos": 7, "attr": "style", "value": "Heading1" },
         {
           "stepType": "replace",
           "from": 166,
           "to": 166,
           "slice": { "content": [{ "type": "text", "text": "new " }] }
+        },
+        {
+          "stepType": "attr",
+          "pos": 139,
+          "attr": "suggest",
+          "value": [{ "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1" } }]
         }
       ],
       "expected": {
@@ -2064,173 +2633,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
-                },
-                {
-                  "type": "table",
-                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
-                  "content": [
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000001" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "R中ent" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000001" },
-                              "content": [{ "type": "text", "text": "Monthlyx" }]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000002" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Depnew osit" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000002" },
-                              "content": [{ "type": "text", "text": "One month" }]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pNote00000000001" },
-                  "content": [
-                    { "type": "text", "text": "With a note" },
-                    {
-                      "type": "footnote",
-                      "attrs": { "id": "fnNote0000000001" },
-                      "content": [
-                        {
-                          "type": "paragraph",
-                          "attrs": { "id": "pFootnote0000001" },
-                          "content": [{ "type": "text", "text": "Footnote text." }]
-                        }
-                      ]
-                    },
-                    { "type": "text", "text": "." }
-                  ]
-                },
-                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
-              ]
-            }
-          ]
-        },
-        "docSha256": "5b7a345145b09fcff77c434bb4d3e4c95ac3badd50c49a76f95145f1aac42edc"
-      }
-    },
-    {
-      "id": "apply-011",
-      "doc": "base",
-      "steps": [
-        { "stepType": "attr", "pos": 147, "attr": "style", "value": null },
-        { "stepType": "replace", "from": 40, "to": 45 }
-      ],
-      "expected": {
-        "ok": true,
-        "doc": {
-          "type": "doc",
-          "content": [
-            {
-              "type": "defs",
-              "content": [
-                { "type": "settings", "attrs": { "lang": "en-GB" } },
-                {
-                  "type": "style_def",
-                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
-                },
-                {
-                  "type": "style_def",
                   "attrs": {
-                    "id": "Heading1",
-                    "name": "Heading 1",
-                    "basedOn": "Normal",
-                    "outlineLevel": 1,
-                    "builtIn": true
-                  }
-                },
-                { "type": "page_setup", "attrs": { "id": "ps1" } }
-              ]
-            },
-            {
-              "type": "body",
-              "attrs": { "pageSetup": "ps1" },
-              "content": [
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                  "content": [{ "type": "text", "text": "Engine fixtures" }]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMarks0000000001" },
-                  "content": [
-                    { "type": "text", "text": "Plain " },
-                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": " and " },
-                    { "type": "text", "text": "c", "marks": [{ "type": "italic" }] },
-                    { "type": "text", "text": " text." }
-                  ]
-                },
-                {
-                  "type": "region",
-                  "attrs": { "id": "rClause000000001", "title": "Clause" },
-                  "content": [
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000001" },
-                      "content": [{ "type": "text", "text": "Liability is limited." }]
-                    },
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000002" },
-                      "content": [{ "type": "text", "text": "Notice is in writing." }]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -2246,189 +2655,16 @@
                           "content": [
                             {
                               "type": "paragraph",
-                              "attrs": { "id": "pA00000000000001" },
+                              "attrs": {
+                                "id": "pA00000000000001",
+                                "suggest": [
+                                  {
+                                    "type": "del",
+                                    "attrs": { "id": "sSuggestion00001", "user": "u1" }
+                                  }
+                                ]
+                              },
                               "content": [{ "type": "text", "text": "Rent" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000001" },
-                              "content": [{ "type": "text", "text": "Monthly" }]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000002" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000002" },
-                              "content": [{ "type": "text", "text": "One month" }]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pNote00000000001" },
-                  "content": [
-                    { "type": "text", "text": "With a note" },
-                    {
-                      "type": "footnote",
-                      "attrs": { "id": "fnNote0000000001" },
-                      "content": [
-                        {
-                          "type": "paragraph",
-                          "attrs": { "id": "pFootnote0000001" },
-                          "content": [{ "type": "text", "text": "Footnote text." }]
-                        }
-                      ]
-                    },
-                    { "type": "text", "text": "." }
-                  ]
-                },
-                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
-              ]
-            }
-          ]
-        },
-        "docSha256": "a40e1b7d723e33f3531862f8aa73ad57b9afaff2483fdcfb798f55a6354d3312"
-      }
-    },
-    {
-      "id": "apply-012",
-      "doc": "base",
-      "steps": [
-        {
-          "stepType": "replace",
-          "from": 166,
-          "to": 166,
-          "slice": { "content": [{ "type": "text", "text": "new " }] }
-        },
-        {
-          "stepType": "addNodeMark",
-          "pos": 139,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
-        },
-        { "stepType": "replace", "from": 130, "to": 131 },
-        { "stepType": "attr", "pos": 146, "attr": "style", "value": null }
-      ],
-      "expected": {
-        "ok": true,
-        "doc": {
-          "type": "doc",
-          "content": [
-            {
-              "type": "defs",
-              "content": [
-                { "type": "settings", "attrs": { "lang": "en-GB" } },
-                {
-                  "type": "style_def",
-                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
-                },
-                {
-                  "type": "style_def",
-                  "attrs": {
-                    "id": "Heading1",
-                    "name": "Heading 1",
-                    "basedOn": "Normal",
-                    "outlineLevel": 1,
-                    "builtIn": true
-                  }
-                },
-                { "type": "page_setup", "attrs": { "id": "ps1" } }
-              ]
-            },
-            {
-              "type": "body",
-              "attrs": { "pageSetup": "ps1" },
-              "content": [
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                  "content": [{ "type": "text", "text": "Engine fixtures" }]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMarks0000000001" },
-                  "content": [
-                    { "type": "text", "text": "Plain " },
-                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": " and " },
-                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
-                    { "type": "text", "text": " text." }
-                  ]
-                },
-                {
-                  "type": "region",
-                  "attrs": { "id": "rClause000000001", "title": "Clause" },
-                  "content": [
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000001" },
-                      "content": [{ "type": "text", "text": "Liability is limited." }]
-                    },
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000002" },
-                      "content": [{ "type": "text", "text": "Notice is in writing." }]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the tble." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
-                },
-                {
-                  "type": "table",
-                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
-                  "content": [
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000001" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "Rent" }],
-                              "marks": [
-                                {
-                                  "type": "del",
-                                  "attrs": { "id": "sSuggestion00001", "user": "u1" }
-                                }
-                              ]
                             }
                           ]
                         },
@@ -2489,6 +2725,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -2499,7 +2738,7 @@
             }
           ]
         },
-        "docSha256": "2746e8a64ab0d8e91f4bf703fb8d691a7639084b110fd02caf88af31fb084d0f"
+        "docSha256": "fd72b44895a5d7256ecbadfe1693e9cf3d4234160f54dd72111365ecba6db784"
       }
     },
     {
@@ -2507,10 +2746,87 @@
       "doc": "base",
       "steps": [
         {
+          "stepType": "replace",
+          "from": 11,
+          "to": 11,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pTitle0000000001",
+                  "style": "Heading1",
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pTitle0000000001",
+                  "style": "Heading1",
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 12, "attr": "id", "value": "p000000000000007" },
+        {
           "stepType": "removeMark",
           "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
-          "from": 40,
-          "to": 46
+          "from": 42,
+          "to": 48
+        },
+        {
+          "stepType": "replace",
+          "from": 169,
+          "to": 169,
+          "slice": { "content": [{ "type": "text", "text": "é" }] }
         }
       ],
       "expected": {
@@ -2546,7 +2862,12 @@
                 {
                   "type": "paragraph",
                   "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                  "content": [{ "type": "text", "text": "Engine fixtures" }]
+                  "content": [{ "type": "text", "text": "Eng" }]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "p000000000000007", "style": "Heading1" },
+                  "content": [{ "type": "text", "text": "ine fixtures" }]
                 },
                 {
                   "type": "paragraph",
@@ -2575,9 +2896,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -2622,7 +2947,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }]
+                              "content": [{ "type": "text", "text": "Deposiét" }]
                             }
                           ]
                         },
@@ -2655,6 +2980,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -2665,7 +2993,7 @@
             }
           ]
         },
-        "docSha256": "27d0ae10c89d6785d5665ad76cdab1ae5ccf3064ec37fae3754fe460aab668fb"
+        "docSha256": "06934d2b369207af39bf4e897516414452ebf0ae260c94f97f70a3a65f35fa19"
       }
     },
     {
@@ -2673,17 +3001,31 @@
       "doc": "base",
       "steps": [
         {
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 143,
+          "to": 144
+        },
+        {
+          "stepType": "replace",
+          "from": 93,
+          "to": 93,
+          "slice": { "content": [{ "type": "text", "text": "é" }] }
+        },
+        {
           "stepType": "removeMark",
           "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
           "from": 31,
           "to": 35
         },
-        { "stepType": "attr", "pos": 24, "attr": "style", "value": "Heading1" },
         {
-          "stepType": "addMark",
-          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
-          "from": 115,
-          "to": 118
+          "stepType": "replace",
+          "from": 195,
+          "to": 195,
+          "slice": { "content": [{ "type": "text", "text": "x" }] }
         }
       ],
       "expected": {
@@ -2723,7 +3065,189 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMarks0000000001", "style": "Heading1" },
+                  "attrs": { "id": "pMarks0000000001" },
+                  "content": [
+                    { "type": "text", "text": "Plain bold and " },
+                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
+                    { "type": "text", "text": " text." }
+                  ]
+                },
+                {
+                  "type": "region",
+                  "attrs": { "id": "rClause000000001", "title": "Clause" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000001" },
+                      "content": [{ "type": "text", "text": "Liability is limited." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000002" },
+                      "content": [{ "type": "text", "text": "Notice is in wréiting." }]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
+                },
+                {
+                  "type": "table",
+                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
+                  "content": [
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000001" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000001" },
+                              "content": [
+                                { "type": "text", "text": "Ren" },
+                                {
+                                  "type": "text",
+                                  "text": "t",
+                                  "marks": [
+                                    { "type": "link", "attrs": { "href": "https://example.org/" } }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000001" },
+                              "content": [{ "type": "text", "text": "Monthly" }]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000002" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000002" },
+                              "content": [{ "type": "text", "text": "Deposit" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000002" },
+                              "content": [{ "type": "text", "text": "One month" }]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pNote00000000001" },
+                  "content": [
+                    { "type": "text", "text": "With a nxote" },
+                    {
+                      "type": "footnote",
+                      "attrs": { "id": "fnNote0000000001" },
+                      "content": [
+                        {
+                          "type": "paragraph",
+                          "attrs": { "id": "pFootnote0000001" },
+                          "content": [{ "type": "text", "text": "Footnote text." }]
+                        }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
+                      ]
+                    },
+                    { "type": "text", "text": "." }
+                  ]
+                },
+                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
+              ]
+            }
+          ]
+        },
+        "docSha256": "eac285d740368586c94df9d00b607da3508ff6fa62c0579e65d0a5435a42769a"
+      }
+    },
+    {
+      "id": "apply-015",
+      "doc": "base",
+      "steps": [
+        {
+          "stepType": "removeMark",
+          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
+          "from": 31,
+          "to": 35
+        }
+      ],
+      "expected": {
+        "ok": true,
+        "doc": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "defs",
+              "content": [
+                { "type": "settings", "attrs": { "lang": "en-GB" } },
+                {
+                  "type": "style_def",
+                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
+                },
+                {
+                  "type": "style_def",
+                  "attrs": {
+                    "id": "Heading1",
+                    "name": "Heading 1",
+                    "basedOn": "Normal",
+                    "outlineLevel": 1,
+                    "builtIn": true
+                  }
+                },
+                { "type": "page_setup", "attrs": { "id": "ps1" } }
+              ]
+            },
+            {
+              "type": "body",
+              "attrs": { "pageSetup": "ps1" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
+                  "content": [{ "type": "text", "text": "Engine fixtures" }]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pMarks0000000001" },
                   "content": [
                     { "type": "text", "text": "Plain bold and " },
                     { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
@@ -2748,13 +3272,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [
-                    { "type": "text", "text": "Between the r" },
-                    { "type": "text", "text": "egi", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": "on and the table." }
-                  ],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -2832,6 +3356,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -2842,23 +3369,29 @@
             }
           ]
         },
-        "docSha256": "6abb85c8fe4b7ef7aca1a1de1f3891287ef7006f8cbe55bdfc0503c551f73fe9"
+        "docSha256": "32481f51c443b3aedd4936d8f18c11700a5d9a4e873bae3508f6bd93bef2cf14"
       }
     },
     {
-      "id": "apply-015",
+      "id": "apply-016",
       "doc": "base",
       "steps": [
         {
+          "stepType": "removeMark",
+          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
+          "from": 31,
+          "to": 35
+        },
+        {
           "stepType": "replace",
-          "from": 148,
-          "to": 148,
+          "from": 41,
+          "to": 41,
           "slice": {
             "content": [
               {
                 "type": "paragraph",
                 "attrs": {
-                  "id": "pB00000000000001",
+                  "id": "pMarks0000000001",
                   "style": null,
                   "numbering": null,
                   "numberingRestart": null,
@@ -2879,6 +3412,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -2886,7 +3420,7 @@
               {
                 "type": "paragraph",
                 "attrs": {
-                  "id": "pB00000000000001",
+                  "id": "pMarks0000000001",
                   "style": null,
                   "numbering": null,
                   "numberingRestart": null,
@@ -2907,6 +3441,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -2917,182 +3452,7 @@
           },
           "structure": true
         },
-        { "stepType": "attr", "pos": 149, "attr": "id", "value": "p000000000000005" }
-      ],
-      "expected": {
-        "ok": true,
-        "doc": {
-          "type": "doc",
-          "content": [
-            {
-              "type": "defs",
-              "content": [
-                { "type": "settings", "attrs": { "lang": "en-GB" } },
-                {
-                  "type": "style_def",
-                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
-                },
-                {
-                  "type": "style_def",
-                  "attrs": {
-                    "id": "Heading1",
-                    "name": "Heading 1",
-                    "basedOn": "Normal",
-                    "outlineLevel": 1,
-                    "builtIn": true
-                  }
-                },
-                { "type": "page_setup", "attrs": { "id": "ps1" } }
-              ]
-            },
-            {
-              "type": "body",
-              "attrs": { "pageSetup": "ps1" },
-              "content": [
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                  "content": [{ "type": "text", "text": "Engine fixtures" }]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMarks0000000001" },
-                  "content": [
-                    { "type": "text", "text": "Plain " },
-                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": " and " },
-                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
-                    { "type": "text", "text": " text." }
-                  ]
-                },
-                {
-                  "type": "region",
-                  "attrs": { "id": "rClause000000001", "title": "Clause" },
-                  "content": [
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000001" },
-                      "content": [{ "type": "text", "text": "Liability is limited." }]
-                    },
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000002" },
-                      "content": [{ "type": "text", "text": "Notice is in writing." }]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
-                },
-                {
-                  "type": "table",
-                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
-                  "content": [
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000001" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "Rent" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000001" },
-                          "content": [
-                            { "type": "paragraph", "attrs": { "id": "pB00000000000001" } },
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "p000000000000005" },
-                              "content": [{ "type": "text", "text": "Monthly" }]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000002" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000002" },
-                              "content": [{ "type": "text", "text": "One month" }]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pNote00000000001" },
-                  "content": [
-                    { "type": "text", "text": "With a note" },
-                    {
-                      "type": "footnote",
-                      "attrs": { "id": "fnNote0000000001" },
-                      "content": [
-                        {
-                          "type": "paragraph",
-                          "attrs": { "id": "pFootnote0000001" },
-                          "content": [{ "type": "text", "text": "Footnote text." }]
-                        }
-                      ]
-                    },
-                    { "type": "text", "text": "." }
-                  ]
-                },
-                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
-              ]
-            }
-          ]
-        },
-        "docSha256": "80f472e8421d4ab1b8f81b9148906d17f2131bc4c1db755e542015e414c1b1e5"
-      }
-    },
-    {
-      "id": "apply-016",
-      "doc": "base",
-      "steps": [
-        {
-          "stepType": "replace",
-          "from": 42,
-          "to": 42,
-          "slice": { "content": [{ "type": "text", "text": "中" }] }
-        },
-        {
-          "stepType": "removeMark",
-          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
-          "from": 31,
-          "to": 35
-        }
+        { "stepType": "attr", "pos": 42, "attr": "id", "value": "p000000000000008" }
       ],
       "expected": {
         "ok": true,
@@ -3134,9 +3494,14 @@
                   "attrs": { "id": "pMarks0000000001" },
                   "content": [
                     { "type": "text", "text": "Plain bold and " },
-                    { "type": "text", "text": "it", "marks": [{ "type": "italic" }] },
-                    { "type": "text", "text": "中" },
-                    { "type": "text", "text": "alic", "marks": [{ "type": "italic" }] },
+                    { "type": "text", "text": "i", "marks": [{ "type": "italic" }] }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "p000000000000008" },
+                  "content": [
+                    { "type": "text", "text": "talic", "marks": [{ "type": "italic" }] },
                     { "type": "text", "text": " text." }
                   ]
                 },
@@ -3158,9 +3523,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -3238,6 +3607,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -3248,7 +3620,7 @@
             }
           ]
         },
-        "docSha256": "f40f05ea73242e1939a5c25593277eeabf0e17dece49d240d27a781534a1bd73"
+        "docSha256": "13962da2224ef8f9df193ead7d68e6d092f340e6e5bcf86d0ef95465d65b0b09"
       }
     },
     {
@@ -3260,7 +3632,84 @@
           "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
           "from": 80,
           "to": 81
-        }
+        },
+        {
+          "stepType": "replace",
+          "from": 168,
+          "to": 168,
+          "slice": { "content": [{ "type": "text", "text": "x" }] }
+        },
+        {
+          "stepType": "replace",
+          "from": 140,
+          "to": 140,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pA00000000000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pA00000000000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 141, "attr": "id", "value": "p000000000000009" }
       ],
       "expected": {
         "ok": true,
@@ -3330,9 +3779,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -3346,9 +3799,10 @@
                           "type": "table_cell",
                           "attrs": { "id": "cA00000000000001" },
                           "content": [
+                            { "type": "paragraph", "attrs": { "id": "pA00000000000001" } },
                             {
                               "type": "paragraph",
-                              "attrs": { "id": "pA00000000000001" },
+                              "attrs": { "id": "p000000000000009" },
                               "content": [{ "type": "text", "text": "Rent" }]
                             }
                           ]
@@ -3377,7 +3831,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }]
+                              "content": [{ "type": "text", "text": "Depositx" }]
                             }
                           ]
                         },
@@ -3410,6 +3864,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -3420,7 +3877,7 @@
             }
           ]
         },
-        "docSha256": "3e53034c70d555d2acf73f6311b0969fc46d5e6d43438bf0fddfa4010341c8ae"
+        "docSha256": "21b234f109ba7c5b3980eaaa1212dba7084fbf9adc4d230f9697d1dc18072233"
       }
     },
     {
@@ -3429,226 +3886,93 @@
       "steps": [
         {
           "stepType": "replace",
-          "from": 218,
-          "to": 218,
+          "from": 150,
+          "to": 150,
           "slice": { "content": [{ "type": "text", "text": "new " }] }
-        },
-        {
-          "stepType": "replaceAround",
-          "from": 7,
-          "to": 24,
-          "gapFrom": 7,
-          "gapTo": 24,
-          "insert": 1,
-          "slice": {
-            "content": [
-              {
-                "type": "region",
-                "attrs": {
-                  "id": "r000000000000006",
-                  "title": null,
-                  "policy": "inherit",
-                  "preserved": null,
-                  "ext": {}
-                }
-              }
-            ]
-          },
-          "structure": true
         },
         {
           "stepType": "replace",
-          "from": 152,
-          "to": 152,
-          "slice": { "content": [{ "type": "text", "text": "new " }] }
-        }
-      ],
-      "expected": {
-        "ok": true,
-        "doc": {
-          "type": "doc",
-          "content": [
-            {
-              "type": "defs",
-              "content": [
-                { "type": "settings", "attrs": { "lang": "en-GB" } },
-                {
-                  "type": "style_def",
-                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
-                },
-                {
-                  "type": "style_def",
-                  "attrs": {
-                    "id": "Heading1",
-                    "name": "Heading 1",
-                    "basedOn": "Normal",
-                    "outlineLevel": 1,
-                    "builtIn": true
-                  }
-                },
-                { "type": "page_setup", "attrs": { "id": "ps1" } }
-              ]
-            },
-            {
-              "type": "body",
-              "attrs": { "pageSetup": "ps1" },
-              "content": [
-                {
-                  "type": "region",
-                  "attrs": { "id": "r000000000000006" },
-                  "content": [
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                      "content": [{ "type": "text", "text": "Engine fixtures" }]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMarks0000000001" },
-                  "content": [
-                    { "type": "text", "text": "Plain " },
-                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": " and " },
-                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
-                    { "type": "text", "text": " text." }
-                  ]
-                },
-                {
-                  "type": "region",
-                  "attrs": { "id": "rClause000000001", "title": "Clause" },
-                  "content": [
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000001" },
-                      "content": [{ "type": "text", "text": "Liability is limited." }]
-                    },
-                    {
-                      "type": "paragraph",
-                      "attrs": { "id": "pClause000000002" },
-                      "content": [{ "type": "text", "text": "Notice is in writing." }]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
-                },
-                {
-                  "type": "table",
-                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
-                  "content": [
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000001" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "Rent" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000001" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000001" },
-                              "content": [{ "type": "text", "text": "Monew nthly" }]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "table_row",
-                      "attrs": { "id": "trRow00000000002" },
-                      "content": [
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cA00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "Deposit" }]
-                            }
-                          ]
-                        },
-                        {
-                          "type": "table_cell",
-                          "attrs": { "id": "cB00000000000002" },
-                          "content": [
-                            {
-                              "type": "paragraph",
-                              "attrs": { "id": "pB00000000000002" },
-                              "content": [{ "type": "text", "text": "One month" }]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pNote00000000001" },
-                  "content": [
-                    { "type": "text", "text": "With a note" },
-                    {
-                      "type": "footnote",
-                      "attrs": { "id": "fnNote0000000001" },
-                      "content": [
-                        {
-                          "type": "paragraph",
-                          "attrs": { "id": "pFootnote0000001" },
-                          "content": [{ "type": "text", "text": "Footnote text." }]
-                        }
-                      ]
-                    },
-                    { "type": "text", "text": "." }
-                  ]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pEnd000000000001" },
-                  "content": [{ "type": "text", "text": "new " }]
-                }
-              ]
-            }
-          ]
-        },
-        "docSha256": "3e48bf27e72cfee92e4b07a70d525d0ab85b6760717eaac5354037a2646ed454"
-      }
-    },
-    {
-      "id": "apply-019",
-      "doc": "base",
-      "steps": [
-        {
-          "stepType": "addMark",
-          "mark": {
-            "type": "link",
-            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
-          },
-          "from": 79,
-          "to": 80
+          "from": 141,
+          "to": 141,
+          "slice": { "content": [{ "type": "text", "text": "中" }] }
         },
         {
           "stepType": "addMark",
           "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
           "from": 12,
           "to": 18
-        }
+        },
+        {
+          "stepType": "replace",
+          "from": 211,
+          "to": 211,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pFootnote0000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pFootnote0000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 212, "attr": "id", "value": "p000000000000010" }
       ],
       "expected": {
         "ok": true,
@@ -3712,23 +4036,19 @@
                     {
                       "type": "paragraph",
                       "attrs": { "id": "pClause000000002" },
-                      "content": [
-                        { "type": "text", "text": "N" },
-                        {
-                          "type": "text",
-                          "text": "o",
-                          "marks": [{ "type": "link", "attrs": { "href": "https://example.org/" } }]
-                        },
-                        { "type": "text", "text": "tice is in writing." }
-                      ]
+                      "content": [{ "type": "text", "text": "Notice is in writing." }]
                     }
                   ]
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -3745,7 +4065,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "Rent" }]
+                              "content": [{ "type": "text", "text": "R中ent" }]
                             }
                           ]
                         },
@@ -3756,7 +4076,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pB00000000000001" },
-                              "content": [{ "type": "text", "text": "Monthly" }]
+                              "content": [{ "type": "text", "text": "Monew nthly" }]
                             }
                           ]
                         }
@@ -3804,8 +4124,16 @@
                         {
                           "type": "paragraph",
                           "attrs": { "id": "pFootnote0000001" },
-                          "content": [{ "type": "text", "text": "Footnote text." }]
+                          "content": [{ "type": "text", "text": "Footnot" }]
+                        },
+                        {
+                          "type": "paragraph",
+                          "attrs": { "id": "p000000000000010" },
+                          "content": [{ "type": "text", "text": "e text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -3816,54 +4144,18 @@
             }
           ]
         },
-        "docSha256": "acbe9a1a4f41ac0aea2fc39992e8a2cd4309d7baf684287f7587f00ed5099be3"
+        "docSha256": "7279c4b59cab60020428cd85068e84afc198eb33177aa4f1bd48a5bf79f7abac"
       }
     },
     {
-      "id": "apply-020",
+      "id": "apply-019",
       "doc": "base",
       "steps": [
         {
           "stepType": "replace",
-          "from": 155,
-          "to": 155,
-          "slice": { "content": [{ "type": "text", "text": "é" }] }
-        },
-        {
-          "stepType": "replace",
-          "from": 155,
-          "to": 155,
-          "slice": { "content": [{ "type": "text", "text": "x" }] }
-        },
-        {
-          "stepType": "replaceAround",
-          "from": 77,
-          "to": 101,
-          "gapFrom": 77,
-          "gapTo": 100,
-          "insert": 1,
-          "slice": {
-            "content": [
-              {
-                "type": "region",
-                "attrs": {
-                  "id": "rClause000000001",
-                  "title": "Clause",
-                  "policy": "inherit",
-                  "preserved": null,
-                  "ext": {}
-                }
-              }
-            ],
-            "openStart": 1
-          },
-          "structure": true
-        },
-        {
-          "stepType": "addMark",
-          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
-          "from": 151,
-          "to": 157
+          "from": 152,
+          "to": 152,
+          "slice": { "content": [{ "type": "text", "text": "中" }] }
         }
       ],
       "expected": {
@@ -3920,19 +4212,23 @@
                       "type": "paragraph",
                       "attrs": { "id": "pClause000000001" },
                       "content": [{ "type": "text", "text": "Liability is limited." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000002" },
+                      "content": [{ "type": "text", "text": "Notice is in writing." }]
                     }
                   ]
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pClause000000002" },
-                  "content": [{ "type": "text", "text": "Notice is in writing." }]
-                },
-                {
-                  "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -3960,10 +4256,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pB00000000000001" },
-                              "content": [
-                                { "type": "text", "text": "Mon" },
-                                { "type": "text", "text": "thlyxé", "marks": [{ "type": "bold" }] }
-                              ]
+                              "content": [{ "type": "text", "text": "Mont中hly" }]
                             }
                           ]
                         }
@@ -4013,6 +4306,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -4023,13 +4319,20 @@
             }
           ]
         },
-        "docSha256": "3a2d5c68d636ea64a033cc406e622a71ec99e3b8f9e22471cfeb991919043d2f"
+        "docSha256": "23246d9f4a41b55ba602adce19c25ebe6fe1eb0ef430495a5208e23e685cfcd1"
       }
     },
     {
-      "id": "apply-021",
+      "id": "apply-020",
       "doc": "base",
       "steps": [
+        {
+          "stepType": "replace",
+          "from": 216,
+          "to": 216,
+          "slice": { "content": [{ "type": "text", "text": "new " }] }
+        },
+        { "stepType": "attr", "pos": 24, "attr": "style", "value": "Heading1" },
         {
           "stepType": "addMark",
           "mark": {
@@ -4038,15 +4341,7 @@
           },
           "from": 19,
           "to": 22
-        },
-        { "stepType": "attr", "pos": 217, "attr": "style", "value": null },
-        {
-          "stepType": "replace",
-          "from": 140,
-          "to": 140,
-          "slice": { "content": [{ "type": "text", "text": "new " }] }
-        },
-        { "stepType": "attr", "pos": 175, "attr": "style", "value": "Heading1" }
+        }
       ],
       "expected": {
         "ok": true,
@@ -4093,7 +4388,7 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMarks0000000001" },
+                  "attrs": { "id": "pMarks0000000001", "style": "Heading1" },
                   "content": [
                     { "type": "text", "text": "Plain " },
                     { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
@@ -4120,9 +4415,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -4139,7 +4438,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "new Rent" }]
+                              "content": [{ "type": "text", "text": "Rent" }]
                             }
                           ]
                         },
@@ -4177,7 +4476,7 @@
                           "content": [
                             {
                               "type": "paragraph",
-                              "attrs": { "id": "pB00000000000002", "style": "Heading1" },
+                              "attrs": { "id": "pB00000000000002" },
                               "content": [{ "type": "text", "text": "One month" }]
                             }
                           ]
@@ -4200,9 +4499,12 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
-                    { "type": "text", "text": "." }
+                    { "type": "text", "text": ".new " }
                   ]
                 },
                 { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
@@ -4210,23 +4512,30 @@
             }
           ]
         },
-        "docSha256": "4fd29e4a96f3a1032c66fddad15bd21ab88bc0ca24c9bed73598003bee8939ea"
+        "docSha256": "e00ca01f9c6cf5ca9c1c4c3c434a058056034b8da808b17722079d64ec9b0d21"
       }
     },
     {
-      "id": "apply-022",
+      "id": "apply-021",
       "doc": "base",
       "steps": [
-        { "stepType": "replace", "from": 140, "to": 143 },
         {
-          "stepType": "removeNodeMark",
-          "pos": 101,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2", "ext": {} } }
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 204,
+          "to": 210
         },
         {
-          "stepType": "addNodeMark",
-          "pos": 54,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 204,
+          "to": 210
         }
       ],
       "expected": {
@@ -4282,10 +4591,7 @@
                     {
                       "type": "paragraph",
                       "attrs": { "id": "pClause000000001" },
-                      "content": [{ "type": "text", "text": "Liability is limited." }],
-                      "marks": [
-                        { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1" } }
-                      ]
+                      "content": [{ "type": "text", "text": "Liability is limited." }]
                     },
                     {
                       "type": "paragraph",
@@ -4296,7 +4602,12 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
                   "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
@@ -4314,7 +4625,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000001" },
-                              "content": [{ "type": "text", "text": "t" }]
+                              "content": [{ "type": "text", "text": "Rent" }]
                             }
                           ]
                         },
@@ -4373,8 +4684,21 @@
                         {
                           "type": "paragraph",
                           "attrs": { "id": "pFootnote0000001" },
-                          "content": [{ "type": "text", "text": "Footnote text." }]
+                          "content": [
+                            { "type": "text", "text": "Footn" },
+                            {
+                              "type": "text",
+                              "text": "ote te",
+                              "marks": [
+                                { "type": "link", "attrs": { "href": "https://example.org/" } }
+                              ]
+                            },
+                            { "type": "text", "text": "xt." }
+                          ]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -4385,31 +4709,32 @@
             }
           ]
         },
-        "docSha256": "f1beebdd641040ca15a1c2d7dfc426c26f8ce132d2af0f0867dede1bed82020d"
+        "docSha256": "e82256ebb8c8c9999e43bcadf4aa98daa348d7dca8af02d0490d003d68057812"
       }
     },
     {
-      "id": "apply-023",
+      "id": "apply-022",
       "doc": "base",
       "steps": [
-        { "stepType": "attr", "pos": 185, "attr": "style", "value": null },
         {
-          "stepType": "replace",
-          "from": 161,
-          "to": 161,
-          "slice": { "content": [{ "type": "text", "text": "中" }] }
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 17,
+          "to": 21
         },
-        { "stepType": "attr", "pos": 139, "attr": "style", "value": null },
         {
           "stepType": "replace",
-          "from": 155,
-          "to": 155,
+          "from": 165,
+          "to": 165,
           "slice": {
             "content": [
               {
                 "type": "paragraph",
                 "attrs": {
-                  "id": "pB00000000000001",
+                  "id": "pA00000000000002",
                   "style": null,
                   "numbering": null,
                   "numberingRestart": null,
@@ -4430,6 +4755,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -4437,7 +4763,7 @@
               {
                 "type": "paragraph",
                 "attrs": {
-                  "id": "pB00000000000001",
+                  "id": "pA00000000000002",
                   "style": null,
                   "numbering": null,
                   "numberingRestart": null,
@@ -4458,6 +4784,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -4468,7 +4795,7 @@
           },
           "structure": true
         },
-        { "stepType": "attr", "pos": 156, "attr": "id", "value": "p000000000000007" }
+        { "stepType": "attr", "pos": 166, "attr": "id", "value": "p000000000000011" }
       ],
       "expected": {
         "ok": true,
@@ -4503,7 +4830,15 @@
                 {
                   "type": "paragraph",
                   "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
-                  "content": [{ "type": "text", "text": "Engine fixtures" }]
+                  "content": [
+                    { "type": "text", "text": "Engine fi" },
+                    {
+                      "type": "text",
+                      "text": "xtur",
+                      "marks": [{ "type": "link", "attrs": { "href": "https://example.org/" } }]
+                    },
+                    { "type": "text", "text": "es" }
+                  ]
                 },
                 {
                   "type": "paragraph",
@@ -4534,9 +4869,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -4565,8 +4904,7 @@
                               "type": "paragraph",
                               "attrs": { "id": "pB00000000000001" },
                               "content": [{ "type": "text", "text": "Monthly" }]
-                            },
-                            { "type": "paragraph", "attrs": { "id": "p000000000000007" } }
+                            }
                           ]
                         }
                       ]
@@ -4582,7 +4920,12 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pA00000000000002" },
-                              "content": [{ "type": "text", "text": "中Deposit" }]
+                              "content": [{ "type": "text", "text": "Depo" }]
+                            },
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "p000000000000011" },
+                              "content": [{ "type": "text", "text": "sit" }]
                             }
                           ]
                         },
@@ -4615,6 +4958,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -4625,33 +4971,24 @@
             }
           ]
         },
-        "docSha256": "b5e8b75b0e677287be6e4c050d5ecf99b161faa41ef69f9afbbe959821e529d3"
+        "docSha256": "378e24be9aa51def66031fa5081a1112deed4e71f365577dc34af77084f2c32f"
       }
     },
     {
-      "id": "apply-024",
+      "id": "apply-023",
       "doc": "base",
       "steps": [
+        {
+          "stepType": "replace",
+          "from": 21,
+          "to": 21,
+          "slice": { "content": [{ "type": "text", "text": "中" }] }
+        },
         {
           "stepType": "addMark",
           "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
           "from": 13,
-          "to": 16
-        },
-        {
-          "stepType": "addMark",
-          "mark": {
-            "type": "link",
-            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
-          },
-          "from": 172,
-          "to": 178
-        },
-        {
-          "stepType": "addMark",
-          "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
-          "from": 73,
-          "to": 76
+          "to": 18
         }
       ],
       "expected": {
@@ -4689,8 +5026,8 @@
                   "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
                   "content": [
                     { "type": "text", "text": "Engin" },
-                    { "type": "text", "text": "e f", "marks": [{ "type": "bold" }] },
-                    { "type": "text", "text": "ixtures" }
+                    { "type": "text", "text": "e fix", "marks": [{ "type": "bold" }] },
+                    { "type": "text", "text": "tur中es" }
                   ]
                 },
                 {
@@ -4711,10 +5048,7 @@
                     {
                       "type": "paragraph",
                       "attrs": { "id": "pClause000000001" },
-                      "content": [
-                        { "type": "text", "text": "Liability is limit" },
-                        { "type": "text", "text": "ed.", "marks": [{ "type": "italic" }] }
-                      ]
+                      "content": [{ "type": "text", "text": "Liability is limited." }]
                     },
                     {
                       "type": "paragraph",
@@ -4725,9 +5059,13 @@
                 },
                 {
                   "type": "paragraph",
-                  "attrs": { "id": "pMiddle000000001" },
-                  "content": [{ "type": "text", "text": "Between the region and the table." }],
-                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+                  "attrs": {
+                    "id": "pMiddle000000001",
+                    "suggest": [
+                      { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                    ]
+                  },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
                 },
                 {
                   "type": "table",
@@ -4783,16 +5121,7 @@
                             {
                               "type": "paragraph",
                               "attrs": { "id": "pB00000000000002" },
-                              "content": [
-                                {
-                                  "type": "text",
-                                  "text": "One mo",
-                                  "marks": [
-                                    { "type": "link", "attrs": { "href": "https://example.org/" } }
-                                  ]
-                                },
-                                { "type": "text", "text": "nth" }
-                              ]
+                              "content": [{ "type": "text", "text": "One month" }]
                             }
                           ]
                         }
@@ -4814,6 +5143,9 @@
                           "attrs": { "id": "pFootnote0000001" },
                           "content": [{ "type": "text", "text": "Footnote text." }]
                         }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
                       ]
                     },
                     { "type": "text", "text": "." }
@@ -4824,7 +5156,248 @@
             }
           ]
         },
-        "docSha256": "f0b8b371cd684d70f27a915f2b07bc9822e6a763b143812d1a90f8c3ce26ae44"
+        "docSha256": "518b3a20d7a610694fa601d7479ddaa18f0c4df676e4f824d16636fc50fa6f06"
+      }
+    },
+    {
+      "id": "apply-024",
+      "doc": "base",
+      "steps": [
+        { "stepType": "attr", "pos": 101, "attr": "suggest", "value": null },
+        {
+          "stepType": "replace",
+          "from": 201,
+          "to": 201,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pFootnote0000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pFootnote0000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 202, "attr": "id", "value": "p000000000000012" }
+      ],
+      "expected": {
+        "ok": true,
+        "doc": {
+          "type": "doc",
+          "content": [
+            {
+              "type": "defs",
+              "content": [
+                { "type": "settings", "attrs": { "lang": "en-GB" } },
+                {
+                  "type": "style_def",
+                  "attrs": { "id": "Normal", "name": "Normal", "builtIn": true }
+                },
+                {
+                  "type": "style_def",
+                  "attrs": {
+                    "id": "Heading1",
+                    "name": "Heading 1",
+                    "basedOn": "Normal",
+                    "outlineLevel": 1,
+                    "builtIn": true
+                  }
+                },
+                { "type": "page_setup", "attrs": { "id": "ps1" } }
+              ]
+            },
+            {
+              "type": "body",
+              "attrs": { "pageSetup": "ps1" },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pTitle0000000001", "style": "Heading1" },
+                  "content": [{ "type": "text", "text": "Engine fixtures" }]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pMarks0000000001" },
+                  "content": [
+                    { "type": "text", "text": "Plain " },
+                    { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] },
+                    { "type": "text", "text": " and " },
+                    { "type": "text", "text": "italic", "marks": [{ "type": "italic" }] },
+                    { "type": "text", "text": " text." }
+                  ]
+                },
+                {
+                  "type": "region",
+                  "attrs": { "id": "rClause000000001", "title": "Clause" },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000001" },
+                      "content": [{ "type": "text", "text": "Liability is limited." }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "attrs": { "id": "pClause000000002" },
+                      "content": [{ "type": "text", "text": "Notice is in writing." }]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pMiddle000000001" },
+                  "content": [{ "type": "text", "text": "Between the region and the table." }]
+                },
+                {
+                  "type": "table",
+                  "attrs": { "id": "tTable0000000001", "grid": [2000, 2000] },
+                  "content": [
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000001" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000001" },
+                              "content": [{ "type": "text", "text": "Rent" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000001" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000001" },
+                              "content": [{ "type": "text", "text": "Monthly" }]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "table_row",
+                      "attrs": { "id": "trRow00000000002" },
+                      "content": [
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cA00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pA00000000000002" },
+                              "content": [{ "type": "text", "text": "Deposit" }]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "table_cell",
+                          "attrs": { "id": "cB00000000000002" },
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "attrs": { "id": "pB00000000000002" },
+                              "content": [{ "type": "text", "text": "One month" }]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "attrs": { "id": "pNote00000000001" },
+                  "content": [
+                    { "type": "text", "text": "With a note" },
+                    {
+                      "type": "footnote",
+                      "attrs": { "id": "fnNote0000000001" },
+                      "content": [
+                        {
+                          "type": "paragraph",
+                          "attrs": { "id": "pFootnote0000001" },
+                          "content": [{ "type": "text", "text": "Fo" }]
+                        },
+                        {
+                          "type": "paragraph",
+                          "attrs": { "id": "p000000000000012" },
+                          "content": [{ "type": "text", "text": "otnote text." }]
+                        }
+                      ],
+                      "marks": [
+                        { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }
+                      ]
+                    },
+                    { "type": "text", "text": "." }
+                  ]
+                },
+                { "type": "paragraph", "attrs": { "id": "pEnd000000000001" } }
+              ]
+            }
+          ]
+        },
+        "docSha256": "be1af9b901105bdd690feed9fa8563c5487f898f7bb837de8cf9a4e1d4793c9f"
       }
     },
     {

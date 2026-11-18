@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { bodyRange } from '../src/body.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { spikeDocument } from '../src/spike-document.ts';
+import { blockEntries } from '../src/block-suggestion.ts';
 import { internals } from '../src/testing.ts';
 import { editorAccess } from './fixtures.ts';
 import { microtask } from './support.ts';
@@ -57,7 +58,7 @@ function reviewer(): DocumentCore {
 }
 
 function nodeMarks(node: PMNode): { type: string; user: unknown }[] {
-  return node.marks.map((m) => ({ type: m.type.name, user: m.attrs['user'] }));
+  return blockEntries(node).map((e) => ({ type: e.type, user: e.attrs.user }));
 }
 
 describe('FE-044 criterion 1: a paragraph the user adds carries ins', () => {
@@ -74,7 +75,7 @@ describe('FE-044 criterion 1: a paragraph the user adds carries ins', () => {
     const added = after[after.indexOf(after.find((p) => p.pos === alpha.pos)!) + 1]!;
     expect(added.node.content.size).toBe(0);
     expect(nodeMarks(added.node)).toEqual([{ type: 'ins', user: 'alice' }]);
-    expect(added.node.marks[0]!.attrs['id']).toBeTruthy();
+    expect(blockEntries(added.node)[0]!.attrs.id).toBeTruthy();
     expect(validate(c.getContent()).valid).toBe(true);
   });
 

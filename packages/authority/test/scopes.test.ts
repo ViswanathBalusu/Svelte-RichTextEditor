@@ -20,6 +20,7 @@ import { outcomeCheck, type OutcomeVerdict } from '../src/permissions/outcome.ts
 import { diffScopes } from '../src/permissions/scopes.ts';
 import { applySteps } from '../src/rebase.ts';
 import { regionsOf } from '../src/room/room.ts';
+import { addSuggestion } from './block-suggest.ts';
 import { USERS, baseDoc, basePermissions, posInside, posOf, schema } from './fixtures.ts';
 import { changedScopes } from './harness/oracle.ts';
 
@@ -51,13 +52,31 @@ function verdict(
 const del = (user: string) =>
   schema.marks['del']!.create({ id: `s${user.padEnd(15, 'x')}`.slice(0, 16), user });
 
-/** The base document with a bold run and a suggested deletion in the restricted region. */
+/** The position of the tab that `marked()` puts at the end of the restricted paragraph. */
+function tabAt(doc: Node): number {
+  let found = -1;
+  doc.descendants((n, pos) => {
+    if (n.type.name === 'tab' && found < 0) found = pos;
+    return found < 0;
+  });
+  return found;
+}
+
+/**
+ * The base document with a bold run and a suggested deletion in the restricted region: the block
+ * suggestion is an entry of `suggest` (03 §5), and a tab carries a node mark (an inline node still
+ * takes one).
+ */
 function marked(): Node {
   const doc = baseDoc();
   const start = posInside(doc, 'pLegal000000001B');
+  const p = posOf(doc, 'pLegal000000001B');
+  const end = p + 1 + doc.nodeAt(p)!.content.size;
   return apply(doc, [
     new AddMarkStep(start, start + 9, schema.marks['bold']!.create()),
-    new AddNodeMarkStep(posOf(doc, 'pLegal000000001B'), del('dave')),
+    addSuggestion(doc, p, del('dave')),
+    new ReplaceStep(end, end, new Slice(Fragment.from(schema.nodes['tab']!.create()), 0, 0)),
+    new AddNodeMarkStep(end, del('dave')),
   ]);
 }
 
@@ -79,11 +98,11 @@ function stepsOfEveryKind(doc: Node): Array<[string, Step]> {
     [
       'addNodeMark',
       new AddNodeMarkStep(
-        p,
+        tabAt(doc),
         schema.marks['ins']!.create({ id: 'sCarol0000000001', user: 'carol' }),
       ),
     ],
-    ['removeNodeMark', new RemoveNodeMarkStep(p, del('dave'))],
+    ['removeNodeMark', new RemoveNodeMarkStep(tabAt(doc), del('dave'))],
     [
       'replaceAround',
       new ReplaceAroundStep(

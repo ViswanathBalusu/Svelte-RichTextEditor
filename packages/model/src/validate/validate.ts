@@ -23,7 +23,7 @@ import {
   BUILT_IN_STYLES,
   CDM1,
   FIELD_TARGET_PATTERN,
-  NODE_MARK_HOSTS,
+  SUGGESTION_HOSTS,
 } from '../definition/cdm1.ts';
 import type {
   AttrDef,
@@ -428,7 +428,7 @@ function walk(
   if (type === 'text') {
     if (typeof node['text'] !== 'string' || node['text'] === '')
       add(st, 'empty_text', `${path}/text`, nearestId, 'text nodes need non-empty text');
-    checkMarks(st, node['marks'], `${path}/marks`, false, type, nearestId);
+    checkMarks(st, node['marks'], `${path}/marks`, nearestId);
     return;
   }
 
@@ -458,10 +458,34 @@ function walk(
         );
     }
   }
-  // Inline atoms carry marks as text does, formatting and suggestions alike (spike S11, change 1);
-  // on blocks, marks are node marks (03 §5).
-  if (node['marks'] !== undefined)
-    checkMarks(st, node['marks'], `${path}/marks`, !nd.inline, type, nodeId);
+  // Inline atoms carry marks as text does, formatting and suggestions alike (spike S11, change 1).
+  // A block carries no marks: its suggestions are in the `suggest` attribute (03 §5; owner decision 92).
+  if (node['marks'] !== undefined) {
+    if (nd.inline) checkMarks(st, node['marks'], `${path}/marks`, nodeId);
+    else if (!Array.isArray(node['marks']))
+      add(st, 'malformed', `${path}/marks`, nodeId, 'marks must be an array');
+    else if (node['marks'].length)
+      add(
+        st,
+        'node_mark_host',
+        `${path}/marks`,
+        nodeId,
+        `a ${type} carries no marks; block suggestions are in its \`suggest\` attribute`,
+      );
+  }
+  const suggest = attrs['suggest'];
+  if (SUGGESTION_HOSTS.includes(type) && Array.isArray(suggest))
+    suggest.forEach((e, i) => {
+      if (!isObject(e) || typeof e['type'] !== 'string' || !isObject(e['attrs'])) return;
+      checkSuggestion(
+        st,
+        e['type'],
+        e['attrs'] as Record<string, JsonValue>,
+        `${path}/attrs/suggest/${i}/attrs`,
+        type,
+        nodeId,
+      );
+    });
   collect(st, type, attrs, path, ancestors, nodeId);
 
   const content = node['content'];
@@ -602,25 +626,10 @@ function checkAttrs(
 
 const SUGGESTIONS = new Set(['ins', 'del', 'fmt']);
 
-function checkMarks(
-  st: State,
-  marks: unknown,
-  path: string,
-  nodeMarks: boolean,
-  host: string,
-  nodeId: string | null,
-): void {
+function checkMarks(st: State, marks: unknown, path: string, nodeId: string | null): void {
   const { ix } = st;
   if (marks === undefined) return;
   if (!Array.isArray(marks)) return add(st, 'malformed', path, nodeId, 'marks must be an array');
-  if (nodeMarks && marks.length && !NODE_MARK_HOSTS.includes(host))
-    add(
-      st,
-      'node_mark_host',
-      path,
-      nodeId,
-      `node marks are allowed only on ${NODE_MARK_HOSTS.join(', ')}, not on ${host}`,
-    );
   marks.forEach((m, i) => {
     const p = `${path}/${i}`;
     if (!isObject(m) || typeof m['type'] !== 'string')
@@ -630,14 +639,7 @@ function checkMarks(
         add(st, 'unknown_member', `${p}/${key}`, nodeId, `unknown member "${key}" on a mark`);
     const md = ix.marks.get(m['type']);
     if (!md) return add(st, 'unknown_mark_type', p, nodeId, `unknown mark type "${m['type']}"`);
-    if (nodeMarks && !SUGGESTIONS.has(md.name))
-      add(
-        st,
-        'node_mark_host',
-        p,
-        nodeId,
-        `only suggestion marks can be node marks, not ${md.name}`,
-      );
+
     if (md.feature && !st.requires.has(md.feature))
       add(
         st,
@@ -648,8 +650,7 @@ function checkMarks(
       );
     const attrs = checkAttrs(st, md, m['attrs'], `${p}/attrs`, md.name, nodeId);
     collectRefs(st, md.attrs, attrs, `${p}/attrs`, nodeId);
-    if (SUGGESTIONS.has(md.name))
-      checkSuggestion(st, md.name, attrs, `${p}/attrs`, nodeMarks ? host : null, nodeId);
+    if (SUGGESTIONS.has(md.name)) checkSuggestion(st, md.name, attrs, `${p}/attrs`, null, nodeId);
   });
 }
 

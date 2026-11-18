@@ -112,13 +112,20 @@ describe('model.validate()', () => {
     expect(validate(e, ctx).valid).toBe(true);
   });
 
-  it('I1: node marks only on paragraphs, rows and tables', () => {
+  it('I1: blocks carry no marks; paragraphs, rows and tables carry suggestions in `suggest`', () => {
+    const entry = { type: 'ins', attrs: { id: 'sSuggestion00001', user: 'u1' } };
     const d = clone();
-    body(d)[1]!.marks = [{ type: 'ins', attrs: { id: 'sSuggestion00001', user: 'u1' } }];
+    body(d)[1]!.marks = [entry];
     expect(invariants(d)).toContain('I1');
     const e = clone();
-    body(e)[0]!.marks = [{ type: 'ins', attrs: { id: 'sSuggestion00001', user: 'u1' } }];
-    expect(validate(e, ctx).valid).toBe(true);
+    body(e)[0]!.marks = [entry];
+    expect(invariants(e)).toContain('I1');
+    const f = clone();
+    body(f)[0]!.attrs.suggest = [entry];
+    expect(validate(f, ctx).valid).toBe(true);
+    const g = clone();
+    body(g)[1]!.attrs.suggest = [entry];
+    expect(invariants(g)).toContain('I1');
   });
 
   it('I2: identifiers present and unique', () => {

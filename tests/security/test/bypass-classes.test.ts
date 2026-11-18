@@ -7,13 +7,7 @@
  * The document has a restricted region `rLegal0000000001`; a document-level editor holds no grant
  * there, so every attempt to change it must be refused with `permission_denied` and that scope.
  */
-import {
-  AddMarkStep,
-  AddNodeMarkStep,
-  AttrStep,
-  ReplaceAroundStep,
-  ReplaceStep,
-} from 'prosemirror-transform';
+import { AddMarkStep, AttrStep, ReplaceAroundStep, ReplaceStep } from 'prosemirror-transform';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { uuid7 } from '@docedit/model';
 import {
@@ -250,11 +244,13 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
     // Added at the security review of 2026-11-15 (lane w3; docs/review/2026-11-15-sec-021-bypass-
     // review.md): the rows of 07 §16 that answer this threat and had no fixture over the wire.
-    t()('a node-mark step on a restricted paragraph is refused', async () => {
+    t()('a block-suggestion step on a restricted paragraph is refused', async () => {
       const d = loadDoc(content.doc);
-      // Like attr and mark steps, a node-mark step maps no positions.
-      const del = schema.marks['del']!.create({ id: 'sgEditor00000001', user: 'u-editor' });
-      const step = new AddNodeMarkStep(at(d, 'pLegal0000000001'), del);
+      // A block suggestion is the `suggest` attribute (owner decision 92): an attribute step, which
+      // like a mark step maps no positions.
+      const step = new AttrStep(at(d, 'pLegal0000000001'), 'suggest', [
+        { type: 'del', attrs: { id: 'sgEditor00000001', user: 'u-editor' } },
+      ]);
       expect(step.apply(d).failed).toBeNull();
       const r = await submitAs('editor', stepsJson([step]));
       expect(r.t).toBe('sync.reject');

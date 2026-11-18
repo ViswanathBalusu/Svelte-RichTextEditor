@@ -9,7 +9,7 @@
     "max": 1,
     "schema": "spec/cdm/cdm-1.schema.json",
     "id": "urn:docedit:cdm:1:draft",
-    "sha256": "b6199182f27e8eee2076c83458d3cc4c24ea51a9266f4ff7700fada9c9d3fef7"
+    "sha256": "0345bc5ee75752eb9e032db3bb3edea70f90b038fce55c8a4c2c47a8dbfb15ad"
   },
   "counts": {
     "messages": 28,

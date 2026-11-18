@@ -87,9 +87,9 @@ Formatting properties of a style are separate attributes so that two people chan
 
 | Node | Content | Attributes |
 |---|---|---|
-| `paragraph` | `inline*` | `id`, `style`, `numbering` (`{ numberingId, level, listId }` or null), `numberingRestart` (number or null), and the paragraph properties in 4.5 as direct formatting |
-| `table` | `table_row+` | `id`, `style`, `width` (`{ type: auto \| pct \| fixed, value }`), `align`, `grid` (column widths), `headerRows`, `borders`, `cellMargins` |
-| `table_row` | `table_cell+` | `id`, `height`, `heightRule` (`auto`, `atLeast`, `exact`), `cantSplit` |
+| `paragraph` | `inline*` | `id`, `style`, `numbering` (`{ numberingId, level, listId }` or null), `numberingRestart` (number or null), `suggest` (block suggestions, section 5, or null), and the paragraph properties in 4.5 as direct formatting |
+| `table` | `table_row+` | `id`, `style`, `width` (`{ type: auto \| pct \| fixed, value }`), `align`, `grid` (column widths), `headerRows`, `borders`, `cellMargins`, `suggest` |
+| `table_row` | `table_cell+` | `id`, `height`, `heightRule` (`auto`, `atLeast`, `exact`), `cantSplit`, `suggest` |
 | `table_cell` | `(paragraph \| figure \| equation_block)+` | `id`, `colspan`, `rowspan`, `vAlign`, `shading`, `borders`, `margins` |
 | `figure` | `caption?` | `id`, `asset`, `width`, `height`, `alt`, `align`, `placement` (`here`, `float`) |
 | `caption` | `inline*` | none |
@@ -171,14 +171,14 @@ Draft, from [ADR 0031](../adr/0031-cdm-1-model-completion.md) (proposed; CDM-052
 | `del` | `id`, `user` | Suggested deletion. The text stays in the document until accepted |
 | `fmt` | `id`, `user`, `before` | Suggested formatting change. `before` records the previous marks or attributes |
 
-Marks apply to text and to inline atoms alike: an inline atom of 4.4 (a picture, an equation, a field and the rest) carries formatting and suggestion marks as text does, so that a suggested insertion of a picture is an `ins` mark on it (spike S11). On blocks, marks are node marks (below).
+Marks apply to text and to inline atoms alike: an inline atom of 4.4 (a picture, an equation, a field and the rest) carries formatting and suggestion marks as text does, so that a suggested insertion of a picture is an `ins` mark on it (spike S11). A block carries no marks: its suggestions are in its `suggest` attribute (below).
 
 Rules for suggestion marks:
 
 - They do not exclude other marks of the same type, so one person's suggestion can never replace another's on the same text.
 - A suggestion `id` belongs to the user who first used it. The authority rejects its use by anyone else.
 - The authority checks that `user` equals the submitting user. Marks carry no time; the time of a suggestion is the server time of the commit that introduced its `id`, which the service indexes.
-- `ins`, `del` and `fmt` may also be applied to block nodes as node marks, to suggest a new or removed block or a change of paragraph style, alignment or list level. In version 1 this is limited to paragraphs, whole table rows and whole tables. The view renders block suggestions as decorations, never as wrapper elements, because a wrapper inside a table breaks its layout.
+- A block suggestion is an entry of the `suggest` attribute (an array, or null), with the shape of a suggestion mark: `{ type: ins | del | fmt, attrs: { id, user, before? } }`. It suggests a new or removed block or a change of paragraph style, alignment or list level. In version 1 this is limited to paragraphs, whole table rows and whole tables, and the rules above (identifier, `user`, no exclusion between users) apply to its entries as to marks. Owner decision 92 chose an attribute over node marks: the view draws a block suggestion as a node decoration, and ProseMirror puts an element around any node that carries a mark, which inside a table breaks its layout. A block that carries marks is invalid (I1).
 
 ## 6. Formatting cascade
 
