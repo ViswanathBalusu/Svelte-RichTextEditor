@@ -3125,7 +3125,21 @@ export class DocumentCore implements DocumentApi {
       const out: ImagePasteResult[] = [];
       for (const [i, image] of images.entries()) {
         try {
-          out.push(await pasteImage(host, image, port, { writable }));
+          const result = await pasteImage(host, image, port, { writable });
+          out.push(result);
+          // The user is told why the picture was not added (FE-053 criterion 3), in the shell's
+          // own words: the refusal view carries the reason only, never the service's message.
+          if (!result.ok) {
+            this.#refused({
+              reason:
+                result.reason === 'read-only'
+                  ? this.#locked()
+                    ? 'read-only'
+                    : 'scope'
+                  : result.reason,
+              scopes: [],
+            });
+          }
         } finally {
           host.dispatch(removePlaceholder(this.#state.tr, ids[i] ?? 0));
         }
