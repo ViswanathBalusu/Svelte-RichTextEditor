@@ -4,7 +4,8 @@
  * stands for an erased person) and one named version whose note holds markup, which must show as
  * text. `named` is a reader who sees named versions only (and who cannot name one); `failing`
  * rejects every call; `refusing` lists as `full` does but the service refuses to name a version
- * (HIS-006). Only `full` and `refusing` offer `createVersion`; a version named in `full` is added to
+ * (HIS-006). `empty` lists nothing; `slow` holds the first list until `window.__historyRelease()` is
+ * called, so the loading message can be read (HIS-009 criterion 7). Only `full` and `refusing` offer `createVersion`; a version named in `full` is added to
  * the list and the pane is told that it changed.
  */
 import type {
@@ -16,7 +17,15 @@ import type {
   ResolveUsers,
 } from '../../src/core-api.ts';
 
-export type HistoryHarnessMode = 'full' | 'named' | 'failing' | 'refusing';
+export type HistoryHarnessMode = 'full' | 'named' | 'failing' | 'refusing' | 'empty' | 'slow';
+
+/** The regions and fields each item touched; the service reads them from the per-scope table. */
+const SCOPES: Readonly<Record<string, { regions: readonly string[]; fields: readonly string[] }>> =
+  {
+    g1: { regions: ['r1'], fields: [] },
+    v1: { regions: [], fields: [] },
+    g2: { regions: [], fields: ['f1'] },
+  };
 
 const ITEMS: readonly HistoryPaneItem[] = [
   {
@@ -61,6 +70,13 @@ const CHOICES: HistoryChoices = {
 
 export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers): HistoryPort {
   const named = mode === 'named';
+  let released = false;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  (globalThis as { __historyRelease?: () => void }).__historyRelease = () => {
+    released = true;
+    release();
+  };
   const items: HistoryPaneItem[] = [...ITEMS];
   const listeners = new Set<() => void>();
   const createVersion: HistoryPort['createVersion'] =
@@ -88,17 +104,27 @@ export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers
       return () => listeners.delete(listener);
     },
     choices: () => Promise.resolve(CHOICES),
-    list(query: HistoryPaneQuery): Promise<HistoryPaneResult> {
-      if (mode === 'failing') return Promise.reject(new Error('history service down'));
+    async list(query: HistoryPaneQuery): Promise<HistoryPaneResult> {
+      if (mode === 'failing') throw new Error('history service down');
+      if (mode === 'empty') return { items: [], nextCursor: null, namedOnly: false };
+      if (mode === 'slow' && !released) await held;
       let shown = items.filter((item) => !named || item.kind === 'version');
       if (query.namedOnly) shown = shown.filter((item) => item.kind === 'version');
+      if (query.region !== null)
+        shown = shown.filter(
+          (item) => SCOPES[item.id]?.regions.includes(query.region ?? '') ?? false,
+        );
+      if (query.field !== null)
+        shown = shown.filter(
+          (item) => SCOPES[item.id]?.fields.includes(query.field ?? '') ?? false,
+        );
       if (query.user !== null)
         shown = shown.filter((item) =>
           item.kind === 'group'
             ? item.authors.includes(query.user ?? '')
             : item.creator === query.user,
         );
-      return Promise.resolve({ items: shown, nextCursor: null, namedOnly: named });
+      return { items: shown, nextCursor: null, namedOnly: named };
     },
   };
 }

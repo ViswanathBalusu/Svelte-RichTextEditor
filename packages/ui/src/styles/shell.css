@@ -1464,3 +1464,10 @@
   font: inherit;
   min-block-size: 24px;
 }
+
+/* Focus is as visible on the filter lists as on every other control (HIS-009 criterion 5). */
+.de-comments-filters select:focus-visible,
+.de-history-filters select:focus-visible {
+  outline: 2px solid var(--_de-focus);
+  outline-offset: 1px;
+}
