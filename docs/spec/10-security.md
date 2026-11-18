@@ -119,7 +119,7 @@ The rules are in 09, sections 4, 6.3 and 9.3. In short: only machine-generated L
 
 ### 3.8 Supply chain
 
-Lock files, dependency review, a software bill of materials per release, signed container images, pinned base images, and a pinned TeX Live with a licence manifest. The editor bundle loads no code at run time from third-party origins. Sandboxed third-party extensions, if they are ever built, are an explicit exception with their own review (13, section 7.2).
+Lock files, dependency review, a software bill of materials per release, signed container images, pinned base images, and a pinned TeX Live with a licence manifest. The editor bundle loads no code at run time from third-party origins. Sandboxed third-party extensions (phase 4; ADR 0393) are an explicit exception with their own review (13, section 7.2).
 
 ## 4. Privacy
 

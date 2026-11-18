@@ -1487,10 +1487,12 @@ As a maintainer, I want to decide whether tier 2 is worth its cost, so that it i
 **Acceptance criteria**
 
 - [ ] Given 13 section 13 asks whether sandboxed extensions are worth their cost before there is an ecosystem, when the decision is taken, then it records the evidence: named partners or authors, tier 1 usage, and the security review cost.
-- [ ] Given the decision is "no", when it is recorded, then UX-060 is removed and the parity profile (UX-001) is updated.
-- [ ] Given the decision is "yes", when it is recorded, then it sets the first set of read and write levels for UX-060.
+- [x] ~~Given the decision is "no", when it is recorded, then UX-060 is removed and the parity profile (UX-001) is updated.~~ Not applicable: the decision is "yes" (owner decision 120).
+- [x] Given the decision is "yes", when it is recorded, then it sets the first set of read and write levels for UX-060.
 
-**Notes:** 11 section 7 lists sandboxed extensions in phase 4; 13 section 13 questions them. UX-060 is therefore `cond`. Lane UX-053-065, round 2: no decision is recorded. The evidence the criteria ask for is not in the repository (no named partner or author, no tier 1 usage data, no security review cost); see docs/adr/0235-lane-UX-053-065.md, decision 1 (proposed; spec default: tier 2 not built).
+**Evidence (lane w3, 2026-11-18; criteria 2 and 3 ticked, criterion 1 not):** owner decision 120 (`docs/owner-decisions-2026-11-15.md`): "Build them", reversing the spec default. Recorded in docs/adr/0393-w3-UX-059-sandboxed-extensions.md, which sets the first levels (`read`: `view`; `write`: `none`, `suggest`, `edit`, from the manifest of ADR 0234 B3, accepted by owner decision 173) and which says what each lets the wrapper forward. Spec changed: 13 section 7.2 (phase 4), 13 section 13 and 10 (supply chain). No test: this is a decision record.
+
+**Notes:** Lane w3 (2026-11-18): criterion 1 stays unticked. The owner decided without the evidence it asks for, and none exists in the repository (no named partner or author, no tier 1 usage data, no security review cost; ADR 0235, decision 1); ADR 0393 says so and invents none. Criterion 2 is struck as not applicable, as the owner did for the "no" branch of CDM-004 (decision 3). The reading of "view or higher" as `view` only is the ADR's and is open to the owner. UX-060 is no longer `cond`. 11 section 7 lists sandboxed extensions in phase 4; 13 section 13 questions them. UX-060 is therefore `cond`. Lane UX-053-065, round 2: no decision is recorded. The evidence the criteria ask for is not in the repository (no named partner or author, no tier 1 usage data, no security review cost); see docs/adr/0235-lane-UX-053-065.md, decision 1 (proposed; spec default: tier 2 not built).
 
 ### UX-060 Run extensions in a sandboxed iframe
 
