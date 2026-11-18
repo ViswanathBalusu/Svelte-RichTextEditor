@@ -126,7 +126,7 @@ These are requirements on the component's user experience. They are not security
 - The region guard refuses local transactions in scopes without `edit`, `suggest` or `fill`, so the user normally never sees a rejection.
 - A region is isolating. Backspace at the start of its first paragraph and Delete at the end of its last do nothing. Enter at the end stays inside. Selections that start inside a region are clamped to it. There is always a body paragraph after a region (03, section 4.2).
 - A deletion across several scopes removes only the parts the user may edit and says so.
-- "Replace all" skips scopes the user cannot edit and reports how many matches it skipped.
+- "Replace all" skips scopes the user cannot edit and reports how many matches it skipped. Where suggestion mode is on, each replacement is a suggestion: the match is marked deleted and the new text is inserted after it, marked inserted (owner decision 46).
 - A user who may edit only regions can apply existing styles there but cannot change definitions, page setup, headers or footers.
 - Numbering continues across region boundaries because it is computed (03, section 7) and is not stored in the content.
 - In a scope where the user has `suggest` only, the editor is in suggestion mode and cannot leave it.
