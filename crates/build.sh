@@ -1,0 +1,88 @@
+#!/bin/sh
+# The kernel's build pipeline (WASM-001), run inside the builder image of Containerfile or on a
+# machine that has the pinned toolchain (crates/rust-toolchain.toml), wasm-bindgen-cli 0.2.130 and
+# wasm-opt (binaryen version_133). `packages/layout-kernel/scripts/build.ts` calls it.
+#
+#   build.sh test          native tests, formatting, clippy, and the check for system libraries
+#   build.sh build OUTDIR  wasm32-unknown-unknown, wasm-bindgen, wasm-opt; writes the package files
+#
+# Two builds of one commit give byte-identical files: the target directory is fresh or fixed, no
+# path of the machine enters the output (remapped), no timestamp is written, and every tool is
+# pinned. `packages/layout-kernel/scripts/build.ts --verify` builds twice and compares.
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+cd "$here"
+
+export CARGO_INCREMENTAL=0
+export SOURCE_DATE_EPOCH=0
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/docedit-kernel-target}"
+cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+sysroot=$(rustc --print sysroot)
+export RUSTFLAGS="-C debuginfo=0 --remap-path-prefix=$here=/crates --remap-path-prefix=$cargo_home=/cargo --remap-path-prefix=$sysroot=/rustc"
+
+# No crate of the kernel's tree links a system library: Cargo names those `*-sys`.
+no_system_libraries() {
+  tree=$(cargo tree --locked --target wasm32-unknown-unknown --prefix none --edges normal)
+  if printf '%s\n' "$tree" | grep -E '(^|[ -])sys( |$)|-sys v' >/dev/null; then
+    printf '%s\n' "$tree" | grep -E '-sys v' >&2 || true
+    echo "the kernel depends on a system library (a -sys crate)" >&2
+    exit 1
+  fi
+}
+
+# The project's own crates forbid unsafe code (ADR 0016, decision 5): each inherits the workspace
+# lint `unsafe_code = "forbid"` and repeats it as an attribute of its root file.
+forbid_unsafe() {
+  for manifest in */Cargo.toml; do
+    crate=$(dirname "$manifest")
+    if ! grep -q '^workspace = true' "$manifest"; then
+      echo "$crate does not inherit the workspace lints" >&2
+      exit 1
+    fi
+    if ! grep -q '^#!\[forbid(unsafe_code)\]' "$crate/src/lib.rs"; then
+      echo "$crate/src/lib.rs does not forbid unsafe code" >&2
+      exit 1
+    fi
+  done
+}
+
+case "${1:-}" in
+  test)
+    forbid_unsafe
+    cargo fmt --all --check
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo test --locked
+    no_system_libraries
+    ;;
+  build)
+    out="${2:?usage: build.sh build OUTDIR}"
+    no_system_libraries
+    cargo build --locked --release --target wasm32-unknown-unknown -p docedit-layout-kernel
+    raw="$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/docedit_layout_kernel.wasm"
+    rm -rf "$out"
+    mkdir -p "$out"
+    # `web` gives an ES module with `initSync` and `init`, which Node.js and every browser load.
+    wasm-bindgen --target web --typescript --out-dir "$out" --out-name docedit_layout_kernel "$raw"
+    wasm-opt -Oz --all-features --strip-debug --strip-producers \
+      -o "$out/docedit_layout_kernel_bg.wasm.opt" "$out/docedit_layout_kernel_bg.wasm"
+    mv "$out/docedit_layout_kernel_bg.wasm.opt" "$out/docedit_layout_kernel_bg.wasm"
+    # What was built, with no date and no path, so that the file is the same on every build.
+    wasm_sha=$(sha256sum "$out/docedit_layout_kernel_bg.wasm" | cut -d' ' -f1)
+    wasm_bytes=$(wc -c < "$out/docedit_layout_kernel_bg.wasm" | tr -d ' ')
+    {
+      printf '{\n'
+      printf '  "crate": "docedit-layout-kernel",\n'
+      printf '  "crateVersion": "%s",\n' "$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+      printf '  "rustc": "%s",\n' "$(rustc --version)"
+      printf '  "wasmBindgen": "%s",\n' "$(wasm-bindgen --version)"
+      printf '  "wasmOpt": "%s",\n' "$(wasm-opt --version)"
+      printf '  "wasm": { "file": "docedit_layout_kernel_bg.wasm", "bytes": %s, "sha256": "%s" }\n' "$wasm_bytes" "$wasm_sha"
+      printf '}\n'
+    } > "$out/build.json"
+    ;;
+  *)
+    echo "usage: build.sh test | build OUTDIR" >&2
+    exit 2
+    ;;
+esac
