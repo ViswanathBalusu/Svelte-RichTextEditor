@@ -77,6 +77,28 @@ export {
 
 export { validateFields, type FieldReport } from './validate.ts';
 
+// The logic of the rule builder (FRW-024).
+export {
+  BUILDER_OPERATORS,
+  BUILDER_EFFECTS,
+  addRule,
+  builderAccess,
+  checkRuleSet,
+  newRuleFromParts,
+  openRule,
+  ruleParts,
+  ruleSentence,
+  saveRule,
+  saveRuleParts,
+  type BuilderRule,
+  type ComparisonOperator,
+  type BuilderEffect,
+  type RuleEffectPart,
+  type RuleOperand,
+  type RuleParts,
+  type RuleSetCheck,
+} from './builder.ts';
+
 export {
   MAX_RULES,
   checkRuleInvariants,

@@ -36,10 +36,12 @@ export function harnessConfig(): InlineConfig {
       sourcemap: true,
       minify: false,
       rollupOptions: {
-        // Two pages: the shell's harness and the field properties panel alone (FRW-073).
+        // Three pages: the shell's harness, the field properties panel alone (FRW-073) and the rule
+        // builder alone (FRW-024).
         input: {
           index: join(harnessDir, 'index.html'),
           'field-properties': join(harnessDir, 'field-properties.html'),
+          'rule-builder': join(harnessDir, 'rule-builder.html'),
         },
         output: {
           entryFileNames: 'assets/[name].js',
