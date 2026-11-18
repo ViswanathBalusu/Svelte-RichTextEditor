@@ -150,6 +150,54 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
+      'returns no text below the gate from history, diff or attribution (criterion 2)',
+      async () => {
+        const doc = await h.createDocument({ content: documentWithRegions() });
+        await append(h, doc, ['Zedone', 'Zedtwo', 'Zedthree']);
+        const owner = h.userToken({ [doc]: 'owner' });
+        const viewer = h.userToken({ [doc]: 'viewer' }, { sub: 'carol' });
+        const get = (path: string, token: string) =>
+          h.call('GET', `/v1/documents/${doc}${path}`, { token });
+
+        // The owner reads the whole range: the control that shows the text is there to leak.
+        const all = await get('/diff?fromSeq=0&toSeq=3', owner);
+        expect(all.status, all.text).toBe(200);
+        expect(all.text).toContain('Zed');
+        expect((await get('/history', owner)).status).toBe(200);
+        expect((await get('/attribution?atSeq=1', owner)).status).toBe(200);
+
+        // The viewer's gate is the head (`editors`; ADR 0034): a range that starts, ends or
+        // straddles below it is refused whole, and the refusal carries none of the text.
+        const refused = [
+          await get('/history?fromSeq=1', viewer),
+          await get('/history?toSeq=1', viewer),
+          await get('/diff?fromSeq=1&toSeq=3', viewer),
+          await get('/diff?fromSeq=0&toSeq=3', viewer),
+          await get('/attribution?atSeq=1', viewer),
+          await get('/attribution?atSeq=2', viewer),
+        ];
+        for (const r of refused) {
+          expect(r.status, r.text).toBe(403);
+          expect(r.json.code).toBe('forbidden');
+          expect(r.text).not.toContain('Zed');
+        }
+
+        // At the gate the same routes answer, and what they answer holds nothing from below it.
+        const history = await get('/history', viewer);
+        expect(history.status, history.text).toBe(200);
+        expect(history.text).not.toContain('Zed');
+        for (const item of history.json.items as Array<{ type: string; fromSeq?: number }>)
+          if (item.type === 'group') expect(item.fromSeq).toBeGreaterThanOrEqual(3);
+        const atHead = await get('/diff?fromSeq=3&toSeq=3', viewer);
+        expect(atHead.status).toBe(200);
+        expect(atHead.json.changes).toEqual([]);
+        const head = await get('/attribution', viewer);
+        expect(head.status).toBe(200);
+        expect(head.json.seq).toBe(3);
+      },
+    );
+
+    it.skipIf(skip)(
       'applies the gate of the acting user to a fork with DEP-Actor (criterion 4)',
       async () => {
         const doc = await document();
