@@ -318,7 +318,7 @@
     {
       "row": 13,
       "id": "service",
-      "operation": "Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, holds",
+      "operation": "Import, fork, create, list, search, audit, webhooks, tokens, revoke, retention, history visibility, holds",
       "requirement": { "kind": "service" },
       "conditions": [],
       "routes": [
@@ -335,6 +335,10 @@
         "GET /templates/{tid}",
         "POST /bulk-sends",
         "GET /bulk-sends/{bid}",
+        "GET /history-visibility",
+        "PUT /history-visibility",
+        "GET /documents/{id}/history-visibility",
+        "PUT /documents/{id}/history-visibility",
         "GET /quotas",
         "PUT /quotas",
         "GET /origins",
