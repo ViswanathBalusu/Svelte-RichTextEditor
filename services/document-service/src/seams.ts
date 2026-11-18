@@ -163,6 +163,12 @@ export interface DataPlaneDeps {
   // --- Added by packet A, phase 1b (additive; each one is off without it). --------------------
   /** The index of checkpoints (`doc_checkpoints`; BE-020): rooms open only from indexed ones. */
   readonly checkpointIndex?: CheckpointIndex;
+  /**
+   * Called after a checkpoint is stored (BE-054 criterion 1: the indexer job is queued from it).
+   * It must not throw into the room: the data plane catches and reports a failure by name, and the
+   * checkpoint stays written. Absent: nothing is called.
+   */
+  readonly onCheckpoint?: (ref: DocRef, seq: number) => void | Promise<void>;
   /** The audit trail (BE-014): rejected commits are recorded (PRM-051). */
   readonly audit?: AuditStore;
   /**
