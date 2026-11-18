@@ -1689,7 +1689,7 @@ As an operator at very large scale, I want the job queue on a managed queue serv
 - [ ] Given the adapter is selected, when jobs are enqueued and claimed, then priorities, tenant limits and retries behave as in BE-050.
 - [ ] Given jobs in flight at the switch, when the queue is changed, then none is lost or run twice.
 
-**Notes:** `cond`: 06 §6 puts a managed queue at stage 3 (and optionally stage 2).
+**Notes:** `cond`: 06 §6 puts a managed queue at stage 3 (and optionally stage 2). Lane w5 (2026-11-18): blocked; nothing ticked. No managed queue service is chosen (an owner decision) and the test environment has neither a service nor an emulator of one, so an adapter could not run the contract suite of BE-002 (criterion 1), and the switch of criterion 3 has nothing to switch to. The port is wider than a message queue (priorities, per-tenant limits, cache lookup, depth, enqueue-if-absent), so the adapter cannot be written from the service's documentation alone; `docs/adr/0401-w5-BE-072-managed-queue.md` (proposed) sets out what each managed queue gives, a design that uses the queue for dispatch only and keeps the job rows in PostgreSQL, and the three questions for the owner. No code was written, so that no scaffolding stands in for the adapter.
 
 ### BE-073 Run a hot document in a dedicated process
 
