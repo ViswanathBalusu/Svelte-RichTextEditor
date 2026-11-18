@@ -275,7 +275,7 @@ S  {"t":"event","ch":1,"d":{"type":"export.completed","resource":"/exports/0192f
 - JSON bodies. Errors use RFC 9457 problem details with a `code` from section 5.8.
 - **Browsers.** The service answers CORS preflights for the tenant's allowed origins, allows the headers `Authorization`, `Content-Type`, `If-Match`, `Idempotency-Key`, `DEP-Actor` and `traceparent`, and exposes `ETag`, `Retry-After`, `Deprecation` and `Sunset`. The conformance kit asserts these headers.
 - **Concurrency.** Every mutable resource has an `ETag`, and updates require `If-Match`.
-- **Idempotency.** `POST` requests that create something accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
+- **Idempotency.** `POST` requests that create something, and `PUT /documents/{id}/content`, accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
 - **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200.
 - **Tracing.** Requests may carry `traceparent`; responses carry a request identifier.
 - **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A user token that does not cover it, and a user who is not the requester of an export or import job, get `not_found`, so that the identifier is not confirmed (owner decision 57; a service credential covers every document of its tenant). The same holds for comments and imports (`/comments/{cid}`, `/imports/{jid}`).
@@ -311,12 +311,12 @@ Callers are end users (every request is checked against that user's permissions)
 | `/comments/{cid}` | PATCH, DELETE | Author only, or `manage` |
 | `/documents/{id}/assets` | POST | Body: `filename`, `mime`, `size`. Returns an asset identifier and a size-bound pre-signed upload into a quarantine area |
 | `/assets/{aid}/complete` | POST | The asset worker validates, re-encodes, hashes and stores the asset, then raises `asset.ready` or `asset.failed` |
-| `/documents/{id}/assets/resolve` | POST | Body: asset identifiers used by the document. Returns short-lived signed URLs, because an `<img>` cannot send a bearer token |
+| `/documents/{id}/assets/resolve` | POST | Body: asset identifiers used by the document, and the caller's own ready uploads for it that no commit references yet (decision 198). Returns short-lived signed URLs, because an `<img>` cannot send a bearer token |
 | `/documents/{id}/exports` | POST | Body: `target` (`pdf`, `tex`, `docx`, `cdm`, `html`, `md`), optional `seq`, `options` (09, section 9.1). Returns `202` with a job. `pending_suggestions` when the document has unresolved suggestions and `options.suggestions` is absent. Refused for callers restricted with `no-export` |
 | `/exports/{jid}` | GET, DELETE | State (`queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`), progress, result, diagnostics |
 | `/documents/{id}/imports` | POST | Body: `asset`, `format` (`docx`). Returns a job with warnings on completion |
 | `/imports/{jid}` | GET | |
-| `/fonts` | GET | Font manifest: families, styles, file URLs, hashes, licences, manifest version |
+| `/fonts` | GET | Font manifest: families, styles, file URLs, hashes, licences, manifest version. Tenant-wide: every user of the tenant may read it, with no document in view (decision 95) |
 | `/webhooks`, `/webhooks/{id}` | GET, POST, PATCH, DELETE | Service credential only. Event filters and secret rotation |
 | `/webhooks/{id}/ping` | POST | Service credential only. A test delivery to one subscription, marked as a test; answers 202 with its `deliveryId` (UX-079; decision 177) |
 | `/webhooks/{id}/deliveries/{deliveryId}/replay` | POST | Service credential only. Sends a recent delivery of that subscription again under its own `webhook-id`; answers 202 (UX-079; decision 177) |
