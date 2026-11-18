@@ -432,6 +432,8 @@ Listed in 13, section 11.
 
 The component reaches a backend only through these interfaces: `auth`, `sync`, `permissions`, and optionally `presence`, `history`, `comments`, `assets`, `exports`, `imports`, `fonts`, `leases`, `fields`, `workflow`, `proofing`, `assistant`.
 
+A port that has a feature name (`assets`, `exports`, `history`, `comments`, `leases`) is present only when the server announces the feature and the client asked for it. `fonts` has no feature name: `backend-dep` offers it whenever the backend is built, because `GET /fonts` is tenant-wide (decision 95). The upload call of `assets` answers the asset identifier; the URL comes from `resolve()` after `asset.ready` (owner decision 189; G06 default accepted by decisions 196 to 220).
+
 ```ts
 interface Backend {
   readonly features: ReadonlySet<string>;
