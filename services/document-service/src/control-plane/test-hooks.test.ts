@@ -187,4 +187,24 @@ describe('fault-injection hooks (BE-079)', () => {
     expect(TEST_TIMERS.idempotencyTtlMs).toBeLessThan(24 * 60 * 60 * 1000);
     expect(TEST_TIMERS.previewWindowMs).toBeLessThan(10_000);
   });
+
+  it('restarts the node in place, or says it cannot (PRO-024 criterion 6)', async () => {
+    const { hooks, calls } = stubHooks();
+    const restarting = build({
+      ...hooks,
+      restartNode: async () => {
+        calls.push('restartNode');
+      },
+    });
+    const done = await restarting.call('POST', '/restart-node');
+    expect(done.status).toBe(204);
+    expect(calls).toEqual(['restartNode']);
+    expect(restarting.logged.map((l) => l.message)).toEqual(['restart-node']);
+    // A data plane that cannot restart answers not_found, and a GET is not the hook.
+    const plain = build(stubHooks().hooks);
+    expect((await plain.call('POST', '/restart-node')).body).toMatchObject({ code: 'not_found' });
+    expect((await restarting.call('GET', '/restart-node')).body).toMatchObject({
+      code: 'not_found',
+    });
+  });
 });

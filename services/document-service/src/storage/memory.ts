@@ -5,6 +5,7 @@
  * without touching rooms.
  */
 import type { LogCommit, PermissionState, WriteRequest, WriteResult } from '@docedit/authority';
+import type { LogBundle } from '@docedit/history';
 import { uuid7, type JsonEnvelope } from '@docedit/model';
 import { chainHash, encodeCommit } from './codec.ts';
 import { isUuid } from './ids.ts';
@@ -37,6 +38,8 @@ interface MemoryDocument {
   snapshots?: Map<number, JsonEnvelope>;
   /** Assets attached to the document, with the seq that first referenced each (BE-044). */
   assets?: Map<string, number>;
+  /** The seq of the commit that introduced each suggestion, kept as commits are stored (HIS-042). */
+  introduced?: Map<string, number>;
   epoch: number;
   owner: string | null;
   perms: PermissionState;
@@ -302,6 +305,8 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     const retired = new Set<string>();
     for (const c of req.commits) {
       d.log.push(clone({ ...c, scopes: [...c.scopes].sort() }));
+      const introduced = (d.introduced ??= new Map());
+      for (const id of c.claimed) if (!introduced.has(id)) introduced.set(id, c.seq);
       for (const r of c.retired) {
         if (!d.retired.has(r)) d.retired.set(r, c.seq);
         retired.add(r);
@@ -400,6 +405,34 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
       if (c.seq === seq) return prev.toString('hex');
     }
     return null;
+  }
+
+  /** The records `fromSeq` to `toSeq` with their hashes, as PgLogStore.chainRange answers it. */
+  async chainRange(ref: DocRef, fromSeq: number, toSeq: number): Promise<LogBundle> {
+    const commits: LogBundle['commits'] = [];
+    let prev: Buffer | null = null;
+    for (const c of this.#get(ref).log) {
+      const e = encodeCommit(ref.doc, c);
+      const hash = chainHash(prev, e.metaBytes, e.payloadHash);
+      if (c.seq >= fromSeq && c.seq <= toSeq)
+        commits.push({
+          meta: { ...e.meta },
+          payloadHash: e.payloadHash.toString('hex'),
+          prevHash: prev ? prev.toString('hex') : null,
+          hash: hash.toString('hex'),
+        });
+      prev = hash;
+    }
+    const head = this.#get(ref).log.length;
+    return {
+      format: 'docedit-log-bundle/1',
+      doc: ref.doc,
+      head: { seq: head, chainHead: prev ? prev.toString('hex') : null },
+      commits,
+    };
+  }
+  async introducedBy(ref: DocRef, suggestionId: string): Promise<number | undefined> {
+    return this.#find(ref)?.introduced?.get(suggestionId);
   }
 
   async claim(ref: DocRef, node: string): Promise<number> {

@@ -11,10 +11,15 @@
  * The random compile uses strings from the same alphabet as `exp-046-trace.compile.test.ts` (and the seeds)
  * for the title, alignment and shading, and random integers for the indent.
  *
- * Limits, as in `exp-046-trace.compile.test.ts`: the trace is at level 1 of `\tracingcommands`, so
- * expandable macros are not traced. `generatedId` takes a counter, not a string, so no batch reaches it;
- * its numeric output is checked by `emit.strings.test.ts`. A positive control checks that the trace is on,
- * and a negative control checks that a `\special` in the body is reported.
+ * `generatedId` takes a counter, not a string, so its test compiles a document of a few blocks and one of
+ * many blocks and tables (the block numbers and anchors differ) and compares the traces the same way.
+ * Each comparison also names the denylist of dangerous primitives (`test/trace-denylist.ts`; decision 212
+ * of docs/owner-decisions-2026-11-15.md says "nothing unexpected" is a denylist, ADR 0320) and fails on a
+ * word of it that the baseline lacks.
+ *
+ * Limit, as in `exp-046-trace.compile.test.ts`: the trace is at level 1 of `\tracingcommands`, so
+ * expandable macros are not traced. A positive control checks that the trace is on, and a negative
+ * control checks that a `\special` in the body is reported (as a denylist word).
  *
  * The tests skip when `sandboxReady()` reports that sandboxed compiles cannot run here (EXP-070).
  */
@@ -30,6 +35,7 @@ import {
   keep,
   sandboxReady,
 } from '../test/harness.ts';
+import { dangerousIn } from '../test/trace-denylist.ts';
 
 const ready = (await sandboxReady()).ok;
 
@@ -225,6 +231,30 @@ describe.skipIf(!ready)(
         );
       }
       expect(extra).toEqual([]);
+      expect(dangerousIn(extra)).toEqual([]);
+    }, 900_000);
+
+    it('generatedId: a document of many blocks and tables has no control sequence that a small one lacks', async () => {
+      const small = await compileTraced('ids', [
+        para('ONE'),
+        para('TWO'),
+        shadedTable(['#0000FF']),
+      ]);
+      const many: J[] = [];
+      for (let i = 0; i < 120; i++) many.push(para(`P${i}`));
+      for (let i = 0; i < 6; i++) many.push(shadedTable(KNOWN_COLOUR));
+      const large = await compileTraced('ids', many);
+      if (!small.compile.ok || !small.compile.pdf)
+        throw new Error(`the small compile failed:\n${small.compile.log.slice(-1500)}`);
+      if (!large.compile.ok || !large.compile.pdf)
+        throw new Error(
+          `the large compile failed (${keep('exp-046-ids-large', large)}):\n${firstError(large.compile.log)}`,
+        );
+      const allowed = controlNames(small.compile.log);
+      expect(allowed.size).toBeGreaterThan(0);
+      const extra = [...controlNames(large.compile.log)].filter((n) => !allowed.has(n));
+      expect(extra).toEqual([]);
+      expect(dangerousIn(extra)).toEqual([]);
     }, 900_000);
 
     it('negative control: an unexpandable command the emitters did not write is reported', async () => {
@@ -242,6 +272,7 @@ describe.skipIf(!ready)(
         (n) => !controlNames(baseline.compile.log).has(n),
       );
       expect(extra).toContain('\\special');
+      expect(dangerousIn(extra)).toContain('\\special');
     }, 900_000);
   },
 );

@@ -125,7 +125,7 @@ The document service MUST validate every `latex` attribute when the commit that 
 - Reject definitions and low-level primitives regardless of spelling, including `\def`, `\let`, `\csname`, `\catcode`, `\input`, `\include`, `\openin`, `\write`, `\directlua`, `\special`, `\immediate`, `\newcommand`, and the `^^` character notation.
 - Reject commands that paint outside their own box or hide other content: `\rlap`, `\llap`, `\smash`, `\raisebox`, `\colorbox`, `\fcolorbox`, `\rule` and `\kern`, `\hskip`, `\hspace` with negative or large arguments. Every dimension argument is bounded. Without this, a person who may edit only one region could cover a price in another region with a white box in the PDF that gets signed.
 - Reject unescaped `%`, `#`, `~` and a stray `&` outside alignment environments. `\text{50% of}` balances its braces but comments out the closing one.
-- Allow only one display environment, `equation` (numbered or not), containing `aligned`, `gathered`, `cases` and the matrix environments, so that the editor and the typesetter count equation numbers the same way.
+- Allow only one display environment, `equation` (numbered or not), and let the class supply it: the converter writes the wrapper around the value, so a value holds `aligned`, `gathered`, `cases` or a matrix environment and is rejected if it names `equation` itself, `align`, `gather`, `multline` or `eqnarray`. This way the editor and the typesetter count equation numbers the same way (owner decision 211, 2026-11-17).
 - Limit length to 4,000 characters and nesting depth to 50. The class clips every equation to its box.
 
 An equation that fails is rejected at edit time. If one reaches the converter anyway, it is replaced with a visible placeholder and a diagnostic.

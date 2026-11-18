@@ -36,12 +36,13 @@ The reasons for this shape are in [ADR 0008](../adr/0008-protocol-planes-and-enc
   "engines": ["pm-steps/1"],
   "cdm": { "min": 1, "max": 1 },
   "features": ["presence", "regions", "suggest-enforced", "history", "comments", "assets", "exports", "leases", "fields", "read-restrictions"],
+  "exportTargets": ["pdf", "tex"],
   "mode": "authority",
   "jwks_uri": "https://docs.example.com/.well-known/jwks.json"
 }
 ```
 
-`rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
+`rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `exportTargets` is optional and present when `exports` is announced: the export targets the deployment offers (`pdf`, `tex`, and others by name; ADR 0382, option 1, with the other proposed defaults accepted by the owner's decisions 116 to 220). A client offers these targets and no others, and a service refuses a target that is not in the list with `validation_failed`. When it is absent the deployment does not say, and a client offers the PDF and the LaTeX bundle. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
 
 `read-restrictions` says that the server hides content from readers by projection (ADR 0019, proposed): the view token of section 5.2, the empty `steps` of section 5.3 and the `access_changed` cause of `ch.closed` apply only to a server that announces it. The name is a proposal of the conformance kit (ADR 0042, item 4), not yet a decision of the owner. The CDM schema for projections, `spec/cdm/cdm-1.projection.json`, adds the `hidden_region` placeholder node, which stands where a reader may not see a region.
 
@@ -301,6 +302,8 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/regions/{rid}/lease` | POST, PUT, DELETE | Optional exclusive-edit lease with heartbeat. Feature `leases` |
 | `/documents/{id}/grants` | GET, PATCH | Region grants. The response to PATCH carries the new grants revision, and once it has returned, no commit can be stored under the old revision (04, G7) |
 | `/sessions/revoke` | POST | Service credential only. Section 3.3 |
+| `/documents/{id}/audit-segment` | GET | `fromSeq`, `toSeq`. A segment of the hash chain for third-party verification: the metadata rows, the payload hashes, the anchor records of the range and the verification instructions, with no payloads (08, section 12). Subject to history visibility (07, section 8): records below the caller's gate are left out, and only the chain hash of the record just below it is given, as the first record's link. Refused with `forbidden` for a range that ends below the gate and for a caller whose view hides content |
+| `/documents/{id}/suggestions/{sid}/introduction` | GET | The commit that introduced the suggestion, answered from an index that is written as the commit is stored, not by a scan of the log: the suggestion identifier, the server time of that commit (the date of a suggestion, 08, section 14), its user and origin, and its `seq` when the `seq` is not below the caller's gate. `not_found` for an identifier no commit introduced. Subject to history visibility (07, section 8): a suggestion below the gate is answered only while it is in the document the caller reads |
 | `/documents/{id}/history` | GET | Grouped commits. Filters: `region`, `field`, `user`, `fromSeq`, `toSeq`, `namedOnly` |
 | `/documents/{id}/versions` | GET, POST | Named versions. POST body: `seq` (default head), `name`, `note` |
 | `/documents/{id}/diff` | GET | `fromSeq`, `toSeq`, optional `region`, `granularity` (`word`, `char`) |

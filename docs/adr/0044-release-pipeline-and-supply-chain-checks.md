@@ -110,7 +110,7 @@ Bad:
 
 ## Questions for the owner
 
-1. Accept the two PDF.js exceptions of §6, or require a viewer build without those paths? SEC-054 criterion 2 stays open until this is decided.
+1. Accept the two PDF.js exceptions of §6, or require a viewer build without those paths? Answered by owner decision 67 (docs/owner-decisions-2026-11-15.md): the two computed imports are allowed in the viewer frame, documented and checked. See ADR 0410.
 2. One release version for everything (§2), or a version per package?
 3. Which packages besides the element are published to npm, and is the reference service published as a library (01 §9)?
 4. May a release ship without the document service's image? This proposal allows it only for pre-releases.

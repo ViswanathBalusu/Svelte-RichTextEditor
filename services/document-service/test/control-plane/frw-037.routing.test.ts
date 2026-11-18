@@ -111,7 +111,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     const events = (name: string, doc: string) =>
       h.events.of(`dep.workflow.${name}.v1`).filter((e) => e.subject === doc);
     const controls = async (doc: string) =>
-      (await h.parts.logs.read({ tenant: h.tenant, doc })).filter((c) => c.kind === 'control');
+      (await h.parts.logs.read({ tenant: h.tenant, doc })).filter(
+        // Not the control commit that anchors the salted hash of evidence (FRW-041).
+        (c) => c.kind === 'control' && c.evidence === undefined,
+      );
     const states = (c: DepClient) =>
       c.all('wf.changed', 1).map((m) => (m.d as { state: string }).state);
     /** The status of their own participant in each wf.changed a participant's channel received. */

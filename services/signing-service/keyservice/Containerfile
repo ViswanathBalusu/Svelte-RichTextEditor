@@ -1,0 +1,18 @@
+# Key service emulator for development and tests (spike S8, SPK-021; owner decision 222).
+# SoftHSM2 is a software implementation of a PKCS#11 token. It stands in for a hardware security
+# module or a cloud key service. It is NOT a production key store: the token is a directory in the
+# container's file system and its protection is the container's. No key is baked into the image;
+# keyservice.sh makes a token and a non-extractable RSA key when the container starts.
+#
+#   node services/signing-service/scripts/build-keyservice-image.ts
+#
+# which runs `podman build` (the command is DOCEDIT_CONTAINER_CLI, default podman) on this folder.
+#
+# Packages: softhsm 2.7.0 (BSD-2-Clause), opensc 0.26 for its pkcs11-tool (LGPL-2.1; a command line
+# tool inside this development image only, never linked into or shipped with the service), openssl
+# (Apache-2.0). Alpine's package index is fetched when the image is built.
+FROM docker.io/library/alpine:3@sha256:0f49f331d9212aff11b932863be4eb01cdf962969aa86dab7d1ee21ac6f5f52b
+RUN apk add --no-cache softhsm opensc openssl
+COPY keyservice.sh /usr/local/bin/keyservice.sh
+RUN chmod 0555 /usr/local/bin/keyservice.sh
+ENTRYPOINT ["/usr/local/bin/keyservice.sh", "serve"]
