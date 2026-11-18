@@ -49,7 +49,7 @@ import { Icons } from '../../src/icons/icons.ts';
 import { PeopleDirectory } from '../../src/people/directory.ts';
 import { SettingsStore, type ShellSettings } from '../../src/shell/settings.ts';
 import shellCss from '../../src/styles/shell.css?inline';
-import type { ThreadSummary } from '../../src/core-api.ts';
+import type { ThreadDetail, ThreadSummary } from '../../src/core-api.ts';
 import { FakeCore, type FakeCoreOptions, type Notify } from '../../test/support/fake-core.ts';
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
 import { catchUpPort, type CatchUpHarnessMode } from './his-028-catch-up-port.ts';
@@ -814,6 +814,34 @@ const harness = {
   /** The threads the comments pane lists (UX-030). */
   setThreads: (items: ThreadSummary[]) => void (need().core.threads!.items = items),
   refuseNextThread: (code: string) => void (need().core.threads!.refuseNext = code),
+  /** The service's copy of each thread, for the thread view (UX-029); each gets a new version. */
+  putThreads: (details: Array<Omit<ThreadDetail, 'etag'>>) =>
+    void details.forEach((d) => need().core.threads!.put(d)),
+  /** Signs in as another user for the thread view (UX-029). */
+  setThreadUser: (principal: string) => void (need().core.threads!.user = principal),
+  /** Another client replies (comment.created): the pane is told and shows it without a reload. */
+  remoteReply: (id: string, author: string, text: string) =>
+    need().core.threads!.remoteReply(id, author, text),
+  /** The next write finds the thread changed: another client replied first (If-Match fails). */
+  staleNextThread: (author: string, text: string) => {
+    need().core.threads!.staleNext = {
+      apply: (d) => ({
+        ...d,
+        comments: [
+          ...d.comments,
+          {
+            id: `c-stale`,
+            author,
+            createdAt: '2026-11-02T10:30:00Z',
+            body: [{ type: 'text', text }],
+            edited: false,
+          },
+        ],
+      }),
+    };
+  },
+  /** What the thread view asked the service to do. */
+  threadWrites: () => JSON.parse(JSON.stringify(need().core.threads?.writes ?? [])) as unknown[],
   conflictNextGrantSave: () => void (need().core.grants!.conflictNext = true),
   restoreFocus: () => (need().app['restoreFocus'] as () => boolean)(),
   setUndo: (undo: number, redo: number) => {
