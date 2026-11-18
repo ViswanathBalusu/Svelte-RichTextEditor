@@ -96,7 +96,7 @@ The rules are in 09, sections 4, 6.3 and 9.3. In short: only machine-generated L
 | Remote content in DOCX | External relationships are never followed |
 | Macros and embedded objects | Macro-enabled files are refused. Embedded objects are kept as opaque preserved content: never parsed, run or rendered, and written back unchanged on DOCX export (ADR 0017; 09, section 12) |
 | Decoder exploits | Decoding happens in a sandboxed worker without network or credentials; output is re-encoded |
-| Content-type confusion | The declared type must match the detected type; assets are served with fixed content types and `nosniff` from a separate origin |
+| Content-type confusion | The declared type must match the detected type; assets and export results are served with fixed content types and `nosniff` from a separate origin |
 | Impersonation through imported tracked changes | Imported authors become labels, never user identities |
 
 ### 3.6 Signing and evidence

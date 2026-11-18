@@ -301,7 +301,12 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
     // A cached result's files are under the prefix of the job that made them (EXP-006).
     const owner = out?.from ?? job.id;
     const key = (name: string) => objectKeys.exportFile(job.tenant, owner, name);
-    const sign = (name: string) => d.assets.signedUrl(job.tenant, key(name), expiresAt);
+    // With an asset origin, results are served from it with fixed content types and `nosniff`
+    // (SEC-036 criterion 6; owner decision 66); without one, from the object store's own URLs.
+    const sign = (name: string) =>
+      d.exportUrl
+        ? d.exportUrl(job.tenant, owner, name, expiresAt)
+        : d.assets.signedUrl(job.tenant, key(name), expiresAt);
     const payload = job.payload as { target: ExportJob['target']; seq: number };
     return {
       id: job.id,

@@ -35,8 +35,18 @@ export {
 } from './sandbox-podman.ts';
 export type { PodmanSandboxOptions, Readiness, SandboxLimits } from './sandbox-podman.ts';
 export { containerCli } from './container.ts';
-export { assetUrlExpiry, SERVED, signAssetUrl, URL_DEFAULTS, verifyAssetUrl } from './signing.ts';
-export type { AssetUrlKey, AssetUrlKeys, ServedKind, UrlCheck } from './signing.ts';
+export {
+  assetUrlExpiry,
+  EXPORT_SERVED,
+  exportKindOf,
+  SERVED,
+  signAssetUrl,
+  signExportUrl,
+  URL_DEFAULTS,
+  verifyAssetUrl,
+  verifyExportUrl,
+} from './signing.ts';
+export type { AssetUrlKey, AssetUrlKeys, ExportUrlCheck, ServedKind, UrlCheck } from './signing.ts';
 export { assetOriginHandler, startAssetOrigin } from './origin.ts';
 export type { AssetOriginOptions, RunningOrigin } from './origin.ts';
 export { readReply, isSanitisedSvg } from './verify.ts';
