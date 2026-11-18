@@ -1512,6 +1512,10 @@
       "capability": "fields-and-forms"
     },
     {
+      "id": "view.rules",
+      "capability": "fields-and-forms"
+    },
+    {
       "id": "view.roles",
       "capability": "fields-and-forms"
     },

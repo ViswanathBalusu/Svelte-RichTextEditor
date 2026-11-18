@@ -89,6 +89,12 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     available: (core) => core.fieldProperties !== undefined,
   },
   {
+    id: 'rules',
+    label: 'pane.rules',
+    load: () => load(import('../panes/RulesPane.svelte')),
+    available: (core) => core.rules !== undefined,
+  },
+  {
     id: 'checker',
     label: 'pane.checker',
     load: () => load(import('../panes/CheckerPane.svelte')),
