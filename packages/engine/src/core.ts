@@ -19,7 +19,9 @@ import {
   type FieldReport,
   type StepJson,
   definitionUse,
+  sendChecklist,
   stepsToJson,
+  type SendProblem,
 } from '@docedit/authority';
 import type { RemoteCommit } from '@docedit/protocol';
 import type { EquationDrawer } from './equation-draw.ts';
@@ -3720,6 +3722,53 @@ one or original. It is a
     this.focus();
     this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
     return true;
+  }
+
+  /**
+   * Selects the text that carries the suggestion mark with this identifier and scrolls it into view
+   * (FRW-028 criterion 2: a failed check of the send dialog links to the suggestion). False, and
+   * nothing changes, when no mark has the identifier or the reader may not view where it is.
+   */
+  selectSuggestion(id: string): boolean {
+    const doc = this.#state.doc;
+    let from = -1;
+    let to = -1;
+    doc.descendants((node, pos) => {
+      if (from >= 0 && to >= 0 && pos >= to) return false;
+      if (!node.isInline) return true;
+      const hit = node.marks.some(
+        (m) => ['ins', 'del', 'fmt'].includes(m.type.name) && m.attrs['id'] === id,
+      );
+      if (!hit) return true;
+      if (from < 0) from = pos;
+      to = Math.max(to, pos + node.nodeSize);
+      return true;
+    });
+    if (from < 0) return false;
+    if (!this.#canView(this.#scopeIn(doc, from))) return false;
+    this.focus();
+    this.dispatchTransaction(
+      this.#state.tr.setSelection(TextSelection.create(doc, from, to)).scrollIntoView(),
+    );
+    return true;
+  }
+
+  /**
+   * The pre-send checks over the document as this reader holds it (FRW-027 criterion 1; FRW-028):
+   * the authority's checklist, given the participants the workflow resource lists. An empty list
+   * means every check passed. It changes nothing.
+   */
+  sendChecklist(participants: readonly { readonly roles: readonly string[] }[]): SendProblem[] {
+    return sendChecklist(
+      this.getContent(),
+      participants.map((p, i) => ({
+        id: `p${i}`,
+        roles: p.roles,
+        kind: 'filler' as const,
+        order: 1,
+        completed: false,
+      })),
+    );
   }
 
   focus(): void {

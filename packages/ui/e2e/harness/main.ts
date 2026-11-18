@@ -51,6 +51,7 @@ import shellCss from '../../src/styles/shell.css?inline';
 import type { ThreadSummary } from '../../src/core-api.ts';
 import { FakeCore, type FakeCoreOptions, type Notify } from '../../test/support/fake-core.ts';
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
+import { sendService, type SendHarnessLog, type SendHarnessMode } from './frw-028-send-port.ts';
 import { catchUpPort, type CatchUpHarnessMode } from './his-028-catch-up-port.ts';
 
 const violations: string[] = [];
@@ -59,6 +60,9 @@ document.addEventListener('securitypolicyviolation', (e) => {
     `${e.violatedDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber} ${JSON.stringify(e.sample)}`,
   );
 });
+/** What the shell asked of the send service (FRW-028). */
+const sendLog: SendHarnessLog = { fields: [], suggestions: [], refreshes: 0, sends: 0 };
+let sendHandle: ReturnType<typeof sendService> | null = null;
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
@@ -103,6 +107,8 @@ export interface MountOptions {
   people?: 'host' | 'failing' | 'none';
   /** The history port of HIS-009: full, a reader of named versions, or failing; absent: none. */
   history?: HistoryHarnessMode;
+  /** The send dialog's service of FRW-028: see harness/frw-028-send-port.ts for the modes; absent: none. */
+  send?: SendHarnessMode;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
   catchUp?: CatchUpHarnessMode;
   share?: boolean;
@@ -545,6 +551,15 @@ function mountShell(options: MountOptions = {}): void {
         resolver(options.people ?? 'host') ?? (async (ids) => ids.map(() => null)),
       ),
     });
+  if (options.send) {
+    sendLog.fields.length = 0;
+    sendLog.suggestions.length = 0;
+    sendLog.refreshes = 0;
+    sendLog.sends = 0;
+    sendHandle = sendService(options.send, sendLog);
+    // The roles and the rules panes are stand-ins here; they need only be offered for the links.
+    Object.assign(core, { workflowSend: sendHandle, roles: {}, rules: {} });
+  }
   if (options.catchUp)
     Object.assign(core, {
       catchUp: catchUpPort(
@@ -588,6 +603,12 @@ function mountShell(options: MountOptions = {}): void {
   else if (options.commentsPane)
     props['panes'] = {
       comments: async () => (await import('../../src/panes/CommentsPane.svelte')).default,
+    };
+  if (options.send)
+    props['panes'] = {
+      ...(props['panes'] as Record<string, unknown> | undefined),
+      roles: async () => (await import('./StubPane.svelte')).default,
+      rules: async () => (await import('./StubPane.svelte')).default,
     };
   if (options.share) props['onShareRequest'] = hostShareDialog;
   if (options.print) props['onPrintRequest'] = () => printRequests.push(Date.now());
@@ -768,6 +789,10 @@ const harness = {
   exportPreflights: () => need().core.exports?.preflights ?? [],
   updateExport: (jobId: string, patch: Partial<ExportJobView>) =>
     need().core.exports?.update(jobId, patch),
+  /** What the send dialog asked of its service (FRW-028), and a change of the editor's own checks. */
+  sendLog: () => JSON.parse(JSON.stringify(sendLog)) as SendHarnessLog,
+  setSendFailures: (next: Parameters<ReturnType<typeof sendService>['setFailures']>[0]) =>
+    sendHandle?.setFailures(next),
   grantSaves: () => need().core.grants?.saves ?? [],
   /** The comment threads port (UX-028, UX-031): what was asked for, and what the core reports. */
   principalQueries: () => [...principalQueries],

@@ -137,12 +137,14 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `view.permissions` | review | regions-and-permissions |  |  |
 | `view.recovered` | view | recovery-journal |  |  |
 | `view.roles` | view | fields-and-forms |  |  |
+| `view.rules` | view | fields-and-forms |  |  |
 | `view.shortcuts` | view | keyboard-shortcuts |  |  |
 | `view.sources` | view | citations |  |  |
 | `view.styles` | view | styles |  |  |
 | `view.zoomIn` | view | zoom |  |  |
 | `view.zoomOut` | view | zoom |  |  |
 | `view.zoomReset` | view | zoom |  |  |
+| `workflow.send` | review | fields-and-forms |  |  |
 
 ## Configuration
 
