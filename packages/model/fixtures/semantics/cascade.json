@@ -172,7 +172,7 @@
     },
     {
       "id": "table-style-over-default-style",
-      "description": "S7 question 1: a table style overrides the default paragraph style for a Normal paragraph in the table, because Normal is layer 1 and is not applied again in layer 4.",
+      "description": "S7 question 1: a table style overrides the default paragraph style for a Normal paragraph in the table, because Normal is layer 1 and is not applied again in layer 3.",
       "styles": [
         {
           "type": "style_def",
@@ -196,7 +196,7 @@
     },
     {
       "id": "table-style-over-default-style-through-based-on",
-      "description": "The same holds for a style based on Normal: Normal contributes once, in layer 1; the style's own values (layer 4) still win.",
+      "description": "The same holds for a style based on Normal: Normal contributes once, in layer 1; the style's own values (layer 3) still win.",
       "styles": [
         {
           "type": "style_def",
@@ -229,7 +229,7 @@
     },
     {
       "id": "numbering-level-over-table-style",
-      "description": "The numbering level (layer 3) overrides the table style (layer 2).",
+      "description": "The numbering level (layer 4) overrides the table style (layer 2).",
       "styles": [
         {
           "type": "style_def",
@@ -280,20 +280,33 @@
       }
     },
     {
-      "id": "paragraph-style-over-numbering-level",
-      "description": "S7 question 2: under 03 §6 as written, the paragraph style (layer 4) overrides the numbering level (layer 3), so ListParagraph's indentLeft 720 replaces level 1's 1440; the hanging indent, which the style does not set, comes from the level. Word applies the level after the style; the owner decides (ADR 0032, open question).",
+      "id": "numbering-level-over-paragraph-style",
+      "description": "Owner decision 9 (2026-11-15), Word's order: the numbering level (layer 4) overrides the paragraph style (layer 3), so level 1's indentLeft 1440 replaces ListParagraph's 720; the hanging indent comes from the level too.",
       "paragraph": {
         "numbering": { "numberingId": "decimal-list", "level": 1, "listId": "listAxxxxxxxxxxx" },
         "style": "ListParagraph"
       },
       "expected": {
-        "paragraph": { "indentLeft": 720, "indentFirstLine": -360 },
-        "layers": { "indentLeft": "paragraph style", "indentFirstLine": "numbering level" }
+        "paragraph": { "indentLeft": 1440, "indentFirstLine": -360 },
+        "layers": { "indentLeft": "numbering level", "indentFirstLine": "numbering level" }
+      }
+    },
+    {
+      "id": "direct-over-numbering-level",
+      "description": "Direct paragraph attributes (layer 5) override the numbering level (layer 4), which overrides the paragraph style (layer 3).",
+      "paragraph": {
+        "numbering": { "numberingId": "decimal-list", "level": 1, "listId": "listAxxxxxxxxxxx" },
+        "style": "ListParagraph",
+        "indentLeft": 300
+      },
+      "expected": {
+        "paragraph": { "indentLeft": 300, "indentFirstLine": -360 },
+        "layers": { "indentLeft": "direct", "indentFirstLine": "numbering level" }
       }
     },
     {
       "id": "style-chain-from-root-to-style",
-      "description": "Layer 4 applies the basedOn chain from its root to the style, so the nearer style wins.",
+      "description": "Layer 3 applies the basedOn chain from its root to the style, so the nearer style wins.",
       "styles": [
         {
           "type": "style_def",

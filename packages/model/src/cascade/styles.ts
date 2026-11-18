@@ -200,7 +200,7 @@ export type StyleChainResult =
 const chains = new WeakMap<StyleTable, Map<string, StyleChainResult>>();
 
 /**
- * The `basedOn` chain of a style, from the root of the chain to the style itself (03 §6, layer 4).
+ * The `basedOn` chain of a style, from the root of the chain to the style itself (03 §6, layer 3).
  * A missing style, a cycle or a chain longer than ten styles is a typed error; the walk always ends.
  */
 export function styleChain(table: StyleTable, styleId: string): StyleChainResult {
