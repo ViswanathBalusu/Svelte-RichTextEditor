@@ -75,3 +75,5 @@ export {
 } from './edits.ts';
 export type { ScriptedEdit, SkippedEdit } from './edits.ts';
 export { NodeHasher } from './hash.ts';
+export { jobWarnings } from './job-warnings.ts';
+export type { JobWarning } from './job-warnings.ts';
