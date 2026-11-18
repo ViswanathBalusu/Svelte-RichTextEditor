@@ -310,6 +310,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/retention` | GET, PUT | Service credential only. The document's retention policy and the effective policy that applies to it. 08, section 11 |
 | `/holds` | GET | Service credential only. The tenant's legal holds, one page at a time. 08, section 11; 13, section 10 |
 | `/documents/{id}/holds` | POST | Service credential only. Places a legal hold on a document with a reason; audited. 08, section 11; 13, section 10 |
+| `/users/erase` | POST | Service credential only. Erases a person: deletes their mapping row, display name and read markers, and changes nothing in the log; audited. The `sub` is in the body, never in the path. A person in a document under legal hold is erased after the hold is released (owner decision 38). An unknown `sub` is `not_found`. 08, section 13; 13, section 10 |
 | `/origins` | GET, POST | Service credential only. GET lists the origins the tenant allows. POST allows one origin (`{ origin }`, normalised) and is audited. 05, section 4; 13, section 10 |
 | `/origins/{origin}` | DELETE | Service credential only. Removes an allowed origin (percent-encoded in the path); audited. 05, section 4; 13, section 10 |
 | `/keys` | GET, POST | Service credential only. GET lists the public keys registered for the tenant, user keys then service keys. POST registers one public key (ES256, EdDSA or RS256 only; a private or symmetric key is refused) and is audited. 05, section 3.2; 13, section 10 |

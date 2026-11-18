@@ -40,6 +40,7 @@ import type { Cursors } from './http.ts';
 import type { WebhookSubscriptions } from './webhook-subscriptions.ts';
 import type { RetentionService } from './retention.ts';
 import type { HoldService } from './holds.ts';
+import type { ErasureRequests } from './erasure-requests.ts';
 import type { QuotaAdminService } from './quota-admin.ts';
 import type { TenantRegistry } from './tenants.ts';
 import type { SearchHit, SearchQuery } from './search-index.ts';
@@ -133,6 +134,8 @@ export interface HandlerDeps {
   retention?: RetentionService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080 criteria 2 and 3). Absent: not offered. */
   holds?: HoldService;
+  /** The erasure of a person (POST /users/erase, HIS-038 criterion 6). Absent: not offered. */
+  erasures?: ErasureRequests;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: not offered. */
   quotaAdmin?: QuotaAdminService;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: not offered. */
