@@ -10,9 +10,9 @@
  *   `cached`. A target with no label is refused, so the field is never inserted empty.
  * - `staleCaches` lists the `seq` and `ref` fields whose `cached` no longer matches the labels, after
  *   content moved or was inserted. `refreshCaches` builds the transaction that sets them. Nothing
- *   calls it on each change yet: `cached` is part of the document that the authority commits, so
- *   whether the editor writes it on every edit is a sync decision that is not made here (FE-134
- *   criterion 3 stays open).
+ *   calls it on each change: owner decision 90 (2026-11-15) says a refreshed text is not written
+ *   into the document but computed when shown (`fieldTexts`, drawn by
+ *   view/computed-field-view.ts) and when exported.
  *
  * Not in this module: table captions (the CDM has no table caption node), numbered equations (the
  * CDM numbers them through `numbered`, not a `seq` field), the cross-reference dialog (UX), and the
@@ -149,6 +149,16 @@ export interface StaleCache {
  * order. A `seq` field counts through its holder's list of labels, as `computeLabels` writes them.
  */
 export function staleCaches(doc: PMNode): StaleCache[] {
+  return fieldTexts(doc).filter((f) => f.cached !== f.text);
+}
+
+/**
+ * Every `seq` and `ref` field with the text the labels give it, in document order (FE-134
+ * criterion 3). The web view shows this text, not `cached`, so that the numbers follow the content
+ * as it moves; nothing is written into the document (decision 90 of
+ * `docs/owner-decisions-2026-11-15.md`: refreshed texts are computed when shown and when exported).
+ */
+export function fieldTexts(doc: PMNode): StaleCache[] {
   const labels = computeLabels(doc);
   const out: StaleCache[] = [];
   const counts = new Map<string, number>();
@@ -159,13 +169,11 @@ export function staleCaches(doc: PMNode): StaleCache[] {
       const index = counts.get(holder) ?? 0;
       counts.set(holder, index + 1);
       const text = labels.sequences.get(holder)?.[index]?.text ?? '';
-      if (child.attrs['cached'] !== text)
-        out.push({ pos, kind, cached: child.attrs['cached'], text });
+      out.push({ pos, kind, cached: child.attrs['cached'], text });
     } else if (kind === 'ref') {
       const target = child.attrs['target'];
       const text = typeof target === 'string' ? referenceText(labels, target) : null;
-      if (child.attrs['cached'] !== text)
-        out.push({ pos, kind, cached: child.attrs['cached'], text });
+      out.push({ pos, kind, cached: child.attrs['cached'], text });
     }
   };
 
