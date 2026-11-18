@@ -11529,10 +11529,12 @@
             ]
           },
           "locale": {
+            "description": "Default: the document's language (`settings.lang`), else `en-GB`. The job records the value it used.",
             "type": "string",
             "pattern": "^(?:(?:[A-Za-z]{2,3}(?:-[A-Za-z]{3}){0,3}|[A-Za-z]{4,8})(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?(?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*(?:-[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+)*(?:-[Xx](?:-[A-Za-z0-9]{1,8})+)?|[Xx](?:-[A-Za-z0-9]{1,8})+)$"
           },
           "timeZone": {
+            "description": "An IANA zone name. Default `UTC`. The job records the value it used.",
             "type": "string"
           },
           "certificate": {
