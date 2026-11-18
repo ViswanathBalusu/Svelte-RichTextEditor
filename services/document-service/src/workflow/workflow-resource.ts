@@ -34,6 +34,26 @@ export type WorkflowPutResult =
   | { readonly ok: true; readonly resource: WorkflowResourceView; readonly created: boolean }
   | { readonly ok: false; readonly problem: WorkflowPutProblem };
 
+/** What a transition writes besides the new state (12 §6.2 `send`; FRW-030). */
+export interface WorkflowTransitionWrite {
+  /** The state the workflow moves to. */
+  readonly to: string;
+  /** Set at the send: the `seq` of the commit and the chain hash at it. */
+  readonly sentSeq?: number;
+  readonly sentHash?: string;
+  /** The participant list as the transition leaves it (the activation marks, `state`). */
+  readonly participants?: WorkflowResourceView['participants'];
+}
+
+export type WorkflowTransitionResult =
+  | { readonly ok: true; readonly resource: WorkflowResourceView }
+  | {
+      readonly ok: false;
+      readonly problem:
+        | { readonly code: 'not_found' }
+        | { readonly code: 'conflict'; readonly state: string; readonly rev: number };
+    };
+
 export interface WorkflowResourceStore {
   /** The resource of a document with its ETag, or null when the document has no workflow. */
   read(tenant: string, doc: string): Promise<WorkflowResourceView | null>;
@@ -48,6 +68,17 @@ export interface WorkflowResourceStore {
     expectedRev: number,
     input: WorkflowInput,
   ): Promise<WorkflowPutResult>;
+  /**
+   * Moves the workflow from the state and revision the caller read to `write.to`, and raises the
+   * revision. Another state or revision is refused as `conflict`, so two transitions never both
+   * apply (FRW-030). One row, one statement: the write is atomic.
+   */
+  transition(
+    tenant: string,
+    doc: string,
+    from: { readonly state: string; readonly rev: number },
+    write: WorkflowTransitionWrite,
+  ): Promise<WorkflowTransitionResult>;
 }
 
 export const etagOfRevision = (rev: number): string => `"${rev}"`;
@@ -87,6 +118,34 @@ export class MemoryWorkflowResourceStore implements WorkflowResourceStore {
   ): void {
     const row = this.#rows.get(`${tenant}/${doc}`);
     if (row !== undefined) this.#rows.set(`${tenant}/${doc}`, { ...row, ...patch });
+  }
+
+  transition(
+    tenant: string,
+    doc: string,
+    from: { readonly state: string; readonly rev: number },
+    write: WorkflowTransitionWrite,
+  ): Promise<WorkflowTransitionResult> {
+    const key = `${tenant}/${doc}`;
+    const row = this.#rows.get(key);
+    if (row === undefined) return Promise.resolve({ ok: false, problem: { code: 'not_found' } });
+    if (row.state !== from.state || row.rev !== from.rev)
+      return Promise.resolve({
+        ok: false,
+        problem: { code: 'conflict', state: row.state, rev: row.rev },
+      });
+    const rev = row.rev + 1;
+    const next: WorkflowResourceView = {
+      ...row,
+      state: write.to,
+      rev,
+      etag: etagOfRevision(rev),
+      sentSeq: write.sentSeq ?? row.sentSeq,
+      sentHash: write.sentHash ?? row.sentHash,
+      participants: structuredClone(write.participants ?? row.participants),
+    };
+    this.#rows.set(key, next);
+    return Promise.resolve({ ok: true, resource: structuredClone(next) });
   }
 
   put(

@@ -30,6 +30,8 @@ import {
   type WorkflowPutResult,
   type WorkflowResourceStore,
   type WorkflowResourceView,
+  type WorkflowTransitionResult,
+  type WorkflowTransitionWrite,
 } from './workflow-resource.ts';
 
 export type { WorkflowResourceView } from './workflow-resource.ts';
@@ -211,6 +213,48 @@ export class PgWorkflowResourceStore implements WorkflowResourceStore {
       return { ok: true, resource: viewOf(next) };
     });
   }
+  /**
+   * A state transition (FRW-030): one conditional `UPDATE` on the state and revision the caller
+   * read. It sets the new state, `sent_seq` and `sent_hash` when given, the participants as the
+   * transition leaves them, and raises the revision. Nothing else changes in the row.
+   */
+  transition(
+    tenant: string,
+    doc: string,
+    from: { readonly state: string; readonly rev: number },
+    write: WorkflowTransitionWrite,
+  ): Promise<WorkflowTransitionResult> {
+    const at = new Date(this.#now()).toISOString();
+    return inTenant(this.#pool, tenant, async (c): Promise<WorkflowTransitionResult> => {
+      const row = await lockRow(c, tenant, doc);
+      if (row === null) return { ok: false, problem: { code: 'not_found' } };
+      if (row.state !== from.state || row.rev !== from.rev)
+        return { ok: false, problem: { code: 'conflict', state: row.state, rev: row.rev } };
+      const updated = await c.query<Row>(
+        `UPDATE ${WORKFLOW_RESOURCE_TABLE}
+            SET state = $3,
+                sent_seq = COALESCE($4::bigint, sent_seq),
+                sent_hash = COALESCE($5, sent_hash),
+                participants = COALESCE($6::jsonb, participants),
+                rev = rev + 1, updated_at = $7
+          WHERE tenant_id = $1 AND doc_id = $2
+          RETURNING ${COLUMNS}`,
+        [
+          tenant,
+          doc,
+          write.to,
+          write.sentSeq ?? null,
+          write.sentHash ?? null,
+          write.participants === undefined ? null : JSON.stringify(write.participants),
+          at,
+        ],
+      );
+      const next = updated.rows[0];
+      if (next === undefined) return { ok: false, problem: { code: 'not_found' } };
+      return { ok: true, resource: viewOf(next) };
+    });
+  }
+
   /**
    * The write behind `PUT /documents/{id}/workflow` (FRW-025): `expectedRev` 0 creates the workflow,
    * any other value replaces the writable members of a `draft` one at that revision. The input has
