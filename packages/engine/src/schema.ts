@@ -112,6 +112,38 @@ function preservedDOM(tag: 'div' | 'span', node: PMNode): DOMOutputSpec {
   ];
 }
 
+/** What the reader is told when a custom block's extension is not available to them (UX-058). */
+export const EXTENSION_NOTICE = 'This content comes from an extension that is not available.';
+
+/**
+ * A custom block as a reader sees it when no extension draws it (UX-056 criterion 6; UX-058): a
+ * named group with the notice, the fallback picture when there is one and the fallback text as an
+ * ordinary paragraph. The picture's alternative text is the fallback text, so a block with a picture
+ * and no text has none (the accessibility checker flags it). The payload is never rendered.
+ */
+function extensionDOM(node: PMNode): DOMOutputSpec {
+  const text = typeof node.attrs['fallbackText'] === 'string' ? node.attrs['fallbackText'] : '';
+  const hasAsset =
+    typeof node.attrs['fallbackAsset'] === 'string' && node.attrs['fallbackAsset'] !== '';
+  const children: DOMOutputSpec[] = [['p', { class: 'de-extension-notice' }, EXTENSION_NOTICE]];
+  if (hasAsset)
+    children.push([
+      'span',
+      { class: 'de-image de-extension-image', role: 'img', 'aria-label': text },
+    ]);
+  if (text !== '') children.push(['p', { class: 'de-extension-text' }, text]);
+  return [
+    'div',
+    {
+      class: 'de-extension',
+      contenteditable: 'false',
+      role: 'group',
+      'aria-label': `Content from extension ${String(node.attrs['extension'])}`,
+    },
+    ...children,
+  ];
+}
+
 const FIELD_PLACEHOLDER: Record<string, string> = {
   page: '#',
   pageCount: '##',
@@ -276,7 +308,7 @@ const NODE_RENDERING: Record<string, Partial<NodeSpec>> = {
   toc: { toDOM: () => ['div', { class: 'de-toc' }, 'Table of contents'] },
   bibliography: { toDOM: () => ['div', { class: 'de-bibliography' }, 'Bibliography'] },
   extension_block: {
-    toDOM: (node) => ['div', { class: 'de-extension' }, String(node.attrs['fallbackText'] ?? '')],
+    toDOM: (node) => extensionDOM(node),
   },
   preserved_block: {
     toDOM: (node) => preservedDOM('div', node),

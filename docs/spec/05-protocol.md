@@ -304,8 +304,10 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/retention` | GET, PUT | Service credential only. The document's retention policy and the effective policy that applies to it. 08, section 11 |
 | `/holds` | GET | Service credential only. The tenant's legal holds, one page at a time. 08, section 11; 13, section 10 |
 | `/documents/{id}/holds` | POST | Service credential only. Places a legal hold on a document with a reason; audited. 08, section 11; 13, section 10 |
-| `/origins` | GET | Service credential only. The origins the tenant allows; read only until the administration API writes them. 05, section 4; 13, section 10 |
-| `/keys` | GET | Service credential only. The public keys registered for the tenant, user keys then service keys; read only. 05, section 3.2; 13, section 10 |
+| `/origins` | GET, POST | Service credential only. GET lists the origins the tenant allows. POST allows one origin (`{ origin }`, normalised) and is audited. 05, section 4; 13, section 10 |
+| `/origins/{origin}` | DELETE | Service credential only. Removes an allowed origin (percent-encoded in the path); audited. 05, section 4; 13, section 10 |
+| `/keys` | GET, POST | Service credential only. GET lists the public keys registered for the tenant, user keys then service keys. POST registers one public key (ES256, EdDSA or RS256 only; a private or symmetric key is refused) and is audited. 05, section 3.2; 13, section 10 |
+| `/keys/{kid}` | DELETE | Service credential only. Removes a key; tokens it signed are refused at once; audited. 05, section 3.2; 13, section 10 |
 | `/quotas` | GET, PUT | Service credential only. The tenant's quota values, null when unset; PUT names the dimensions to set, takes `If-Match`, and is audited. 06, section 12; 13, section 10 |
 
 Resources for fields, workflow, templates and bulk sends are listed in 12, section 10. Administration resources are outlined in 13, section 10.

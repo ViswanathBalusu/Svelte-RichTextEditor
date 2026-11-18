@@ -20,6 +20,7 @@ import type {
   ErrorCode,
   Limits,
   PresencePort,
+  ProofingPort,
   Resume,
   SyncChannel,
   SyncPort,
@@ -36,7 +37,7 @@ import type { AssetsPort as PictureAssetsPort, JournalPort } from '@docedit/engi
 import { pictureAssets } from './assets.ts';
 import { type IdbJournal, openIdbJournal } from './journal-idb.ts';
 import { AUTH_CODES, codeOf, messageOf } from './errors.ts';
-import { manifestFamilyLookup, registerManifestFonts } from './font-loader.ts';
+import { manifestFamilyLookup, readOnce, registerManifestFonts } from './font-loader.ts';
 import type { HostApi } from './host-api.ts';
 import {
   DEFAULT_PRESENCE_BASELINE_MS,
@@ -73,6 +74,8 @@ export interface AttachAt {
   features?: readonly string[];
   /** Uploads pasted pictures through the backend's assets port (FE-053; assets.ts). */
   assets?: PictureAssetsPort;
+  /** The backend's proofing port, when it has one (13 §6.1; UX-041). It has no feature name (G06). */
+  proofing?: ProofingPort;
 }
 
 /** What the session needs from the mounted editor (the editing core and the shell). */
@@ -258,10 +261,11 @@ export class Session {
       // FE-061: the manifest's files go on the page under hash aliases, alongside the load. A
       // manifest that cannot be read leaves the editor on its fallback fonts; the load goes on.
       // FE-062 criterion 1: the family lookup the engine draws with is read alongside it.
-      const families = backend.fonts ? manifestFamilyLookup(backend.fonts) : undefined;
-      if (backend.fonts) {
+      const fonts = backend.fonts ? readOnce(backend.fonts) : undefined;
+      const families = fonts ? manifestFamilyLookup(fonts) : undefined;
+      if (fonts) {
         const register = this.#options.registerFonts ?? registerManifestFonts;
-        void register(backend.fonts).catch(() => {});
+        void register(fonts).catch(() => {});
       }
       // FE-069 criterion 3: the KaTeX files, from the host's directory, under hash aliases. Loaded
       // lazily, so a session without it never loads KaTeX's sheet.
@@ -314,6 +318,7 @@ export class Session {
         at.presence = this.#presencePort(backend.presence);
       if (backend.assets && backend.features.has('assets'))
         at.assets = pictureAssets(backend.assets, this.docId);
+      if (backend.proofing) at.proofing = backend.proofing;
       at.features = [...backend.features];
       this.#channel = channel;
       this.#detach = editor.attach(channel, at);

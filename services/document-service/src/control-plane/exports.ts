@@ -130,7 +130,11 @@ export function exportState(
 }
 
 /** What the data plane offers for notifications on the socket (05 §5.6; seams `notify`). */
-export type NotifyFn = (ref: DocRef, notification: Notification, opts?: { user?: string }) => void;
+export type NotifyFn = (
+  ref: DocRef,
+  notification: Notification,
+  opts?: { user?: string; scopes?: readonly string[] },
+) => void;
 
 /**
  * The hooks that turn job progress and outcomes into notifications for the requester's channels

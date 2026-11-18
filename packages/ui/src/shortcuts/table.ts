@@ -130,6 +130,24 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
       },
     ],
   },
+  // The next and the previous spelling or grammar issue (UX-041). Word's own key for the next issue
+  // is Alt+F7; no browser list that was read gives it a meaning.
+  {
+    id: 'proofing.next',
+    kind: 'command',
+    conventional: ['Alt-F7'],
+    keys: ['Alt-F7'],
+    alternative: [],
+    conflicts: [],
+  },
+  {
+    id: 'proofing.previous',
+    kind: 'command',
+    conventional: [],
+    keys: ['Alt-Shift-F7'],
+    alternative: [],
+    conflicts: [],
+  },
   {
     id: 'view.commandSearch',
     kind: 'command',

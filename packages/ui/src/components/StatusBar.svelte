@@ -16,6 +16,7 @@
   import type { Notice } from '../shell/notices.ts';
   import { languageAt } from '../shell/status.ts';
   import { classificationName } from '../shell/classification.ts';
+  import { proofingBarItem } from '../proofing/present.ts';
   import type { StatusItemRegistry } from '../extensions/contributions.ts';
   import SaveState from './SaveState.svelte';
 
@@ -52,6 +53,11 @@
   const classification = core.classification ? live(core.classification) : null;
   const snapshot = live(shell.registry.view);
   const extensionView = statusItems ? live(statusItems.view) : null;
+  const proofing = core.proofing ? live(core.proofing) : null;
+  /** The proofing state, or null without a proofing port (UX-041 criteria 4 and 5). */
+  const proofingItem = $derived(
+    proofingBarItem(proofing?.current, (key, params) => tr.t(key, params)),
+  );
 
   /** Extension items at the bar's start and end edges, in registration order (UX-052; 13 §3). */
   const startItems = $derived.by(() => {
@@ -163,6 +169,15 @@
   {/if}
   {#if classificationText}
     <span data-status="classification">{classificationText}</span>
+  {/if}
+  {#if proofingItem}
+    <!-- Quiet: text only, never an error that blocks typing (UX-041 criterion 4). Absent without a port. -->
+    <span
+      data-status="proofing"
+      data-state={proofingItem.state}
+      role="group"
+      aria-label={tr.t('status.proofing.label')}>{proofingItem.text}</span
+    >
   {/if}
   {#if core.status}
     <SaveState status={core.status} />

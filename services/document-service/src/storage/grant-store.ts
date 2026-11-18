@@ -396,6 +396,10 @@ export class PgGrantStore implements GrantStore {
             rev: state.revision,
             scopes: changedScopes(change),
             ...(change.documentState !== undefined ? { documentState: change.documentState } : {}),
+            // A workflow transition sets this flag (07 section 14; UX-081 criterion 1).
+            ...(change.workflowActive !== undefined
+              ? { workflowActive: change.workflowActive }
+              : {}),
           },
           at: Date.now(),
         });

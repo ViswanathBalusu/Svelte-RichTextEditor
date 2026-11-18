@@ -16,6 +16,7 @@
 import '../src/index.ts';
 import { MockBackend, MockService, type MockToken } from '@docedit/backend-mock';
 import { SPIKE_IDS, spikeDocument } from '@docedit/engine/spike-document';
+import { mathGateReason } from '@docedit/export-latex';
 import type { CdmEnvelope } from '@docedit/model';
 import type { DocRole } from '@docedit/protocol';
 import { EVENT_NAMES } from '../src/events.ts';
@@ -263,6 +264,14 @@ function fillBackend(sub: string, roles: string[] = [FIELD_IDS.tenant]) {
   return service.backend({ ...userOf(sub), fill: { roles } }, { [fieldsDocId]: 'filler' });
 }
 
+/**
+ * A service whose rooms run the converter's math gate (09 §6.3; I8), as the document service does:
+ * a commit that sets a LaTeX source the gate refuses is rejected (FE-070 criterion 4). Tests create
+ * their own document on it with `mathService.createDocument(envelope)` and a backend with
+ * `mathService.backend(user, { [id]: 'editor' })`.
+ */
+const mathService = new MockService({ mathGate: mathGateReason });
+
 /** A service that offers no optional port: no `presence` port and no `presence` feature (PRO-099). */
 const noPresence = new MockService({ presence: false });
 const noPresenceDocId = noPresence.createDocument(spikeDocument() as unknown as CdmEnvelope);
@@ -354,6 +363,7 @@ Object.assign(globalThis, {
     backend,
     backendWithoutPresence,
     noPresenceDocId,
+    mathService,
     issueToken,
     useEndpoint,
     endpointCalls,

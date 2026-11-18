@@ -7,11 +7,7 @@
 import { DocumentCore } from '@docedit/engine/headless';
 import type { Access } from '@docedit/protocol';
 import { describe, expect, it } from 'vitest';
-import {
-  EVENT_NAMES,
-  type FieldChangeDetail,
-  type FillProgressDetail,
-} from '../src/events.ts';
+import { EVENT_NAMES, type FieldChangeDetail, type FillProgressDetail } from '../src/events.ts';
 import { FillEvents, type FillWatch, fillView, progressDetail } from '../src/fill.ts';
 import { Value, contractDocument } from './support.ts';
 

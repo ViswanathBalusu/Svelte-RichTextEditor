@@ -144,8 +144,7 @@ export function editField(
     state.doc.firstChild?.forEach((child) => {
       if (child.type.name === 'role_def' && child.attrs['id'] === role) found = true;
     });
-    if (!found)
-      problems.push({ field: 'assignee', code: 'not-a-role', message: 'not a role' });
+    if (!found) problems.push({ field: 'assignee', code: 'not-a-role', message: 'not a role' });
   }
   if (problems.length > 0) return { ok: false, reason: 'invalid', problems };
 

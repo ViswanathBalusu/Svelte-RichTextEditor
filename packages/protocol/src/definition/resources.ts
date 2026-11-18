@@ -805,6 +805,45 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
     'UX',
   ),
+  // The registration of a key or an origin (UX-077 criterion 5; 05 sections 3.2 and 4). The shapes
+  // are proposed in docs/adr/0372-w3-UX-077-key-origin-writes.md: the spec gives no body for them.
+  named(
+    'KeyRegistration',
+    obj(
+      {
+        kid: req(text({ minLength: 1 }), 'The key identifier, unique within the tenant.'),
+        use: req(
+          enm(['user', 'service']),
+          'user keys verify user tokens; service keys verify service credentials.',
+        ),
+        alg: req(
+          enm(['ES256', 'EdDSA', 'RS256']),
+          'The algorithm the key verifies; symmetric and other algorithms are refused.',
+        ),
+        jwk: req(
+          obj({}, { openMembers: true }),
+          'The public key as a JWK. A key with private members is refused.',
+        ),
+        issuer: opt(nullable(text()), 'The iss the key verifies, or null for any.'),
+      },
+      {
+        doc: 'The public key a tenant administrator registers (UX-077; 05 section 3.2).',
+        spec: '05 §3.2; 13 §10',
+      },
+    ),
+    'UX',
+  ),
+  named(
+    'OriginRegistration',
+    obj(
+      { origin: req(text({ minLength: 1 }), 'An origin: scheme, host and optional port.') },
+      {
+        doc: 'An origin a tenant administrator allows (UX-077; 05 section 4).',
+        spec: '05 §4; 13 §10',
+      },
+    ),
+    'UX',
+  ),
   // The quota values of a tenant (UX-078 criterion 1; 06 section 12). The store keeps finite
   // numbers; the contract names whole numbers only, as a proposal (docs/adr/0330-lane-V-UX-076-090.md).
   named(
@@ -1214,7 +1253,11 @@ export const OPERATIONS: readonly OperationDef[] = [
     security: BOTH,
     feature: 'history',
     requires: 'view and the history-visibility gate (07 §8)',
-    query: { region: opt(nodeId()) },
+    query: {
+      region: opt(nodeId()),
+      seq: opt(seq(), 'The version asked about; the head when omitted.'),
+      blocks: opt(text(), 'Block identifiers, separated by commas (a block range).'),
+    },
     success: ok(ref('Attribution')),
     gaps: ['G68'],
     owner: PRO,
@@ -1655,6 +1698,61 @@ export const OPERATIONS: readonly OperationDef[] = [
     security: SERVICE,
     requires: 'Service credential',
     success: ok(ref('KeyList')),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'registerTenantKey',
+    method: 'POST',
+    path: '/keys',
+    summary: 'Registers a public key for the tenant; audited (UX-077).',
+    spec: '05 §3.2; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('KeyRegistration'),
+    idempotencyKey: true,
+    success: created(ref('TenantKeyView')),
+    codes: ['idempotency_mismatch', 'conflict'],
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'removeTenantKey',
+    method: 'DELETE',
+    path: '/keys/{kid}',
+    summary: 'Removes a registered key; tokens it signed are refused at once; audited (UX-077).',
+    spec: '05 §3.2; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    params: { kid: req(text({ minLength: 1 }), 'The key identifier.') },
+    ifMatch: 'optional',
+    success: ok(),
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'addTenantOrigin',
+    method: 'POST',
+    path: '/origins',
+    summary: 'Allows an origin for the tenant; audited (UX-077).',
+    spec: '05 §4; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('OriginRegistration'),
+    idempotencyKey: true,
+    success: created(ref('OriginRegistration')),
+    codes: ['idempotency_mismatch'],
+    owner: 'UX',
+  }),
+  op({
+    operationId: 'removeTenantOrigin',
+    method: 'DELETE',
+    path: '/origins/{origin}',
+    summary:
+      'Removes an allowed origin; the origin is percent-encoded in the path; audited (UX-077).',
+    spec: '05 §4; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    params: { origin: req(text({ minLength: 1 }), 'The origin, percent-encoded.') },
+    ifMatch: 'optional',
+    success: ok(),
     owner: 'UX',
   }),
   op({

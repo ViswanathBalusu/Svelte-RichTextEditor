@@ -201,4 +201,8 @@ export class ShardedJobQueue implements JobQueue {
   async setLimit(tenant: string, kind: string, maxRunning: number | null): Promise<void> {
     return this.#on(tenant).setLimit(tenant, kind, maxRunning);
   }
+
+  async activeCount(tenant: string, kind: string): Promise<number> {
+    return this.#on(tenant).activeCount(tenant, kind);
+  }
 }

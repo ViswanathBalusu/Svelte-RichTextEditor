@@ -89,9 +89,7 @@ test.describe('FRW-074 the roles manager', () => {
     await pane.getByLabel('Name').fill('Lessee');
     await pane.getByLabel('Colour').fill('#aa00aa');
     await pane.locator('[data-roles="save"]').click();
-    await expect
-      .poll(() => roleDefs(page, 'one'))
-      .toContain('role_tenant|Lessee|#AA00AA');
+    await expect.poll(() => roleDefs(page, 'one')).toContain('role_tenant|Lessee|#AA00AA');
     await expect(list.locator('[data-role="role_tenant"] [data-content]').first()).toHaveText(
       'Lessee',
     );
@@ -162,7 +160,10 @@ test.describe('FRW-074 the roles manager', () => {
     await openEmbed(page);
     await mountFields(page, { name: 'fill', sub: 'vic', fill: true });
     const editor = editorOf('fill');
-    await page.locator(`${editor} .de-fill-bar`).getByRole('button', { name: 'What is left' }).click();
+    await page
+      .locator(`${editor} .de-fill-bar`)
+      .getByRole('button', { name: 'What is left' })
+      .click();
     const pane = page.locator(`${editor} .de-pane[data-pane="fill"]`);
     await expect(pane).toBeVisible();
 

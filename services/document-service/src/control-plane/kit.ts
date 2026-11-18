@@ -27,7 +27,12 @@ import {
 import type { AssetRegistry, AssetUploads } from './assets.ts';
 import type { ContentReader } from './content.ts';
 import type { EventSink } from './events.ts';
-import { CHANGE_WINDOW_MS, DOCUMENT_CHANGED, DocumentChangeDebounce } from './event-throttle.ts';
+import {
+  CHANGE_WINDOW_MS,
+  DOCUMENT_CHANGED,
+  DebouncedEventSink,
+  DocumentChangeDebounce,
+} from './event-throttle.ts';
 import type { ExportPolicy, NotifyFn } from './exports.ts';
 import type { FontCatalogue } from './fonts.ts';
 import type { Cursors } from './http.ts';
@@ -38,6 +43,7 @@ import type { QuotaAdminService } from './quota-admin.ts';
 import type { TenantRegistry } from './tenants.ts';
 import type { SearchHit, SearchQuery } from './search-index.ts';
 import type { CompileBudget } from './exp-009-compile-budget.ts';
+import type { LiveQuotas, QuotaSource } from './live-quotas.ts';
 import type { PolicyHookGate } from './policy-hook-client.ts';
 import type { JobQueue } from './jobs/queue.ts';
 import type { TenantMeter } from './metrics.ts';
@@ -87,6 +93,8 @@ export interface HandlerDeps {
   uploads?: AssetUploads | null;
   /** Lifetime of a pre-signed upload, seconds (a setting). */
   uploadSeconds?: number;
+  /** The rebase window in steps that a thread's `baseSeq` must be within; absent: the protocol default. */
+  rebaseWindow?: number;
   /** The font set (PRO-067, BE-047). */
   fonts?: () => FontCatalogue;
   /** Previews, caches and tenant caps (BE-050, BE-051, EXP-006, EXP-007). */
@@ -127,6 +135,10 @@ export interface HandlerDeps {
   search?: { search(tenant: string, q: string, query: SearchQuery): Promise<SearchHit[]> };
   /** The monthly compile-minute budget of tenants (EXP-009). Absent: no budget is checked. */
   compileBudget?: CompileBudget;
+  /** The live-use quotas of the node; the REST routes that author a commit ask it (BE-091). */
+  liveQuotas?: LiveQuotas;
+  /** The tenants' quota values, for the storage and export quotas (BE-092). Absent: none apply. */
+  quotaSource?: QuotaSource;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: no hook is asked. */
   policyHook?: PolicyHookGate;
   /** True when this node runs the import job (EXP-098); otherwise `/imports` is `not_found`. */
@@ -259,7 +271,8 @@ export function createKit(d: HandlerDeps): Kit {
       };
       // PRO-072 criterion 2: at most one dep.document.changed per document per window; the last of a
       // burst is raised when its window ends (armChangeFlush).
-      if (event.type === DOCUMENT_CHANGED) {
+      // A sink that already debounces (the running service shares one with the rooms) takes it as it is.
+      if (event.type === DOCUMENT_CHANGED && !(d.events instanceof DebouncedEventSink)) {
         changes.offer(event, d.now());
         armChangeFlush();
         return;

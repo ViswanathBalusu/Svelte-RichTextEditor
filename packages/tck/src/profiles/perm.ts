@@ -27,6 +27,7 @@ import {
 import { capabilityFixtures, type CapabilityCase } from '../fixtures.ts';
 import { judge, permissionState, type OracleGrant } from '../oracle.ts';
 import { scenario, type ProfileDef, type ScenarioDef } from '../scenario.ts';
+import { PERM_DOC_MATRIX, PERM_REGION_MATRIX } from './perm-matrix.ts';
 import {
   acked,
   join,
@@ -97,9 +98,10 @@ export const PERM_DOC: ProfileDef = {
   id: 'perm-doc',
   title: 'Document roles',
   spec: '07 §2, §4, §5; 05 §3.1, §5.5',
-  stories: ['PRO-113'],
+  stories: ['PRO-113', 'PRM-057'],
   requires: { kind: 'mode', mode: 'authority' },
   scenarios: [
+    ...PERM_DOC_MATRIX,
     doc({
       id: 'access',
       title: 'the access of each document role matches the capability fixtures',
@@ -200,9 +202,10 @@ export const PERM_REGION: ProfileDef = {
   id: 'perm-region',
   title: 'Region grants',
   spec: '07 §1, §3, §4, §9; 05 §5.5',
-  stories: ['PRO-113'],
+  stories: ['PRO-113', 'PRM-057'],
   requires: { kind: 'features', features: ['regions'] },
   scenarios: [
+    ...PERM_REGION_MATRIX,
     reg({
       id: 'capabilities',
       title:
