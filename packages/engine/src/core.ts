@@ -76,6 +76,7 @@ import type {
   DocumentApi,
   EditMode,
   EquationConfirmation,
+  FieldFillOutcome,
   EquationRequest,
   EquationTarget,
   FindResult,
@@ -344,6 +345,20 @@ export interface CoreConfig {
 }
 
 /** A document the core cannot open (03 §2, §11.1): the codes are DEP's (05 §5.8). */
+/** What a fill the service refused is told as (12 §4.2, §10). */
+function refusalText(code: string): string {
+  switch (code) {
+    case 'conflict':
+      return 'someone else changed the field first, so the value was not saved (12 §4.2, P9)';
+    case 'field_invalid':
+      return 'the value does not fit the field (12 §3.3, I15)';
+    case 'permission_denied':
+      return 'the user may not fill this field (12 §4.2, P7)';
+    default:
+      return `the service refused the value (${code})`;
+  }
+}
+
 export class UnsupportedDocumentError extends Error {
   readonly code: 'unsupported_cdm' | 'unsupported_feature' | 'validation_failed';
   readonly missing: readonly string[];
@@ -1675,6 +1690,74 @@ export class DocumentCore implements DocumentApi {
    */
   validateFields(): FieldReport[] {
     return this.#fieldEntries.validate();
+  }
+
+  /**
+   * `getFieldValues()` of the embedding API (12 §10; FRW-069): the value of each form field by key,
+   * as the document holds it now. A key that two fields share (which I13 refuses) is the first's.
+   */
+  fieldValues(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    this.#state.doc.descendants((node) => {
+      if (node.type.name !== 'form_field') return true;
+      const key = node.attrs['key'];
+      if (typeof key === 'string' && !Object.hasOwn(out, key))
+        out[key] = node.attrs['value'] ?? null;
+      return false;
+    });
+    return out;
+  }
+
+  /**
+   * `setFieldValue(key, value)` of the embedding API (12 §10; FRW-069): the same fill a person makes
+   * in the control, as the current user. The guard refuses a field the person may not fill
+   * (`permission_denied`, P7), and the answer of the document service decides the rest: a value
+   * that does not fit is `field_invalid`, a field someone else changed first is `conflict`. The
+   * promise resolves with the code, or with `confirmed: false` when the service did not answer in
+   * `timeoutMs` (default 15 s) and the change stays queued.
+   */
+  async fillField(
+    key: string,
+    value: unknown,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<FieldFillOutcome> {
+    const missing: FieldFillOutcome = {
+      ok: false,
+      code: 'not_found',
+      message: `the document has no field with the key ${key}`,
+    };
+    let id: string | null = null;
+    this.#state.doc.descendants((node) => {
+      if (id !== null || node.type.name !== 'form_field') return id === null;
+      if (node.attrs['key'] === key && typeof node.attrs['id'] === 'string') id = node.attrs['id'];
+      return false;
+    });
+    if (id === null) return missing;
+    if (!this.fieldFillable(id))
+      return {
+        ok: false,
+        code: 'permission_denied',
+        message: 'this field is not one the current user may fill (12 §4.2, P7)',
+      };
+    const kept = this.recovered.get().items.length;
+    const entered = this.enterFieldValue(id, value as JsonValue);
+    if (!entered.ok)
+      return entered.reason === 'no-field'
+        ? missing
+        : {
+            ok: false,
+            code: 'permission_denied',
+            message: 'the change to this field was refused (12 §4.2, P7)',
+          };
+    try {
+      await this.flush({ timeoutMs: options.timeoutMs ?? 15_000 });
+    } catch {
+      return { ok: true, confirmed: false };
+    }
+    // Work the service refused is set aside with its code (04 §8): the first item set aside since.
+    const refused = this.recovered.get().items.slice(kept)[0];
+    if (refused) return { ok: false, code: refused.reason, message: refusalText(refused.reason) };
+    return { ok: true, confirmed: true };
   }
 
   /**

@@ -64,6 +64,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'validateFields'
       // FRW-070, FRW-078: the fields of fill mode without their values, and the entries a person made.
       | 'fillFields'
+      // FRW-069: the field members of the embedding API.
+      | 'fieldValues'
+      | 'fillField'
       | 'onFieldChange'
       // FRW-074: the roles of the document and the changes to them, for the roles manager.
       | 'roles'
@@ -101,7 +104,10 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // SYN-036: the peers' carets as rectangles, which the shell draws (UX-027).
       | 'carets'
       // FRW-078: the summary's link moves focus to a field's control.
-      | 'focusField';
+      | 'focusField'
+      // FRW-069: focus by key, and the next field the person may fill.
+      | 'focusFieldByKey'
+      | 'nextFillableField';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });
