@@ -58,7 +58,7 @@ import {
   TextSelection,
   type Transaction,
 } from 'prosemirror-state';
-import { type Step, replaceStep } from 'prosemirror-transform';
+import { Step, replaceStep } from 'prosemirror-transform';
 import { type JsonValue, nodeId } from '@docedit/model';
 import type {
   AccessLimit,
@@ -77,6 +77,7 @@ import type {
   DocumentApi,
   EditMode,
   EquationConfirmation,
+  FieldFillOutcome,
   EquationRequest,
   EquationTarget,
   FindResult,
@@ -107,10 +108,19 @@ import type {
   SyncSummary,
 } from './api.ts';
 import { buildFragment, fragmentOf, fragmentProblem, isFragmentProblem } from './content.ts';
+import { fragmentOfSteps, recoveredKind } from './recovered-fragment.ts';
 import { bodyGuard, initialSelection, selectAllInBody } from './body.ts';
 import { effectiveMode, modeLocks } from './mode.ts';
 import { insertFootnote } from './footnote.ts';
-import { createVariantStory } from './header-footer.ts';
+import {
+  type StoryPart,
+  type StoryVariant,
+  type StoryVariantInfo,
+  createVariantStory,
+  pageSetupIdOf,
+  roleOfStory,
+  storyVariantsOf,
+} from './header-footer.ts';
 import { type CitationItemInput, insertCitation } from './citation-insert.ts';
 import { addLink, followInternalLink, insertBookmark } from './links-bookmarks.ts';
 import { type PageSetupChanges, setPageSetup } from './page-setup-commands.ts';
@@ -208,6 +218,7 @@ import { ReadValue, type Schedule, ViewHub, sameJson } from './read-value.ts';
 import {
   placeholderAt,
   regionAt,
+  scopeOfPosition,
   regionClamp,
   regionTitleKey,
   regionParagraphs,
@@ -283,11 +294,13 @@ import {
   type SyncState,
   type Transition,
   initialState,
+  insertedText,
   local,
   receiveCommits,
   settled,
   unconfirmed,
 } from './sync/state.ts';
+import type { RestorePlan } from './sync/restore.ts';
 import type { SelectionShim } from './view-support.ts';
 import { CDM1 } from '@docedit/model/definition';
 
@@ -355,6 +368,20 @@ export interface CoreConfig {
 }
 
 /** A document the core cannot open (03 §2, §11.1): the codes are DEP's (05 §5.8). */
+/** What a fill the service refused is told as (12 §4.2, §10). */
+function refusalText(code: string): string {
+  switch (code) {
+    case 'conflict':
+      return 'someone else changed the field first, so the value was not saved (12 §4.2, P9)';
+    case 'field_invalid':
+      return 'the value does not fit the field (12 §3.3, I15)';
+    case 'permission_denied':
+      return 'the user may not fill this field (12 §4.2, P7)';
+    default:
+      return `the service refused the value (${code})`;
+  }
+}
+
 export class UnsupportedDocumentError extends Error {
   readonly code: 'unsupported_cdm' | 'unsupported_feature' | 'validation_failed';
   readonly missing: readonly string[];
@@ -416,6 +443,8 @@ export interface ViewBridge {
    * end), with no new state: the view reads `editable` again (FE-029).
    */
   lockChanged?(locked: boolean): void;
+  /** The access changed: what a view shows of the fields a person may fill is drawn again (FRW-076). */
+  accessChanged?(): void;
   /**
    * The main-document position of the caret when this view's sub-editor has focus, or null (FE-026
    * criterion 3). `selectionScope()` reports the scope of that position.
@@ -1571,6 +1600,7 @@ export class DocumentCore implements DocumentApi {
       this.#readOnly = false;
     this.#refreshMode();
     this.#publish();
+    for (const b of this.#bridges) b.accessChanged?.();
   }
 
   #setReadOnly(on: boolean): void {
@@ -1622,12 +1652,7 @@ export class DocumentCore implements DocumentApi {
    * The authoring commands ask the guard about this scope, so a page setup is checked as `defs`.
    */
   #scopeIn(doc: PMNode, pos: number): string {
-    const $pos = doc.resolve(pos);
-    const top = $pos.depth > 0 ? $pos.node(1) : null;
-    if (top?.type.name === 'defs') return 'defs';
-    if (top?.type.name === 'story') return `story:${String(top.attrs['id'])}`;
-    const r = regionAt($pos);
-    return r ? `region:${r.id ?? ''}` : 'body';
+    return scopeOfPosition(doc, pos);
   }
 
   /**
@@ -1704,6 +1729,74 @@ export class DocumentCore implements DocumentApi {
    */
   validateFields(): FieldReport[] {
     return this.#fieldEntries.validate();
+  }
+
+  /**
+   * `getFieldValues()` of the embedding API (12 §10; FRW-069): the value of each form field by key,
+   * as the document holds it now. A key that two fields share (which I13 refuses) is the first's.
+   */
+  fieldValues(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    this.#state.doc.descendants((node) => {
+      if (node.type.name !== 'form_field') return true;
+      const key = node.attrs['key'];
+      if (typeof key === 'string' && !Object.hasOwn(out, key))
+        out[key] = node.attrs['value'] ?? null;
+      return false;
+    });
+    return out;
+  }
+
+  /**
+   * `setFieldValue(key, value)` of the embedding API (12 §10; FRW-069): the same fill a person makes
+   * in the control, as the current user. The guard refuses a field the person may not fill
+   * (`permission_denied`, P7), and the answer of the document service decides the rest: a value
+   * that does not fit is `field_invalid`, a field someone else changed first is `conflict`. The
+   * promise resolves with the code, or with `confirmed: false` when the service did not answer in
+   * `timeoutMs` (default 15 s) and the change stays queued.
+   */
+  async fillField(
+    key: string,
+    value: unknown,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<FieldFillOutcome> {
+    const missing: FieldFillOutcome = {
+      ok: false,
+      code: 'not_found',
+      message: `the document has no field with the key ${key}`,
+    };
+    let id: string | null = null;
+    this.#state.doc.descendants((node) => {
+      if (id !== null || node.type.name !== 'form_field') return id === null;
+      if (node.attrs['key'] === key && typeof node.attrs['id'] === 'string') id = node.attrs['id'];
+      return false;
+    });
+    if (id === null) return missing;
+    if (!this.fieldFillable(id))
+      return {
+        ok: false,
+        code: 'permission_denied',
+        message: 'this field is not one the current user may fill (12 §4.2, P7)',
+      };
+    const kept = this.recovered.get().items.length;
+    const entered = this.enterFieldValue(id, value as JsonValue);
+    if (!entered.ok)
+      return entered.reason === 'no-field'
+        ? missing
+        : {
+            ok: false,
+            code: 'permission_denied',
+            message: 'the change to this field was refused (12 §4.2, P7)',
+          };
+    try {
+      await this.flush({ timeoutMs: options.timeoutMs ?? 15_000 });
+    } catch {
+      return { ok: true, confirmed: false };
+    }
+    // Work the service refused is set aside with its code (04 §8): the first item set aside since.
+    const refused = this.recovered.get().items.slice(kept)[0];
+    if (refused) return { ok: false, code: refused.reason, message: refusalText(refused.reason) };
+    return { ok: true, confirmed: true };
   }
 
   /**
@@ -2109,20 +2202,26 @@ export class DocumentCore implements DocumentApi {
     state: EditorState,
     dispatch: ((tr: Transaction) => void) | undefined,
   ): boolean {
-    let setupId: string | null = null;
-    state.doc.forEach((node) => {
-      if (node.type.name !== 'defs') return;
-      node.forEach((child) => {
-        if (setupId === null && child.type.name === 'page_setup')
-          setupId = String(child.attrs['id']);
-      });
-    });
+    return this.#createStory(state, dispatch, 'header', 'default');
+  }
+
+  /**
+   * Creates the story a variant of the header or footer has none of, and opens it (FE-057
+   * criterion 2). One transaction through the guard: a refusal leaves no story behind.
+   */
+  #createStory(
+    state: EditorState,
+    dispatch: ((tr: Transaction) => void) | undefined,
+    part: StoryPart,
+    variant: StoryVariant,
+  ): boolean {
+    const setupId = pageSetupIdOf(state.doc);
     if (setupId === null) return false;
     // An availability check (no dispatch) must not draw from the id source: the toolbar asks on
     // every update, and each draw would shift the ids later suggestions and stories receive.
-    if (!dispatch) return createVariantStory(state, setupId, 'header', 'default', 'probe') !== null;
+    if (!dispatch) return createVariantStory(state, setupId, part, variant, 'probe') !== null;
     const storyId = this.#newId();
-    const tr = createVariantStory(state, setupId, 'header', 'default', storyId);
+    const tr = createVariantStory(state, setupId, part, variant, storyId);
     if (tr === null) return false;
     dispatch(tr);
     let present = false;
@@ -3177,7 +3276,21 @@ export class DocumentCore implements DocumentApi {
       const out: ImagePasteResult[] = [];
       for (const [i, image] of images.entries()) {
         try {
-          out.push(await pasteImage(host, image, port, { writable }));
+          const result = await pasteImage(host, image, port, { writable });
+          out.push(result);
+          // The user is told why the picture was not added (FE-053 criterion 3), in the shell's
+          // own words: the refusal view carries the reason only, never the service's message.
+          if (!result.ok) {
+            this.#refused({
+              reason:
+                result.reason === 'read-only'
+                  ? this.#locked()
+                    ? 'read-only'
+                    : 'scope'
+                  : result.reason,
+              scopes: [],
+            });
+          }
         } finally {
           host.dispatch(removePlaceholder(this.#state.tr, ids[i] ?? 0));
         }
@@ -3323,13 +3436,45 @@ export class DocumentCore implements DocumentApi {
     // 07 §7 (FE-056 criterion 6): a person who may not change the story gets no panel, so the
     // command is disabled for them. A read-only panel would need the view, which is not built.
     if (!this.canEdit(`story:${id}`)) return false;
-    this.#open({ kind: 'story', id }, 'Header');
+    const role = roleOfStory(this.#state.doc, id);
+    this.#open({ kind: 'story', id }, role?.part === 'footer' ? 'Footer' : 'Header', role);
     return true;
   }
 
-  #open(target: { kind: 'footnote' | 'story'; id: string }, label: string): void {
+  /**
+   * The variants of the header and footer the page setup uses, each with the story it names or null
+   * and whether the person may edit it, or create it when there is none (FE-057 criterion 1).
+   */
+  storyVariants(): Array<StoryVariantInfo & { editable: boolean }> {
+    return storyVariantsOf(this.#state.doc).map((v) => ({
+      ...v,
+      editable: v.story === null ? this.canEdit('doc') : this.canEdit(`story:${v.story}`),
+    }));
+  }
+
+  /**
+   * Opens the header or footer of a variant in the panel. A variant with no story yet gets one first,
+   * through the guard (FE-057 criterion 2). False, and nothing changes, when the page setup does not
+   * use the variant, when the person may not change the story, or when the guard refuses the new story.
+   */
+  editStory(part: StoryPart, variant: StoryVariant): boolean {
+    const found = this.storyVariants().find((v) => v.part === part && v.variant === variant);
+    if (found === undefined) return false;
+    if (found.story !== null) return this.openStory(found.story);
+    return this.#createStory(this.#state, (tr) => this.dispatchTransaction(tr), part, variant);
+  }
+
+  #open(
+    target: { kind: 'footnote' | 'story'; id: string },
+    label: string,
+    role: { part: StoryPart; variant: StoryVariant | null } | null = null,
+  ): void {
     this.#target = target;
-    this.panel.set({ ...target, label });
+    this.panel.set({
+      ...target,
+      label,
+      ...(role === null ? {} : { part: role.part, variant: role.variant }),
+    });
     this.revision.set(this.revision.get() + 1);
   }
 
@@ -3418,6 +3563,78 @@ export class DocumentCore implements DocumentApi {
 
   // --- Sync (FE-033) -------------------------------------------------------------------------
 
+  /**
+   * Puts the journal's unconfirmed work back on the document the core holds (FE-009; sync/restore.ts).
+   * The commit becomes the in-flight commit under its own identifier, and the queue is queued again.
+   * Work that does not apply to the document, or was made on another one, is returned to be set
+   * aside as recovered edits; it is never applied at positions it was not made for.
+   */
+  #restoreUnconfirmed(plan: RestorePlan): Discarded[] {
+    const schema = this.#schema;
+    const here = this.#sync.seq;
+    const failed: Discarded[] = [];
+    const parse = (json: readonly StepJson[]): Step[] | null => {
+      const out: Step[] = [];
+      for (const j of json) {
+        try {
+          out.push(Step.fromJSON(schema, j));
+        } catch {
+          return null;
+        }
+      }
+      return out;
+    };
+    const setAside = (json: readonly StepJson[], steps: Step[] | null, commit: string | null) =>
+      failed.push({
+        reason: 'stale',
+        commit,
+        steps: [...json],
+        text: steps ? insertedText(steps) : '',
+        seq: here,
+      });
+    // The steps go through the ordinary local path, without the guard (the server decides again) and
+    // out of the undo history; one transaction, or none when any step fails.
+    const applyAll = (steps: readonly Step[]): boolean => {
+      const tr = this.#state.tr;
+      for (const step of steps) if (tr.maybeStep(step).failed) return false;
+      this.dispatchTransaction(tr.setMeta(INTERNAL, true).setMeta('addToHistory', false));
+      return true;
+    };
+
+    const entry = plan.entry;
+    let inflightBack = false;
+    if (entry) {
+      // The text of work that is set aside is read from the steps, which parse without a document.
+      const steps = parse(entry.steps);
+      if (entry.base === here && steps && steps.length > 0 && applyAll(steps)) {
+        const queued = this.#sync.queue;
+        this.#sync = {
+          ...this.#sync,
+          queue: [],
+          inflight: {
+            id: entry.id,
+            base: entry.base,
+            sent: steps,
+            json: [...entry.steps],
+            local: queued,
+            origin: entry.origin,
+            resend: false,
+          },
+        };
+        inflightBack = true;
+      } else setAside(entry.steps, steps, entry.id);
+    }
+    if (plan.queue.length > 0) {
+      const madeOn = plan.queueAt?.seq;
+      const fits = entry ? inflightBack && madeOn === entry.base : madeOn === here;
+      const steps = parse(plan.queue);
+      if (!(fits && steps && steps.length > 0 && applyAll(steps)))
+        setAside(plan.queue, steps, null);
+    }
+    this.#publishSync();
+    return failed;
+  }
+
   attach(channel: SyncChannel, opts: AttachOptions): () => void {
     if (this.#session) throw new Error('a channel is already attached');
     this.#docId = channel.docId;
@@ -3438,8 +3655,12 @@ export class DocumentCore implements DocumentApi {
     if (opts.assets) this.#attachedAssets = opts.assets;
     const detachProofing = opts.proofing ? this.attachProofing(opts.proofing) : null;
     if (opts.user !== undefined) this.#user = opts.user;
+    // Work the journal kept from an earlier visit goes back on the document before the session
+    // starts, so that the session sees it as its own in-flight commit and queue (FE-009).
+    const notRestored = opts.restore ? this.#restoreUnconfirmed(opts.restore) : [];
     const session = new SyncSession(this.#host(), channel, sessionOpts);
     this.#session = session;
+    session.setAside(notRestored);
     if (opts.presence) {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const core = this;
@@ -3569,15 +3790,27 @@ export class DocumentCore implements DocumentApi {
         const before = this.recovered.get().items;
         const items = [
           ...before,
-          ...e.items.map((i, n) => ({
-            reason: i.reason,
-            commit: i.commit,
-            id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
-            text: i.text,
-            seq: i.seq,
-            ...this.#rejectionWords(i),
-            ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
-          })),
+          ...e.items.map((i, n): RecoveredItem => {
+            const words = this.#rejectionWords(i);
+            return {
+              reason: i.reason,
+              kind: recoveredKind(i.reason),
+              commit: i.commit,
+              id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
+              text: i.text,
+              fragment: fragmentOfSteps(
+                this.#state.doc,
+                i.steps,
+                this.#state.schema,
+                CDM_VERSION,
+                this.#requires,
+              ),
+              region: words.scope ?? i.region ?? null,
+              seq: i.seq,
+              ...words,
+              ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
+            };
+          }),
         ];
         this.recovered.set({ count: items.length, items });
         return;

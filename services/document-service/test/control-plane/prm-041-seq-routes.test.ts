@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { SEQ_INPUTS } from '../../src/data-plane/gate.ts';
 
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
-const CONTROL_GATE = /minVisibleSeqOf\(|refuseBelowGate\(/;
+const CONTROL_GATE = /minVisibleSeqOf\(|refuseBelowGate\(|refuseSeqBelowGate\(/;
 const ROOM_GATE = /stateAllowed\(|rangeAllowed\(|minVisibleSeq\(/;
 
 /** Built routes and the file that serves each, with the call that applies the gate there. */
@@ -24,16 +24,20 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
   // and `minVisibleSeqOf`, and refuse with `checkSeq` or `planRestore`.
   'GET /documents/{id}/diff': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
   'GET /documents/{id}/attribution': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
+  'GET /documents/{id}/history': {
+    // HIS-026: `historyViewOf` reads the gate; `checkSeq` and `rangeVisible` refuse below it.
+    file: 'control-plane/history-list-route.ts',
+    gate: /historyViewOf\(/,
+  },
   'POST /documents/{id}/versions': { file: 'control-plane/versions-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/restore': { file: 'control-plane/restore-route.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/fork': { file: 'control-plane/history-routes.ts', gate: CONTROL_GATE },
+  // PRM-042: the threads at a state are refused below the gate, as the content is.
+  'GET /documents/{id}/threads': { file: 'control-plane/thread-routes.ts', gate: CONTROL_GATE },
 };
 
 /** Gated inputs that are not gated yet, or whose route is not built; each with its reason. */
-const OPEN: Record<string, { file: string; reason: string }> = {
-  'GET /documents/{id}/history': { file: '', reason: 'route not built (HIS-026, phase 2)' },
-  'GET /documents/{id}/threads': { file: '', reason: 'route not built (PRM-042 criterion 1)' },
-};
+const OPEN: Record<string, { file: string; reason: string }> = {};
 
 const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
 

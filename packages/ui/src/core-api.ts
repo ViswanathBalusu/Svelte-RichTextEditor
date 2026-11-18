@@ -46,6 +46,26 @@ export interface PanelInfo {
   id: string;
   /** Kept for spike S1; the shell names panels from its own string tables by `kind` (UX-064). */
   label: string;
+  /** For a header or footer story: which one (FE-057). */
+  part?: StoryPart;
+  /** For a header or footer story: the variant the page setup names it for; null when it names none. */
+  variant?: StoryVariant | null;
+}
+
+/** The part of the page a story is set in (03 §4.1). */
+export type StoryPart = 'header' | 'footer';
+
+/** The pages a header or footer is used on: every page, the first page, or the even pages. */
+export type StoryVariant = 'default' | 'first' | 'even';
+
+/** One variant of the header or the footer, as the panel offers it (FE-057 criterion 1). */
+export interface StoryVariantInfo {
+  readonly part: StoryPart;
+  readonly variant: StoryVariant;
+  /** The story the page setup names for it, or null when it has none yet. */
+  readonly story: string | null;
+  /** Whether the person may edit it, or create it when it has none. */
+  readonly editable: boolean;
 }
 
 export interface OutlineItem {
@@ -195,6 +215,8 @@ export interface CoreLabels {
   readonly footnote: string;
   /** Accessible name of the header or footer sub-editor. */
   readonly story: string;
+  /** Accessible name of the footer sub-editor; `story` is used when it is not given. */
+  readonly footer?: string;
 }
 
 /**
@@ -596,6 +618,10 @@ export interface CoreApi {
   readonly outline: ReadView<readonly OutlineItem[]>;
   run(command: CommandName): boolean;
   closePanel(): void;
+  /** The variants of the header and footer the page setup uses (FE-057); absent: no variant tabs. */
+  storyVariants?(): readonly StoryVariantInfo[];
+  /** Opens a variant in the panel, creating its story when it has none (FE-057). */
+  editStory?(part: StoryPart, variant: StoryVariant): boolean;
   focus(): void;
   /** Mounts the body view; returns the function that unmounts it. */
   mountBody(target: HTMLElement): () => void;
@@ -987,9 +1013,77 @@ export interface HistoryVersionView {
   readonly name: string | null;
   /** Draws the version in `target`; returns the function that removes it. */
   mount(target: HTMLElement): () => void;
+  /**
+   * Draws the changes of a comparison whose newer version this is (HIS-013): insertions and formatting
+   * with the marks of suggestions, a change bar on each changed block. Absent when the host cannot draw one.
+   */
+  showComparison?(changes: readonly HistoryChange[]): void;
+  /** Shows or hides deleted text; hidden, the layout does not move. */
+  showDeletions?(on: boolean): void;
+  /** Puts the caret at change `index` and scrolls it into view; false when it has no place in this version. */
+  focusChange?(index: number): boolean;
+  /**
+   * The identifiers of the blocks the user has selected in this version (HIS-015: "who wrote this"
+   * for a passage). Empty when nothing is selected; absent when the host cannot tell.
+   */
+  selectedBlocks?(): string[];
   /** Releases the state. Called once, when the user leaves the version. */
   close(): void;
 }
+
+/** What "who wrote this" is asked about: a region, a list of blocks, or the whole body (both null). */
+export interface HistoryWhoQuery {
+  readonly seq: number;
+  readonly region: string | null;
+  readonly blocks: readonly string[] | null;
+}
+
+/** One author of the passage, with the times of the commits that wrote it (HIS-015; 08 §7). */
+export interface HistoryAuthorLine {
+  readonly user: string;
+  /** Set when an assistant acted for the user. */
+  readonly agent?: string;
+  /** Set when the text was brought back by a restore: the user who restored it (HIS-018). */
+  readonly restoredBy?: string;
+  /** The runs of this author that cover the passage. */
+  readonly runs: number;
+  /** The server times (ISO 8601) of the first and last commit that wrote them. */
+  readonly firstTime: string;
+  readonly lastTime: string;
+}
+
+export type HistoryWhoResult =
+  | { readonly ok: true; readonly seq: number; readonly authors: readonly HistoryAuthorLine[] }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'not_found' | 'failed' };
+
+/** One change of a comparison, as `GET /diff` gives it (08 §6). */
+export interface HistoryChange {
+  readonly kind: string;
+  readonly blockId?: string;
+  readonly fieldId?: string;
+  readonly region?: string;
+  readonly type?: string;
+  readonly user?: string;
+  readonly seq?: number;
+  readonly attrs?: readonly string[];
+  readonly spans?: ReadonlyArray<{
+    readonly op: 'insert' | 'delete';
+    readonly at: number;
+    readonly text: string;
+    readonly user?: string;
+    readonly seq?: number;
+  }>;
+}
+
+export interface HistoryComparison {
+  readonly fromSeq: number;
+  readonly toSeq: number;
+  readonly changes: readonly HistoryChange[];
+}
+
+export type HistoryCompareResult =
+  | { readonly ok: true; readonly comparison: HistoryComparison }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'not_found' | 'failed' };
 
 export type HistoryVersionOpen =
   | { readonly ok: true; readonly view: HistoryVersionView }
@@ -1054,6 +1148,16 @@ export interface HistoryPort {
     seq: number,
     label: { time: string; name: string | null },
   ): Promise<HistoryVersionOpen>;
+  /**
+   * Compares two versions (`GET /diff`; HIS-013). `to` null is the current document. The service
+   * refuses a version below the user's gate with `forbidden`; the pane offers only versions its list shows.
+   */
+  compare?(from: number, to: number | null): Promise<HistoryCompareResult>;
+  /**
+   * Who wrote a passage of the version at `seq` and when (`GET /attribution`, with the commit times
+   * joined; HIS-015). The service limits the answer by the user's gate and projection.
+   */
+  whoWrote?(query: HistoryWhoQuery): Promise<HistoryWhoResult>;
   /**
    * Called by the host when the list may have changed (a version was named, for instance); the
    * pane then asks again. Returns the function that stops the calls.

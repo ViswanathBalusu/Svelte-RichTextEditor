@@ -175,6 +175,8 @@ export class Metrics {
   readonly checkpoints: Counter;
   readonly checkpointFailures: Counter;
   readonly checkpointLatency: Histogram;
+  /** Checkpoints whose hash differed from a replay of the log; each one is an alert (BE-020). */
+  readonly checkpointMismatches: Counter;
   readonly slowConsumers: Counter;
   readonly rateLimited: Counter;
   readonly outbox: Counter;
@@ -207,6 +209,10 @@ export class Metrics {
     this.checkpoints = c('dep_checkpoints_total', 'Checkpoints written');
     this.checkpointFailures = c('dep_checkpoint_failures_total', 'Checkpoint writes that failed');
     this.checkpointLatency = h('dep_checkpoint_ms', 'Time to write a checkpoint, ms', MS);
+    this.checkpointMismatches = c(
+      'dep_checkpoint_mismatches_total',
+      'Checkpoints whose hash differed from a replay of the log (alert)',
+    );
     this.slowConsumers = c('dep_slow_consumers_total', 'Channels closed with slow_consumer');
     this.rateLimited = c('dep_rate_limited_total', 'Messages refused by a rate limit, by scope');
     this.outbox = c('dep_outbox_items_total', 'Outbox items settled, by state');

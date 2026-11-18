@@ -7,7 +7,9 @@
  * `outline()` of 02 §5.1 is `outline.get()`: the outline is a read view, so that the interface can
  * subscribe to it.
  */
-import type { StepJson } from '@docedit/authority';
+import type { FieldReport, StepJson } from '@docedit/authority';
+
+export type { FieldReport };
 import type {
   Access,
   Limits,
@@ -21,6 +23,7 @@ import type { ReadView } from './read-value.ts';
 import type { TrimReport } from './trim.ts';
 import type { Clock } from './sync/session.ts';
 import type { JournalPort } from './sync/journal.ts';
+import type { RestorePlan } from './sync/restore.ts';
 
 /** A CDM document as stored and transferred (03 §2). */
 export interface CdmEnvelope {
@@ -366,6 +369,10 @@ export interface PanelInfo {
   kind: 'footnote' | 'story';
   id: string;
   label: string;
+  /** For a header or footer story: which one (FE-057). */
+  part?: StoryPart;
+  /** For a header or footer story: the variant the page setup names it for; null when it names none. */
+  variant?: StoryVariant | null;
 }
 
 export interface OutlineItem {
@@ -470,6 +477,8 @@ export interface CoreLabels {
   readonly body: string;
   readonly footnote: string;
   readonly story: string;
+  /** The name of a footer's sub-editor; `story` is used when it is not given. */
+  readonly footer?: string;
 }
 
 /** Named queries of the document API for the command registry (13 §4; ADR 0041). */
@@ -515,7 +524,11 @@ export type RefusalReason =
   | 'no-copy'
   | 'no-print'
   | 'suggestion'
-  | 'referenced';
+  | 'referenced'
+  // A pasted picture that was not added after its upload (FE-053 criterion 3): the upload failed or
+  // the asset service did not accept the file, or its size cannot be used. No content is named.
+  | 'upload-failed'
+  | 'invalid-size';
 
 /** The last local change the region guard refused (FE-036): `n` counts refusals. */
 export interface RefusalNotice {
@@ -534,8 +547,25 @@ export interface RecoveredItem {
   commit: string | null;
   /** Names the item for `insertRecovered` and `discardRecovered` (UX-017): the commit, else the `seq` and its place. */
   id?: string;
+  /**
+   * Why it was set aside, in three words (FE-010 criterion 6): `rejected` (the server refused the
+   * commit), `dropped` (a rebase removed it because another change took away what it applied to) or
+   * `unsent` (a reload, a reset or a stale commit left it unsent). It follows from `reason`.
+   */
+  kind?: 'rejected' | 'dropped' | 'unsent';
   /** The text it inserted. */
   text: string;
+  /**
+   * What it inserted, as a CDM fragment, or null when it inserted nothing (a deletion): the pane can
+   * show it and a host can read it (FE-010 criterion 6).
+   */
+  fragment?: CdmFragment | null;
+  /**
+   * The DEP scope it was meant for (`body`, `region:<id>`, `defs`, `story:<id>`), or null when
+   * unknown (an item written to the journal before this field existed). For a `permission_denied`
+   * rejection it is the scope the server named, as `scope` says.
+   */
+  region?: string | null;
   seq: number;
   /**
    * For a `permission_denied` rejection: the scope whose change was refused, as the shell names it
@@ -602,6 +632,39 @@ export type EquationConfirmation =
   | { readonly ok: true; readonly confirmed: boolean }
   | { readonly ok: false; readonly reason: string; readonly message?: string };
 
+/**
+ * The outcome of setting the value of a form field through the embedding API (12 §10; FRW-069). It
+ * resolves once the document service has answered, or after the timeout with `confirmed` false.
+ * `code` is what refused the fill: `permission_denied` (the field is not this person's to fill, P7),
+ * `field_invalid` (the value does not fit the field, I15), `conflict` (someone else changed the
+ * field first, P9), `not_found` (the document has no field with that key) or another code of the
+ * protocol (04 §9).
+ */
+export type FieldFillOutcome =
+  | { readonly ok: true; readonly confirmed: boolean }
+  | { readonly ok: false; readonly code: string; readonly message: string };
+
+/**
+ * The field members of the embedding API over the core (12 §10; FRW-069). The two that move focus
+ * need a view, so a core without one does not offer them.
+ */
+export interface FieldsApi {
+  /** The values of the form fields by key, as the document holds them now (decimals are strings). */
+  fieldValues(): Record<string, unknown>;
+  /** Fills the field with `key` as the current user: a normal commit, checked by the guard and the authority. */
+  fillField(
+    key: string,
+    value: unknown,
+    options?: { readonly timeoutMs?: number },
+  ): Promise<FieldFillOutcome>;
+  /** The fields that are required and empty, or whose entry has a problem; it changes nothing. */
+  validateFields(): FieldReport[];
+  /** Moves focus to the control of the field with `key`; false when there is none. */
+  focusFieldByKey?(key: string): boolean;
+  /** Moves focus to the next field the person may fill; false when there is none. */
+  nextFillableField?(): boolean;
+}
+
 /** The sync client's state as plain data (FE-033 criterion 7). */
 export interface SyncSummary {
   seq: number;
@@ -654,6 +717,13 @@ export interface AttachOptions {
   features?: readonly string[];
   /** The recovery journal (FE-008): commits are written here before they are sent. */
   journal?: JournalPort;
+  /**
+   * Unconfirmed work an earlier visit left in the journal (FE-009; `readRestorePlan`). The content
+   * the core holds must be the document at `restoreBase(restore).seq`, and the channel must have
+   * been opened with a resume at that `seq` naming the commit as in flight. The core puts the work
+   * back as the in-flight commit and the queue; what does not apply is kept as recovered edits.
+   */
+  restore?: RestorePlan;
   /** The assets port: a pasted picture is uploaded through it (FE-053; 10 §3.1). */
   assets?: AssetsPort;
   /** The proofing port (13 §6.1; UX-041): the core checks spelling and grammar through it. */
@@ -744,6 +814,7 @@ export type InsertResult =
     };
 
 import type { CdmFragment } from './cdm-fragment.ts';
+import type { StoryPart, StoryVariant, StoryVariantInfo } from './header-footer.ts';
 import type { ClipboardInput, ClipboardPayload, CutResult } from './clipboard.ts';
 import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
@@ -836,6 +907,10 @@ export interface DocumentApi {
   openFootnote(id: string): void;
   /** Opens the story's panel. Returns false, and opens nothing, when the user may not change the story (07 §7). */
   openStory(id: string): boolean;
+  /** The variants of the header and footer the page setup uses, with the story each names (FE-057). */
+  storyVariants(): Array<StoryVariantInfo & { editable: boolean }>;
+  /** Opens a variant in the panel, creating its story through the guard when it has none (FE-057). */
+  editStory(part: StoryPart, variant: StoryVariant): boolean;
   closePanel(): void;
   /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
   selectBlock(id: string): boolean;

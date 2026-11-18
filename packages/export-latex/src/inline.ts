@@ -438,7 +438,10 @@ function footnoteText(ctx: Ctx, n: J): { fn: number; props: Tex; body: Tex } {
   });
   // The text stands on lines of its own, owned by the footnote's block and not by the host
   // paragraph, cell, heading or caption it is written in (EXP-012 criterion 2).
-  const body = ownLines(fn, join(paragraphBody(ctx, inlines, inner), t('%\n')));
+  // A numbered paragraph in a footnote prints the label of the shared algorithm (EXP-115).
+  const label = blockId ? ctx.labels.lists.get(blockId) : undefined;
+  const lab = label && label.kind !== 'none' && label.text !== '' ? [text(`${label.text} `)] : [];
+  const body = ownLines(fn, join([...lab, ...paragraphBody(ctx, inlines, inner)], t('%\n')));
   return { fn, props: f.tex, body };
 }
 

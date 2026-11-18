@@ -49,6 +49,12 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'peerSelections'
       // PRM-034: the element re-reads the region list when a region is renamed, added or removed.
       | 'regionTitles'
+      // UX-017: the recovered edits pane puts a set-aside edit back or drops it, by its id.
+      | 'insertRecovered'
+      | 'discardRecovered'
+      // UX-018: the status bar's word count and the document language at the selection.
+      | 'words'
+      | 'language'
       // FRW-004: the entries of form fields, for the field controls of the web view. The fill
       // methods of the embedding API (12 §10) are FRW-069's and are not on the document API yet.
       | 'fieldEntry'
@@ -58,6 +64,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'validateFields'
       // FRW-070, FRW-078: the fields of fill mode without their values, and the entries a person made.
       | 'fillFields'
+      // FRW-069: the field members of the embedding API.
+      | 'fieldValues'
+      | 'fillField'
       | 'onFieldChange'
       // FRW-074: the roles of the document and the changes to them, for the roles manager.
       | 'roles'
@@ -101,7 +110,12 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // SYN-036: the peers' carets as rectangles, which the shell draws (UX-027).
       | 'carets'
       // FRW-078: the summary's link moves focus to a field's control.
-      | 'focusField';
+      | 'focusField'
+      // FRW-069: focus by key, and the next field the person may fill.
+      | 'focusFieldByKey'
+      | 'nextFillableField'
+      // HIS-013: a read-only version view draws a comparison over its document.
+      | 'setComparison';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });

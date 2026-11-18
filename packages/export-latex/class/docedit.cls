@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-15 v0.2.9 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-17 v0.2.11 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -64,6 +64,9 @@
 \def\DE@tmp{report}%
 \ifx\DE@opt@glyphs\DE@tmp \tracinglostchars=2 \else \tracinglostchars=3 \fi
 \setcounter{secnumdepth}{-10} % heading numbers are literal labels from the converter
+% Bookmarks follow \c@tocdepth: with the article default of 3 a heading of level 4 to 9 has no
+% bookmark (EXP-022 criterion 4). The table of contents sets its own depth when it is printed.
+\setcounter{tocdepth}{9}
 \setlength\parskip{0pt}
 \setlength\parindent{0pt}
 \frenchspacing
@@ -88,6 +91,7 @@
 \newattribute\DE@attr@pos
 \newattribute\DE@attr@area
 \newattribute\DE@attr@atom
+\newattribute\DE@attr@mclip % the math nodes of an inline equation, clipped to their box by docedit.lua
 \newattribute\DE@attr@lsr  % line rule: 0 multiple, 1 exact, 2 at least
 \newattribute\DE@attr@lsv  % its value: thousandths, or twips
 \newattribute\DE@attr@plh  % natural height of the paragraph mark, twips
@@ -111,6 +115,7 @@
     pos = luatexbase.registernumber("DE@attr@pos"),
     area = luatexbase.registernumber("DE@attr@area"),
     atom = luatexbase.registernumber("DE@attr@atom"),
+    mclip = luatexbase.registernumber("DE@attr@mclip"),
     lsr = luatexbase.registernumber("DE@attr@lsr"),
     lsv = luatexbase.registernumber("DE@attr@lsv"),
     plh = luatexbase.registernumber("DE@attr@plh"),
@@ -559,16 +564,22 @@
 % The clip path is written in scaled points (\number of a dimension, no unit) under a PDF matrix
 % that turns one scaled point into big points (72/72.27/65536 = 0.00001520178239); the matrix is
 % undone straight after `W n`, so the clip stays in big points and the box's content is not scaled.
+% The `q` is written in direct mode, where the backend has made no translation, and the clip path in
+% origin mode, at the box's origin. The matching `Q`, again in direct mode, then restores the origin
+% that the backend believes in. A \pdfextension save and restore pair would not: the restore would
+% leave the later text of the page displaced by the width of the box (EXP-052 criterion 5, Notes).
 \newbox\DE@cbox
 \newcommand*\DE@clipout{%
   \edef\DE@clipstr{0.00001520178239 0 0 0.00001520178239 0 0 cm
     0 \number\dimexpr-\dp\DE@cbox\relax\space \number\wd\DE@cbox\space
     \number\dimexpr\ht\DE@cbox+\dp\DE@cbox\relax\space re W n 65781.76 0 0 65781.76 0 0 cm}%
-  \pdfextension save\pdfextension literal direct{\DE@clipstr}\box\DE@cbox\pdfextension restore}
+  \pdfextension literal direct{q}\pdfextension literal{\DE@clipstr}\box\DE@cbox\pdfextension literal direct{Q}}
 \newcommand\DE@clipmath[1]{\setbox\DE@cbox=\hbox{$\displaystyle#1$}\DE@clipout}
-% Inline equations are not clipped yet (EXP-052 criterion 5, Notes): a box around them stops the
-% line breaker from breaking inside an equation, and it moves the line-start offsets of EXP-055.
-\newcommand\DEmath[1]{\gdef\DE@mathsrc{#1}$#1$}
+% Inline equations are clipped to their box too, but not by a box: a box around them would stop
+% the line breaker from breaking inside an equation and would move the line-start offsets of
+% EXP-055. The math nodes carry DE@attr@mclip, and docedit.lua puts a clip path round the material
+% of each line after the line breaking (clip_math).
+\newcommand\DEmath[1]{\gdef\DE@mathsrc{#1}\begingroup\DE@attr@mclip=1\relax$#1$\endgroup}
 % Tagged equations are a Formula element whose alternative text is the equation's LaTeX source, as
 % the converter wrote it (ADR 0369, EXP-112 criterion 5). latex-lab's own plug would wrap the source
 % in "LaTeX formula starts ... ends" and keep the class's \DE@clipmath in it, so the class has its

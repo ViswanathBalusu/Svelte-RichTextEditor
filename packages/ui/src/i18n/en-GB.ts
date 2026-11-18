@@ -197,6 +197,10 @@ export const EN_GB = {
     'That change was not made: it would break the structure of the document.',
   'notice.refused.noCopy':
     'Nothing was copied: your access does not allow copying from this document. Restrictions deter casual copying and are not a security boundary.',
+  'notice.refused.uploadFailed':
+    'The picture was not added: it could not be uploaded, or the asset service did not accept the file.',
+  'notice.refused.pictureSize':
+    'The picture was not added: its size could not be used in the document.',
   'notice.refused.other': 'That change was not made.',
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',
@@ -288,6 +292,12 @@ export const EN_GB = {
   // Panels and panes (13 §3; UX-019).
   'panel.footnote': 'Footnote',
   'panel.story': 'Header',
+  'panel.footer': 'Footer',
+  // The variants of a header or footer (FE-057): the pages each is used on.
+  'panel.variants': 'Header and footer variants',
+  'panel.variant.default': 'Every page',
+  'panel.variant.first': 'First page',
+  'panel.variant.even': 'Even pages',
   'panel.close': 'Close',
   'pane.outline': 'Navigation',
   'pane.comments': 'Comments',
@@ -906,10 +916,64 @@ export const EN_GB = {
   'history.view.forbidden': 'You cannot open this version.',
   'history.view.not-found': 'This version no longer exists.',
   'history.view.failed': 'This version could not be opened.',
+
+  // Who wrote this (HIS-015; 08 §7): authors are named in words, never by colour alone.
+  'history.who.title': 'Who wrote this',
+  'history.who.scope': 'Passage',
+  'history.who.scope.document': 'The whole document',
+  'history.who.scope.selection': 'The selected passage',
+  'history.who.scope.region': 'Region: {name}',
+  'history.who.ask': 'Show who wrote this',
+  'history.who.loading': 'Looking up who wrote this.',
+  'history.who.nothing-selected': 'Select a passage in the version first.',
+  'history.who.empty': 'No text is recorded for this passage.',
+  'history.who.failed': 'Who wrote this could not be found.',
+  'history.who.forbidden': 'You cannot see who wrote this version.',
+  'history.who.line': {
+    one: '{name}: {count} passage, from {first} to {last}.',
+    other: '{name}: {count} passages, from {first} to {last}.',
+  },
+  'history.who.assistant': 'An assistant acted for this person.',
+  'history.who.restored': 'Brought back by {by}.',
+
+  // Comparing two versions (HIS-013; 08 §6).
+  'history.compare.title': 'Compare versions',
+  'history.compare.from': 'Older version',
+  'history.compare.to': 'Newer version',
+  'history.compare.current': 'Current document',
+  'history.compare.run': 'Compare',
+  'history.compare.option.group': 'Changes up to {when}',
+  'history.compare.option.version': '{name}, {when}',
+  'history.compare.loading': 'Comparing the versions.',
+  'history.compare.none': 'These versions have no differences.',
+  'history.compare.failed': 'The versions could not be compared.',
+  'history.compare.forbidden': 'You cannot compare these versions.',
+  'history.compare.navigate': 'Move between changes',
+  'history.compare.previous': 'Previous change',
+  'history.compare.next': 'Next change',
+  'history.compare.deletions': 'Show deleted text',
+  'history.compare.announce': 'Change {n} of {m}: {kind}, by {name}',
+  'history.compare.announce.nobody': 'Change {n} of {m}: {kind}',
+  'history.compare.kind.modified': 'text changed',
+  'history.compare.kind.added': 'added',
+  'history.compare.kind.removed': 'removed',
+  'history.compare.kind.moved': 'moved',
+  'history.compare.kind.formatted': 'formatting changed',
+  'history.compare.kind.field': 'field value changed',
+  'history.compare.kind.definition': 'style or setting changed',
+  'history.compare.summary': 'Summary by region',
+  'history.compare.region.none': 'Outside regions',
+  'history.compare.region.row': {
+    one: '{region}: {count} change',
+    other: '{region}: {count} changes',
+  },
+  'history.compare.fields': 'Field changes',
+  'history.compare.field.row': '{field} was changed by {name}',
   // Names of the core's own surfaces (CoreApi.setLabels).
   'surface.body': 'Document',
   'surface.footnote': 'Footnote text',
   'surface.story': 'Header',
+  'surface.footer': 'Footer',
 
   // Spelling and grammar findings (UX-041, UX-042; 13 §6.1). Shown only with a proofing port.
   'command.proofing.next': 'Next spelling or grammar issue',

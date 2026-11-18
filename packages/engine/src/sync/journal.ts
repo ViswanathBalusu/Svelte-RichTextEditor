@@ -15,6 +15,18 @@ import type { Discarded, OutgoingCommit } from './state.ts';
 /** A commit as the journal keeps it: the document it belongs to, and the commit as it was sent. */
 export interface JournalEntry extends OutgoingCommit {
   readonly docId: string;
+  /**
+   * The log incarnation `base` belongs to (04 §1). The next visit opens its channel with it, so that
+   * a log that was rewound since answers `reload` and the work is set aside, not applied to another
+   * history (FE-009). Absent in entries written before FE-009.
+   */
+  readonly incarnation?: string;
+}
+
+/** The confirmed document the queue of unsent steps was made on. */
+export interface QueueAt {
+  readonly seq: number;
+  readonly incarnation: string;
 }
 
 /** What the journal holds for one document. */
@@ -23,6 +35,11 @@ export interface JournalContents {
   readonly commits: readonly JournalEntry[];
   /** Local steps not yet sent. */
   readonly queue: readonly StepJson[];
+  /**
+   * The confirmed `seq` and incarnation the queue was made on, when it was written with them
+   * (FE-009): the queue's steps apply to that document plus the in-flight commit's steps.
+   */
+  readonly queueAt?: QueueAt;
 }
 
 /** The store the sync session writes through. Every method resolves once its write is durable. */
@@ -34,8 +51,11 @@ export interface JournalPort {
    * an unknown identifier is a no-op.
    */
   remove(docId: string, id: string): Promise<void>;
-  /** Replaces the queue of unsent steps for a document. */
-  setQueue(docId: string, steps: readonly StepJson[]): Promise<void>;
+  /**
+   * Replaces the queue of unsent steps for a document. `at` is the confirmed document the steps
+   * were made on; a port keeps it with them and gives it back from `read` (FE-009).
+   */
+  setQueue(docId: string, steps: readonly StepJson[], at?: QueueAt): Promise<void>;
   /** Reads what the document has unconfirmed. */
   read(docId: string): Promise<JournalContents>;
   /**
@@ -51,6 +71,7 @@ export interface JournalPort {
 export function memoryJournal(): JournalPort & { readonly size: number } {
   const commits = new Map<string, JournalEntry>();
   const queues = new Map<string, readonly StepJson[]>();
+  const queueAts = new Map<string, QueueAt>();
   const recovered = new Map<string, readonly Discarded[]>();
   const key = (docId: string, id: string) => `${docId}\u0000${id}`;
   return {
@@ -70,17 +91,25 @@ export function memoryJournal(): JournalPort & { readonly size: number } {
     async remove(docId, id) {
       commits.delete(key(docId, id));
     },
-    async setQueue(docId, steps) {
-      if (steps.length === 0) queues.delete(docId);
-      else queues.set(docId, structuredCloneSteps(steps));
+    async setQueue(docId, steps, at) {
+      if (steps.length === 0) {
+        queues.delete(docId);
+        queueAts.delete(docId);
+      } else {
+        queues.set(docId, structuredCloneSteps(steps));
+        if (at) queueAts.set(docId, { seq: at.seq, incarnation: at.incarnation });
+        else queueAts.delete(docId);
+      }
     },
     async read(docId) {
       const mine = [...commits.values()]
         .filter((e) => e.docId === docId)
         .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      const at = queueAts.get(docId);
       return {
         commits: mine.map(structuredCloneEntry),
         queue: structuredCloneSteps(queues.get(docId) ?? []),
+        ...(at ? { queueAt: { ...at } } : {}),
       };
     },
   };

@@ -185,4 +185,42 @@ describe('PRO-095 criterion 2: sync.caughtUp comes before a resubmission of an u
     expect(resubmitAt).toBeGreaterThan(caughtUpAt);
     await b.close();
   });
+
+  it('holds a resubmission made while catching up until sync.caughtUp has arrived and the port reports live', async () => {
+    const s = setup(['stream'], { limits: { ackTimeoutMs: 80 } });
+    const b = s.make();
+    const { ch, content, states } = await joined(s, b);
+    const commit = {
+      id: '0192f0c4-0000-7000-8000-0000000000e2',
+      base: content.seq,
+      steps: [insertText(posIn(content.doc, IDS.intro), 'r')],
+    };
+    // The first submit is lost; the server holds sync.caughtUp of the resumed channel back.
+    s.server.swallowBudget = 1;
+    s.server.holdCaughtUp = true;
+    const failed = ch.submit(commit).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    await until(() => resumesOf(s.net).some((r) => r['inflight'] === commit.id), 'the resume');
+    expect(await failed).toMatchObject({ code: 'unavailable' });
+    await until(() => s.server.held.length > 0, 'the held sync.caughtUp');
+    // The caller resubmits at once, while the channel is still catching up.
+    const liveBefore = states.filter((x) => x.status === 'live').length;
+    expect(states.at(-1)?.status).not.toBe('live');
+    const result = ch.submit(commit);
+    await sleep(60);
+    const submits = () =>
+      s.net
+        .decoded('c2s')
+        .filter((f) => f['t'] === 'sync.submit' && JSON.stringify(f).includes(commit.id)).length;
+    // Only the lost frame has been sent: the port holds the resubmission back.
+    expect(submits()).toBe(1);
+    expect(states.filter((x) => x.status === 'live').length).toBe(liveBefore);
+    s.server.releaseCaughtUp();
+    expect(await result).toMatchObject({ seq: content.seq + 1 });
+    expect(states.filter((x) => x.status === 'live').length).toBe(liveBefore + 1);
+    expect(submits()).toBe(2);
+    await b.close();
+  });
 });

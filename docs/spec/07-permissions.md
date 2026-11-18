@@ -215,7 +215,7 @@ Word's protection is advisory: the file format specification says it is not a se
 ## 17. Open issues
 
 - Read restrictions per region and per field value are required since 2026-11-06 (SPK-005). They need filtered content, filtered sync, filtered history and filtered export; ADR 0019 proposes per-reader projections of the one log.
-- The exact P4 rules for suggested block-level changes beyond paragraphs and whole table rows need a precise specification and property tests before the `perm-suggest` profile can exist.
+- The P4 rules for suggested block-level changes are written and property-tested (PRM-062; ADR 0146, proposed). Version 1 supports paragraphs, whole table rows and whole tables, as 03 §5 says. Table cells and columns, figures, equations, `toc`, extension blocks and regions are not supported, and a suggestion on them is refused with `invalid_op`. The `perm-suggest` profile covers `ins`, `del` and `fmt` marks on text; block-level suggestions are tested in `packages/authority` and are not in the profile yet. The owner has not yet confirmed that whole tables belong in version 1.
 - A user who may edit only regions cannot add a landscape page or a new style. Whether some of `structure` should be grantable per region is open.
 - A per-region size quota would stop a region-only editor from filling a document to its size limit.
 - A policy engine (for example OpenFGA or SpiceDB) can replace the grants tables behind `GrantStore` when groups nest or grants need conditions. Nothing in the protocol changes.

@@ -76,6 +76,8 @@ export interface HistoryController {
   reload(): Promise<void>;
   /** Opens the state an item stands for, read-only (HIS-010). False when the item cannot be opened. */
   open(item: HistoryPaneItem): Promise<boolean>;
+  /** Opens the state at `seq`, for a caller that has no list item (a comparison with the current document). */
+  openAt(key: string, what: { seq: number; time: string; name: string | null }): Promise<boolean>;
   /** Leaves the version: the state is released and the list shows again. */
   leave(): void;
   /** Releases anything the pane holds (an open version); the pane calls it when it closes. */
@@ -241,12 +243,13 @@ export function createHistoryController(port: HistoryPort): HistoryController {
     if (was?.status === 'open') was.view.close();
   };
 
-  const open = async (item: HistoryPaneItem): Promise<boolean> => {
-    const what = openingOf(item);
-    if (what === null || port.openVersion === undefined) return false;
+  const openAt = async (
+    key: string,
+    what: { seq: number; time: string; name: string | null },
+  ): Promise<boolean> => {
+    if (port.openVersion === undefined) return false;
     release();
     const mine = ++opening;
-    const key = itemKey(item);
     set({ viewing: { status: 'opening', key, seq: what.seq } });
     let result;
     try {
@@ -276,6 +279,11 @@ export function createHistoryController(port: HistoryPort): HistoryController {
     return true;
   };
 
+  const open = (item: HistoryPaneItem): Promise<boolean> => {
+    const what = openingOf(item);
+    return what === null ? Promise.resolve(false) : openAt(itemKey(item), what);
+  };
+
   const leave = (): void => {
     opening++;
     release();
@@ -298,6 +306,7 @@ export function createHistoryController(port: HistoryPort): HistoryController {
     loadMore,
     reload,
     open,
+    openAt,
     leave,
     dispose() {
       opening++;

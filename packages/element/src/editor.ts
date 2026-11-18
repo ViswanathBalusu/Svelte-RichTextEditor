@@ -287,6 +287,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     styleEdit: (op, id) => core.checkStyleEdit(op, id),
     run: (command) => core.run(command),
     closePanel: () => core.closePanel(),
+    // The variants of the header and footer panel (FE-057): the core lists and opens them.
+    storyVariants: () => core.storyVariants(),
+    editStory: (part, variant) => core.editStory(part, variant),
     focus: () => core.focus(),
     // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
     selectBlock: (id) => core.selectBlock(id),

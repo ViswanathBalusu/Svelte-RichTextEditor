@@ -68,7 +68,13 @@ describe('the sub-editor state (FE-056 criterion 1)', () => {
     const before = internals(c).state.selection;
     c.openStory(SPIKE_IDS.header);
     expect(internals(c).state.selection.eq(before)).toBe(true);
-    expect(c.panel.get()).toEqual({ kind: 'story', id: SPIKE_IDS.header, label: 'Header' });
+    expect(c.panel.get()).toEqual({
+      kind: 'story',
+      id: SPIKE_IDS.header,
+      label: 'Header',
+      part: 'header',
+      variant: 'default',
+    });
   });
 });
 
