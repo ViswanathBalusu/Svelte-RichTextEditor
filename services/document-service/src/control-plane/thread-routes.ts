@@ -239,7 +239,13 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
   ): Promise<{ t: StoredThread; c: StoredComment }> => {
     const loc = await store().findComment(ctx.caller.tenant, cid);
     if (!loc) throw new ApiError('not_found', 'no such comment');
-    const t = await readThread(ctx, loc.threadId);
+    // A comment of a thread the caller cannot see answers as an unknown comment does, not as a
+    // thread (SEC-016 criterion 4: a refusal and a missing identifier look the same).
+    const t = await readThread(ctx, loc.threadId).catch((e: unknown) => {
+      if (e instanceof ApiError && e.code === 'not_found')
+        throw new ApiError('not_found', 'no such comment');
+      throw e;
+    });
     const c = t.comments.find((x) => x.id === cid);
     if (!c) throw new ApiError('not_found', 'no such comment');
     return { t, c };

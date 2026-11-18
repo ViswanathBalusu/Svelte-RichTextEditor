@@ -9,6 +9,7 @@
 -->
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import AssistantMark from '../components/AssistantMark.svelte';
   import { useShell } from '../context.ts';
   import type { CoreApi, HistoryPaneItem } from '../core-api.ts';
   import {
@@ -18,6 +19,8 @@
     type WhoState,
   } from '../shell/history-who.ts';
   import {
+    agentOf,
+    assistantChanges,
     authorOf,
     compareChoices,
     createCompareController,
@@ -216,7 +219,14 @@
     const row = state.rows[state.index];
     if (row === undefined) return '';
     const author = authorOf(row.change);
+    const agent = agentOf(row.change);
     const params = { n: state.index + 1, m: state.rows.length, kind: kindText(row.change.kind) };
+    if (agent !== null)
+      return tr.t('history.compare.announce.assistant', {
+        ...params,
+        agent,
+        name: personName(author, state.names),
+      });
     return author === null
       ? tr.t('history.compare.announce.nobody', params)
       : tr.t('history.compare.announce', { ...params, name: personName(author, state.names) });
@@ -260,6 +270,13 @@
     if (askScope === 'selection') return { kind: 'selection' };
     if (askScope.startsWith('region:')) return { kind: 'region', id: askScope.slice(7) };
     return { kind: 'document' };
+  }
+
+  /** Asks the host to copy the open version into a new document; the fork is the host's call (HIS-022). */
+  function forkFrom(seq: number): void {
+    if (shell?.requestFork === undefined) return;
+    shell.requestFork(seq);
+    shell.announce('history.fork.requested');
   }
 
   function leave(): void {
@@ -310,6 +327,16 @@
         <button type="button" class="de-list-button" onclick={leave}>
           {tr.t('history.view.leave')}
         </button>
+        {#if shell?.requestFork !== undefined}
+          <button
+            type="button"
+            class="de-list-button"
+            data-fork-request
+            onclick={() => forkFrom(snapshot!.viewing!.status === 'open' ? snapshot!.viewing!.view.seq : 0)}
+          >
+            {tr.t('history.fork.request')}
+          </button>
+        {/if}
         {#if cmp?.status === 'ready'}
           <div class="de-history-compare" data-compare>
             {#if cmp.rows.length === 0}
@@ -353,6 +380,22 @@
                   </li>
                 {/each}
               </ul>
+              {#if assistantChanges(cmp.rows.map((r) => r.change)).length > 0}
+                <h3 class="de-subhead">{tr.t('history.compare.assistant.title')}</h3>
+                <ul data-compare-assistant>
+                  {#each assistantChanges(cmp.rows.map((r) => r.change)) as a (a.index)}
+                    <li data-assistant>
+                      <AssistantMark />
+                      {tr.t('history.compare.assistant.row', {
+                        n: a.index + 1,
+                        kind: kindText(a.change.kind),
+                        agent: a.agent,
+                        name: personName(a.user, cmp.names),
+                      })}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
               {#if fieldChanges(cmp.rows.map((r) => r.change)).length > 0}
                 <h3 class="de-subhead">{tr.t('history.compare.fields')}</h3>
                 <ul data-compare-fields>
@@ -417,7 +460,9 @@
                       last: when(line.lastTime),
                     })}
                     {#if line.agent !== undefined}
-                      {tr.t('history.who.assistant')}
+                      <span data-assistant><AssistantMark />
+                        {tr.t('history.who.assistant', { agent: line.agent })}</span
+                      >
                     {/if}
                     {#if line.restoredBy !== undefined}
                       {tr.t('history.who.restored', { by: personName(line.restoredBy, answer.names) })}
@@ -559,6 +604,15 @@
                 <span>{tr.t('history.group.changes', { count: item.changes })}</span>
               </p>
               <p>{tr.t('history.group.authors', { authors: authors(item.authors, snapshot) })}</p>
+              {#each item.assisted ?? [] as a (`${a.user}|${a.agent}`)}
+                <p data-assistant>
+                  <AssistantMark />
+                  {tr.t('history.group.assisted', {
+                    name: authors([a.user], snapshot),
+                    agent: a.agent,
+                  })}
+                </p>
+              {/each}
               <p>{tr.t('history.group.origins', { origins: item.origins.join(', ') })}</p>
               {@render openButton(item)}
             </li>

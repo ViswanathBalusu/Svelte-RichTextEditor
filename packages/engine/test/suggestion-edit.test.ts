@@ -210,6 +210,22 @@ describe('formatting suggestions (FE-043 criteria 1 to 3)', () => {
     expect(fmts.map((m) => m.attrs['user']).sort()).toEqual(['u1', 'u2']);
   });
 
+  it('gives a second user the first user’s before, so the baseline does not depend on order (PRM-013)', () => {
+    const s0 = baseState();
+    const from = start(s0);
+    const s1 = s0.apply(
+      suggestFormat(s0, from, from + 5, s0.schema.marks['bold']!.create(), author('u1', ['a'])).tr,
+    );
+    const s2 = s1.apply(
+      suggestFormat(s1, from, from + 5, s1.schema.marks['italic']!.create(), author('u2', ['b']))
+        .tr,
+    );
+    const fmts = s2.doc.nodeAt(from)!.marks.filter((m) => m.type.name === 'fmt');
+    expect(fmts).toHaveLength(2);
+    // Both record the formatting before the first suggestion, not the first user's bold.
+    for (const m of fmts) expect(m.attrs['before']).toEqual({ marks: [], attrs: {} });
+  });
+
   it('rejecting a formatting suggestion puts back exactly the previous marks (criterion 3)', () => {
     const s0 = baseState();
     const from = start(s0);

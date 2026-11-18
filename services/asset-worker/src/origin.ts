@@ -16,13 +16,18 @@
  * - long caching: assets are immutable and content-addressed, the URL changes when it is re-signed.
  *
  * Anything else answers 403 or 404 with no detail, and nothing is cached.
+ *
+ * The result files of an export job (`/e/{tenant}/{job}/{name}`, SEC-036 criterion 6; owner decision
+ * 66) come out of the same handler with the same headers: the content type is fixed by the file's
+ * extension (signing.ts `EXPORT_SERVED`), every result is `attachment`, and the answer is
+ * `private, no-store` because a job's files are not content-addressed.
  */
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { assetKeys } from './keys.ts';
 import type { AssetObjects } from './objects.ts';
-import { URL_DEFAULTS, verifyAssetUrl, type AssetUrlKeys } from './signing.ts';
+import { URL_DEFAULTS, verifyAssetUrl, verifyExportUrl, type AssetUrlKeys } from './signing.ts';
 
 export interface AssetOriginOptions {
   objects: Pick<AssetObjects, 'get'>;
@@ -61,10 +66,55 @@ export function assetOriginHandler(
   const now = opts.now ?? Date.now;
   const maxBytes = opts.maxBytes ?? 64 * 1024 * 1024;
   const cacheControl = opts.cacheControl ?? 'private, max-age=31536000, immutable';
+  /** A result file of an export job. */
+  const serveExport = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const check = verifyExportUrl(
+      req.url ?? '',
+      opts.keys,
+      now(),
+      opts.maxLifetimeMs ?? URL_DEFAULTS.maxLifetimeMs,
+    );
+    if (!check.ok) {
+      opts.onRefused?.(check.reason);
+      return refuse(res, check.reason === 'not_found' ? 404 : 403);
+    }
+    let body: Uint8Array | null;
+    try {
+      body = await opts.objects.get(
+        assetKeys.exportFile(check.tenant, check.job, check.name),
+        maxBytes,
+      );
+    } catch {
+      opts.onRefused?.('store');
+      return refuse(res, 503);
+    }
+    if (!body) {
+      opts.onRefused?.('missing');
+      return refuse(res, 404);
+    }
+    const headers: Record<string, string> = {
+      ...SECURITY_HEADERS,
+      'Content-Type': check.kind.contentType,
+      'Content-Disposition': `attachment; filename="${check.name}"`,
+      'Cache-Control': 'private, no-store',
+      // The element reads `layout.json` and the viewer reads the PDF with a `fetch` from the
+      // host's origin. The URL is a signed capability and the request carries no credentials, so
+      // any origin may read what the URL names.
+      'Access-Control-Allow-Origin': '*',
+      'Content-Length': String(body.length),
+    };
+    res.writeHead(200, headers);
+    res.end(
+      req.method === 'HEAD'
+        ? undefined
+        : Buffer.from(body.buffer, body.byteOffset, body.byteLength),
+    );
+  };
   return (req, res) => {
     void (async () => {
       if (req.method !== 'GET' && req.method !== 'HEAD')
         return refuse(res, 405, { Allow: 'GET, HEAD' });
+      if ((req.url ?? '').startsWith('/e/')) return serveExport(req, res);
       const check = verifyAssetUrl(
         req.url ?? '',
         opts.keys,

@@ -1,6 +1,6 @@
 # ADR 0020: Storage of the commit log in PostgreSQL
 
-**Status:** proposed, 2026-11-06. Records the decision of BE-008 and the choices made while building the PostgreSQL storage of `services/document-service` (BE-009, BE-010, BE-024). The hash-chain layout is provisional until HIS-002 publishes one with test vectors. The project owner has not reviewed any of it.
+**Status:** accepted by the owner on 2026-11-17 (decisions 137 and 220 in `docs/owner-decisions-2026-11-15.md`: 64 partitions; the other proposed ADRs 0020 and 0030 to 0052 are accepted as proposed). The hash-chain note below still stands. Proposed 2026-11-06. Records the decision of BE-008 and the choices made while building the PostgreSQL storage of `services/document-service` (BE-009, BE-010, BE-024). The hash-chain layout is provisional until HIS-002 publishes one with test vectors. The project owner has not reviewed any of it.
 
 ## Context
 

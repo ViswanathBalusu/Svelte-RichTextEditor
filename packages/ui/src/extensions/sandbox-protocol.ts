@@ -71,6 +71,11 @@ export interface SandboxBridgeOptions {
   /** Sends a reply or an event to the frame. */
   readonly send: (message: SandboxReply | SandboxEventMessage) => void;
   readonly log: (entry: SandboxLogEntry) => void;
+  /**
+   * Leave the API alive when the bridge is disposed (a panel's frame closes and opens again while
+   * the extension stays installed, UX-060); the host ends the API when it removes the extension.
+   */
+  readonly keepApi?: boolean;
 }
 
 const EVENTS: ReadonlySet<string> = new Set<ExtEventName>([
@@ -276,7 +281,7 @@ export function createSandboxBridge(options: SandboxBridgeOptions): SandboxBridg
       disposed = true;
       for (const off of subscriptions.values()) off();
       subscriptions.clear();
-      api.dispose();
+      if (options.keepApi !== true) api.dispose();
     },
   };
 }

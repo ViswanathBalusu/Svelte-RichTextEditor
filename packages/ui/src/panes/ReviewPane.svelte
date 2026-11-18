@@ -1,7 +1,7 @@
 <!--
   The review pane (UX-037; 13 §3, §5, §12; 08 §14). Lists the document's suggestions in document
   order with the kind (insertion, deletion, formatting, block change), the author, the time of the
-  commit that introduced it when the core knows it, and the words. A filter by author narrows the
+  commit that introduced it when the core knows it, and the words. A filter by author, and one by region, narrow the
   list; assistant authors are authors like any other. Choosing a suggestion moves the document to it;
   accept and reject are offered on an item only where the user may resolve it (UX-036), and "accept
   all" and "reject all" act on what the filter shows. The list follows the core's revision, so a
@@ -38,8 +38,24 @@
     return people.lookup(sub).name ?? tr.t('people.fallback');
   }
 
+  // The regions that hold a suggestion, in document order, and the filter on one of them (UX-036
+  // criterion 2). A region the user may not see has no title: it is named without one.
+  const regionsView = core.regions ? live(core.regions) : null;
+  let region = $state('');
+  const regionIds = $derived([
+    ...new Set(items.flatMap((i) => (i.region === undefined || i.region === null ? [] : [i.region]))),
+  ]);
+  $effect(() => {
+    if (region !== '' && !regionIds.includes(region)) region = '';
+  });
+  function regionName(id: string): string {
+    const title = regionsView?.current.find((r) => r.id === id)?.title;
+    return title ? title : tr.t('review.pane.region.untitled');
+  }
+  const shownItems = $derived(region === '' ? items : items.filter((i) => i.region === region));
+
   let author = $state('');
-  const authors = $derived([...new Set(items.map((i) => i.user))].sort());
+  const authors = $derived([...new Set(shownItems.map((i) => i.user))].sort());
   // A filter on an author who has no suggestion left is dropped: the list is never empty by a stale choice.
   $effect(() => {
     if (author !== '' && !authors.includes(author)) author = '';
@@ -58,7 +74,7 @@
 
   const rows = $derived(
     reviewPaneRows(
-      items.map(
+      shownItems.map(
         (i): SuggestionRow => ({
           id: i.id,
           kind: kindOf(i),
@@ -103,12 +119,30 @@
   function resolveShown(action: 'accept' | 'reject'): void {
     const report = core.resolveSuggestions?.(
       action,
-      'document',
+      region === '' ? 'document' : { id: region },
       author === '' ? undefined : author,
     );
     if (!report) return;
     if (report.handled === 0 && report.skipped === 0) shell.announce('review.none');
     else say(action, report.handled, report.skipped);
+  }
+
+  function bulkLabel(action: 'accept' | 'reject'): string {
+    const who = author === '' ? null : authorName(author);
+    const where = region === '' ? null : regionName(region);
+    const accept = action === 'accept';
+    if (who !== null && where !== null)
+      return tr.t(accept ? 'review.pane.acceptAllByIn' : 'review.pane.rejectAllByIn', {
+        author: who,
+        region: where,
+      });
+    if (who !== null)
+      return tr.t(accept ? 'review.pane.acceptAllBy' : 'review.pane.rejectAllBy', { author: who });
+    if (where !== null)
+      return tr.t(accept ? 'review.pane.acceptAllIn' : 'review.pane.rejectAllIn', {
+        region: where,
+      });
+    return tr.t(accept ? 'review.pane.acceptAll' : 'review.pane.rejectAll');
   }
 
   function rowName(row: (typeof rows)[number]): string {
@@ -125,6 +159,15 @@
 <section class="de-review" aria-label={tr.t('pane.review')}>
   {#if authors.length > 0}
     <div class="de-review-filters">
+      {#if regionIds.length > 0}
+        <label for="de-review-region">{tr.t('review.pane.filter.region')}</label>
+        <select id="de-review-region" bind:value={region}>
+          <option value="">{tr.t('review.pane.filter.allRegions')}</option>
+          {#each regionIds as id (id)}
+            <option value={id}>{regionName(id)}</option>
+          {/each}
+        </select>
+      {/if}
       <label for="de-review-author">{tr.t('review.pane.filter.author')}</label>
       <select id="de-review-author" bind:value={author}>
         <option value="">{tr.t('review.pane.filter.everyone')}</option>
@@ -136,14 +179,10 @@
     {#if core.resolveSuggestions && mayResolveShown}
       <div class="de-review-bulk">
         <button type="button" class="de-list-button" data-review-accept-all onclick={() => resolveShown('accept')}
-          >{author === ''
-            ? tr.t('review.pane.acceptAll')
-            : tr.t('review.pane.acceptAllBy', { author: authorName(author) })}</button
+          >{bulkLabel('accept')}</button
         >
         <button type="button" class="de-list-button" data-review-reject-all onclick={() => resolveShown('reject')}
-          >{author === ''
-            ? tr.t('review.pane.rejectAll')
-            : tr.t('review.pane.rejectAllBy', { author: authorName(author) })}</button
+          >{bulkLabel('reject')}</button
         >
       </div>
     {/if}

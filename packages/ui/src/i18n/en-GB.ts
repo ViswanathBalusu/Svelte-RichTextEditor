@@ -254,6 +254,13 @@ export const EN_GB = {
   'review.pane.rejectAll': 'Reject all',
   'review.pane.acceptAllBy': 'Accept all by {author}',
   'review.pane.rejectAllBy': 'Reject all by {author}',
+  'review.pane.filter.region': 'Region',
+  'review.pane.filter.allRegions': 'The whole document',
+  'review.pane.region.untitled': 'Untitled region',
+  'review.pane.acceptAllIn': 'Accept all in {region}',
+  'review.pane.rejectAllIn': 'Reject all in {region}',
+  'review.pane.acceptAllByIn': 'Accept all by {author} in {region}',
+  'review.pane.rejectAllByIn': 'Reject all by {author} in {region}',
   'review.nothingHere': 'No suggestion at the cursor or in the selection.',
   'review.accepted': {
     one: '{count} suggestion accepted.',
@@ -1267,6 +1274,7 @@ export const EN_GB = {
     other: '{count} changes',
   },
   'history.group.authors': 'Authors: {authors}',
+  'history.group.assisted': 'Written by an assistant for {name}: {agent}',
   'history.group.origins': 'Origins: {origins}',
   'history.group.named': 'Named version',
   'history.version.by': 'Named by {name} at {time}',
@@ -1276,6 +1284,9 @@ export const EN_GB = {
   'history.view.label.named': 'Read-only version {name}, {when}',
   'history.view.note': 'This is a read-only copy. Changes to the live document do not appear here.',
   'history.view.leave': 'Back to the live document',
+  // Copy a version into a new document (HIS-022): the editor asks, the host makes the copy.
+  'history.fork.request': 'Copy this version to a new document',
+  'history.fork.requested': 'Asked to copy this version into a new document.',
   'history.view.opening': 'Opening this version.',
   'history.view.forbidden': 'You cannot open this version.',
   'history.view.not-found': 'This version no longer exists.',
@@ -1297,7 +1308,7 @@ export const EN_GB = {
     one: '{name}: {count} passage, from {first} to {last}.',
     other: '{name}: {count} passages, from {first} to {last}.',
   },
-  'history.who.assistant': 'An assistant acted for this person.',
+  'history.who.assistant': 'Written by an assistant ({agent}) for this person.',
   'history.who.restored': 'Brought back by {by}.',
 
   // Comparing two versions (HIS-013; 08 §6).
@@ -1317,6 +1328,11 @@ export const EN_GB = {
   'history.compare.next': 'Next change',
   'history.compare.deletions': 'Show deleted text',
   'history.compare.announce': 'Change {n} of {m}: {kind}, by {name}',
+  'history.compare.announce.assistant':
+    'Change {n} of {m}: {kind}, written by an assistant ({agent}) for {name}',
+  'history.compare.assistant.title': 'Written by assistants',
+  'history.compare.assistant.row':
+    'Change {n}: {kind}, written by an assistant ({agent}) for {name}',
   'history.compare.announce.nobody': 'Change {n} of {m}: {kind}',
   'history.compare.kind.modified': 'text changed',
   'history.compare.kind.added': 'added',

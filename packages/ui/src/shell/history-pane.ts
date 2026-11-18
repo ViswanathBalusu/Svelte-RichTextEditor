@@ -135,8 +135,10 @@ function queryOf(filter: HistoryFilter, cursor: string | null): HistoryPaneQuery
 function authorIdsOf(items: readonly HistoryPaneItem[]): string[] {
   const ids = new Set<string>();
   for (const item of items) {
-    if (item.kind === 'group') for (const id of item.authors) ids.add(id);
-    else ids.add(item.creator);
+    if (item.kind === 'group') {
+      for (const id of item.authors) ids.add(id);
+      for (const a of item.assisted ?? []) ids.add(a.user);
+    } else ids.add(item.creator);
   }
   return [...ids];
 }

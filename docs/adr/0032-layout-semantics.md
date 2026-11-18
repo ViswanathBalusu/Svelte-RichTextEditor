@@ -101,7 +101,7 @@ The functions are pure and deterministic and use no Node.js or browser API. Leng
 |---|---|
 | Where the body starts | At the larger of `marginTop` and `headerDistance` plus the header's height |
 | Whether a footer grows like a header | Yes, upwards: the body ends at the smaller of `height - marginBottom` and `height - footerDistance` less the footer's height. Word is believed to do the same (to be confirmed in S11); the class must measure its footer box as it measures its header box (09 §3.1) |
-| A header and footer that leave no room | The body height is 0; pagination decides what to do |
+| A header and footer that leave no room | The body height is 0. The first page is shipped with an empty body and the body starts on the next page, at the same top, as the LaTeX class does (owner decision 77, docs/owner-decisions-2026-11-15.md; `startsOnPage` in `header-growth.json`, `bodyFrame` in the model, `paginate` in the layout) |
 | Which story a page shows | With `differentFirstPage`, the first page of a page section shows `headerFirst`; otherwise, with `differentOddEven`, an even page shows `headerEven`; otherwise `headerDefault`. Footers alike. A null slot means no header on those pages; it does not fall back to another slot. Which page is the first of its section and which pages are even is pagination's. The CDM sets `differentOddEven` per page setup, Word for the whole document (S7 report): the DOCX writer must reconcile them |
 
 ### 7. Spaces (S7 question 3)

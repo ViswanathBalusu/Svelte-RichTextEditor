@@ -3589,6 +3589,7 @@ one or original. It is a
         ...s,
         caps: access === null ? FULL_CAPS : (capsOf(access, depScope(scope)) as readonly string[]),
         canResolve: this.#mayResolve(scope),
+        region: scope.startsWith('region:') ? scope.slice('region:'.length) : null,
       };
     });
   }

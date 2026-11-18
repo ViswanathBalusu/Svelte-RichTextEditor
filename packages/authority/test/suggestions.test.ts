@@ -136,6 +136,53 @@ describe('the suggestion baseline (PRM-013)', () => {
     );
   });
 
+  it('takes overlapping fmt marks of two users back to the same baseline in either order (criterion 4)', () => {
+    const plain = para(text('abc'));
+    const bold = schema.marks['bold']!.create();
+    const italic = schema.marks['italic']!.create();
+    // The engine gives the second user's fmt the first user's before (owner decision 79; ADR 0378),
+    // so every fmt of the run records the formatting before the first suggestion.
+    const swapped = [
+      ['sAlice0000000001', 'sBob0000000001'],
+      ['sBob0000000001', 'sAlice0000000001'],
+    ] as const;
+    for (const [first, second] of swapped) {
+      const both = para(
+        text('a'),
+        text('bc', [
+          bold,
+          italic,
+          fmt(first, first.startsWith('sAlice') ? 'alice' : 'bob', { marks: [], attrs: {} }),
+          fmt(second, second.startsWith('sAlice') ? 'alice' : 'bob', { marks: [], attrs: {} }),
+        ]),
+      );
+      expect(baselineText([both])).toBe(baselineText([plain]));
+    }
+    // A suggester adds a second user's fmt over a run that already carries one: the commit keeps the
+    // baseline, so P4 accepts it.
+    const doc = tableDoc();
+    const start = posInside(doc, 'pIntro0000000001');
+    const seeded = applySteps(doc, [
+      new AddMarkStep(start, start + 4, bold),
+      new AddMarkStep(start, start + 4, fmt('sCarol0000000001', 'carol', { marks: [], attrs: {} })),
+    ]);
+    if (!seeded.ok) throw new Error(seeded.reason);
+    const verdict = check(
+      USERS.dave,
+      seeded.value.doc,
+      [
+        new AddMarkStep(start, start + 4, italic),
+        new AddMarkStep(
+          start,
+          start + 4,
+          fmt('sDave00000000001', 'dave', { marks: [], attrs: {} }),
+        ),
+      ],
+      { owners: new Map([['sCarol0000000001', 'carol']]) },
+    );
+    expect(verdict.ok).toBe(true);
+  });
+
   it('includes attributes and bookmarks', () => {
     const a = para(text('abc'));
     const aligned = schema.nodes['paragraph']!.create({ id: 'pIntro0000000001', align: 'center' }, [

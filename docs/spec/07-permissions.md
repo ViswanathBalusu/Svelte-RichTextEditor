@@ -136,6 +136,8 @@ These are requirements on the component's user experience. They are not security
 
 Old versions can contain text that was deleted before a person was given access. One setting per tenant or document decides what each person may see (08, section 9). It is enforced by a single gate, `minVisibleSeq(user)`, applied to every place a sequence number can be supplied: content at a `seq`, history, comparison, attribution, activity, forks, exports at a `seq`, the commits resource, and `resume.seq` on a channel. A resume below the gate gets `catchUp: "reload"` instead of old commits. Read markers only move forward.
 
+`minVisibleSeq(user)` is a sequence number: the lowest `seq` whose content the user may read. A single state (content at a `seq`, a version, one side of a comparison) is visible at or above it, at the head, and at a named version; the head is never blocked. A run of commits after a `seq` (`resume.seq`, `after`, `fromSeq`) may be sent only when that `seq` is at or above it, because the commits reveal every state up to the head; named versions do not open runs. A named version discloses its own content, its attribution map and a comparison with another visible state, which is computed from the two states and never from the commits between them. A person under `editors` who is not an editor reloads after a short disconnect unless they resume at the head. The gate is evaluated when a request arrives, so a change of setting applies at once to history already written and nothing is rewritten (owner decision 140; ADR 0034).
+
 ## 9. Live changes, revocation and races
 
 - A change to grants, region states or leases is written to the database with a new grants revision. The log write of every commit is conditional on the grants revision it was checked against (04, G7), so even if the notification to the room is lost, no commit can be stored under permissions that have been replaced. The owning room is also notified, recomputes the affected connections, records a control commit, and sends `perm.changed`.
@@ -146,7 +148,7 @@ Old versions can contain text that was deleted before a person was given access.
 
 ## 10. Leases
 
-A lease gives one user exclusive editing of a region for a short time, for teams that want check-out behaviour. It is optional (feature `leases`). A lease has an identifier, a holder and an expiry (default five minutes); the holder extends it with a heartbeat, up to a maximum total of eight hours. It ends when released, when it expires, or when a user with `manage` breaks it. While a lease is held, other users' capabilities in the region are limited as in section 4. Leases are not locks in the document and are not needed for correctness.
+A lease gives one user exclusive editing of a region for a short time, for teams that want check-out behaviour. It is optional (feature `leases`). A lease has an identifier, a holder and an expiry (default five minutes); the holder extends it with a heartbeat, up to a maximum total of eight hours. It ends when released, when it expires, or when a user with `manage` breaks it. While a lease is held, other users' capabilities in the region are limited as in section 4. Leases are not locks in the document and are not needed for correctness. A lease changes nobody's grants, so a former holder's pending commit is checked as any commit is, under their grants once the lease has ended: it is accepted if the grants allow it and otherwise rejected with `permission_denied`, its content going to recovered edits (owner decision 135).
 
 ## 11. Region states
 
@@ -164,7 +166,7 @@ An approval is bound to what was approved: the state record holds the `seq` and 
 | Create a thread, reply | `comment` in the scopes of the target |
 | Resolve, reopen or assign a thread | `comment` in its scope; delete needs the author or `manage` |
 | Upload an asset | `edit`, `suggest` or `fill` somewhere in the document |
-| Read an asset | `view` on a document the asset is attached to |
+| Read an asset | `view` on a document the asset is attached to; the uploader may also read their own ready upload for that document before a commit references it |
 | Named version | `edit` somewhere in the document |
 | Restore a region | `edit` in that region; not approved; not leased to someone else |
 | Restore a document, grants, region state or policy, break a lease, workflow actions, delete | `manage` |

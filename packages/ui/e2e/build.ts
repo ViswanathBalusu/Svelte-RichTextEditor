@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { build } from 'vite';
-import { harnessConfig, outDir } from './vite-config.ts';
+import { harnessConfig, outDir, uiDir } from './vite-config.ts';
 
 /** A square PNG of one colour, written by hand so the harness needs no image file. */
 function png(size: number, rgb: readonly [number, number, number]): Buffer {
@@ -37,4 +37,41 @@ function png(size: number, rgb: readonly [number, number, number]): Buffer {
 const started = Date.now();
 await build(harnessConfig());
 writeFileSync(join(outDir, 'avatar.png'), png(8, [11, 92, 173]));
+
+// The sandboxed extension's frame (UX-060): the runtime built as one classic script, the frame page
+// that loads it, and a small extension that draws two buttons.
+await build({
+  configFile: false,
+  logLevel: 'warn',
+  build: {
+    outDir,
+    emptyOutDir: false,
+    target: 'es2022',
+    minify: false,
+    lib: {
+      entry: join(uiDir, 'src', 'extensions', 'sandbox-runtime.ts'),
+      formats: ['iife'],
+      name: 'sandboxRuntime',
+      fileName: () => 'sandbox-runtime.js',
+    },
+  },
+});
+writeFileSync(
+  join(outDir, 'sandbox-frame.html'),
+  '<!doctype html><meta charset="utf-8"><title>Extension</title><script src="/sandbox-runtime.js"></script>',
+);
+writeFileSync(
+  join(outDir, 'ext-panel.js'),
+  `deExtension.activate(() => {
+  document.body.textContent = '';
+  for (const id of ['b1', 'b2']) {
+    const b = document.createElement('button');
+    b.id = id;
+    b.textContent = 'Button ' + id;
+    document.body.append(b);
+  }
+  document.body.dataset.ready = '1';
+});
+`,
+);
 console.log(`ui harness build: done in ${((Date.now() - started) / 1000).toFixed(1)} s`);

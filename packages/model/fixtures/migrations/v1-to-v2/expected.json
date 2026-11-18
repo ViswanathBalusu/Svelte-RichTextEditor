@@ -1,0 +1,12 @@
+{
+  "migration": "move ext[\"acme.test:keepTogether\"] to paragraph.keepTogether",
+  "from": 1,
+  "to": 2,
+  "description": "A test-only migration (owner decisions 75 and 76): before.json is a version 1 document whose paragraphs carry the key in ext, after.json is the version 2 document it becomes. The hash is the SHA-256 of the canonical form of after.json under the test-only version 2 (test/cdm2-test-only.ts).",
+  "canonicalHash": "489dbd882cb86beb4b825c5d89ad8c626821b75b03c68b909d06a17cbca74e3c",
+  "moved": [
+    { "node": "p3Jq8sLw0aZx1VbN", "value": true },
+    { "node": "pA1b2C3d4E5f6G7h", "value": false }
+  ],
+  "keptInExt": [{ "node": "p3Jq8sLw0aZx1VbN", "key": "acme.test:note" }]
+}
