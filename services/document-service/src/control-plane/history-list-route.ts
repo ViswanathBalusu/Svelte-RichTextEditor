@@ -85,7 +85,13 @@ export function historyListRoutes(k: Kit): Record<string, Handler> {
     if (toSeq !== undefined) checkSeq(toSeq, gate);
     // Only what the gate allows is read: nothing below it leaves storage for this request.
     const first = Math.max(1, gate.min);
-    const logCommits = head.seq >= first ? await d.logs.read(ref, first, head.seq) : [];
+    // Metadata only: a commit whose payload was removed (HIS-040) is still listed.
+    const logCommits =
+      head.seq < first
+        ? []
+        : d.logs.readMeta
+          ? await d.logs.readMeta(ref, first, head.seq)
+          : await d.logs.read(ref, first, head.seq);
     const commits: CommitMeta[] = logCommits.map((c) => ({
       seq: c.seq,
       kind: c.kind,
