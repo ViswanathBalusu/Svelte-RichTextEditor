@@ -45,6 +45,8 @@ The reasons for this shape are in [ADR 0008](../adr/0008-protocol-planes-and-enc
 
 `read-restrictions` says that the server hides content from readers by projection (ADR 0019, proposed): the view token of section 5.2, the empty `steps` of section 5.3 and the `access_changed` cause of `ch.closed` apply only to a server that announces it. The name is a proposal of the conformance kit (ADR 0042, item 4), not yet a decision of the owner. The CDM schema for projections, `spec/cdm/cdm-1.projection.json`, adds the `hidden_region` placeholder node, which stands where a reader may not see a region.
 
+`test-hooks` says that the server exposes fault-injection hooks for the conformance kit (section 11). A server announces it only while its test-mode switch is on, and never in production. The hooks are not part of the protocol: their routes are the server's own, and the kit's profile states the ones it uses (ADR 0398).
+
 ## 3. Authentication
 
 ### 3.1 User tokens
@@ -475,7 +477,7 @@ The conformance kit is a black-box test runner in a container.
 
 - **Bootstrap contract.** The kit is given a discovery URL, a service credential, and a test-mode switch that shortens timers (token lifetime, lease expiry, idle timeouts). It mints user tokens through `POST /tokens`, registers a webhook that points at itself, and creates its own documents.
 - **Profiles.** `core`, `core-relay`, `presence`, `perm-doc`, `perm-region`, `perm-suggest`, `history`, `comments`, `assets`, `exports`, `webhooks`, `leases`, `authority-service`, and the profiles of 12. A profile maps to the features a server may announce.
-- **What it cannot see.** Durability before acknowledgement, fencing, the hash chain and the audit trail are not observable from outside. An optional fault-injection profile covers them for servers that expose the test hooks.
+- **What it cannot see.** Durability before acknowledgement, fencing, the hash chain and the audit trail are not observable from outside. An optional fault-injection profile covers them for servers that expose the test hooks. A server announces the feature `test-hooks` while its test-mode switch is on; without it the profile is skipped.
 - **Contents.** Golden message fixtures; step-semantics and canonical-hash fixtures generated from the pinned library release; rules fixtures; negative tests for every row of the authorisation matrix; fuzzers for the envelope parser and for step validation.
 
 Machine-readable definitions (AsyncAPI for the real-time plane, OpenAPI for the control plane, JSON Schema for the CDM and for webhook bodies) are generated in phase 0 and are checked against this document by the kit.

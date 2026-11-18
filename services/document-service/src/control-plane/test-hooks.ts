@@ -13,6 +13,7 @@
  *   POST /_test/documents/{id}/fail-next-write { "at": "before-insert" | "after-insert" }
  *   POST /_test/documents/{id}/kill-room             the room stops as a crash would
  *   POST /_test/documents/{id}/drop-announcement     the next grant announcement is lost
+ *   POST /_test/documents/{id}/rewind { "to": seq }  the log is rewound to seq and gets a new incarnation (in-memory store only)
  *   GET  /_test/documents/{id}/state                 head, epoch, owner, incarnation, chain head
  *   GET  /_test/documents/{id}/audit                 the document's audit events
  */
@@ -103,6 +104,19 @@ export function testHooks(opts: {
           log('drop-announcement', ref.doc);
           hooks.dropNextAnnouncement(ref);
           return reply(204, undefined);
+        case 'POST rewind': {
+          const body = (await readJsonBody(req, 4096)) as { to?: unknown } | undefined;
+          const to = body?.to;
+          if (typeof to !== 'number' || !Number.isSafeInteger(to) || to < 0)
+            throw new ApiError('validation_failed', 'to must be a sequence number', {
+              violations: [{ path: '/to', rule: 'integer' }],
+            });
+          log('rewind', ref.doc);
+          const done = await hooks.rewind(ref, to);
+          if (!done)
+            throw new ApiError('not_found', 'the log store of this service cannot be rewound');
+          return reply(200, done);
+        }
         case 'GET state':
           log('state', ref.doc);
           return reply(200, await hooks.state(ref));

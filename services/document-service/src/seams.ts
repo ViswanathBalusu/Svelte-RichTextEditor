@@ -290,6 +290,12 @@ export interface DataPlaneTestHooks {
   killRoom(ref: DocRef): Promise<boolean>;
   /** The next grant announcement for the document is dropped. */
   dropNextAnnouncement(ref: DocRef): void;
+  /**
+   * Rewinds the log of a document to head, as a database restored to an earlier point would leave
+   * it, and gives it a new incarnation (04 §9; 06 §8). The room stops first, so clients reconnect.
+   * Null when the log store cannot be rewound (only the in-memory one can).
+   */
+  rewind(ref: DocRef, head: number): Promise<{ head: number; incarnation: string } | null>;
   /** The chain head, the head and the ownership epoch of a document. */
   state(ref: DocRef): Promise<{
     seq: number;

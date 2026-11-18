@@ -2106,6 +2106,12 @@
       "owner": "PRO"
     },
     {
+      "name": "test-hooks",
+      "relayForbidden": false,
+      "spec": "05 §2, §11",
+      "owner": "PRO"
+    },
+    {
       "name": "extensions",
       "relayForbidden": false,
       "spec": "03 §11",

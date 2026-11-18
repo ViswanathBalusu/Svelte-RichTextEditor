@@ -31,7 +31,7 @@ export type Restriction = "no-export" | "no-copy" | "no-print";
 export type ScopeId = string;
 
 /** A feature name. Protocol and CDM features share one namespace; experimental names start with `x-` (05 §1). */
-export type FeatureName = "presence" | "regions" | "suggest-enforced" | "history" | "comments" | "assets" | "exports" | "leases" | "fields" | "rules" | "workflow" | "sign" | "seal" | "read-restrictions" | "extensions" | "preserve" | (string & {});
+export type FeatureName = "presence" | "regions" | "suggest-enforced" | "history" | "comments" | "assets" | "exports" | "leases" | "fields" | "rules" | "workflow" | "sign" | "seal" | "read-restrictions" | "test-hooks" | "extensions" | "preserve" | (string & {});
 
 /** A code of the error registry (05 §5.8). */
 export type ErrorCode = "bad_message" | "unknown_type" | "unauthenticated" | "token_expired" | "revoked" | "forbidden" | "unsupported_version" | "unsupported_engine" | "unsupported_cdm" | "unsupported_feature" | "not_found" | "already_open" | "channel_limit" | "stale_base" | "rebase_failed" | "permission_denied" | "read_only" | "invalid_op" | "conflict" | "field_invalid" | "busy" | "too_large" | "rate_limited" | "quota_exceeded" | "slow_consumer" | "precondition_failed" | "validation_failed" | "pending_suggestions" | "workflow_active" | "idempotency_mismatch" | "unavailable" | "internal";

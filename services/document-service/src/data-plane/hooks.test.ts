@@ -162,6 +162,35 @@ describe('fault hooks on the real data plane (BE-079)', () => {
     expect(controls.map((c) => c.control?.rev)).toEqual([3]);
   });
 
+  it('rewinds the log with a new incarnation: the room stops and a client resuming the old state reloads (PRO-126 criterion 3)', async () => {
+    const { p, memory, hooks } = await testPlane();
+    const doc = await p.createDocument();
+    const ref = p.ref(doc);
+    const a = await p.client('alice', { [doc]: 'owner' });
+    const first = await a.open(1, doc);
+    const before = first.d!['incarnation'] as string;
+    for (let i = 0; i < 3; i++)
+      expect((await a.submit(1, { base: i, steps: [insertText(intro(), `t${i}`)] })).t).toBe(
+        'sync.ack',
+      );
+    expect((await hooks.state(ref)).seq).toBe(3);
+
+    const done = await hooks.rewind(ref, 1);
+    expect(done).toMatchObject({ head: 1 });
+    expect(done!.incarnation).not.toBe(before);
+    expect((await memory.read(ref)).map((c) => c.seq)).toEqual([1]);
+    expect(await hooks.state(ref)).toMatchObject({ seq: 1, incarnation: done!.incarnation });
+    // The room stopped: the channel is closed as `unavailable`.
+    await until(() => a.all('ch.closed', 1).length > 0, 3000, 'ch.closed');
+    expect(a.all('ch.closed', 1)[0]!.d).toMatchObject({ code: 'unavailable' });
+
+    // A client that resumes at the old incarnation, or past the new head, is told to reload.
+    const b = await p.client('bob', { [doc]: 'owner' });
+    const reload = await b.open(1, doc, { resume: { seq: 3, incarnation: before } });
+    expect(reload.d!['catchUp']).toBe('reload');
+    expect(reload.d!['incarnation']).toBe(done!.incarnation);
+    expect(reload.d!['head']).toBe(1);
+  });
   it('reads the chain head, the ownership epoch and the audit events of a document, and records each change hook in the audit trail (criteria 4, 5)', async () => {
     const { p, memory, audit, hooks } = await testPlane();
     const doc = await p.createDocument();

@@ -3,7 +3,8 @@
  * mode, which is off by default and refused when NODE_ENV is `production`; the composition decides
  * how the kit reaches them. They can make the database unreachable for the node, fail the next
  * write of a document before its insert or after it, kill a room as a crash would, drop one grant
- * announcement, and read a document's chain head, ownership epoch and audit events. Every use is
+ * announcement, rewind the log of a document with a new incarnation (the in-memory store only),
+ * and read a document's chain head, ownership epoch and audit events. Every use is
  * logged and, with an audit trail, recorded in it (criterion 5).
  */
 import { uuid7 } from '@docedit/model';
@@ -91,6 +92,22 @@ export function testHooks(d: HookDeps): DataPlaneTestHooks {
     dropNextAnnouncement(ref) {
       d.faults.dropNextAnnouncement(ref);
       used('dropNextAnnouncement', ref);
+    },
+    async rewind(ref, head) {
+      // Only a store that can be rewound (the in-memory one) supports it; PostgreSQL has no such
+      // hook, because a restored database is the operator's procedure (BE-078).
+      const logs = d.logs as LogStore & {
+        rewindForTest?(ref: DocRef, head: number): void;
+        newIncarnation?(ref: DocRef, incarnation: string): Promise<{ before: string }>;
+      };
+      if (typeof logs.rewindForTest !== 'function' || typeof logs.newIncarnation !== 'function')
+        return null;
+      used('rewind', ref, { head });
+      await d.kill(ref);
+      logs.rewindForTest(ref, head);
+      const incarnation = uuid7();
+      await logs.newIncarnation(ref, incarnation);
+      return { head, incarnation };
     },
     async state(ref) {
       used('state', ref, {}, false);
