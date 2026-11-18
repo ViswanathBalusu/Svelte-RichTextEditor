@@ -18,6 +18,7 @@ export * from './flow.ts';
 export * from './tree.ts';
 export * from './tree-share.ts';
 export * from './paginate.ts';
+export * from './paginate-driver.ts';
 export { placeNotes } from './notes.ts';
 export * from './items.ts';
 export * from './engine.ts';
