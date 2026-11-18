@@ -2956,7 +2956,7 @@ As a maintainer, I want protocol 1.0 frozen only after an independent server pas
 - [ ] Given the differences between the two implementations found on the way, when they were ambiguities in the prose, then 05 is amended before the freeze.
 - [ ] Given the freeze, when the roadmap is read, then the date and the implementation are recorded.
 
-**Notes:** Condition: PRO-128 yields a date.
+**Notes:** Condition: PRO-128 yields a date. Lane w5 (2026-11-18): nothing can be ticked, so the story is blocked. Criterion 1 needs a second server that is not derived from the reference service, and none exists: `packages/backend-mock` and `services/document-service` are both ours and share the protocol package, so a pass by either proves nothing about an independent reading of 05. PRO-128 is unticked and has no partner, tier or date (see its Notes), and the owner's answers of 2026-11-15 and 2026-11-17 do not cover it. Criterion 2 (tag 1.0) follows a pass and a freeze date. Criterion 3 (amend 05 for ambiguities found) can only come from the comparison of two implementations. Criterion 4 (record date and implementation in the roadmap) follows the freeze. The default of 05 §11 stands: protocol 1.0 is not frozen, and the artifacts, the registry and the kit stay at their pre-1.0 versions. Nothing was built, and no decision record was written, because there is nothing yet to propose.
 
 ## Read restrictions (ADR 0019)
 
