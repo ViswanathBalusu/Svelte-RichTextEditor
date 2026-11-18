@@ -136,7 +136,7 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   // FRW-044: the handler exists, but this scenario composes no consent texts.
   participantConsent: 'this server keeps no consent texts',
   participantComplete: NOT_OFFERED,
-  signField: NOT_OFFERED,
+  signField: 'this server does not offer signing',
   // HIS-040: the route needs a purge pool, which only an operator supplies.
   tombstoneCommit: 'this server does not remove payloads',
 };
