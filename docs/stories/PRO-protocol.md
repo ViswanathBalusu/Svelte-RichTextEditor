@@ -1526,12 +1526,14 @@ As an author, I want to start from a Word file, so that I can bring existing wor
 
 **Acceptance criteria**
 
-- [ ] Given an uploaded and ready asset, when `POST /documents/{id}/imports` is called with `asset` and `format` `docx`, then a job is returned.
-- [ ] Given a job, when `GET /imports/{jid}` is called, then it returns the state and, when completed, the warnings.
-- [ ] Given a job that ends, when it completes or fails, then `import.completed` or `import.failed` is sent and the matching webhook is raised.
-- [ ] Given a document that is imported into, when the import is applied, then a snapshot commit with origin `import` is stored and clients receive `sync.reset` with reason `import`.
+- [x] Given an uploaded and ready asset, when `POST /documents/{id}/imports` is called with `asset` and `format` `docx`, then a job is returned.
+- [x] Given a job, when `GET /imports/{jid}` is called, then it returns the state and, when completed, the warnings.
+- [x] Given a job that ends, when it completes or fails, then `import.completed` or `import.failed` is sent and the matching webhook is raised.
+- [x] Given a document that is imported into, when the import is applied, then a snapshot commit with origin `import` is stored and clients receive `sync.reset` with reason `import`.
 
-**Notes:** The authorisation matrix (07 §12) lists "Import" under the service credential, but 05 §6.2 does not mark this route that way (Open questions). Conversion is EXP-098. Lane PRO-057-070, 2026-11-13: `handlers.ts` answers imports with `validation_failed` (D62); no import route, job or conversion exists, so no criterion is ticked.
+**Evidence:** Lane w5, 2026-11-18. The routes and the job are `services/document-service/src/control-plane/imports.ts` (EXP-098, ADR 0373). `services/document-service/test/control-plane/pro-066-import-end-to-end.test.ts` (memory, the real importer of `packages/export-docx` on `poi/sample.docx`, the real data plane, a WebSocket client with the document open; `pnpm exec vitest run <file>`, Node.js, 1 of 1 passes): a ready asset and `docx` give 202 and a job identifier (criterion 1); `GET /imports/{jid}` gives `completed`, the head `seq` and a `warnings` array (criterion 2); the completed job raises `dep.import.completed.v1` once (criterion 3, webhook); the open channel receives `sync.reset` with reason `import` and the `seq` of the job, the commit log's `reset` is that `seq`, the history lists the origin `import`, and the old content is gone (criterion 4); a user token, the owner's included, is refused with 403 on both routes (07 §12 row 13). The notifications to the requester and the failure path (`import.failed` and its webhook, nothing stored) are tested in `services/document-service/src/control-plane/exp-098-import-job.test.ts` (memory and PostgreSQL; criterion 3 of EXP-098), the reset with reason `import` on every open channel in `services/document-service/src/data-plane/snapshot-reset.test.ts` and `be-037-replace-outbox.test.ts`; the three files above pass together with the PRO-054 files (37 of 37).
+
+**Notes:** The authorisation matrix (07 §12) lists "Import" under the service credential, but 05 §6.2 does not mark this route that way (Open questions). Conversion is EXP-098. Lane PRO-057-070, 2026-11-13: `handlers.ts` answered imports with `validation_failed` (D62); no import route, job or conversion existed, so no criterion was ticked. Lane w5, 2026-11-18: the routes and the job were built by EXP-098 (lane w2, ADR 0373), and all four criteria are ticked (Evidence above). The service offers the routes only when the host gives it an importer (`importer` of `startService`); the default `main.ts` gives none, because the service does not depend on `@docedit/export-docx`, so a stock service answers `not_found` for them. That is the open point of ADR 0373 item 1, and the matrix places the route under the service credential, as built.
 
 ## Control plane: fonts and webhook management (05 §6.2)
 
