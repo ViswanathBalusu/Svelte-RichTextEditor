@@ -159,3 +159,38 @@ describe('a result where the user has no suggest is refused (UX-046 criterion 4)
     await service.dispose();
   });
 });
+
+describe('LaTeX in an assistant result is literal text in the document (UX-048 criterion 5)', () => {
+  const attack = [
+    '\\section{Injected}',
+    '\\input{/etc/passwd}',
+    '\\write18{rm -rf /}',
+    '$x^2$ and $$y$$',
+    '%comment \\newcommand',
+    '{\\catcode`\\%=0 }',
+    '#1 & ~ _ ^ {}',
+  ].join(' ');
+
+  it('stores the strings as one text run with only the suggestion mark, and no node besides text', async () => {
+    const { service, docId, m } = await setUp('grace', 'editor');
+    select(m, IDS.intro, 0, 0);
+    expect(m.core.insertAssistantResult(attack)).toEqual({ ok: true });
+    await saved(m);
+    const doc = service.document(docId)!.content().doc as unknown as JsonNode;
+    const para = (function find(n: JsonNode): JsonNode | null {
+      if (n.attrs?.['id'] === IDS.intro) return n;
+      for (const c of n.content ?? []) {
+        const r = find(c);
+        if (r) return r;
+      }
+      return null;
+    })(doc)!;
+    const first = para.content![0]!;
+    expect(first).toMatchObject({ type: 'text', text: attack });
+    expect((first.marks ?? []).map((mark) => mark.type)).toEqual(['ins']);
+    // Nothing the insertion made is a node: every child of the paragraph is text.
+    expect(para.content!.every((child) => child.type === 'text')).toBe(true);
+    m.detach();
+    await service.dispose();
+  });
+});

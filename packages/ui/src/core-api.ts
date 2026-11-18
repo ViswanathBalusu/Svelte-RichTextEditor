@@ -9,6 +9,10 @@
  * ADR 0052. "Core" here is whatever the element passes as `core`: the editing core's views, and
  * the backend's ports adapted by the element (exports, grants, regions).
  */
+import type {
+  DataInput as AssistantDataInput,
+  PromptStructure as AssistantPromptStructure,
+} from './assistant/prompt.ts';
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extensions/document-api.ts';
 import type { FieldDraft } from './shell/field-properties.ts';
 import type { MarkupView } from './shell/markup-views.ts';
@@ -368,13 +372,28 @@ export interface AssistantApi {
     task: AssistantTaskName,
     prompt: string,
     signal: AbortSignal,
+    /**
+     * Builds the request's structure from the user's request and the document text as data parts
+     * (UX-048 criterion 1); the pane gives `buildPrompt`, which loads with the pane. The API sends the
+     * result to the port beside the plain request.
+     */
+    structure?: (request: string, data: readonly AssistantDataInput[]) => AssistantPromptStructure,
   ): AsyncIterable<AssistantStreamChunk>;
+  /**
+   * What the last request was built from, for the output guard (UX-048): the text of the context, in
+   * which a link may be found, and the identifiers of the assets attached to the document. Without
+   * it no link and no image passes.
+   */
+  source?(): { readonly text: string; readonly assets: readonly string[] };
   /**
    * Puts an approved result at the selection as suggestions, never as a direct edit (UX-046). Absent
    * where the core cannot; the pane then offers no insertion. Nothing is applied when it refuses.
    */
   insert?(text: string): AssistantInsertResult;
 }
+
+/** One piece of document text for the assistant's request, with its source and label (UX-048). */
+export type { AssistantDataInput };
 
 /** What `AssistantApi.insert` did; `reason` is the core's (UX-046 criterion 4). */
 export type AssistantInsertResult =

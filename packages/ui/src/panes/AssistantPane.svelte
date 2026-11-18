@@ -121,8 +121,17 @@
       tabindex="-1"
       aria-label={tr.t('assistant.response')}
     >
-      {run.text}
+      {view.answer?.text ?? run.text}
     </div>
+    {#if view.answer && view.answer.notices.length > 0}
+      <ul class="de-list" aria-label={tr.t('assistant.notices')} data-assistant-notices>
+        {#each view.answer.notices as notice, i (i)}
+          <li class="de-hint" data-notice={notice.code}>
+            {tr.t(`assistant.notice.${notice.code}` as StringKey, { target: notice.target })}
+          </li>
+        {/each}
+      </ul>
+    {/if}
     {#if view.insertRefused !== null}
       <p class="de-error" data-assistant-insert-refused role="alert">
         {tr.t('assistant.insert.refused')}
@@ -136,7 +145,7 @@
           data-assistant-insert
           aria-disabled={mayInsert ? undefined : 'true'}
           aria-describedby={mayInsert ? undefined : `${id}-why-insert`}
-          onclick={() => mayInsert && controller.approve()}>{tr.t('assistant.insert')}</button
+          onclick={() => mayInsert && void controller.approve()}>{tr.t('assistant.insert')}</button
         >
       {/if}
       <button type="button" class="de-button" onclick={() => controller.dismiss()}
