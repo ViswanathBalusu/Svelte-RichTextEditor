@@ -14,6 +14,9 @@
  * - `spaceBefore` is applied at the top of a page too; the spec does not say to suppress it.
  * - A line taller than the page body, or a box taller than it, is placed alone and reported in
  *   `overflowed`; the spec does not say what happens.
+ * - A page whose header and footer leave no room for the body is shipped empty, once, before the
+ *   first body line: the body starts on the next page, as the LaTeX class does (owner decision 77,
+ *   CDM-045). The line is then placed on a page with the same geometry, at the body's top.
  * - A `pageBreak` on an empty page does nothing, so a break at the top of a page makes no blank page.
  * - A `continuous` section break keeps the current page with its own page setup; the new setup
  *   applies from the next page (decision 7). The exception is the column count: a `continuous`
@@ -696,6 +699,8 @@ function* layoutPassSteps(
    */
   let holding = false;
   let pendingPin: number | null = null;
+  /** True once a page without room for the body was shipped empty (owner decision 77). */
+  let skippedNoRoom = false;
   const pinPages = new Map<number, number>();
   const pageOverflow: number[] = [];
 
@@ -1005,6 +1010,13 @@ function* layoutPassSteps(
           // line would not leave room for, passes the line on.
           if (!colEmpty() || (!pageEmpty() && !allow(1, lines[from]!.height))) {
             breakColumn();
+            continue;
+          }
+          // A page with no room for the body is shipped empty, once: the body starts on the
+          // next page, as the LaTeX class does (owner decision 77).
+          if (!skippedNoRoom && pageEmpty() && cur.geo.body <= EPS && !hold && !opts.fixed) {
+            skippedNoRoom = true;
+            turnPage();
             continue;
           }
           // An empty column takes one line, so the paragraph always moves on.
