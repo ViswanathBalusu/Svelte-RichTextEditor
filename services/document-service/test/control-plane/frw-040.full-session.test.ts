@@ -210,7 +210,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(ok.status, ok.text).toBe(200);
           heads.push({
             seq: (await h.parts.logs.head(ref)).seq,
-            chain: await chainHead(ref),
+            chain: (await chainHead(ref))!,
             key,
             mode,
           });
