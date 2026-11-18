@@ -140,11 +140,10 @@ describe('FRW-011 a fill and a text change in one step list are refused as a who
     ];
     // The fill alone is accepted, in the region that the fill's role may reach.
     expect(verdictOf(LENA, doc, fill(FIELDS.termsSecret, 'SECRET-RENT-2')).ok).toBe(true);
-    const verdict = verdictOf(
-      LENA,
-      doc,
-      (d) => [...fill(FIELDS.termsSecret, 'SECRET-RENT-2')(d), ...insert(d)],
-    );
+    const verdict = verdictOf(LENA, doc, (d) => [
+      ...fill(FIELDS.termsSecret, 'SECRET-RENT-2')(d),
+      ...insert(d),
+    ]);
     expect(verdict.ok).toBe(false);
     expect(refused(verdict)).toContain('region:rTerms000000000A');
     // Text in a region that also holds the fill, with the region approved, is refused as well.
