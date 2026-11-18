@@ -19,7 +19,6 @@
  *
  * Skipped when the sandbox cannot run here.
  */
-import fc from 'fast-check';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,6 +29,7 @@ import { mathGate } from '../src/math/gate.ts';
 import { classFiles, compileBundle, imageFonts, sandboxReady } from './harness.ts';
 import { DANGEROUS } from './trace-denylist.ts';
 import { doc, nid, para } from './docs.ts';
+import { HAND, generated } from './exp-053-values.ts';
 
 const ready = (await sandboxReady()).ok;
 
@@ -70,44 +70,6 @@ export function added(
   }
   return { dangerous: dangerous.sort(), other: other.sort() };
 }
-
-/** Values the gate accepts: hand-written ones, and a fixed-seed sample of generated ones. */
-const HAND = [
-  'x^2+y^2=z^2',
-  '\\frac{a}{b}',
-  '\\sqrt{2}',
-  '\\alpha\\beta\\gamma',
-  '\\sum_{i=1}^{n} i',
-  '\\int_0^1 x\\,dx',
-  '\\left(\\frac{1}{2}\\right)',
-  '\\hat{x}\\cdot\\vec{y}',
-  '\\begin{aligned} a&=b \\\\ c&=d \\end{aligned}',
-  '\\begin{cases} 1 & x>0 \\\\ 0 & x\\le 0 \\end{cases}',
-  '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}',
-];
-const GENERATED_FRAGMENTS = [
-  'x',
-  'y',
-  '1',
-  '2',
-  '^',
-  '_',
-  '{',
-  '}',
-  '+',
-  '\\frac',
-  '\\alpha',
-  '\\sum',
-  '\\,',
-  '=',
-];
-const generatedArb = fc
-  .array(fc.constantFrom(...GENERATED_FRAGMENTS), { minLength: 1, maxLength: 10 })
-  .map((parts) => parts.join(''));
-const generated = fc
-  .sample(generatedArb, { seed: 20261114, numRuns: 400 })
-  .filter((v) => mathGate(v, true).ok)
-  .slice(0, 4);
 
 /** The document: one display equation with the placeholder, between two paragraphs. */
 async function compiledWith(replacement: string, label: string) {
