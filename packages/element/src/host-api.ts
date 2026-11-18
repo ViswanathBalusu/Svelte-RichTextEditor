@@ -10,6 +10,7 @@
  * the toolbar agree on enabled and active and pass the same guards. A name the registry does not
  * know falls to the core (`bold`, `insertField`), and a name neither knows runs nothing and says so.
  */
+import { FillActionError, type CompleteFillingOutcome, type FillActions } from './fill-actions.ts';
 import type {
   CdmEnvelope,
   CdmFragment,
@@ -68,6 +69,14 @@ export interface HostApi {
   setFieldValue(key: string, value: unknown): Promise<FieldFillOutcome>;
   /** The fields that are required and empty or invalid, with keys and reasons; changes nothing (FRW-069). */
   validateFields(): FieldReport[];
+  /**
+   * Validates the fields and, when none fails, completes this participant's part (FRW-071). With a
+   * failure it focuses the first problem and resolves with the failures, calling nothing. Rejects
+   * with a `FillActionError` when the participant is not active.
+   */
+  completeFilling(): Promise<CompleteFillingOutcome>;
+  /** Declines the workflow as this participant; rejects without calling the server for no reason (FRW-071). */
+  decline(reason: string): Promise<unknown>;
 }
 
 /** Never offered, never enabled: what an unknown identifier reports. */
@@ -78,7 +87,11 @@ export const UNKNOWN_COMMAND: CommandState = { enabled: false, active: false };
  * (UX-005); any other name goes to the core, which throws for one it does not know, and that is
  * reported as nothing run (`exec`) or a command that is not enabled (`queryCommand`).
  */
-export function hostApi(core: CoreHostApi, registry?: HostRegistry): HostApi {
+export function hostApi(
+  core: CoreHostApi,
+  registry?: HostRegistry,
+  actions?: Pick<FillActions, 'completeFilling' | 'decline'>,
+): HostApi {
   return {
     flush: (opts) => core.flush(opts),
     getContent: async () => core.confirmedContent(),
@@ -108,8 +121,14 @@ export function hostApi(core: CoreHostApi, registry?: HostRegistry): HostApi {
     getFieldValues: () => core.fieldValues?.() ?? {},
     setFieldValue: (key, value) => core.fillField?.(key, value) ?? Promise.resolve(NOT_LOADED_FILL),
     validateFields: () => core.validateFields?.() ?? [],
+    completeFilling: () =>
+      actions?.completeFilling() ?? Promise.reject(new FillActionError('no_workflow', NO_WORKFLOW)),
+    decline: (reason) =>
+      actions?.decline(reason) ?? Promise.reject(new FillActionError('no_workflow', NO_WORKFLOW)),
   };
 }
+
+const NO_WORKFLOW = 'this document has no workflow to complete or decline';
 
 /** What `setFieldValue` answers when no document is loaded: nothing is filled (FRW-069). */
 export const NOT_LOADED_FILL: FieldFillOutcome = {
@@ -158,5 +177,11 @@ export function elementMethods(current: () => MountedSession | null): HostApi {
     setFieldValue: (key, value) =>
       api()?.setFieldValue(key, value) ?? Promise.resolve(NOT_LOADED_FILL),
     validateFields: () => api()?.validateFields() ?? [],
+    completeFilling: () =>
+      api()?.completeFilling() ??
+      Promise.reject(new FillActionError('no_document', 'no document is loaded')),
+    decline: (reason) =>
+      api()?.decline(reason) ??
+      Promise.reject(new FillActionError('no_document', 'no document is loaded')),
   };
 }

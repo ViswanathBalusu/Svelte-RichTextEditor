@@ -81,6 +81,8 @@ export interface DocEditorEventMap {
   'de-field-change': FieldChangeDetail;
   /** The progress the guided bar of fill mode shows changed (12 §10; FRW-070). */
   'de-fill-progress': FillProgressDetail;
+  /** The workflow was reported `completed` to this session (12 §10; FRW-071). */
+  'de-workflow-complete': WorkflowCompleteDetail;
   'de-error': ErrorDetail;
 }
 
@@ -91,6 +93,14 @@ export interface FieldChangeDetail {
   /** False when the entry has a problem, or the field is required and the entry is empty. */
   valid: boolean;
   empty: boolean;
+}
+
+/**
+ * `de-workflow-complete`: the workflow's state. 12 §10 names the event and not its detail; this member
+ * is proposed (FRW-071 Notes). It carries no participant and no value.
+ */
+export interface WorkflowCompleteDetail {
+  state: 'completed';
 }
 
 /**
@@ -157,6 +167,7 @@ export const EVENT_NAMES: readonly DocEditorEventName[] = [
   'de-counts',
   'de-field-change',
   'de-fill-progress',
+  'de-workflow-complete',
   'de-error',
 ];
 

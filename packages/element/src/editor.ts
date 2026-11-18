@@ -53,6 +53,7 @@ import {
 } from './startup-marks.ts';
 import type { NormalConfig } from './config.ts';
 import type { Connection, StatusDetail } from './events.ts';
+import { fillActionsService } from './fill-actions.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
 import type { PdfViewerFrame } from './pdf/viewer-frame.ts';
@@ -324,6 +325,13 @@ export function mountEditor(options: MountOptions): MountedEditor {
   const fill = fillView(core);
   // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
   const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
+  // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
+  const workflowCompleteListeners = new Set<() => void>();
+  const fillActions = options.workflow
+    ? fillActionsService(core, options.workflow, () => {
+        for (const listener of [...workflowCompleteListeners]) listener();
+      })
+    : null;
   const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;
@@ -644,7 +652,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // FE-114: on a touch device the caret stays above the on-screen keyboard.
   const stopKeyboardInset = attachKeyboardInset(root, core);
 
-  const api = hostApi(core, registry);
+  const api = hostApi(core, registry, fillActions ?? undefined);
 
   return {
     core,
@@ -662,6 +670,13 @@ export function mountEditor(options: MountOptions): MountedEditor {
     header: { mode: core.mode, presence: core.presence, counts: core.counts },
     // What `de-field-change` and `de-fill-progress` watch (FRW-070): no value is read.
     fill: { onFieldChange: (listener) => core.onFieldChange(listener), fill },
+    // What `de-workflow-complete` watches (FRW-071).
+    workflowComplete: {
+      subscribe: (listener) => {
+        workflowCompleteListeners.add(listener);
+        return () => workflowCompleteListeners.delete(listener);
+      },
+    },
     // What `de-selection` and `de-command-state` watch (FE-028); read-only, no content.
     watch: {
       // A change of the registry's states is a reason to look again, as a new revision is (UX-005).
@@ -739,6 +754,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       stopShortcuts();
       stopKeyboardInset();
       workflowSend?.dispose?.();
+      fillActions?.dispose();
+      workflowCompleteListeners.clear();
       void unmount(app);
       registry.destroy();
       core.destroy();

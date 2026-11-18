@@ -128,6 +128,8 @@ export interface EditorHandle {
   readonly header?: HeaderWatch;
   /** What `de-field-change` and `de-fill-progress` watch (FRW-070); absent in stand-in editors. */
   readonly fill?: FillWatch;
+  /** `de-workflow-complete` (FRW-071): the workflow was reported `completed`; absent in stand-in editors. */
+  readonly workflowComplete?: { subscribe(listener: () => void): () => void };
 }
 
 export interface SessionHost {
@@ -455,6 +457,13 @@ export class Session {
       });
       this.#unsubscribe.push(fill.start());
     }
+    // `de-workflow-complete` (12 §10; FRW-071): the server reported the workflow `completed`.
+    if (editor.workflowComplete)
+      this.#unsubscribe.push(
+        editor.workflowComplete.subscribe(() =>
+          this.#emit('de-workflow-complete', { state: 'completed' }),
+        ),
+      );
     const confirmed = editor.confirmedSeq;
     if (confirmed) {
       const change = new ChangeReporter(
