@@ -100,6 +100,7 @@ import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-sto
 import { PgReminderStore } from './workflow/reminder-store-pg.ts';
 import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
 import { PgEvidenceLedger } from './workflow/evidence-ledger-pg.ts';
+import { MemorySealedPdfStore, type SealedPdfStore } from './workflow/sealed-store.ts';
 import { MemoryAccessCodeStore, type AccessCodeStore } from './workflow/access-code-store.ts';
 import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
 import type { ConsentTextStore } from './workflow/consent-service.ts';
@@ -283,6 +284,8 @@ export interface ServiceParts {
   reminders?: ReminderStore;
   /** The workflow evidence ledger (FRW-041): evidence in its own workflow table, hashes for the chain. */
   evidence?: EvidenceLedger;
+  /** The sealed final PDFs (FRW-054): `GET /documents/{id}/workflow/final` reads them. Absent: the route is not offered. */
+  sealedPdfs?: SealedPdfStore;
   /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
   accessCodes?: AccessCodeStore;
   /** The consent texts of the tenants (FRW-044). Absent: the consent route is not offered. */
@@ -595,6 +598,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     workflows: new MemoryWorkflowResourceStore(),
     reminders: new MemoryReminderStore(),
     evidence: new MemoryEvidenceLedger(now),
+    sealedPdfs: new MemorySealedPdfStore(),
     accessCodes: new MemoryAccessCodeStore(),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
@@ -1445,6 +1449,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.accessCodes ? { accessCodes: parts.accessCodes } : {}),
     ...(parts.consentTexts ? { consentTexts: parts.consentTexts } : {}),
     ...(parts.evidence ? { evidence: parts.evidence } : {}),
+    ...(parts.sealedPdfs ? { sealedPdfs: parts.sealedPdfs } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),
     compileBudget,

@@ -201,16 +201,19 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       },
     );
 
-    it.skipIf(skip)('refuses a state whose lock the specification leaves open', async () => {
-      const { ref, view } = await draft(false);
-      await expect(
-        recordTransition(deps(), {
-          ref,
-          actor: 'alice',
-          from: view as WorkflowResourceView,
-          write: { to: 'finalised' },
-        }),
-      ).rejects.toThrow(RangeError);
-    });
+    it.skipIf(skip)(
+      'refuses a state that has no lock (a name that is not a state of 12)',
+      async () => {
+        const { ref, view } = await draft(false);
+        await expect(
+          recordTransition(deps(), {
+            ref,
+            actor: 'alice',
+            from: view as WorkflowResourceView,
+            write: { to: 'nonsense' },
+          }),
+        ).rejects.toThrow(RangeError);
+      },
+    );
   });
 }
