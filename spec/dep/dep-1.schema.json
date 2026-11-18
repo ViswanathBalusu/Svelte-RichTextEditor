@@ -3425,6 +3425,42 @@
         "placedAt"
       ]
     },
+    "ErasePersonRequest": {
+      "title": "ErasePersonRequest",
+      "description": "The body of an erasure of a person (HIS-038; 08 section 13).",
+      "$comment": "08 §13; 13 §10",
+      "type": "object",
+      "properties": {
+        "sub": {
+          "description": "The host's `sub` of the person to erase. Hosts SHOULD NOT use an e-mail address as `sub` (05 section 3.1).",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      },
+      "required": [
+        "sub"
+      ]
+    },
+    "ErasePersonResult": {
+      "title": "ErasePersonResult",
+      "description": "What an erasure of a person did (HIS-038; 08 section 13).",
+      "$comment": "08 §13; 13 §10",
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "description": "`erased`: the mapping, the display name and the read markers are deleted. `deferred`: a document the person wrote in is under legal hold, so the erasure waits for the release (owner decision 38).",
+          "type": "string",
+          "enum": [
+            "erased",
+            "deferred"
+          ]
+        }
+      },
+      "required": [
+        "outcome"
+      ]
+    },
     "FieldInfo": {
       "title": "FieldInfo",
       "description": "A field in the derived list (12 §3.2; FRW-060).",

@@ -5382,6 +5382,71 @@
         "x-dep-requires": "Service credential"
       }
     },
+    "/users/erase": {
+      "post": {
+        "operationId": "erasePerson",
+        "summary": "Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`.",
+        "description": "Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`. Requires: Service credential (07 §12). Specified in 08 §13; 13 §10.",
+        "tags": [
+          "users"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErasePersonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErasePersonResult"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §13; 13 §10",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "Service credential"
+      }
+    },
     "/documents/{id}/fields": {
       "get": {
         "operationId": "listFields",
@@ -10911,6 +10976,42 @@
           "reason",
           "placedBy",
           "placedAt"
+        ]
+      },
+      "ErasePersonRequest": {
+        "title": "ErasePersonRequest",
+        "description": "The body of an erasure of a person (HIS-038; 08 section 13).",
+        "$comment": "08 §13; 13 §10",
+        "type": "object",
+        "properties": {
+          "sub": {
+            "description": "The host's `sub` of the person to erase. Hosts SHOULD NOT use an e-mail address as `sub` (05 section 3.1).",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "sub"
+        ]
+      },
+      "ErasePersonResult": {
+        "title": "ErasePersonResult",
+        "description": "What an erasure of a person did (HIS-038; 08 section 13).",
+        "$comment": "08 §13; 13 §10",
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "description": "`erased`: the mapping, the display name and the read markers are deleted. `deferred`: a document the person wrote in is under legal hold, so the erasure waits for the release (owner decision 38).",
+            "type": "string",
+            "enum": [
+              "erased",
+              "deferred"
+            ]
+          }
+        },
+        "required": [
+          "outcome"
         ]
       },
       "FieldInfo": {

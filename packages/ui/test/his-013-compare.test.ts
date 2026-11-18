@@ -115,7 +115,11 @@ interface Drawn {
   closed: number;
 }
 
-function harness(compareResult: () => Promise<HistoryCompareResult>) {
+function harness(
+  compareResult: () => Promise<HistoryCompareResult>,
+  resolve: HistoryPort['resolveUsers'] = (ids) =>
+    Promise.resolve(ids.map((id) => ({ id, name: `Name ${id}` }))) as never,
+) {
   const drawn: Drawn = { changes: null, deletions: [], focused: [], closed: 0 };
   const opened: number[] = [];
   const compared: [number, number | null][] = [];
@@ -123,7 +127,7 @@ function harness(compareResult: () => Promise<HistoryCompareResult>) {
     list: () =>
       Promise.resolve({ items: [group('g1', 8), named], nextCursor: null, namedOnly: false }),
     choices: () => Promise.resolve({ regions: [], fields: [], people: [] }),
-    resolveUsers: (ids) => Promise.resolve(ids.map((id) => ({ id, name: `Name ${id}` }))) as never,
+    resolveUsers: resolve,
     openVersion: (seq, label) => {
       opened.push(seq);
       const view: HistoryVersionView = {
@@ -159,6 +163,29 @@ const ok = (toSeq: number): Promise<HistoryCompareResult> =>
   Promise.resolve({ ok: true, comparison: { fromSeq: 8, toSeq, changes: CHANGES } });
 
 describe('the comparison controller (HIS-013)', () => {
+  it('keeps the changes of an erased person and leaves them without a name (HIS-038 criterion 2)', async () => {
+    const changes: HistoryChange[] = [
+      { kind: 'added', blockId: 'pA', user: 'u-erased' },
+      { kind: 'added', blockId: 'pB', user: 'u1' },
+    ];
+    const h = harness(
+      () => Promise.resolve({ ok: true, comparison: { fromSeq: 8, toSeq: 12, changes } }),
+      (ids) =>
+        Promise.resolve(
+          ids.map((id) => (id === 'u-erased' ? null : { id, name: `Name ${id}` })),
+        ) as never,
+    );
+    await h.history.reload();
+    const [a, b] = compareChoices(h.history.state().items);
+    expect(await h.compare.run(b!, a!)).toBe(true);
+    const s = h.compare.state();
+    // Both changes stay in the list; the host does not know the erased person, so no name is shown.
+    expect(s.rows).toHaveLength(2);
+    expect(authorOf(s.rows[0]!.change)).toBe('u-erased');
+    expect(s.names.get('u-erased')).toBeNull();
+    expect(s.names.get('u1')).toBe('Name u1');
+  });
+
   it('compares, opens the newer version read-only, hands it the changes and moves between them', async () => {
     const h = harness(() => ok(12));
     await h.history.reload();

@@ -21,6 +21,8 @@ export interface UserRecord {
 export interface UserDirectory {
   /** The user's surrogate, created on first sight; `name` (the `name` claim) is stored with it. */
   resolve(tenant: string, sub: string, name?: string): Promise<UserRecord>;
+  /** The surrogate of a person already mapped, or null. Unlike `resolve` it creates nothing. */
+  surrogateOf(tenant: string, sub: string): Promise<string | null>;
   /** The host `sub` of each surrogate still mapped; erased users are missing from the result. */
   subsOf(tenant: string, surrogates: readonly string[]): Promise<Map<string, string>>;
   /** Records a revocation watermark at `at` (05 §3.3), for one document or for all. */
@@ -72,6 +74,10 @@ export class MemoryUserDirectory implements UserDirectory {
       );
     if (name !== undefined) u.name = name;
     return this.#record(u);
+  }
+
+  async surrogateOf(tenant: string, sub: string): Promise<string | null> {
+    return this.#users.get(tenant)?.get(sub)?.surrogate ?? null;
   }
 
   async subsOf(tenant: string, surrogates: readonly string[]): Promise<Map<string, string>> {
@@ -148,6 +154,21 @@ export class PgUserDirectory implements UserDirectory {
       revokedBefore: millis(row.revoked_before),
       documentRevocations: new Map(d.rows.map((x) => [x.doc_id, millis(x.revoked_before)!])),
     };
+  }
+
+  surrogateOf(tenant: string, sub: string): Promise<string | null> {
+    return inTenant(
+      this.#pool,
+      tenant,
+      async (c) => {
+        const r = await c.query<{ surrogate: string }>(
+          'SELECT surrogate FROM tenant_users WHERE tenant_id = $1 AND sub = $2',
+          [tenant, sub],
+        );
+        return r.rows[0]?.surrogate ?? null;
+      },
+      { readOnly: true },
+    );
   }
 
   subsOf(tenant: string, surrogates: readonly string[]): Promise<Map<string, string>> {

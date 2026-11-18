@@ -142,7 +142,7 @@ The editor renders a comparison in the newer version's layout: insertions highli
 
 ## 7. Attribution
 
-The room maintains an attribution map next to the document: an ordered list of runs, each covering a range of positions and naming the user and `seq` that inserted that content. Each step updates it: existing runs are mapped through the step's position map, and inserted content gets a new run. Formatting changes do not alter attribution in version 1. The map is saved with every checkpoint, so "who wrote this" is a lookup at any version.
+The room maintains an attribution map next to the document: an ordered list of runs, each covering a range of positions and naming the user and `seq` that inserted that content. Each step updates it: existing runs are mapped through the step's position map, and inserted content gets a new run. Formatting changes do not alter attribution in version 1. The map is saved with every checkpoint, so "who wrote this" is a lookup at any version. There is one map per document, not one per block (ADR 0382). Its serialised size may not pass the document size limit of 16 MiB; beyond it the oldest runs are merged into coarser runs that keep the newest user and seq they cover.
 
 Attribute changes are not in the attribution map. "Who filled this field" comes from the `field:<id>` scopes recorded with each commit, which is an index lookup.
 
@@ -201,5 +201,4 @@ Suggestions are pending changes inside the document that someone must accept or 
 
 - Diff quality for moved content, for table structure changes and for style changes is unproven.
 - Replaying commits made under an older schema needs the matching older packages. Snapshot commits with checkpoints on each side limit how often that matters; the policy for how long old packages stay runnable is open.
-- The size of the attribution map on very large documents, and whether it should be stored per block.
 - Branches with merge (working drafts that are later merged back) are not designed. Fork is one-way.

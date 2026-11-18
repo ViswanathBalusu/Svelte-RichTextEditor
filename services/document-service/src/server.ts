@@ -77,6 +77,7 @@ import { QuotaAdminService, type QuotaAdminStore } from './control-plane/quota-a
 import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
 import { HoldService, MemoryHoldStore, type HoldStore } from './control-plane/holds.ts';
+import { ErasureRequests } from './control-plane/erasure-requests.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
 import {
   MemoryWorkflowResourceStore,
@@ -377,6 +378,28 @@ function holdsOver(
 }
 
 /**
+ * The erasure of a person (HIS-038): over the parts' user directory and audit trail. A person is only
+ * deferred by a hold on a document they wrote in, so the documents asked about are the held ones.
+ * The pending requests live in memory (erasure-requests.ts).
+ */
+function erasuresOver(parts: ServiceParts, now: () => number): ErasureRequests | undefined {
+  const { audit, holds, logs } = parts;
+  if (!audit) return undefined;
+  return new ErasureRequests({
+    users: parts.users,
+    audit,
+    heldDocuments: async (tenant) => (holds ? holds.heldDocuments(tenant) : new Set<string>()),
+    documentsOf: async (tenant, surrogate) => {
+      const wrote: string[] = [];
+      for (const doc of holds ? await holds.heldDocuments(tenant) : [])
+        if ((await logs.read({ tenant, doc })).some((c) => c.user === surrogate)) wrote.push(doc);
+      return wrote;
+    },
+    now,
+  });
+}
+
+/**
  * The tenant quota values of `/quotas` (UX-078) over a quota store and the parts' audit trail. The
  * store refuses a tenant it does not know (PostgreSQL asks the `tenants` table).
  */
@@ -532,6 +555,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
+  const erasures = erasuresOver(parts, now);
   if (parts.replica && opts.readSessions === undefined)
     throw new Error('a read replica needs readSessions, the sessions kept for read-your-writes');
   // The node labels every control-plane series too (06 §11; BE-086 criterion 2).
@@ -1066,6 +1090,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
+    ...(erasures ? { erasures } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),

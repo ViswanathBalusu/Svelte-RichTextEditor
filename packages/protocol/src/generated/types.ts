@@ -869,6 +869,18 @@ export interface Hold {
   placedAt: string;
 }
 
+/** The body of an erasure of a person (HIS-038; 08 section 13). */
+export interface ErasePersonRequest {
+  /** The host's `sub` of the person to erase. Hosts SHOULD NOT use an e-mail address as `sub` (05 section 3.1). */
+  sub: string;
+}
+
+/** What an erasure of a person did (HIS-038; 08 section 13). */
+export interface ErasePersonResult {
+  /** `erased`: the mapping, the display name and the read markers are deleted. `deferred`: a document the person wrote in is under legal hold, so the erasure waits for the release (owner decision 38). */
+  outcome: "erased" | "deferred";
+}
+
 /** A field in the derived list (12 §3.2; FRW-060). */
 export interface FieldInfo {
   id: string;
@@ -2026,6 +2038,15 @@ export interface Operations {
     query: { cursor?: string; limit?: number };
     body: never;
     response: List<Hold>;
+  };
+  /** POST /users/erase: Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`. (08 §13; 13 §10) */
+  erasePerson: {
+    method: "POST";
+    path: "/users/erase";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: ErasePersonRequest;
+    response: ErasePersonResult;
   };
   /** GET /documents/{id}/fields: The derived list of fields. (12 §10) */
   listFields: {

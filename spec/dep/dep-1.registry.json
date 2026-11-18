@@ -1269,6 +1269,20 @@
       "owner": "UX"
     },
     {
+      "operationId": "erasePerson",
+      "method": "POST",
+      "path": "/users/erase",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §13; 13 §10",
+      "owner": "HIS"
+    },
+    {
       "operationId": "listFields",
       "method": "GET",
       "path": "/documents/{id}/fields",

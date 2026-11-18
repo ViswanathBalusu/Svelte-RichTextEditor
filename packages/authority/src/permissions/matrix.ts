@@ -191,6 +191,8 @@ export const MATRIX: readonly MatrixRow[] = [
       // Legal holds (08 §11; UX-080 criteria 2 and 3): place and list with a service credential.
       'POST /documents/{id}/holds',
       'GET /holds',
+      // The erasure of a person (08 §13; HIS-038 criterion 6): a service credential.
+      'POST /users/erase',
       // Tenant quotas (06 §12; UX-078 criterion 1): read and set with a service credential.
       'GET /quotas',
       'PUT /quotas',
