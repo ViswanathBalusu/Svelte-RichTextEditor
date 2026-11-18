@@ -337,6 +337,7 @@ Resources for fields, workflow, templates and bulk sends are listed in 12, secti
 | `dep.thread.created`, `dep.thread.resolved`, `dep.thread.reopened`, `dep.thread.deleted`, `dep.comment.created`, `dep.comment.mentioned`, `dep.task.assigned` | |
 | `dep.export.completed`, `dep.export.failed`, `dep.import.completed`, `dep.import.failed` | |
 | `dep.commit.rejected` | A commit was rejected with `permission_denied` or `invalid_op`. Throttled. Useful for security monitoring |
+| `dep.workflow.sent`, `dep.workflow.participant_activated`, `dep.workflow.participant_viewed`, `dep.workflow.field_completed`, `dep.workflow.participant_completed`, `dep.workflow.participant_declined`, `dep.workflow.auth_failed`, `dep.workflow.reminder_due`, `dep.workflow.corrected`, `dep.workflow.voided`, `dep.workflow.expired`, `dep.workflow.completed`, `dep.workflow.finalised` | Workflow events (12 §6.3, §10). `data` has the workflow and document identifiers, the `seq` of the control commit and the chain head, and for an event about one person that participant's identifier. It holds no contact detail and no evidence: the host sends every message |
 
 ## 8. Embedding API
 

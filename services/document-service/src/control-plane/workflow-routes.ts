@@ -256,7 +256,10 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
   ): Promise<void> => {
     const ref = k.refOf(ctx, doc);
     const head = await d.logs.head(ref);
-    const chain = (await d.logs.state?.(ref))?.chainHead ?? '';
+    const chain =
+      (await d.logs.state?.(ref))?.chainHead ??
+      out.resource.sentHash?.replace(/^sha256:/, '') ??
+      '';
     const at = { seq: out.control?.seq ?? head.seq, chainHead: out.control?.chainHead ?? chain };
     for (const e of out.raised) {
       const event = workflowEvent(e.name, {
