@@ -37,6 +37,9 @@ type GrantChange = Parameters<Kit['d']['grants']['change']>[1];
 
 export function leaseRoutes(k: Kit): Record<string, Handler> {
   const { d, refOf, liveDocument } = k;
+  // Test mode shortens the lease (PRO-109); otherwise the defaults of 07 §10 apply.
+  const leaseOptions =
+    d.regionLeaseMs === undefined ? {} : { options: { durationMs: d.regionLeaseMs } };
 
   /**
    * The body of a lease (05 section 6.2 `Lease`): the identifier, the holder as the host's `sub`
@@ -104,6 +107,7 @@ export function leaseRoutes(k: Kit): Record<string, Handler> {
       holder: conn.sub,
       now,
       id,
+      ...leaseOptions,
     });
     if (!verdict.ok) throw refusal(verdict);
     // Acquiring again as the holder keeps the lease in force: nothing is stored then.
@@ -124,7 +128,14 @@ export function leaseRoutes(k: Kit): Record<string, Handler> {
     const held = perms.leases.find((l) => l.region === rid && l.expiresAt > now);
     if (!held) throw new ApiError('not_found', 'you no longer hold this lease');
     checkIfMatch(ctx.req, leaseTag(held), true);
-    const verdict = renewLease({ perms, region: rid, id: held.id ?? '', holder: conn.sub, now });
+    const verdict = renewLease({
+      perms,
+      region: rid,
+      id: held.id ?? '',
+      holder: conn.sub,
+      now,
+      ...leaseOptions,
+    });
     if (!verdict.ok) throw refusal(verdict);
     await store(ref, { putLeases: [verdict.lease] }, perms, ctx.caller.actor);
     return json(200, await leaseBody(ctx, verdict.lease), {
