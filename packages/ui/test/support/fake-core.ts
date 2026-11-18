@@ -180,6 +180,7 @@ export const FAKE_COMMANDS = [
   'setLanguage',
   'markRegion',
   'setRegionPolicy',
+  'renameRegion',
   'nextEditableRegion',
   'insertField',
   'insertRecovered',
@@ -587,6 +588,16 @@ export class FakeCore implements CoreApi {
           (this.regions.get() ?? []).map((r) =>
             r.id === a['region'] ? { ...r, policy: a['policy'] as RegionSummary['policy'] } : r,
           ),
+        );
+        this.#bump();
+        return true;
+      }
+      case 'renameRegion': {
+        const caps = this.permissions?.get()?.caps ?? [];
+        const title = typeof a['title'] === 'string' ? a['title'].trim() : '';
+        if (!caps.includes('structure') || title === '') return false;
+        this.regions?.set(
+          (this.regions.get() ?? []).map((r) => (r.id === a['region'] ? { ...r, title } : r)),
         );
         this.#bump();
         return true;

@@ -57,7 +57,7 @@ import {
   TextSelection,
   type Transaction,
 } from 'prosemirror-state';
-import { type Step, replaceStep } from 'prosemirror-transform';
+import { Step, replaceStep } from 'prosemirror-transform';
 import { type JsonValue, nodeId } from '@docedit/model';
 import type {
   AccessLimit,
@@ -144,6 +144,8 @@ import {
 } from './equation-commands.ts';
 import { isValueFormat, valueFormatCommand } from './formatting-values.ts';
 import { LIST_COMMANDS, listCommand } from './list-commands.ts';
+import { countBodyWords, WordCounter } from './word-count.ts';
+import { type FormatSnapshot, paintMarks, paintParagraphs, takeFormat } from './format-painter.ts';
 import {
   type AssetsPort,
   type ImagePasteResult,
@@ -201,6 +203,7 @@ import {
   placeholderAt,
   regionAt,
   regionClamp,
+  regionTitleKey,
   regionParagraphs,
   withParagraphsAfterRegions,
 } from './regions.ts';
@@ -265,11 +268,13 @@ import {
   type SyncState,
   type Transition,
   initialState,
+  insertedText,
   local,
   receiveCommits,
   settled,
   unconfirmed,
 } from './sync/state.ts';
+import type { RestorePlan } from './sync/restore.ts';
 import type { SelectionShim } from './view-support.ts';
 import { CDM1 } from '@docedit/model/definition';
 
@@ -427,6 +432,8 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'canInsertField',
   'canMarkRegion',
   'hasNextEditableRegion',
+  'canCopyFormat',
+  'canPasteFormat',
 ];
 
 /**
@@ -699,11 +706,25 @@ export class DocumentCore implements DocumentApi {
   readonly access: ReadValue<AccessSummary>;
   readonly saveState: ReadValue<SaveState>;
   readonly confirmedSeq: ReadValue<number>;
+  /**
+   * The titles of the regions in the confirmed document, as one string that changes when a region is
+   * renamed, added or removed there (PRM-034 criterion 1). The element re-reads the region list when it
+   * changes, so a rename reaches the permissions pane and the lock indicators of everyone.
+   */
+  readonly regionTitles: ReadValue<string>;
   readonly connection: ReadValue<ConnectionState>;
   readonly status: ReadValue<StatusSummary>;
   readonly commands: ReadValue<Readonly<Record<CommandName, CommandState>>>;
   readonly revision: ReadValue<number>;
   readonly direction: ReadValue<'ltr' | 'rtl'>;
+  /** The document's default language, a BCP 47 tag, or null when it sets none (UX-018). */
+  readonly language: ReadValue<string | null>;
+  /** The words in the body; null until the first count, which is made off the typing path (UX-018). */
+  readonly words: ReadValue<number | null>;
+  readonly #words = new WordCounter(
+    () => countBodyWords(this.#state.doc),
+    (n) => this.words.set(n),
+  );
   readonly refusal: ReadValue<RefusalNotice | null>;
   readonly mode: ReadValue<ModeState>;
   /** Suggestion mode at the caret, and why (FE-041 criterion 5). */
@@ -728,6 +749,8 @@ export class DocumentCore implements DocumentApi {
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
+  /** The formatting the painter took (UX-009). */
+  #painted: FormatSnapshot | null = null;
   #problems = 0;
   #equationRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
@@ -741,6 +764,8 @@ export class DocumentCore implements DocumentApi {
   readonly #schema: Schema;
   #state: EditorState;
   #sync: SyncState;
+  /** The confirmed document `regionTitles` was last computed from. */
+  #titledDoc: PMNode | null = null;
   /**
    * Whether the last items of the undo history are the unconfirmed steps, one item per step, so that
    * a rebuild may rebase the history through its pairing (remote.ts). Undo and redo, local steps the
@@ -817,6 +842,7 @@ export class DocumentCore implements DocumentApi {
     );
     this.saveState = new ReadValue<SaveState>('saved', Object.is, hub);
     this.confirmedSeq = new ReadValue<number>(0, Object.is, hub);
+    this.regionTitles = new ReadValue<string>('', Object.is, hub);
     this.connection = new ReadValue<ConnectionState>('detached', Object.is, hub);
     this.status = new ReadValue<StatusSummary>(
       { connection: 'offline', sync: 'saved' },
@@ -830,6 +856,8 @@ export class DocumentCore implements DocumentApi {
     );
     this.revision = new ReadValue<number>(0, Object.is, hub);
     this.direction = new ReadValue<'ltr' | 'rtl'>('ltr', Object.is, hub);
+    this.language = new ReadValue<string | null>(null, Object.is, hub);
+    this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.#requested = config.mode ?? 'edit';
     this.#accessValue = config.access ?? null;
@@ -1270,6 +1298,9 @@ export class DocumentCore implements DocumentApi {
       if (!last || last.doc !== state.doc) {
         this.outline.set(outlineOf(state.doc));
         this.direction.set(stylesOf(state.doc).settings.dir);
+        this.language.set(stylesOf(state.doc).settings.lang ?? null);
+        // The count is made later, off the typing path (UX-018 criterion 1).
+        this.#words.changed();
       }
       const commands = {} as Record<CommandName, CommandState>;
       for (const name of COMMANDS) commands[name] = this.queryCommand(name);
@@ -1354,6 +1385,10 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('markRegion', { title: REGION_QUERY_TITLE }).enabled;
       case 'hasNextEditableRegion':
         return this.queryCommand('nextEditableRegion').enabled;
+      case 'canCopyFormat':
+        return this.queryCommand('copyFormat').enabled;
+      case 'canPasteFormat':
+        return this.queryCommand('pasteFormat').enabled;
       default:
         return undefined;
     }
@@ -1389,6 +1424,10 @@ export class DocumentCore implements DocumentApi {
   #publishSync(): void {
     const s = this.#sync;
     this.confirmedSeq.set(s.seq);
+    if (s.confirmed !== this.#titledDoc) {
+      this.#titledDoc = s.confirmed;
+      this.regionTitles.set(regionTitleKey(s.confirmed));
+    }
     this.syncSummary.set({
       seq: s.seq,
       incarnation: s.incarnation,
@@ -1422,12 +1461,14 @@ export class DocumentCore implements DocumentApi {
       .filter((m) => m.attrs['value'] !== false)
       .map((m) => m.type.name)
       .sort();
+    const lang = marksAt(state).find((m) => m.type.name === 'lang')?.attrs['value'];
     return {
       empty,
       scope: r ? 'region' : 'body',
       region: title,
       style: currentStyle(state),
       marks: [...new Set(marks)],
+      lang: typeof lang === 'string' ? lang : null,
     };
   }
 
@@ -1929,6 +1970,16 @@ export class DocumentCore implements DocumentApi {
         return listCommand(name, args, (pos) => this.canEdit(this.#scopeAt(pos)));
       case 'selectAll':
         return selectAllInBody;
+      case 'copyFormat':
+        // Reading changes nothing, so a reader may take formatting; the snapshot is kept for the paste.
+        return (state, dispatch) => {
+          const taken = takeFormat(state);
+          if (taken === null) return false;
+          if (dispatch) this.#painted = taken;
+          return true;
+        };
+      case 'pasteFormat':
+        return this.#painted === null ? null : this.#pasteFormat(this.#painted);
       case 'undo':
         return historyCommand(undo);
       case 'redo':
@@ -1963,6 +2014,55 @@ export class DocumentCore implements DocumentApi {
           return dispatch ? this.openStory(id) : true;
         };
     }
+  }
+
+  /**
+   * Puts a set-aside item's text at the selection through the guards, as typing would (UX-017
+   * criterion 3). The item stays in the list: only a deliberate discard removes it.
+   */
+  insertRecovered(id: string): boolean {
+    const item = this.recovered.get().items.find((i) => i.id === id);
+    if (item === undefined || item.text === '') return false;
+    return this.pastePlainText(item.text);
+  }
+
+  /** Removes a set-aside item from the list and from the journal (UX-017 criteria 4 and 5). */
+  discardRecovered(id: string): boolean {
+    const { items } = this.recovered.get();
+    const item = items.find((i) => i.id === id);
+    if (item === undefined) return false;
+    const rest = items.filter((i) => i !== item);
+    this.recovered.set({ count: rest.length, items: rest });
+    this.#session?.forgetRecovered(item);
+    return true;
+  }
+
+  /**
+   * The format painter's paste (UX-009). The character formatting and the paragraph properties go
+   * through the guard like any change. Where suggestion mode records the change, each part is a
+   * transaction of its own, because a suggestion is built from mark steps or from attribute steps,
+   * not from both (FE-043, FE-044); elsewhere both are one transaction, one step of the history.
+   */
+  #pasteFormat(snapshot: FormatSnapshot): Command {
+    return (state, dispatch) => {
+      if (takeFormat(state) === null) return false;
+      if (!dispatch) return true;
+      const writable = (pos: number): boolean => this.canEdit(this.#scopeAt(pos));
+      const suggesting = this.#suggestionIn(this.#scopeAt(state.selection.from)).on;
+      // The paragraph steps go first: a step clears the stored marks that a caret's paint sets.
+      if (suggesting) {
+        const paragraphs = state.tr;
+        if (paintParagraphs(paragraphs, snapshot, writable, true) > 0) dispatch(paragraphs);
+        const marks = paintMarks(this.#state.tr, snapshot);
+        if (marks.docChanged || marks.storedMarksSet) dispatch(marks);
+      } else {
+        const both = state.tr;
+        paintParagraphs(both, snapshot, writable, false);
+        paintMarks(both, snapshot);
+        if (both.docChanged || both.storedMarksSet) dispatch(both.scrollIntoView());
+      }
+      return true;
+    };
   }
 
   /**
@@ -2013,6 +2113,7 @@ export class DocumentCore implements DocumentApi {
       name === 'subscript' ||
       name === 'insertFootnote' ||
       isValueFormat(name) ||
+      name === 'pasteFormat' ||
       LIST_COMMANDS.has(name)
     );
   }
@@ -2021,6 +2122,7 @@ export class DocumentCore implements DocumentApi {
   static #changes(name: CommandName): boolean {
     return (
       name !== 'selectAll' &&
+      name !== 'copyFormat' &&
       name !== 'editHeader' &&
       name !== 'followInternalLink' &&
       name !== 'nextEditableRegion'
@@ -2456,6 +2558,15 @@ export class DocumentCore implements DocumentApi {
       return reason === null
         ? { enabled: false, active: false }
         : { enabled: false, active: false, reason };
+    }
+    if (name === 'renameRegion' && args?.region !== undefined) {
+      // A rename says why it is unavailable (PRM-034 criterion 5): a lock first, then the rights
+      // `region.retitle` needs, `structure` and `edit` in the region (07 §2).
+      if (this.#locked()) return { enabled: false, active: false, reason: 'read-only' };
+      const permitted =
+        (this.#accessValue?.caps.includes('structure') ?? false) &&
+        this.canEdit(`region:${args.region}`);
+      if (!permitted) return { enabled: false, active: false, reason: 'no-access' };
     }
     const command = this.#command(name, args);
     const applicable = command !== null && command(state);
@@ -3140,6 +3251,78 @@ export class DocumentCore implements DocumentApi {
 
   // --- Sync (FE-033) -------------------------------------------------------------------------
 
+  /**
+   * Puts the journal's unconfirmed work back on the document the core holds (FE-009; sync/restore.ts).
+   * The commit becomes the in-flight commit under its own identifier, and the queue is queued again.
+   * Work that does not apply to the document, or was made on another one, is returned to be set
+   * aside as recovered edits; it is never applied at positions it was not made for.
+   */
+  #restoreUnconfirmed(plan: RestorePlan): Discarded[] {
+    const schema = this.#schema;
+    const here = this.#sync.seq;
+    const failed: Discarded[] = [];
+    const parse = (json: readonly StepJson[]): Step[] | null => {
+      const out: Step[] = [];
+      for (const j of json) {
+        try {
+          out.push(Step.fromJSON(schema, j));
+        } catch {
+          return null;
+        }
+      }
+      return out;
+    };
+    const setAside = (json: readonly StepJson[], steps: Step[] | null, commit: string | null) =>
+      failed.push({
+        reason: 'stale',
+        commit,
+        steps: [...json],
+        text: steps ? insertedText(steps) : '',
+        seq: here,
+      });
+    // The steps go through the ordinary local path, without the guard (the server decides again) and
+    // out of the undo history; one transaction, or none when any step fails.
+    const applyAll = (steps: readonly Step[]): boolean => {
+      const tr = this.#state.tr;
+      for (const step of steps) if (tr.maybeStep(step).failed) return false;
+      this.dispatchTransaction(tr.setMeta(INTERNAL, true).setMeta('addToHistory', false));
+      return true;
+    };
+
+    const entry = plan.entry;
+    let inflightBack = false;
+    if (entry) {
+      // The text of work that is set aside is read from the steps, which parse without a document.
+      const steps = parse(entry.steps);
+      if (entry.base === here && steps && steps.length > 0 && applyAll(steps)) {
+        const queued = this.#sync.queue;
+        this.#sync = {
+          ...this.#sync,
+          queue: [],
+          inflight: {
+            id: entry.id,
+            base: entry.base,
+            sent: steps,
+            json: [...entry.steps],
+            local: queued,
+            origin: entry.origin,
+            resend: false,
+          },
+        };
+        inflightBack = true;
+      } else setAside(entry.steps, steps, entry.id);
+    }
+    if (plan.queue.length > 0) {
+      const madeOn = plan.queueAt?.seq;
+      const fits = entry ? inflightBack && madeOn === entry.base : madeOn === here;
+      const steps = parse(plan.queue);
+      if (!(fits && steps && steps.length > 0 && applyAll(steps)))
+        setAside(plan.queue, steps, null);
+    }
+    this.#publishSync();
+    return failed;
+  }
+
   attach(channel: SyncChannel, opts: AttachOptions): () => void {
     if (this.#session) throw new Error('a channel is already attached');
     this.#docId = channel.docId;
@@ -3160,8 +3343,12 @@ export class DocumentCore implements DocumentApi {
     if (opts.assets) this.#attachedAssets = opts.assets;
     const detachProofing = opts.proofing ? this.attachProofing(opts.proofing) : null;
     if (opts.user !== undefined) this.#user = opts.user;
+    // Work the journal kept from an earlier visit goes back on the document before the session
+    // starts, so that the session sees it as its own in-flight commit and queue (FE-009).
+    const notRestored = opts.restore ? this.#restoreUnconfirmed(opts.restore) : [];
     const session = new SyncSession(this.#host(), channel, sessionOpts);
     this.#session = session;
+    session.setAside(notRestored);
     if (opts.presence) {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const core = this;
@@ -3288,11 +3475,13 @@ export class DocumentCore implements DocumentApi {
         this.#publishSync();
         return;
       case 'discarded': {
+        const before = this.recovered.get().items;
         const items = [
-          ...this.recovered.get().items,
-          ...e.items.map((i) => ({
+          ...before,
+          ...e.items.map((i, n) => ({
             reason: i.reason,
             commit: i.commit,
+            id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
             text: i.text,
             seq: i.seq,
             ...this.#rejectionWords(i),
@@ -3513,6 +3702,7 @@ export class DocumentCore implements DocumentApi {
     this.#session = null;
     if (this.#flushTimer !== null) clearTimeout(this.#flushTimer);
     this.#flushTimer = null;
+    this.#words.stop();
     this.#listeners.clear();
     this.#bridges.clear();
   }

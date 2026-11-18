@@ -240,6 +240,8 @@ export type CoreQueryName1b =
  * - `markRegion`: `{ title }`; the core wraps the selected blocks in a region with policy
  *   `inherit` (PRM-033);
  * - `setRegionPolicy`: `{ region, policy }`, `inherit` or `restricted` (PRM-036);
+ * - `renameRegion`: `{ region, title }`; the core refuses it without `structure` and `edit` in the
+ *   region (PRM-034);
  * - `nextEditableRegion`: none (PRM-027);
  * - `insertField`: `{ kind }` (FRW-072);
  * - `insertRecovered`, `discardRecovered`: `{ id }`, the item's `id` or its index as a string
@@ -256,6 +258,7 @@ export type CoreCommandName =
   | 'setLanguage'
   | 'markRegion'
   | 'setRegionPolicy'
+  | 'renameRegion'
   | 'nextEditableRegion'
   | 'insertField'
   | 'insertRecovered'
@@ -917,6 +920,8 @@ export type HistoryPaneItem =
       readonly authors: readonly string[];
       readonly changes: number;
       readonly origins: readonly string[];
+      /** The last `seq` of the group: the state a reader opens (HIS-010); absent when the host gives none. */
+      readonly toSeq?: number;
     }
   | {
       readonly kind: 'version';
@@ -927,6 +932,26 @@ export type HistoryPaneItem =
       readonly time: string;
       readonly seq: number;
     };
+
+/**
+ * An old version opened as a second, read-only editor state (HIS-010; 08 §5). It is never connected to the live
+ * channel, and no command can submit a commit from it. The pane draws it with `mount` and says so in its name.
+ */
+export interface HistoryVersionView {
+  readonly seq: number;
+  /** When the version was made (ISO 8601). */
+  readonly time: string;
+  /** The version's name; null for a state that was not named. */
+  readonly name: string | null;
+  /** Draws the version in `target`; returns the function that removes it. */
+  mount(target: HTMLElement): () => void;
+  /** Releases the state. Called once, when the user leaves the version. */
+  close(): void;
+}
+
+export type HistoryVersionOpen =
+  | { readonly ok: true; readonly view: HistoryVersionView }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'not_found' | 'failed' };
 
 /** What the pane asks for: the filters of HIS-009 criterion 2 and an opaque cursor. */
 export interface HistoryPaneQuery {
@@ -978,6 +1003,15 @@ export interface HistoryPort {
    * name a version is offered only then. The service's refusal comes back as `forbidden`.
    */
   createVersion?(input: HistoryVersionInput): Promise<HistoryVersionResult>;
+  /**
+   * Opens the document at `seq` as a read-only state (HIS-010; a pinned read, never the live channel).
+   * Present only when the host can read old content. A version below the user's gate comes back as
+   * `forbidden`; the list never offers one (HIS-024).
+   */
+  openVersion?(
+    seq: number,
+    label: { time: string; name: string | null },
+  ): Promise<HistoryVersionOpen>;
   /**
    * Called by the host when the list may have changed (a version was named, for instance); the
    * pane then asks again. Returns the function that stops the calls.

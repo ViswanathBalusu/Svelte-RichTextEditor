@@ -21,6 +21,7 @@ import type { ReadView } from './read-value.ts';
 import type { TrimReport } from './trim.ts';
 import type { Clock } from './sync/session.ts';
 import type { JournalPort } from './sync/journal.ts';
+import type { RestorePlan } from './sync/restore.ts';
 
 /** A CDM document as stored and transferred (03 §2). */
 export interface CdmEnvelope {
@@ -72,7 +73,10 @@ export type CommandName =
   | 'nextEditableRegion'
   | 'markRegion'
   | 'setRegionPolicy'
-  | 'renameRegion';
+  | 'renameRegion'
+  // UX-009: the format painter takes the formatting at the selection, then puts it on another one.
+  | 'copyFormat'
+  | 'pasteFormat';
 
 /**
  * The authoring commands that take arguments (FE-053, FE-070, FE-133 to FE-137, FE-140). Each one
@@ -294,6 +298,8 @@ export interface SelectionSummary {
   /** The paragraph style at the selection, or null when the selected paragraphs differ. */
   style: string | null;
   marks: string[];
+  /** The language mark at the selection (a BCP 47 tag), or null for the document's default (UX-018). */
+  lang?: string | null;
 }
 
 /** The shape of the `de-selection` detail (05 §8.1): a DEP scope identifier and a block. */
@@ -427,7 +433,10 @@ export type CoreQueryName =
   // PRM-033 and FE-044 criterion 5: the selection's whole body blocks may become a region.
   | 'canMarkRegion'
   // PRM-027: a region after the caret, in document order, where the user may edit.
-  | 'hasNextEditableRegion';
+  | 'hasNextEditableRegion'
+  // UX-009: the selection has formatting to take; formatting was taken and may be put here.
+  | 'canCopyFormat'
+  | 'canPasteFormat';
 
 /** `de-status.connection` (05 §8.1), plus `detached` before any channel is attached. */
 export type ConnectionState = 'detached' | 'online' | 'reconnecting' | 'offline';
@@ -471,6 +480,8 @@ export interface RecoveredItem {
   /** The rejection code, or `rebase`, `reload`, `reset`, `stale`. */
   reason: string;
   commit: string | null;
+  /** Names the item for `insertRecovered` and `discardRecovered` (UX-017): the commit, else the `seq` and its place. */
+  id?: string;
   /** The text it inserted. */
   text: string;
   seq: number;
@@ -591,6 +602,13 @@ export interface AttachOptions {
   features?: readonly string[];
   /** The recovery journal (FE-008): commits are written here before they are sent. */
   journal?: JournalPort;
+  /**
+   * Unconfirmed work an earlier visit left in the journal (FE-009; `readRestorePlan`). The content
+   * the core holds must be the document at `restoreBase(restore).seq`, and the channel must have
+   * been opened with a resume at that `seq` naming the commit as in flight. The core puts the work
+   * back as the in-flight commit and the queue; what does not apply is kept as recovered edits.
+   */
+  restore?: RestorePlan;
   /** The assets port: a pasted picture is uploaded through it (FE-053; 10 §3.1). */
   assets?: AssetsPort;
   /** The proofing port (13 §6.1; UX-041): the core checks spelling and grammar through it. */
