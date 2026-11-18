@@ -19,6 +19,12 @@ import {
   readCargoMetadata,
   everyOptionAllowed,
 } from './cargo-licences.ts';
+import {
+  type DataReview,
+  type LockReview,
+  dataReviewProblems,
+  lockReviewProblems,
+} from './kernel-supply-chain.ts';
 import { type Exception, type Policy, activeException, evaluate } from './licence-policy.ts';
 
 interface PnpmLicenceEntry {
@@ -36,6 +42,17 @@ const exceptions = (
   }
 ).exceptions;
 const today = new Date().toISOString().slice(0, 10);
+// The kernel's data reviews and reviewed lock files (WASM-013).
+const dataReviews = (
+  JSON.parse(readFileSync(join(root, 'licences/kernel-data.json'), 'utf8')) as {
+    reviews: DataReview[];
+  }
+).reviews;
+const lockReviews = (
+  JSON.parse(readFileSync(join(root, 'licences/cargo-lock-review.json'), 'utf8')) as {
+    locks: Record<string, LockReview>;
+  }
+).locks;
 
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const raw = execFileSync(pnpm, ['licenses', 'list', '--json', '--prod', '-r'], {
@@ -90,6 +107,17 @@ for (const manifest of findCargoManifests(root)) {
   } catch (e) {
     problems.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
     continue;
+  }
+  if (label.startsWith('crates/')) {
+    // The kernel's own workspace: its data is reviewed and its lock file is pinned (WASM-013).
+    for (const p of dataReviewProblems(crates, dataReviews, today)) problems.push(`${label}: ${p}`);
+    const lockLabel = label.replace(/Cargo\.toml$/, 'Cargo.lock');
+    for (const p of lockReviewProblems(
+      lockLabel,
+      readFileSync(join(root, lockLabel), 'utf8'),
+      lockReviews[lockLabel],
+    ))
+      problems.push(p);
   }
   for (const c of crates) {
     checked++;
