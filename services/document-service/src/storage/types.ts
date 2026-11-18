@@ -72,6 +72,11 @@ export interface LogStore {
   /** The head with the chain head (BE-079 criterion 4). Optional: test doubles may omit it. */
   state?(ref: DocRef): Promise<HeadState>;
   /**
+   * The assets attached to the document so far, with the seq of the commit that first referenced
+   * each (doc_assets, BE-044). Optional: test doubles may omit it.
+   */
+  attachedAssets?(ref: DocRef): Promise<ReadonlyMap<string, number>>;
+  /**
    * The commits whose scopes include `scope`, newest first, behind the caller's gate (HIS-016;
    * `field:<id>` answers "who filled this field"). Optional: test doubles may omit it.
    */
@@ -111,6 +116,12 @@ export interface AppendOptions {
      */
     checkpointKey?: string;
   };
+  /**
+   * Assets the commits of this request attach to the document for the first time (BE-044 criterion
+   * 1): one `doc_assets` row each, with `seq` as its `first_seq`, written in the same transaction as
+   * the commits. A row that exists is kept.
+   */
+  attachments?: ReadonlyArray<{ asset: string; seq: number }>;
   /** A test fault for this write only (BE-079); set by the fault hooks, never in production. */
   fault?: WriteFault;
 }
