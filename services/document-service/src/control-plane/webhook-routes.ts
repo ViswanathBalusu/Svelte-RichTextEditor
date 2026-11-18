@@ -17,6 +17,7 @@ import { ifMatchTags } from './http.ts';
 import { json, type Kit } from './kit.ts';
 import type { Ctx, Handler, Reply } from './pipeline.ts';
 import { ApiError } from './problems.ts';
+import type { WebhookDispatcher } from './webhook-dispatcher.ts';
 import type { Answer, WebhookSubscriptions } from './webhook-subscriptions.ts';
 
 /**
@@ -91,5 +92,35 @@ export function webhookRoutes(k: Kit): Record<string, Handler> {
     return replyOf(answer, k.rest);
   };
 
-  return { listWebhooks, createWebhook, getWebhook, updateWebhook, deleteWebhook };
+  // The test ping and the replay (UX-079 criterion 2; ADR 0330 §2, accepted by decision 177). The
+  // subscription is looked up first, so an unknown or foreign id is `not_found` before any send.
+  const dispatcher = (): Pick<WebhookDispatcher, 'ping' | 'replay'> => {
+    if (!d.webhookDispatcher)
+      throw new ApiError('not_found', 'this server does not send webhook deliveries');
+    return d.webhookDispatcher;
+  };
+
+  const pingWebhook: Handler = async (ctx) => {
+    const id = ctx.params['id'] ?? '';
+    await subs().get(ctx.caller, id);
+    const deliveryId = await dispatcher().ping(ctx.caller.tenant, id);
+    return json(202, { deliveryId }, { 'Cache-Control': 'no-store' });
+  };
+
+  const replayWebhookDelivery: Handler = async (ctx) => {
+    const id = ctx.params['id'] ?? '';
+    await subs().get(ctx.caller, id);
+    const row = await dispatcher().replay(ctx.caller.tenant, ctx.params['deliveryId'] ?? '', id);
+    return json(202, { deliveryId: row.id }, { 'Cache-Control': 'no-store' });
+  };
+
+  return {
+    listWebhooks,
+    createWebhook,
+    getWebhook,
+    updateWebhook,
+    deleteWebhook,
+    pingWebhook,
+    replayWebhookDelivery,
+  };
 }

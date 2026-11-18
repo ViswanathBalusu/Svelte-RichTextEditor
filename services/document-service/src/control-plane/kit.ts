@@ -38,6 +38,7 @@ import {
 import type { ExportPolicy, NotifyFn } from './exports.ts';
 import type { FontCatalogue } from './fonts.ts';
 import type { Cursors } from './http.ts';
+import type { WebhookDispatcher } from './webhook-dispatcher.ts';
 import type { WebhookSubscriptions } from './webhook-subscriptions.ts';
 import type { RetentionService } from './retention.ts';
 import type { HoldService } from './holds.ts';
@@ -137,6 +138,8 @@ export interface HandlerDeps {
   versions?: VersionStorePort;
   /** The webhook subscriptions the `/webhooks` routes use (UX-079). Absent: the routes are not offered. */
   webhooks?: WebhookSubscriptions;
+  /** The dispatcher that sends the test ping and replays deliveries (ADR 0330 §2). Absent: not offered. */
+  webhookDispatcher?: Pick<WebhookDispatcher, 'ping' | 'replay'>;
   /** The retention policies of `/retention` and `/documents/{id}/retention` (UX-080). Absent: not offered. */
   retention?: RetentionService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080 criteria 2 and 3). Absent: not offered. */

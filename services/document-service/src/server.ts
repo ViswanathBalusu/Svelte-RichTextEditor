@@ -1327,6 +1327,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     meter,
     ...(parts.audit ? { audit: parts.audit } : {}),
     ...(parts.webhooks ? { webhooks: parts.webhooks } : {}),
+    ...(webhooks ? { webhookDispatcher: webhooks.dispatcher } : {}),
     ...(parts.retention ? { retention: parts.retention } : {}),
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,

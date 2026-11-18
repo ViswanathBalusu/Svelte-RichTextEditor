@@ -222,6 +222,8 @@ export const MATRIX: readonly MatrixRow[] = [
       'GET /webhooks/{id}',
       'PATCH /webhooks/{id}',
       'DELETE /webhooks/{id}',
+      'POST /webhooks/{id}/ping',
+      'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
       'POST /tokens',
       'POST /sessions/revoke',
     ],
