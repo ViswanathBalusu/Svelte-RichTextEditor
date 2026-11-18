@@ -40,6 +40,7 @@ import type { FontCatalogue } from './fonts.ts';
 import type { Cursors } from './http.ts';
 import type { WebhookDispatcher } from './webhook-dispatcher.ts';
 import type { WebhookSubscriptions } from './webhook-subscriptions.ts';
+import type { HistoryVisibilityService } from './history-visibility.ts';
 import type { RetentionService } from './retention.ts';
 import type { HoldService } from './holds.ts';
 import type { ErasureRequests } from './erasure-requests.ts';
@@ -159,6 +160,8 @@ export interface HandlerDeps {
   webhookDispatcher?: Pick<WebhookDispatcher, 'ping' | 'replay'>;
   /** The retention policies of `/retention` and `/documents/{id}/retention` (UX-080). Absent: not offered. */
   retention?: RetentionService;
+  /** The history visibility settings of /history-visibility (HIS-025). Absent: not offered. */
+  historyVisibility?: HistoryVisibilityService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080 criteria 2 and 3). Absent: not offered. */
   holds?: HoldService;
   /** The erasure of a person (POST /users/erase, HIS-038 criterion 6). Absent: not offered. */

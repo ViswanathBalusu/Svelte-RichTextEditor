@@ -227,7 +227,7 @@ no content; atom; not selectable; feature `preserve`.
 
 A header or footer, edited in a sub-editor. Its content expression already forbids tables (I10). (03 §4.1)
 
-content `story_block+`; isolating; not selectable; node marks on children: `ins del fmt`.
+content `story_block+`; isolating; not selectable.
 
 | Attribute | Type | Range, length or pattern | Default | Notes |
 |---|---|---|---|---|
@@ -240,7 +240,7 @@ content `story_block+`; isolating; not selectable; node marks on children: `ins 
 
 The body. (03 §4.2)
 
-content `(block | region | section_break)+`; node marks on children: `ins del fmt`.
+content `(block | region | section_break)+`.
 
 | Attribute | Type | Range, length or pattern | Default | Notes |
 |---|---|---|---|---|
@@ -251,7 +251,7 @@ content `(block | region | section_break)+`; node marks on children: `ins del fm
 
 A permission scope: a direct child of the body, never nested (I3). (03 §4.2)
 
-content `block+`; isolating; node marks on children: `ins del fmt`.
+content `block+`; isolating.
 
 | Attribute | Type | Range, length or pattern | Default | Notes |
 |---|---|---|---|---|
@@ -304,6 +304,7 @@ content `inline*`; groups `block story_block cell_block`.
 | `tabs` | array of object or null | 0 to 64 items; items: `position`: integer 0 to 31680; `align`: enumeration `left`, `center`, `right`, `decimal`; `leader`: enumeration `none`, `dot`, `hyphen`, `underscore`, `middleDot`, `heavy` | `null` | Tab stops measured from the left margin (03 §7). |
 | `borders` | object or null | `top`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `bottom`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `left`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `right`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `between`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620 | `null` | Paragraph borders. |
 | `shading` | object or null | `fill`: string length 0 to 7; pattern `^#[0-9A-F]{6}$` | `null` | Paragraph shading. |
+| `suggest` | array of object or null | 1 to 8 items; items: `type`: enumeration `ins`, `del`, `fmt`; `attrs`: object `id`: string length 0 to 16; pattern `^[A-Za-z0-9_-]{16}$`; `user`: string length 1 to 255; `before`?: JSON at most 4096 bytes, depth 6, integers only | `null` | Block suggestions: `ins`, `del` or `fmt` entries with the suggesting user; null when there are none. On a `fmt` entry, `before` records only `style`, `align` and `numbering` (CDM-040). |
 | `preserved` | element tree or null | at most 16384 bytes, depth 12; names with a registered prefix, or in Clark notation for other namespaces; or `{ "ref": id }` of a shared tree | `null` | feature `preserve`; Attributes and child elements of the original Word element that the model does not represent, or a reference to a shared tree in `preserved_def` (ADR 0017, spike S11). |
 | `ext` | JSON object | at most 4096 bytes, depth 8, integers only; keys `^[a-z0-9]+(?:[.-][a-z0-9]+)*:[A-Za-z][A-Za-z0-9_-]{0,63}$` | `{}` | Additive attributes under namespaced keys; every reader preserves it unchanged (03 §11.2). |
 
@@ -311,7 +312,7 @@ content `inline*`; groups `block story_block cell_block`.
 
 A table; tables do not nest in version 1. (03 §4.3)
 
-content `table_row+`; groups `block`; node marks on children: `ins del fmt`.
+content `table_row+`; groups `block`.
 
 | Attribute | Type | Range, length or pattern | Default | Notes |
 |---|---|---|---|---|
@@ -323,6 +324,7 @@ content `table_row+`; groups `block`; node marks on children: `ins del fmt`.
 | `headerRows` | integer | 0 to 32767 | `0` | Rows repeated at the top of each page; at most the number of rows (I6). |
 | `borders` | object or null | `top`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `bottom`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `left`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `right`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `insideH`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620; `insideV`?: object `style`: enumeration `none`, `single`, `double`, `dotted`, `dashed`, `thick`; `width`?: integer 0 to 240; `color`?: string length 0 to 7; pattern `^#[0-9A-F]{6}$`; `space`?: integer 0 to 620 | `null` | Table borders. |
 | `cellMargins` | object or null | `top`?: integer 0 to 31680; `bottom`?: integer 0 to 31680; `left`?: integer 0 to 31680; `right`?: integer 0 to 31680 | `null` | Default cell margins. |
+| `suggest` | array of object or null | 1 to 8 items; items: `type`: enumeration `ins`, `del`, `fmt`; `attrs`: object `id`: string length 0 to 16; pattern `^[A-Za-z0-9_-]{16}$`; `user`: string length 1 to 255; `before`?: JSON at most 4096 bytes, depth 6, integers only | `null` | Block suggestions: `ins`, `del` or `fmt` entries with the suggesting user; null when there are none. On a `fmt` entry, `before` records only `style`, `align` and `numbering` (CDM-040). |
 | `preserved` | element tree or null | at most 16384 bytes, depth 12; names with a registered prefix, or in Clark notation for other namespaces; or `{ "ref": id }` of a shared tree | `null` | feature `preserve`; Attributes and child elements of the original Word element that the model does not represent, or a reference to a shared tree in `preserved_def` (ADR 0017, spike S11). |
 | `ext` | JSON object | at most 4096 bytes, depth 8, integers only; keys `^[a-z0-9]+(?:[.-][a-z0-9]+)*:[A-Za-z][A-Za-z0-9_-]{0,63}$` | `{}` | Additive attributes under namespaced keys; every reader preserves it unchanged (03 §11.2). |
 
@@ -338,6 +340,7 @@ content `table_cell+`.
 | `height` | integer or null | 0 to 31680 | `null` | Row height in twips. |
 | `heightRule` | enumeration | `auto`, `atLeast`, `exact` | `"auto"` | How `height` applies. |
 | `cantSplit` | boolean |  | `false` | Keep the row on one page. |
+| `suggest` | array of object or null | 1 to 8 items; items: `type`: enumeration `ins`, `del`, `fmt`; `attrs`: object `id`: string length 0 to 16; pattern `^[A-Za-z0-9_-]{16}$`; `user`: string length 1 to 255; `before`?: JSON at most 4096 bytes, depth 6, integers only | `null` | Block suggestions: `ins`, `del` or `fmt` entries with the suggesting user; null when there are none. On a `fmt` entry, `before` records only `style`, `align` and `numbering` (CDM-040). |
 | `preserved` | element tree or null | at most 16384 bytes, depth 12; names with a registered prefix, or in Clark notation for other namespaces; or `{ "ref": id }` of a shared tree | `null` | feature `preserve`; Attributes and child elements of the original Word element that the model does not represent, or a reference to a shared tree in `preserved_def` (ADR 0017, spike S11). |
 | `ext` | JSON object | at most 4096 bytes, depth 8, integers only; keys `^[a-z0-9]+(?:[.-][a-z0-9]+)*:[A-Za-z][A-Za-z0-9_-]{0,63}$` | `{}` | Additive attributes under namespaced keys; every reader preserves it unchanged (03 §11.2). |
 
@@ -345,7 +348,7 @@ content `table_cell+`.
 
 A table cell. (03 §4.3)
 
-content `cell_block+`; isolating; node marks on children: `ins del fmt`.
+content `cell_block+`; isolating.
 
 | Attribute | Type | Range, length or pattern | Default | Notes |
 |---|---|---|---|---|

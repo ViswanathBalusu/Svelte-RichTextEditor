@@ -11,6 +11,7 @@
  * A `fmt` suggestion shows the formatting it suggests under `accept`; under `reject` it is settled by
  * `settleSuggestions` before any writer reads the document (EXP-081; docs/adr/0370-w2-exp-081-unverifiable-suggestion-marks.md).
  */
+import { SUGGESTION_HOSTS } from '@docedit/model/definition';
 import { color, lit, tex, type Tex } from './emit.ts';
 import { diag, type Ctx, type J, type Mark } from './context.ts';
 import type { Diagnostic, Suggestions } from './bundle.ts';
@@ -114,6 +115,16 @@ export function settleSuggestions(doc: J, mode: Suggestions | null, diagnostics:
   const visit = (node: J, parents: (string | null)[], inherited: readonly Mark[]): J => {
     let marks = node.marks;
     let attrs = node.attrs;
+    // A paragraph, a row and a table keep their suggestions in `suggest` (03 §5; owner decision 92).
+    // The writers below read them as marks of the block, so the copy gets them as marks and loses
+    // the attribute: the settling and the markup need no second path.
+    const entries: unknown = SUGGESTION_HOSTS.includes(node.type) ? attrs?.['suggest'] : undefined;
+    if (attrs && 'suggest' in attrs) {
+      const { suggest: _moved, ...rest } = attrs;
+      attrs = rest;
+      if (Array.isArray(entries) && entries.length > 0)
+        marks = [...(marks ?? []), ...(entries as unknown as Mark[])];
+    }
     if (marks && marks.length > 0) {
       const unverified = marks.filter(
         (m) => (m.type === 'ins' || m.type === 'del') && !verifiable(m),

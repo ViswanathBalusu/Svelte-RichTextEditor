@@ -14,6 +14,7 @@ import { bodyRange } from '../src/body.ts';
 import type { CdmEnvelope } from '../src/api.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { spikeDocument } from '../src/spike-document.ts';
+import { blockEntries } from '../src/block-suggestion.ts';
 import { internals } from '../src/testing.ts';
 import { editorAccess } from './fixtures.ts';
 import { microtask } from './support.ts';
@@ -88,10 +89,10 @@ function caretAt(c: DocumentCore, row: number, col = 0): void {
   );
 }
 
-const marksOf = (node: PMNode): string[] => node.marks.map((m) => m.type.name);
+const marksOf = (node: PMNode): string[] => blockEntries(node).map((e) => e.type);
 
 describe('whole-row suggestions (FE-045 criteria 1 and 2)', () => {
-  it('inserting a row records it as a row with one ins node mark and keeps the others', () => {
+  it('inserting a row records it as a row with one ins entry in suggest and keeps the others', () => {
     const c = reviewer();
     caretAt(c, 1);
     expect(c.run('insertRowBelow')).toBe(true);
@@ -99,9 +100,9 @@ describe('whole-row suggestions (FE-045 criteria 1 and 2)', () => {
     expect(table.childCount).toBe(ROWS + 1);
     const inserted = table.child(2);
     expect(marksOf(inserted)).toEqual(['ins']);
-    expect(inserted.marks[0]!.attrs['user']).toBe('alice');
-    expect(table.child(1).marks).toHaveLength(0);
-    expect(table.child(3).marks).toHaveLength(0);
+    expect(blockEntries(inserted)[0]!.attrs.user).toBe('alice');
+    expect(blockEntries(table.child(1))).toHaveLength(0);
+    expect(blockEntries(table.child(3))).toHaveLength(0);
   });
 
   it('the document stays valid under the CDM validator after suggested row changes', () => {
@@ -165,7 +166,7 @@ describe('whole-row suggestions (FE-045 criteria 1 and 2)', () => {
           expect(table.childCount).toBeGreaterThanOrEqual(1);
           table.forEach((row) => {
             expect(row.childCount).toBe(2);
-            for (const m of row.marks) expect(['ins', 'del']).toContain(m.type.name);
+            for (const e of blockEntries(row)) expect(['ins', 'del']).toContain(e.type);
           });
         },
       ),
@@ -278,6 +279,6 @@ describe('text in a cell is a text suggestion (FE-045 criterion 4, FE-042)', () 
     };
     expect(hasIns(cell)).toBe(true);
     // The table rows around it are not changed.
-    expect(tableOf(internals(c).state.doc).child(0).marks).toHaveLength(0);
+    expect(blockEntries(tableOf(internals(c).state.doc).child(0))).toHaveLength(0);
   });
 });

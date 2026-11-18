@@ -244,8 +244,10 @@
           },
           {
             "type": "paragraph",
-            "attrs": { "id": "pSuggested000001" },
-            "marks": [{ "type": "del", "attrs": { "id": "sBobDelete000002", "user": "bob" } }],
+            "attrs": {
+              "id": "pSuggested000001",
+              "suggest": [{ "type": "del", "attrs": { "id": "sBobDelete000002", "user": "bob" } }]
+            },
             "content": [
               {
                 "type": "text",
@@ -320,10 +322,10 @@
                   },
                   {
                     "type": "table_row",
-                    "attrs": { "id": "trBody0000000001" },
-                    "marks": [
-                      { "type": "ins", "attrs": { "id": "sAliceInsert0002", "user": "alice" } }
-                    ],
+                    "attrs": {
+                      "id": "trBody0000000001",
+                      "suggest": [{ "type": "ins", "attrs": { "id": "sAliceInsert0002", "user": "alice" } }]
+                    },
                     "content": [
                       {
                         "type": "table_cell",

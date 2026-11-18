@@ -1,0 +1,20 @@
+[package]
+name = "docedit-layout-kernel"
+description = "The layout kernel compiled to WebAssembly (ADR 0016). WASM-001 is the toolchain and an empty kernel: its calls prove the build and the package; shaping and line breaking arrive with WASM-005 to WASM-010."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+# Exact versions, so that Cargo.lock and the licence check agree. The kernel takes no system
+# library and no font stack: fonts arrive as bytes from the manifest (WASM-005).
+[dependencies]
+wasm-bindgen = "=0.2.130"

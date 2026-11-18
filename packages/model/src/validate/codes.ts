@@ -43,7 +43,7 @@ export const VIOLATION_CODES = {
   content_on_leaf: { invariant: 'I1', doc: 'Content on a node type that has none.' },
   node_mark_host: {
     invariant: 'I1',
-    doc: 'A node mark on a node other than a paragraph, a table row or a table, or a node mark that is not a suggestion mark.',
+    doc: 'A block that carries marks. Block suggestions are entries of the suggest attribute of a paragraph, a table row or a table, not marks (03 §5).',
   },
   footnote_paragraphs: {
     invariant: 'I1',

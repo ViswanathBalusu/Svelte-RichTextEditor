@@ -1,0 +1,27 @@
+{
+  "name": "@docedit/layout-kernel",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The layout kernel as an npm package (ADR 0016; WASM-001): the Rust crate of crates/layout-kernel compiled to WebAssembly, with TypeScript typings. The package holds the typed loader in src and the build output in dist.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./wasm/*": "./dist/*"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "build:wasm": "node scripts/build.ts build",
+    "test:native": "node scripts/build.ts test",
+    "test:wasm": "node scripts/build.ts build && vitest run --root ../.. --project node packages/layout-kernel",
+    "verify:reproducible": "node scripts/build.ts verify"
+  },
+  "license": "Apache-2.0"
+}

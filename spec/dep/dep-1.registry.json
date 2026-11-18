@@ -1172,6 +1172,62 @@
       "owner": "UX"
     },
     {
+      "operationId": "getTenantHistoryVisibility",
+      "method": "GET",
+      "path": "/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "setTenantHistoryVisibility",
+      "method": "PUT",
+      "path": "/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "getDocumentHistoryVisibility",
+      "method": "GET",
+      "path": "/documents/{id}/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "setDocumentHistoryVisibility",
+      "method": "PUT",
+      "path": "/documents/{id}/history-visibility",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "required",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §9; 13 §10",
+      "owner": "HIS"
+    },
+    {
       "operationId": "getTenantOrigins",
       "method": "GET",
       "path": "/origins",

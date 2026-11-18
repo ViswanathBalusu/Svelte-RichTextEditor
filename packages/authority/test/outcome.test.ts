@@ -1,9 +1,8 @@
 // The outcome check (07 §5; 12 §4.2): table-driven cases for P1, P2, P4, P6, P7, P8, P9 and 07 §5.3,
-// with every step type, including attribute, mark, node-mark and crafted replaceAround steps.
+// with every step type, including attribute, mark, block-suggestion and crafted replaceAround steps.
 import { Fragment, Slice } from 'prosemirror-model';
 import {
   AddMarkStep,
-  AddNodeMarkStep,
   AttrStep,
   ReplaceAroundStep,
   ReplaceStep,
@@ -16,6 +15,7 @@ import { outcomeCheck, type OutcomeVerdict } from '../src/permissions/outcome.ts
 import { diffScopes } from '../src/permissions/scopes.ts';
 import { applySteps } from '../src/rebase.ts';
 import { regionsOf } from '../src/room/room.ts';
+import { addSuggestion } from './block-suggest.ts';
 import { USERS, baseDoc, basePermissions, posInside, posOf, schema } from './fixtures.ts';
 
 function check(
@@ -76,7 +76,7 @@ describe('outcome check', () => {
     allowed(check(USERS.bob, insertText('pLegal000000001B', 'Agreed ')));
   });
 
-  it('P1 holds for every step type: mark, attribute, node mark and crafted replaceAround', () => {
+  it('P1 holds for every step type: mark, attribute, block suggestion and crafted replaceAround', () => {
     denied(check(USERS.carol, boldRange('pLegal000000001B', 0, 9)), 'region:rLegal000000000B');
     denied(
       check(USERS.carol, setAttr('pLegal000000001B', 'style', 'Heading1')),
@@ -84,7 +84,8 @@ describe('outcome check', () => {
     );
     denied(
       check(USERS.carol, (doc) => [
-        new AddNodeMarkStep(
+        addSuggestion(
+          doc,
           posOf(doc, 'pLegal000000001B'),
           schema.marks['del']!.create({ id: 'sSuggestCarol001', user: 'carol' }),
         ),

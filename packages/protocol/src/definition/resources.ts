@@ -812,6 +812,45 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
     'UX',
   ),
+  // Who sees full history (HIS-025; 08 section 9; ADR 0034 section 2). The setting names are those of
+  // `documents.history_visibility` (06 section 4.1).
+  named(
+    'HistoryVisibilitySetting',
+    obj(
+      {
+        setting: req(
+          enm(['editors', 'all', 'since_access']),
+          'editors: people with edit somewhere see full history and the rest named versions only (the default). all: everyone with view sees full history. since_access: history from the state current when the person was given access.',
+        ),
+      },
+      { doc: 'A history visibility setting (08 section 9; HIS-025).', spec: '08 §9; 13 §10' },
+    ),
+    'HIS',
+  ),
+  named(
+    'HistoryVisibilityView',
+    obj(
+      {
+        setting: req(
+          nullable(enm(['editors', 'all', 'since_access'])),
+          'The setting the document carries, or null when it carries none.',
+        ),
+        effective: req(
+          enm(['editors', 'all', 'since_access']),
+          'The setting that applies: the document setting, else the tenant setting, else editors.',
+        ),
+        source: req(
+          enm(['document', 'tenant', 'default']),
+          'Where the effective setting comes from.',
+        ),
+      },
+      {
+        doc: 'A document history visibility setting with the effective one (HIS-025).',
+        spec: '08 §9; 13 §10',
+      },
+    ),
+    'HIS',
+  ),
   // The keys and origins a tenant registered (UX-077 criterion 4; 05 sections 3.2 and 4). Read only:
   // changes come from the registration (UX-091) until the administration API writes them (UX-076).
   named(
@@ -1873,6 +1912,55 @@ export const OPERATIONS: readonly OperationDef[] = [
     ifMatch: 'required',
     success: ok(ref('RetentionView'), { etag: true }),
     owner: 'UX',
+  }),
+  op({
+    operationId: 'getTenantHistoryVisibility',
+    method: 'GET',
+    path: '/history-visibility',
+    summary: 'The tenant history visibility setting; editors when none is set (HIS-025).',
+    spec: '08 §9; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    success: ok(ref('HistoryVisibilitySetting'), { etag: true }),
+    owner: 'HIS',
+  }),
+  op({
+    operationId: 'setTenantHistoryVisibility',
+    method: 'PUT',
+    path: '/history-visibility',
+    summary: 'Sets the tenant history visibility setting; audited (HIS-025).',
+    spec: '08 §9; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('HistoryVisibilitySetting'),
+    ifMatch: 'required',
+    success: ok(ref('HistoryVisibilitySetting'), { etag: true }),
+    owner: 'HIS',
+  }),
+  op({
+    operationId: 'getDocumentHistoryVisibility',
+    method: 'GET',
+    path: '/documents/{id}/history-visibility',
+    summary:
+      'A document history visibility setting and the effective setting that applies (HIS-025).',
+    spec: '08 §9; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    success: ok(ref('HistoryVisibilityView'), { etag: true }),
+    owner: 'HIS',
+  }),
+  op({
+    operationId: 'setDocumentHistoryVisibility',
+    method: 'PUT',
+    path: '/documents/{id}/history-visibility',
+    summary: 'Sets the history visibility of one document; audited (HIS-025).',
+    spec: '08 §9; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('HistoryVisibilitySetting'),
+    ifMatch: 'required',
+    success: ok(ref('HistoryVisibilityView'), { etag: true }),
+    owner: 'HIS',
   }),
   op({
     operationId: 'getTenantOrigins',

@@ -1,6 +1,6 @@
 # ADR 0385: Rendering block suggestion marks (lane w1, FE-044)
 
-Status: proposed. It carries on from ADR 0302 and answers its open question in part. The owner decides whether the wording of FE-044 criterion 4 and FE-045 criterion 1 ("never as wrapper elements") may be read as below.
+Status: superseded by owner decision 92 (2026-11-15), which chose option 2 of ADR 0302: the block state is the `suggest` attribute, no element is drawn around a block, and the `display: contents` rule and the `de-suggest-wrap` class this file describes were removed on 2026-11-18. Kept as the record of why option 1 could not give a block without an element. Its text below is the state before the change.
 
 ## Context
 

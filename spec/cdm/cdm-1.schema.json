@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:docedit:cdm:1:draft",
   "title": "CDM version 1 (draft)",
-  "description": "JSON Schema for documents of the Canonical Document Model, major version 1, generated from packages/model/src/definition (03; CDM-007).\nDraft: published before the footnote model (CDM-001), the attribute grammars (CDM-002) and spike S11 are decided.\nA document is valid only if it also passes model.validate(); this schema cannot express:\n- I1 in part: the order and cardinality of children (content expressions); exactly one paragraph in a footnote; node marks only on paragraph, table_row and table; node types, marks, attributes and attribute values (the `field` kind `formValue`) that belong to a feature missing from `requires`; the `hidden_region` placeholder and the redaction marker, which exist only in projections.\n- I2: identifiers present and unique; a non-null identifier never changes; a suggestion identifier belongs to one user.\n- I3: regions and section breaks are direct children of the body; a removed region identifier is never reused.\n- I4: every reference resolves, to a definition of the right kind, a numbering level that the definition has and a field target of the kind its field needs; cited sources exist; assets are attached to the document.\n- I5: basedOn chains have no cycles and are at most ten styles deep.\n- I6: column spans add up to the grid, taking row spans into account; header rows are at most the rows of the table.\n- I7 in part: canonical size at most 16 MiB, at most 500 regions, nesting depth at most 12.\n- I8: LaTeX passes the math gate (09).\n- I10 in part: no footnote inside a footnote; no table in a story or a footnote; no floating figure in a table cell; no page or column break in cells, captions or footnotes; no form field in headers, footers or footnotes.\n- I11 in part: rules that relate two values: table properties only on table styles, `minLevel` at most `maxLevel`, a field target in the form of its kind and no target or sequence name where the kind takes none, unique option identifiers, the shape of `fmt.before`.\n- I12 in part: an extension node carries a fallback.\n- I13 to I15: field keys unique, assignees and `formValue` targets resolve, at most 2,000 fields and 500 rules, values of at most 4 KiB typed by kind.\n- Size and depth limits of `ext`, payloads and preserved element trees; a name in a registered namespace written with its prefix, never in Clark notation; references to shared trees resolve to a `preserved_def`.",
+  "description": "JSON Schema for documents of the Canonical Document Model, major version 1, generated from packages/model/src/definition (03; CDM-007).\nDraft: published before the footnote model (CDM-001), the attribute grammars (CDM-002) and spike S11 are decided.\nA document is valid only if it also passes model.validate(); this schema cannot express:\n- I1 in part: the order and cardinality of children (content expressions); exactly one paragraph in a footnote; no marks on blocks (block suggestions are the suggest attribute of paragraph, table_row and table); node types, marks, attributes and attribute values (the `field` kind `formValue`) that belong to a feature missing from `requires`; the `hidden_region` placeholder and the redaction marker, which exist only in projections.\n- I2: identifiers present and unique; a non-null identifier never changes; a suggestion identifier belongs to one user.\n- I3: regions and section breaks are direct children of the body; a removed region identifier is never reused.\n- I4: every reference resolves, to a definition of the right kind, a numbering level that the definition has and a field target of the kind its field needs; cited sources exist; assets are attached to the document.\n- I5: basedOn chains have no cycles and are at most ten styles deep.\n- I6: column spans add up to the grid, taking row spans into account; header rows are at most the rows of the table.\n- I7 in part: canonical size at most 16 MiB, at most 500 regions, nesting depth at most 12.\n- I8: LaTeX passes the math gate (09).\n- I10 in part: no footnote inside a footnote; no table in a story or a footnote; no floating figure in a table cell; no page or column break in cells, captions or footnotes; no form field in headers, footers or footnotes.\n- I11 in part: rules that relate two values: table properties only on table styles, `minLevel` at most `maxLevel`, a field target in the form of its kind and no target or sequence name where the kind takes none, unique option identifiers, the shape of `fmt.before`.\n- I12 in part: an extension node carries a fallback.\n- I13 to I15: field keys unique, assignees and `formValue` targets resolve, at most 2,000 fields and 500 rules, values of at most 4 KiB typed by kind.\n- Size and depth limits of `ext`, payloads and preserved element trees; a name in a registered namespace written with its prefix, never in Clark notation; references to shared trees resolve to a `preserved_def`.",
   "type": "object",
   "properties": {
     "cdm": {
@@ -3120,22 +3120,6 @@
               }
             ]
           }
-        },
-        "marks": {
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/mark.ins"
-              },
-              {
-                "$ref": "#/$defs/mark.del"
-              },
-              {
-                "$ref": "#/$defs/mark.fmt"
-              }
-            ]
-          }
         }
       },
       "required": [
@@ -3767,6 +3751,75 @@
           ],
           "default": null
         },
+        "suggest": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "ins",
+                      "del",
+                      "fmt"
+                    ]
+                  },
+                  "attrs": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "maxLength": 16,
+                        "allOf": [
+                          {
+                            "pattern": "^[A-Za-z0-9_-]{16}$"
+                          },
+                          {
+                            "pattern": "^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]*$"
+                          }
+                        ]
+                      },
+                      "user": {
+                        "type": "string",
+                        "maxLength": 255,
+                        "minLength": 1,
+                        "pattern": "^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]*$"
+                      },
+                      "before": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/json",
+                            "description": "At most 4096 bytes of canonical JSON and 6 levels deep."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "user"
+                    ]
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "attrs"
+                ]
+              },
+              "maxItems": 8,
+              "minItems": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "preserved": {
           "anyOf": [
             {
@@ -3823,22 +3876,6 @@
             ]
           },
           "minItems": 1
-        },
-        "marks": {
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/mark.ins"
-              },
-              {
-                "$ref": "#/$defs/mark.del"
-              },
-              {
-                "$ref": "#/$defs/mark.fmt"
-              }
-            ]
-          }
         }
       },
       "required": [
@@ -4314,6 +4351,75 @@
           ],
           "default": null
         },
+        "suggest": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "ins",
+                      "del",
+                      "fmt"
+                    ]
+                  },
+                  "attrs": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "maxLength": 16,
+                        "allOf": [
+                          {
+                            "pattern": "^[A-Za-z0-9_-]{16}$"
+                          },
+                          {
+                            "pattern": "^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]*$"
+                          }
+                        ]
+                      },
+                      "user": {
+                        "type": "string",
+                        "maxLength": 255,
+                        "minLength": 1,
+                        "pattern": "^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]*$"
+                      },
+                      "before": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/json",
+                            "description": "At most 4096 bytes of canonical JSON and 6 levels deep."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "user"
+                    ]
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "attrs"
+                ]
+              },
+              "maxItems": 8,
+              "minItems": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "preserved": {
           "anyOf": [
             {
@@ -4371,22 +4477,6 @@
             ]
           },
           "minItems": 1
-        },
-        "marks": {
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/mark.ins"
-              },
-              {
-                "$ref": "#/$defs/mark.del"
-              },
-              {
-                "$ref": "#/$defs/mark.fmt"
-              }
-            ]
-          }
         }
       },
       "required": [
@@ -4435,6 +4525,75 @@
         "cantSplit": {
           "type": "boolean",
           "default": false
+        },
+        "suggest": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "ins",
+                      "del",
+                      "fmt"
+                    ]
+                  },
+                  "attrs": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "maxLength": 16,
+                        "allOf": [
+                          {
+                            "pattern": "^[A-Za-z0-9_-]{16}$"
+                          },
+                          {
+                            "pattern": "^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]*$"
+                          }
+                        ]
+                      },
+                      "user": {
+                        "type": "string",
+                        "maxLength": 255,
+                        "minLength": 1,
+                        "pattern": "^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]*$"
+                      },
+                      "before": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/json",
+                            "description": "At most 4096 bytes of canonical JSON and 6 levels deep."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "user"
+                    ]
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "attrs"
+                ]
+              },
+              "maxItems": 8,
+              "minItems": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "preserved": {
           "anyOf": [

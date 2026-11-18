@@ -1,0 +1,227 @@
+{
+  "cdm": 1,
+  "requires": ["fields"],
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "defs",
+        "content": [
+          {
+            "type": "settings",
+            "attrs": {
+              "lang": "en-GB",
+              "defaultTabStop": 720,
+              "defaultParagraphStyle": "Normal"
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Normal",
+              "kind": "paragraph",
+              "name": "Normal",
+              "builtIn": true,
+              "fontSize": 220
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Title",
+              "kind": "paragraph",
+              "name": "Title",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "fontSize": 400,
+              "bold": true
+            }
+          },
+          {
+            "type": "style_def",
+            "attrs": {
+              "id": "Heading1",
+              "kind": "paragraph",
+              "name": "Heading 1",
+              "builtIn": true,
+              "basedOn": "Normal",
+              "next": "Normal",
+              "outlineLevel": 1,
+              "fontSize": 300,
+              "bold": true
+            }
+          },
+          {
+            "type": "page_setup",
+            "attrs": {
+              "id": "ps1",
+              "width": 11906,
+              "height": 16838,
+              "marginTop": 1440,
+              "marginRight": 1440,
+              "marginBottom": 1440,
+              "marginLeft": 1440
+            }
+          },
+          {
+            "type": "role_def",
+            "attrs": {
+              "id": "tenant",
+              "name": "Tenant",
+              "color": "#1F77B4"
+            }
+          },
+          {
+            "type": "role_def",
+            "attrs": {
+              "id": "landlord",
+              "name": "Landlord",
+              "color": "#2CA02C"
+            }
+          }
+        ]
+      },
+      {
+        "type": "body",
+        "attrs": {
+          "pageSetup": "ps1"
+        },
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "pLeaseTitle00001"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Lease agreement"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "pLeaseTenant0001"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Tenant: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "fLeaseTenantName",
+                  "key": "tenant.name",
+                  "kind": "text",
+                  "label": "Tenant name",
+                  "assignee": "tenant",
+                  "required": false,
+                  "value": null
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "pLeaseRent000001"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Monthly rent: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "fLeaseRent000001",
+                  "key": "lease.rent",
+                  "kind": "number",
+                  "label": "Monthly rent",
+                  "assignee": "landlord",
+                  "required": false,
+                  "value": null
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "pLeaseStart00001"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Starts on: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "fLeaseStart00001",
+                  "key": "lease.start",
+                  "kind": "date",
+                  "label": "Start date",
+                  "assignee": "landlord",
+                  "required": false,
+                  "value": null
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "pLeaseSign000001"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Tenant signature: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "fLeaseSign000001",
+                  "key": "tenant.signature",
+                  "kind": "signature",
+                  "label": "Tenant signature",
+                  "assignee": "tenant",
+                  "required": false,
+                  "value": null
+                }
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "attrs": {
+              "id": "pLeaseSigned0001"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "Signed on: "
+              },
+              {
+                "type": "form_field",
+                "attrs": {
+                  "id": "fLeaseSigned0001",
+                  "key": "tenant.signed",
+                  "kind": "dateSigned",
+                  "label": "Date signed",
+                  "assignee": "tenant",
+                  "required": false,
+                  "value": null
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

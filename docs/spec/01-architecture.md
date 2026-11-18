@@ -215,6 +215,7 @@ packages/
   rules/            The field rules language: parser, type checker, evaluator, fixtures
   engine/           Editing core: state, commands, sync client, region guard, suggestions
   layout/           DOM-free layout engine (read and print views)
+  layout-kernel/    The layout kernel as an npm package: typed loader and the WebAssembly build of crates/layout-kernel (ADR 0016)
   painter/          DOM painter; caret and selection overlay and input bridge for the print view
   ui/               Svelte 5 components
   element/          The custom element and the distributable bundle
@@ -225,6 +226,7 @@ packages/
   export-latex/     CDM to LaTeX converter, house class, typed emitters, source map
   export-docx/      CDM to DOCX writer (a package patcher for imported files, ADR 0017) and DOCX importer (phase 2)
   tck/              Conformance kit: black-box tests, fixtures, fuzzers
+crates/             Rust workspace of the WebAssembly kernels (ADR 0016), pinned toolchain and builder image; built by packages/layout-kernel
 services/
   document-service/ Gateway, rooms, control API (reference implementation, Node.js)
   authority-service/ The authority package behind a network interface for non-JavaScript backends (05, section 10)
@@ -236,6 +238,8 @@ apps/
 docs/               This specification
 spec/               Machine-readable DEP and CDM artifacts (Phase 0)
 ```
+
+The Rust crates are the only code outside the pnpm workspace. They sit in `crates/` with their own `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml`, and only `packages/layout-kernel` builds them (`pnpm --filter @docedit/layout-kernel build:wasm`, in a Podman image that holds the pinned toolchain). The project's own crates forbid unsafe code (ADR 0016, decision 5).
 
 `authority` has no dependency on Node.js or the browser so that the same code runs in the room, in the authority service, in the local backend and in tests.
 

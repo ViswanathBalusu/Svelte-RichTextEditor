@@ -5,13 +5,20 @@
  * (for example pdfjs-dist in the element) does ship: the release pipeline checks those, from the
  * packages found in each bundle (scripts/release/, ADR 0044). A dual licence passes only with a
  * recorded decision naming the option taken (borrow list §15). Exceptions need a decision, a reason
- * and an expiry.
+ * and an expiry. The Cargo crates of the Rust module are checked by the same policy
+ * (scripts/cargo-licences.ts).
  *
  * Usage: node scripts/licence-gate.ts            (exit code 1 on any violation)
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
+import {
+  findCargoManifests,
+  productionCrates,
+  readCargoMetadata,
+  everyOptionAllowed,
+} from './cargo-licences.ts';
 import { type Exception, type Policy, activeException, evaluate } from './licence-policy.ts';
 
 interface PnpmLicenceEntry {
@@ -71,6 +78,44 @@ for (const entries of Object.values(byLicence)) {
           `${e.name}@${version}: dual licence ${e.license} needs a recorded decision naming the option taken (licences/exceptions.json)`,
         );
       }
+    }
+  }
+}
+// Cargo crates of the Rust WebAssembly module (ADR 0016), by the same policy.
+for (const manifest of findCargoManifests(root)) {
+  const label = relative(root, manifest).replaceAll('\\', '/');
+  let crates;
+  try {
+    crates = productionCrates(readCargoMetadata(manifest));
+  } catch (e) {
+    problems.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+    continue;
+  }
+  for (const c of crates) {
+    checked++;
+    const id = `${c.name}@${c.version} (crate of ${label})`;
+    const ex = activeException(exceptions, c.name, c.version, today);
+    if (
+      !existsSync(c.dir) ||
+      !readdirSync(c.dir).some((f) => /^(licen[cs]e|copying|notice)/i.test(f))
+    ) {
+      if (ex)
+        notes.push(
+          `${id}: no licence file in the crate; allowed by exception (${ex.decision}, until ${ex.expires})`,
+        );
+      else problems.push(`${id}: no licence file in the published crate`);
+    }
+    const v = evaluate(c.licence ?? undefined, policy);
+    if (!v.ok) {
+      if (ex)
+        notes.push(
+          `${id}: ${c.licence} allowed by exception (${ex.decision}, until ${ex.expires})`,
+        );
+      else problems.push(`${id}: ${v.reason}`);
+    } else if (v.dual && !ex && !everyOptionAllowed(c.licence!, policy)) {
+      problems.push(
+        `${id}: dual licence ${c.licence} has an option that is not allowed and needs a recorded decision naming the option taken (licences/exceptions.json)`,
+      );
     }
   }
 }

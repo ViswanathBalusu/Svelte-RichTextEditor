@@ -6,13 +6,10 @@
  * The outline is read with `test/exp-023-pdf-links.ts` (the same reader as EXP-022).
  *
  * Observed (2026-11-14, Podman, preview profile): titles with `%`, parentheses, `&`, `#`, `~`, `$`, `]`,
- * `^^5c`, braces and `_` come out as typed. A title with a backslash (`\textbf{BOLD}`) loses the
- * backslash and the letter after it (`Plan extbf{BOLD}`), and a longer title with `\textbf` and `\input`
- * came out as mixed-width garbage in one run. Round 8 (lane U-EXP-033-048) found the likely cause: the
- * bookmark string is a PDF literal that is not escaped, so `\t` in `\textbf` reads as a tab. Doubling
- * the backslash in `\DE@strexp` fixes the outline but also changes the XMP title (raw text), so it was
- * reverted; the fix needs a separate path for the bookmark (EXP-043 Notes). The criterion's "PDF string
- * encoding" wording stays open as well.
+ * `^^5c`, braces and `_` come out as typed. A title with a backslash (`	extbf{BOLD}`) lost the backslash
+ * and the letter after it (`Plan extbf{BOLD}`) until class 0.2.14: hyperref read the catcode-12
+ * backslash as the start of an escape. `docedit.strexp` (`DE@strexp`, used where `pdfstringdef` builds
+ * a bookmark title) now writes it as `	extbackslash` (owner decision 209; EXP-022 criterion 2).
  *
  * The tests skip when `sandboxReady()` reports that sandboxed compiles cannot run here (EXP-070).
  */
@@ -66,15 +63,10 @@ describe.skipIf(!ready)(
       expect(await outlineTitles(title)).toEqual([title]);
     }, 300_000);
 
-    // Known defect, see the header: the backslash of a TeX command is lost in the bookmark. Remove the
-    // `.fails` when the bookmark prints the heading as typed.
-    it.fails(
-      'keeps a backslash command in a heading in the outline unchanged (known defect, EXP-043)',
-      async () => {
-        const title = 'Plan \\textbf{BOLD}';
-        expect(await outlineTitles(title)).toEqual([title]);
-      },
-      300_000,
-    );
+    // The backslash of a TeX command was lost in the bookmark until class 0.2.14 (`docedit.strexp`).
+    it('keeps a backslash command in a heading in the outline unchanged (fixed in class 0.2.14)', async () => {
+      const title = 'Plan \\textbf{BOLD}';
+      expect(await outlineTitles(title)).toEqual([title]);
+    }, 300_000);
   },
 );

@@ -5,7 +5,7 @@
   "library": { "prosemirror-transform": "1.12.5", "prosemirror-model": "1.25.12" },
   "schema": {
     "cdm": 1,
-    "sha256": "114aaf8efd1fcdc419226436613a8613f2954bfec5f9e393a714e3a66b841ca5"
+    "sha256": "6dd13c18b42c5604ca4e8aaa5a5f7b61984e686878462fc6a4b18926bc1f718a"
   },
   "docs": {
     "base": {
@@ -71,9 +71,11 @@
             },
             {
               "type": "paragraph",
-              "attrs": { "id": "pMiddle000000001" },
-              "content": [{ "type": "text", "text": "Between the region and the table." }],
-              "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+              "attrs": {
+                "id": "pMiddle000000001",
+                "suggest": [{ "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }]
+              },
+              "content": [{ "type": "text", "text": "Between the region and the table." }]
             },
             {
               "type": "table",
@@ -151,7 +153,8 @@
                       "attrs": { "id": "pFootnote0000001" },
                       "content": [{ "type": "text", "text": "Footnote text." }]
                     }
-                  ]
+                  ],
+                  "marks": [{ "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2" } }]
                 },
                 { "type": "text", "text": "." }
               ]
@@ -177,6 +180,306 @@
         }
       ],
       "positions": [
+        { "pos": 70, "assoc": -1 },
+        { "pos": 20, "assoc": -1 },
+        { "pos": 45, "assoc": -1 },
+        { "pos": 190, "assoc": -1 },
+        { "pos": 147, "assoc": -1 },
+        { "pos": 205, "assoc": -1 },
+        { "pos": 144, "assoc": 1 },
+        { "pos": 161, "assoc": 1 },
+        { "pos": 71, "assoc": 1 },
+        { "pos": 169, "assoc": 1 },
+        { "pos": 154, "assoc": 1 },
+        { "pos": 127, "assoc": 1 }
+      ],
+      "expected": [
+        {
+          "pos": 70,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 20,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 45,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 190,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 147,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 205,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 144,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 161,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 71,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 169,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 154,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 127,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        }
+      ]
+    },
+    {
+      "id": "map-002",
+      "steps": [
+        {
+          "stepType": "replace",
+          "from": 181,
+          "to": 181,
+          "slice": { "content": [{ "type": "text", "text": "x" }] }
+        },
+        {
+          "stepType": "replace",
+          "from": 204,
+          "to": 204,
+          "slice": { "content": [{ "type": "text", "text": "中" }] }
+        },
+        {
+          "stepType": "removeNodeMark",
+          "pos": 198,
+          "mark": { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2", "ext": {} } }
+        }
+      ],
+      "positions": [
+        { "pos": 1, "assoc": 1 },
+        { "pos": 12, "assoc": 1 },
+        { "pos": 108, "assoc": 1 },
+        { "pos": 201, "assoc": 1 },
+        { "pos": 135, "assoc": 1 },
+        { "pos": 216, "assoc": -1 },
+        { "pos": 110, "assoc": 1 },
+        { "pos": 10, "assoc": -1 },
+        { "pos": 98, "assoc": -1 },
+        { "pos": 98, "assoc": 1 },
+        { "pos": 15, "assoc": 1 },
+        { "pos": 214, "assoc": -1 }
+      ],
+      "expected": [
+        {
+          "pos": 1,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 12,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 108,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 202,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 135,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 218,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 110,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 10,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 98,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 98,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 15,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 216,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        }
+      ]
+    },
+    {
+      "id": "map-003",
+      "steps": [
+        {
+          "stepType": "replace",
+          "from": 181,
+          "to": 181,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pB00000000000002",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pB00000000000002",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 182, "attr": "id", "value": "p000000000000001" }
+      ],
+      "positions": [
+        { "pos": 186, "assoc": 1 },
+        { "pos": 61, "assoc": 1 },
         { "pos": 154, "assoc": 1 },
         { "pos": 27, "assoc": -1 },
         { "pos": 56, "assoc": 1 },
@@ -186,11 +489,23 @@
         { "pos": 124, "assoc": -1 },
         { "pos": 28, "assoc": 1 },
         { "pos": 165, "assoc": 1 },
-        { "pos": 9, "assoc": -1 },
-        { "pos": 136, "assoc": 1 },
-        { "pos": 40, "assoc": -1 }
+        { "pos": 9, "assoc": -1 }
       ],
       "expected": [
+        {
+          "pos": 188,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 61,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
         {
           "pos": 154,
           "deleted": false,
@@ -260,7 +575,99 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
+        }
+      ]
+    },
+    {
+      "id": "map-004",
+      "steps": [
+        {
+          "stepType": "replace",
+          "from": 173,
+          "to": 173,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pB00000000000002",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pB00000000000002",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
         },
+        { "stepType": "attr", "pos": 174, "attr": "id", "value": "p000000000000002" }
+      ],
+      "positions": [
+        { "pos": 136, "assoc": 1 },
+        { "pos": 40, "assoc": -1 },
+        { "pos": 37, "assoc": 1 },
+        { "pos": 174, "assoc": 1 },
+        { "pos": 119, "assoc": -1 },
+        { "pos": 108, "assoc": -1 },
+        { "pos": 39, "assoc": 1 },
+        { "pos": 205, "assoc": 1 },
+        { "pos": 164, "assoc": -1 },
+        { "pos": 213, "assoc": -1 },
+        { "pos": 13, "assoc": -1 },
+        { "pos": 4, "assoc": 1 }
+      ],
+      "expected": [
         {
           "pos": 136,
           "deleted": false,
@@ -274,45 +681,7 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        }
-      ]
-    },
-    {
-      "id": "map-002",
-      "steps": [
-        {
-          "stepType": "replace",
-          "from": 181,
-          "to": 181,
-          "slice": { "content": [{ "type": "text", "text": "x" }] }
         },
-        {
-          "stepType": "replace",
-          "from": 204,
-          "to": 204,
-          "slice": { "content": [{ "type": "text", "text": "中" }] }
-        },
-        {
-          "stepType": "addNodeMark",
-          "pos": 160,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
-        }
-      ],
-      "positions": [
-        { "pos": 37, "assoc": 1 },
-        { "pos": 174, "assoc": 1 },
-        { "pos": 119, "assoc": -1 },
-        { "pos": 108, "assoc": -1 },
-        { "pos": 39, "assoc": 1 },
-        { "pos": 205, "assoc": 1 },
-        { "pos": 164, "assoc": -1 },
-        { "pos": 213, "assoc": -1 },
-        { "pos": 13, "assoc": -1 },
-        { "pos": 4, "assoc": 1 },
-        { "pos": 219, "assoc": -1 },
-        { "pos": 13, "assoc": -1 }
-      ],
-      "expected": [
         {
           "pos": 37,
           "deleted": false,
@@ -321,7 +690,7 @@
           "deletedAcross": false
         },
         {
-          "pos": 174,
+          "pos": 176,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -382,206 +751,11 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        },
-        {
-          "pos": 221,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 13,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
         }
       ]
     },
     {
-      "id": "map-003",
-      "steps": [
-        {
-          "stepType": "removeMark",
-          "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
-          "from": 40,
-          "to": 46
-        },
-        { "stepType": "attr", "pos": 77, "attr": "style", "value": null },
-        {
-          "stepType": "replace",
-          "from": 173,
-          "to": 173,
-          "slice": {
-            "content": [
-              {
-                "type": "paragraph",
-                "attrs": {
-                  "id": "pB00000000000002",
-                  "style": null,
-                  "numbering": null,
-                  "numberingRestart": null,
-                  "align": null,
-                  "dir": null,
-                  "indentLeft": null,
-                  "indentRight": null,
-                  "indentFirstLine": null,
-                  "spaceBefore": null,
-                  "spaceAfter": null,
-                  "contextualSpacing": null,
-                  "lineSpacing": null,
-                  "lineRule": null,
-                  "keepNext": null,
-                  "keepLines": null,
-                  "pageBreakBefore": null,
-                  "widowControl": null,
-                  "tabs": null,
-                  "borders": null,
-                  "shading": null,
-                  "preserved": null,
-                  "ext": {}
-                }
-              },
-              {
-                "type": "paragraph",
-                "attrs": {
-                  "id": "pB00000000000002",
-                  "style": null,
-                  "numbering": null,
-                  "numberingRestart": null,
-                  "align": null,
-                  "dir": null,
-                  "indentLeft": null,
-                  "indentRight": null,
-                  "indentFirstLine": null,
-                  "spaceBefore": null,
-                  "spaceAfter": null,
-                  "contextualSpacing": null,
-                  "lineSpacing": null,
-                  "lineRule": null,
-                  "keepNext": null,
-                  "keepLines": null,
-                  "pageBreakBefore": null,
-                  "widowControl": null,
-                  "tabs": null,
-                  "borders": null,
-                  "shading": null,
-                  "preserved": null,
-                  "ext": {}
-                }
-              }
-            ],
-            "openStart": 1,
-            "openEnd": 1
-          },
-          "structure": true
-        },
-        { "stepType": "attr", "pos": 174, "attr": "id", "value": "p000000000000001" }
-      ],
-      "positions": [
-        { "pos": 2, "assoc": 1 },
-        { "pos": 201, "assoc": -1 },
-        { "pos": 184, "assoc": -1 },
-        { "pos": 92, "assoc": 1 },
-        { "pos": 176, "assoc": -1 },
-        { "pos": 168, "assoc": 1 },
-        { "pos": 112, "assoc": 1 },
-        { "pos": 178, "assoc": -1 },
-        { "pos": 83, "assoc": 1 },
-        { "pos": 74, "assoc": 1 },
-        { "pos": 193, "assoc": 1 },
-        { "pos": 154, "assoc": -1 }
-      ],
-      "expected": [
-        {
-          "pos": 2,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 203,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 186,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 92,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 178,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 168,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 112,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 180,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 83,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 74,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 195,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 154,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        }
-      ]
-    },
-    {
-      "id": "map-004",
+      "id": "map-005",
       "steps": [
         {
           "stepType": "replace",
@@ -625,6 +799,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -653,6 +828,7 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 }
@@ -663,190 +839,25 @@
           },
           "structure": true
         },
-        { "stepType": "attr", "pos": 167, "attr": "id", "value": "p000000000000002" }
+        { "stepType": "attr", "pos": 167, "attr": "id", "value": "p000000000000003" }
       ],
       "positions": [
-        { "pos": 200, "assoc": -1 },
-        { "pos": 103, "assoc": -1 },
-        { "pos": 5, "assoc": -1 },
+        { "pos": 219, "assoc": -1 },
+        { "pos": 13, "assoc": -1 },
+        { "pos": 2, "assoc": 1 },
+        { "pos": 201, "assoc": -1 },
+        { "pos": 184, "assoc": -1 },
+        { "pos": 92, "assoc": 1 },
+        { "pos": 176, "assoc": -1 },
         { "pos": 168, "assoc": 1 },
-        { "pos": 132, "assoc": -1 },
-        { "pos": 180, "assoc": -1 },
-        { "pos": 137, "assoc": -1 },
-        { "pos": 33, "assoc": -1 },
-        { "pos": 215, "assoc": -1 },
-        { "pos": 61, "assoc": -1 },
-        { "pos": 170, "assoc": -1 },
-        { "pos": 154, "assoc": 1 }
+        { "pos": 112, "assoc": 1 },
+        { "pos": 178, "assoc": -1 },
+        { "pos": 83, "assoc": 1 },
+        { "pos": 74, "assoc": 1 }
       ],
       "expected": [
         {
-          "pos": 207,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 108,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 5,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 175,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 137,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 187,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 142,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 37,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 222,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 66,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 177,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 159,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        }
-      ]
-    },
-    {
-      "id": "map-005",
-      "steps": [
-        { "stepType": "attr", "pos": 139, "attr": "style", "value": null },
-        {
-          "stepType": "addNodeMark",
-          "pos": 139,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
-        },
-        {
-          "stepType": "addNodeMark",
-          "pos": 171,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
-        }
-      ],
-      "positions": [
-        { "pos": 61, "assoc": 1 },
-        { "pos": 132, "assoc": -1 },
-        { "pos": 59, "assoc": -1 },
-        { "pos": 50, "assoc": -1 },
-        { "pos": 199, "assoc": -1 },
-        { "pos": 113, "assoc": -1 },
-        { "pos": 72, "assoc": 1 },
-        { "pos": 29, "assoc": 1 },
-        { "pos": 17, "assoc": 1 },
-        { "pos": 67, "assoc": -1 },
-        { "pos": 158, "assoc": 1 },
-        { "pos": 88, "assoc": 1 }
-      ],
-      "expected": [
-        {
-          "pos": 61,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 132,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 59,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 50,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 199,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 113,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 72,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 29,
+          "pos": 226,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -860,14 +871,56 @@
           "deletedAcross": false
         },
         {
-          "pos": 67,
+          "pos": 2,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 158,
+          "pos": 208,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 191,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 97,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 183,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 175,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 117,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 185,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -879,44 +932,271 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
+        },
+        {
+          "pos": 79,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
         }
       ]
     },
     {
       "id": "map-006",
       "steps": [
+        { "stepType": "attr", "pos": 139, "attr": "style", "value": null },
         {
-          "stepType": "replaceAround",
-          "from": 185,
-          "to": 217,
-          "gapFrom": 185,
-          "gapTo": 217,
-          "insert": 1,
-          "slice": {
-            "content": [
-              {
-                "type": "region",
-                "attrs": {
-                  "id": "r000000000000003",
-                  "title": null,
-                  "policy": "inherit",
-                  "preserved": null,
-                  "ext": {}
-                }
-              }
-            ]
-          },
-          "structure": true
+          "stepType": "removeNodeMark",
+          "pos": 197,
+          "mark": { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2", "ext": {} } }
         },
-        {
-          "stepType": "removeMark",
-          "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
-          "from": 40,
-          "to": 46
-        },
-        { "stepType": "attr", "pos": 147, "attr": "style", "value": "Heading1" }
+        { "stepType": "attr", "pos": 217, "attr": "style", "value": null }
       ],
       "positions": [
+        { "pos": 193, "assoc": 1 },
+        { "pos": 154, "assoc": -1 },
+        { "pos": 200, "assoc": -1 },
+        { "pos": 103, "assoc": -1 },
+        { "pos": 5, "assoc": -1 },
+        { "pos": 168, "assoc": 1 },
+        { "pos": 132, "assoc": -1 },
+        { "pos": 180, "assoc": -1 },
+        { "pos": 137, "assoc": -1 },
+        { "pos": 33, "assoc": -1 },
+        { "pos": 215, "assoc": -1 },
+        { "pos": 61, "assoc": -1 }
+      ],
+      "expected": [
+        {
+          "pos": 193,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 154,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 200,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 103,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 5,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 168,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 132,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 180,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 137,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 33,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 215,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 61,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        }
+      ]
+    },
+    {
+      "id": "map-007",
+      "steps": [
+        {
+          "stepType": "replace",
+          "from": 20,
+          "to": 20,
+          "slice": { "content": [{ "type": "text", "text": "中" }] }
+        },
+        {
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 212,
+          "to": 215
+        },
+        {
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 212,
+          "to": 214
+        }
+      ],
+      "positions": [
+        { "pos": 170, "assoc": -1 },
+        { "pos": 154, "assoc": 1 },
+        { "pos": 61, "assoc": 1 },
+        { "pos": 132, "assoc": -1 },
+        { "pos": 59, "assoc": -1 },
+        { "pos": 50, "assoc": -1 },
+        { "pos": 199, "assoc": -1 },
+        { "pos": 113, "assoc": -1 },
+        { "pos": 72, "assoc": 1 },
+        { "pos": 29, "assoc": 1 },
+        { "pos": 17, "assoc": 1 },
+        { "pos": 67, "assoc": -1 }
+      ],
+      "expected": [
+        {
+          "pos": 171,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 155,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 62,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 133,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 60,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 51,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 200,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 114,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 73,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 30,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 17,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 68,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        }
+      ]
+    },
+    {
+      "id": "map-008",
+      "steps": [
+        { "stepType": "replace", "from": 165, "to": 168 },
+        {
+          "stepType": "replace",
+          "from": 148,
+          "to": 148,
+          "slice": { "content": [{ "type": "text", "text": "é" }] }
+        }
+      ],
+      "positions": [
+        { "pos": 158, "assoc": 1 },
+        { "pos": 88, "assoc": 1 },
         { "pos": 3, "assoc": -1 },
         { "pos": 206, "assoc": 1 },
         { "pos": 138, "assoc": 1 },
@@ -926,11 +1206,23 @@
         { "pos": 60, "assoc": -1 },
         { "pos": 53, "assoc": -1 },
         { "pos": 194, "assoc": 1 },
-        { "pos": 118, "assoc": 1 },
-        { "pos": 77, "assoc": -1 },
-        { "pos": 204, "assoc": -1 }
+        { "pos": 118, "assoc": 1 }
       ],
       "expected": [
+        {
+          "pos": 159,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 88,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
         {
           "pos": 3,
           "deleted": false,
@@ -939,7 +1231,7 @@
           "deletedAcross": false
         },
         {
-          "pos": 207,
+          "pos": 204,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -988,7 +1280,7 @@
           "deletedAcross": false
         },
         {
-          "pos": 195,
+          "pos": 192,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1000,49 +1292,40 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        },
-        {
-          "pos": 77,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 205,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
         }
       ]
     },
     {
-      "id": "map-007",
+      "id": "map-009",
       "steps": [
+        { "stepType": "replace", "from": 14, "to": 19 },
         {
-          "stepType": "replace",
-          "from": 18,
-          "to": 18,
-          "slice": { "content": [{ "type": "text", "text": "new " }] }
-        },
-        {
-          "stepType": "replace",
-          "from": 196,
-          "to": 202,
+          "stepType": "replaceAround",
+          "from": 7,
+          "to": 19,
+          "gapFrom": 7,
+          "gapTo": 19,
+          "insert": 1,
           "slice": {
             "content": [
               {
-                "type": "footnote",
-                "attrs": { "id": "fnNote0000000001", "preserved": null, "origin": null, "ext": {} }
+                "type": "region",
+                "attrs": {
+                  "id": "r000000000000004",
+                  "title": null,
+                  "policy": "inherit",
+                  "preserved": null,
+                  "ext": {}
+                }
               }
-            ],
-            "openEnd": 1
-          }
-        },
-        { "stepType": "replace", "from": 27, "to": 29, "structure": true }
+            ]
+          },
+          "structure": true
+        }
       ],
       "positions": [
+        { "pos": 77, "assoc": -1 },
+        { "pos": 204, "assoc": -1 },
         { "pos": 19, "assoc": 1 },
         { "pos": 139, "assoc": -1 },
         { "pos": 150, "assoc": 1 },
@@ -1052,34 +1335,46 @@
         { "pos": 195, "assoc": -1 },
         { "pos": 58, "assoc": -1 },
         { "pos": 207, "assoc": -1 },
-        { "pos": 140, "assoc": 1 },
-        { "pos": 218, "assoc": 1 },
-        { "pos": 126, "assoc": -1 }
+        { "pos": 140, "assoc": 1 }
       ],
       "expected": [
         {
-          "pos": 23,
+          "pos": 74,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 141,
+          "pos": 201,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 152,
+          "pos": 15,
+          "deleted": false,
+          "deletedBefore": true,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 136,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 97,
+          "pos": 147,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 92,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1093,21 +1388,21 @@
           "deletedAcross": false
         },
         {
-          "pos": 79,
+          "pos": 74,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 194,
-          "deleted": true,
-          "deletedBefore": true,
-          "deletedAfter": true,
-          "deletedAcross": true
+          "pos": 192,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
         },
         {
-          "pos": 60,
+          "pos": 55,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1121,21 +1416,7 @@
           "deletedAcross": false
         },
         {
-          "pos": 142,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 215,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 128,
+          "pos": 137,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1144,18 +1425,95 @@
       ]
     },
     {
-      "id": "map-008",
+      "id": "map-010",
       "steps": [
-        { "stepType": "replace", "from": 216, "to": 218, "structure": true },
+        {
+          "stepType": "removeNodeMark",
+          "pos": 197,
+          "mark": { "type": "del", "attrs": { "id": "sSuggestion00003", "user": "u2", "ext": {} } }
+        },
+        {
+          "stepType": "removeMark",
+          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
+          "from": 31,
+          "to": 35
+        },
+        { "stepType": "replace", "from": 57, "to": 59 },
         {
           "stepType": "replace",
-          "from": 70,
-          "to": 70,
-          "slice": { "content": [{ "type": "text", "text": "é" }] }
+          "from": 140,
+          "to": 140,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pA00000000000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pA00000000000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
         },
-        { "stepType": "replace", "from": 64, "to": 65 }
+        { "stepType": "attr", "pos": 137, "attr": "id", "value": "p000000000000005" }
       ],
       "positions": [
+        { "pos": 218, "assoc": 1 },
+        { "pos": 126, "assoc": -1 },
         { "pos": 208, "assoc": -1 },
         { "pos": 23, "assoc": -1 },
         { "pos": 28, "assoc": 1 },
@@ -1165,11 +1523,23 @@
         { "pos": 178, "assoc": -1 },
         { "pos": 48, "assoc": -1 },
         { "pos": 204, "assoc": 1 },
-        { "pos": 19, "assoc": 1 },
-        { "pos": 173, "assoc": 1 },
-        { "pos": 196, "assoc": 1 }
+        { "pos": 19, "assoc": 1 }
       ],
       "expected": [
+        {
+          "pos": 218,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 124,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
         {
           "pos": 208,
           "deleted": false,
@@ -1239,36 +1609,38 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        },
-        {
-          "pos": 173,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 196,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
         }
       ]
     },
     {
-      "id": "map-009",
+      "id": "map-011",
       "steps": [
         {
+          "stepType": "removeMark",
+          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
+          "from": 31,
+          "to": 35
+        },
+        {
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 190,
+          "to": 195
+        },
+        { "stepType": "attr", "pos": 171, "attr": "style", "value": "Heading1" },
+        {
           "stepType": "replace",
-          "from": 82,
-          "to": 82,
+          "from": 103,
+          "to": 103,
           "slice": {
             "content": [
               {
                 "type": "paragraph",
                 "attrs": {
-                  "id": "pClause000000002",
+                  "id": "pMiddle000000001",
                   "style": null,
                   "numbering": null,
                   "numberingRestart": null,
@@ -1289,6 +1661,9 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": [
+                    { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                  ],
                   "preserved": null,
                   "ext": {}
                 }
@@ -1296,7 +1671,7 @@
               {
                 "type": "paragraph",
                 "attrs": {
-                  "id": "pClause000000002",
+                  "id": "pMiddle000000001",
                   "style": null,
                   "numbering": null,
                   "numberingRestart": null,
@@ -1317,6 +1692,9 @@
                   "tabs": null,
                   "borders": null,
                   "shading": null,
+                  "suggest": [
+                    { "type": "del", "attrs": { "id": "sSuggestion00002", "user": "u2" } }
+                  ],
                   "preserved": null,
                   "ext": {}
                 }
@@ -1327,9 +1705,11 @@
           },
           "structure": true
         },
-        { "stepType": "attr", "pos": 83, "attr": "id", "value": "p000000000000004" }
+        { "stepType": "attr", "pos": 104, "attr": "id", "value": "p000000000000006" }
       ],
       "positions": [
+        { "pos": 173, "assoc": 1 },
+        { "pos": 196, "assoc": 1 },
         { "pos": 155, "assoc": -1 },
         { "pos": 56, "assoc": 1 },
         { "pos": 133, "assoc": -1 },
@@ -1339,11 +1719,23 @@
         { "pos": 3, "assoc": 1 },
         { "pos": 99, "assoc": 1 },
         { "pos": 152, "assoc": 1 },
-        { "pos": 33, "assoc": -1 },
-        { "pos": 216, "assoc": -1 },
-        { "pos": 5, "assoc": -1 }
+        { "pos": 33, "assoc": -1 }
       ],
       "expected": [
+        {
+          "pos": 175,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 198,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
         {
           "pos": 157,
           "deleted": false,
@@ -1394,7 +1786,7 @@
           "deletedAcross": false
         },
         {
-          "pos": 101,
+          "pos": 99,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1413,9 +1805,43 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
+        }
+      ]
+    },
+    {
+      "id": "map-012",
+      "steps": [
+        { "stepType": "attr", "pos": 7, "attr": "style", "value": "Heading1" },
+        {
+          "stepType": "replace",
+          "from": 166,
+          "to": 166,
+          "slice": { "content": [{ "type": "text", "text": "new " }] }
         },
         {
-          "pos": 218,
+          "stepType": "attr",
+          "pos": 139,
+          "attr": "suggest",
+          "value": [{ "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1" } }]
+        }
+      ],
+      "positions": [
+        { "pos": 216, "assoc": -1 },
+        { "pos": 5, "assoc": -1 },
+        { "pos": 216, "assoc": 1 },
+        { "pos": 36, "assoc": 1 },
+        { "pos": 78, "assoc": -1 },
+        { "pos": 10, "assoc": 1 },
+        { "pos": 64, "assoc": -1 },
+        { "pos": 76, "assoc": 1 },
+        { "pos": 51, "assoc": -1 },
+        { "pos": 4, "assoc": 1 },
+        { "pos": 155, "assoc": -1 },
+        { "pos": 208, "assoc": -1 }
+      ],
+      "expected": [
+        {
+          "pos": 220,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1427,48 +1853,9 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        }
-      ]
-    },
-    {
-      "id": "map-010",
-      "steps": [
-        {
-          "stepType": "replace",
-          "from": 155,
-          "to": 155,
-          "slice": { "content": [{ "type": "text", "text": "x" }] }
         },
         {
-          "stepType": "replace",
-          "from": 141,
-          "to": 141,
-          "slice": { "content": [{ "type": "text", "text": "中" }] }
-        },
-        {
-          "stepType": "replace",
-          "from": 166,
-          "to": 166,
-          "slice": { "content": [{ "type": "text", "text": "new " }] }
-        }
-      ],
-      "positions": [
-        { "pos": 216, "assoc": 1 },
-        { "pos": 36, "assoc": 1 },
-        { "pos": 78, "assoc": -1 },
-        { "pos": 10, "assoc": 1 },
-        { "pos": 64, "assoc": -1 },
-        { "pos": 76, "assoc": 1 },
-        { "pos": 51, "assoc": -1 },
-        { "pos": 4, "assoc": 1 },
-        { "pos": 155, "assoc": -1 },
-        { "pos": 208, "assoc": -1 },
-        { "pos": 106, "assoc": 1 },
-        { "pos": 159, "assoc": 1 }
-      ],
-      "expected": [
-        {
-          "pos": 222,
+          "pos": 220,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1524,21 +1911,125 @@
           "deletedAcross": false
         },
         {
-          "pos": 156,
+          "pos": 155,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 214,
+          "pos": 212,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
+        }
+      ]
+    },
+    {
+      "id": "map-013",
+      "steps": [
+        {
+          "stepType": "replace",
+          "from": 11,
+          "to": 11,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pTitle0000000001",
+                  "style": "Heading1",
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pTitle0000000001",
+                  "style": "Heading1",
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 12, "attr": "id", "value": "p000000000000007" },
+        {
+          "stepType": "removeMark",
+          "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
+          "from": 42,
+          "to": 48
         },
         {
-          "pos": 106,
+          "stepType": "replace",
+          "from": 169,
+          "to": 169,
+          "slice": { "content": [{ "type": "text", "text": "é" }] }
+        }
+      ],
+      "positions": [
+        { "pos": 106, "assoc": 1 },
+        { "pos": 159, "assoc": 1 },
+        { "pos": 189, "assoc": -1 },
+        { "pos": 55, "assoc": 1 },
+        { "pos": 216, "assoc": -1 },
+        { "pos": 33, "assoc": -1 },
+        { "pos": 6, "assoc": -1 },
+        { "pos": 35, "assoc": -1 },
+        { "pos": 136, "assoc": -1 },
+        { "pos": 219, "assoc": 1 },
+        { "pos": 89, "assoc": 1 },
+        { "pos": 82, "assoc": 1 }
+      ],
+      "expected": [
+        {
+          "pos": 108,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1550,60 +2041,23 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        }
-      ]
-    },
-    {
-      "id": "map-011",
-      "steps": [
-        { "stepType": "attr", "pos": 147, "attr": "style", "value": null },
-        { "stepType": "replace", "from": 40, "to": 45 }
-      ],
-      "positions": [
-        { "pos": 189, "assoc": -1 },
-        { "pos": 55, "assoc": 1 },
-        { "pos": 216, "assoc": -1 },
-        { "pos": 33, "assoc": -1 },
-        { "pos": 6, "assoc": -1 },
-        { "pos": 35, "assoc": -1 },
-        { "pos": 136, "assoc": -1 },
-        { "pos": 219, "assoc": 1 },
-        { "pos": 89, "assoc": 1 },
-        { "pos": 82, "assoc": 1 },
-        { "pos": 17, "assoc": -1 },
-        { "pos": 74, "assoc": -1 }
-      ],
-      "expected": [
+        },
         {
-          "pos": 184,
+          "pos": 192,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 50,
+          "pos": 57,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 211,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 33,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 6,
+          "pos": 219,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1617,14 +2071,35 @@
           "deletedAcross": false
         },
         {
-          "pos": 131,
+          "pos": 6,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 214,
+          "pos": 37,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 138,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 222,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 91,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1636,48 +2111,43 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        },
-        {
-          "pos": 77,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 17,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 69,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
         }
       ]
     },
     {
-      "id": "map-012",
+      "id": "map-014",
       "steps": [
         {
-          "stepType": "replace",
-          "from": 166,
-          "to": 166,
-          "slice": { "content": [{ "type": "text", "text": "new " }] }
+          "stepType": "addMark",
+          "mark": {
+            "type": "link",
+            "attrs": { "href": "https://example.org/", "title": null, "ext": {} }
+          },
+          "from": 143,
+          "to": 144
         },
         {
-          "stepType": "addNodeMark",
-          "pos": 139,
-          "mark": { "type": "del", "attrs": { "id": "sSuggestion00001", "user": "u1", "ext": {} } }
+          "stepType": "replace",
+          "from": 93,
+          "to": 93,
+          "slice": { "content": [{ "type": "text", "text": "é" }] }
         },
-        { "stepType": "replace", "from": 130, "to": 131 },
-        { "stepType": "attr", "pos": 146, "attr": "style", "value": null }
+        {
+          "stepType": "removeMark",
+          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
+          "from": 31,
+          "to": 35
+        },
+        {
+          "stepType": "replace",
+          "from": 195,
+          "to": 195,
+          "slice": { "content": [{ "type": "text", "text": "x" }] }
+        }
       ],
       "positions": [
+        { "pos": 17, "assoc": -1 },
+        { "pos": 74, "assoc": -1 },
         { "pos": 208, "assoc": 1 },
         { "pos": 31, "assoc": 1 },
         { "pos": 17, "assoc": -1 },
@@ -1687,13 +2157,25 @@
         { "pos": 186, "assoc": 1 },
         { "pos": 52, "assoc": 1 },
         { "pos": 217, "assoc": 1 },
-        { "pos": 15, "assoc": 1 },
-        { "pos": 88, "assoc": -1 },
-        { "pos": 122, "assoc": -1 }
+        { "pos": 15, "assoc": 1 }
       ],
       "expected": [
         {
-          "pos": 211,
+          "pos": 17,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 74,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 210,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1728,14 +2210,14 @@
           "deletedAcross": false
         },
         {
-          "pos": 201,
+          "pos": 200,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 189,
+          "pos": 187,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1749,7 +2231,7 @@
           "deletedAcross": false
         },
         {
-          "pos": 220,
+          "pos": 219,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1761,7 +2243,34 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        },
+        }
+      ]
+    },
+    {
+      "id": "map-015",
+      "steps": [
+        {
+          "stepType": "removeMark",
+          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
+          "from": 31,
+          "to": 35
+        }
+      ],
+      "positions": [
+        { "pos": 88, "assoc": -1 },
+        { "pos": 122, "assoc": -1 },
+        { "pos": 97, "assoc": 1 },
+        { "pos": 145, "assoc": -1 },
+        { "pos": 192, "assoc": -1 },
+        { "pos": 198, "assoc": 1 },
+        { "pos": 110, "assoc": 1 },
+        { "pos": 199, "assoc": 1 },
+        { "pos": 5, "assoc": 1 },
+        { "pos": 157, "assoc": 1 },
+        { "pos": 127, "assoc": -1 },
+        { "pos": 48, "assoc": -1 }
+      ],
+      "expected": [
         {
           "pos": 88,
           "deleted": false,
@@ -1775,34 +2284,7 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        }
-      ]
-    },
-    {
-      "id": "map-013",
-      "steps": [
-        {
-          "stepType": "removeMark",
-          "mark": { "type": "italic", "attrs": { "value": true, "ext": {} } },
-          "from": 40,
-          "to": 46
-        }
-      ],
-      "positions": [
-        { "pos": 97, "assoc": 1 },
-        { "pos": 145, "assoc": -1 },
-        { "pos": 192, "assoc": -1 },
-        { "pos": 198, "assoc": 1 },
-        { "pos": 110, "assoc": 1 },
-        { "pos": 199, "assoc": 1 },
-        { "pos": 5, "assoc": 1 },
-        { "pos": 157, "assoc": 1 },
-        { "pos": 127, "assoc": -1 },
-        { "pos": 48, "assoc": -1 },
-        { "pos": 30, "assoc": 1 },
-        { "pos": 186, "assoc": 1 }
-      ],
-      "expected": [
+        },
         {
           "pos": 97,
           "deleted": false,
@@ -1872,25 +2354,11 @@
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
-        },
-        {
-          "pos": 30,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 186,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
         }
       ]
     },
     {
-      "id": "map-014",
+      "id": "map-016",
       "steps": [
         {
           "stepType": "removeMark",
@@ -1898,15 +2366,81 @@
           "from": 31,
           "to": 35
         },
-        { "stepType": "attr", "pos": 24, "attr": "style", "value": "Heading1" },
         {
-          "stepType": "addMark",
-          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
-          "from": 115,
-          "to": 118
-        }
+          "stepType": "replace",
+          "from": 41,
+          "to": 41,
+          "slice": {
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pMarks0000000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              },
+              {
+                "type": "paragraph",
+                "attrs": {
+                  "id": "pMarks0000000001",
+                  "style": null,
+                  "numbering": null,
+                  "numberingRestart": null,
+                  "align": null,
+                  "dir": null,
+                  "indentLeft": null,
+                  "indentRight": null,
+                  "indentFirstLine": null,
+                  "spaceBefore": null,
+                  "spaceAfter": null,
+                  "contextualSpacing": null,
+                  "lineSpacing": null,
+                  "lineRule": null,
+                  "keepNext": null,
+                  "keepLines": null,
+                  "pageBreakBefore": null,
+                  "widowControl": null,
+                  "tabs": null,
+                  "borders": null,
+                  "shading": null,
+                  "suggest": null,
+                  "preserved": null,
+                  "ext": {}
+                }
+              }
+            ],
+            "openStart": 1,
+            "openEnd": 1
+          },
+          "structure": true
+        },
+        { "stepType": "attr", "pos": 42, "attr": "id", "value": "p000000000000008" }
       ],
       "positions": [
+        { "pos": 30, "assoc": 1 },
+        { "pos": 186, "assoc": 1 },
         { "pos": 53, "assoc": 1 },
         { "pos": 6, "assoc": -1 },
         { "pos": 106, "assoc": -1 },
@@ -1916,13 +2450,25 @@
         { "pos": 220, "assoc": 1 },
         { "pos": 58, "assoc": 1 },
         { "pos": 179, "assoc": -1 },
-        { "pos": 122, "assoc": -1 },
-        { "pos": 107, "assoc": -1 },
-        { "pos": 193, "assoc": 1 }
+        { "pos": 122, "assoc": -1 }
       ],
       "expected": [
         {
-          "pos": 53,
+          "pos": 30,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 188,
+          "deleted": false,
+          "deletedBefore": false,
+          "deletedAfter": false,
+          "deletedAcross": false
+        },
+        {
+          "pos": 55,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -1936,195 +2482,42 @@
           "deletedAcross": false
         },
         {
-          "pos": 106,
+          "pos": 108,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 212,
+          "pos": 214,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 67,
+          "pos": 69,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 151,
+          "pos": 153,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 220,
+          "pos": 222,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
           "deletedAcross": false
         },
         {
-          "pos": 58,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 179,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 122,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 107,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 193,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        }
-      ]
-    },
-    {
-      "id": "map-015",
-      "steps": [
-        {
-          "stepType": "replace",
-          "from": 148,
-          "to": 148,
-          "slice": {
-            "content": [
-              {
-                "type": "paragraph",
-                "attrs": {
-                  "id": "pB00000000000001",
-                  "style": null,
-                  "numbering": null,
-                  "numberingRestart": null,
-                  "align": null,
-                  "dir": null,
-                  "indentLeft": null,
-                  "indentRight": null,
-                  "indentFirstLine": null,
-                  "spaceBefore": null,
-                  "spaceAfter": null,
-                  "contextualSpacing": null,
-                  "lineSpacing": null,
-                  "lineRule": null,
-                  "keepNext": null,
-                  "keepLines": null,
-                  "pageBreakBefore": null,
-                  "widowControl": null,
-                  "tabs": null,
-                  "borders": null,
-                  "shading": null,
-                  "preserved": null,
-                  "ext": {}
-                }
-              },
-              {
-                "type": "paragraph",
-                "attrs": {
-                  "id": "pB00000000000001",
-                  "style": null,
-                  "numbering": null,
-                  "numberingRestart": null,
-                  "align": null,
-                  "dir": null,
-                  "indentLeft": null,
-                  "indentRight": null,
-                  "indentFirstLine": null,
-                  "spaceBefore": null,
-                  "spaceAfter": null,
-                  "contextualSpacing": null,
-                  "lineSpacing": null,
-                  "lineRule": null,
-                  "keepNext": null,
-                  "keepLines": null,
-                  "pageBreakBefore": null,
-                  "widowControl": null,
-                  "tabs": null,
-                  "borders": null,
-                  "shading": null,
-                  "preserved": null,
-                  "ext": {}
-                }
-              }
-            ],
-            "openStart": 1,
-            "openEnd": 1
-          },
-          "structure": true
-        },
-        { "stepType": "attr", "pos": 149, "attr": "id", "value": "p000000000000005" }
-      ],
-      "positions": [
-        { "pos": 199, "assoc": 1 },
-        { "pos": 59, "assoc": 1 },
-        { "pos": 7, "assoc": 1 },
-        { "pos": 118, "assoc": 1 },
-        { "pos": 62, "assoc": 1 },
-        { "pos": 179, "assoc": -1 },
-        { "pos": 6, "assoc": -1 },
-        { "pos": 134, "assoc": -1 },
-        { "pos": 196, "assoc": 1 },
-        { "pos": 106, "assoc": 1 },
-        { "pos": 182, "assoc": -1 },
-        { "pos": 131, "assoc": 1 }
-      ],
-      "expected": [
-        {
-          "pos": 201,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 59,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 7,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 118,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 62,
+          "pos": 60,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
@@ -2138,159 +2531,7 @@
           "deletedAcross": false
         },
         {
-          "pos": 6,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 134,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 198,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 106,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 184,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 131,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        }
-      ]
-    },
-    {
-      "id": "map-016",
-      "steps": [
-        {
-          "stepType": "replace",
-          "from": 42,
-          "to": 42,
-          "slice": { "content": [{ "type": "text", "text": "中" }] }
-        },
-        {
-          "stepType": "removeMark",
-          "mark": { "type": "bold", "attrs": { "value": true, "ext": {} } },
-          "from": 31,
-          "to": 35
-        }
-      ],
-      "positions": [
-        { "pos": 158, "assoc": -1 },
-        { "pos": 22, "assoc": -1 },
-        { "pos": 70, "assoc": -1 },
-        { "pos": 169, "assoc": -1 },
-        { "pos": 122, "assoc": 1 },
-        { "pos": 88, "assoc": -1 },
-        { "pos": 107, "assoc": -1 },
-        { "pos": 17, "assoc": 1 },
-        { "pos": 107, "assoc": 1 },
-        { "pos": 115, "assoc": -1 },
-        { "pos": 191, "assoc": -1 },
-        { "pos": 220, "assoc": -1 }
-      ],
-      "expected": [
-        {
-          "pos": 159,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 22,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 71,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 170,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 123,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 89,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 108,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 17,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 108,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 116,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 192,
-          "deleted": false,
-          "deletedBefore": false,
-          "deletedAfter": false,
-          "deletedAcross": false
-        },
-        {
-          "pos": 221,
+          "pos": 124,
           "deleted": false,
           "deletedBefore": false,
           "deletedAfter": false,
