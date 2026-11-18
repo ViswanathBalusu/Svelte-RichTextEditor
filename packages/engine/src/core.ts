@@ -79,6 +79,7 @@ import type {
   DocumentApi,
   EditMode,
   EquationConfirmation,
+  AssistantInsertOutcome,
   FieldFillOutcome,
   EquationRequest,
   EquationTarget,
@@ -1151,6 +1152,49 @@ export class DocumentCore implements DocumentApi {
       attachments,
     );
     return { docId: this.#docId, task, prompt, context, omitted };
+  }
+
+  // --- Assistant result (UX-046) -------------------------------------------------------------
+
+  /**
+   * Puts an approved assistant result at the selection as suggestions by this user (UX-046
+   * criterion 1; 13 §6.2). The change is recorded as suggestions whatever the edit mode and the role,
+   * so it is never a direct edit, an editor's included. It is refused, with nothing applied, when the
+   * document is read-only, when the user holds no `suggest` where the selection lies (criterion 4;
+   * the authority checks the same, P4), when there is no user to name, or when the change cannot be
+   * recorded as suggestions. The commit carries the origin hint `assistant`, a client claim: the
+   * server attributes an agent only to a verified agent token (UX-044 A1).
+   */
+  insertAssistantResult(text: string): AssistantInsertOutcome {
+    const refuse = (reason: Extract<AssistantInsertOutcome, { ok: false }>['reason']) =>
+      ({ ok: false, reason }) as const;
+    if (this.#destroyed || text === '') return refuse('not-recorded');
+    const state = this.#state;
+    const { from, to } = state.selection;
+    const scopes = [...new Set([from, to].map((pos) => this.#scopeIn(state.doc, pos)))];
+    if (this.#locked()) {
+      this.#refused({ reason: 'read-only', scopes });
+      return refuse('read-only');
+    }
+    const access = this.#accessValue;
+    const mayRecord = (scope: string): boolean =>
+      access === null || capsOf(access, depScope(scope)).includes('suggest');
+    if (!scopes.every(mayRecord)) {
+      this.#refused({ reason: 'scope', scopes });
+      return refuse('no-suggest');
+    }
+    const user = this.#user;
+    if (user === null) return refuse('no-user');
+    const recorded = recordAsSuggestion(state, state.tr.insertText(text, from, to), {
+      user,
+      nextId: this.#newId,
+    });
+    if (recorded === null) return refuse('not-recorded');
+    const before = state.doc;
+    this.dispatchTransaction(
+      recorded.setMeta(SUGGESTED, true).setMeta(RESOLVE_ORIGIN, 'assistant'),
+    );
+    return this.#state.doc === before ? refuse('not-recorded') : { ok: true };
   }
 
   // --- Proofing (UX-041, UX-042) -------------------------------------------------------------

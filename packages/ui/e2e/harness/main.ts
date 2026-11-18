@@ -312,6 +312,9 @@ type AssistantMode = 'ok' | 'rate_limited' | 'quota_exceeded' | 'fail' | 'hang';
 let assistantMode: AssistantMode = 'ok';
 const assistantCalls: Array<{ task: string; prompt: string; aborted: boolean }> = [];
 const assistantAvailable = new Value(true);
+/** What the fake core's insertion answers, and the texts it was asked to insert (UX-046). */
+let assistantInsertReason: string | null = null;
+const assistantInserted: string[] = [];
 /** How many times the checker read the document (UX-066 criterion 5). */
 let checkerReads = 0;
 function checkerContent(): unknown {
@@ -669,9 +672,17 @@ function mountShell(options: MountOptions = {}): void {
     assistantMode = 'ok';
     assistantCalls.length = 0;
     assistantAvailable.set(true);
+    assistantInsertReason = null;
+    assistantInserted.length = 0;
     Object.assign(core, {
       assistant: {
         available: assistantAvailable,
+        insert(text: string) {
+          if (assistantInsertReason !== null)
+            return { ok: false, reason: assistantInsertReason } as const;
+          assistantInserted.push(text);
+          return { ok: true } as const;
+        },
         async *request(task: string, prompt: string, signal: AbortSignal) {
           const call = { task, prompt, aborted: false };
           assistantCalls.push(call);
@@ -791,6 +802,10 @@ const harness = {
   setAssistantMode: (mode: AssistantMode) => void (assistantMode = mode),
   /** The assistant requests made so far, with whether each was aborted (UX-045). */
   assistantCalls: () => assistantCalls.map((c) => ({ ...c })),
+  /** Makes the fake core refuse the next insertions with this reason, or accept them with null (UX-046). */
+  setAssistantInsertRefusal: (reason: string | null) => void (assistantInsertReason = reason),
+  /** The texts the fake core was asked to insert as suggestions (UX-046). */
+  assistantInserted: () => assistantInserted.slice(),
   /** The assistant port is attached or taken away (UX-045 criterion 5). */
   setAssistantAvailable: (available: boolean) => assistantAvailable.set(available),
   /** How many times the checker has read the document since the page loaded (UX-066 criterion 5). */

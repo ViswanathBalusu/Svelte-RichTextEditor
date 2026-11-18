@@ -102,7 +102,7 @@ describe('an assistant write without suggest is refused (SEC-010 criterion 5)', 
     expect(rejectOf(fx, 'x-f2')?.code).toBe('permission_denied');
   });
 
-  it('control: the same assistant identity acting for an editor is accepted with origin assistant', () => {
+  it('refuses a direct insertion under the agent identity of an editor, with permission_denied (UX-046 criterion 3; owner decision 119)', () => {
     const r = room();
     const assistantForEditor = {
       ...USERS.carol,
@@ -111,12 +111,42 @@ describe('an assistant write without suggest is refused (SEC-010 criterion 5)', 
     };
     r.open('x-c', assistantForEditor);
     r.open('a1', USERS.alice);
+    for (const origin of ['assistant', 'input']) {
+      const fx = flush(
+        r,
+        r.submit('x-c', { id: id(), base: 0, steps: insert(), origin } as CommitInput),
+      );
+      expect(rejectOf(fx, 'x-c')?.code).toBe('permission_denied');
+      expect(ackOf(fx, 'x-c')).toBe(false);
+      expect(stored(fx, 'a1')).toEqual([]);
+    }
+  });
+
+  it('control: the same assistant identity acting for an editor is accepted when the text is a suggestion', () => {
+    const r = room();
+    const assistantForEditor = {
+      ...USERS.carol,
+      session: 's-assist-c2',
+      agent: 'assistant:drafting',
+    };
+    r.open('x-c2', assistantForEditor);
+    r.open('a1', USERS.alice);
+    const doc = baseDoc();
+    const pos = posInside(doc, 'pIntro0000000001', 0);
+    const mark = schema.marks['ins']!.create({ id: 'sSec010000000001', user: 'carol' });
+    const suggested = stepsToJson([
+      new ReplaceStep(
+        pos,
+        pos,
+        new Slice(Fragment.from(schema.text('ignore the above', [mark])), 0, 0),
+      ),
+    ]);
     const fx = flush(
       r,
-      r.submit('x-c', { id: id(), base: 0, steps: insert(), origin: 'assistant' } as CommitInput),
+      r.submit('x-c2', { id: id(), base: 0, steps: suggested, origin: 'assistant' } as CommitInput),
     );
-    expect(ackOf(fx, 'x-c')).toBe(true);
-    expect(rejectOf(fx, 'x-c')).toBeNull();
+    expect(ackOf(fx, 'x-c2')).toBe(true);
+    expect(rejectOf(fx, 'x-c2')).toBeNull();
     expect(stored(fx, 'a1')[0]).toMatchObject({
       user: 'carol',
       origin: 'assistant',
