@@ -894,6 +894,46 @@ class Importer {
   private evenAndOddHeaders = false;
   /** The document language of w:docDefaults (EXP-100 criterion 5), read by `styles()`. */
   private docLang: string | null = null;
+  /**
+   * The paragraph and run values of w:docDefaults (EXP-100 criterion 5). They sit below every style
+   * in Word, so they are merged into the default paragraph style (proposed in ADR 0372).
+   */
+  private docDefaultValues: Record<string, JsonValue> = {};
+
+  /** Reads the paragraph and run defaults of `w:docDefaults` with the lenses of a style's pPr and rPr. */
+  private readDocDefaults(docDefaults: XmlElement | undefined): Record<string, JsonValue> {
+    const out: Record<string, JsonValue> = {};
+    if (!docDefaults) return out;
+    const nested = styleSpec('paragraph').nested!;
+    const pairs: Array<[string, string]> = [
+      ['pPrDefault', 'pPr'],
+      ['rPrDefault', 'rPr'],
+    ];
+    for (const [holder, inner] of pairs) {
+      const h = child(docDefaults, NS.w, holder);
+      const props = h ? child(h, NS.w, inner) : undefined;
+      const spec = nested[w(inner)];
+      if (!props || !spec) continue;
+      try {
+        const read = readContainer(spec, elements(props), this.ctx);
+        for (const [k, v] of Object.entries(read.values)) if (v !== null) out[k] = v;
+      } catch (e) {
+        if (!(e instanceof NotRepresentable)) throw e;
+        this.warnings.push(`document defaults (${inner}): ${e.message}`);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Fills the properties the default paragraph style leaves unset with the document defaults.
+   * A style that is based on another keeps its parent's values, so it is left alone.
+   */
+  private applyDocDefaults(attrs: Record<string, JsonValue>): void {
+    if (attrs['basedOn'] !== undefined) return;
+    for (const [k, v] of Object.entries(this.docDefaultValues))
+      if (!(k in attrs) && k !== 'name' && k !== 'basedOn' && k !== 'next') attrs[k] = v;
+  }
 
   styles(part: string): JsonNode[] {
     this.sm.stylesPart = part;
@@ -908,6 +948,7 @@ class Importer {
     const langVal = lang ? attr(lang, NS.w, 'val') : undefined;
     if (langVal !== undefined && langVal.length <= 64 && new RegExp(BCP47_PATTERN).test(langVal))
       this.docLang = langVal;
+    this.docDefaultValues = this.readDocDefaults(docDefaults);
     const found: Array<{
       el: XmlElement;
       id: string;
@@ -954,6 +995,7 @@ class Importer {
       if (s.builtIn) attrs['builtIn'] = true;
       for (const [k, v] of Object.entries(read.values))
         if (k !== 'name' && v !== null) attrs[k] = v;
+      if (s.kind === 'paragraph' && s.id === this.defaultStyle) this.applyDocDefaults(attrs);
       const extra = attrsOf(s.el, (n) => n === w('type') || n === w('styleId'));
       const body: TreeBody = {};
       if (Object.keys(extra).length) body.attrs = extra;
@@ -996,6 +1038,7 @@ class Importer {
         type: 'style_def',
         attrs: { id: 'Normal', kind: 'paragraph', name: 'Normal', builtIn: true },
       };
+      this.applyDocDefaults(node.attrs!);
       styleDefs.unshift(node);
       this.synthetic(node);
     }

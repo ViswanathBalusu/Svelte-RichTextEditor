@@ -40,6 +40,12 @@ import { DebouncedEventSink } from './control-plane/event-throttle.ts';
 import { CompileBudget } from './control-plane/exp-009-compile-budget.ts';
 import { EXPORT_KIND, PREVIEW_KIND, exportHooks } from './control-plane/exports.ts';
 import {
+  IMPORT_KIND,
+  importHooks,
+  importJobHandler,
+  type DocxImporter,
+} from './control-plane/imports.ts';
+import {
   LIVE_QUOTA_COUNT_RETRY_MS,
   LIVE_QUOTA_WINDOW_MS,
   LiveQuotas,
@@ -229,6 +235,12 @@ export interface StartOptions {
    * `preview` when no handler of its own is given) and anything else. None: no export runner.
    */
   jobHandlers?: Readonly<Record<string, JobHandler>>;
+  /**
+   * Reads a `.docx` file into CDM content (EXP-098). With it, this node offers `/imports` and runs
+   * the import job in process; without it, the routes are `not_found`. The package of the importer
+   * is not a dependency of this service, so a host passes it in.
+   */
+  importer?: DocxImporter;
   /**
    * The asset worker in this process (PRO-061): its sandbox, or `unsandboxed()` with
    * `allowUnsandboxed` in tests. Default: `podmanSandbox()` when `config.assetWorker` is set.
@@ -805,6 +817,36 @@ export async function startService(opts: StartOptions): Promise<Service> {
       }),
     });
 
+  // Word imports (EXP-098): one runner of kind `import`, with the notifications and the version.
+  if (opts.importer)
+    runnerFor(
+      {
+        [IMPORT_KIND]: importJobHandler({
+          importer: opts.importer,
+          assets,
+          registry: parts.assetRegistry,
+          grants: parts.grants,
+          content,
+          dataPlane,
+        }),
+      },
+      {
+        hooks: importHooks({
+          notify,
+          events,
+          now,
+          ...(parts.versions ? { versions: parts.versions } : {}),
+          versionFailed: (job) =>
+            logger.error({
+              event: 'import.version',
+              tenant: job.tenant,
+              job: job.id,
+              message: 'import version not stored',
+            }),
+        }),
+      },
+    );
+
   // Scheduled maintenance (BE-052): one job per task and slot in the queue.
   const tasks: ScheduledTask[] = [
     {
@@ -995,6 +1037,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(liveQuotas ? { liveQuotas } : {}),
     ...(quotaSource ? { quotaSource } : {}),
     ...(config.maxRebaseSteps !== null ? { rebaseWindow: config.maxRebaseSteps } : {}),
+    ...(opts.importer ? { importsOffered: true } : {}),
   });
 
   const ready = () => readiness(parts.pool);
