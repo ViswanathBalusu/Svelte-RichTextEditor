@@ -66,7 +66,9 @@ export interface BusFaults {
 export class MemoryBusNetwork {
   readonly faults: BusFaults = { down: false, drop: 0, delayMs: 0 };
   readonly #topics = new Map<string, Set<{ bus: MemoryBus; on: BusHandler }>>();
-  /** The time before which the next message of a topic may arrive: keeps the topic in order. */
+  /** The delivery of each topic, one after another: keeps the topic in order. */
+  readonly #chains = new Map<string, Promise<void>>();
+  /** The time before which the next message of a topic may arrive: delays do not add up. */
   readonly #tails = new Map<string, number>();
   readonly #random: Random;
 
@@ -92,9 +94,8 @@ export class MemoryBusNetwork {
   send(topic: string, from: string, body: string): boolean {
     const f = this.faults;
     if (f.down || this.#random() < f.drop) return false;
-    const now = Date.now();
     const wait = f.delayMs > 0 ? Math.floor(this.#random() * f.delayMs) : 0;
-    const at = Math.max(now + wait, this.#tails.get(topic) ?? 0);
+    const at = Math.max(Date.now() + wait, this.#tails.get(topic) ?? 0);
     this.#tails.set(topic, at);
     const targets = [...(this.#topics.get(topic) ?? [])];
     const deliver = (): void => {
@@ -105,8 +106,17 @@ export class MemoryBusNetwork {
         t.on({ from, body });
       }
     };
-    if (at <= now) queueMicrotask(deliver);
-    else setTimeout(deliver, at - now);
+    const previous = this.#chains.get(topic) ?? Promise.resolve();
+    this.#chains.set(
+      topic,
+      previous
+        .then(() => {
+          const left = at - Date.now();
+          return left > 0 ? new Promise<void>((r) => setTimeout(r, left)) : undefined;
+        })
+        .then(deliver)
+        .catch(() => undefined),
+    );
     return true;
   }
 }

@@ -174,7 +174,13 @@ describe('per-tenant metrics from the call sites (BE-086 criterion 2)', () => {
     // list kept by hand.
     const declared = declaredIn(open);
     const written = new Set([...series(open), ...series(closed)].map((l) => metricOf(l, declared)));
-    const notFromHere = new Set(['dep_slow_consumers_total', 'dep_checkpoint_mismatches_total']);
+    // The forwarding counters are written by forwarded channels (test/data-plane/be-062-forwarding.test.ts).
+    const notFromHere = new Set([
+      'dep_slow_consumers_total',
+      'dep_checkpoint_mismatches_total',
+      'dep_forward_frames_total',
+      'dep_forward_closed_total',
+    ]);
     const missing = [...declared].filter((n) => !written.has(n) && !notFromHere.has(n));
     expect(missing).toEqual([]);
   }, 30_000);

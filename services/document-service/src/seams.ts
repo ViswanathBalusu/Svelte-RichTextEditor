@@ -19,6 +19,7 @@ import type { WorkflowResourceStore } from './workflow/workflow-resource.ts';
 import type { EventSink } from './control-plane/events.ts';
 import type { JsonEnvelope } from '@docedit/model';
 import type { AssetAttachments } from './data-plane/asset-attachments.ts';
+import type { Bus } from './data-plane/bus.ts';
 import type { RateLimits } from './data-plane/limits.ts';
 import type { LiveQuotaGate } from './data-plane/quota-gate.ts';
 import type { Content, Limits, Notification, RemoteCommit } from '@docedit/protocol';
@@ -144,6 +145,30 @@ export interface DataPlaneDeps {
    * 200). It is written on the node's lease row at each renewal. Absent: the node announces none.
    */
   readonly address?: string | undefined;
+  /**
+   * The internal bus between nodes (BE-062, BE-063). With it, and with `leases`, a channel for a
+   * document that another live node owns is opened on that node and forwarded. Absent: a single
+   * node, which serves what it owns and refuses the rest with `unavailable`.
+   */
+  readonly bus?: Bus | undefined;
+  /** Settings of channel forwarding; every member has a default (data-plane/forwarding.ts). */
+  readonly forwarding?:
+    | Partial<
+        Readonly<
+          Record<
+            | 'retain'
+            | 'repairMs'
+            | 'maxNacks'
+            | 'retryInMs'
+            | 'heartbeatMs'
+            | 'silenceMs'
+            | 'openTimeoutMs'
+            | 'ownerWatchMs',
+            number
+          >
+        >
+      >
+    | undefined;
   /** Server time, Unix milliseconds. */
   readonly now: () => number;
   /** The node's shared rate limits (BE-030); the data plane makes its own when absent. */

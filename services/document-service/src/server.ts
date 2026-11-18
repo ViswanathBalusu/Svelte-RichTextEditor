@@ -17,6 +17,9 @@ import { podmanSandbox, type AssetUrlKeys, type Sandbox } from '@docedit/asset-w
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
 import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
+import { AnnouncingNotifier, listenForAnnouncements } from './data-plane/announcements.ts';
+import type { Bus } from './data-plane/bus.ts';
+import { ValkeyBus } from './data-plane/valkey-bus.ts';
 import { ValkeyTokenBuckets } from './data-plane/valkey-buckets.ts';
 import { DEFAULT_FEATURES, DEFAULT_RATES } from './data-plane/settings.ts';
 import {
@@ -304,6 +307,11 @@ export interface StartOptions {
    * draw from the same instance. Absent: the default settings (`DEFAULT_RATES`).
    */
   rateLimits?: RateLimits;
+  /**
+   * The bus between nodes (BE-062, BE-063). Absent: with `DOCEDIT_VALKEY_URL` and node leases the
+   * service opens its own Valkey streams bus; otherwise there is none and the node is alone.
+   */
+  bus?: Bus;
   logger?: Logger;
   /** The event sink of both planes. Not with `config.webhooks`, whose dispatcher is the sink. */
   events?: EventSink;
@@ -777,6 +785,11 @@ export async function startService(opts: StartOptions): Promise<Service> {
     opts.rateLimits === undefined && config.valkeyUrl !== null
       ? new ValkeyTokenBuckets({ url: config.valkeyUrl })
       : undefined;
+  const ownBus =
+    opts.bus === undefined && config.valkeyUrl !== null && parts.leases
+      ? new ValkeyBus({ node: config.node, url: config.valkeyUrl })
+      : undefined;
+  const bus = opts.bus ?? ownBus;
   const rateLimits =
     opts.rateLimits ??
     new RateLimits(DEFAULT_RATES, {
@@ -913,10 +926,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.audit ? { audit: parts.audit } : {}),
     ...(parts.outbox ? { outbox: parts.outbox } : {}),
     ...(parts.leases ? { leases: parts.leases } : {}),
+    ...(bus ? { bus } : {}),
     ...(config.nodeAddress !== null ? { address: config.nodeAddress } : {}),
     // The room raises refused commits here (PRM-053 criterion 3): the caller's sink or the dispatcher.
     ...(opts.events || webhooks ? { events } : {}),
   });
+  // BE-063 criterion 5: with a bus, a change is announced to the owning room on another node, and
+  // the announcements of other nodes are applied to this node's rooms.
+  const roomNotifier = bus ? new AnnouncingNotifier(dataPlane, bus) : dataPlane;
+  const announcements = bus
+    ? await listenForAnnouncements(bus, config.node, dataPlane, parts.grants, (e, where) =>
+        logger.warn({ event: 'bus.announcement', message: `${where}: ${String(e)}` }),
+      )
+    : undefined;
   const notify = () => (dataPlane.notify ? dataPlane.notify.bind(dataPlane) : undefined);
 
   // --- Jobs: maintenance, assets, exports (BE-049 to BE-052; PRO-061; EXP-004 to EXP-008). ------
@@ -1117,7 +1139,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
                   reminders: parts.reminders!,
                   grants: parts.grants,
                   logs: parts.logs,
-                  notifier: dataPlane,
+                  notifier: roomNotifier,
                   ...(parts.audit ? { audit: parts.audit } : {}),
                   now,
                   events,
@@ -1302,7 +1324,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     content,
     views,
     events,
-    notifier: dataPlane,
+    notifier: roomNotifier,
     dataPlane,
     publicUrl,
     restPath: REST_PATH,
@@ -1455,8 +1477,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
         await exportWorkers?.stop();
         await Promise.all(runners.map((r) => r.stop()));
         await searchWorkers?.close().catch(() => undefined);
+        announcements?.close();
         await dataPlane.close().catch(() => undefined);
         sharedRateStore?.close();
+        await ownBus?.close();
         // The last change of a burst that still waits for its window is raised before the sends drain.
         events.close();
         // Sends already started finish; each is bounded by the egress timeout (BE-056).
