@@ -62,7 +62,7 @@ describe('assistant controller (UX-045)', () => {
     await tick();
     expect(c.view().state.phase).toBe('shown');
     expect(inserted).toEqual([]);
-    expect(c.approve()).toBe(true);
+    expect(await c.approve()).toBe(true);
     expect(inserted).toEqual(['New text']);
     expect(c.view()).toMatchObject({ state: { phase: 'idle' }, inserted: true });
   });
@@ -73,7 +73,7 @@ describe('assistant controller (UX-045)', () => {
     const c = make(api);
     c.ask('draft', 'x');
     await tick();
-    expect(c.approve()).toBe(false);
+    expect(await c.approve()).toBe(false);
     expect(c.view()).toMatchObject({
       state: { phase: 'shown', text: 'T' },
       insertRefused: 'no-suggest',
@@ -91,11 +91,11 @@ describe('assistant controller (UX-045)', () => {
     const viewer = make(withInsert, VIEWER);
     viewer.ask('question', 'q');
     await tick();
-    expect(viewer.approve()).toBe(false);
+    expect(await viewer.approve()).toBe(false);
     const bare = make(api);
     bare.ask('question', 'q');
     await tick();
-    expect(bare.approve()).toBe(false);
+    expect(await bare.approve()).toBe(false);
     expect(calls).toEqual([]);
   });
 
@@ -118,7 +118,7 @@ describe('assistant controller (UX-045)', () => {
     release();
     await tick();
     expect(c.view().state.phase).toBe('cancelled');
-    expect(c.approve()).toBe(false);
+    expect(await c.approve()).toBe(false);
   });
 
   it('ends a failure with nothing held and retry offered, for each failure kind (criterion 4)', async () => {
@@ -134,7 +134,7 @@ describe('assistant controller (UX-045)', () => {
       c.ask('question', 'q');
       await tick();
       expect(c.view().state).toMatchObject({ phase: 'failed', failure, retry: true });
-      expect(c.approve()).toBe(false);
+      expect(await c.approve()).toBe(false);
       expect(EN_GB[`assistant.error.${failure}`]).toMatch(/Nothing was applied/);
     }
   });
@@ -173,7 +173,7 @@ describe('assistant controller (UX-045)', () => {
     expect(c.view().refused).toBeNull();
     expect(c.view().state.phase).toBe('shown');
     // A view-only author's approval inserts nothing.
-    expect(c.approve()).toBe(false);
+    expect(await c.approve()).toBe(false);
     expect(EN_GB['assistant.refused.no-change']).toMatch(/does not allow/);
   });
 

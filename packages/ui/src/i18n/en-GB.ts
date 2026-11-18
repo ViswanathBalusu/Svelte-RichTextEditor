@@ -423,6 +423,12 @@ export const EN_GB = {
   'assistant.retry': 'Try again',
   'assistant.dismiss': 'Clear',
   'assistant.insert': 'Insert as suggestion',
+  'assistant.notices': 'What the editor changed in the answer',
+  'assistant.notice.link-blocked':
+    'A link the assistant added is shown as text and is not a link: {target}',
+  'assistant.notice.image-blocked': 'A picture the assistant added was left out: {target}',
+  'assistant.notice.image-not-inserted':
+    'An attached picture named in the answer is not inserted by this pane: {target}',
   'assistant.insert.refused':
     'The result was not inserted: you cannot suggest changes here. Nothing was applied.',
   'assistant.inserted':
