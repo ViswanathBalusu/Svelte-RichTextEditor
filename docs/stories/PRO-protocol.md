@@ -161,7 +161,7 @@ As a maintainer, I want deprecations to be announced for at least twelve months 
 **Evidence:** criterion 2 (lane V-PRO-001-017, 2026-11-13): `services/document-service/test/control-plane/routes.documents.test.ts` (the test "answers CORS for allowed origins only"): a `GET` from an allowed origin gets `Access-Control-Expose-Headers` listing `Deprecation` and `Sunset`, in memory and on PostgreSQL. This checks the exposed header list the browser applies; no browser was run for it.
 - [ ] Given a feature or field marked deprecated, when a major version that removes it is prepared, then CI fails unless the deprecation date in the artifacts is at least twelve months earlier.
 
-**Notes:** Condition: only when the first feature, field or resource is deprecated; nothing is deprecated in 1.0.
+**Notes:** Condition: only when the first feature, field or resource is deprecated; nothing is deprecated in 1.0. Lane w5, 2026-11-18: nothing new ticked. No resource, field or feature is marked deprecated in the OpenAPI document (`packages/protocol/src/generate/openapi.ts` declares the `Deprecation` and `Sunset` headers, but no operation carries `deprecated`), so criterion 1 has nothing to test. Criterion 3 needs a major version that removes a deprecated item, and no such version exists; the status is blocked by its condition.
 
 ## Discovery (05 §2)
 
