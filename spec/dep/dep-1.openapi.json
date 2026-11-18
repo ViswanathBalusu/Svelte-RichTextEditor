@@ -6546,8 +6546,8 @@
     "/documents/{id}/field-values": {
       "get": {
         "operationId": "getFieldValues",
-        "summary": "Field values by key; `?seq` reads them at a pinned seq.",
-        "description": "Field values by key; `?seq` reads them at a pinned seq. Only when the server announces the feature `fields`. Specified in 12 §10.",
+        "summary": "Field values by key; `?seq` reads them at a pinned seq. `?format=csv` answers `text/csv` instead of the JSON body: one row of key and value for each field, with a leading `=`, `+`, `-` or `@` neutralised by an apostrophe (12 §9; FRW-064; proposed, ADR 0410).",
+        "description": "Field values by key; `?seq` reads them at a pinned seq. `?format=csv` answers `text/csv` instead of the JSON body: one row of key and value for each field, with a leading `=`, `+`, `-` or `@` neutralised by an apostrophe (12 §9; FRW-064; proposed, ADR 0410). Only when the server announces the feature `fields`. Specified in 12 §10.",
         "tags": [
           "field"
         ],
@@ -6580,6 +6580,18 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ]
             }
           },
           {

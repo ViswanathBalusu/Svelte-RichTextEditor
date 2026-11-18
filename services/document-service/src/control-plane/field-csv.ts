@@ -32,3 +32,16 @@ export function fieldValuesCsv(rows: ReadonlyArray<{ key: string; value: string 
   const lines = ['key,value', ...rows.map((r) => `${csvCell(r.key)},${csvCell(r.value)}`)];
   return `${lines.join('\r\n')}\r\n`;
 }
+
+/**
+ * The text of one field value as a cell, before neutralising: no value is an empty cell, a string is
+ * itself (a number is a decimal string in a field), a boolean is `true` or `false`, and a value that
+ * is an object, such as the adopted image of a signature or the redaction marker of a projection, is
+ * its JSON text.
+ */
+export function valueText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+}

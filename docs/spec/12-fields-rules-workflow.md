@@ -255,7 +255,7 @@ The document service sends no e-mail and no text messages. It raises webhooks (`
 ## 9. Templates, prefill and bulk send
 
 - A template is a document with role placeholders, fields and rules, and no participants. Instantiating it forks the document at a pinned `seq`, binds participants and optionally prefills values.
-- Prefill is `PATCH /documents/{id}/field-values` by key. It produces a server-authored commit with origin `prefill`. Signature, initials, date-signed and formula fields cannot be prefilled. Values are typed data and go through the same emitters as any text; exported spreadsheets neutralise leading `=`, `+`, `-` and `@`.
+- Prefill is `PATCH /documents/{id}/field-values` by key. It produces a server-authored commit with origin `prefill`. Signature, initials, date-signed and formula fields cannot be prefilled. Values are typed data and go through the same emitters as any text; exported spreadsheets neutralise leading `=`, `+`, `-` and `@`. The spreadsheet output of field values is CSV (owner decision 44): `GET /documents/{id}/field-values?format=csv`, one row of key and value for each field, a cell that starts with one of those four characters written with an apostrophe in front, and the JSON of the same route unchanged (ADR 0410, proposed).
 - Bulk send is a job that creates one fork per recipient row.
 
 ## 10. Protocol additions
