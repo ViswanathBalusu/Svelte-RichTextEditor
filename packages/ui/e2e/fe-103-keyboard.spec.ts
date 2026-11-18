@@ -47,18 +47,17 @@ test.describe('keyboard exit from the editing surface (FE-103)', () => {
     await page.keyboard.press('Escape');
     // Focus has left the editing surface: the shell no longer holds it.
     expect(await focusIndex(page)).toBe(-1);
+    // Focus waits on the empty place after the surface (`.de-tab-origin`), so that Tab goes on from there.
     expect(
-      await page.evaluate(() => document.getElementById('host')!.shadowRoot!.activeElement),
-    ).toBeNull();
+      await page.evaluate(
+        () => document.getElementById('host')!.shadowRoot!.activeElement?.className ?? null,
+      ),
+    ).toBe('de-tab-origin');
   });
 
   test('after Escape, Tab moves to the next control in page order and Shift+Tab to the previous one', async ({
     page,
-    browserName,
   }) => {
-    // WebKit restarts Tab from the first control of the page after the surface is blurred (the
-    // sequential focus starting point is lost), so this part is not met there; see the story Notes.
-    test.skip(browserName === 'webkit', 'WebKit restarts Tab at the start after blur()');
     await open(page, { extended: true });
     await focusSurface(page);
     const surface = await focusIndex(page);

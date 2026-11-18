@@ -21,6 +21,8 @@ import {
   stepsToJson,
 } from '@docedit/authority';
 import type { RemoteCommit } from '@docedit/protocol';
+import type { EquationDrawer } from './equation-draw.ts';
+import type { AssetImageLookup } from './image-source.ts';
 import type { Access, SyncChannel } from '@docedit/protocol';
 import {
   FIELD_LIMITS,
@@ -51,6 +53,7 @@ import {
   EditorState,
   NodeSelection,
   Plugin,
+  Selection,
   TextSelection,
   type Transaction,
 } from 'prosemirror-state';
@@ -72,6 +75,9 @@ import type {
   CoreQueryName,
   DocumentApi,
   EditMode,
+  EquationConfirmation,
+  EquationRequest,
+  EquationTarget,
   FindResult,
   FindState,
   InsertResult,
@@ -129,7 +135,13 @@ import { type InsertFieldOptions, insertField, insertSymbol, insertToc } from '.
 import { formFieldCount } from './frw-072-form-fields.ts';
 import { insertCaption, insertReference } from './captions-refs.ts';
 import { referenceGuardPlugin } from './referenced-targets.ts';
-import { setEquationLatex } from './equation-commands.ts';
+import {
+  EQUATION_NODES,
+  LATEX_MAX_CODE_POINTS,
+  MATH_NESTING_MAX,
+  latexRefusal,
+  setEquationLatex,
+} from './equation-commands.ts';
 import { isValueFormat, valueFormatCommand } from './formatting-values.ts';
 import { LIST_COMMANDS, listCommand } from './list-commands.ts';
 import {
@@ -165,10 +177,25 @@ import { idTypesOf, identifierPlugin } from './ids.ts';
 import { type Internals, register } from './internals.ts';
 import { INTERNAL, REMOTE, SUGGESTED } from './meta.ts';
 import { scopeDiff } from './scope-diff.ts';
+import { ExtensionApi } from './extension-api.ts';
+import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
 import { recordAsSuggestion } from './suggestion-edit.ts';
 import { type MarkupView, type SuggestionSpec, suggestionSpecs } from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
+import {
+  type AssistantRequest,
+  type HostAttachment,
+  assembleAssistantContext,
+} from './assistant-context.ts';
+import {
+  type LocatedFinding,
+  NO_PROOFING,
+  type ProofingClock,
+  ProofingController,
+  type ProofingPort,
+  type ProofingInfo,
+} from './proofing.ts';
 import { ReadValue, type Schedule, ViewHub, sameJson } from './read-value.ts';
 import {
   placeholderAt,
@@ -299,6 +326,14 @@ export interface CoreConfig {
    * family mark with the alias it returns; a family it does not know keeps its name. Read at each draw.
    */
   fontAlias?: (family: string) => string | undefined;
+  /**
+   * The signed URL and content type of an asset, for the web view's pictures (FE-067 criterion 3).
+   * The view draws a picture only from an `http` or `https` URL of a raster type; without this
+   * lookup, or for any other answer, it draws no picture. Read when a picture is drawn.
+   */
+  assetImage?: AssetImageLookup;
+  /** Draws equations in the web view (FE-069); absent, the LaTeX source is shown as text. */
+  drawEquation?: EquationDrawer;
 }
 
 /** A document the core cannot open (03 §2, §11.1): the codes are DEP's (05 §5.8). */
@@ -682,13 +717,18 @@ export class DocumentCore implements DocumentApi {
   readonly features: ReadValue<readonly string[]>;
   readonly counts: ReadValue<ShellCounts>;
   readonly problem: ReadValue<CoreProblem | null>;
+  /** The last request to open the math editor on an equation (FE-070); the shell opens it. */
+  readonly equationRequest: ReadValue<EquationRequest | null>;
   readonly findState: ReadValue<FindState>;
+  /** The proofing state and findings (UX-041); `available` is false without a proofing port. */
+  readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
   #problems = 0;
+  #equationRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
   #find: { query: string; matches: SearchMatch[]; current: number | null } = {
     query: '',
@@ -714,6 +754,7 @@ export class DocumentCore implements DocumentApi {
   /** The service's last answer to a commit of ours was `unavailable` (FE-008 criterion 4; 06 §8). */
   #serviceUnavailable = false;
   #accessValue: Access | null;
+  #proofing: ProofingController | null = null;
   /** The `mode` the host set, and the one in force under the access (FE-029). */
   #requested: EditMode = 'edit';
   #effective: EditMode = 'edit';
@@ -736,8 +777,12 @@ export class DocumentCore implements DocumentApi {
   #standInHeld = false;
   #waiters: Array<{ resolve: () => void }> = [];
   #destroyed = false;
+  /** The document the attached channel serves, for the proofing port's requests. */
+  #docId = '';
   #flushTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #listeners = new Set<(tr: Transaction, state: EditorState) => void>();
+  /** The extensions' document APIs (UX-053), told of every change and of the service's thread ranges. */
+  readonly #extApis = new Set<ExtensionApi>();
   /** Remote changes that waited for a composition, for the tests of FE-034. */
   #deferrals = 0;
   /** Identifiers for the nodes an authoring command creates (03 §9). */
@@ -807,6 +852,8 @@ export class DocumentCore implements DocumentApi {
     this.features = new ReadValue<readonly string[]>([], sameJson, hub);
     this.counts = new ReadValue<ShellCounts>({}, sameJson, hub);
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
+    this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
+    this.proofing = new ReadValue<ProofingInfo>(NO_PROOFING, sameJson, hub);
     this.findState = new ReadValue<FindState>(
       { query: '', count: 0, current: null },
       sameJson,
@@ -925,6 +972,7 @@ export class DocumentCore implements DocumentApi {
         if (t.docChanged) this.#comments.apply(t.mapping.maps, ++this.#commentSeq);
       this.#publishThreadRanges();
     }
+    for (const api of this.#extApis) api.applied(transactions, tr);
     for (const b of this.#bridges) b.update(state, transactions);
     this.#publish();
     const presence = this.#presenceClient;
@@ -933,7 +981,161 @@ export class DocumentCore implements DocumentApi {
       if (state.doc !== before.doc || !state.selection.eq(before.selection))
         presence.selectionChanged();
     }
+    if (state.doc !== before.doc) this.#proofing?.textChanged();
     for (const listener of this.#listeners) listener(tr, state);
+  }
+
+  // --- Assistant request (UX-047) ------------------------------------------------------------
+
+  /**
+   * The request the assistant port is sent (13 §6.2): the selection, the blocks around it and the
+   * outline, from scopes the reader may view, and the host's attachments. Nothing else of the core is
+   * read, so no token, profile or hidden text can reach the request. `omitted` counts what was left out.
+   */
+  assistantRequest(
+    task: AssistantRequest['task'],
+    prompt: string,
+    attachments: readonly HostAttachment[] = [],
+  ): AssistantRequest & { readonly omitted: number } {
+    const sel = this.#state.selection;
+    const { context, omitted } = assembleAssistantContext(
+      this.#state.doc,
+      { from: sel.from, to: sel.to },
+      (scope) => this.#canView(scope),
+      this.outline.get(),
+      attachments,
+    );
+    return { docId: this.#docId, task, prompt, context, omitted };
+  }
+
+  // --- Proofing (UX-041, UX-042) -------------------------------------------------------------
+
+  /**
+   * Gives the core the proofing port (13 §6.1). The body is checked at once and again, a block at
+   * a time, after a pause in typing. Findings are drawn as decorations and never change the
+   * document. Without a port `proofing.get().available` is false and no control is shown. Returns
+   * the function that detaches the port.
+   */
+  attachProofing(
+    port: ProofingPort,
+    opts: { docId?: string; clock?: ProofingClock; debounceMs?: number } = {},
+  ): () => void {
+    this.#proofing?.dispose();
+    const controller = new ProofingController(
+      {
+        doc: () => this.#state.doc,
+        canView: (scope) => this.#canView(scope),
+        docId: () => opts.docId ?? this.#docId,
+        defaultLang: () => stylesOf(this.#state.doc).settings.lang,
+        changed: () => {
+          if (this.#proofing === controller) this.#publishProofing();
+        },
+      },
+      port,
+      {
+        clock: opts.clock ?? {
+          // Bound wrappers, as the sync client's clock has (browsers refuse an unbound `setTimeout`).
+          setTimeout: (fn, ms) => setTimeout(fn, ms),
+          clearTimeout: (h) => clearTimeout(h as never),
+        },
+        ...(opts.debounceMs !== undefined ? { debounceMs: opts.debounceMs } : {}),
+      },
+    );
+    this.#proofing = controller;
+    controller.start();
+    this.#publishProofing();
+    return () => {
+      if (this.#proofing !== controller) return;
+      controller.dispose();
+      this.#proofing = null;
+      this.proofing.set(NO_PROOFING);
+    };
+  }
+
+  #canView(scope: string): boolean {
+    const access = this.#accessValue;
+    return access === null || capsOf(access, depScope(scope)).includes('view');
+  }
+
+  #publishProofing(): void {
+    const p = this.#proofing;
+    if (!p || this.#destroyed) return;
+    this.proofing.set(p.info(this.#state.selection.head));
+  }
+
+  /** The findings that hold for the document now, with their positions (the view draws them). */
+  proofingFindings(): readonly LocatedFinding[] {
+    return this.#proofing?.locate() ?? [];
+  }
+
+  /** The identifier of the finding the last navigation chose, while it is shown. */
+  proofingCurrentId(): string | null {
+    return this.#proofing?.currentId() ?? null;
+  }
+
+  /**
+   * Moves the selection to the next finding after the caret (or the previous one), wrapping at the
+   * ends. False when there is none. The caret lands on the finding's text; nothing is changed.
+   */
+  proofingStep(direction: 1 | -1 = 1): boolean {
+    const p = this.#proofing;
+    if (!p) return false;
+    const sel = this.#state.selection;
+    const f = p.step(direction === 1 ? sel.to : sel.from, direction, sel.empty);
+    if (!f) return false;
+    this.dispatchTransaction(
+      this.#state.tr
+        .setSelection(TextSelection.create(this.#state.doc, f.from, f.to))
+        .scrollIntoView(),
+    );
+    this.#publishProofing();
+    return true;
+  }
+
+  /**
+   * Applies a suggestion of a finding as an ordinary edit (UX-042 criterion 2): it goes through the
+   * same guards as typing, and in suggestion mode it is recorded as a suggestion. In a scope the
+   * user may not change it is refused as any edit is (FE-036), and false is returned.
+   */
+  applyFinding(id: string, suggestion = 0): boolean {
+    const f = this.#proofing?.find(id);
+    const text = f?.suggestions[suggestion];
+    if (!f || text === undefined) return false;
+    if (!this.canEdit(f.scope)) {
+      this.#refused({ reason: this.#locked() ? 'read-only' : 'scope', scopes: [f.scope] });
+      return false;
+    }
+    const before = this.#state.doc;
+    this.dispatchTransaction(this.#state.tr.insertText(text, f.from, f.to));
+    return this.#state.doc !== before;
+  }
+
+  /** Whether a finding's suggestion can be applied now (the menu offers "apply" only then). */
+  canApplyFinding(id: string): boolean {
+    const f = this.#proofing?.find(id);
+    return f !== undefined && f !== null && f.suggestions.length > 0 && this.canEdit(f.scope);
+  }
+
+  /** Hides one finding until its text changes (UX-042 criterion 1). */
+  ignoreFinding(id: string, everywhere = false): boolean {
+    const p = this.#proofing;
+    if (!p) return false;
+    return everywhere ? p.ignoreEverywhere(id) : p.ignoreOnce(id);
+  }
+
+  /** Adds a finding's text to the port's custom dictionary and checks again (UX-042 criterion 3). */
+  addFindingToDictionary(id: string): Promise<boolean> {
+    return this.#proofing?.addToDictionary(id) ?? Promise.resolve(false);
+  }
+
+  /** The words of the custom dictionary for a language; null when the port has no dictionary. */
+  dictionaryWords(lang: string): Promise<string[] | null> {
+    return this.#proofing?.words(lang) ?? Promise.resolve(null);
+  }
+
+  /** Removes a word from the custom dictionary and checks again. */
+  removeDictionaryWord(word: string, lang: string): Promise<boolean> {
+    return this.#proofing?.removeWord(word, lang) ?? Promise.resolve(false);
   }
 
   // --- Suggestion mode (FE-041, FE-042, FE-043) ----------------------------------------------
@@ -1078,6 +1280,7 @@ export class DocumentCore implements DocumentApi {
     // Outside the check above: a change of mode alone moves suggestion mode too (FE-041).
     const scope = this.#scopeAt(state.selection.from);
     this.suggestion.set({ ...this.#suggestionIn(scope), scope });
+    this.#publishProofing();
     this.#publishSync();
   }
 
@@ -1235,6 +1438,7 @@ export class DocumentCore implements DocumentApi {
   setAccess(access: Access | null): void {
     this.#accessValue = access;
     this.permissions.set(access);
+    this.#proofing?.accessChanged();
     // `read_only` ends when an access with a newer revision grants a write capability again.
     if (
       this.#readOnly &&
@@ -1854,8 +2058,13 @@ export class DocumentCore implements DocumentApi {
   }
 
   #selectionEditable(): boolean {
-    if (this.#locked()) return false;
     const { from, to } = this.#state.selection;
+    return this.#spanEditable(from, to);
+  }
+
+  /** Whether the user may change the scopes at both ends of a span, and the document is not locked. */
+  #spanEditable(from: number, to: number): boolean {
+    if (this.#locked()) return false;
     return this.canEdit(this.#scopeAt(from)) && this.canEdit(this.#scopeAt(to));
   }
 
@@ -1932,6 +2141,98 @@ export class DocumentCore implements DocumentApi {
     if (this.#activeField === id) return;
     this.#activeField = id;
     this.revision.set(this.revision.get() + 1);
+  }
+
+  /** The limits of an equation's source (I7; 09 §6.3): code points, and levels of braces. */
+  readonly equationLimits = { length: LATEX_MAX_CODE_POINTS, depth: MATH_NESTING_MAX } as const;
+
+  /** The limit a source breaks, or null: what `confirmEquation` would refuse it for. */
+  checkEquationSource(latex: string): 'too-long' | 'too-deep' | null {
+    return latexRefusal(latex);
+  }
+
+  /** The equation at `pos` as the math editor takes it; null when that is not an equation. */
+  equationAt(pos: number): EquationTarget | null {
+    if (!Number.isInteger(pos) || pos < 0 || pos >= this.#state.doc.content.size) return null;
+    const node = this.#state.doc.nodeAt(pos);
+    if (!node || !EQUATION_NODES.has(node.type.name)) return null;
+    const latex = node.attrs['latex'];
+    return { pos, latex: typeof latex === 'string' ? latex : '', display: node.isBlock };
+  }
+
+  /** The equation the person selected (a node selection holds it), or null (FE-070). */
+  selectedEquation(): EquationTarget | null {
+    const selection = this.#state.selection;
+    return selection instanceof NodeSelection ? this.equationAt(selection.from) : null;
+  }
+
+  /**
+   * Selects the equation at `pos` (a node selection), as the math editor does when it closes: a
+   * rejection with the action `reload` replaces the document and its selection, and focus is to
+   * return to the equation (FE-070 criterion 6). False when there is no equation at `pos`.
+   */
+  selectEquation(pos: number): boolean {
+    if (!this.equationAt(pos)) return false;
+    if (this.selectedEquation()?.pos !== pos)
+      this.dispatchTransaction(
+        this.#state.tr.setSelection(NodeSelection.create(this.#state.doc, pos)),
+      );
+    return true;
+  }
+
+  /**
+   * Asks the shell to open the math editor on the equation at `pos` (default: the selected one),
+   * as a double click or Enter on it does. False when there is no equation there.
+   */
+  requestEquationEdit(pos?: number): boolean {
+    const target = pos === undefined ? this.selectedEquation() : this.equationAt(pos);
+    if (!target) return false;
+    this.equationRequest.set({ ...target, n: ++this.#equationRequests });
+    return true;
+  }
+
+  /**
+   * Whether this person may change the equation at `pos` now, and why not when they may not
+   * (`read-only` in a locked document or a scope without `edit`, `suggestion` where suggestion mode
+   * is on; the equation's own source is what is checked, so a limit is not the reason).
+   */
+  equationAccess(pos: number): { readonly canEdit: boolean; readonly reason?: string } {
+    const target = this.equationAt(pos);
+    if (!target) return { canEdit: false, reason: 'not-equation' };
+    const state = this.queryCommand('setEquationLatex', {
+      equation: { pos, latex: target.latex },
+    });
+    if (state.enabled) return { canEdit: true };
+    return { canEdit: false, reason: state.reason ?? 'read-only' };
+  }
+
+  /**
+   * Confirms an equation's new source (FE-070): the change is one commit (`setEquationLatex`), and
+   * the answer waits for the document service to accept or reject it, so that a rejection by the
+   * math gate (I8) is told to the person who typed the source. A source the command refuses
+   * changes nothing. A rejected commit is taken back by the sync client (the equation keeps its old
+   * source); `message` is the service's reason. With no answer within `timeoutMs` (default 15 s)
+   * the change stays queued and `confirmed` is false.
+   */
+  async confirmEquation(
+    pos: number,
+    latex: string,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<EquationConfirmation> {
+    const args = { equation: { pos, latex } };
+    const state = this.queryCommand('setEquationLatex', args);
+    if (!state.enabled) return { ok: false, reason: state.reason ?? 'read-only' };
+    const before = this.#problems;
+    if (!this.exec('setEquationLatex', args)) return { ok: false, reason: 'read-only' };
+    try {
+      await this.flush({ timeoutMs: options.timeoutMs ?? 15_000 });
+    } catch {
+      return { ok: true, confirmed: false };
+    }
+    const problem = this.problem.get();
+    if (problem && this.#problems > before && !problem.fatal)
+      return { ok: false, reason: 'rejected', message: problem.message };
+    return { ok: true, confirmed: true };
   }
 
   /**
@@ -2015,12 +2316,14 @@ export class DocumentCore implements DocumentApi {
    */
   setThreadRange(threadId: string, range: { from: number; to: number }, seq: number): void {
     this.#comments.set(threadId, range, seq);
+    for (const api of this.#extApis) api.commentNoted(threadId);
     this.#publishThreadRanges();
   }
 
   /** Removes a thread's range (the thread was deleted) (FE-048). */
   removeThreadRange(threadId: string): void {
     this.#comments.remove(threadId);
+    for (const api of this.#extApis) api.commentNoted(threadId);
     this.#publishThreadRanges();
   }
 
@@ -2574,12 +2877,17 @@ export class DocumentCore implements DocumentApi {
    * take, and a selection the user may not change, change nothing and say why.
    */
   insertContent(fragment: CdmFragment): InsertResult {
+    const { from, to } = this.#state.selection;
+    return this.#insertFragment(fragment, from, to);
+  }
+
+  /** `insertContent` for any span: the extension API's `insertBlocks` (UX-053) calls it with a held range. */
+  #insertFragment(fragment: CdmFragment, from: number, to: number): InsertResult {
     const problem = fragmentProblem(fragment, CDM_VERSION, this.#requires);
     if (problem) return { ok: false, ...problem };
     if (fragment.content.length === 0) return { ok: true };
     const state = this.#state;
-    const { from, to } = state.selection;
-    if (!this.#selectionEditable()) {
+    if (!this.#spanEditable(from, to)) {
       const scopes = [...new Set([this.#scopeAt(from), this.#scopeAt(to)])];
       const reason = this.#locked() ? 'read-only' : 'scope';
       this.#refused({ reason, scopes });
@@ -2648,6 +2956,39 @@ export class DocumentCore implements DocumentApi {
     };
   }
 
+  /**
+   * The range-based API for one extension (UX-053; 13 §7.1). Each call gives an API of its own, with
+   * its own held ranges and subscriptions. Its writes go through the core dispatch, so they meet
+   * the guards and suggestion mode as typing does. It ends with dispose() or when the core is destroyed.
+   */
+  extensionApi(options: ExtensionApiOptions): ExtensionDocumentApi {
+    const api: ExtensionApi = new ExtensionApi(
+      {
+        state: () => this.#state,
+        seq: () => this.#sync.seq,
+        canView: (doc, pos) => this.#canView(this.#scopeIn(doc, pos)),
+        canEdit: (doc, pos) => !this.#locked() && this.canEdit(this.#scopeIn(doc, pos)),
+        dispatch: (tr) => {
+          const before = this.#state.doc;
+          const refusals = this.#refusals;
+          this.dispatchTransaction(tr);
+          const refused = this.#refusals > refusals ? this.refusal.get() : null;
+          return { changed: this.#state.doc !== before, refusal: refused ? refused.reason : null };
+        },
+        insertFragment: (fragment, from, to) => this.#insertFragment(fragment, from, to),
+        threads: () => this.#comments.ids().map((id) => ({ id, ...this.#comments.get(id)! })),
+        newId: () => this.#newId(),
+        requireFeature: (feature) => {
+          if (!this.#requires.includes(feature)) this.#requires.push(feature);
+        },
+        disposed: () => this.#extApis.delete(api),
+      },
+      options,
+    );
+    this.#extApis.add(api);
+    return api;
+  }
+
   // --- Panels (sub-editors) ------------------------------------------------------------------
 
   openFootnote(id: string): void {
@@ -2678,6 +3019,40 @@ export class DocumentCore implements DocumentApi {
     this.panel.set(null);
     this.revision.set(this.revision.get() + 1);
     this.focus();
+  }
+
+  /**
+   * Puts the caret at the start of the block with this identifier, or selects it when it holds no
+   * text, and scrolls it into view (UX-067 criterion 1; the checker, the outline and the export
+   * diagnostics use it). False, and nothing changes, when there is no such block in the body or a
+   * region, when it is in a header, a footer or a footnote (those have their own panels), or when
+   * the reader may not view its scope.
+   */
+  selectBlock(id: string): boolean {
+    const doc = this.#state.doc;
+    let at = -1;
+    doc.descendants((node, pos) => {
+      if (at >= 0) return false;
+      const type = node.type.name;
+      if (type === 'defs' || type === 'story' || type === 'footnote') return false;
+      if (node.isBlock && node.attrs['id'] === id) at = pos;
+      return at < 0;
+    });
+    if (at < 0) return false;
+    if (!this.#canView(this.#scopeIn(doc, at))) return false;
+    const node = doc.nodeAt(at)!;
+    let selection: Selection | null = null;
+    if (node.isTextblock) selection = TextSelection.create(doc, at + 1);
+    else {
+      const inside = Selection.findFrom(doc.resolve(at + 1), 1, true);
+      if (inside && inside.from < at + node.nodeSize) selection = inside;
+      else if (NodeSelection.isSelectable(node)) selection = NodeSelection.create(doc, at);
+    }
+    if (selection === null) return false;
+    // The view scrolls relative to the DOM selection, which is in the editor only once it has focus.
+    this.focus();
+    this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
+    return true;
   }
 
   focus(): void {
@@ -2721,6 +3096,7 @@ export class DocumentCore implements DocumentApi {
 
   attach(channel: SyncChannel, opts: AttachOptions): () => void {
     if (this.#session) throw new Error('a channel is already attached');
+    this.#docId = channel.docId;
     this.#sync = { ...this.#sync, seq: opts.seq, incarnation: opts.incarnation, view: opts.view };
     const sessionOpts = {
       ...(opts.sync ? { sync: opts.sync } : {}),
@@ -2736,6 +3112,7 @@ export class DocumentCore implements DocumentApi {
     this.connection.set('online');
     if (opts.features) this.setFeatures(opts.features);
     if (opts.assets) this.#attachedAssets = opts.assets;
+    const detachProofing = opts.proofing ? this.attachProofing(opts.proofing) : null;
     if (opts.user !== undefined) this.#user = opts.user;
     const session = new SyncSession(this.#host(), channel, sessionOpts);
     this.#session = session;
@@ -2773,6 +3150,7 @@ export class DocumentCore implements DocumentApi {
     this.#publish();
     return () => {
       session.end();
+      detachProofing?.();
       this.#presenceClient?.end();
       this.#presenceClient = null;
       if (this.#session === session) {
@@ -3081,6 +3459,9 @@ export class DocumentCore implements DocumentApi {
 
   destroy(): void {
     this.#destroyed = true;
+    for (const api of [...this.#extApis]) api.dispose();
+    this.#proofing?.dispose();
+    this.#proofing = null;
     this.#session?.end();
     this.#session = null;
     if (this.#flushTimer !== null) clearTimeout(this.#flushTimer);

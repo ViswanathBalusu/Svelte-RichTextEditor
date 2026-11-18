@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import example from '../../fixtures/example-03-12.json' with { type: 'json' };
 // Imported through the package entry point, so the test also proves other packages can reach it.
-import { resolveTableFormat } from '../index.ts';
+import { resolveParagraph, resolveTableFormat } from '../index.ts';
 import { type TreeNode, styleTable } from './styles.ts';
 
 type J = Record<string, unknown>;
@@ -132,5 +132,19 @@ describe('table borders and cell margins in the cascade (CDM-028)', () => {
     if (r.ok) return;
     expect(r.error.code).toBe('style_missing');
     expect(r.error.styleId).toBe('Missing');
+  });
+});
+
+describe('the borders of a table style are not paragraph borders', () => {
+  it('leaves the borders of a paragraph in a cell unset (found by EXP-078, with EXP-020)', () => {
+    const t = table([
+      { id: 'Grid', name: 'Grid', kind: 'table', borders: STYLE_BORDERS },
+      { id: 'Boxed', name: 'Boxed', kind: 'paragraph', borders: { top: GRID } },
+    ]);
+    const plain = resolveParagraph(t, undefined, { tableStyle: 'Grid' });
+    expect(plain.ok && plain.value.properties.borders).toBeNull();
+    // A paragraph style still gives its paragraphs borders inside a table.
+    const boxed = resolveParagraph(t, { style: 'Boxed' }, { tableStyle: 'Grid' });
+    expect(boxed.ok && boxed.value.properties.borders).toEqual({ top: GRID });
   });
 });

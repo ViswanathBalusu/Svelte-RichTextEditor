@@ -26,7 +26,7 @@ describe('PRO-035 the export stems agree across notifications, webhooks and DOM 
 
   it('has a progress notice and a DOM event, and no webhook (a webhook reports an end)', () => {
     expect(notifications.has('export.progress')).toBe(true);
-    expect(exportEvent(job('running')).name).toBe('de-export-progress');
+    expect(exportEvent(job('converting')).name).toBe('de-export-progress');
     expect(webhooks.has('dep.export.progress')).toBe(false);
   });
 

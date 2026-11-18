@@ -380,8 +380,7 @@ export const EN_GB = {
   'pane.roles': 'Roles',
   'roles.label': 'Roles of this document',
   'roles.empty': 'This document has no roles.',
-  'roles.readOnly':
-    'Changing the roles needs permission to change the structure of the document.',
+  'roles.readOnly': 'Changing the roles needs permission to change the structure of the document.',
   'roles.noFields': 'No field is assigned to this role.',
   'roles.fieldCount': {
     one: '{count} field is assigned to this role.',
@@ -412,8 +411,7 @@ export const EN_GB = {
   'roles.error.noChange': 'Nothing was changed.',
   'roles.error.noFeature': 'This document does not use fields, so it has no roles.',
   'roles.error.invalid': 'Some values are not valid. Check the marked fields.',
-  'roles.error.inUse':
-    'Fields are still assigned to this role, so it cannot be deleted. They are:',
+  'roles.error.inUse': 'Fields are still assigned to this role, so it cannot be deleted. They are:',
   'roles.legend': 'Roles',
   'announce.roles.added': 'Role added.',
   'announce.roles.changed': 'Role changed.',
@@ -518,6 +516,27 @@ export const EN_GB = {
   'announce.region.failed': 'The region could not be made.',
   'announce.language.set': 'Language set.',
   'announce.language.failed': 'The language could not be set here.',
+
+  // The math editor (FE-070). The equation's LaTeX is content; the words around it are not.
+  'dialog.math.title': 'Edit equation',
+  'dialog.math.visual': 'Equation editor',
+  'dialog.math.source': 'LaTeX source',
+  'dialog.math.hint':
+    'Edit the equation above, or type its LaTeX here. Escape closes without changing it.',
+  'dialog.math.loading': 'Loading the equation editor.',
+  'dialog.math.unavailable':
+    'The equation editor could not be loaded. You can still edit the LaTeX source.',
+  'dialog.math.readOnly': 'You cannot change this equation.',
+  'dialog.math.suggestion': 'An equation cannot be changed in suggestion mode.',
+  'dialog.math.refused': 'This equation cannot be changed now.',
+  'dialog.math.tooLong': 'The equation is longer than {max} characters.',
+  'dialog.math.tooDeep': 'The equation is nested more than {max} levels deep.',
+  'dialog.math.rejected': 'The document service did not accept this equation. Your input is kept.',
+  'dialog.math.rejectedWhy': 'Reason: {reason}',
+  'dialog.math.apply': 'Apply equation',
+  'dialog.math.applying': 'Checking the equation.',
+  'announce.equation.set': 'Equation changed.',
+  'announce.equation.rejected': 'The equation was not accepted.',
 
   // Comments (UX-028, UX-031). The comment and the names are content.
   'dialog.comment.title': 'New comment',
@@ -797,6 +816,33 @@ export const EN_GB = {
   'surface.body': 'Document',
   'surface.footnote': 'Footnote text',
   'surface.story': 'Header',
+
+  // Spelling and grammar findings (UX-041, UX-042; 13 §6.1). Shown only with a proofing port.
+  'command.proofing.next': 'Next spelling or grammar issue',
+  'command.proofing.previous': 'Previous spelling or grammar issue',
+  'status.proofing.label': 'Spelling and grammar',
+  'status.proofing.checking': 'Checking spelling and grammar',
+  'status.proofing.unavailable': 'Spelling and grammar check is not available',
+  'status.proofing.none': 'No spelling or grammar issues',
+  'status.proofing.count': {
+    one: '{count} spelling or grammar issue',
+    other: '{count} spelling or grammar issues',
+  },
+  'proofing.kind.spelling': 'Spelling',
+  'proofing.kind.grammar': 'Grammar',
+  'proofing.kind.other': 'Issue',
+  'proofing.finding': '{kind}: {text}. {message}',
+  'proofing.finding.suggestions': 'Suggestions: {suggestions}.',
+  'proofing.finding.nosuggestions': 'No suggestions.',
+  'proofing.none': 'No spelling or grammar issues to move to',
+  'menu.proofing.label': 'Spelling and grammar',
+  'menu.proofing.apply': 'Change to {suggestion}',
+  'menu.proofing.ignoreOnce': 'Ignore once',
+  'menu.proofing.ignoreAll': 'Ignore all',
+  'menu.proofing.addWord': 'Add to dictionary',
+  'proofing.applied': 'Changed to {suggestion}',
+  'proofing.ignored': 'Ignored',
+  'proofing.wordAdded': 'Added to the dictionary',
 } as const satisfies StringTable;
 
 export type StringKey = keyof typeof EN_GB;

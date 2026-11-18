@@ -39,6 +39,9 @@ export type {
   CoreQueryName,
   DocumentApi,
   EditMode,
+  EquationConfirmation,
+  EquationRequest,
+  EquationTarget,
   FieldArgs,
   FindResult,
   FindState,
@@ -77,6 +80,9 @@ export type { ClipboardInput } from './clipboard.ts';
 export { ReadValue, ViewHub, type ReadView, type Schedule } from './read-value.ts';
 export { editingSchema, definitionFor, headingLevel, type FootnoteModel } from './schema.ts';
 export type { SelectionShim } from './view-support.ts';
+export { imageSource, RASTER_IMAGE_TYPES } from './image-source.ts';
+export type { AssetImage, AssetImageLookup } from './image-source.ts';
+export type { EquationDrawer } from './equation-draw.ts';
 export type { Clock, ConnectionStatus } from './sync/session.ts';
 export type { Discarded } from './sync/state.ts';
 export {
@@ -85,3 +91,17 @@ export {
   type JournalPort,
   memoryJournal,
 } from './sync/journal.ts';
+export type {
+  LocatedFinding,
+  ProofingClock,
+  ProofingFindingInfo,
+  ProofingPort,
+  ProofingInfo,
+  ProofingState,
+} from './proofing.ts';
+export type {
+  AssistantRequest,
+  AssistantRequestContext,
+  AttachmentOut,
+  HostAttachment,
+} from './assistant-context.ts';

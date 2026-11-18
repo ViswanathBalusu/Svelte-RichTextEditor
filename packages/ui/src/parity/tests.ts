@@ -45,6 +45,15 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/src/view/fe-131-table-style.universal.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when EXP-085 closed (2026-11-17). No browser spec presses the download yet: the links
+  // are the tests of the archive the download hands out, which run the converter and read it back.
+  [
+    'export-latex',
+    [
+      { path: 'packages/export-latex/src/archive.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-085-licences.test.ts', kind: 'unit' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

@@ -126,6 +126,8 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `view.permissions` | regions-and-permissions |
 | `view.checker` | accessibility-checker |
 | `view.sources` | citations |
+| `view.fieldProperties` | fields-and-forms |
+| `view.roles` | fields-and-forms |
 | `view.fillSummary` | fields-and-forms |
 | `format.painter` | format-painter |
 | `format.applyFormat` | format-painter |
@@ -134,6 +136,8 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `review.comment` | comments |
 | `document.export` | export-pdf |
 | `document.print` | export-pdf |
+| `proofing.next` | spelling-and-grammar |
+| `proofing.previous` | spelling-and-grammar |
 | `view.zoomIn` | zoom |
 | `view.zoomOut` | zoom |
 | `view.zoomReset` | zoom |

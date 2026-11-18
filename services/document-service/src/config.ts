@@ -35,6 +35,11 @@ export interface ServiceConfig {
    * and `exports` of the control plane when a compile worker can serve them (ADR 0054).
    */
   features: string[] | null;
+  /**
+   * The rebase window in steps (`maxRebaseSteps`, 04 §12): how far behind the head a commit or a
+   * thread's `baseSeq` may be. Null keeps the protocol default; a test sets a small one.
+   */
+  maxRebaseSteps: number | null;
   /** The key of view tokens, shared by both planes (ADR 0019 change 1); null draws one. */
   viewKey: Uint8Array | null;
   /** Export targets the compile worker supports (PRO-063). */
@@ -135,6 +140,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   signingJwk: null,
   tenantsFile: null,
   features: null,
+  maxRebaseSteps: null,
   viewKey: null,
   exportTargets: ['pdf'],
   workers: 2,
@@ -297,6 +303,10 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     signingJwk: signing ? (JSON.parse(signing) as Record<string, unknown>) : null,
     tenantsFile: env['DOCEDIT_TENANTS_FILE'] ?? null,
     features: env['DOCEDIT_FEATURES'] === undefined ? null : list(env['DOCEDIT_FEATURES'], []),
+    maxRebaseSteps:
+      env['DOCEDIT_MAX_REBASE_STEPS'] === undefined
+        ? null
+        : int(env, 'DOCEDIT_MAX_REBASE_STEPS', 1),
     viewKey: env['DOCEDIT_VIEW_KEY'] ? Buffer.from(env['DOCEDIT_VIEW_KEY'], 'base64') : null,
     exportTargets: list(env['DOCEDIT_EXPORT_TARGETS'], DEFAULTS.exportTargets),
     node: env['DOCEDIT_NODE_ID'] ?? `${hostname()}-${process.pid}`,
