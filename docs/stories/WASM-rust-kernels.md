@@ -176,7 +176,7 @@ As a maintainer, I want the kernel to break a whole paragraph into lines in one 
 - [ ] Re-breaking an edited paragraph reuses cached shaping for runs that did not change.
 - [ ] Golden tests in Node.js lock the line breaks of the shared corpus.
 
-**Notes:** C-RUST, phase 3. Knuth and Plass's algorithm is not in scope: 09 §7 says TeX's paragraph builder is not rebuilt in the browser (assessment §5).
+**Notes:** C-RUST, phase 3. Knuth and Plass's algorithm is not in scope: 09 §7 says TeX's paragraph builder is not rebuilt in the browser (assessment §5). Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold. S10 (SPK-023) chose first-fit line breaking in TypeScript, and both prototypes gave identical breaks and widths (ADR 0016, "Result of S10"), so a Rust line breaker has no reason to exist. The story also depends on WASM-006 and WASM-007, which are blocked. Line breaking in TypeScript belongs to the layout engine's own stories (FE-076, FE-081); the S10 prototype in `packages/perf/src/kernel/` is measurement code and its golden results are not the shared-corpus golden tests of the last criterion.
 
 ### WASM-009 Hyphenation with TeX patterns
 
