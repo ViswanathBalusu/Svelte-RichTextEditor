@@ -3317,6 +3317,128 @@
         "source"
       ]
     },
+    "AuditSegment": {
+      "title": "AuditSegment",
+      "description": "A log segment for third-party verification (08 section 12; HIS-037).",
+      "$comment": "08 §12; 13 §10",
+      "type": "object",
+      "properties": {
+        "format": {
+          "description": "The segment format, docedit-audit-segment/1.",
+          "type": "string"
+        },
+        "doc": {
+          "description": "The document.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "from": {
+          "description": "The first seq held, not below the caller gate.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to": {
+          "description": "The last seq held.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "head": {
+          "description": "The head of the segment: the last seq and that record hash.",
+          "type": "object",
+          "properties": {
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "chainHead": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "seq",
+            "chainHead"
+          ]
+        },
+        "commits": {
+          "description": "The hashed metadata of each record, its payload hash, the link to the previous hash and its own hash.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "anchors": {
+          "description": "The anchor records whose seq lies in the range.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "instructions": {
+          "description": "How to verify the segment offline.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "doc",
+        "from",
+        "to",
+        "head",
+        "commits",
+        "anchors",
+        "instructions"
+      ]
+    },
+    "SuggestionIntroduction": {
+      "title": "SuggestionIntroduction",
+      "description": "The commit that introduced a suggestion (08 section 14; HIS-042).",
+      "$comment": "08 §14",
+      "type": "object",
+      "properties": {
+        "suggestion": {
+          "description": "The suggestion identifier.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{16}$"
+        },
+        "time": {
+          "description": "The server time of the introducing commit, ISO 8601 UTC.",
+          "type": "string"
+        },
+        "user": {
+          "description": "The user who introduced it, as `sub`.",
+          "type": "string"
+        },
+        "origin": {
+          "description": "The origin of the introducing commit.",
+          "type": "string"
+        },
+        "seq": {
+          "description": "The seq of the introducing commit; absent when it lies below the caller gate.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "suggestion",
+        "time",
+        "user",
+        "origin"
+      ]
+    },
     "TenantKeyView": {
       "title": "TenantKeyView",
       "description": "A registered public key of a tenant (UX-077; 05 section 3.2).",
