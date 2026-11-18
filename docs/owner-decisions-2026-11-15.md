@@ -119,6 +119,98 @@ The owner answered these in the working session of 2026-11-17. They are settled 
 | 101 | `Idempotency-Key` on `replaceContent` | BE-037 | Accepted. |
 | 102 | Anchor of a Word comment | EXP-093 | The exact range of text the thread is on. |
 | 103 | Store of performance results | FND-007 | A dedicated branch in the repository. |
+| 104 | Access against the commit that created a region | PRM-006 | The region-listing rule is enough; the engine does no extra tracking. Criterion 1 is reworded. |
+| 105 | The rebuild and verify tool and "heavy work off the event loop" | SYN-039 | The command-line tool is exempt. |
+| 106 | CPU limit of the math gate | EXP-051 | A tunable limit; the default comes from a measurement on the reference machine. Open until measured. |
+| 107 | Where the secrets criterion is judged | SEC-048 | On the demo stack, with secrets split per service; checked again on a real deployment later. |
+| 108 | Source file of an imported document | EXP-098 | The document is created first, the source file is attached to it, then the content is written. A failed import removes the document. |
+| 109 | Time of a suggestion | FE-046 | The server's time at acceptance of the commit. |
+| 110 | Quota refusals | UX-078 | Every refusal names the quota kind: socket error, `sync.reject` and the REST problem. |
+| 111 | "Accept" in a suggestion export | EXP-081 | Checked per suggestion against the requester's grants. The payload carries the owners of the suggestion ids and the requester's grants. |
+| 112 | "Signing keys" in the administration API | UX-076 | Both token keys and PDF sealing keys, as separate sections. |
+| 113 | Mail sink for tests | UX-098 | Mailpit, in a container with a pinned image. |
+| 114 | Height of a table row before splitting | EXP-039, EXP-003 | From the editor's own page layout. No first compile pass. |
+| 115 | Layer that owns rule P3 | PRO-110, PRO-111 | The pure engine (the authority), so every backend enforces it and the kit covers it. The owner was given a short description of P3, not its text. |
+| 116 | Key that shows the access letters | UX-012 | Alt pressed and released alone (ADR 0231 option A). |
+| 117 | States of a side pane | UX-023 | Open and closed only. The criterion is reworded. |
+| 118 | Who switches on tracked changes for everyone | UX-038 | `manage` only. |
+| 119 | An assistant's direct edit | UX-046, UX-044 | Refused by the server. An assistant's output arrives as suggestions only. |
+| 120 | Sandboxed third-party extensions | UX-059, UX-060, SEC-055 | Build them. This reverses the spec default (tier 2 not built); the spec changes. |
+| 121 | Dark and high-contrast themes | UX-070 | In the start chunk, as built. |
+| 122 | A data-loss hook that does not answer | UX-086 | Fail closed: refused with `unavailable` and an audit entry. |
+| 123 | Remote images in pasted HTML | FE-054 | Fetched and stored as assets. This reverses the built default (dropped). The fetch goes through the egress proxy with its policy; the design goes in an ADR before it is built. |
+| 124 | Switch to the read view with unsent work | FE-065 | The session keeps running behind the read view (ADR 0304 option a). |
+| 125 | Font substitutes | FE-062 | A `substitutes` field in `GET /fonts`, with `defaultFamily` as the fallback (ADR 0144). |
+| 126 | Citation style | FE-140, EXP-121 | Selectable styles, not the house style alone. This reverses the proposed default. The web view and the PDF must offer the same styles; with decision 16 the PDF side is a biblatex style option run through biber. How the styles are chosen and stored goes in an ADR. |
+| 127 | A format change made as a suggestion | FE-128 | The format mark stays on the text alongside the suggestion, as built. Criterion 7 is reworded. |
+| 128 | "Structure" per region | PRM-063 | Grantable per region. This reverses ADR 0033 item 4 (document level only); the role-table stories follow the new rule, and the design goes in an ADR first. |
+| 129 | Titles of confidential regions; owners | PRM-066 | Titles hidden. Owners always see everything (pending items 21 and 23). |
+| 130 | Split and merge of a region | PRM-065, PRM-034 | The part that keeps the id keeps grants, state and policy; the other part gets a fresh id (ADR 0033 item 3). |
+| 131 | Comments while a document is out for signing | FRW-085 | Always on. |
+| 132 | Long answers under a workflow lock | FRW-086, FRW-012 | The participant may edit their granted region while the document is locked (review SR-M26, option a). |
+| 133 | What is sealed when values are hidden from some participants | FRW-049, FRW-089, FRW-050 to FRW-055 | One sealed full PDF for the owner and a sealed view per participant, with evidence of what each saw (pending item 4). |
+| 134 | Quota for region-only editors | PRM-064 | None. The 16 MiB risk is recorded (ADR 0033 item 5). |
+| 135 | A pending change after a broken lease | PRM-045 | Accepted if the former holder's grants allow it. Criterion 4 is reworded (ADR 0146). |
+| 136 | Bus between nodes in stage 2 | BE-059, BE-060, BE-062, BE-063, BE-028 | Valkey streams (pending item 15). |
+| 137 | Partitions of the commit log | BE-008, BE-009 | 64 (ADR 0020). |
+| 138 | Caching of pinned reads | BE-036 | Private only (D70, pending item 31). |
+| 139 | Read-only follower nodes | SYN-042 | Not before stage 3, on demand. A submission on a follower is refused with `read_only` (ADR 0147). |
+| 140 | Default history gate | HIS-023 to HIS-026, HIS-046 | ADR 0034: `editors` see full history, everyone else named versions only; an owner may change it per document. |
+| 141 | History "from when they got access" | HIS-025 | Starts at the state current at that moment, as built. |
+| 142 | Hidden commits in an exported log | HIS-037 | Left out, with one link hash revealed, as built. Whether the names of hidden region scopes may show is still open. |
+| 143 | Public transparency log | SEC-063 | Yes: chain heads are anchored in a public log. This reverses the proposed default (none in version 1). The choice of log goes in an ADR. |
+| 144 | Word constructs the model cannot hold | EXP-101, EXP-102, EXP-103, EXP-109 | Kept as preserved blocks (A2, ADR 0017, pending item 13). The criteria are reworded. |
+| 145 | Charts and SmartArt from Word | EXP-117 | A labelled placeholder; the original is preserved (pending item 11). The tagpdf table module question of EXP-041 is still open. |
+| 146 | Sandbox of the compile workers | EXP-069 | gVisor (ADR 0045), still to be measured. |
+| 147 | Forced line breaks (parity level L2) | EXP-059 | Build them. This reverses the proposed default (not built). |
+| 148 | Default locale and time zone of an export | EXP-005, EXP-033 | The document's language, else `en-GB`, and UTC (ADR 0045 q5). Date fields print the stored day in UTC. |
+| 149 | A figure's `align` and its caption | EXP-028 | The caption does not move (ADR 0223 decision 12). |
+| 150 | Raw compile log | EXP-066 | Callers without `edit` get the job without a log URL, as built. |
+| 151 | Grants and rules parts of an exported DOCX | EXP-095 | The host decides what it passes, as built. |
+| 152 | Audience of the lossless DOCX export | pending item 1 | Only a requester who sees the whole document. |
+| 153 | Active content in imports | pending item 12, SEC-039 | Preserved, never run, and reported. SEC-039 is reworded to "kept and reported". |
+| 154 | Tables in headers and footers | pending item 7 | Allowed. |
+| 155 | Time zone of `now` in rules | pending item 29 | The tenant's time zone. This reverses the proposed default (UTC). The tenant setting and its default go in an ADR. |
+| 156 | Who reads hidden values | pending item 22 | The assignee role, `manage`, and grant holders. |
+| 157 | Deleting a field the reader cannot read | pending item 5 | Only with `manage`. |
+| 158 | Timing of read restrictions | pending item 6 | Confidential regions in phase 1b; hidden values with the workflow in phase 2. |
+| 159 | A `manage` user and other users' export jobs | pending item 30 | Not readable. |
+| 160 | A service credential changing grants alone | pending item 32 | Allowed; audited as the host. |
+| 161 | Interface locales | pending item 35 | en-GB plus pseudo-locales. |
+| 162 | Picture cropping, text prediction, translation, read aloud | pending item 37 | Left out of version 1. |
+| 163 | Nested archives in uploads | pending item 41 | Allowed under `word/embeddings/`, never expanded. |
+| 164 | Editors creating preserved Word data | pending item 2 | No. Preserved blocks come from imports only. |
+| 165 | Phase 2 | pending item 9 | Split into 2a and 2b. |
+| 166 | Resume and catch-up limits | pending item 34, HIS-023 | A resume beyond 5,000 commits or 5 MiB reloads (ADR 0034). Starting values, tunable by operators. |
+| 167 | A region grant against a document role | pending item 15 | A region grant cannot lower a document role. |
+| 168 | Key that moves focus into the floating format bar | UX-010 | Alt+F10. |
+| 169 | The four markup views | UX-035 | As built (ADR 0233 d4): `all`, `simple`, `none` (as if accepted), `original` (as if rejected). |
+| 170 | Search synonyms for commands | UX-011 | In the locale tables (13 §8). |
+| 171 | Choices of the accessibility checker | UX-066, UX-068 | As built: 4.5:1 contrast, heading levels 1 to 9, headers and footers included, no "decorative image" mark (ADR 0329, ADR 0137). |
+| 172 | Identity of an assistant | UX-044, UX-045, UX-046 | ADR 0234 A: a separate agent token derived from the user's, capped by the room at `suggest`. |
+| 173 | Extension API | UX-049, UX-055 | ADR 0234 B accepted, with the commit origin hint `extension` (04 changes) and the deprecation window. |
+| 174 | `DEP-Actor` | UX-096, UX-097 | Tightened against the proposal: a service credential acting for a user is bounded by that user's rights, and the audit trail records the credential as well as the user. A security review is still required. |
+| 175 | Discovery and tenant export bundles | UX-087, UX-088 | ADR 0373 accepted, with its new DEP operation. |
+| 176 | A client without an extension the document uses | UX-056, UX-057 | The document opens; the custom block shows as a locked placeholder and is kept untouched. The refusal code for an attempt to edit it, and the size limit of inline custom content, are still open (ADR 0328 d2). |
+| 177 | Webhook test ping and delivery replay | UX-079, PRO-068, BE-057 | Both, on the routes ADR 0330 §2 proposes. |
+| 178 | `keepNext` against widow control | FE-082, FE-085 | A `keepNext` chain wins (ADR 0120, ADR 0206). The other fixtures of those ADRs were not put to the owner. |
+| 179 | Page guides after an edit | FE-068 | Kept; `seq` is not compared (open question 28). |
+| 180 | Performance definitions | FE-119, FE-120 | ADR 0209 accepted. The owner was given a paraphrase of its definitions; figures are still to be measured. |
+| 181 | Listeners left on `document` while suspended | FE-005 | Accepted. The criterion is reworded. |
+| 182 | Layout cascade | FE-077 | Switched to the model's resolver (ADR 0304 item 3). `toFlow` fixtures are re-approved. |
+| 183 | Scope of block-level suggestions | PRM-062, PRM-013, PRM-014 | ADR 0146 and ADR 0132 as proposed: `style`, `align` and `numbering` only. |
+| 184 | The workflow design ADRs | FRW-027 to FRW-080 | Accepted as a set: ADR 0249, 0250, 0148, 0340, 0341, 0342, 0343, 0252 and 0366, with the proposals in the notes of FRW-039, 044, 045, 054, 055, 062, 063, 071 and 080. `Idempotency-Key` on the prefill route (FRW-061) is part of ADR 0342. |
+| 185 | Code for a declined or voided document | FRW-018, FRW-020, FRW-022, FRW-029 | `read_only`, as built. Restore under a workflow lock answers `conflict`, as built. Every rule problem is refused at save (ADR 0340). |
+| 186 | A value typed and not yet acknowledged | FRW-076 | Resubmitted once on return, without a "recovered edit" offer. Criterion 5 is reworded. |
+| 187 | Message of `validation.pattern` | FRW-018 | The field definition carries an optional message (ADR 0030 item 3; the model gains the member). |
+| 188 | Result of `exec()` | PRO-085 | `{ok, reason}`, not a boolean. This reverses the built default. |
+| 189 | Answer to an upload | PRO-096, PRO-097 | The asset id, as built. |
+| 190 | Features the reference service announces | PRO-115 | Comments, history and leases are on by default. This reverses the built default (ADR 0315). |
+| 191 | Test-mode timers | PRO-109, PRO-043 | 60 s, with a guard against production use and a security review of the switch. |
+| 192 | Fault-injection hooks | PRO-126, PRO-024 | ADR 0219 accepted: the hooks and the `test-hooks` feature exist only in test mode. |
+| 193 | Wire format of the authority service | PRO-102 | Accepted as the starting point; it may be refined while it is built and measured. |
+| 194 | Close for a silent client | PRO-037, PRO-111, BE-093 | The server sends a proper close (1000 or 1001) instead of dropping the connection. The mapping of the 1009 close is still open. |
+| 195 | `node_leases` without a tenant column | BE-011 | Allowed (ADR 0332). The rule is reworded to tables that hold tenant data. |
 
 The owner chose to be asked every remaining decision, including the engineering ones.
 
