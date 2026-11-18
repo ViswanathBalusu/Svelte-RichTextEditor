@@ -485,6 +485,18 @@ The authority service is the project's authority package behind a network interf
 
 The service keeps recently used documents in memory and can rebuild any of them from storage, so it holds no state that matters. It has its own conformance profile.
 
+### 10.1 The history calls
+
+`restoreSteps`, `diff` and `attribution` are `POST` calls on a state, with canonical JSON bodies (ADR 0314 decision 3; ADR 0395, proposed, accepted as the starting point by owner decision 193). Every request names who asks: `requester` (`sub`, `session`, `role`, `groups`) and `permissions` (as `applyCommit`), and may carry `gate` (`{ min, named }`, 07 §8) and `now` (Unix milliseconds). The service computes the requester's access and hidden set from them. It plans and reports; it applies nothing and keeps nothing. A request the history rules refuse is an answer, `200` with `{ refused: { code, reason } }`, where `code` is `forbidden`, `not_found`, `conflict`, `workflow_active` or `validation_failed`. A malformed request is `invalid_request`, an unknown state `unknown_state` (the caller opens it again), and a seq below the checkpoint the state was opened from `not_found`.
+
+| Call and route | Request (besides the common fields) | Response |
+|---|---|---|
+| `restoreSteps`: `POST /v1/authority/states/{stateId}/restore-steps` | `toSeq`; optional `region`, `dryRun`, `retired`, `idSalt` | `{ kind: "steps", region, steps, parts }` or `{ kind: "snapshot", reason: "restore", region?, fallback?, content }`; in both `toSeq`, `headSeq`, `reidentified`, `recreated`, `replaced`, `preconditions` (what `applyCommit` checks again, 04 §5), `unchanged`, and, for a dry run, `dryRun` (the comparison from the head to the result) |
+| `diff`: `POST /v1/authority/states/{stateId}/diff` | `fromSeq`, `toSeq`; optional `region`, `granularity` (`word` or `char`) | `{ comparison }` as the history package defines it (08 §7) |
+| `attribution`: `POST /v1/authority/states/{stateId}/attribution` | optional `seq` (the head when absent), `region`, `blocks` (block identifiers) | `{ seq, blocks }`: for each block its `id`, `type`, `region`, `from` and `to`, and its runs (`from`, `len`, `user`, `seq`, and `agent`, `restoredBy`, `restoredSeq` when they apply). A block in a region the requester may not see is `not_found` |
+
+The attribution map is replayed from a baseline at the checkpoint the state was opened from: `checkpointRef` may carry `attribution` (the saved map) and `createdBy`, and a map that does not cover the checkpoint is refused at `open`.
+
 ## 11. Conformance
 
 The conformance kit is a black-box test runner in a container.
