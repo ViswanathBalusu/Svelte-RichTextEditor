@@ -944,6 +944,15 @@ export interface HistoryPaneResult {
   readonly namedOnly: boolean;
 }
 
+/** What the user typed to name a version (HIS-006): a name and an optional note, both plain text. */
+export interface HistoryVersionInput {
+  readonly name: string;
+  readonly note: string | null;
+}
+
+export type HistoryVersionResult =
+  { readonly ok: true } | { readonly ok: false; readonly reason: 'forbidden' | 'failed' };
+
 /** A choice the filters offer: a region, a field or a person (HIS-009 criterion 2). */
 export interface HistoryChoice {
   readonly id: string;
@@ -963,6 +972,17 @@ export interface HistoryChoices {
 export interface HistoryPort {
   list(query: HistoryPaneQuery): Promise<HistoryPaneResult>;
   choices(): Promise<HistoryChoices>;
+  /**
+   * Names the current state of the document (HIS-006; `POST /versions`). Present only when the
+   * host lets this user name versions (`edit` somewhere in the document, 07 §12); the command to
+   * name a version is offered only then. The service's refusal comes back as `forbidden`.
+   */
+  createVersion?(input: HistoryVersionInput): Promise<HistoryVersionResult>;
+  /**
+   * Called by the host when the list may have changed (a version was named, for instance); the
+   * pane then asks again. Returns the function that stops the calls.
+   */
+  onChange?(listener: () => void): () => void;
   /** The host's directory (UX-025); null for an identifier the host does not know, such as an erased person. */
   readonly resolveUsers?: ResolveUsers;
 }

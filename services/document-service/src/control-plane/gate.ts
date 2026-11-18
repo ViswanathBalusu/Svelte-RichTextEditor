@@ -17,11 +17,12 @@ import {
   type RegionInfo,
   computeAccess,
   editsSomewhere,
-  minVisibleSeq,
+  minVisibleSeqAsync,
   regionPolicyOf,
 } from '@docedit/authority';
 import type { JsonNode } from '@docedit/model';
 import type { DocRef, DocumentRecord, LogStore } from '../storage/types.ts';
+import { stateAllowed } from '../data-plane/gate.ts';
 import { regionsOfJson } from './content.ts';
 import type { Caller } from './pipeline.ts';
 import { ApiError } from './problems.ts';
@@ -72,6 +73,20 @@ export function requireRow(
   if (!verdict.ok) throw new ApiError('forbidden', `${verdict.reason} (07 §12)`);
 }
 
+/**
+ * Whether the connection holds `edit` somewhere in the document (07 §12). The rule is the
+ * authority's `editsSomewhere`, the same one that decides who sees full history (08 §9); routes
+ * that need the answer for another purpose ask here and do not call the authority themselves.
+ */
+export function holdsEditSomewhere(
+  conn: Connection,
+  regions: readonly RegionInfo[],
+  perms: PermissionState,
+  now: number,
+): boolean {
+  return editsSomewhere(conn, regions, perms, now);
+}
+
 function settingOf(record: DocumentRecord): HistoryVisibility {
   const s = record.historyVisibility as HistoryVisibility;
   return HISTORY_VISIBILITIES.includes(s) ? s : DEFAULT_HISTORY_VISIBILITY;
@@ -93,36 +108,21 @@ export async function minVisibleSeqOf(opts: {
 }): Promise<number> {
   const conn = connectionOn(opts.caller, opts.ref.doc);
   if (!conn) return 0;
-  const setting = settingOf(opts.record);
   const edits = editsSomewhere(conn, opts.regions, opts.perms, opts.now);
-  if (setting !== 'since_access')
-    return minVisibleSeq({
-      setting,
-      editsSomewhere: edits,
-      head: opts.head,
-      timeOf: () => undefined,
-    });
-  const since = opts.caller.identity?.accessSince;
-  if (since === undefined) return opts.head;
-  // The last commit stored at or before `since`; commit times are taken as non-decreasing.
-  let lo = 1;
-  let hi = opts.head;
-  let found = 0;
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    const [c] = await opts.logs.read(opts.ref, mid, mid);
-    if (c && c.time <= since) {
-      found = mid;
-      lo = mid + 1;
-    } else hi = mid - 1;
-  }
-  return found;
+  // The rule is the authority's; only the reading of commit times from storage is done here.
+  return minVisibleSeqAsync({
+    setting: settingOf(opts.record),
+    editsSomewhere: edits,
+    accessSince: opts.caller.identity?.accessSince,
+    head: opts.head,
+    timeOf: async (seq) => (await opts.logs.read(opts.ref, seq, seq))[0]?.time,
+  });
 }
 
 /** Refuses a `seq` below the caller's gate (07 §8; PRM-041): the same answer on every route. */
 export function refuseBelowGate(seq: number, min: number, head: number, what = 'seq'): void {
   // A single state at the head is always visible (ADR 0034).
-  if (seq >= min || seq === head) return;
+  if (stateAllowed(min, seq, head)) return;
   throw new ApiError(
     'forbidden',
     `the ${what} is below the history visibility of the caller (07 §8)`,
