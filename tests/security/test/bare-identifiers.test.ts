@@ -58,6 +58,9 @@ const CATALOGUE: Record<string, 'probed' | 'not-served'> = {
   'GET /webhooks/{id}': 'not-served',
   'PATCH /webhooks/{id}': 'not-served',
   'DELETE /webhooks/{id}': 'not-served',
+  // UX-079 (ADR 0330 section 2): the test-ping and the replay of one delivery name a webhook by its own identifier.
+  'POST /webhooks/{id}/ping': 'not-served',
+  'POST /webhooks/{id}/deliveries/{deliveryId}/replay': 'not-served',
 };
 
 const withId = (route: string, ids: Record<string, string>) =>

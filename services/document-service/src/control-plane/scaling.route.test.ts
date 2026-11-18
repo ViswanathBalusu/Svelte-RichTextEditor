@@ -8,7 +8,7 @@ import { NOTHING_HIDDEN } from '@docedit/authority';
 import { uuid7 } from '@docedit/model';
 import { afterEach, describe, expect, it } from 'vitest';
 import { StubDataPlane, documentWithRegions, hostKey } from '../../test/control-plane/support.ts';
-import { configFromEnv, type ServiceConfig } from '../config.ts';
+import { checkConfig, configFromEnv, type ServiceConfig } from '../config.ts';
 import { memoryParts, startService, type Service, type StartOptions } from '../server.ts';
 import type { MemoryStore } from '../storage/memory.ts';
 import type { DocRef, DocumentStore, LogStore } from '../storage/types.ts';
@@ -173,6 +173,31 @@ function laggingReplica(primary: MemoryStore, applied: Map<string, number>) {
   return { logs, documents, grants: primary };
 }
 
+describe('the read replica is configured from the environment (BE-064)', () => {
+  it('reads the replica URL, the sessions kept and the lag sample size, and refuses a replica without sessions', () => {
+    const base = { DOCEDIT_DATABASE_URL: 'postgres://primary/db' };
+    const c = configFromEnv({
+      ...base,
+      DOCEDIT_REPLICA_DATABASE_URL: 'postgres://standby/db',
+      DOCEDIT_READ_SESSIONS: '50',
+      DOCEDIT_READ_LAG_DOCUMENTS: '20',
+    });
+    expect(c.replicaDatabaseUrl).toBe('postgres://standby/db');
+    expect(c.readSessions).toBe(50);
+    expect(c.readLagDocuments).toBe(20);
+    expect(() => checkConfig(c)).not.toThrow();
+    expect(configFromEnv({}).replicaDatabaseUrl).toBeNull();
+    expect(() =>
+      checkConfig(
+        configFromEnv({ ...base, DOCEDIT_REPLICA_DATABASE_URL: 'postgres://standby/db' }),
+      ),
+    ).toThrow('DOCEDIT_READ_SESSIONS');
+    expect(() =>
+      checkConfig(configFromEnv({ DOCEDIT_REPLICA_DATABASE_URL: 'x', DOCEDIT_READ_SESSIONS: '5' })),
+    ).toThrow('DOCEDIT_DATABASE_URL');
+  });
+});
+
 describe('read replicas behind the read-only routes (BE-064)', () => {
   async function withReplica() {
     const parts = memoryParts();
@@ -208,6 +233,40 @@ describe('read replicas behind the read-only routes (BE-064)', () => {
     // A seq above the head is not found, from the primary, never a replica's guess.
     const missing = await r.call('GET', `/v1/documents/${doc}/content?seq=5`, { token: reader });
     expect(missing.status).toBe(404);
+  });
+
+  it('answers history reads from the replica when it has the document, and from the primary when it does not (criterion 1)', async () => {
+    const r = await withReplica();
+    const doc = await r.createDocument();
+    const reader = r.tenant.userToken({ [doc]: 'editor' });
+    const paths = [
+      `/v1/documents/${doc}/history`,
+      `/v1/documents/${doc}/diff?fromSeq=0&toSeq=0`,
+      `/v1/documents/${doc}/attribution`,
+    ];
+    // The replica has not applied the document: each read is answered by the primary.
+    const first: string[] = [];
+    for (const path of paths) {
+      const res = await r.call('GET', path, { token: reader });
+      expect(res.status, path).toBe(200);
+      first.push(res.text);
+    }
+    expect(r.routes()['replica']).toBeUndefined();
+    expect(r.routes()['replica-error'] ?? 0).toBeGreaterThanOrEqual(paths.length);
+
+    // Once the replica has it, the replica answers, with the same bytes.
+    r.applied.set(doc, 0);
+    for (const [i, path] of paths.entries()) {
+      const res = await r.call('GET', path, { token: reader });
+      expect(res.status, path).toBe(200);
+      expect(res.text, path).toBe(first[i]);
+    }
+    expect(r.routes()['replica']).toBe(paths.length);
+
+    // A document the caller has no access to is refused the same way, from the primary's answer.
+    const other = r.tenant.userToken({ [randomUUID()]: 'editor' });
+    const refused = await r.call('GET', paths[0]!, { token: other });
+    expect(refused.status).toBe(403);
   });
 
   it('serves a caller its own writes: from the primary until the replica reaches them (criterion 3)', async () => {

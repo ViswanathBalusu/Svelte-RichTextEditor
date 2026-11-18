@@ -128,6 +128,11 @@ export interface HandlerDeps {
   /** Read-only routes through a read replica (BE-064): lists and pinned content. Absent: primary. */
   reads?: ReadRouter<ReadStores>;
   /** The callers' writes, so that their reads wait for the replica (BE-064 criterion 3). */
+  /**
+   * What a history read takes from the read replica instead of the primary: its stores and its
+   * content reader (BE-064). With `reads`, the history routes run on a second kit over these.
+   */
+  replicaDeps?: Partial<HandlerDeps>;
   readSessions?: ReadSessions;
   /** Version-pinned content cached in the process (BE-075). Absent: no cache. */
   pinnedCache?: PinnedCache;

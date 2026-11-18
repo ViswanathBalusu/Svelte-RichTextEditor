@@ -756,6 +756,35 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     return json(200, catalogue.manifest, headers);
   };
 
+  // History reads (lists, diffs, attribution) are served from the read replica when one is
+  // configured and it can answer them correctly (BE-064 criterion 1): the same handlers run on a
+  // second kit over the replica's stores, and the router decides which one answers. A replica that
+  // lacks the document, fails, or has not applied the caller's own writes sends the read to the
+  // primary, whose answer (or refusal) is the one the caller gets.
+  const primaryHistory = { ...historyReadRoutes(k), ...historyListRoutes(k) };
+  const historyReads: Record<string, Handler> = primaryHistory;
+  if (d.reads && d.replicaDeps) {
+    const reads = d.reads;
+    const { reads: _reads, replicaDeps, ...own } = d;
+    const replicaKit = createKit({ ...own, ...replicaDeps });
+    const onReplica = { ...historyReadRoutes(replicaKit), ...historyListRoutes(replicaKit) };
+    for (const [id, primary] of Object.entries(primaryHistory)) {
+      historyReads[id] = async (ctx) => {
+        const session = k.session(ctx);
+        const routed = await reads.read<Awaited<ReturnType<Handler>>>(
+          {
+            kind: 'history',
+            tenant: ctx.caller.tenant,
+            doc: ctx.params['id']!,
+            ...(session ? { session } : {}),
+          },
+          async (store) => (store === reads.primary ? primary(ctx) : onReplica[id]!(ctx)),
+        );
+        return routed!.value;
+      };
+    }
+  }
+
   return {
     getDiscovery,
     createToken,
@@ -777,8 +806,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...fieldRoutes(k),
     ...commitRoutes(k),
     ...historyRoutes(k),
-    ...historyReadRoutes(k),
-    ...historyListRoutes(k),
+    ...historyReads,
     ...restoreRoutes(k),
     ...activityRoutes(k),
     ...connectRoutes(k),
