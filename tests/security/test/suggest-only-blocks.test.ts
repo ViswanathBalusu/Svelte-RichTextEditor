@@ -1,13 +1,14 @@
 /**
  * SEC-023 criterion 5 (10 §5; 03 §5; 07 §5.2, §17): suggestions on blocks other than paragraphs,
  * whole table rows and whole tables are refused. Owner decision 7 of 2026-11-15
- * (docs/owner-decisions-2026-11-15.md) settles the set: `model.validate()` enforces suggestion
- * marks on `paragraph`, `table_row` and `table` only (invariant I1, `node_mark_host`).
+ * (docs/owner-decisions-2026-11-15.md) settles the set, and decision 92 the form: a block suggestion is
+ * an entry of the `suggest` attribute, which only `paragraph`, `table_row` and `table` have, and
+ * no block takes a node mark (invariant I1, `node_mark_host`).
  *
  * The room applies the steps, runs the outcome check (P4) and then the invariants of the result.
- * A node mark on a block other than those three is refused at the first stage, because the schema
- * lets only those parents hold a marked child (or at the outcome check, in a restricted region);
- * `model.validate()` is the second guard and is tested directly. The proof drives all stages.
+ * A node mark on any block is refused at the first stage, because the schema lets no parent hold a
+ * marked block; `model.validate()` is the second guard and is tested directly. A suggestion on the
+ * three hosts is an attribute step, which the pipeline accepts. The proof drives all stages.
  */
 import {
   applySteps,
@@ -19,7 +20,7 @@ import {
 import { validateDoc } from '@docedit/model/validate';
 import fc from 'fast-check';
 import type { Node } from 'prosemirror-model';
-import { AddNodeMarkStep, type Step } from 'prosemirror-transform';
+import { AddNodeMarkStep, AttrStep, type Step } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import { BASE_JSON, accessOf, permissions, schema } from './support/authority-fixtures.ts';
 
@@ -96,6 +97,20 @@ function markOf(kind: 'ins' | 'del' | 'fmt', user: string) {
   return schema.marks[kind]!.create({ id: sid(), user });
 }
 
+/** The entry of `suggest` that says the same as a suggestion mark. */
+function entryOf(kind: 'ins' | 'del' | 'fmt', user: string): J {
+  const attrs: J = { id: sid(), user };
+  if (kind === 'fmt') attrs['before'] = { attrs: { align: 'left' } };
+  return { type: kind, attrs };
+}
+
+/** The step a suggester makes: an attribute step on a host, a node mark (which fails) elsewhere. */
+function suggestionStep(t: Target, kind: 'ins' | 'del' | 'fmt'): Step {
+  return HOSTS.includes(t.type)
+    ? new AttrStep(t.pos, 'suggest', [entryOf(kind, SAM.sub)])
+    : new AddNodeMarkStep(t.pos, markOf(kind, SAM.sub));
+}
+
 /** The room's pipeline: outcome check, then the invariants of the result. */
 function pipeline(before: Node, steps: Step[]) {
   const applied = applySteps(before, steps);
@@ -133,9 +148,18 @@ describe('SEC-023 criterion 5: block suggestions beyond paragraphs, table rows a
 
   it.each(HOSTS)('a suggested deletion on a whole %s is accepted (the control)', (type) => {
     const t = byType(type);
-    const r = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf('del', SAM.sub))]);
+    const r = pipeline(doc, [suggestionStep(t, 'del')]);
     expect(r).toEqual({ stage: 'accepted', code: 'ok', reason: '' });
   });
+
+  it.each(HOSTS)(
+    'a node mark on a whole %s is refused: a block suggestion is an attribute',
+    (type) => {
+      const t = byType(type);
+      const r = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf('del', SAM.sub))]);
+      expect(r.stage).toBe('apply');
+    },
+  );
 
   it('a suggested deletion on a table cell is refused: the schema does not let a row hold a marked cell', () => {
     const t = byType('table_cell');
@@ -180,7 +204,7 @@ describe('SEC-023 criterion 5: block suggestions beyond paragraphs, table rows a
         fc.constantFrom<'ins' | 'del' | 'fmt'>('ins', 'del', 'fmt'),
         (i, kind) => {
           const t = all[i]!;
-          const r = pipeline(doc, [new AddNodeMarkStep(t.pos, markOf(kind, SAM.sub))]);
+          const r = pipeline(doc, [suggestionStep(t, kind)]);
           if (r.stage === 'accepted') {
             accepted++;
             expect(HOSTS).toContain(t.type);

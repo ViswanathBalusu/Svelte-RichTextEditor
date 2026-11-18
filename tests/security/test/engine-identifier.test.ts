@@ -26,7 +26,13 @@ const FILES = ['pm-steps-1.json', 'golden/apply.json', 'golden/map.json', 'golde
  * is a new engine identifier, never a silent upgrade).
  */
 const RECORDED: Readonly<Record<string, string>> = {
-  'pm-steps/1': '014ca7714178e880a393e9572693400792299e6a0dbd96e036bc44276dd14498',
+  // Re-recorded on 2026-11-18 by lane w1 (FE-044, FE-045), under the same identifier, because owner
+  // decision 92 moved block suggestions from node marks to the `suggest` attribute of the CDM
+  // schema, which is still a draft (`status: draft` in pm-steps-1.json, nothing released). The
+  // fixtures were regenerated against that schema; the behaviour of the step library did not
+  // change. The previous digest was 014ca7714178e880a393e9572693400792299e6a0dbd96e036bc44276dd14498.
+  // Whether a change of a draft schema needs `pm-steps/2` is for the owner of SYN-002 to say.
+  'pm-steps/1': 'e371cf5f8ca8bc843be32d14347a873d68915d12a01cd9570d07af647bb66a81',
 };
 
 /** The release of each library the identifier pins (the definition names the same releases). */

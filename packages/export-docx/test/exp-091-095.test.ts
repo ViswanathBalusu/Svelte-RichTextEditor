@@ -272,14 +272,12 @@ describe('the direct DOCX writer: rows, pictures, captions, suggestions and form
     bodyOf(env).content = [
       {
         type: 'table',
-        attrs: { id: nid('t'), grid: [3000, 3000] },
-        marks: [del],
+        attrs: { id: nid('t'), grid: [3000, 3000], suggest: [del] },
         content: [row(cells('one')), row(cells('two'))],
       },
       {
         type: 'table',
-        attrs: { id: nid('t'), grid: [3000, 3000] },
-        marks: [ins],
+        attrs: { id: nid('t'), grid: [3000, 3000], suggest: [ins] },
         content: [row(cells('three'))],
       },
     ];
