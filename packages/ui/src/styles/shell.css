@@ -973,6 +973,21 @@
   gap: var(--_de-space-2);
 }
 
+/* The frame of a sandboxed extension's panel (UX-060). */
+.de-sandbox-pane {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 16em;
+}
+
+.de-sandbox-pane iframe {
+  flex: 1 1 auto;
+  inline-size: 100%;
+  min-block-size: 16em;
+  border: 1px solid var(--_de-border);
+  background: var(--_de-surface);
+}
+
 .de-tree,
 .de-tree-group {
   margin: 0;
