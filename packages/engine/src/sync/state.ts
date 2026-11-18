@@ -309,15 +309,21 @@ export function resendCommit(s: SyncState): { state: SyncState; commit: Outgoing
 
 /** What the steps inserted, as text (for recovered edits). */
 export function insertedText(steps: readonly Step[]): string {
-  const parts: string[] = [];
+  let out = '';
+  // Where the previous insertion ended, in the document the next step is made on: a step that
+  // inserts right there continues the same typing (one step per keystroke), so no line break.
+  let continuesAt = -1;
   for (const step of steps) {
     if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
       const content = step.slice.content;
       const text = content.textBetween(0, content.size, '\n', '');
-      if (text) parts.push(text);
+      if (text) {
+        out += out === '' ? text : step.from === continuesAt ? text : `\n${text}`;
+        continuesAt = step.from + step.slice.size;
+      }
     }
   }
-  return parts.join('\n');
+  return out;
 }
 
 function discard(
