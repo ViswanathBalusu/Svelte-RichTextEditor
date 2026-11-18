@@ -33,7 +33,7 @@ The editing schema is the CDM's projection schema (`buildProjectionSchema` of `@
 
 ### Resume, reload, reset
 
-- `catchUp: "page"` is treated as `reload`: no port member reads the missing commits over REST.
+- `catchUp: "page"` is treated as `stream`: the channel reads the missing commits over REST (`backend-dep`, PRO-026) and delivers them in order, then the state `live`, so the session neither reloads nor reads REST itself. (Changed 2026-11-17, lane w9, SYN-028 criterion 4; the first version reloaded, because no port member read the commits.)
 - A reload (04 §9 step 3; ADR 0019 item 6) moves unconfirmed work to recovered edits; a reset (04 §8, §3.2) re-applies local steps to the new content and sets aside those that fail. An in-flight commit the resume reports `accepted` is part of the reloaded content; one not reported at all is treated as `unknown` and resent after the stream catches up.
 - The stream is caught up at `sync.caughtUp`, or as soon as the confirmed `seq` reaches the head of `ch.opened`, so a missed state message cannot stop the client from sending.
 - A confirmed step that fails to apply is a no-op, as 04 §14 requires of every client, and is reported; an exception while processing a message is reported and resumes the channel.

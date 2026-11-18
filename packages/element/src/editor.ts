@@ -331,6 +331,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
         if (typeof title !== 'string') return false;
         return core.run('markRegion', { title });
       }
+      if (name === 'nextEditableRegion') return core.run('nextEditableRegion');
       if (name === 'setRegionPolicy') {
         const a = args as { region?: unknown; policy?: unknown } | undefined;
         if (typeof a?.region !== 'string') return false;

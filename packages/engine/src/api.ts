@@ -426,7 +426,7 @@ export type CoreQueryName =
   | 'canInsertField'
   // PRM-033 and FE-044 criterion 5: the selection's whole body blocks may become a region.
   | 'canMarkRegion'
-  // PRM-027 criterion 1: a region after the caret that the user may edit exists.
+  // PRM-027: a region after the caret, in document order, where the user may edit.
   | 'hasNextEditableRegion';
 
 /** `de-status.connection` (05 §8.1), plus `detached` before any channel is attached. */
