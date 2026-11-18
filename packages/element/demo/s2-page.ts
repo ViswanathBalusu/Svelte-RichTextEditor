@@ -2,14 +2,15 @@
  * Spike S2 demo page: `<doc-editor>` under the policy the test sends with the page, loaded from
  * the in-memory backend. The style nonce comes from the page (the server writes it into a meta
  * element). Query: `fallback` forces the nonce `<style>` path; `fonts` gives the backend a `fonts`
- * port whose manifest lists one file of the demo server.
+ * port whose manifest lists one file of the demo server; `proofing` and `assistant` give it scripted
+ * ports of those names (the in-memory backend has neither), for the strict-policy runs of FE-125.
  */
 import '../src/index.ts';
 import { MockService } from '@docedit/backend-mock';
 import { SPIKE_IDS, spikeDocument } from '@docedit/engine/spike-document';
 import type { CdmEnvelope } from '@docedit/model';
 import type { DocEditorElement } from '../src/doc-editor.ts';
-import { installSpikeHooks } from '../src/testing.ts';
+import { installSpikeHooks, internalsOf } from '../src/testing.ts';
 
 const params = new URLSearchParams(location.search);
 const nonce = document.querySelector('meta[name="de-nonce"]')?.getAttribute('content') ?? undefined;
@@ -51,10 +52,50 @@ if (params.has('fonts')) {
     },
   });
 }
+if (params.has('proofing')) {
+  // One finding on the first three letters of the first block that has text, so the finding
+  // decoration is drawn on the page and the proofing commands exist (UX-041).
+  Object.defineProperty(backend, 'proofing', {
+    value: {
+      check: (request: { blocks: readonly { blockId: string; text: string }[] }) =>
+        Promise.resolve(
+          request.blocks
+            .filter((b) => b.text.length >= 3)
+            .slice(0, 1)
+            .map((b) => ({
+              blockId: b.blockId,
+              from: 0,
+              to: 3,
+              kind: 'spelling',
+              message: 'Unknown word',
+              suggestions: ['Fix'],
+            })),
+        ),
+      addWord: () => Promise.resolve(),
+    },
+  });
+}
+if (params.has('assistant')) {
+  // One scripted answer, so the assistant pane runs a whole request on the page.
+  Object.defineProperty(backend, 'assistant', {
+    value: {
+      async *request() {
+        yield { kind: 'text', text: 'Scripted answer.' };
+        yield { kind: 'done', agent: 'agt-s2' };
+      },
+    },
+  });
+}
 el.backend = backend;
 el.setAttribute('doc-id', docId);
 document.getElementById('mount')!.append(el);
 
 Object.assign(globalThis, {
-  __s2: { el, nonce, trustedTypes: typeof (globalThis as { trustedTypes?: unknown }).trustedTypes },
+  __s2: {
+    el,
+    nonce,
+    openPane: (id: string) => internalsOf(el).editor!.openPane(id),
+    proofingFindings: () => internalsOf(el).editor!.core.proofingFindings().length,
+    trustedTypes: typeof (globalThis as { trustedTypes?: unknown }).trustedTypes,
+  },
 });

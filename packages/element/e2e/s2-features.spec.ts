@@ -29,6 +29,9 @@ export const GUIDE: Record<string, Record<string, string>> = {
   'math editor': { 'trusted-types': 'docedit-math', 'style-src-attr': "'unsafe-inline'" },
   // The baseline's `font-src 'self'` is all the manifest fonts need (FE-061; the guide's Fonts section).
   fonts: {},
+  // The scripted ports of the S2 page (demo/s2-page.ts) add nothing to the baseline (FE-125).
+  proofing: {},
+  assistant: {},
 };
 
 /** The font file the S2 page's manifest lists when the page is opened with `fonts=1` (demo/s2-page.ts). */
@@ -110,6 +113,27 @@ async function exercise(page: Page, feature: string, run: string): Promise<unkno
         };
       }, S2_FONT_FILE);
     }
+    case 'proofing': {
+      // The scripted proofing port answers one finding; the core draws it.
+      type S2 = { __s2: { proofingFindings(): number } };
+      await page.waitForFunction(() => (window as unknown as S2).__s2.proofingFindings() > 0);
+      return {
+        findings: await page.evaluate(() => (window as unknown as S2).__s2.proofingFindings()),
+        marked: await page.locator('doc-editor .de-editing-surface .de-proof-spelling').count(),
+      };
+    }
+    case 'assistant': {
+      const opened = await page.evaluate(() =>
+        (window as unknown as { __s2: { openPane(id: string): Promise<boolean> } }).__s2.openPane(
+          'assistant',
+        ),
+      );
+      const pane = page.locator('doc-editor .de-pane[data-pane="assistant"]');
+      await pane.getByRole('textbox').fill('Summarise this.');
+      await pane.locator('[data-ask="question"]').click();
+      const shown = await pane.locator('[data-assistant-state="shown"]').innerText();
+      return { opened, shown };
+    }
     case 'pdf': {
       return showSamplePdf(page, run, { workerPolicy: PDF_WORKER_POLICY });
     }
@@ -148,7 +172,12 @@ for (const feature of Object.keys(GUIDE)) {
     }) => {
       const run = runId();
       const csp = policy(which === 'guide' ? GUIDE[feature] : {});
-      await openS2(page, run, csp, feature === 'fonts' ? '&fonts=1' : '');
+      await openS2(
+        page,
+        run,
+        csp,
+        ['fonts', 'proofing', 'assistant'].includes(feature) ? `&${feature}=1` : '',
+      );
       const result = await exercise(page, feature, run);
       const collected = await collect(page, request, run);
       const fetched = await requests(request, run);
@@ -177,6 +206,9 @@ for (const feature of Object.keys(GUIDE)) {
       // `font-src 'self'` is in the baseline, so the file loads under both policies.
       if (feature === 'fonts')
         expect(result).toEqual({ aliases: 1, status: 'loaded', fetched: true });
+      if (feature === 'proofing') expect(result).toMatchObject({ findings: 1 });
+      if (feature === 'assistant')
+        expect(result).toEqual({ opened: true, shown: 'Scripted answer.' });
       if (feature === 'pane') expect((result as { outline: string }).outline).not.toBe('');
       if (feature === 'web view')
         expect(result).toMatchObject({
