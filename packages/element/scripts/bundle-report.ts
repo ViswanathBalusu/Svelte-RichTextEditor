@@ -68,7 +68,8 @@ const isWasm = (name: string) => /\.wasm(\?.*)?$/.test(name);
 export function lazyFeatureOf(fileName: string, moduleIds: readonly string[] = []): LazyFeature {
   const ids = moduleIds.map((id) => id.replaceAll('\\', '/'));
   const any = (test: RegExp) => ids.some((id) => test.test(id));
-  if (isWasm(fileName)) return 'webassembly';
+  if (isWasm(fileName) || any(/\/layout-kernel\/dist\/|\/element\/src\/features\/layout-kernel/))
+    return 'webassembly';
   if (/pdf\.worker/.test(fileName)) return 'pdf worker';
   if (fileName.startsWith('viewer/') || any(/\/element\/src\/pdf\//)) return 'pdf viewer';
   if (any(/node_modules\/(katex|mathlive)\//) || any(/\/element\/src\/katex-/))

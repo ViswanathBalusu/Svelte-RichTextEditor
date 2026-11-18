@@ -16,7 +16,7 @@
  * components have no style block, the styles are the element's one stylesheet.
  */
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { cpSync } from 'node:fs';
+import { cpSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { InlineConfig, Plugin } from 'vite';
@@ -50,6 +50,56 @@ function componentSvelte(fragments: 'tree' | 'html'): Plugin[] {
   }) as Plugin[];
 }
 
+/**
+ * The layout kernel's files (WASM-002) are a build output of the Rust crate (`pnpm --filter
+ * @docedit/layout-kernel build:wasm`, which needs Podman), not part of the repository. When they
+ * are there, the bundler takes them: the WebAssembly file becomes an asset next to the chunks.
+ * When they are not, the build still works and the kernel's loader reports `compile_failed` at run
+ * time, so a checkout that never built the crate can build and test the rest.
+ */
+const KERNEL_DIST = resolve(elementDir, '../layout-kernel/dist');
+const KERNEL_PREFIX = '@docedit/layout-kernel/wasm/';
+const MISSING = '\0docedit-kernel-missing:';
+export function kernelFiles(): Plugin {
+  return {
+    name: 'docedit-kernel-files',
+    enforce: 'pre',
+    resolveId(id) {
+      if (!id.startsWith(KERNEL_PREFIX)) return null;
+      const rest = id.slice(KERNEL_PREFIX.length);
+      const file = rest.replace(/\?.*$/, '');
+      // The package's `exports` map would keep the query in the file name, so the path is given here.
+      if (existsSync(join(KERNEL_DIST, file)))
+        return join(KERNEL_DIST, file).replaceAll('\\', '/') + rest.slice(file.length);
+      this.warn(`the layout kernel is not built (${file}); the page view's loader will report it`);
+      return `${MISSING}${id}`;
+    },
+    // wasm-bindgen's module starts, when it is given nothing, from `new URL('<name>_bg.wasm',
+    // import.meta.url)`, which library mode would inline as base64 (FND-008 forbids it). The loader
+    // always gives the module its file, so the default is cut out.
+    transform(code, id) {
+      if (!id.replaceAll('\\', '/').endsWith('/layout-kernel/dist/docedit_layout_kernel.js'))
+        return null;
+      const fallback = "new URL('docedit_layout_kernel_bg.wasm', import.meta.url)";
+      if (!code.includes(fallback))
+        this.error('the layout kernel glue has no default URL to cut out');
+      return {
+        map: null,
+        code: code.replace(
+          fallback,
+          "(() => { throw new Error('the layout kernel needs its file given'); })()",
+        ),
+      };
+    },
+    load(id) {
+      if (!id.startsWith(MISSING)) return null;
+      if (id.includes('?')) return 'export default "";';
+      const message = JSON.stringify('the layout kernel was not built into this bundle');
+      return `export default async function init() { throw new Error(${message}); }`;
+    },
+  };
+}
+
 function base(outDir: string): InlineConfig {
   return {
     configFile: false,
@@ -73,7 +123,10 @@ export function libraryConfig(): InlineConfig {
   const config = base(libDir);
   return {
     ...config,
-    plugins: componentSvelte('tree'),
+    // Relative asset URLs: a lazy file (the kernel's WebAssembly) is found next to the chunk that
+    // names it, wherever the host serves the component from (WASM-002).
+    base: './',
+    plugins: [kernelFiles(), ...componentSvelte('tree')],
     build: {
       ...config.build,
       lib: {
@@ -158,7 +211,7 @@ export function demoConfig(fragments: 'tree' | 'html', withDemo: boolean): Inlin
     for (const name of DEMO_SCRIPTS) input[name] = join(elementDir, 'demo', `${name}.ts`);
   return {
     ...config,
-    plugins: componentSvelte(fragments),
+    plugins: [kernelFiles(), ...componentSvelte(fragments)],
     build: {
       ...config.build,
       rollupOptions: {

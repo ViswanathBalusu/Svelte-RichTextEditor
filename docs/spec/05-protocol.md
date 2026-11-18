@@ -415,6 +415,7 @@ All events are `CustomEvent`s with `bubbles: true` and `composed: true`. They ca
 | `de-export-progress`, `de-export-completed`, `de-export-failed` | Job state |
 | `de-auth-required` | `getToken` failed or the token was refused |
 | `de-share-request`, `de-fork-request` | The user asked for something the host owns. `de-fork-request` carries `{ docId, atSeq }` (HIS-022) |
+| `de-diagnostic` | `{ feature, kind, ms, bytes, streaming, code, directive, fallback }`: a lazily loaded feature loaded, failed to load or is not available, and which directive the host lacks (WASM-002, WASM-003; proposed, ADR 0410). No content |
 | `de-error` | `{ code, message, fatal }` |
 
 Fill-mode methods and events are in 12, section 10. Theming uses CSS custom properties with the prefix `--de-` and `::part()` names listed in 02. An iframe variant of this API over `postMessage` is deferred.
