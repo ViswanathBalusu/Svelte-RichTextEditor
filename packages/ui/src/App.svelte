@@ -84,7 +84,14 @@
   import { PeopleDirectory } from './people/directory.ts';
   import { commentCommandState } from './shell/comment-create.ts';
   import { fillProgress } from './shell/fill.ts';
-  import { focusTarget, landmarkKeys, landmarksIn, nextLandmark } from './shell/landmarks.ts';
+  import {
+    focusTarget,
+    landmarkKeys,
+    landmarksIn,
+    landmarkStep,
+    nextLandmark,
+    type FrameKey,
+  } from './shell/landmarks.ts';
   import { modeOptions } from './shell/modes.ts';
   import type { CheckTarget } from './shell/send-checklist.ts';
   import { lockKind } from './shell/workflow-lock.ts';
@@ -1262,6 +1269,26 @@
     };
   }
 
+  // Moves focus to the next or previous landmark (UX-023).
+  function cycleLandmark(step: 1 | -1): void {
+    if (!shellEl) return;
+    const next = nextLandmark(landmarksIn(shellEl), activeElement(), step);
+    if (!next) return;
+    if (next.dataset['landmark'] === 'page') core.focus();
+    else focusTarget(next).focus();
+  }
+
+  // A key a sandboxed frame forwarded out of a pane (UX-060): Escape closes the pane, a landmark
+  // key moves on as it does from any control of the shell. Nothing else leaves the frame.
+  function frameKey(key: FrameKey): void {
+    if (key.key === 'Escape') {
+      closePane();
+      return;
+    }
+    const step = landmarkStep(key, landmarkKeys(registry.apple), registry.apple);
+    if (step !== null) cycleLandmark(step);
+  }
+
   // Keys (UX-013, UX-023, UX-008, UX-009): the registry's, and the shell's own.
   onMount(() => {
     const root = rootOf();
@@ -1269,13 +1296,7 @@
     const target = root instanceof Document ? (shellEl as HTMLElement) : root;
     const keys = landmarkKeys(registry.apple);
     const inPage = (event: Event) => (pageEl ? event.composedPath().includes(pageEl) : false);
-    const cycle = (step: 1 | -1) => {
-      if (!shellEl) return;
-      const next = nextLandmark(landmarksIn(shellEl), activeElement(), step);
-      if (!next) return;
-      if (next.dataset['landmark'] === 'page') core.focus();
-      else focusTarget(next).focus();
-    };
+    const cycle = cycleLandmark;
     const stopKeys = bindShortcuts(target, registry, {
       shell: (key, event) => {
         if (keys.next.has(key)) {
@@ -1407,7 +1428,9 @@
     const d = pane ? paneRegistry.get(pane.id) : undefined;
     return d ? tr.text(d.label) : '';
   });
-  const paneHeadingId = `de-pane-${Math.random().toString(36).slice(2, 8)}`;
+  // The props a contributed pane asks for beside `core` and `close` (UX-060).
+  const paneProps = $derived(pane ? (paneRegistry.get(pane.id)?.props ?? {}) : {});
+  const paneHeadingId =`de-pane-${Math.random().toString(36).slice(2, 8)}`;
 </script>
 
 <div
@@ -1524,7 +1547,7 @@
           >
         </div>
         <div class="de-pane-content">
-          <Pane {core} close={closePane} />
+          <Pane {core} close={closePane} {frameKey} {...paneProps} />
         </div>
       </aside>
     {/if}

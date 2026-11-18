@@ -49,6 +49,8 @@ export interface SandboxFrameOptions {
   readonly log: (entry: SandboxLogEntry) => void;
   /** Receives a landmark key or Escape pressed in the frame (UX-023). */
   readonly onKey?: (key: SandboxKey) => void;
+  /** Keep the document API alive when the frame is disposed (a panel that closes and reopens). */
+  readonly keepApi?: boolean;
 }
 
 /** A key forwarded out of the frame: only F6 (landmarks) and a bare Escape. */
@@ -91,6 +93,7 @@ export function mountSandboxFrame(options: SandboxFrameOptions): SandboxFrame {
     access: options.access,
     suggesting: options.suggesting,
     log: options.log,
+    ...(options.keepApi ? { keepApi: true } : {}),
     send: (message) => channel.port1.postMessage(message),
   });
 

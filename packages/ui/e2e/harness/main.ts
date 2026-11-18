@@ -40,10 +40,15 @@ import type {
 import { FilterRegistry } from '../../src/extensions/filters.ts';
 import type { DocumentChangedEvent, HookQueueStats } from '../../src/extensions/hooks.ts';
 import { StatusItemRegistry, contributePanel } from '../../src/extensions/contributions.ts';
+import { sandboxedExtension } from '../../src/extensions/sandbox-extension.ts';
 import { PaneRegistry, type PaneComponent } from '../../src/shell/panes.ts';
 
 /** The identifier of the extension panel the harness contributes (UX-052). */
 export const EXTENSION_PANE = 'ext-notes';
+/** The pane of the sandboxed extension (UX-060). */
+export const SANDBOX_PANE = 'ext-sandboxed';
+let sandboxEntry: unknown = null;
+const sandboxLog: unknown[] = [];
 import { Strings } from '../../src/i18n/strings.ts';
 import { Icons } from '../../src/icons/icons.ts';
 import { PeopleDirectory } from '../../src/people/directory.ts';
@@ -187,6 +192,12 @@ export interface MountOptions {
    * `contributePanel`, and one item at each edge of the status bar.
    */
   extensionContributions?: boolean;
+  /**
+   * A sandboxed extension with a panel (UX-060): the shell is given a recording document API, and
+   * `setExtensions('sandbox')` installs a tier 2 extension whose panel holds an iframe. The page must
+   * be opened with `frame-src 'self'` (see `open` in helpers.ts).
+   */
+  sandboxPanel?: boolean;
   /** Host string replacements by key (UX-063, criterion 2), passed to the string catalogue. */
   overrides?: Record<string, string>;
   /** Host icon replacements by command icon name (UX-063, criteria 1 and 3). */
@@ -815,6 +826,40 @@ function mountShell(options: MountOptions = {}): void {
     root.addEventListener('input', onInput);
     stops.push(() => root.removeEventListener('input', onInput));
   }
+  if (options.sandboxPanel) {
+    const paneRegistry = new PaneRegistry();
+    const noop = (): unknown => undefined;
+    // A document API that answers reads with fixed values; the isolation and the keys are the real code.
+    Object.assign(core, {
+      extensionApi: () => ({
+        range: (from: number, to: number) => ({ id: `r${from}-${to}`, from, to }),
+        text: () => 'harness text',
+        on: () => noop,
+        dispose: noop,
+      }),
+    });
+    props['documentApi'] = { maxRanges: 4 };
+    props['paneRegistry'] = paneRegistry;
+    sandboxEntry = sandboxedExtension({
+      manifest: {
+        id: 'ext.sandboxed',
+        name: 'Sandboxed notes',
+        apiVersion: '1',
+        tier: 2,
+        access: { read: 'view', write: 'none' },
+        entry: `${location.origin}/ext-panel.js`,
+      },
+      frameUrl: `${location.origin}/sandbox-frame.html`,
+      panel: {
+        registry: paneRegistry,
+        id: SANDBOX_PANE,
+        load: async () =>
+          (await import('../../src/panes/SandboxPane.svelte')).default as unknown as PaneComponent,
+      },
+      suggesting: () => false,
+      log: (entry) => void sandboxLog.push(entry),
+    });
+  }
   if (options.extensionContributions) {
     const paneRegistry = new PaneRegistry();
     contributePanel(paneRegistry, {
@@ -1109,8 +1154,13 @@ const harness = {
       .map((e) => e.id),
   commandRuns: () => [...commandRuns],
   /** Sets the host's extension list on the mounted shell, as the element does (UX-050). */
-  setExtensions: (kind: 'none' | 'valid' | 'mixed') =>
-    (need().app['setExtensions'] as (list: unknown[]) => void)(extensionsFor(kind)),
+  setExtensions: (kind: 'none' | 'valid' | 'mixed' | 'sandbox') =>
+    (need().app['setExtensions'] as (list: unknown[]) => void)(
+      kind === 'sandbox' ? [sandboxEntry] : extensionsFor(kind),
+    ),
+  openSandboxPane: () =>
+    (need().app['openPaneById'] as (id: string) => Promise<boolean>)(SANDBOX_PANE),
+  sandboxLog: () => [...sandboxLog],
   extensionReports: () => extensionReports.map((r) => ({ ...r })),
   runs: () =>
     need()
