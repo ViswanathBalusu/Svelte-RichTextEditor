@@ -110,7 +110,6 @@ const WITHOUT_IDENTIFIER = ['hello', 'ping', 'pong', 'error'];
  */
 const NOT_OFFERED = 'this server does not offer the route';
 const NOT_FOUND_FOR_OWNER: Record<string, string> = {
-  listHistory: NOT_OFFERED,
   createImport: 'this server does not import Word files',
   getImport: 'no import job',
   getWorkflowEvidence: NOT_OFFERED,

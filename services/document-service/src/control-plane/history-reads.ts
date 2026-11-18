@@ -143,6 +143,89 @@ export async function nameUsers(k: Kit, ctx: Ctx, c: Comparison): Promise<Compar
   return { ...c, changes: c.changes.map(rename) };
 }
 
+/**
+ * The attribution map at `seq` (08 §7): replayed from the content at seq 0 over the stored
+ * commits. A snapshot commit starts a map of its own user.
+ */
+async function attributionMapOf(
+  k: Kit,
+  ref: DocRef,
+  record: DocumentRecord,
+  inc: string,
+  seq: number,
+) {
+  const { d } = k;
+  const schema = cdmSchema();
+  const first = schema.nodeFromJSON((await d.content.rebuild(ref, inc, 0)).doc);
+  const map0 = AttributionMap.create(first.content.size, { user: record.createdBy, seq: 0 });
+  const commits = seq > 0 ? await d.logs.read(ref, 1, seq) : [];
+  const snapshots = new Map<number, AttributionMap>();
+  for (const c of commits) {
+    if (c.kind !== 'snapshot') continue;
+    const node = schema.nodeFromJSON((await d.content.rebuild(ref, inc, c.seq)).doc);
+    snapshots.set(c.seq, AttributionMap.create(node.content.size, { user: c.user, seq: c.seq }));
+  }
+  const r = attributionAt(seq, {
+    schema,
+    checkpoints: [{ seq: 0, map: map0 }],
+    commits: (after, to) => commits.filter((c) => c.seq > after && c.seq <= to),
+    snapshot: (c) => snapshots.get(c.seq),
+  });
+  if (!r.ok) throw new ApiError('internal', r.reason);
+  return r.map;
+}
+
+export type HistoryView = Awaited<ReturnType<typeof historyViewOf>>;
+
+/**
+ * The comparison of two visible states, as the caller's class sees it (08 §6; HIS-011, HIS-012).
+ * The steps are read only for versions near enough to be compared from them; a longer gap is
+ * compared by block alignment. The work runs in a worker thread when the service has a pool, and
+ * the callers refuse a `seq` below the gate first (`checkSeq`).
+ */
+export async function compareRange(
+  k: Kit,
+  v: HistoryView,
+  fromSeq: number,
+  toSeq: number,
+  opts: { region?: string | undefined; granularity?: 'word' | 'char' | null } = {},
+): Promise<Comparison> {
+  const { d } = k;
+  const inc = v.head.incarnation;
+  const from = await d.content.rebuild(v.ref, inc, fromSeq);
+  const to = toSeq === fromSeq ? from : await d.content.rebuild(v.ref, inc, toSeq);
+  const commits = toSeq - fromSeq <= STEP_LIMIT ? await d.logs.read(v.ref, fromSeq + 1, toSeq) : [];
+  const hidden = v.hiddenIn(v.headDoc, from.doc, to.doc);
+  const task = (attribution: AttributionJson | null): CompareTask => ({
+    request: {
+      fromSeq,
+      toSeq,
+      ...(opts.region !== undefined ? { region: opts.region } : {}),
+      ...(opts.granularity ? { granularity: opts.granularity } : {}),
+    },
+    incarnation: inc,
+    docs: toSeq === fromSeq ? { [fromSeq]: from.doc } : { [fromSeq]: from.doc, [toSeq]: to.doc },
+    commits: [...commits],
+    gate: { min: v.gate.min, head: v.gate.head, named: v.namedSeqs },
+    hidden: { regions: [...hidden.regions], values: [...hidden.values], titles: hidden.titles },
+    attribution,
+  });
+  // The comparison runs in a worker thread, never on the loop that serves requests and rooms
+  // (HIS-011 criterion 4); without a pool (small tests, tools) it runs inline.
+  const run = async (t: CompareTask): Promise<CompareAnswer> =>
+    d.comparePool
+      ? (await d.comparePool.run<{ result: CompareAnswer }>('compare', t)).result
+      : compareTask(t);
+  let r = await run(task(null));
+  // A comparison by alignment names the authors from the attribution map at `toSeq`.
+  if (r.ok && r.comparison.method === 'aligned') {
+    const map = await attributionMapOf(k, v.ref, v.record, inc, toSeq);
+    r = await run(task(map.toJSON()));
+  }
+  if (!r.ok) throw problemOf(r);
+  return r.comparison;
+}
+
 export function historyReadRoutes(k: Kit): Record<string, Handler> {
   const { d } = k;
   const schema = cdmSchema();
@@ -151,34 +234,8 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
   const contentAt = async (ref: DocRef, incarnation: string, seq: number, head: Head) =>
     seq === head.seq ? head.doc : (await d.content.rebuild(ref, incarnation, seq)).doc;
 
-  /**
-   * The attribution map at `seq` (08 §7): replayed from the content at seq 0 over the stored
-   * commits. A snapshot commit starts a map of its own user.
-   */
-  const attributionMapAt = async (
-    ref: DocRef,
-    record: DocumentRecord,
-    inc: string,
-    seq: number,
-  ) => {
-    const first = schema.nodeFromJSON((await d.content.rebuild(ref, inc, 0)).doc);
-    const map0 = AttributionMap.create(first.content.size, { user: record.createdBy, seq: 0 });
-    const commits = seq > 0 ? await d.logs.read(ref, 1, seq) : [];
-    const snapshots = new Map<number, AttributionMap>();
-    for (const c of commits) {
-      if (c.kind !== 'snapshot') continue;
-      const node = schema.nodeFromJSON((await d.content.rebuild(ref, inc, c.seq)).doc);
-      snapshots.set(c.seq, AttributionMap.create(node.content.size, { user: c.user, seq: c.seq }));
-    }
-    const r = attributionAt(seq, {
-      schema,
-      checkpoints: [{ seq: 0, map: map0 }],
-      commits: (after, to) => commits.filter((c) => c.seq > after && c.seq <= to),
-      snapshot: (c) => snapshots.get(c.seq),
-    });
-    if (!r.ok) throw new ApiError('internal', r.reason);
-    return r.map;
-  };
+  const attributionMapAt = (ref: DocRef, record: DocumentRecord, inc: string, seq: number) =>
+    attributionMapOf(k, ref, record, inc, seq);
 
   const getDiff: Handler = async (ctx) => {
     const doc = ctx.params['id']!;
@@ -199,41 +256,8 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('validation_failed', `fromSeq ${fromSeq} is above toSeq ${toSeq}`);
     checkSeq(fromSeq, v.gate);
     checkSeq(toSeq, v.gate);
-    const inc = v.head.incarnation;
-    const from = await d.content.rebuild(v.ref, inc, fromSeq);
-    const to = toSeq === fromSeq ? from : await d.content.rebuild(v.ref, inc, toSeq);
-    // The steps are read only for versions near enough to be compared from them (08 §6).
-    const commits =
-      toSeq - fromSeq <= STEP_LIMIT ? await d.logs.read(v.ref, fromSeq + 1, toSeq) : [];
-    const hidden = v.hiddenIn(v.headDoc, from.doc, to.doc);
-    const task = (attribution: AttributionJson | null): CompareTask => ({
-      request: {
-        fromSeq,
-        toSeq,
-        ...(region !== undefined ? { region } : {}),
-        ...(granularity !== null ? { granularity } : {}),
-      },
-      incarnation: inc,
-      docs: toSeq === fromSeq ? { [fromSeq]: from.doc } : { [fromSeq]: from.doc, [toSeq]: to.doc },
-      commits: [...commits],
-      gate: { min: v.gate.min, head: v.gate.head, named: v.namedSeqs },
-      hidden: { regions: [...hidden.regions], values: [...hidden.values], titles: hidden.titles },
-      attribution,
-    });
-    // The comparison runs in a worker thread, never on the loop that serves requests and rooms
-    // (HIS-011 criterion 4); without a pool (small tests, tools) it runs inline.
-    const run = async (t: CompareTask): Promise<CompareAnswer> =>
-      d.comparePool
-        ? (await d.comparePool.run<{ result: CompareAnswer }>('compare', t)).result
-        : compareTask(t);
-    let r = await run(task(null));
-    // A comparison by alignment names the authors from the attribution map at `toSeq`.
-    if (r.ok && r.comparison.method === 'aligned') {
-      const map = await attributionMapAt(v.ref, v.record, inc, toSeq);
-      r = await run(task(map.toJSON()));
-    }
-    if (!r.ok) throw problemOf(r);
-    return json(200, await nameUsers(k, ctx, r.comparison), {
+    const comparison = await compareRange(k, v, fromSeq, toSeq, { region, granularity });
+    return json(200, await nameUsers(k, ctx, comparison), {
       'Cache-Control': 'private, no-cache',
     });
   };

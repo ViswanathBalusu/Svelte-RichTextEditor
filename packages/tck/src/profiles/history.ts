@@ -302,6 +302,52 @@ export const HISTORY: ProfileDef = {
       },
     }),
     hs({
+      id: 'gate.history-list-and-versions',
+      title: 'the history list and named-version creation refuse a seq below the gate',
+      spec: '07 §8, §12; 08 §4, §9; HIS-026',
+      covers: {
+        operations: ['GET /documents/{id}/history', 'POST /documents/{id}/versions'],
+        errors: ['forbidden'],
+      },
+      async run(ctx) {
+        const s = await series(ctx);
+        const { doc } = s;
+        const { token: viewer } = await ctx.token('viewer', { [doc]: 'viewer' });
+        const base = `/documents/${doc}`;
+        const refused = (res: HttpResponse, what: string) => {
+          equal(problemCode(res), 'forbidden', `${what} is refused below the gate`);
+          equal(res.status, 403, `${what}: the status`);
+        };
+        // A viewer reads the head only: a list that starts below it, or ends below it, is refused.
+        refused(await get(ctx, viewer, `${base}/history`, { fromSeq: s.s1 }), 'a list from a seq');
+        refused(await get(ctx, viewer, `${base}/history`, { toSeq: s.s2 }), 'a list to a seq');
+        // Control: a list that starts at the head, and one without bounds, are served.
+        expectStatus(
+          await get(ctx, viewer, `${base}/history`, { fromSeq: s.s3 + 1 }),
+          200,
+          'a list from the head',
+        );
+        expectStatus(await get(ctx, viewer, `${base}/history`), 200, 'the list without bounds');
+        // An editor holds `edit` and reads all of it.
+        expectStatus(
+          await get(ctx, s.author.token, `${base}/history`, { fromSeq: s.s1 }),
+          200,
+          'an editor reads the list from the first commit',
+        );
+        // A version is created at a visible state only: a user below the gate may not name one.
+        // (A viewer has no `edit` either; the refusal is `forbidden` for both reasons, so the
+        // control is an editor at the first commit.)
+        expectStatus(
+          await ctx.service.as(s.author.token, 'POST', `${base}/versions`, {
+            body: { seq: s.s1, name: 'first' },
+          }),
+          201,
+          'an editor names the first commit',
+        );
+        await closeAll(s);
+      },
+    }),
+    hs({
       id: 'restore.dry-run',
       title: 'a restore with dryRun stores nothing',
       spec: '08 §8; 05 §6.2; HIS-021',
