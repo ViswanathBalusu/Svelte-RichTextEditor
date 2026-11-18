@@ -116,10 +116,14 @@ export class NoticeTracker {
     // Fewer items: the author discarded or inserted some, which is not news.
     if (!next || count <= before) return null;
     const added = next.items.slice(before);
-    const reason = added[0]?.reason ?? '';
+    const first = added[0];
+    const reason = first?.reason ?? '';
+    // A fill that lost to another change of the same field is told in the field's own words
+    // (FRW-010 criterion 5); the notice names no field and no value (ADR 0019).
+    const fieldConflict = reason === 'conflict' && (first?.fields?.length ?? 0) > 0;
     return {
       kind: 'rejection',
-      key: rejectionKey(String(reason)),
+      key: fieldConflict ? 'notice.rejected.fieldConflict' : rejectionKey(String(reason)),
       count: count - before,
       serial: ++this.#serial,
     };

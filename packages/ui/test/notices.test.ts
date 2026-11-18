@@ -56,6 +56,25 @@ describe('work set aside', () => {
     expect(tracker.recovered({ count: 1, items: [item('rebase')] })).toBeNull();
   });
 
+  it('tells a fill that lost to another change of the same field that someone else changed it (FRW-010)', () => {
+    const tracker = new NoticeTracker(null, { count: 0, items: [] });
+    const tr = new Strings().current;
+    const notice = tracker.recovered({
+      count: 1,
+      items: [{ ...item('conflict'), fields: ['f1'] }],
+    });
+    expect(notice).toMatchObject({ kind: 'rejection', key: 'notice.rejected.fieldConflict' });
+    expect(tr.t('notice.rejected.fieldConflict', { count: 1 })).toMatch(
+      /changed by someone else.*current value/,
+    );
+    // A conflict that named no field keeps the general words.
+    const general = tracker.recovered({
+      count: 2,
+      items: [{ ...item('conflict'), fields: ['f1'] }, item('conflict')],
+    });
+    expect(general).toMatchObject({ key: 'notice.rejected.conflict' });
+  });
+
   it('explains the rejection codes of 05 §5.8 and the reasons of the sync client', () => {
     expect(rejectionKey('permission_denied')).toBe('notice.rejected.permission');
     expect(rejectionKey('read_only')).toBe('notice.rejected.readOnly');

@@ -210,6 +210,13 @@ export const EN_GB = {
     other:
       '{count} changes could not be saved because they conflicted with other changes. They are kept in recovered edits.',
   },
+  // A fill that lost to another change of the same field (12 §4.2, P9; FRW-010): the field shows the
+  // current value and the entry is not merged into it.
+  'notice.rejected.fieldConflict': {
+    one: 'This field was changed by someone else, so your entry was not saved. The field now shows the current value. Your entry is kept in recovered edits.',
+    other:
+      '{count} fields were changed by someone else, so your entries were not saved. The fields now show the current values. Your entries are kept in recovered edits.',
+  },
   'notice.rejected.field': {
     one: 'A field value could not be saved because it is not valid. It is kept in recovered edits.',
     other:

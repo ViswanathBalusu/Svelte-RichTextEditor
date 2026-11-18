@@ -67,6 +67,11 @@ export interface Discarded {
   readonly scopes?: readonly string[];
   /** For a `permission_denied` rejection: the last permission change the client saw (PRM-024). */
   readonly change?: PermissionChange | null;
+  /**
+   * For a `conflict` rejection that named `field:<id>` scopes (12 §4.2, P9): the identifiers of the
+   * fields that someone else changed first (FRW-010 criterion 5).
+   */
+  readonly fields?: readonly string[];
 }
 
 /**
@@ -325,7 +330,7 @@ function discard(
   steps: readonly Step[],
   reason: string,
   commit: string | null,
-  why?: Pick<Discarded, 'scopes' | 'change'>,
+  why?: Pick<Discarded, 'scopes' | 'change' | 'fields'>,
 ): Discarded[] {
   if (steps.length === 0) return [];
   return [
@@ -622,7 +627,7 @@ export function receiveAck(s: SyncState, ack: Ack, schema: Schema): Transition {
 function dropInflight(
   s: SyncState,
   reason: string,
-  why?: Pick<Discarded, 'scopes' | 'change'>,
+  why?: Pick<Discarded, 'scopes' | 'change' | 'fields'>,
 ): Moved {
   const inf = s.inflight!;
   const nInf = inf.local.length;
@@ -689,10 +694,18 @@ export function receiveReject(s: SyncState, reject: SyncReject): Transition {
       }
       // A permission rejection keeps what it names and the last permission change the client
       // saw, so that the editor can say which part was refused and who changed it (07 §9; PRM-024).
+      // A `conflict` that named fields keeps their identifiers, so that the editor can tell the
+      // person that someone else changed the field first (FRW-010 criterion 5).
+      const fieldIds =
+        reject.code === 'conflict'
+          ? (reject.scopes ?? []).filter((x) => x.startsWith('field:')).map((x) => x.slice(6))
+          : [];
       const why =
         reject.code === 'permission_denied'
           ? { scopes: [...(reject.scopes ?? [])], change: s.permissionChange ?? null }
-          : undefined;
+          : fieldIds.length > 0
+            ? { fields: fieldIds }
+            : undefined;
       const t = transition(s, dropInflight(s, reject.code, why));
       const actions: Action[] = [...t.actions];
       if (reject.code === 'permission_denied')
