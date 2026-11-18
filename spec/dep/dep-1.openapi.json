@@ -939,6 +939,88 @@
         "x-dep-feature": "history"
       }
     },
+    "/documents/{id}/suggestions/{sid}/introduction": {
+      "get": {
+        "operationId": "getSuggestionIntroduction",
+        "summary": "The commit that introduced a suggestion, answered from an index, with its server time (HIS-042).",
+        "description": "The commit that introduced a suggestion, answered from an index, with its server time (HIS-042). Requires: view and the history-visibility gate (07 §8) (07 §12). Only when the server announces the feature `history`. Specified in 08 §14.",
+        "tags": [
+          "suggestions"
+        ],
+        "security": [
+          {
+            "userToken": []
+          },
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The suggestion identifier.",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16}$"
+            },
+            "description": "The suggestion identifier."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionIntroduction"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §14",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "view and the history-visibility gate (07 §8)",
+        "x-dep-feature": "history"
+      }
+    },
     "/documents/{id}/regions": {
       "get": {
         "operationId": "listRegions",
@@ -12483,6 +12565,43 @@
           "commits",
           "anchors",
           "instructions"
+        ]
+      },
+      "SuggestionIntroduction": {
+        "title": "SuggestionIntroduction",
+        "description": "The commit that introduced a suggestion (08 section 14; HIS-042).",
+        "$comment": "08 §14",
+        "type": "object",
+        "properties": {
+          "suggestion": {
+            "description": "The suggestion identifier.",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{16}$"
+          },
+          "time": {
+            "description": "The server time of the introducing commit, ISO 8601 UTC.",
+            "type": "string"
+          },
+          "user": {
+            "description": "The user who introduced it, as `sub`.",
+            "type": "string"
+          },
+          "origin": {
+            "description": "The origin of the introducing commit.",
+            "type": "string"
+          },
+          "seq": {
+            "description": "The seq of the introducing commit; absent when it lies below the caller gate.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "suggestion",
+          "time",
+          "user",
+          "origin"
         ]
       },
       "TenantKeyView": {

@@ -3393,6 +3393,43 @@
         "instructions"
       ]
     },
+    "SuggestionIntroduction": {
+      "title": "SuggestionIntroduction",
+      "description": "The commit that introduced a suggestion (08 section 14; HIS-042).",
+      "$comment": "08 §14",
+      "type": "object",
+      "properties": {
+        "suggestion": {
+          "description": "The suggestion identifier.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{16}$"
+        },
+        "time": {
+          "description": "The server time of the introducing commit, ISO 8601 UTC.",
+          "type": "string"
+        },
+        "user": {
+          "description": "The user who introduced it, as `sub`.",
+          "type": "string"
+        },
+        "origin": {
+          "description": "The origin of the introducing commit.",
+          "type": "string"
+        },
+        "seq": {
+          "description": "The seq of the introducing commit; absent when it lies below the caller gate.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "suggestion",
+        "time",
+        "user",
+        "origin"
+      ]
+    },
     "TenantKeyView": {
       "title": "TenantKeyView",
       "description": "A registered public key of a tenant (UX-077; 05 section 3.2).",

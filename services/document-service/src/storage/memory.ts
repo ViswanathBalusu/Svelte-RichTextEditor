@@ -38,6 +38,8 @@ interface MemoryDocument {
   snapshots?: Map<number, JsonEnvelope>;
   /** Assets attached to the document, with the seq that first referenced each (BE-044). */
   assets?: Map<string, number>;
+  /** The seq of the commit that introduced each suggestion, kept as commits are stored (HIS-042). */
+  introduced?: Map<string, number>;
   epoch: number;
   owner: string | null;
   perms: PermissionState;
@@ -303,6 +305,8 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     const retired = new Set<string>();
     for (const c of req.commits) {
       d.log.push(clone({ ...c, scopes: [...c.scopes].sort() }));
+      const introduced = (d.introduced ??= new Map());
+      for (const id of c.claimed) if (!introduced.has(id)) introduced.set(id, c.seq);
       for (const r of c.retired) {
         if (!d.retired.has(r)) d.retired.set(r, c.seq);
         retired.add(r);
@@ -427,6 +431,10 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
       commits,
     };
   }
+  async introducedBy(ref: DocRef, suggestionId: string): Promise<number | undefined> {
+    return this.#find(ref)?.introduced?.get(suggestionId);
+  }
+
   async claim(ref: DocRef, node: string): Promise<number> {
     const d = this.#get(ref);
     d.epoch++;

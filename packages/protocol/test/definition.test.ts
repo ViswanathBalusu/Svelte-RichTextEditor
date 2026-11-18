@@ -152,6 +152,7 @@ const PROSE_ROUTES = [
   'PUT /documents/{id}/content',
   'GET /documents/{id}/commits',
   'GET /documents/{id}/audit-segment',
+  'GET /documents/{id}/suggestions/{sid}/introduction',
   'GET /documents/{id}/regions',
   'PUT /documents/{id}/regions/{rid}/state',
   'POST /documents/{id}/regions/{rid}/lease',

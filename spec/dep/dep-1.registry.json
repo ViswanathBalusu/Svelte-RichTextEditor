@@ -466,6 +466,22 @@
       "owner": "HIS"
     },
     {
+      "operationId": "getSuggestionIntroduction",
+      "method": "GET",
+      "path": "/documents/{id}/suggestions/{sid}/introduction",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "history",
+      "requires": "view and the history-visibility gate (07 §8)",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §14",
+      "owner": "HIS"
+    },
+    {
       "operationId": "listRegions",
       "method": "GET",
       "path": "/documents/{id}/regions",

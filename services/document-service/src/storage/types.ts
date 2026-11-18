@@ -69,11 +69,16 @@ export interface LogStore {
    */
   readMeta?(ref: DocRef, fromSeq: number, toSeq: number): Promise<CommitMetaRow[]>;
   /**
-   * The hashed metadata, payload hash and chain hashes of the records romSeq to 	oSeq, with the
-   * head, as the log bundle of @docedit/history holds them and without any payload (HIS-037). The
+   * The hashed metadata, payload hash and chain hashes of the records `fromSeq` to `toSeq`, with the
+   * head, as the log bundle of `@docedit/history` holds them and without any payload (HIS-037). The
    * audit segment is cut from it. Optional: a store without it offers no audit export.
    */
   chainRange?(ref: DocRef, fromSeq: number, toSeq: number): Promise<LogBundle>;
+  /**
+   * The seq of the commit that introduced the suggestion, by its identifier, from an index that is
+   * written as the commit is stored (HIS-042). It does not scan the log. Optional.
+   */
+  introducedBy?(ref: DocRef, suggestionId: string): Promise<number | undefined>;
   /**
    * The stored commit with this identifier, or null (04 §5 step 2, "then in the log"). A room holds
    * only the commits after its checkpoint; this finds the older ones, so that a redelivered

@@ -852,7 +852,7 @@ export const REST_SHAPES: readonly NamedShape[] = [
     'HIS',
   ),
   // The audit segment of HIS-037 (08 section 12): metadata rows and hashes, no payloads. The shape is
-  // the one uditSegment of @docedit/history builds; its members are open so that the hashed
+  // the one `auditSegment` of `@docedit/history` builds; its members are open so that the hashed
   // metadata of a commit can grow with the chain format.
   named(
     'AuditSegment',
@@ -880,6 +880,25 @@ export const REST_SHAPES: readonly NamedShape[] = [
         doc: 'A log segment for third-party verification (08 section 12; HIS-037).',
         spec: '08 §12; 13 §10',
       },
+    ),
+    'HIS',
+  ),
+  // The commit that introduced a suggestion (HIS-042; 08 section 14): the date of a suggestion is the
+  // server time of this commit, not a time carried by the mark.
+  named(
+    'SuggestionIntroduction',
+    obj(
+      {
+        suggestion: req(nodeId(), 'The suggestion identifier.'),
+        time: req(text(), 'The server time of the introducing commit, ISO 8601 UTC.'),
+        user: req(text(), 'The user who introduced it, as `sub`.'),
+        origin: req(text(), 'The origin of the introducing commit.'),
+        seq: opt(
+          seq(),
+          'The seq of the introducing commit; absent when it lies below the caller gate.',
+        ),
+      },
+      { doc: 'The commit that introduced a suggestion (08 section 14; HIS-042).', spec: '08 §14' },
     ),
     'HIS',
   ),
@@ -1291,6 +1310,20 @@ export const OPERATIONS: readonly OperationDef[] = [
       toSeq: opt(seq(), 'The last seq asked for; default the head.'),
     },
     success: ok(ref('AuditSegment')),
+    owner: 'HIS',
+  }),
+  op({
+    operationId: 'getSuggestionIntroduction',
+    method: 'GET',
+    path: '/documents/{id}/suggestions/{sid}/introduction',
+    summary:
+      'The commit that introduced a suggestion, answered from an index, with its server time (HIS-042).',
+    spec: '08 §14',
+    security: BOTH,
+    feature: 'history',
+    requires: 'view and the history-visibility gate (07 §8)',
+    params: { sid: req(nodeId(), 'The suggestion identifier.') },
+    success: ok(ref('SuggestionIntroduction')),
     owner: 'HIS',
   }),
   op({

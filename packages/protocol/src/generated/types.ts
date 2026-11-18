@@ -859,6 +859,20 @@ export interface AuditSegment {
   instructions: string;
 }
 
+/** The commit that introduced a suggestion (08 section 14; HIS-042). */
+export interface SuggestionIntroduction {
+  /** The suggestion identifier. */
+  suggestion: string;
+  /** The server time of the introducing commit, ISO 8601 UTC. */
+  time: string;
+  /** The user who introduced it, as `sub`. */
+  user: string;
+  /** The origin of the introducing commit. */
+  origin: string;
+  /** The seq of the introducing commit; absent when it lies below the caller gate. */
+  seq?: number;
+}
+
 /** A registered public key of a tenant (UX-077; 05 section 3.2). */
 export interface TenantKeyView {
   /** The key identifier. */
@@ -1757,6 +1771,15 @@ export interface Operations {
     query: { fromSeq?: number; toSeq?: number };
     body: never;
     response: AuditSegment;
+  };
+  /** GET /documents/{id}/suggestions/{sid}/introduction: The commit that introduced a suggestion, answered from an index, with its server time (HIS-042). (08 §14) */
+  getSuggestionIntroduction: {
+    method: "GET";
+    path: "/documents/{id}/suggestions/{sid}/introduction";
+    params: { id: string; sid: string };
+    query: Record<string, never>;
+    body: never;
+    response: SuggestionIntroduction;
   };
   /** GET /documents/{id}/regions: Derived list: identifier, title, policy, order, state, who can edit. (05 §6.2) */
   listRegions: {

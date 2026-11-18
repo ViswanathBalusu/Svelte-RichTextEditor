@@ -240,6 +240,13 @@ const INSERT_DOC_ASSETS = `
   SELECT $1, $2, x.asset, x.seq FROM unnest($3::uuid[], $4::bigint[]) AS x(asset, seq)
   ON CONFLICT (tenant_id, doc_id, asset_id) DO NOTHING`;
 
+/** The commit that introduced each suggestion, kept as the commit is stored (HIS-042; migration 0062). The lowest seq wins. */
+const INSERT_SUGGESTION_INTRODUCTIONS = `
+  INSERT INTO suggestion_introductions (tenant_id, doc_id, suggestion_id, seq)
+  SELECT $1, $2, x.id, x.seq FROM unnest($3::text[], $4::bigint[]) AS x(id, seq)
+  ON CONFLICT (tenant_id, doc_id, suggestion_id) DO UPDATE
+    SET seq = least(suggestion_introductions.seq, excluded.seq)`;
+
 /** The index row of the checkpoint written for a snapshot (BE-020; ADR 0034 §3). */
 const INSERT_CHECKPOINT_ROW = `
   INSERT INTO doc_checkpoints (doc_id, seq, tenant_id, object_key, bytes, content_hash, created_at)
@@ -554,6 +561,15 @@ export class PgLogStore implements LogStore, OwnershipStore {
           hooks.attachments.map((a) => a.asset),
           hooks.attachments.map((a) => a.seq),
         ]);
+      // The suggestions this batch claims first are indexed in the same transaction (HIS-042).
+      const claims = commits.flatMap((c) => c.claimed.map((id) => [id, c.seq] as const));
+      if (claims.length)
+        await client.query(INSERT_SUGGESTION_INTRODUCTIONS, [
+          ref.tenant,
+          ref.doc,
+          claims.map(([id]) => id),
+          claims.map(([, seq]) => seq),
+        ]);
       const snap = req.snapshot ? hooks.snapshot : undefined;
       if (req.snapshot && snap) {
         const hash = Buffer.from(snap.hash, 'hex');
@@ -762,6 +778,22 @@ export class PgLogStore implements LogStore, OwnershipStore {
       true,
     );
   }
+  /** The `seq` of the commit that introduced a suggestion, from the index; not a scan of the log (HIS-042). */
+  async introducedBy(ref: DocRef, suggestionId: string): Promise<number | undefined> {
+    return this.#inTenant(
+      ref,
+      async (c) => {
+        const r = await c.query<{ seq: string }>(
+          `SELECT seq FROM suggestion_introductions
+            WHERE tenant_id = $1 AND doc_id = $2 AND suggestion_id = $3`,
+          [ref.tenant, ref.doc, suggestionId],
+        );
+        return r.rows[0] === undefined ? undefined : int(r.rows[0].seq);
+      },
+      true,
+    );
+  }
+
   /** Attaches assets outside a commit; a row that exists is kept (HIS-022). */
   async attachAssets(
     ref: DocRef,
