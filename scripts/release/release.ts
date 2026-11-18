@@ -35,7 +35,13 @@ import { scanRepository } from '../supply-chain/pin-check.ts';
 import { presence, type Distributable } from './distributables.ts';
 import { parseLockfile } from './lockfile.ts';
 import { renderNotices, type NoticeEntry } from './notices.ts';
-import { readCompatibility, renderReleaseNotes, type Artefact, type ImageRecord } from './notes.ts';
+import {
+  parseRoundTrip,
+  readCompatibility,
+  renderReleaseNotes,
+  type Artefact,
+  type ImageRecord,
+} from './notes.ts';
 import {
   bundleSbom,
   compareWithContents,
@@ -492,6 +498,23 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
     join(artefactsDir, 'CHANGELOG.md'),
     renderChangelog(version, previous?.version ?? null, changes),
   );
+  // 8a0. The lossless DOCX round trip (EXP-120): R0 and R1 on the SPK-028 corpus, whose corpus
+  // version and pass rates the notes state. The report is written even when a file fails.
+  const roundTripFile = 'lossless-roundtrip-report.json';
+  const roundTripRun = run(
+    'pnpm',
+    ['--filter', '@docedit/export-docx', 'roundtrip:report', join(artefactsDir, roundTripFile)],
+    o.root,
+  );
+  const roundTripPath = join(artefactsDir, roundTripFile);
+  const roundTrip = existsSync(roundTripPath)
+    ? parseRoundTrip(readFileSync(roundTripPath, 'utf8'))
+    : null;
+  step(
+    'lossless DOCX round trip',
+    roundTripRun.ok && roundTrip !== null,
+    roundTripRun.ok && roundTrip ? [] : roundTripRun.output.trim().split('\n').slice(-15),
+  );
   const compatibility = readCompatibility(o.root);
   const signerRepo = repository?.replace(/^https:\/\/github\.com\//, '');
   const notes = renderReleaseNotes({
@@ -505,6 +528,7 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
     missing: missingNotes,
     changes,
     coverage,
+    roundTrip,
     ...(signerRepo
       ? { signer: { repository: signerRepo, workflow: '.github/workflows/release.yml' } }
       : {}),
@@ -516,6 +540,7 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
   );
   for (const f of ['stories-snapshot.json', 'CHANGELOG.md', 'RELEASE-NOTES.md'])
     addArtefact(f, 'release record');
+  if (roundTrip) addArtefact(roundTripFile, 'lossless round-trip report');
 
   // 8b. The parity report (UX-002; 13 §2), published beside the release notes. The script
   // refuses to write while a shipped row links to no automated test.
