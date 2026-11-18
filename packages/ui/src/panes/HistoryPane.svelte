@@ -272,6 +272,13 @@
     return { kind: 'document' };
   }
 
+  /** Asks the host to copy the open version into a new document; the fork is the host's call (HIS-022). */
+  function forkFrom(seq: number): void {
+    if (shell?.requestFork === undefined) return;
+    shell.requestFork(seq);
+    shell.announce('history.fork.requested');
+  }
+
   function leave(): void {
     compare?.close();
     controller?.leave();
@@ -320,6 +327,16 @@
         <button type="button" class="de-list-button" onclick={leave}>
           {tr.t('history.view.leave')}
         </button>
+        {#if shell?.requestFork !== undefined}
+          <button
+            type="button"
+            class="de-list-button"
+            data-fork-request
+            onclick={() => forkFrom(snapshot!.viewing!.status === 'open' ? snapshot!.viewing!.view.seq : 0)}
+          >
+            {tr.t('history.fork.request')}
+          </button>
+        {/if}
         {#if cmp?.status === 'ready'}
           <div class="de-history-compare" data-compare>
             {#if cmp.rows.length === 0}

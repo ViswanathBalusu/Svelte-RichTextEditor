@@ -1269,6 +1269,9 @@ export const EN_GB = {
   'history.view.label.named': 'Read-only version {name}, {when}',
   'history.view.note': 'This is a read-only copy. Changes to the live document do not appear here.',
   'history.view.leave': 'Back to the live document',
+  // Copy a version into a new document (HIS-022): the editor asks, the host makes the copy.
+  'history.fork.request': 'Copy this version to a new document',
+  'history.fork.requested': 'Asked to copy this version into a new document.',
   'history.view.opening': 'Opening this version.',
   'history.view.forbidden': 'You cannot open this version.',
   'history.view.not-found': 'This version no longer exists.',

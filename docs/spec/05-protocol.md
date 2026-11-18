@@ -407,7 +407,7 @@ All events are `CustomEvent`s with `bubbles: true` and `composed: true`. They ca
 | `de-recovered-edits` | `{ count }` when rejected or unsent content was set aside |
 | `de-export-progress`, `de-export-completed`, `de-export-failed` | Job state |
 | `de-auth-required` | `getToken` failed or the token was refused |
-| `de-share-request`, `de-fork-request` | The user asked for something the host owns |
+| `de-share-request`, `de-fork-request` | The user asked for something the host owns. `de-fork-request` carries `{ docId, atSeq }` (HIS-022) |
 | `de-error` | `{ code, message, fatal }` |
 
 Fill-mode methods and events are in 12, section 10. Theming uses CSS custom properties with the prefix `--de-` and `::part()` names listed in 02. An iframe variant of this API over `postMessage` is deferred.

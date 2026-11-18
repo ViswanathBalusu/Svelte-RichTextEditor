@@ -15,6 +15,7 @@
  *   of the source are not copied.
  */
 import { formatTimestamp, uuid7, type JsonEnvelope } from '@docedit/model';
+import { assetRefsIn } from '../data-plane/asset-attachments.ts';
 import { actingConnection, refuseSeqBelowGate } from './gate.ts';
 import { json, type Kit } from './kit.ts';
 import { guard, type Handler } from './pipeline.ts';
@@ -112,6 +113,18 @@ export function historyRoutes(k: Kit): Record<string, Handler> {
       });
     } catch (e) {
       k.translate(e);
+    }
+    // The assets the copied content references are attached to the copy, from seq 0, so that its
+    // references resolve (invariant I4; HIS-022). Only those the source has attached: an asset
+    // the source never held is left out. The objects are shared by hash, not copied.
+    if (d.logs.attachAssets && d.logs.attachedAssets) {
+      const held = await d.logs.attachedAssets(ref);
+      const wanted = [...assetRefsIn(full.doc)].filter((a) => held.has(a));
+      if (wanted.length > 0)
+        await d.logs.attachAssets(
+          refOf(ctx, id),
+          wanted.map((asset) => ({ asset, seq: 0 })),
+        );
     }
     k.emit(ctx, 'dep.document.created', id, { seq: 0 });
     return json(201, documentResource(record!), {

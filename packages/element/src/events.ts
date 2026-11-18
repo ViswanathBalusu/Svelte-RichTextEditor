@@ -31,7 +31,7 @@ export interface ErrorDetail {
 }
 
 /**
- * The events this release raises. The catalogue of 05 §8.1 has more (`de-fork-request`); each arrives with its
+ * The events this release raises. The catalogue of 05 §8.1 may have more; each arrives with its
  * story and is added here, so that it goes through `emit` too.
  */
 export interface DocEditorEventMap {
@@ -58,6 +58,12 @@ export interface DocEditorEventMap {
    * identifier of the placeholder. The host decides who answers; the editor sends nothing itself.
    */
   'de-access-request': { docId: string; scope: string };
+  /**
+   * The user chose to copy a version into a new document (HIS-022; 05 §8.1). Fork is a service-credential
+   * operation, so the editor only asks: the host calls `POST /documents/{id}/fork` with `atSeq`. Identifiers
+   * and a `seq` only, no content.
+   */
+  'de-fork-request': { docId: string; atSeq: number };
   /** An export job reports its state (PRO-086): identifiers and job state only, no content. */
   'de-export-progress': { jobId: string; state: string; progress: number | null };
   /** The export job completed (PRO-086). Same detail as `de-export-progress`. */
@@ -156,6 +162,7 @@ export const EVENT_NAMES: readonly DocEditorEventName[] = [
   'de-auth-required',
   'de-recovered-edits',
   'de-share-request',
+  'de-fork-request',
   'de-access-request',
   'de-export-progress',
   'de-export-completed',
