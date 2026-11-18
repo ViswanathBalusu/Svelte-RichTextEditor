@@ -64,6 +64,24 @@ export class VersionView extends VersionDocument {
     dom.scrollIntoView({ block: 'nearest' });
     return true;
   }
+  /**
+   * The identifiers of the text blocks the user has selected in this version, in document order
+   * (HIS-015: "who wrote this" for a passage). A caret with no range selects nothing.
+   */
+  selectedBlocks(): string[] {
+    const view = viewsOf(this.core as EditorCore).view;
+    if (!view) return [];
+    const { from, to } = view.state.selection;
+    if (from === to) return [];
+    const ids: string[] = [];
+    view.state.doc.nodesBetween(from, to, (node) => {
+      const id: unknown = node.attrs['id'];
+      if (node.isTextblock && typeof id === 'string') ids.push(id);
+      return true;
+    });
+    return ids;
+  }
+
   #draw(): void {
     const core = this.core as EditorCore;
     const view = viewsOf(core).view;

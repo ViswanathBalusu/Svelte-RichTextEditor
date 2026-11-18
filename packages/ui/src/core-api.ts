@@ -945,9 +945,39 @@ export interface HistoryVersionView {
   showDeletions?(on: boolean): void;
   /** Puts the caret at change `index` and scrolls it into view; false when it has no place in this version. */
   focusChange?(index: number): boolean;
+  /**
+   * The identifiers of the blocks the user has selected in this version (HIS-015: "who wrote this"
+   * for a passage). Empty when nothing is selected; absent when the host cannot tell.
+   */
+  selectedBlocks?(): string[];
   /** Releases the state. Called once, when the user leaves the version. */
   close(): void;
 }
+
+/** What "who wrote this" is asked about: a region, a list of blocks, or the whole body (both null). */
+export interface HistoryWhoQuery {
+  readonly seq: number;
+  readonly region: string | null;
+  readonly blocks: readonly string[] | null;
+}
+
+/** One author of the passage, with the times of the commits that wrote it (HIS-015; 08 §7). */
+export interface HistoryAuthorLine {
+  readonly user: string;
+  /** Set when an assistant acted for the user. */
+  readonly agent?: string;
+  /** Set when the text was brought back by a restore: the user who restored it (HIS-018). */
+  readonly restoredBy?: string;
+  /** The runs of this author that cover the passage. */
+  readonly runs: number;
+  /** The server times (ISO 8601) of the first and last commit that wrote them. */
+  readonly firstTime: string;
+  readonly lastTime: string;
+}
+
+export type HistoryWhoResult =
+  | { readonly ok: true; readonly seq: number; readonly authors: readonly HistoryAuthorLine[] }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'not_found' | 'failed' };
 
 /** One change of a comparison, as `GET /diff` gives it (08 §6). */
 export interface HistoryChange {
@@ -1046,6 +1076,11 @@ export interface HistoryPort {
    * refuses a version below the user's gate with `forbidden`; the pane offers only versions its list shows.
    */
   compare?(from: number, to: number | null): Promise<HistoryCompareResult>;
+  /**
+   * Who wrote a passage of the version at `seq` and when (`GET /attribution`, with the commit times
+   * joined; HIS-015). The service limits the answer by the user's gate and projection.
+   */
+  whoWrote?(query: HistoryWhoQuery): Promise<HistoryWhoResult>;
   /**
    * Called by the host when the list may have changed (a version was named, for instance); the
    * pane then asks again. Returns the function that stops the calls.

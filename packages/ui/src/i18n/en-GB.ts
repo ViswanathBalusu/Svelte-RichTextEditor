@@ -833,6 +833,25 @@ export const EN_GB = {
   'history.view.not-found': 'This version no longer exists.',
   'history.view.failed': 'This version could not be opened.',
 
+  // Who wrote this (HIS-015; 08 §7): authors are named in words, never by colour alone.
+  'history.who.title': 'Who wrote this',
+  'history.who.scope': 'Passage',
+  'history.who.scope.document': 'The whole document',
+  'history.who.scope.selection': 'The selected passage',
+  'history.who.scope.region': 'Region: {name}',
+  'history.who.ask': 'Show who wrote this',
+  'history.who.loading': 'Looking up who wrote this.',
+  'history.who.nothing-selected': 'Select a passage in the version first.',
+  'history.who.empty': 'No text is recorded for this passage.',
+  'history.who.failed': 'Who wrote this could not be found.',
+  'history.who.forbidden': 'You cannot see who wrote this version.',
+  'history.who.line': {
+    one: '{name}: {count} passage, from {first} to {last}.',
+    other: '{name}: {count} passages, from {first} to {last}.',
+  },
+  'history.who.assistant': 'An assistant acted for this person.',
+  'history.who.restored': 'Brought back by {by}.',
+
   // Comparing two versions (HIS-013; 08 §6).
   'history.compare.title': 'Compare versions',
   'history.compare.from': 'Older version',
