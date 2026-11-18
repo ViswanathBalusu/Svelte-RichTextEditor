@@ -1892,6 +1892,8 @@ As a maintainer, I want the contradiction between "a long answer is a region gra
 - [ ] Given the decision, then it states how an edit by a role-granted participant is attributed, checked by the outcome check and kept stable under a signature.
 - [ ] Given the decision, then 12 §6.2 ("the authority accepts only commits allowed by P7 and P8") and 07 §4 are corrected to agree.
 
+**Notes (lane w4, 2026-11-17):** Nothing is ticked: the owner has not decided. `docs/owner-decisions-2026-11-15.md` and the answers added on 2026-11-17 do not list this story, and Part B of `docs/owner-blockers-2026-11-17.md` gives the proposed default (the participant may edit their granted region, option (a)), which the owner is to review before it counts as settled. The default is written out in `docs/adr/0381-w4-FRW-086-long-answers-under-a-lock.md` (proposed): its effect on P7 (none), on 07 §4 limit 1 (proposed wording), on the freeze at `sentSeq` (compared outside the role regions), how an edit by a role-granted participant is attributed (a commit by their `sub`, origin `edit`), and what holds under a signature (the signature names its own `seq`; a checklist warning is proposed). It also gives the proposed correction of the row "While `sent` or `in_progress`" of 12 §6.2. The spec files 07 and 12 are not changed, because criterion 3 follows the owner's decision. FRW-012 stays blocked on it.
+
 **Notes:** The contradiction is described under Open questions. Second review (2026-11-06, SPK-027), SR-M26 recommends the first option: limit 1 of 07 §4 keeps `edit` in regions granted to a role whose participant is active ([review](../review/2026-11-06-second-review.md)).
 
 ### FRW-087 Obtain legal review of the signing claims before launch
