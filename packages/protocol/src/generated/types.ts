@@ -2139,6 +2139,24 @@ export interface Operations {
     body: never;
     response: Workflow;
   };
+  /** POST /documents/{id}/workflow/correct: Corrects a document that is in progress: pauses every participant and unlocks the document for the owner (12 §6.2). The method and path are assumed. (12 §6.2, §10) */
+  correctWorkflow: {
+    method: "POST";
+    path: "/documents/{id}/workflow/correct";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: Workflow;
+  };
+  /** POST /documents/{id}/workflow/resume: Resumes a corrected workflow: compares the document with its sent version, resets the participants the change concerns and locks the document again (12 §6.2). The method and path are assumed. (12 §6.2, §10) */
+  resumeWorkflow: {
+    method: "POST";
+    path: "/documents/{id}/workflow/resume";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: Workflow;
+  };
   /** POST /documents/{id}/workflow/participants/{pid}/consent: Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */
   participantConsent: {
     method: "POST";

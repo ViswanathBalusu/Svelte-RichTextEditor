@@ -53,6 +53,26 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/src/view/fe-131-table-style.universal.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FE-137 closed (2026-11-18). The panel is run in the three browsers by the element's
+  // spec; the variants turned on by the page setup and the page fields are run through the core and
+  // the layout in Node.js.
+  [
+    'headers-and-footers',
+    [
+      { path: 'packages/element/e2e/fe-057-panel.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/fe-057-variants.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-137-variant-wiring.test.ts', kind: 'unit' },
+      { path: 'packages/layout/src/fe-137-page-number-fields.test.ts', kind: 'unit' },
+    ],
+  ],
+  // The stored text is the core's (FE-137); the print is the export's, compiled in the Podman sandbox.
+  [
+    'watermark',
+    [
+      { path: 'packages/engine/test/fe-137-watermark.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-036-watermark.compile.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-009 closed (2026-11-17): the engine's painter, and the element's browser run of it.
   [
     'format-painter',
@@ -155,6 +175,23 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
     [
       { path: 'packages/ui/e2e/ux-011-command-search.spec.ts', kind: 'playwright' },
       { path: 'packages/ui/test/command-search.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FE-057 and FE-137 closed (2026-11-17); entry added by the batch 12 integrator.
+  [
+    'headers-and-footers',
+    [
+      { path: 'packages/element/e2e/fe-057-panel.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/fe-057-variants.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-137-variant-wiring.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FE-137 and EXP-036 closed; the PDF run of the watermark is a compile test.
+  [
+    'watermark',
+    [
+      { path: 'packages/engine/test/fe-137-watermark.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/exp-036-watermark.compile.test.ts', kind: 'unit' },
     ],
   ],
 ];

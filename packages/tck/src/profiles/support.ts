@@ -135,6 +135,31 @@ export async function acked(
   return reply.d;
 }
 
+/**
+ * A submit that must end acknowledged, for a scenario that makes many commits. A refusal with the
+ * action `retry` (`rate_limited`, `busy`) is what a client resubmits after `retryAfterMs`
+ * (04 §8), the same commit under the same id; any other reply is a failure. At most `attempts`
+ * tries, so a server that never lets the commit through fails the scenario.
+ */
+export async function ackedWithRetry(
+  wire: Wire,
+  ch: number,
+  commit: { id?: string; base: number; steps: Step[]; origin?: string },
+  attempts = 50,
+) {
+  const sent = { ...commit, id: commit.id ?? uuid7() };
+  for (let i = 1; ; i++) {
+    const reply = await submit(wire, ch, sent);
+    if (reply.t === 'sync.ack') return reply.d;
+    if (reply.t === 'sync.reject' && reply.d.action === 'retry' && i < attempts) {
+      const wait = Math.min(Math.max(reply.d.retryAfterMs ?? 10, 1), 2000);
+      await new Promise<void>((resolve) => setTimeout(resolve, wait));
+      continue;
+    }
+    throw new KitFailure('the commit was not acknowledged', 'sync.ack', reply);
+  }
+}
+
 /** A submit that must be rejected; resolves the `sync.reject` payload. */
 export async function rejected(
   wire: Wire,

@@ -99,7 +99,7 @@ Grant changes take effect immediately (section 5.5). To end a user's access befo
 - Binary frames are reserved for engines with opaque payloads. Their layout is three unsigned LEB128 integers (`ch`, `kind`, `id`) followed by the payload. `pm-steps/1` does not use them.
 - Messages on one channel are delivered in order. There is no ordering guarantee between channels.
 - **Chunking** is part of the core protocol. A message whose UTF-8 size exceeds `maxMessageBytes` is sent as `chunk` messages: `of` is a fresh identifier, `i` and `n` are the index and count, and `part` is a substring of the serialised message, split only between Unicode code points. Chunks of one message are sent consecutively on the connection. Reassembly times out after 10 seconds.
-- Either side sends `ping` when it has sent nothing for `heartbeatMs` (25,000 until `welcome` says otherwise). The peer answers `pong`. Any received message resets the idle timer. A side that hears nothing for two intervals closes the connection.
+- Either side sends `ping` when it has sent nothing for `heartbeatMs` (25,000 until `welcome` says otherwise). The peer answers `pong`. Any received message resets the idle timer. A side that hears nothing for two intervals closes the connection with a close frame, code 1001 (going away), and ends the socket if the peer does not finish the closing handshake (owner decision 194).
 - Compression (`permessage-deflate`) is optional and off by default.
 - At most one channel per document may be open on a connection.
 
@@ -366,6 +366,7 @@ The embedding API has its own version, exposed as the static property `DocEditor
 | `config` | object | Feature switches, fonts, shortcuts, limits, a style nonce |
 | `searchPrincipals`, `resolveUsers` | callbacks | The host's directory, for grants, mentions, presence and history |
 | `extensions` | array | Host-registered extensions (13, section 7) |
+| `icons` | object | Replacement icons by the command's icon name (13, section 8; UX-063). A value is SVG path data, or `{ paths, viewBox?, fill? }`. Never markup. A name the host omits, or gives as anything else, keeps the built-in drawing |
 
 | Method | Notes |
 |---|---|

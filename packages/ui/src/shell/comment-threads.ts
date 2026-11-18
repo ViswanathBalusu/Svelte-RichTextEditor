@@ -129,6 +129,8 @@ export interface ThreadInput {
   readonly excerpt: string | null;
   /** The block kind (figure, table, equation, ...), when the target is a block. */
   readonly blockKind: string | null;
+  /** The person the thread is assigned to as a task (`user:<sub>`), when it is (UX-032). */
+  readonly assignee?: string | null;
 }
 
 export type TargetLabel =
@@ -144,6 +146,8 @@ export interface PaneRow {
   readonly state: ThreadState;
   readonly replyCount: number;
   readonly target: TargetLabel;
+  /** The task's assignee, or null when the thread is not assigned (UX-032). */
+  readonly assignee: string | null;
   /** The parts a screen reader name is made from (UX-030 criterion 6): author, state, replies. */
   readonly accessibleName: {
     readonly author: string;
@@ -174,8 +178,51 @@ export function paneRows(threads: readonly ThreadInput[]): PaneRow[] {
       state: t.state,
       replyCount: t.replyCount,
       target: targetLabel(t),
+      assignee: t.assignee ?? null,
       accessibleName: { author: t.author, state: t.state, replyCount: t.replyCount },
     }));
+}
+
+/* ----- what changed in the list (UX-030 criterion 4: the change is announced) ----- */
+
+export interface ChangeInput {
+  readonly id: string;
+  readonly state: ThreadState;
+  readonly author: string;
+  readonly replyCount: number;
+}
+
+/** What one refresh of the list changed, as a kind and the person it names. */
+export interface ThreadChange {
+  readonly kind: 'created' | 'reply' | 'resolved' | 'reopened' | 'deleted';
+  /** The thread's author, which is who a created, resolved or reopened announcement names. */
+  readonly author: string;
+}
+
+/**
+ * Compares the list the pane showed with the list it reads now, and says what changed, one change
+ * first: a new thread, then a reply, a state change, a deletion. Null when nothing the pane shows
+ * changed. The strings come from the string tables; this only picks the kind.
+ */
+export function describeThreadChange(
+  before: readonly ChangeInput[],
+  after: readonly ChangeInput[],
+): ThreadChange | null {
+  const was = new Map(before.map((t) => [t.id, t]));
+  const now = new Map(after.map((t) => [t.id, t]));
+  for (const t of after) if (!was.has(t.id)) return { kind: 'created', author: t.author };
+  for (const t of after) {
+    const old = was.get(t.id);
+    if (old && t.replyCount > old.replyCount) return { kind: 'reply', author: t.author };
+  }
+  for (const t of after) {
+    const old = was.get(t.id);
+    if (old && t.state !== old.state) {
+      return { kind: t.state === 'resolved' ? 'resolved' : 'reopened', author: t.author };
+    }
+  }
+  for (const t of before) if (!now.has(t.id)) return { kind: 'deleted', author: t.author };
+  return null;
 }
 
 /* ----- assignment (UX-032 criteria 1 and 2) ----- */

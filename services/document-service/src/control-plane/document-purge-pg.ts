@@ -32,6 +32,7 @@ export const PURGE_TABLES: readonly string[] = [
   'workflow_resource',
   'document_revocations',
   'tenant_retention',
+  'document_keys',
   'outbox',
   'jobs',
 ];

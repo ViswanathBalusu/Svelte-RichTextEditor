@@ -16,8 +16,10 @@
 import {
   activeParticipantIds,
   checkWorkflowBody,
+  fieldOwnersOf,
   sendProblem,
   sendWorkflow,
+  snapshotOf,
   workflowEvent,
   type SendProblem,
   type WorkflowEventName,
@@ -25,6 +27,8 @@ import {
 } from '@docedit/authority';
 import { createHash } from 'node:crypto';
 import { canonicalize } from '@docedit/model';
+import { recordCorrection, recordResume } from '../workflow/correction.ts';
+import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
 import { checkIfMatch } from './http.ts';
 import { json, notModified, type Kit } from './kit.ts';
@@ -244,5 +248,119 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     });
   };
 
-  return { getWorkflow, putWorkflow, sendWorkflow: sendWorkflowRoute };
+  /** The webhooks of a transition carry the control commit's `seq` and the chain head (ADR 0382). */
+  const raiseAll = async (
+    ctx: Parameters<Handler>[0],
+    doc: string,
+    out: Extract<ProgressOutcome, { ok: true }>,
+  ): Promise<void> => {
+    const ref = k.refOf(ctx, doc);
+    const head = await d.logs.head(ref);
+    const chain = (await d.logs.state?.(ref))?.chainHead ?? '';
+    const at = { seq: out.control?.seq ?? head.seq, chainHead: out.control?.chainHead ?? chain };
+    for (const e of out.raised) {
+      const event = workflowEvent(e.name, {
+        workflow: out.resource.id,
+        document: doc,
+        ...at,
+        ...(e.participant !== undefined ? { participant: e.participant } : {}),
+      });
+      k.emit(ctx, event.type, doc, { ...event.data });
+    }
+  };
+
+  const problemOf = (doc: string, problem: Extract<ProgressOutcome, { ok: false }>['problem']) => {
+    switch (problem.code) {
+      case 'not_found':
+        return new ApiError('not_found', `document ${doc} has no workflow`);
+      case 'forbidden':
+        return new ApiError('forbidden', 'the caller may not do this');
+      case 'invalid_state':
+        return new ApiError('conflict', `the workflow is ${problem.state}`);
+      case 'conflict':
+        return new ApiError('conflict', `the workflow is ${problem.state}`);
+    }
+  };
+
+  const transitionDeps = () => ({
+    workflows: store(),
+    grants: d.grants,
+    logs: d.logs,
+    notifier: d.notifier,
+    ...(d.audit ? { audit: d.audit } : {}),
+    now: d.now,
+    controlWaitMs: CONTROL_WAIT_MS,
+  });
+
+  /**
+   * `POST /documents/{id}/workflow/correct` (12 §6.2 `correct`; FRW-032; method and path assumed,
+   * G95). Needs `manage`. An `in_progress` workflow moves to `correcting`: the document is unlocked
+   * for the owner, the participants are paused, a control commit records it and `corrected` is
+   * raised. Any other state is `conflict`.
+   */
+  const correctWorkflowRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    guard(ctx.caller, 'manage', doc);
+    await liveDocument(ctx, doc);
+    const out = await recordCorrection(transitionDeps(), {
+      ref: k.refOf(ctx, doc),
+      actor: ctx.caller.actor,
+    });
+    if (!out.ok) throw problemOf(doc, out.problem);
+    await raiseAll(ctx, doc, out);
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-cache',
+    });
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/resume` (12 §6.2 `resume`; FRW-032; method and path assumed,
+   * G95). Needs `manage`. The document at the head is compared with the document at `sentSeq`
+   * (the whole document, not the caller's projection); the participants the change concerns are
+   * reset, the document is locked again and the workflow returns to `in_progress`.
+   */
+  const resumeWorkflowRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const workflows = store();
+    guard(ctx.caller, 'manage', doc);
+    await liveDocument(ctx, doc);
+    const ref = k.refOf(ctx, doc);
+    const current = await workflows.read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (current.state !== 'correcting' || current.sentSeq === null)
+      throw new ApiError(
+        'conflict',
+        `the workflow is ${current.state}; only a corrected one is resumed`,
+      );
+    const head = await d.logs.head(ref);
+    const [sent, now] = await Promise.all([
+      d.content.rebuild(ref, head.incarnation, current.sentSeq),
+      d.content.rebuild(ref, head.incarnation, head.seq),
+    ]);
+    const out = await recordResume(transitionDeps(), {
+      ref,
+      actor: ctx.caller.actor,
+      sent: snapshotOf({ cdm: sent.cdm, requires: sent.requires, doc: sent.doc }),
+      head: snapshotOf({ cdm: now.cdm, requires: now.requires, doc: now.doc }),
+      owners: fieldOwnersOf(
+        { cdm: now.cdm, requires: now.requires, doc: now.doc },
+        current.participants,
+      ),
+    });
+    if (!out.ok) throw problemOf(doc, out.problem);
+    await raiseAll(ctx, doc, out);
+    return json(200, toWire(out.resource), {
+      ETag: out.resource.etag,
+      'Cache-Control': 'private, no-cache',
+    });
+  };
+
+  return {
+    getWorkflow,
+    putWorkflow,
+    sendWorkflow: sendWorkflowRoute,
+    correctWorkflow: correctWorkflowRoute,
+    resumeWorkflow: resumeWorkflowRoute,
+  };
 }

@@ -12,6 +12,7 @@
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extensions/document-api.ts';
 import type { FieldDraft } from './shell/field-properties.ts';
 import type { MarkupView } from './shell/markup-views.ts';
+import type { SendFailure } from './shell/send-checklist.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -814,6 +815,8 @@ export interface CoreApi {
   readonly fieldProperties?: FieldPropertiesService;
   /** The rules of the document and the builder's changes to them (FRW-024). Absent: no rules pane. */
   readonly rules?: RulesService;
+  /** The send dialog's checks and the send action (FRW-028). Absent: no "send for completion" command. */
+  readonly workflowSend?: WorkflowSendService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
   readonly mathEditor?: MathEditorService;
 }
@@ -1045,6 +1048,55 @@ export interface RulesService {
   remove(id: string): RuleChangeResult;
   /** Moves to the field with this key in the document; false when there is none. */
   showField(key: string): boolean;
+}
+
+/**
+ * What the send dialog got from the server (FRW-028; 12 §6.2 `send`). A refusal for the checklist
+ * carries the server's verdict, which replaces the editor's own.
+ */
+export type WorkflowSendOutcome =
+  | { readonly ok: true; readonly state: string }
+  | {
+      readonly ok: false;
+      readonly reason: 'checklist_failed';
+      readonly failures: readonly SendFailure[];
+    }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'not_draft' | 'failed' };
+
+/** A participant of the workflow as the lock banner names them; the name is the owner's text. */
+export interface WorkflowParticipantView {
+  readonly id: string;
+  /** The name the owner gave; null when none. */
+  readonly name: string | null;
+  readonly roles: readonly string[];
+  /** The participant's state in the workflow resource; null when the resource does not say. */
+  readonly state: string | null;
+}
+
+/**
+ * The send dialog's port over the core and the backend's workflow port (FRW-028; 12 §6.2). The
+ * checks run over the document the reader holds and the participants the workflow resource lists.
+ */
+export interface WorkflowSendService {
+  /** The workflow's state (`draft`, `sent`, ...); null while it has not been read. */
+  readonly state: ReadView<string | null>;
+  /** The failures of the editor's own checks; empty when every check passes. */
+  readonly failures: ReadView<readonly SendFailure[]>;
+  /**
+   * The people bound to the workflow and where each stands (`active`, `pending`, `completed`, ...),
+   * for the lock banner: who may still act (FRW-029 criterion 6). Empty until the resource is read.
+   */
+  readonly participants: ReadView<readonly WorkflowParticipantView[]>;
+  /** Reads the workflow resource again (the participants and the state). */
+  refresh(): Promise<void>;
+  /** Moves to the form field with this key; false when there is none. */
+  showField(key: string): boolean;
+  /** Selects the suggestion with this identifier; false when there is none. */
+  showSuggestion(id: string): boolean;
+  /** Asks the server to send; the state follows the answer. */
+  send(): Promise<WorkflowSendOutcome>;
+  /** Stops following the workflow; called when the editor is destroyed. */
+  dispose?(): void;
 }
 
 /** A role of the document as the roles manager and the legend show it (FRW-074; 12 §3.1). */
@@ -1381,8 +1433,84 @@ export interface ThreadSummary {
   readonly blockKind: string | null;
 }
 
+/** One comment of a thread as the thread view shows it (UX-029; 05 §6.2). */
+export interface CommentView {
+  readonly id: string;
+  /** The author's principal, `user:<sub>`. */
+  readonly author: string;
+  readonly createdAt: string;
+  readonly body: readonly CommentBodyPart[];
+  /** True once the author has edited the comment. */
+  readonly edited: boolean;
+}
+
+/**
+ * A thread with its comments, for the thread view (UX-029). `caps` are the capabilities the core
+ * reports for the thread's scope (07 §12); `etag` is the version a write sends as `If-Match`.
+ */
+export interface ThreadDetail {
+  readonly id: string;
+  readonly state: 'open' | 'resolved';
+  /** The author of the thread, who is the author of its first comment. */
+  readonly author: string;
+  /** True once the commented text was removed; the thread stays readable and is not re-attached. */
+  readonly detached: boolean;
+  /** The person the thread is assigned to as a task, `user:<sub>`; null or absent when nobody (UX-032). */
+  readonly assignee?: string | null;
+  readonly caps: readonly Capability[];
+  readonly comments: readonly CommentView[];
+  readonly etag: string;
+}
+
+/**
+ * The answer to a write on a thread (UX-029): the thread as it is now, or the service's error code
+ * (05 §5.8). `precondition_failed` (`If-Match` failed) carries the latest thread.
+ */
+export type ThreadWrite =
+  | { readonly ok: true; readonly detail: ThreadDetail }
+  | { readonly ok: false; readonly code: string; readonly latest?: ThreadDetail };
+
 /** Comment threads (05 §6.2). Creating one is a control-plane request, never a commit (13 §5). */
 export interface ThreadsService {
+  /** The signed-in user's principal (`user:<sub>`), for who may edit and delete (UX-029). */
+  self?(): string;
+  /**
+   * Moves whenever a thread or a comment changes, here or on another client (`thread.*` and
+   * `comment.*` events), so the pane reads `list` and `detail` again (UX-029 criteria 1 and 3).
+   */
+  readonly changes?: ReadView<number>;
+  /**
+   * Marks the thread in the document and brings its range or block into view (UX-030 criterion 2).
+   * A reader's setting: no step, no commit. Called with the row the pane's reader chose.
+   */
+  reveal?(thread: ThreadSummary): void;
+  /** The thread whose highlight the reader chose in the page; `n` counts the choices (UX-030). */
+  readonly picked?: ReadView<{ readonly id: string; readonly n: number } | null>;
+  /** One thread with its comments; null when it is gone or the reader may not see it. */
+  detail?(id: string): ThreadDetail | null;
+  /** Adds a reply (`POST .../comments`, `If-Match` with `etag`). */
+  reply?(id: string, body: readonly CommentBodyPart[], etag: string): Promise<ThreadWrite>;
+  /** Replaces the body of a comment. */
+  editComment?(
+    id: string,
+    commentId: string,
+    body: readonly CommentBodyPart[],
+    etag: string,
+  ): Promise<ThreadWrite>;
+  /** Deletes a comment. */
+  deleteComment?(id: string, commentId: string, etag: string): Promise<ThreadWrite>;
+  /** Deletes a whole thread. */
+  deleteThread?(
+    id: string,
+    etag: string,
+  ): Promise<{ readonly ok: boolean; readonly code?: string }>;
+  /** Resolves or reopens a thread. */
+  setState?(id: string, state: 'open' | 'resolved', etag: string): Promise<ThreadWrite>;
+  /**
+   * Gives the thread to a person as a task, or clears the assignee with null (`PATCH` of `assignee`,
+   * `If-Match` with `etag`; UX-032). The service raises `dep.task.assigned` for a person named.
+   */
+  assign?(id: string, assignee: string | null, etag: string): Promise<ThreadWrite>;
   /** The anchor for the current selection; null when nothing that can carry a thread is selected. */
   anchor(): CommentAnchor | null;
   /** The threads the document holds now, open or resolved (the 5,000 limit of UX-028). */

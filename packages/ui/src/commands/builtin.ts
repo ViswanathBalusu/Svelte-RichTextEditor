@@ -230,7 +230,7 @@ export interface ShellCommandHost1b {
   painter(): boolean;
   applyFormat(): boolean;
   /** Opens a dialog of the shell. */
-  openDialog(name: 'language' | 'region' | 'export' | 'comment' | 'version'): boolean;
+  openDialog(name: 'language' | 'region' | 'export' | 'comment' | 'version' | 'send'): boolean;
   zoom(step: 'in' | 'out' | 'reset'): boolean;
   setMode(mode: EditorMode): boolean;
   setView(view: ViewName): boolean;
@@ -551,6 +551,17 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       feature: 'history',
       capability: 'version-history',
       run: () => host.openDialog('version'),
+    },
+    // Send the document for completion (FRW-028; 12 §6.2): opens the pre-send checklist. It writes
+    // no content itself, so a locked document keeps it; the dialog explains why sending is off
+    // for a reader without `manage` or for a workflow that is no longer a draft.
+    'workflow.send': {
+      id: 'workflow.send',
+      label: 'command.workflow.send',
+      group: 'review',
+      changesContent: false,
+      capability: 'fields-and-forms',
+      run: () => host.openDialog('send'),
     },
     // Comment on the selection (UX-028): opens the comment box for the anchor the core gives. It
     // changes nothing in the document, so a locked or approved document keeps it (criterion 4);

@@ -7,13 +7,18 @@
   checker changes nothing (UX-066 criterion 6). Loaded on demand (UX-070).
 -->
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { useShell } from '../context.ts';
   import type { CoreApi } from '../core-api.ts';
   import { type Translator, sourceTranslator } from '../i18n/strings.ts';
   import { live } from '../live.ts';
   import type { CheckKind } from '../shell/accessibility-check.ts';
-  import { runAccessibilityCheck, type ListedIssue } from '../shell/accessibility-run.ts';
+  import {
+    runAccessibilityCheck,
+    type AccessibilityResult,
+    type ListedIssue,
+  } from '../shell/accessibility-run.ts';
+  import { browserIdle, quietScheduler } from '../shell/quiet-scheduler.ts';
 
   interface Props {
     core?: CoreApi;
@@ -34,11 +39,32 @@
   /** Principals are shown by their identifier until the directory names them. */
   const nameOf = (principal: string): string => principal.replace(/^user:/, '');
 
-  const result = $derived.by(() => {
+  /** How long the document stays quiet before the list is worked out again (UX-066 criterion 5). */
+  const QUIET_MS = 250;
+  const scheduler = quietScheduler({ quietMs: QUIET_MS, whenIdle: browserIdle() });
+  onDestroy(() => scheduler.cancel());
+
+  function compute(): AccessibilityResult | null {
+    return core ? runAccessibilityCheck(core, tr, nameOf) : null;
+  }
+
+  // The first list is made when the pane opens. After that the list follows the document, but not
+  // inside a keystroke: the check reads the whole document, so a change asks for a run once the
+  // document has been quiet, and a burst of changes costs one run.
+  let result = $state.raw<AccessibilityResult | null>(untrack(compute));
+  let opened = false;
+  $effect(() => {
     void revision?.current;
     void access?.current;
     void regions?.current;
-    return core ? runAccessibilityCheck(core, tr, nameOf) : null;
+    void tr;
+    if (!opened) {
+      opened = true;
+      return;
+    }
+    scheduler.request(() => {
+      result = untrack(compute);
+    });
   });
 
   /** The issues of each kind that has any, in the checker's order. */

@@ -17,6 +17,7 @@
       "default": "./src/panes/*"
     },
     "./fill": "./src/shell/fill.ts",
+    "./send-checklist": "./src/shell/send-checklist.ts",
     "./strings": "./src/i18n/strings.ts",
     "./styles/*": "./src/styles/*"
   },

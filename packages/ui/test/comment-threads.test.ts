@@ -182,8 +182,11 @@ describe('the pane rows (UX-030 criterion 1, and the name of criterion 6)', () =
       state: 'open',
       replyCount: 0,
       target: { kind: 'block', blockKind: 'figure' },
+      assignee: null,
       accessibleName: { author: 'ben', state: 'open', replyCount: 0 },
     });
+    // A thread given to a person carries the assignee (UX-032).
+    expect(paneRows([threadInput('t', 1, { assignee: 'user:u2' })])[0]?.assignee).toBe('user:u2');
     expect(rows[1]?.target).toEqual({ kind: 'excerpt', text: 'abc' });
     expect(rows[1]?.accessibleName).toEqual({ author: 'ann', state: 'resolved', replyCount: 2 });
   });

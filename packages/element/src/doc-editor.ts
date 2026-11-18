@@ -39,6 +39,7 @@ import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
+import type { WorkflowSendSource } from './workflow-send.ts';
 import type { PrintOutcome } from './print.ts';
 import {
   elementMethods,
@@ -48,7 +49,7 @@ import {
   type HostApi,
 } from './host-api.ts';
 import type * as EditorChunk from './editor.ts';
-import type { MountedEditor, SettingsStore, StringOverrides } from './editor.ts';
+import type { IconOverrides, MountedEditor, SettingsStore, StringOverrides } from './editor.ts';
 
 type EditorModule = typeof EditorChunk;
 import { emit, type DocEditorEventMap, type DocEditorEventName } from './events.ts';
@@ -89,6 +90,7 @@ const CAPTURED = [
   'resolveUsers',
   'extensions',
   'strings',
+  'icons',
 ] as const;
 
 /**
@@ -153,6 +155,7 @@ export class DocEditorElement extends Base {
   #searchPrincipals: SearchPrincipals | null = null;
   #extensions: readonly unknown[] = [];
   #strings: StringOverrides | null = null;
+  #icons: IconOverrides | null = null;
 
   #session: Session | null = null;
   #sessionKey: Backend | string | null = null;
@@ -179,6 +182,14 @@ export class DocEditorElement extends Base {
   #webLabel: HTMLElement | null = null;
   #readViewOf: { docId: string; key: unknown } | null = null;
   #readToken: object | null = null;
+  /**
+   * The view the element shows in place of the one the `view` attribute asks for, after the user
+   * selected an export diagnostic in the read view (FE-072 criterion 4). The attribute keeps the
+   * host's value; setting it again clears this.
+   */
+  #viewOverride: ViewName | null = null;
+  /** The block the editor moves to as soon as the web view is shown (FE-072 criterion 4). */
+  #pendingBlock: string | null = null;
   #grace: ReturnType<typeof setTimeout> | null = null;
   /** flush, getContent, exec and queryCommand over the current session (src/host-api.ts). */
   readonly #methods: HostApi = elementMethods(() => this.#session);
@@ -292,6 +303,23 @@ export class DocEditorElement extends Base {
     this.#mounted?.setStrings(this.#strings ?? {});
   }
 
+  /**
+   * The host's replacement icons by the command's icon name (UX-063): SVG path data, or a drawing
+   * ({ paths, viewBox?, fill? }). An icon the host omits, or gives as anything but path data, keeps
+   * the built-in drawing. Icons are shown once the host gives a set (an empty object asks for the
+   * built-in drawings alone); without one, commands show labels only. Icons are drawn by the shell
+   * and never inserted as markup.
+   */
+  get icons(): IconOverrides | null {
+    return this.#icons;
+  }
+
+  set icons(value: IconOverrides | null) {
+    const plain = value !== null && typeof value === 'object' && !Array.isArray(value);
+    this.#icons = plain ? value : null;
+    this.#mounted?.setIcons(this.#icons);
+  }
+
   /** Host-registered extensions (13 §7, 05 §8.1). A change while the shell is mounted is applied at once (UX-050). */
   get extensions(): readonly unknown[] {
     return this.#extensions;
@@ -379,6 +407,8 @@ export class DocEditorElement extends Base {
       case 'view':
         // A change of `view` is reflected by the reconcile a new document takes (FE-065). Between web and
         // print the session is kept; the read view has no core, so a change to or from it is a new mount.
+        this.#viewOverride = null;
+        this.#pendingBlock = null;
         this.#scheduleLoad();
         break;
       default:
@@ -465,6 +495,7 @@ export class DocEditorElement extends Base {
       // Back from the read view: the same core is shown again (FE-065 criterion 3).
       this.#setEditorHidden(false);
       if (this.#mounted !== null) this.#showWebLabel();
+      this.#revealPendingBlock();
       return;
     }
     this.#reload = false;
@@ -517,8 +548,31 @@ export class DocEditorElement extends Base {
 
   /** The view the `view` attribute asks for now (FE-065; view-select.ts). Touch devices get the web view. */
   #viewChoice(): ViewName {
+    if (this.#viewOverride !== null) return this.#viewOverride;
     const touch = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches;
     return selectView(this.getAttribute('view'), { touch, pageViewAvailable: false }).view;
+  }
+
+  /**
+   * The user selected a diagnostic of the read view's export and may edit (FE-072 criterion 4): the
+   * web view is shown in place of the read view and moves its caret to the block. The core is the
+   * session's own, kept behind the read view or started now.
+   */
+  #openBlockInEditor(blockId: string): void {
+    this.#viewOverride = 'web';
+    this.#pendingBlock = blockId;
+    this.#scheduleLoad();
+  }
+
+  /** Moves the editor to the block a selected diagnostic named, once the web view is shown. */
+  #revealPendingBlock(): void {
+    const blockId = this.#pendingBlock;
+    const mounted = this.#mounted;
+    if (blockId === null || mounted === null || this.#readViewOf !== null) return;
+    this.#pendingBlock = null;
+    // False when the block is not in the body or a region the reader can see; the web view then
+    // stays where it was.
+    mounted.core.selectBlock(blockId);
   }
 
   /**
@@ -575,6 +629,9 @@ export class DocEditorElement extends Base {
         backend,
         viewerUrl: this.#config.pdfViewerUrl ?? new URL(VIEWER_PAGE, import.meta.url).href,
         ownsBackend,
+        onOpenInEditor: (blockId) => {
+          if (this.#readToken === token) this.#openBlockInEditor(blockId);
+        },
       });
     })().catch(() => {});
   }
@@ -668,6 +725,8 @@ export class DocEditorElement extends Base {
       ...this.#assetImage(docId),
       // The export dialog's jobs go through the backend's exports port, when it has one (UX-101).
       ...this.#exportService(docId),
+      // The send dialog goes through the backend's workflow port, when it has one (FRW-028).
+      ...this.#workflowSource(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       mathFontsUrl: this.#config.katexFontsUrl,
@@ -701,6 +760,7 @@ export class DocEditorElement extends Base {
         if (this.#session?.docId === docId) this.#emit('de-access-request', { docId, scope });
       },
       strings: () => this.#strings,
+      icons: () => this.#icons,
       // The host's extensions are read at mount and then applied on each change (UX-050).
       extensions: () => this.#extensions,
       // A problem with one extension is raised as a non-fatal `de-error`; the others still load.
@@ -716,6 +776,7 @@ export class DocEditorElement extends Base {
     if (this.#readViewOf !== null) this.#setEditorHidden(true);
     else this.#showWebLabel();
     this.#applyPageGuides();
+    this.#revealPendingBlock();
     return mounted;
   }
 
@@ -887,6 +948,22 @@ export class DocEditorElement extends Base {
   }
 
   /**
+   * The send dialog's source (FRW-028), when the session's backend has the workflow port and
+   * announced the feature; otherwise nothing, and the shell offers no "send for completion" command.
+   */
+  #workflowSource(docId: string): { workflow?: () => WorkflowSendSource | null } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.workflow || !hasPort(backend, 'workflow')) return {};
+    return {
+      workflow: () =>
+        this.#session === session && session?.backend?.workflow
+          ? { port: session.backend.workflow, docId: session.docId }
+          : null,
+    };
+  }
+
+  /**
    * The shell's export service (UX-101), when the session's backend has the exports port and
    * announced the feature; otherwise nothing, and the shell offers no export command.
    */
@@ -918,6 +995,8 @@ export class DocEditorElement extends Base {
     document.removeEventListener('pointerdown', this.#onOutsidePress, true);
     this.#suspended = false;
     this.#reload = false;
+    this.#viewOverride = null;
+    this.#pendingBlock = null;
     this.#closeReadView();
     this.#hideWebLabel();
     const session = this.#session;
