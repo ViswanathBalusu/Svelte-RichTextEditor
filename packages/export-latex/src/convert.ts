@@ -42,6 +42,7 @@ import {
   kvValue,
   lit,
   tex,
+  text,
   type Tex,
 } from './emit.ts';
 import { ALLOW_LIST } from './math/allow-list.ts';
@@ -52,7 +53,7 @@ import { preflight } from './preflight.ts';
 import { styleMacro } from './props.ts';
 
 /** The house class version (EXP-015): raised with every change to docedit.cls or docedit.lua. */
-export const CLASS_VERSION = '0.2.11';
+export const CLASS_VERSION = '0.2.12';
 
 /** A TeX Live image digest (EXP-073): `sha256:` and 64 lowercase hex digits. */
 export const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
@@ -357,6 +358,8 @@ export async function convert(envelope: CdmEnvelope, options: ConvertOptions): P
     }
   }
   if (hyphenation) line(ctx, t('\\DEhyphenation'));
+  // The classification marking (EXP-089), escaped through the text emitter; empty means none.
+  if (options.classification) line(ctx, tex`\DEdefclassification{${text(options.classification)}}`);
   for (const s of setupLines) line(ctx, s);
   line(ctx, tex`\DEgeometry{${int(firstSetup ? ctx.setups.indexOf(firstSetup) : 0)}}`);
   for (const [, k] of ctx.markedStyles) line(ctx, tex`\DEdefmark{${int(k)}}`);
@@ -464,6 +467,7 @@ export async function convert(envelope: CdmEnvelope, options: ConvertOptions): P
       title: options.title ?? 'Document',
       timeZone: options.timeZone ?? '',
       instant: options.instant ?? '',
+      ...(options.classification ? { classification: options.classification } : {}),
     },
     redactions: ctx.redactions,
     files: sortedHashes,
