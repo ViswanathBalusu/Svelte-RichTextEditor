@@ -1,7 +1,7 @@
 // The `history` profile against the reference service (PRO-119). The service is started with
 // `history` and `comments` in DOCEDIT_FEATURES, as an operator announces them (a comment is made in
-// the region-restore scenario). The history listing (`GET /documents/{id}/history`) is not served,
-// so it has no scenario (see the Notes of PRO-119).
+// the region-restore scenario). The history listing (`GET /documents/{id}/history`)
+// is served since HIS-026, and `history.gate.history-list-and-versions` runs it.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runKit } from '../src/runner.ts';
 import type { KitReport } from '../src/report.ts';
@@ -56,6 +56,10 @@ describe.skipIf(skip)('history profile against the reference service (PRO-119)',
       'versions, comparison and attribution (criterion 1)',
     ],
     ['history.gate.every-route-with-a-seq', 'a seq below the gate is refused (criterion 2)'],
+    [
+      'history.gate.history-list-and-versions',
+      'the list and a version refuse a seq below the gate (HIS-026)',
+    ],
     ['history.restore.dry-run', 'a dry run stores nothing (criterion 3)'],
     ['history.restore.region', 'a region restore keeps the rest and not the grants (criterion 3)'],
     ['history.read-marker.forward-only', 'a read marker moved backwards stays (criterion 4)'],
