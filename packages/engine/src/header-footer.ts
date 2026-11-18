@@ -115,3 +115,57 @@ export function insertPageNumber(schema: Schema): Command {
     return true;
   };
 }
+
+/** The identifier of the page setup the body uses, else the first one, or null when there is none. */
+export function pageSetupIdOf(doc: PMNode): string | null {
+  let named: string | null = null;
+  let first: string | null = null;
+  doc.forEach((top) => {
+    if (top.type.name === 'body' && typeof top.attrs['pageSetup'] === 'string')
+      named = top.attrs['pageSetup'];
+    if (top.type.name !== 'defs') return;
+    top.forEach((child) => {
+      if (first === null && child.type.name === 'page_setup') first = String(child.attrs['id']);
+    });
+  });
+  return named !== null && pageSetupNode(doc, named) !== null ? named : first;
+}
+
+/** What the panel needs to know about one variant of a header or footer (FE-057 criterion 1). */
+export interface StoryVariantInfo {
+  readonly part: StoryPart;
+  readonly variant: StoryVariant;
+  /** The story the page setup names for it, or null when it has none yet. */
+  readonly story: string | null;
+}
+
+/**
+ * The variants the page setup uses, for the header and then the footer, each with the story the
+ * page setup names (or null). Empty when the document has no page setup.
+ */
+export function storyVariantsOf(doc: PMNode): StoryVariantInfo[] {
+  const id = pageSetupIdOf(doc);
+  const setup = id === null ? null : pageSetupNode(doc, id);
+  if (id === null || setup === null) return [];
+  const out: StoryVariantInfo[] = [];
+  for (const part of ['header', 'footer'] as const)
+    for (const variant of variantsInUse(setup.node))
+      out.push({ part, variant, story: storyOfVariant(doc, id, part, variant) });
+  return out;
+}
+
+/** Which part and variant a story is, by the page setup that names it; null for another story. */
+export function roleOfStory(
+  doc: PMNode,
+  storyId: string,
+): { part: StoryPart; variant: StoryVariant | null } | null {
+  let kind: StoryPart | null = null;
+  doc.forEach((top) => {
+    if (top.type.name !== 'story' || top.attrs['id'] !== storyId) return;
+    const k = top.attrs['kind'];
+    if (k === 'header' || k === 'footer') kind = k;
+  });
+  if (kind === null) return null;
+  const named = storyVariantsOf(doc).find((v) => v.story === storyId);
+  return { part: kind, variant: named?.variant ?? null };
+}

@@ -282,8 +282,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
     selection: core.selection,
     panel: core.panel,
     outline: core.outline,
+    // The styles pane (UX-022): the document's styles, and whether they may be edited now.
+    styles: core.styles,
+    styleEdit: (op, id) => core.checkStyleEdit(op, id),
     run: (command) => core.run(command),
     closePanel: () => core.closePanel(),
+    // The variants of the header and footer panel (FE-057): the core lists and opens them.
+    storyVariants: () => core.storyVariants(),
+    editStory: (part, variant) => core.editStory(part, variant),
     focus: () => core.focus(),
     // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
     selectBlock: (id) => core.selectBlock(id),
@@ -353,6 +359,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
       'insertRecovered',
       'discardRecovered',
       'setLanguage',
+      'paragraphStyle',
+      'characterStyle',
+      'tableStyle',
+      'createStyle',
+      'changeStyle',
+      'deleteStyle',
     ],
     runNamed: (name, args) => {
       if (name === 'showReferences') return core.showReferences();
@@ -372,6 +384,36 @@ export function mountEditor(options: MountOptions): MountedEditor {
         const id = (args as { id?: unknown } | undefined)?.id;
         if (typeof id !== 'string') return false;
         return name === 'insertRecovered' ? core.insertRecovered(id) : core.discardRecovered(id);
+      }
+      // The styles pane (UX-022): `{ style }` applies a style of the kind the name says, to the
+      // selection through the guards (a user who may only suggest records a suggestion);
+      // `createStyle` takes `{ name, kind, basedOn? }`, `changeStyle` `{ id, name?, basedOn? }` and
+      // `deleteStyle` `{ id }`, and the core checks the user's rights and the rule of 07 §5.3.
+      if (name === 'paragraphStyle' || name === 'characterStyle' || name === 'tableStyle') {
+        const style = (args as { style?: unknown } | undefined)?.style;
+        if (typeof style !== 'string') return false;
+        if (name === 'paragraphStyle') return core.run('paragraphStyle', { style });
+        if (name === 'characterStyle') return core.run('charStyle', { charStyle: style });
+        return core.run('setTableStyle', { tableStyle: style });
+      }
+      if (name === 'createStyle') {
+        const a = args as { name?: unknown; kind?: unknown; basedOn?: unknown } | undefined;
+        if (typeof a?.name !== 'string') return false;
+        if (a.kind !== 'paragraph' && a.kind !== 'character' && a.kind !== 'table') return false;
+        const basedOn = typeof a.basedOn === 'string' ? a.basedOn : null;
+        return core.createStyle({ name: a.name, kind: a.kind, basedOn }).ok;
+      }
+      if (name === 'changeStyle') {
+        const a = args as { id?: unknown; name?: unknown; basedOn?: unknown } | undefined;
+        if (typeof a?.id !== 'string') return false;
+        const changes: { name?: string; basedOn?: string | null } = {};
+        if (typeof a.name === 'string') changes.name = a.name;
+        if (typeof a.basedOn === 'string' || a.basedOn === null) changes.basedOn = a.basedOn;
+        return core.changeStyle(a.id, changes).ok;
+      }
+      if (name === 'deleteStyle') {
+        const id = (args as { id?: unknown } | undefined)?.id;
+        return typeof id === 'string' && core.deleteStyle(id).ok;
       }
       if (name === 'markRegion') {
         const title = (args as { title?: unknown } | undefined)?.title;

@@ -35,6 +35,10 @@ export interface SelectionSummary {
   lang?: string | null;
   /** The identifier of the paragraph style at the selection, when `style` names one (UX-022). */
   styleId?: string | null;
+  /** The character style at the selection, or null when there is none or the runs differ (UX-022). */
+  charStyleId?: string | null;
+  /** The style of the table the selection is in, or null (UX-022). */
+  tableStyleId?: string | null;
 }
 
 export interface PanelInfo {
@@ -42,6 +46,26 @@ export interface PanelInfo {
   id: string;
   /** Kept for spike S1; the shell names panels from its own string tables by `kind` (UX-064). */
   label: string;
+  /** For a header or footer story: which one (FE-057). */
+  part?: StoryPart;
+  /** For a header or footer story: the variant the page setup names it for; null when it names none. */
+  variant?: StoryVariant | null;
+}
+
+/** The part of the page a story is set in (03 §4.1). */
+export type StoryPart = 'header' | 'footer';
+
+/** The pages a header or footer is used on: every page, the first page, or the even pages. */
+export type StoryVariant = 'default' | 'first' | 'even';
+
+/** One variant of the header or the footer, as the panel offers it (FE-057 criterion 1). */
+export interface StoryVariantInfo {
+  readonly part: StoryPart;
+  readonly variant: StoryVariant;
+  /** The story the page setup names for it, or null when it has none yet. */
+  readonly story: string | null;
+  /** Whether the person may edit it, or create it when it has none. */
+  readonly editable: boolean;
 }
 
 export interface OutlineItem {
@@ -191,6 +215,8 @@ export interface CoreLabels {
   readonly footnote: string;
   /** Accessible name of the header or footer sub-editor. */
   readonly story: string;
+  /** Accessible name of the footer sub-editor; `story` is used when it is not given. */
+  readonly footer?: string;
 }
 
 /**
@@ -255,6 +281,10 @@ export type CoreCommandName =
   | 'pasteFormat'
   | 'paragraphStyle'
   | 'characterStyle'
+  | 'tableStyle'
+  | 'createStyle'
+  | 'changeStyle'
+  | 'deleteStyle'
   | 'setLanguage'
   | 'markRegion'
   | 'setRegionPolicy'
@@ -351,7 +381,39 @@ export interface StyleSummary {
   readonly id: string;
   readonly name: string;
   readonly kind: 'paragraph' | 'character' | 'table';
+  /** The parent style of the same kind, when the core says (UX-022). */
+  readonly basedOn?: string | null;
 }
+
+/** What a user may do with the definitions of styles (UX-022 criteria 2 and 3). */
+export type StyleEditOp = 'create' | 'change' | 'delete';
+
+/**
+ * Why a style cannot be created, changed or deleted now: the user's right (`read-only`,
+ * `suggestion`, `no-access`, or `region`: a region the user may not edit uses the style, 07 §5.3),
+ * or the document (`unknown-style`, `built-in`, `in-use`, `duplicate-name`, `bad-name`,
+ * `bad-based-on`).
+ */
+export type StyleEditReason =
+  | 'read-only'
+  | 'suggestion'
+  | 'no-access'
+  | 'region'
+  | 'unknown-style'
+  | 'built-in'
+  | 'in-use'
+  | 'duplicate-name'
+  | 'bad-name'
+  | 'bad-based-on';
+
+/**
+ * Whether an edit may be tried. `regions` are the regions that use the style; with `region` as the
+ * reason, those the user may not edit. The server decides the rule again, and refuses a change while
+ * a region that uses the style is approved (PRM-047), which the core cannot see.
+ */
+export type StyleEditCheck =
+  | { readonly ok: true; readonly regions: readonly string[] }
+  | { readonly ok: false; readonly reason: StyleEditReason; readonly regions: readonly string[] };
 
 /** Who can edit a region (05 §6.2 `RegionEditors`; PRM-032). */
 export interface RegionEditors {
@@ -556,6 +618,10 @@ export interface CoreApi {
   readonly outline: ReadView<readonly OutlineItem[]>;
   run(command: CommandName): boolean;
   closePanel(): void;
+  /** The variants of the header and footer the page setup uses (FE-057); absent: no variant tabs. */
+  storyVariants?(): readonly StoryVariantInfo[];
+  /** Opens a variant in the panel, creating its story when it has none (FE-057). */
+  editStory?(part: StoryPart, variant: StoryVariant): boolean;
   focus(): void;
   /** Mounts the body view; returns the function that unmounts it. */
   mountBody(target: HTMLElement): () => void;
@@ -654,6 +720,8 @@ export interface CoreApi {
   readonly classification?: ReadView<ClassificationLabel | null>;
   /** The document's styles, in the document's order (UX-022). */
   readonly styles?: ReadView<readonly StyleSummary[]>;
+  /** Whether a style may be created, changed or deleted now (UX-022 criteria 2 and 3). */
+  styleEdit?(op: StyleEditOp, id?: string): StyleEditCheck;
   /** The derived region list, as this reader may see it (PRM-032; ADR 0019). */
   readonly regions?: ReadView<readonly RegionSummary[]>;
   /** The words for the lock indicators of regions the user cannot edit, by region id (PRM-026). */

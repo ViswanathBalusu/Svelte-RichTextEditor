@@ -29,9 +29,12 @@ describe('placeAfter (UX-020 criterion 2)', () => {
   });
 
   it('always names a heading that is listed, or none, and never moves a place that is listed', () => {
-    const ids = fc.uniqueArray(fc.integer({ min: 0, max: 30 }).map((n) => `h${n}`), {
-      maxLength: 20,
-    });
+    const ids = fc.uniqueArray(
+      fc.integer({ min: 0, max: 30 }).map((n) => `h${n}`),
+      {
+        maxLength: 20,
+      },
+    );
     fc.assert(
       fc.property(ids, ids, fc.nat(30), (before, after, pick) => {
         const place = before.length ? before[pick % before.length]! : null;

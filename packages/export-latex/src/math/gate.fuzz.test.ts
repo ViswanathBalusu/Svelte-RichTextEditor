@@ -1,8 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { ALLOW_LIST } from './allow-list.ts';
-import { mathGate, scanMath } from './gate.ts';
-import { katexRejects } from './katex.ts';
+import { fuzzAndStore } from '../../test/gate-regressions.ts';
+import { mathGate } from './gate.ts';
 
 /**
  * Fuzzing of the math gate (EXP-053). The seeds of known attacks are given to every property as
@@ -81,34 +80,14 @@ const mutatedArb = fc
   });
 const inputArb = fc.oneof(grammarArb, randomArb, unicodeArb, mutatedArb);
 
-const examples: [string][] = SEEDS.map((s) => [s]);
-const RUNS = { numRuns: 400, examples };
-
-/** A control word in a string of TeX: a backslash and its letters. */
-const CONTROL_WORD = /\\([A-Za-z]+)/g;
-
+/**
+ * The properties are the named checks of `test/gate-regressions.ts`. A failing run stores its
+ * shrunk input in `test/math-gate-regressions.json` (criterion 5), and every run gives the stored
+ * inputs and the seeds to the property first.
+ */
 describe('math gate fuzzing (EXP-053 criterion 1)', () => {
   it('never throws, and decides each input within a bounded time', () => {
-    fc.assert(
-      fc.property(inputArb, (latex) => {
-        const started = performance.now();
-        const r = mathGate(latex, false);
-        const elapsed = performance.now() - started;
-        expect(typeof r.ok).toBe('boolean');
-        // A generous bound for one call on a 4,000-character input; a hang would exceed it.
-        expect(elapsed).toBeLessThan(2000);
-      }),
-      RUNS,
-    );
-  });
-
-  it('decides the display and inline forms alike without throwing', () => {
-    fc.assert(
-      fc.property(inputArb, fc.boolean(), (latex, display) => {
-        expect(() => mathGate(latex, display)).not.toThrow();
-      }),
-      RUNS,
-    );
+    fuzzAndStore('bounded-decision', inputArb, SEEDS);
   });
 });
 
@@ -116,29 +95,13 @@ describe('math gate fuzzing (EXP-053 criterion 2, part)', () => {
   it('accepts only control words that are on the allow-list', () => {
     // The compile half of this criterion (the token-stream trace) needs the TeX engine and is
     // not run here. This is its lexical half: every control word of an accepted value is listed.
-    fc.assert(
-      fc.property(inputArb, (latex) => {
-        if (!scanMath(latex).ok) return;
-        for (const m of latex.matchAll(CONTROL_WORD)) {
-          const name = m[1]!;
-          if (name === 'begin' || name === 'end') continue;
-          expect(Object.hasOwn(ALLOW_LIST.commands, name)).toBe(true);
-        }
-      }),
-      RUNS,
-    );
+    fuzzAndStore('allow-listed-words', inputArb, SEEDS);
   });
 });
 
 describe('math gate fuzzing (EXP-053 criterion 3)', () => {
   it('accepts only what KaTeX in strict mode also accepts', () => {
-    fc.assert(
-      fc.property(inputArb, fc.boolean(), (latex, display) => {
-        if (!mathGate(latex, display).ok) return;
-        expect(katexRejects(latex, display)).toBeNull();
-      }),
-      RUNS,
-    );
+    fuzzAndStore('katex-accepts', inputArb, SEEDS);
   });
 });
 

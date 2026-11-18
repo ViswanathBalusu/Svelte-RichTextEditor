@@ -292,6 +292,53 @@ export interface CommandState {
   reason?: CommandUnavailable;
 }
 
+/** The three kinds of style a document defines (03 §4.1 `style_def`). */
+export type StyleKind = 'paragraph' | 'character' | 'table';
+
+/** A style the document defines, for the shell's gallery and pane (UX-022). Names are content. */
+export interface StyleSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: StyleKind;
+  /** The parent style of the same kind, or null (03 §4.1 `basedOn`). */
+  readonly basedOn: string | null;
+}
+
+/** What a user may do with the definitions of styles (UX-022 criteria 2 and 3). */
+export type StyleEditOp = 'create' | 'change' | 'delete';
+
+/**
+ * Why a style cannot be created, changed or deleted: the user's right (`read-only`, `suggestion`,
+ * `no-access`: no `structure` or no `edit` in `defs`; `region`: a region the user may not edit uses
+ * the style, 07 §5.3), or the document (`unknown-style`, `built-in`, `in-use`, `duplicate-name`,
+ * `bad-name`, `bad-based-on`).
+ */
+export type StyleEditReason =
+  | 'read-only'
+  | 'suggestion'
+  | 'no-access'
+  | 'region'
+  | 'unknown-style'
+  | 'built-in'
+  | 'in-use'
+  | 'duplicate-name'
+  | 'bad-name'
+  | 'bad-based-on';
+
+/**
+ * Whether an edit of the style may be tried now. `regions` are the identifiers of the regions that
+ * use the style, directly or through `basedOn` (07 §5.3), and with a refusal `region` those the user
+ * may not edit. The server's own rule, including an approved region, is decided again on the commit.
+ */
+export type StyleEditCheck =
+  | { readonly ok: true; readonly regions: readonly string[] }
+  | { readonly ok: false; readonly reason: StyleEditReason; readonly regions: readonly string[] };
+
+/** What a style edit did: the new style's identifier, or why nothing changed. */
+export type StyleEditResult =
+  | { readonly ok: true; readonly id: string }
+  | { readonly ok: false; readonly reason: StyleEditReason; readonly regions: readonly string[] };
+
 export interface SelectionSummary {
   empty: boolean;
   scope: 'body' | 'region';
@@ -302,6 +349,12 @@ export interface SelectionSummary {
   marks: string[];
   /** The language mark at the selection (a BCP 47 tag), or null for the document's default (UX-018). */
   lang?: string | null;
+  /** The identifier of the paragraph style at the selection (the same as `style`; UX-022). */
+  styleId?: string | null;
+  /** The character style at the selection, or null when there is none or the runs differ (UX-022). */
+  charStyleId?: string | null;
+  /** The style of the table the selection is in, or null (UX-022). */
+  tableStyleId?: string | null;
 }
 
 /** The shape of the `de-selection` detail (05 §8.1): a DEP scope identifier and a block. */
@@ -316,6 +369,10 @@ export interface PanelInfo {
   kind: 'footnote' | 'story';
   id: string;
   label: string;
+  /** For a header or footer story: which one (FE-057). */
+  part?: StoryPart;
+  /** For a header or footer story: the variant the page setup names it for; null when it names none. */
+  variant?: StoryVariant | null;
 }
 
 export interface OutlineItem {
@@ -420,6 +477,8 @@ export interface CoreLabels {
   readonly body: string;
   readonly footnote: string;
   readonly story: string;
+  /** The name of a footer's sub-editor; `story` is used when it is not given. */
+  readonly footer?: string;
 }
 
 /** Named queries of the document API for the command registry (13 §4; ADR 0041). */
@@ -465,7 +524,11 @@ export type RefusalReason =
   | 'no-copy'
   | 'no-print'
   | 'suggestion'
-  | 'referenced';
+  | 'referenced'
+  // A pasted picture that was not added after its upload (FE-053 criterion 3): the upload failed or
+  // the asset service did not accept the file, or its size cannot be used. No content is named.
+  | 'upload-failed'
+  | 'invalid-size';
 
 /** The last local change the region guard refused (FE-036): `n` counts refusals. */
 export interface RefusalNotice {
@@ -751,6 +814,7 @@ export type InsertResult =
     };
 
 import type { CdmFragment } from './cdm-fragment.ts';
+import type { StoryPart, StoryVariant, StoryVariantInfo } from './header-footer.ts';
 import type { ClipboardInput, ClipboardPayload, CutResult } from './clipboard.ts';
 import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
@@ -769,6 +833,8 @@ export interface DocumentApi {
   readonly proofing: ReadView<ProofingInfo>;
   readonly panel: ReadView<PanelInfo | null>;
   readonly outline: ReadView<readonly OutlineItem[]>;
+  /** The styles the document defines, in its order (UX-022). */
+  readonly styles: ReadView<readonly StyleSummary[]>;
   /** The DEP `access` in force (`ch.opened`, then every `perm.changed`); null before any. */
   readonly permissions: ReadView<Access | null>;
   /** Effective access at the selection (the shell's `access`, ADR 0041). */
@@ -841,6 +907,10 @@ export interface DocumentApi {
   openFootnote(id: string): void;
   /** Opens the story's panel. Returns false, and opens nothing, when the user may not change the story (07 §7). */
   openStory(id: string): boolean;
+  /** The variants of the header and footer the page setup uses, with the story each names (FE-057). */
+  storyVariants(): Array<StoryVariantInfo & { editable: boolean }>;
+  /** Opens a variant in the panel, creating its story through the guard when it has none (FE-057). */
+  editStory(part: StoryPart, variant: StoryVariant): boolean;
   closePanel(): void;
   /** Puts the caret at the start of a block (or selects it) and scrolls it into view; false when it cannot (UX-067). */
   selectBlock(id: string): boolean;
@@ -852,6 +922,21 @@ export interface DocumentApi {
   focus(): void;
   destroy(): void;
 
+  /** Whether a style may be created, changed or deleted now, and which regions use it (UX-022). */
+  checkStyleEdit(op: StyleEditOp, id?: string): StyleEditCheck;
+  /** Creates a style of `kind` with a new identifier; the user needs `structure` (UX-022). */
+  createStyle(spec: {
+    readonly name: string;
+    readonly kind: StyleKind;
+    readonly basedOn?: string | null;
+  }): StyleEditResult;
+  /** Renames a style or changes its parent, through the rules of 07 §5.3 (UX-022). */
+  changeStyle(
+    id: string,
+    changes: { readonly name?: string; readonly basedOn?: string | null },
+  ): StyleEditResult;
+  /** Deletes a style nothing uses, through the rules of 07 §5.3 (UX-022). */
+  deleteStyle(id: string): StyleEditResult;
   /**
    * Finds `query` in the body and highlights nothing itself: the matches are the core's and the
    * view draws them (FE-059). An empty query clears the find. Changes no document.

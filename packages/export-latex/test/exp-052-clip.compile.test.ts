@@ -1,7 +1,7 @@
 /**
  * EXP-052 criterion 5 (Podman, export worker sandbox, lane V-EXP-049-064), display equations only:
  * the class clips a display equation to its box, so nothing of it is painted outside the box.
- * Inline equations are not clipped (see the class and the story Notes), so this test has none.
+ * Inline equations are in `exp-052-clip-inline.compile.test.ts`.
  *
  * The converter's gate refuses the painting commands (EXP-050), so the test puts a painting command
  * in by hand: after conversion, the placeholder `QQQ` in the bundle's main.tex is replaced by TeX
@@ -12,18 +12,16 @@
  *
  * Skipped when the sandbox or pdftoppm cannot run here.
  */
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { convert } from '../src/index.ts';
+import { darkPixels, differingPixels, rasteriserAvailable } from './raster.ts';
 import { classFiles, compileBundle, imageFonts, sandboxReady } from './harness.ts';
 import { doc, nid, para } from './docs.ts';
 
-const PDFTOPPM = process.env['DOCEDIT_PDFTOPPM'] ?? 'pdftoppm';
-const probe = spawnSync(PDFTOPPM, ['-v'], { encoding: 'utf8' });
-const rasteriser = !probe.error;
+const rasteriser = rasteriserAvailable();
 const ready = rasteriser && (await sandboxReady()).ok;
 
 const INSTANT = '2026-11-06T10:00:00.000Z';
@@ -34,44 +32,8 @@ function dumpLog(name: string, log: string): void {
   writeFileSync(join(tmpdir(), `docedit-v-exp-049-064-052-${name}.log`), log);
 }
 
-/** Dark pixels (grey below 128) of page 1, rendered at 72 dpi, from the PGM that pdftoppm writes. */
-function darkPixels(pdf: Uint8Array): number {
-  const dir = mkdtempSync(join(tmpdir(), 'docedit-v-exp-049-064-clip-'));
-  try {
-    const input = join(dir, 'page.pdf');
-    writeFileSync(input, pdf);
-    const r = spawnSync(
-      PDFTOPPM,
-      ['-gray', '-r', '72', '-f', '1', '-l', '1', '-singlefile', input, join(dir, 'page')],
-      {
-        encoding: 'buffer',
-      },
-    );
-    if (r.status !== 0) throw new Error(`pdftoppm failed: ${String(r.stderr)}`);
-    const bytes = readFileSync(join(dir, 'page.pgm'));
-    // PGM header: P5, width, height, maxval, each followed by whitespace; then the raster.
-    let pos = 0;
-    const token = (): string => {
-      while (pos < bytes.length && /\s/.test(String.fromCharCode(bytes[pos]!))) pos++;
-      const start = pos;
-      while (pos < bytes.length && !/\s/.test(String.fromCharCode(bytes[pos]!))) pos++;
-      return bytes.subarray(start, pos).toString('latin1');
-    };
-    expect(token()).toBe('P5');
-    const width = Number(token());
-    const height = Number(token());
-    token();
-    pos++; // the single whitespace byte before the raster
-    let dark = 0;
-    for (let i = 0; i < width * height; i++) if (bytes[pos + i]! < 128) dark++;
-    return dark;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
 /** The document: one display equation with the placeholder, between two paragraphs. */
-async function compiledWith(replacement: string) {
+async function compiledWith(replacement: string, unclipped = false) {
   const body = [
     para('Before the equation.', {}, []),
     { type: 'equation_block', attrs: { id: nid('env'), latex: PLACEHOLDER } },
@@ -90,6 +52,14 @@ async function compiledWith(replacement: string) {
   expect(hits.map(([name]) => name)).toEqual(['main.tex']);
   writeFileSync(join(tmpdir(), 'docedit-v-exp-049-064-052-main.tex'), bundle.files['main.tex']!);
   bundle.files['main.tex'] = bundle.files['main.tex']!.split(PLACEHOLDER).join(replacement);
+  if (unclipped) {
+    // The display equation as the class set it before the clip: the box, without the clip path.
+    bundle.files['main.tex'] = bundle.files['main.tex']!.replace(
+      '\\begin{document}',
+      () =>
+        '\\makeatletter\\renewcommand\\DE@clipmath[1]{\\setbox\\DE@cbox=\\hbox{$\\displaystyle#1$}\\box\\DE@cbox}\\makeatother\n\\begin{document}',
+    );
+  }
   return compileBundle(bundle, { maxPasses: 1, minPasses: 1 });
 }
 
@@ -117,5 +87,20 @@ describe.skipIf(!ready)('EXP-052 criterion 5: the class clips every equation to 
     expect(withSquare - baseline).toBeGreaterThan(300);
     // The bar would add about 1200 dark pixels if it were painted; the clip leaves at most a few.
     expect(withBar - baseline).toBeLessThan(20);
+  }, 900_000);
+
+  it('moves nothing after a display equation that has a width', async () => {
+    const clipped = await compiledWith('a+b+c+d+e+f+g+h', false);
+    expect(clipped.compile.ok).toBe(true);
+    const unclipped = await compiledWith('a+b+c+d+e+f+g+h', true);
+    expect(unclipped.compile.ok).toBe(true);
+    const dark = darkPixels(unclipped.compile.pdf!);
+    expect(dark).toBeGreaterThan(300);
+    const differing = differingPixels(clipped.compile.pdf!, unclipped.compile.pdf!);
+    writeFileSync(
+      join(tmpdir(), 'docedit-w2-exp-052-display-shift.txt'),
+      `dark ${dark}, differing ${differing}`,
+    );
+    expect(differing).toBeLessThan(10);
   }, 900_000);
 });

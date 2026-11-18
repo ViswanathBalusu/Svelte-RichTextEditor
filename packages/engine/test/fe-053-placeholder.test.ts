@@ -10,7 +10,7 @@ import type { AssetsPort, PastedImage, UploadOutcome } from '../src/image-paste.
 import { picturePlaceholderKey } from '../src/picture-placeholder.ts';
 import { internals } from '../src/testing.ts';
 import { AUTH_IDS, authoringEnvelope } from './authoring-doc.ts';
-import { caret, microtask } from './support.ts';
+import { caret, microtask, type } from './support.ts';
 
 const EDIT = ['view', 'comment', 'suggest', 'edit'] as const;
 const REGION = `region:${AUTH_IDS.region}`;
@@ -112,6 +112,59 @@ describe('the picture placeholder while an upload runs (FE-053 criterion 3)', ()
     await settle();
     expect(shown(c)).toBe(0);
     expect(docJson(c)).toBe(before);
+  });
+
+  it('records a refusal the shell turns into a message when the upload fails or is rejected', async () => {
+    const port = waitingPort();
+    const c = core(port);
+    caret(c, AUTH_IDS.p1, 2);
+    expect(c.refusal.get()).toBeNull();
+    const result = c.pasteFromClipboard({ files: [PICTURE] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Nothing is said while the upload runs.
+    expect(c.refusal.get()).toBeNull();
+    port.answer(0, { ok: false, message: 'the asset service rejected the file' });
+    await result.uploads;
+    const notice = c.refusal.get();
+    expect(notice).toMatchObject({ n: 1, reason: 'upload-failed', scopes: [] });
+    // The service's own message is not carried into the notice.
+    expect(JSON.stringify(notice)).not.toContain('rejected the file');
+  });
+
+  it('says nothing when the upload succeeds', async () => {
+    const port = waitingPort();
+    const c = core(port);
+    caret(c, AUTH_IDS.p1, 2);
+    const result = c.pasteFromClipboard({ files: [PICTURE] });
+    if (!result.ok) throw new Error('refused');
+    port.answer(0, { ok: true, image: { asset: ASSET, widthTwips: 1440, heightTwips: 720 } });
+    await result.uploads;
+    expect(c.refusal.get()).toBeNull();
+  });
+
+  it('keeps the placeholder in place of the picture while the user types before it', async () => {
+    const port = waitingPort();
+    const c = core(port);
+    caret(c, AUTH_IDS.p1, 2);
+    const result = c.pasteFromClipboard({ files: [PICTURE] });
+    if (!result.ok) throw new Error('refused');
+    const at = (): number | undefined =>
+      [...(picturePlaceholderKey.getState(internals(c).state)?.pending.values() ?? [])][0];
+    const first = at();
+    expect(first).toBeDefined();
+    // The user continues: text typed before the placeholder moves it, text after it does not.
+    caret(c, AUTH_IDS.p1, 0);
+    type(c, 'abc');
+    expect(shown(c)).toBe(1);
+    expect(at()).toBe((first ?? 0) + 3);
+    const moved = at();
+    caret(c, AUTH_IDS.p1, 'end');
+    type(c, 'xyz');
+    expect(at()).toBe(moved);
+    port.answer(0, { ok: false, message: 'too large' });
+    await result.uploads;
+    expect(shown(c)).toBe(0);
   });
 
   it('shows one placeholder per picture and removes each as its upload finishes', async () => {

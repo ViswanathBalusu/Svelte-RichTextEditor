@@ -22,7 +22,7 @@ const reference = {
   viewport: REFERENCE_PROFILE.viewport,
   deviceScaleFactor: REFERENCE_PROFILE.deviceScaleFactor,
 };
-const crossBrowser = /(s5|s10)\.spec\.ts$/;
+const crossBrowser = /(s5|s9|s10)\.spec\.ts$/;
 
 export default defineConfig({
   testDir: './e2e',

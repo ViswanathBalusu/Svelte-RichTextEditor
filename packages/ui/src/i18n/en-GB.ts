@@ -197,6 +197,10 @@ export const EN_GB = {
     'That change was not made: it would break the structure of the document.',
   'notice.refused.noCopy':
     'Nothing was copied: your access does not allow copying from this document. Restrictions deter casual copying and are not a security boundary.',
+  'notice.refused.uploadFailed':
+    'The picture was not added: it could not be uploaded, or the asset service did not accept the file.',
+  'notice.refused.pictureSize':
+    'The picture was not added: its size could not be used in the document.',
   'notice.refused.other': 'That change was not made.',
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',
@@ -288,6 +292,12 @@ export const EN_GB = {
   // Panels and panes (13 §3; UX-019).
   'panel.footnote': 'Footnote',
   'panel.story': 'Header',
+  'panel.footer': 'Footer',
+  // The variants of a header or footer (FE-057): the pages each is used on.
+  'panel.variants': 'Header and footer variants',
+  'panel.variant.default': 'Every page',
+  'panel.variant.first': 'First page',
+  'panel.variant.even': 'Even pages',
   'panel.close': 'Close',
   'pane.outline': 'Navigation',
   'pane.comments': 'Comments',
@@ -350,6 +360,46 @@ export const EN_GB = {
   'styles.kind.table': 'Table style',
   'styles.current': 'In use at the cursor',
   'styles.empty': 'This document defines no styles.',
+  'styles.manage': 'Manage styles',
+  'styles.new': 'New style',
+  'styles.new.name': 'Name of the style',
+  'styles.new.kind': 'Kind of style',
+  'styles.new.basedOn': 'Based on',
+  'styles.new.noParent': 'No parent style',
+  'styles.new.save': 'Create',
+  'styles.new.cancel': 'Cancel',
+  'styles.new.done': 'Style created.',
+  'styles.change': 'Change style {name}',
+  'styles.change.action': 'Change',
+  'styles.delete.action': 'Delete',
+  'styles.change.label': 'Change the style {name}',
+  'styles.change.save': 'Save',
+  'styles.change.done': 'Style changed.',
+  'styles.delete': 'Delete style {name}',
+  'styles.delete.done': 'Style deleted.',
+  'styles.edit.failed': 'The style could not be saved.',
+  'styles.why.read-only': 'The document is locked, so its styles cannot be changed.',
+  'styles.why.suggestion':
+    'You are suggesting changes, and a change to a style cannot be a suggestion.',
+  'styles.why.no-access':
+    'Creating, changing and deleting styles needs permission to change the structure of the document, which you do not have. You can still apply a style.',
+  'styles.why.region': {
+    one: 'This style is used in the region {regions}, which you cannot edit, so you cannot change it.',
+    other:
+      'This style is used in the regions {regions}, which you cannot edit, so you cannot change it.',
+  },
+  'styles.why.approved': {
+    one: 'This style is used in the region {regions}, which is approved, so it cannot be changed.',
+    other:
+      'This style is used in the regions {regions}, which are approved, so it cannot be changed.',
+  },
+  'styles.why.built-in': 'A built-in style cannot be renamed or deleted.',
+  'styles.why.in-use': 'This style is in use, so it cannot be deleted.',
+  'styles.why.duplicate-name': 'Another style of this kind has that name.',
+  'styles.why.bad-name': 'Give the style a name.',
+  'styles.why.bad-based-on':
+    'A style can be based only on another style of its kind, and not on itself or on a style based on it.',
+  'styles.why.unknown-style': 'That style is no longer in the document.',
 
   // Sources (UX-103). Titles, names, identifiers and excerpts are content.
   'command.view.sources': 'Sources',
@@ -949,6 +999,7 @@ export const EN_GB = {
   'surface.body': 'Document',
   'surface.footnote': 'Footnote text',
   'surface.story': 'Header',
+  'surface.footer': 'Footer',
 
   // Spelling and grammar findings (UX-041, UX-042; 13 §6.1). Shown only with a proofing port.
   'command.proofing.next': 'Next spelling or grammar issue',

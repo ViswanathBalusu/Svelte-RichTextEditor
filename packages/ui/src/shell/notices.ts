@@ -37,6 +37,9 @@ const REFUSALS: Readonly<Record<string, StringKey>> = {
   'no-copy': 'notice.refused.noCopy',
   // A deletion a cross-reference still names (I4; FE-133 criterion 5): the notice offers to show them.
   referenced: 'notice.refused.referenced',
+  // A pasted picture that was not added (FE-053 criterion 3): the upload failed or was refused.
+  'upload-failed': 'notice.refused.uploadFailed',
+  'invalid-size': 'notice.refused.pictureSize',
 };
 
 const REJECTIONS: Readonly<Record<string, StringKey>> = {
