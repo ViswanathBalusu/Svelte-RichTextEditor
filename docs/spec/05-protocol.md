@@ -302,6 +302,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/fork` | POST | Service credential only. `atSeq`, whether grants are copied. The component raises `de-fork-request` so the host can call it |
 | `/documents/{id}/read-marker` | PUT | Records the caller's last seen `seq`. It can only move forward |
 | `/documents/{id}/activity` | GET | Changes and comment activity by other people since the caller's read marker |
+| `/documents/{id}/connect` | GET | Stage 2 (06 section 2.1). The WebSocket URL of the node that owns the document, or of the node routing would choose when it has none: `{ url, node, source }`. `source` is `owner`, `routing` or `entry` (the service's own address, when the node announces none). A hint only: it grants nothing, and a channel that lands elsewhere is forwarded. Needs `view` |
 | `/documents/{id}/threads` | GET, POST | POST body: `target` (`{ range: { from, to, baseSeq } }` or `{ block: id }`) and the first comment. `baseSeq` must be within the rebase window. The room maps the range to the head and checks `comment` there. GET accepts `?seq` |
 | `/threads/{tid}` | GET, PATCH, DELETE | PATCH `state` (`open`, `resolved`), `assignee` |
 | `/threads/{tid}/comments` | POST | Body may contain mentions (13, section 5) |

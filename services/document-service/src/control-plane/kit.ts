@@ -6,6 +6,7 @@
  */
 import { parsePrincipal, type PermissionState } from '@docedit/authority';
 import type { JsonNode } from '@docedit/model';
+import type { Placement } from './room-routing.ts';
 import type { AuditStore, OutboxStore } from '../storage/types.ts';
 import type { ReadMarkerStore } from '../storage/read-markers.ts';
 import type { ThreadStore } from '../storage/thread-store.ts';
@@ -86,6 +87,11 @@ export interface HandlerDeps {
   publicUrl: string;
   restPath: string;
   wsPath: string;
+  /**
+   * Routing over the live nodes (BE-060), for `GET /documents/{id}/connect` (BE-061). Absent on a
+   * node without leases: the route then answers with the address of the service itself.
+   */
+  placement?: Placement;
   features: readonly string[];
   /** Export targets the worker supports (PRO-063 criterion 3). */
   exportTargets: readonly string[];

@@ -712,6 +712,21 @@
       "owner": "PRO"
     },
     {
+      "operationId": "getConnect",
+      "method": "GET",
+      "path": "/documents/{id}/connect",
+      "security": [
+        "user",
+        "service"
+      ],
+      "requires": "view",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 06 §2.1",
+      "owner": "PRO"
+    },
+    {
       "operationId": "listThreads",
       "method": "GET",
       "path": "/documents/{id}/threads",

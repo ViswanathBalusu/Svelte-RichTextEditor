@@ -49,6 +49,7 @@ import { historyReadRoutes } from './history-reads.ts';
 import { historyRoutes } from './history-routes.ts';
 import { importRoutes } from './imports.ts';
 import { activityRoutes } from './activity-route.ts';
+import { connectRoutes } from './connect-route.ts';
 import { restoreRoutes } from './restore-route.ts';
 import { threadRoutes } from './thread-routes.ts';
 import { versionRoutes } from './versions-routes.ts';
@@ -780,6 +781,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...historyListRoutes(k),
     ...restoreRoutes(k),
     ...activityRoutes(k),
+    ...connectRoutes(k),
     ...threadRoutes(k),
     ...versionRoutes(k),
     ...leaseRoutes(k),
