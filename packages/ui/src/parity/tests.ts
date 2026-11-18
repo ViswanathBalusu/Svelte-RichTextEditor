@@ -90,6 +90,17 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/mini-toolbar.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-062 closed (2026-11-18): the light, dark and high-contrast themes and forced colours.
+  [
+    'themes',
+    [
+      { path: 'packages/ui/e2e/ux-061-themes.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-062-forced-colors.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-062-non-colour-cues.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/theme.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/forced-colors.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-018 closed (2026-11-17): the element's browser runs of the counts and the language.
   [
     'status-bar',
