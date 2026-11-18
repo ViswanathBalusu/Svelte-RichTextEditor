@@ -19,7 +19,15 @@
 import {
   type Checkpoint,
   type ContentSource,
+  type Connection,
+  type DocRole,
+  type DocumentState,
   type LogCommit,
+  type PermissionState,
+  type RegionApproval,
+  type RegionGrant,
+  type RegionState,
+  Room,
   type SnapshotCommit,
   type SnapshotReason,
   type StepJson,
@@ -200,7 +208,90 @@ interface HeldState {
   cdm: number;
   /** The `requires` of the document at each sequence number from `first` to `head`. */
   requires: Map<number, string[]>;
+  /** The commits after the checkpoint, in order, and the contents of the snapshots they name. */
+  log: readonly LogCommit[];
+  snapshots: ReadonlyMap<string, Node>;
+  /** The document at `first`: where every replay starts. */
+  checkpointDoc: Node;
+  /** The hash of the commit at `head` (the next commit links to it); the checkpoint's own at `first`. */
+  chainHead: string | null;
 }
+
+/**
+ * The permission state a caller hands to `applyCommit` (05 §10; ADR 0394). It is the state the
+ * room would hold at apply time, as JSON: the service keeps none of it between calls.
+ */
+export interface WirePermissions {
+  /** The grants revision now (04 G7). */
+  revision: number;
+  grants: RegionGrant[];
+  regionStates?: Record<string, RegionState>;
+  leases?: PermissionState['leases'];
+  documentState?: DocumentState;
+  workflowActive?: boolean;
+  approvals?: Record<string, RegionApproval>;
+}
+
+/** The connection a commit is judged under (05 §3): who submits it and with which role. */
+export interface WireAuthor {
+  sub: string;
+  session: string;
+  role: DocRole;
+  groups?: string[];
+  agent?: string;
+  participantRoles?: string[];
+  participantActive?: boolean;
+}
+
+/** What the caller relied on when it decided to apply the commit (04 §5, closing paragraph). */
+export interface WirePreconditions {
+  revision?: number;
+  head?: number;
+  documentState?: DocumentState;
+  workflowActive?: boolean;
+  regionStates?: Record<string, RegionState>;
+}
+
+export interface ApplyCommitRequest {
+  commit: {
+    id: string;
+    base: number;
+    steps: unknown;
+    origin?: string;
+    author: WireAuthor;
+    /** The server time of the commit, Unix milliseconds; the service's clock when absent. */
+    time?: number;
+  };
+  permissions: WirePermissions;
+  preconditions?: WirePreconditions;
+}
+
+/** A rejection, in the shape of `sync.reject` (05 §5.3); the answer, not an error. */
+export interface WireRejection {
+  id: string;
+  code: string;
+  action: string;
+  head: number;
+  reason?: string;
+  scopes?: string[];
+  rule?: string;
+}
+
+export type ApplyCommitAnswer =
+  | {
+      accepted: true;
+      /** The state after the commit (and the control commit that came with it, if any). */
+      stateId: string;
+      seq: number;
+      /** The steps as applied, after rebasing (08 §2). */
+      steps: StepJson[];
+      /** The scopes the commit changed (07 §5.1). */
+      scopes: string[];
+      rebased: boolean;
+      /** Every commit to store, in order, as `open` takes them: a control commit may come first. */
+      commits: WireCommit[];
+    }
+  | { accepted: false; rejected: WireRejection };
 
 export interface OpenAnswer {
   stateId: string;
@@ -330,19 +421,7 @@ export class AuthorityService {
         : sortedUnion(currentRequires, c.payload.requires ?? []);
       requires.set(c.meta.seq, currentRequires);
     }
-    const checkpoints: Checkpoint[] = [{ seq: ref.seq, doc: node }];
-    const source: ContentSource = {
-      incarnation: stateId,
-      head,
-      checkpoints,
-      commits: (afterSeq, toSeq) => log.filter((c) => c.seq > afterSeq && c.seq <= toSeq),
-      resolve: (c: SnapshotCommit) => {
-        const found = snapshots.get(c.snapshot.checkpoint);
-        if (!found) throw new Error(`checkpoint ${c.snapshot.checkpoint} was not resolved`);
-        return found;
-      },
-      replayers: defaultReplayers(this.#schema),
-    };
+    const source = this.#source(stateId, head, ref.seq, node, log, snapshots);
     const built = contentAt(head, source);
     if (!built.ok) return fail('replay_failed', built.reason, { code: built.code });
     const state: HeldState = {
@@ -354,9 +433,37 @@ export class AuthorityService {
       headDoc: built.doc,
       cdm: envelope.cdm,
       requires,
+      log,
+      snapshots,
+      checkpointDoc: node,
+      chainHead: prev,
     };
     this.#hold(state);
     return { ok: true, stateId, seq: head, doc };
+  }
+
+  /** What `contentAt` replays: the checkpoint, the log after it and the snapshots the log names. */
+  #source(
+    stateId: string,
+    head: number,
+    first: number,
+    checkpointDoc: Node,
+    log: readonly LogCommit[],
+    snapshots: ReadonlyMap<string, Node>,
+  ): ContentSource {
+    const checkpoints: Checkpoint[] = [{ seq: first, doc: checkpointDoc }];
+    return {
+      incarnation: stateId,
+      head,
+      checkpoints,
+      commits: (afterSeq, toSeq) => log.filter((c) => c.seq > afterSeq && c.seq <= toSeq),
+      resolve: (c: SnapshotCommit) => {
+        const found = snapshots.get(c.snapshot.checkpoint);
+        if (!found) throw new Error(`checkpoint ${c.snapshot.checkpoint} was not resolved`);
+        return found;
+      },
+      replayers: defaultReplayers(this.#schema),
+    };
   }
 
   /**
@@ -399,6 +506,192 @@ export class AuthorityService {
       content: envelope,
       text: canonicalText(envelope),
       contentHash: await documentHash(envelope),
+    };
+  }
+
+  /**
+   * `applyCommit(stateId, commit, permissions, preconditions)` (05 §10; 04 §5, §6; 07 §5): the
+   * room's own checks on a commit, run on a state this service holds. The authority package decides,
+   * as in a room: the base and the rebase, the allow-list, the invariants, the permission outcome,
+   * the suggestion and field rules. The service stores nothing: the answer holds the commits to
+   * store and the new `stateId`, and the new state is held so that the next call can name it. A
+   * commit that is not acceptable is a rejection in the answer, never an error (ADR 0314).
+   */
+  async applyCommit(stateId: unknown, request: unknown): Promise<Answer<ApplyCommitAnswer>> {
+    if (typeof stateId !== 'string' || !HEX64.test(stateId))
+      return fail('invalid_request', 'stateId must be 64 lower-case hexadecimal digits');
+    const parsed = parseApply(request);
+    if (!parsed.ok) return parsed;
+    const { commit, permissions, preconditions } = parsed.value;
+    const found = await this.#state(stateId);
+    if (!found.ok) return found;
+    const state = found.state;
+
+    const perms = unpackWirePerms(permissions);
+    // The state the caller decided under must still be the state now (04 §5, closing paragraph).
+    const failed = preconditionFailure(preconditions, perms, state.head);
+    if (failed !== null)
+      return {
+        ok: true,
+        accepted: false,
+        rejected: {
+          id: commit.id,
+          code: 'conflict',
+          action: 'drop',
+          head: state.head,
+          reason: failed,
+        },
+      };
+
+    const lastRevision = state.log.length ? state.log[state.log.length - 1]!.revision : undefined;
+    const at = Number.isSafeInteger(commit.time) ? (commit.time as number) : Date.now();
+    const a = commit.author;
+    const conn: Connection = {
+      sub: a.sub,
+      session: a.session,
+      role: a.role,
+      groups: a.groups ?? [],
+      participantRoles: a.participantRoles ?? [],
+      participantActive: a.participantActive ?? false,
+      ...(a.agent !== undefined ? { agent: a.agent } : {}),
+    };
+    const room = new Room({
+      schema: this.#schema,
+      initial: state.checkpointDoc,
+      requires: state.requires.get(state.first) ?? [],
+      log: [...state.log],
+      perms,
+      initialRevision: lastRevision ?? (state.first === 0 ? 0 : perms.revision),
+      initialSeq: state.first,
+      epoch: 1,
+      incarnation: stateId,
+      now: () => at,
+      snapshotContent: (c) => {
+        const node = state.snapshots.get(c.snapshot.checkpoint);
+        if (!node) throw new Error(`checkpoint ${c.snapshot.checkpoint} was not resolved`);
+        return node;
+      },
+    });
+    const channel = 'apply';
+    const opened = room.open(channel, conn, {
+      seq: state.head,
+      incarnation: stateId,
+      inflight: null,
+    });
+    if (opened.refused)
+      return fail('unsupported_feature', 'the document needs features this service lacks', {
+        missing: opened.refused.missing,
+      });
+    const fx = room.submit(channel, {
+      id: commit.id,
+      base: commit.base,
+      steps: commit.steps,
+      ...(commit.origin !== undefined ? { origin: commit.origin } : {}),
+    });
+    for (const o of fx.send) {
+      if (o.msg.t !== 'sync.reject') continue;
+      const m = o.msg;
+      return {
+        ok: true,
+        accepted: false,
+        rejected: {
+          id: m.id,
+          code: m.code,
+          action: m.action,
+          head: m.head,
+          ...(m.reason !== undefined ? { reason: m.reason } : {}),
+          ...(m.scopes ? { scopes: m.scopes } : {}),
+          ...(m.rule !== undefined ? { rule: m.rule } : {}),
+        },
+      };
+    }
+    // The room asks storage to write; the service answers yes, and the caller stores the same
+    // commits for real before it relies on the new state.
+    const stored: StoredCommit[] = [];
+    let write = fx.write;
+    for (let guard = 0; write && guard < 8; guard++) {
+      stored.push(...write.commits);
+      write = room.writeCompleted({ status: 'ok' }).write;
+    }
+    const mine = stored.find((c) => c.id === commit.id);
+    if (!mine) return fail('replay_failed', 'the room accepted the commit but stored nothing');
+
+    // The commits as the hash chain holds them, linked to the head of this state.
+    const wire: WireCommit[] = [];
+    const requires = new Map(state.requires);
+    let prev = state.chainHead;
+    let current = state.requires.get(state.head) ?? [];
+    for (const c of stored) {
+      const w = await this.#wireCommit(state.doc, c, prev, state.cdm);
+      wire.push(w);
+      prev = w.hash;
+      current = c.requires ? sortedUnion(c.requires) : current;
+      requires.set(c.seq, current);
+    }
+    const head = stored[stored.length - 1]!.seq;
+    const newId = prev ?? stateId;
+    const log = [...state.log, ...stored];
+    this.#hold({
+      ...state,
+      stateId: newId,
+      head,
+      headDoc: room.document,
+      source: this.#source(newId, head, state.first, state.checkpointDoc, log, state.snapshots),
+      requires,
+      log,
+      chainHead: prev,
+    });
+    return {
+      ok: true,
+      accepted: true,
+      stateId: newId,
+      seq: mine.seq,
+      steps: mine.steps,
+      scopes: mine.scopes,
+      rebased: mine.rebased ?? false,
+      commits: wire,
+    };
+  }
+
+  /** A stored commit as the hash chain holds it: the inverse of `#logCommit`. */
+  async #wireCommit(
+    doc: string,
+    c: StoredCommit,
+    prev: string | null,
+    cdm: number,
+  ): Promise<WireCommit> {
+    const payload: WirePayload = {
+      steps: c.steps,
+      retired: c.retired,
+      claimed: c.claimed,
+      ...(c.requires ? { requires: c.requires } : {}),
+    };
+    const digest = await payloadDigest(payload);
+    const meta: ChainMetadata = {
+      doc,
+      seq: c.seq,
+      kind: c.kind,
+      id: c.id,
+      user: c.user,
+      session: c.session === '' ? null : c.session,
+      agent: c.agent ?? null,
+      time: new Date(c.time).toISOString(),
+      origin: c.origin,
+      scopes: c.scopes,
+      base: c.base ?? null,
+      rebased: c.rebased ?? null,
+      revision: c.revision,
+      jti: c.jti ?? null,
+      cdm: c.cdm ?? cdm,
+      engine: c.engine,
+      size: digest.size,
+    };
+    return {
+      meta,
+      payloadHash: digest.hash,
+      prevHash: prev,
+      hash: await chainHash(prev, meta, digest.hash),
+      payload,
     };
   }
 
@@ -644,6 +937,75 @@ export class AuthorityService {
     this.#held.delete(state.stateId);
     this.#held.set(state.stateId, state);
   }
+}
+
+const DOCUMENT_STATES: readonly string[] = ['active', 'locked', 'archived'];
+
+/** Checks the shape of an `applyCommit` request; the room checks what the commit means. */
+function parseApply(input: unknown): Answer<{ value: ApplyCommitRequest }> {
+  const bad = (m: string) => fail('invalid_request', m);
+  if (!isObject(input)) return bad('the request must be a JSON object');
+  const { commit, permissions, preconditions } = input;
+  if (!isObject(commit)) return bad('commit must be an object');
+  if (typeof commit['id'] !== 'string') return bad('commit.id must be a string');
+  if (typeof commit['base'] !== 'number' || !Number.isSafeInteger(commit['base']))
+    return bad('commit.base must be an integer');
+  const author = commit['author'];
+  if (
+    !isObject(author) ||
+    typeof author['sub'] !== 'string' ||
+    typeof author['session'] !== 'string'
+  )
+    return bad('commit.author needs a sub and a session');
+  if (typeof author['role'] !== 'string') return bad('commit.author.role must be a string');
+  if (
+    commit['time'] !== undefined &&
+    !(typeof commit['time'] === 'number' && Number.isSafeInteger(commit['time']))
+  )
+    return bad('commit.time must be an integer');
+  if (!isObject(permissions)) return bad('permissions must be an object');
+  if (typeof permissions['revision'] !== 'number' || !Number.isSafeInteger(permissions['revision']))
+    return bad('permissions.revision must be an integer');
+  if (!Array.isArray(permissions['grants'])) return bad('permissions.grants must be an array');
+  const ds = permissions['documentState'];
+  if (ds !== undefined && !(typeof ds === 'string' && DOCUMENT_STATES.includes(ds)))
+    return bad('permissions.documentState must be active, locked or archived');
+  if (preconditions !== undefined && !isObject(preconditions))
+    return bad('preconditions must be an object');
+  return { ok: true, value: input as unknown as ApplyCommitRequest };
+}
+
+function unpackWirePerms(p: WirePermissions): PermissionState {
+  return {
+    revision: p.revision,
+    grants: p.grants.map((g) => ({ ...g })),
+    regionStates: new Map(Object.entries(p.regionStates ?? {})),
+    leases: (p.leases ?? []).map((l) => ({ ...l })),
+    documentState: p.documentState ?? 'active',
+    workflowActive: p.workflowActive ?? false,
+    ...(p.approvals ? { approvals: new Map(Object.entries(p.approvals)) } : {}),
+  };
+}
+
+/** What the room checks for a server-authored commit (04 §5), here for a commit the caller decided on. */
+function preconditionFailure(
+  p: WirePreconditions | undefined,
+  now: PermissionState,
+  head: number,
+): string | null {
+  if (!p) return null;
+  if (p.revision !== undefined && p.revision !== now.revision)
+    return `the grants revision is ${now.revision}, not ${p.revision}`;
+  if (p.head !== undefined && p.head !== head) return `commits were accepted after ${p.head}`;
+  if (p.documentState !== undefined && p.documentState !== now.documentState)
+    return `the document is ${now.documentState}, not ${p.documentState}`;
+  if (p.workflowActive !== undefined && p.workflowActive !== now.workflowActive)
+    return p.workflowActive ? 'no workflow is active' : 'a workflow is active';
+  for (const [region, state] of Object.entries(p.regionStates ?? {})) {
+    const cur = now.regionStates.get(region) ?? 'draft';
+    if (cur !== state) return `region ${region} is ${cur}, not ${state}`;
+  }
+  return null;
 }
 
 /** Checks the shape of an `open` request; the contents are checked by the service itself. */
