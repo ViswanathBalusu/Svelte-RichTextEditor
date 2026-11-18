@@ -13,9 +13,10 @@
  * whose commit was never stored is not used.
  */
 import type { StepJson } from '@docedit/authority';
-import type { JsonEnvelope } from '@docedit/model';
+import type { AttributionJson } from '@docedit/history';
+import { canonicalize, type JsonEnvelope } from '@docedit/model';
 import { objectKeys } from '../objects/store.ts';
-import { decodeContent } from '../storage/codec.ts';
+import { decodeContent, encodeContent } from '../storage/codec.ts';
 import type { CheckpointIndex, CheckpointStore, DocRef } from '../storage/types.ts';
 import type { Base, Encoded } from './tasks.ts';
 import type { Workers } from './workers.ts';
@@ -164,10 +165,49 @@ export class Checkpointer {
     return this.#workers.run('checkpoint', input);
   }
 
-  /** Stores an encoded checkpoint at `seq`; with `index`, records it too. */
-  async save(ref: DocRef, seq: number, e: Encoded, index = true): Promise<Written> {
+  /** Whether the store keeps a side object (the attribution map) with each checkpoint. */
+  get sides(): boolean {
+    return this.#store?.putSide !== undefined && this.#store.getSide !== undefined;
+  }
+
+  /** The attribution map saved with the checkpoint at exactly `seq`, or null (ADR 0377). */
+  async loadSide(ref: DocRef, seq: number): Promise<AttributionJson | null> {
+    const store = this.#store;
+    if (!store?.getSide) return null;
+    const bytes = await store.getSide(ref, seq);
+    if (!bytes) return null;
+    try {
+      const side = decodeContent<{ v?: number; attribution?: AttributionJson }>(bytes);
+      return side.v === 1 && side.attribution ? side.attribution : null;
+    } catch (e) {
+      // An unreadable side object is as good as none: the map is rebuilt by a replay.
+      this.#onSavedError?.(e);
+      return null;
+    }
+  }
+
+  /**
+   * Stores an encoded checkpoint at `seq`; with `index`, records it too. A side object, when
+   * given, is written first: a side object without its checkpoint is never read, a checkpoint
+   * without one only costs a replay. A failure to write it is reported and does not fail the
+   * checkpoint.
+   */
+  async save(
+    ref: DocRef,
+    seq: number,
+    e: Encoded,
+    index = true,
+    side?: AttributionJson,
+  ): Promise<Written> {
     const store = this.#store;
     if (!store) throw new Error('no checkpoint store is configured');
+    if (side && store.putSide) {
+      try {
+        await store.putSide(ref, seq, encodeContent(canonicalize({ v: 1, attribution: side })));
+      } catch (err) {
+        this.#onSavedError?.(err);
+      }
+    }
     if (store.putEncoded) await store.putEncoded(ref, seq, e.encoded);
     // A store without encoded writes gets the envelope: decoded here (once the control plane's
     // store offers putEncoded, nothing heavy is left on the main thread).

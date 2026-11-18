@@ -1,6 +1,6 @@
 # ADR 0377: The room's attribution map and its checkpoints (HIS-014)
 
-Status: proposed. Lane w7, 2026-11-17.
+Status: accepted as proposed (owner decisions 83, 84 and 196 to 220 of `docs/owner-decisions-2026-11-15.md`), with the amendments below. Written by lane w7 on 2026-11-17; built on 2026-11-18.
 
 ## Context
 
@@ -15,12 +15,25 @@ HIS-014 criteria 1 and 4 stay open for this reason. Criterion 1 needs the room h
 3. **How a room opens.** From the checkpoint's map plus a replay of the commits after it (`attributionAt`). A checkpoint written before this change has no map: the room builds one by replaying from seq 0, once, and the next checkpoint saves it. This backfill is the open question that HIS-014 Notes already records; the default taken here is to backfill lazily on the first read of a map, not at upgrade time.
 4. **The route.** `attributionMapAt` takes the nearest saved map at or before the `seq`, as `attributionAt` already allows, and replays only the commits after it.
 
-## Needs a decision before it is built
+## Amendments when it was built (2026-11-18)
 
-- **Erasure.** The sidecar holds user identifiers. The erasure of a person (HIS-038) and the purge of checkpoints (HIS-035, HIS-037) must rewrite or delete these objects, or an erased person stays named in storage. This is a rule for the erasure story and needs the owner's confirmation that the sidecar is in scope of an erasure request.
-- **Retention.** Whether thinning keeps a map for every checkpoint it keeps, and drops the rest with their checkpoints.
-- **Set-aside after recovery** (BE-078): `setAside` moves checkpoints above a recovered head; the sidecars must move with them.
+- **Key.** The side object is the one 06 §4.2 already names, `checkpoints/{seq}.side.json.zst` (`objectKeys.checkpointSide`), not `docs/{doc}/attribution/{seq}.json.zst`. Its content is `{ "v": 1, "attribution": <AttributionJson> }`, canonical JSON compressed with Zstandard; the member leaves room for the comment ranges that 06 §4.2 also puts there. The `CheckpointStore` port gained the optional `putSide` and `getSide`; `ObjectCheckpointStore` implements them.
+- **Where.** `AttributionTracker` is in `services/document-service/src/data-plane/attribution.ts`. It keeps the map at the last checkpoint and the commits stored since, so the map at the `seq` of a checkpoint is known when later commits are already stored. A room opens one only when the checkpoint store keeps side objects. If the commits it is given cannot be applied, the room drops the map, writes no side object, and the route replays.
+- **Order of writes.** The side object is written before the checkpoint. A side object without a recorded checkpoint is never read. A failure to write it is reported and does not fail the checkpoint.
+- **Opening.** The saved map must fit the content (same size) or it is dropped and the map is rebuilt from seq 0; the rebuilt map is saved with the next checkpoint. Backfill is lazy, as proposed.
+- **Snapshot commits.** The map is one run of the user and `seq` of the commit. A region restore is a snapshot commit (ADR 0374), so a restore does not keep the original authors in the room's map (HIS-018, Notes).
+
+## Decisions taken (the three points the first version left open)
+
+- **Erasure.** The side object holds surrogate identifiers, as the log does. The erase operation of HIS-038 deletes the mapping from a surrogate to a person, so nothing in a side object leads to a person after it (decision 84). Tombstoning a commit (`commit-tombstone.ts`) must still rewrite the side objects at or after it; that belongs to HIS-040 and is not built here.
+- **Retention.** A side object lives and dies with its checkpoint. Thinning that drops a checkpoint drops its side object; one that keeps a checkpoint keeps it.
+- **Set-aside after a recovery (BE-078).** `ObjectCheckpointStore.setAside` moves the side object with its checkpoint, under the same tag.
+
+## Not built
+
+- The route `GET /documents/{id}/attribution` (PRO-055) still replays the log. Reading the nearest saved map (point 4) is a change to `history-reads.ts` in the control plane and is left to the lane that owns it.
+- No thinning of checkpoints exists yet, so the retention rule is stated and not exercised.
 
 ## Consequences
 
-Nothing is built under this record. Without it a room opens with no map and the route replays the log, which is correct but costs time in proportion to the length of the log.
+A room opens with the map of its checkpoint plus a replay of the commits after it. The commit log stays the source of truth: the map can always be rebuilt from it.

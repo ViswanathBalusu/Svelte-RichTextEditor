@@ -1240,6 +1240,11 @@ export type HistoryPaneItem =
       readonly to: string;
       /** Identifiers of the people in the group; names come from `resolveUsers` (UX-025). */
       readonly authors: readonly string[];
+      /**
+       * The people an assistant acted for in the group, with the agent (HIS-017). Absent or empty when
+       * every change is the person's own.
+       */
+      readonly assisted?: ReadonlyArray<{ readonly user: string; readonly agent: string }>;
       readonly changes: number;
       readonly origins: readonly string[];
       /** The last `seq` of the group: the state a reader opens (HIS-010); absent when the host gives none. */
@@ -1319,6 +1324,8 @@ export interface HistoryChange {
   readonly type?: string;
   readonly user?: string;
   readonly seq?: number;
+  /** Set when an assistant acted for `user` (HIS-017). */
+  readonly agent?: string;
   readonly attrs?: readonly string[];
   readonly spans?: ReadonlyArray<{
     readonly op: 'insert' | 'delete';
@@ -1326,6 +1333,7 @@ export interface HistoryChange {
     readonly text: string;
     readonly user?: string;
     readonly seq?: number;
+    readonly agent?: string;
   }>;
 }
 

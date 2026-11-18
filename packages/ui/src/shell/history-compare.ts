@@ -74,6 +74,28 @@ export function authorOf(change: HistoryChange): string | null {
   return null;
 }
 
+/**
+ * The assistant that acted for the person a change is credited to, when one did (HIS-017): the agent
+ * of the change, else the agent of its first span that names one. A person's own writing has none.
+ */
+export function agentOf(change: HistoryChange): string | null {
+  if (change.agent !== undefined) return change.agent;
+  for (const span of change.spans ?? []) if (span.agent !== undefined) return span.agent;
+  return null;
+}
+
+/** The changes an assistant wrote for a person, with their place in the order (HIS-017). */
+export function assistantChanges(
+  changes: readonly HistoryChange[],
+): { index: number; change: HistoryChange; agent: string; user: string | null }[] {
+  const out: { index: number; change: HistoryChange; agent: string; user: string | null }[] = [];
+  changes.forEach((change, index) => {
+    const agent = agentOf(change);
+    if (agent !== null) out.push({ index, change, agent, user: authorOf(change) });
+  });
+  return out;
+}
+
 /** One line of the summary: the changes of one region. */
 export interface RegionRow {
   /** The region, or null for changes outside regions. */

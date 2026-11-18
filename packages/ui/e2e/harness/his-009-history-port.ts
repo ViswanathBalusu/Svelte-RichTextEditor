@@ -22,7 +22,7 @@ import type {
 } from '../../src/core-api.ts';
 
 export type HistoryHarnessMode =
-  'full' | 'named' | 'failing' | 'refusing' | 'empty' | 'slow' | 'versions';
+  'full' | 'named' | 'failing' | 'refusing' | 'empty' | 'slow' | 'versions' | 'assisted';
 
 /** What the harness records of the versions the pane opens (HIS-010). */
 export interface VersionLog {
@@ -44,6 +44,9 @@ export interface VersionLog {
   selected?: string[];
   whoOutcome?: 'forbidden' | 'not_found' | 'failed' | 'empty';
 }
+
+/** The `assisted` mode (HIS-017): the data has text an assistant wrote for a person. */
+let assisted = false;
 
 /** Groups end at a state a reader can open, in the `versions` mode. */
 const GROUP_SEQ: Readonly<Record<string, number>> = { g1: 8, g2: 15 };
@@ -116,6 +119,17 @@ function whoWrote(query: HistoryWhoQuery): Promise<HistoryWhoResult> {
     ok: true,
     seq: query.seq,
     authors: [
+      ...(assisted
+        ? [
+            {
+              user: 'u1',
+              agent: 'drafting-assistant',
+              runs: 1,
+              firstTime: '2026-11-13T09:02:00Z',
+              lastTime: '2026-11-13T09:02:00Z',
+            },
+          ]
+        : []),
       { user: 'u1', runs: 2, firstTime: '2026-11-13T09:00:00Z', lastTime: '2026-11-13T09:04:00Z' },
       {
         user: 'u-erased',
@@ -155,6 +169,28 @@ function compare(from: number, to: number | null): Promise<HistoryCompareResult>
           spans: [{ op: 'insert', at: 0, text: 'New', user: 'u1', seq: 22 }],
         },
         { kind: 'field', fieldId: 'f1', blockId: 'pB', user: 'u2', seq: 24 },
+        ...(assisted
+          ? [
+              {
+                kind: 'modified',
+                blockId: 'pE',
+                region: 'r1',
+                user: 'u1',
+                agent: 'drafting-assistant',
+                seq: 23,
+                spans: [
+                  {
+                    op: 'insert' as const,
+                    at: 0,
+                    text: 'Draft',
+                    user: 'u1',
+                    agent: 'drafting-assistant',
+                    seq: 23,
+                  },
+                ],
+              },
+            ]
+          : []),
         { kind: 'added', blockId: 'pC', user: 'u1', seq: 25 },
         { kind: 'removed', blockId: 'pD', region: 'r1', user: 'u2', seq: 26 },
       ],
@@ -213,6 +249,8 @@ const CHOICES: HistoryChoices = {
 
 export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers): HistoryPort {
   const named = mode === 'named';
+  assisted = mode === 'assisted';
+  const versioned = mode === 'versions' || mode === 'assisted';
   let released = false;
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
@@ -221,13 +259,19 @@ export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers
     release();
   };
   const items: HistoryPaneItem[] = ITEMS.map((item) =>
-    mode === 'versions' && item.kind === 'group' && GROUP_SEQ[item.id] !== undefined
-      ? { ...item, toSeq: GROUP_SEQ[item.id] as number }
+    versioned && item.kind === 'group' && GROUP_SEQ[item.id] !== undefined
+      ? {
+          ...item,
+          toSeq: GROUP_SEQ[item.id] as number,
+          ...(assisted && item.id === 'g1'
+            ? { assisted: [{ user: 'u1', agent: 'drafting-assistant' }] }
+            : {}),
+        }
       : item,
   );
   const listeners = new Set<() => void>();
   const createVersion: HistoryPort['createVersion'] =
-    mode === 'full' || mode === 'refusing' || mode === 'versions'
+    mode === 'full' || mode === 'refusing' || versioned
       ? (input) => {
           if (mode === 'refusing') return Promise.resolve({ ok: false, reason: 'forbidden' });
           items.push({
@@ -246,7 +290,7 @@ export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers
   return {
     resolveUsers,
     ...(createVersion ? { createVersion } : {}),
-    ...(mode === 'versions' || mode === 'named' ? { openVersion, compare, whoWrote } : {}),
+    ...(versioned || mode === 'named' ? { openVersion, compare, whoWrote } : {}),
     onChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

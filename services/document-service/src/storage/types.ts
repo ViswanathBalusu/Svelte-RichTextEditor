@@ -322,6 +322,14 @@ export interface CheckpointStore {
    * (a log rewound by a database recovery; BE-078). Returns the sequence numbers set aside.
    */
   setAside?(ref: DocRef, aboveSeq: number): Promise<number[]>;
+  /**
+   * Stores the side object of the checkpoint at `seq`: the attribution map, compressed as a
+   * checkpoint is (06 §4.2 `{seq}.side.json.zst`; HIS-014, ADR 0377). It is written before the
+   * checkpoint, and set aside with it.
+   */
+  putSide?(ref: DocRef, seq: number, bytes: Uint8Array): Promise<void>;
+  /** The stored bytes of the side object at exactly `seq`, or null. */
+  getSide?(ref: DocRef, seq: number): Promise<Uint8Array | null>;
 }
 
 /**
