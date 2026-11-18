@@ -490,6 +490,11 @@ export class EditorCore extends DocumentCore {
         return sub && sub.view.hasFocus() ? sub.mainSelection().from : null;
       },
       // `editable` is read again by setProps; the open sub-editor follows the same lock (FE-029).
+      // The fields a person may fill depend on the access too, and the access arrives after the
+      // controls are drawn (FRW-076 criterion 1).
+      accessChanged: () => {
+        if (this.#view) this.#fieldViews.refresh(this.#view.state.doc);
+      },
       lockChanged: () => {
         this.#view?.setProps({});
         if (this.#view) this.#fieldViews.refresh(this.#view.state.doc);

@@ -328,8 +328,8 @@ function fieldLimitDocId(): string {
 }
 
 /** A backend for a participant who may only fill the fields of `roles` (12 §4.1; `MockUser.fill`). */
-function fillBackend(sub: string, roles: string[] = [FIELD_IDS.tenant]) {
-  return service.backend({ ...userOf(sub), fill: { roles } }, { [fieldsDocId]: 'filler' });
+function fillBackend(sub: string, roles: string[] = [FIELD_IDS.tenant], active = true) {
+  return service.backend({ ...userOf(sub), fill: { roles, active } }, { [fieldsDocId]: 'filler' });
 }
 
 /**
