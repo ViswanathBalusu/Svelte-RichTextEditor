@@ -234,7 +234,7 @@ As an editor working with collaborators in other browsers, I want the page view 
 - [ ] Given two collaborators in different browsers editing one document in the page view, then both see the same line breaks before the next compile.
 - [ ] The suite runs on every change to the kernel or its dependencies, and on every Unicode or font update.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold (SPK-013 is not held, see WASM-003). The story depends on WASM-010, which is blocked because there is no kernel to run in Node.js, so there are no golden outputs to compare against. The shared corpus (`packages/corpus`) exists, but a cross-browser run would test prototypes, not a shipped kernel. A page view to compare between two collaborators does not exist either. It reopens if SPK-013 says yes.
 
 ### WASM-012 Size, memory and time budgets for the kernel
 
