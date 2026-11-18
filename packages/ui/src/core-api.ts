@@ -791,12 +791,13 @@ export interface CoreApi {
   /** Accepts or rejects the suggestions in the selection, or the one the caret is in: one commit (UX-036). */
   resolveAtSelection?(action: 'accept' | 'reject'): ReviewReport;
   /**
-   * Accepts or rejects every suggestion in the selection or the document, or only an author's, or
-   * only one suggestion: one commit; those in a scope without `edit` stay pending and are counted.
+   * Accepts or rejects every suggestion in the selection, the document or one region (`{ id }`, the
+   * region's identifier), or only an author's, or only one suggestion: one commit; those in a scope
+   * without `edit` stay pending and are counted.
    */
   resolveSuggestions?(
     action: 'accept' | 'reject',
-    target?: 'selection' | 'document',
+    target?: 'selection' | 'document' | { readonly id: string },
     author?: string,
     suggestion?: string,
   ): ReviewReport;
@@ -1581,6 +1582,8 @@ export interface ReviewItem {
   readonly caps: readonly Capability[];
   /** Whether the user may accept or reject it now (`edit` in its scope, document not locked). */
   readonly canResolve: boolean;
+  /** The identifier of the region the suggestion lies in; null in the body (UX-036 criterion 2). */
+  readonly region?: string | null;
 }
 
 /** What an accept or reject did: the suggestions handled, those left pending, and where. */

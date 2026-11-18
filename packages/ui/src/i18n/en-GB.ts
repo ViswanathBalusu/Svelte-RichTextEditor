@@ -254,6 +254,13 @@ export const EN_GB = {
   'review.pane.rejectAll': 'Reject all',
   'review.pane.acceptAllBy': 'Accept all by {author}',
   'review.pane.rejectAllBy': 'Reject all by {author}',
+  'review.pane.filter.region': 'Region',
+  'review.pane.filter.allRegions': 'The whole document',
+  'review.pane.region.untitled': 'Untitled region',
+  'review.pane.acceptAllIn': 'Accept all in {region}',
+  'review.pane.rejectAllIn': 'Reject all in {region}',
+  'review.pane.acceptAllByIn': 'Accept all by {author} in {region}',
+  'review.pane.rejectAllByIn': 'Reject all by {author} in {region}',
   'review.nothingHere': 'No suggestion at the cursor or in the selection.',
   'review.accepted': {
     one: '{count} suggestion accepted.',

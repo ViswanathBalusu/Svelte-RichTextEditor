@@ -221,6 +221,7 @@ function reviewItem(s: ReturnType<EditorCore['suggestionItems']>[number]): Revie
     text: s.text,
     caps: s.caps.filter((c): c is Capability => (CAPABILITIES as readonly string[]).includes(c)),
     canResolve: s.canResolve,
+    region: s.region,
   };
 }
 
