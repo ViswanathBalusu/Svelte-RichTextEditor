@@ -128,6 +128,7 @@ describe('KeyService', () => {
     const operations = [...names].filter((n) => n !== 'constructor');
     expect(operations.sort()).toEqual([
       'create',
+      'destroy',
       'disable',
       'enabled',
       'publicJwk',

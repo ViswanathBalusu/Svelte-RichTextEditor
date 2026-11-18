@@ -1433,8 +1433,84 @@ export interface ThreadSummary {
   readonly blockKind: string | null;
 }
 
+/** One comment of a thread as the thread view shows it (UX-029; 05 §6.2). */
+export interface CommentView {
+  readonly id: string;
+  /** The author's principal, `user:<sub>`. */
+  readonly author: string;
+  readonly createdAt: string;
+  readonly body: readonly CommentBodyPart[];
+  /** True once the author has edited the comment. */
+  readonly edited: boolean;
+}
+
+/**
+ * A thread with its comments, for the thread view (UX-029). `caps` are the capabilities the core
+ * reports for the thread's scope (07 §12); `etag` is the version a write sends as `If-Match`.
+ */
+export interface ThreadDetail {
+  readonly id: string;
+  readonly state: 'open' | 'resolved';
+  /** The author of the thread, who is the author of its first comment. */
+  readonly author: string;
+  /** True once the commented text was removed; the thread stays readable and is not re-attached. */
+  readonly detached: boolean;
+  /** The person the thread is assigned to as a task, `user:<sub>`; null or absent when nobody (UX-032). */
+  readonly assignee?: string | null;
+  readonly caps: readonly Capability[];
+  readonly comments: readonly CommentView[];
+  readonly etag: string;
+}
+
+/**
+ * The answer to a write on a thread (UX-029): the thread as it is now, or the service's error code
+ * (05 §5.8). `precondition_failed` (`If-Match` failed) carries the latest thread.
+ */
+export type ThreadWrite =
+  | { readonly ok: true; readonly detail: ThreadDetail }
+  | { readonly ok: false; readonly code: string; readonly latest?: ThreadDetail };
+
 /** Comment threads (05 §6.2). Creating one is a control-plane request, never a commit (13 §5). */
 export interface ThreadsService {
+  /** The signed-in user's principal (`user:<sub>`), for who may edit and delete (UX-029). */
+  self?(): string;
+  /**
+   * Moves whenever a thread or a comment changes, here or on another client (`thread.*` and
+   * `comment.*` events), so the pane reads `list` and `detail` again (UX-029 criteria 1 and 3).
+   */
+  readonly changes?: ReadView<number>;
+  /**
+   * Marks the thread in the document and brings its range or block into view (UX-030 criterion 2).
+   * A reader's setting: no step, no commit. Called with the row the pane's reader chose.
+   */
+  reveal?(thread: ThreadSummary): void;
+  /** The thread whose highlight the reader chose in the page; `n` counts the choices (UX-030). */
+  readonly picked?: ReadView<{ readonly id: string; readonly n: number } | null>;
+  /** One thread with its comments; null when it is gone or the reader may not see it. */
+  detail?(id: string): ThreadDetail | null;
+  /** Adds a reply (`POST .../comments`, `If-Match` with `etag`). */
+  reply?(id: string, body: readonly CommentBodyPart[], etag: string): Promise<ThreadWrite>;
+  /** Replaces the body of a comment. */
+  editComment?(
+    id: string,
+    commentId: string,
+    body: readonly CommentBodyPart[],
+    etag: string,
+  ): Promise<ThreadWrite>;
+  /** Deletes a comment. */
+  deleteComment?(id: string, commentId: string, etag: string): Promise<ThreadWrite>;
+  /** Deletes a whole thread. */
+  deleteThread?(
+    id: string,
+    etag: string,
+  ): Promise<{ readonly ok: boolean; readonly code?: string }>;
+  /** Resolves or reopens a thread. */
+  setState?(id: string, state: 'open' | 'resolved', etag: string): Promise<ThreadWrite>;
+  /**
+   * Gives the thread to a person as a task, or clears the assignee with null (`PATCH` of `assignee`,
+   * `If-Match` with `etag`; UX-032). The service raises `dep.task.assigned` for a person named.
+   */
+  assign?(id: string, assignee: string | null, etag: string): Promise<ThreadWrite>;
   /** The anchor for the current selection; null when nothing that can carry a thread is selected. */
   anchor(): CommentAnchor | null;
   /** The threads the document holds now, open or resolved (the 5,000 limit of UX-028). */

@@ -28,8 +28,13 @@ import { EQUATION_NODES } from '../equation-commands.ts';
 import { equationBlockView, equationNumbersPlugin, equationView } from './equation-view.ts';
 import { figureView } from './figure-view.ts';
 import { imageView } from './image-view.ts';
+import { preservedView } from './preserved-view.ts';
 import { coreKeys } from '../keys.ts';
-import { commentDecorations } from '../comment-decorations.ts';
+import {
+  COMMENT_RANGE_CLASS,
+  COMMENT_SELECTED_CLASS,
+  commentDecorations,
+} from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
 import { proofingDecorations } from '../proofing-decorations.ts';
 import { ReadValue, sameJson } from '../read-value.ts';
@@ -442,6 +447,9 @@ export class EditorCore extends DocumentCore {
           image: imageView(this.#assetImage),
           // FE-132: the figure's stored size and its resize handle.
           figure: figureView,
+          // FE-139: the preserved atom's label, fallback picture and display size.
+          preserved_block: preservedView('div', this.#assetImage),
+          preserved_inline: preservedView('span', this.#assetImage),
           equation: equationView(this.#drawEquation),
           equation_block: equationBlockView(this.#drawEquation),
         },
@@ -459,6 +467,11 @@ export class EditorCore extends DocumentCore {
           // shadow root has no such target.
           click: (view, event) => {
             const target = event.target;
+            // The highlight of a comment, chosen in the page, selects its thread in the pane (UX-030).
+            const range =
+              target instanceof Element ? target.closest(`.${COMMENT_RANGE_CLASS}`) : null;
+            const threadId = range?.getAttribute('data-thread-id');
+            if (threadId) this.pickThread(threadId);
             const anchor = target instanceof Element ? target.closest('a[href^="#"]') : null;
             if (anchor === null) return false;
             if (view.editable && !(event.ctrlKey || event.metaKey)) return false;
@@ -535,7 +548,14 @@ export class EditorCore extends DocumentCore {
                 this.suggestionLabel ?? undefined,
               ).find(),
             )
-            .add(state.doc, commentDecorations(state.doc, this.threadRanges.get()).find())
+            .add(
+              state.doc,
+              commentDecorations(
+                state.doc,
+                this.threadRanges.get(),
+                this.selectedThread.get(),
+              ).find(),
+            )
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
             .add(state.doc, comparisonDecorations(state.doc, this.#comparison).find())
             .add(
@@ -555,6 +575,14 @@ export class EditorCore extends DocumentCore {
     // A change of the find state redraws the highlights at once (the view is not told by a transaction).
     // A change of a thread's range redraws its decoration at once (FE-048).
     const unthread = this.threadRanges.subscribe(() => this.#view?.setProps({}));
+    // A thread chosen in the comments pane is marked and brought into view (UX-030 criterion 2).
+    const unselect = this.selectedThread.subscribe(() => {
+      const v = this.#view;
+      if (!v) return;
+      v.setProps({});
+      if (this.selectedThread.get() === null) return;
+      v.dom.querySelector(`.${COMMENT_SELECTED_CLASS}`)?.scrollIntoView({ block: 'center' });
+    });
     // A result of the proofing port, or a navigation, draws the findings again (UX-041).
     const unproof = this.proofing.subscribe(() => this.#view?.setProps({}));
     // Choosing another markup view draws the suggestions again; the document is not touched (UX-035).
@@ -605,6 +633,7 @@ export class EditorCore extends DocumentCore {
       remove();
       unfind();
       unthread();
+      unselect();
       unproof();
       unmarkup();
       undirection();

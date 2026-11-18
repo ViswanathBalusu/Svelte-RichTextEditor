@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { validate } from '@docedit/model/validate';
 import { checkR0, exportDocx, importDocx } from '../src/index.ts';
+import { r0Failures } from './ci-failure.ts';
 import { corpusFiles, readFile } from './corpus.ts';
 
 const files = corpusFiles();
@@ -23,9 +24,9 @@ describe.each(files)('$name', (file) => {
     const imported = await importDocx(bytes);
     const out = await exportDocx(imported.envelope, bytes, imported.sourceMap, imported.assets);
     const r0 = checkR0(bytes, out.bytes);
+    // A failure names the file, the part and the first differing element (EXP-120, criterion 3).
+    expect(r0Failures(file.name, r0), 'R0 failures').toEqual([]);
     expect(r0.diff.changed, 'changed parts').toEqual([]);
-    expect(r0.diff.missing, 'missing parts').toEqual([]);
-    expect(r0.diff.added, 'added parts').toEqual([]);
     expect(out.regenerated, 'nodes regenerated without an edit').toEqual([]);
     expect(Object.values(out.parts).every((m) => m === 'copied')).toBe(true);
   });

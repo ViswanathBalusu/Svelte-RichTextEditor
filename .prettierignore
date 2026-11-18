@@ -17,3 +17,5 @@ spec/
 packages/*/src/generated/
 # Byte-for-byte copies of spec/rules/ that the kit ships (PRO-123).
 packages/tck/fixtures/
+# Clipboard samples are kept as the programs write them; formatting would change what the cleaners see (FE-054).
+packages/engine/test/clipboard-corpus/

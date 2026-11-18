@@ -25,6 +25,7 @@ import { ADMIN, SERVICE_USER, postgresUnavailable, settings } from '../support/e
 import { runKit } from '../../../../packages/tck/src/runner.ts';
 import type { KitReport } from '../../../../packages/tck/src/report.ts';
 import { KIT_ORIGIN } from '../../../../packages/tck/test/targets/reference.ts';
+import { unsandboxed } from '@docedit/asset-worker';
 import { imageFontManifest } from '../../../export-worker/src/fonts.ts';
 import { createExportHandler, type ExportHandlerDeps } from '../../../export-worker/src/job.ts';
 import { IMAGE } from '../../../export-worker/src/sandbox.ts';
@@ -156,9 +157,14 @@ describe.skipIf(unavailable !== null)(
           if (attempt === 3) throw e;
         }
       }
+      // The asset branch (PRO-131 criterion 1): the asset worker runs in this process, unsandboxed
+      // as in the other asset tests of this service, and signed URLs name a separate asset origin.
+      env['DOCEDIT_ASSET_ORIGIN'] = 'https://assets.tests.example';
+      env['DOCEDIT_ASSET_URL_KEY'] = `k1:${randomBytes(32).toString('base64')}`;
       service = await startService({
         config: configFromEnv(env),
         jobHandlers: { export: createExportHandler(deps) },
+        assetWorker: { sandbox: unsandboxed(), allowUnsandboxed: true },
       });
       report = await runKit({
         discovery: `${service.url}/.well-known/dep`,
@@ -207,8 +213,21 @@ describe.skipIf(unavailable !== null)(
         );
     });
 
-    it('converge and placeholder pass', () => {
-      for (const id of ['perm-read.converge', 'perm-read.placeholder'])
+    it('the leak scenario proves the asset branch: the owner resolves the asset, readers get nothing', () => {
+      const notes = scenario('perm-read.leak')?.notes ?? [];
+      expect(notes, 'the asset branch').toEqual(
+        expect.arrayContaining([expect.stringMatching(/^asset branch proven/)]),
+      );
+      for (const who of ['editor-without-grant', 'viewer-without-grant'])
+        expect(notes, `${who} asset resolution`).toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(new RegExp(`^${who}: asset resolution scanned`)),
+          ]),
+        );
+    });
+
+    it('converge, placeholder and hidden-value pass', () => {
+      for (const id of ['perm-read.converge', 'perm-read.placeholder', 'perm-read.hidden-value'])
         expect(scenario(id)?.outcome, JSON.stringify(scenario(id)?.failure)).toBe('passed');
     });
 

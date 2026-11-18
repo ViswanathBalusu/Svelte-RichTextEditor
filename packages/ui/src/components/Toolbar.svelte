@@ -12,6 +12,7 @@
   import type { CommandView } from '../commands/types.ts';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
+  import Icon from './Icon.svelte';
   import { boundKeys } from '../shortcuts/table.ts';
   import { useSuspension } from '../shell/suspension.ts';
   import { toolbarCommands } from '../shell/toolbar-groups.ts';
@@ -279,7 +280,7 @@
       aria-keyshortcuts={shortcuts(item)}
       title={item.enabled || !item.reasonKey ? undefined : tr.text(item.reasonKey)}
       onclick={() => run(item)}
-      {@attach remember(item)}>{tr.text(item.entry.label)}</button
+      {@attach remember(item)}><Icon name={item.entry.icon} />{tr.text(item.entry.label)}</button
     >
   {/each}
   <button
@@ -323,7 +324,7 @@
           aria-disabled={item.enabled ? undefined : 'true'}
           aria-describedby={item.enabled ? undefined : reasonId(item)}
           aria-keyshortcuts={shortcuts(item)}
-          onclick={() => runFromMenu(item)}>{tr.text(item.entry.label)}</button
+          onclick={() => runFromMenu(item)}><Icon name={item.entry.icon} />{tr.text(item.entry.label)}</button
         >
       {/each}
     </div>

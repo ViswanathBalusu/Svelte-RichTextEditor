@@ -6,15 +6,14 @@
  * export is complete, and returns the diagnostics of the job with their block identifiers so that
  * the shell can point each one back to a document location.
  *
- * What is not here (FE-072 Notes): the mounting of the read view in place of the editing surface,
- * the rendering of the progress and of the diagnostics list, and moving the editor to a block
- * (that needs the editing core and the web view). The viewer is injected as `openPdf`, so the
- * function runs in Node.js tests.
+ * The mounting of the read view (read-view-element.ts) and the move of the editor to a block
+ * (doc-editor.ts) are elsewhere; `mayEditDocument` here reads the user's right to edit for that move.
+ * The viewer is injected as `openPdf`, so the function runs in Node.js tests.
  *
  * Failures are returned, not thrown: a refused start or a failed export gives `status: 'failed'`
  * (or `'unavailable'` when no export could be started), with the registry code and a message.
  */
-import type { ErrorCode } from '@docedit/protocol';
+import type { Access, Backend, ErrorCode } from '@docedit/protocol';
 import { codeOf, messageOf } from './errors.ts';
 import { startExport, type ExportSource } from './export.ts';
 
@@ -29,7 +28,33 @@ export const READ_VIEW_STRINGS = {
   exporting: 'Preparing the typeset PDF',
   /** Shown for a failed export; the diagnostics follow it. */
   failed: 'The typeset PDF could not be made',
+  /** Shown when a diagnostic is selected and the user may not edit the document (criterion 4). */
+  cannotEdit: 'You cannot edit this document, so this block cannot be opened in the editor.',
+  /** Shown when the right to edit could not be read, so the editor was not opened. */
+  editCheckFailed: 'Whether you may edit this document could not be checked.',
 } as const;
+
+/** Whether an access lets the user edit the document or any region of it (a role or a scope with `edit`). */
+export function mayEdit(access: Access): boolean {
+  return (
+    access.caps.includes('edit') ||
+    Object.values(access.scopes).some((caps) => caps.includes('edit'))
+  );
+}
+
+/**
+ * Whether the user may edit the document. The read view has no editing core, so it opens a document
+ * channel only to read the access of `ch.opened`, and closes it at once (FE-072 criterion 4). Rejects
+ * when the channel cannot be opened; the caller says so and does not open the editor.
+ */
+export async function mayEditDocument(backend: Backend, docId: string): Promise<boolean> {
+  const channel = await backend.sync.open(docId, {});
+  try {
+    return mayEdit(channel.opened.access);
+  } finally {
+    channel.close();
+  }
+}
 
 /** One diagnostic of the export job (09 §9.2), with the block it points at, when it has one. */
 export interface ReadViewDiagnostic {

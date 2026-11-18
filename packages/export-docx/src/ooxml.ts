@@ -26,6 +26,7 @@ const R_TYPES = 'http://schemas.openxmlformats.org/officeDocument/2006/relations
 export const REL = {
   officeDocument: `${R_TYPES}officeDocument`,
   styles: `${R_TYPES}styles`,
+  theme: `${R_TYPES}theme`,
   settings: `${R_TYPES}settings`,
   numbering: `${R_TYPES}numbering`,
   fontTable: `${R_TYPES}fontTable`,

@@ -338,7 +338,8 @@ describe('keep-alive (PRO-019)', () => {
     const silent = await p.client('carol', { [doc]: 'editor' });
     await silent.take((m) => m.t === 'ping', 2000, 'a ping');
     const closed = await silent.closed;
-    expect(closed.code).toBe(1006);
+    // The server closes with 1001 (going away), not by dropping the connection (decision 194).
+    expect(closed.code).toBe(1001);
     await new Promise((r) => setTimeout(r, 800));
     expect(alive.closeInfo).toBeNull();
     expect(alive.all('ping').length).toBeGreaterThanOrEqual(3);

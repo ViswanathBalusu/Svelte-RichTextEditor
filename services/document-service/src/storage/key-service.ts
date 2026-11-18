@@ -30,6 +30,12 @@ export interface KeyService {
   enabled(keyId: string): Promise<boolean>;
   /** Stops the key from signing or unwrapping. Other keys are unaffected. */
   disable(keyId: string): Promise<void>;
+  /**
+   * Destroys the key (HIS-041; 08 §13). The private key material is gone and cannot come back, so
+   * whatever was wrapped with the key can never be unwrapped again, in any copy or backup. The
+   * identifier stays taken, so it is never issued again. Destroying a destroyed key is not an error.
+   */
+  destroy(keyId: string): Promise<void>;
 }
 
 export class KeyNotFoundError extends Error {
@@ -42,6 +48,11 @@ export class KeyExistsError extends Error {
 
 export class KeyDisabledError extends Error {
   override name = 'KeyDisabledError';
+}
+
+/** The key was destroyed (`destroy`); nothing can be unwrapped or signed with it any more. */
+export class KeyDestroyedError extends Error {
+  override name = 'KeyDestroyedError';
 }
 
 /** The key does not have the purpose the operation needs. */
@@ -71,10 +82,12 @@ export async function wrapDataKey(publicJwk: Jwk, dataKey: Uint8Array): Promise<
 /** In-process `KeyService`. Keys live in this object and nowhere else. */
 export class MemoryKeyService implements KeyService {
   readonly #keys = new Map<string, StoredKey>();
+  readonly #destroyed = new Set<string>();
 
   async create(keyId: string, purpose: KeyPurpose): Promise<void> {
     assertKeyId(keyId);
-    if (this.#keys.has(keyId)) throw new KeyExistsError(`key ${keyId} exists`);
+    if (this.#keys.has(keyId) || this.#destroyed.has(keyId))
+      throw new KeyExistsError(`key ${keyId} exists`);
     const pair =
       purpose === 'sign'
         ? await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
@@ -121,8 +134,19 @@ export class MemoryKeyService implements KeyService {
     this.#lookup(keyId).enabled = false;
   }
 
+  async destroy(keyId: string): Promise<void> {
+    if (this.#destroyed.has(keyId)) return;
+    const key = this.#lookup(keyId);
+    // Overwrite what can be overwritten, then drop the reference. The pair is not exported again.
+    key.enabled = false;
+    this.#keys.delete(keyId);
+    this.#destroyed.add(keyId);
+  }
+
   #lookup(keyId: string): StoredKey {
     const key = this.#keys.get(keyId);
+    if (!key && this.#destroyed.has(keyId))
+      throw new KeyDestroyedError(`key ${keyId} was destroyed`);
     if (!key) throw new KeyNotFoundError(`key ${keyId} is unknown`);
     return key;
   }

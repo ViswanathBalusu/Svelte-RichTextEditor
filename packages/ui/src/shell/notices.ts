@@ -37,6 +37,8 @@ const REFUSALS: Readonly<Record<string, StringKey>> = {
   // A copy the output restriction refused (UX-040 criterion 2): the user is told why, and that
   // nothing was copied; a copy is not a change, so the general "change not made" words do not fit.
   'no-copy': 'notice.refused.noCopy',
+  // A change that suggestion mode cannot record as a suggestion (FE-045 criterion 5).
+  suggestion: 'notice.refused.suggestion',
   // A deletion a cross-reference still names (I4; FE-133 criterion 5): the notice offers to show them.
   referenced: 'notice.refused.referenced',
   // A pasted picture that was not added (FE-053 criterion 3): the upload failed or was refused.

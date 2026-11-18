@@ -7,13 +7,15 @@
  * Everything shown is set with DOM APIs and textContent, never with a document value through
  * innerHTML (FE-067). The labels are the strings of read-view.ts (UX's, 13 §8).
  *
- * Not here (FE-072 Notes): moving the editor to a diagnostic's block (criterion 4 needs the editing
- * core and the user's edit right), and a change of `view` while the element is open (FE-065
- * criterion 3).
+ * A diagnostic that names a block is a button when the element gives `onOpenInEditor` (FE-072
+ * criterion 4). Selecting it reads whether the user may edit (`mayEditDocument`); if so the element
+ * is asked to show the web view at that block, and if not the reason is shown in `.de-read-jump` and
+ * the read view stays.
  */
 import type { Backend } from '@docedit/protocol';
 import { PdfViewerFrame } from './pdf/viewer-frame.ts';
 import {
+  mayEditDocument,
   openReadView,
   READ_VIEW_STRINGS,
   type ReadViewDiagnostic,
@@ -30,6 +32,11 @@ export interface ReadViewElementOptions {
   readonly viewerUrl: string;
   /** True when the element created the backend, so that it closes it on `close()`. */
   readonly ownsBackend: boolean;
+  /**
+   * Called when the user selects a diagnostic that names a block and may edit the document: the
+   * element then shows the web view and moves its caret to that block (FE-072 criterion 4).
+   */
+  readonly onOpenInEditor?: (blockId: string) => void;
 }
 
 export interface MountedReadView {
@@ -59,16 +66,45 @@ export function mountReadView(options: ReadViewElementOptions): MountedReadView 
   status.setAttribute('role', 'status');
   const diagnostics = element('ul', 'de-read-diagnostics');
   const pages = element('div', 'de-read-pages');
-  section.append(label, status, diagnostics, pages);
+  const jump = element('p', 'de-read-jump');
+  jump.setAttribute('role', 'status');
+  section.append(label, status, diagnostics, jump, pages);
   options.root.append(section);
 
   let viewer: PdfViewerFrame | null = null;
   let closed = false;
+  let checking = false;
+
+  /** Selecting a diagnostic: the editor opens at its block only if the user may edit. */
+  const openBlock = async (blockId: string): Promise<void> => {
+    const open = options.onOpenInEditor;
+    if (open === undefined || checking) return;
+    checking = true;
+    jump.textContent = '';
+    try {
+      const may = await mayEditDocument(options.backend, options.docId);
+      if (closed) return;
+      if (may) open(blockId);
+      else jump.textContent = READ_VIEW_STRINGS.cannotEdit;
+    } catch {
+      if (!closed) jump.textContent = READ_VIEW_STRINGS.editCheckFailed;
+    } finally {
+      checking = false;
+    }
+  };
 
   const showDiagnostics = (list: readonly ReadViewDiagnostic[]): void => {
     for (const d of list) {
-      const item = element('li', 'de-read-diagnostic', `${d.severity}: ${d.code}: ${d.message}`);
-      if (d.blockId !== null) item.dataset['blockId'] = d.blockId;
+      const text = `${d.severity}: ${d.code}: ${d.message}`;
+      const item = element('li', 'de-read-diagnostic');
+      const blockId = d.blockId;
+      if (blockId !== null) item.dataset['blockId'] = blockId;
+      if (blockId !== null && options.onOpenInEditor !== undefined) {
+        const go = element('button', 'de-read-diagnostic-go', text);
+        go.type = 'button';
+        go.addEventListener('click', () => void openBlock(blockId));
+        item.append(go);
+      } else item.textContent = text;
       diagnostics.append(item);
     }
   };

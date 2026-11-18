@@ -136,6 +136,15 @@ export {
   type StringsOptions,
   type Translator,
 } from './i18n/strings.ts';
+export {
+  BUILT_IN_ICONS,
+  Icons,
+  parseIcon,
+  type IconDrawing,
+  type IconOverrides,
+  type IconSet,
+  type IconsOptions,
+} from './icons/icons.ts';
 export { EN_GB, type StringKey } from './i18n/en-GB.ts';
 export type {
   LocaleTable,
