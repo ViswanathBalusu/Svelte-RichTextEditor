@@ -109,6 +109,15 @@ export {
 } from './thinning.ts';
 export { shownAuthor, type ShownAuthor, type UnknownAuthorLabel } from './erasure.ts';
 export {
+  decideErasure,
+  releaseDeferred,
+  type DeferredRun,
+  type ErasureAudit,
+  type ErasureDecision,
+  type ErasureRequest,
+  type PendingErasure,
+} from './erasure-hold.ts';
+export {
   derivedId,
   markRestored,
   planRestore,
