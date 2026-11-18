@@ -442,6 +442,7 @@ export const FRW_EXTENSION: DepExtension = {
       feature: 'fields',
       body: ref('FieldValues'),
       ifMatch: 'required',
+      idempotencyKey: true,
       success: { status: '2XX', body: ref('FieldValues'), etag: true },
       gaps: ['G96', 'G80'],
       owner: FRW,

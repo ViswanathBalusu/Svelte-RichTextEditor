@@ -6661,6 +6661,9 @@
             "$ref": "#/components/parameters/IfMatch"
           },
           {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
             "$ref": "#/components/parameters/DepActor"
           },
           {

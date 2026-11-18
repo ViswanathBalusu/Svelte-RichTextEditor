@@ -1,7 +1,8 @@
 // FRW-061 criterion 6 (lane V-FRW-055-072): a prefill repeated writes one commit. The first request
 // is applied through the real data plane (the room or a transient authority); the repeat, sent with
-// the same `Idempotency-Key`, is refused by its stale If-Match, so the log holds one commit with
-// origin `prefill`. The key itself is not replayed (see the note in the test). Runs against
+// the same `Idempotency-Key`, gets the first answer back (the route carries the key since ADR 0342,
+// decision 184), so the log holds one commit with origin `prefill`; a repeat under another key is
+// refused by its stale If-Match. Runs against
 // PostgreSQL in Podman when the test environment is up, and against memory storage otherwise.
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -73,13 +74,18 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const first = await h.call('PATCH', `/v1/documents/${doc}/field-values`, request);
         expect(first.status, JSON.stringify(first.json)).toBe(200);
 
-        // The repeat is the same request. The protocol does not flag the prefill route for
-        // `Idempotency-Key` (packages/protocol/src/definition/frw.ts; 05 §6.1 names POST), so the key
-        // is not replayed here. The repeat is refused by its stale If-Match, and nothing is applied.
-        // Whether prefill should accept the key is open (FRW-061, lane V-FRW-055-072 notes).
+        // The repeat is the same request under the same key: the first answer is replayed and
+        // nothing is applied again (ADR 0342; owner decision 184).
         const again = await h.call('PATCH', `/v1/documents/${doc}/field-values`, request);
-        expect(again.status, JSON.stringify(again.json)).toBe(412);
-        expect(again.json.code).toBe('precondition_failed');
+        expect(again.status, JSON.stringify(again.json)).toBe(200);
+        expect(again.json).toEqual(first.json);
+        // The same body under another key is a new request: its stale If-Match refuses it.
+        const other = await h.call('PATCH', `/v1/documents/${doc}/field-values`, {
+          ...request,
+          headers: { 'if-match': etag, 'Idempotency-Key': randomUUID() },
+        });
+        expect(other.status, JSON.stringify(other.json)).toBe(412);
+        expect(other.json.code).toBe('precondition_failed');
 
         const commits = await h.call('GET', `/v1/documents/${doc}/commits?after=0&limit=200`, {
           token: service,
