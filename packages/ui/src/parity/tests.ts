@@ -82,6 +82,25 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/src/fe-133-link-open.universal.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-022 closed (2026-11-17): the element's browser run of the pane, and the core's tests.
+  [
+    'styles',
+    [
+      { path: 'packages/element/e2e/ux-022-styles.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-022-style-edit.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/ux-022-style-edit.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-022-styles.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when UX-027 closed (2026-11-17): two mounted editors, and the core's concurrent edits.
+  [
+    'presence',
+    [
+      { path: 'packages/element/e2e/ux-027-carets.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/ux-027-carets.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/ux-027-concurrent-carets.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when EXP-085 closed (2026-11-17). No browser spec presses the download yet: the links
   // are the tests of the archive the download hands out, which run the converter and read it back.
   [

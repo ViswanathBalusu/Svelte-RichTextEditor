@@ -79,7 +79,13 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'equationAccess'
       | 'equationLimits'
       | 'checkEquationSource'
-      | 'confirmEquation';
+      | 'confirmEquation'
+      // UX-018: the language at the selection and the document's, and the word count, for the status bar.
+      | 'language'
+      | 'words'
+      // UX-017: the recovered edits pane puts an item back into the document or drops it.
+      | 'insertRecovered'
+      | 'discardRecovered';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed
