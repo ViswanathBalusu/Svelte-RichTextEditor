@@ -29,7 +29,7 @@ const schema = cdmSchema();
 
 /** Checkpoints with side objects, as `ObjectCheckpointStore` keeps them. */
 class WithSides extends MemoryCheckpoints {
-  readonly sides = new Map<string, Uint8Array>();
+  override readonly sides = new Map<string, Uint8Array>();
   /** The checkpoint seqs written above 0, in order. */
   readonly written: number[] = [];
   /** Writes no side object while true: a checkpoint from before ADR 0377. */
@@ -38,10 +38,10 @@ class WithSides extends MemoryCheckpoints {
     if (seq > 0) this.written.push(seq);
     return super.put(ref, seq, content);
   }
-  async putSide(ref: DocRef, seq: number, bytes: Uint8Array): Promise<void> {
+  override async putSide(ref: DocRef, seq: number, bytes: Uint8Array): Promise<void> {
     if (!this.legacy) this.sides.set(`${ref.doc}/${seq}`, bytes);
   }
-  async getSide(ref: DocRef, seq: number): Promise<Uint8Array | null> {
+  override async getSide(ref: DocRef, seq: number): Promise<Uint8Array | null> {
     return this.sides.get(`${ref.doc}/${seq}`) ?? null;
   }
 }

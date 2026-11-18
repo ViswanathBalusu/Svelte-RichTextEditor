@@ -57,6 +57,14 @@ export class MemoryCheckpoints implements CheckpointStore {
     }
     return null;
   }
+  /** The side objects (comment ranges; SYN-032), as bytes. */
+  readonly sides = new Map<string, Uint8Array>();
+  async putSide(ref: DocRef, seq: number, bytes: Uint8Array): Promise<void> {
+    this.sides.set(`${ref.tenant}/${ref.doc}/${seq}`, bytes.slice());
+  }
+  async getSide(ref: DocRef, seq: number): Promise<Uint8Array | null> {
+    return this.sides.get(`${ref.tenant}/${ref.doc}/${seq}`)?.slice() ?? null;
+  }
 }
 
 export interface Stores {

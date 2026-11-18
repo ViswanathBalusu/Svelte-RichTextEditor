@@ -52,6 +52,7 @@ import {
   type SnapshotCommit,
   type SnapshotReason,
   type StepJson,
+  type ThreadAnchor,
   type ToClient,
   type WriteRequest,
   type WriteResult,
@@ -367,6 +368,8 @@ export class HostedRoom {
     base: Base;
     /** Its canonical size, an estimate where the bytes are unknown. */
     baseBytes: number;
+    /** The comment ranges saved with the checkpoint, each at `initialSeq` (SYN-032). */
+    threads?: readonly ThreadAnchor[];
     /** Stored commits after `initialSeq`, in order. */
     log: readonly LogCommit[];
     /** The content of each snapshot commit in `log`. */
@@ -423,6 +426,7 @@ export class HostedRoom {
       initial: init.initial,
       initialSeq: init.initialSeq,
       requires: init.record.requires,
+      ...(init.threads?.length ? { threads: init.threads } : {}),
       log: init.log,
       snapshotContent: snapshotDoc,
       perms: init.perms,
@@ -1586,6 +1590,11 @@ ecentHead, keeping one entry older than the window. */
       requires: [...this.#room.requiresList],
       commits: this.#since.slice(0, n),
     };
+    // The comment ranges at `at` (SYN-032 criterion 6; owner decision 81): the room holds them at
+    // its durable head, so they are taken now, with the steps, and only when that head is `at`. A
+    // checkpoint below the head (a repair) gets none: anchors of a later `seq` would be mapped over
+    // the wrong steps when a room opened from it.
+    const threads = this.#room.head === at ? this.#room.threadAnchors() : [];
     const tenant = this.ref.tenant;
     const span = this.#deps.tracer.start('dep.checkpoint', this.#lastTrace, {
       tenant,
@@ -1598,7 +1607,7 @@ ecentHead, keeping one entry older than the window. */
       try {
         const e = await this.#deps.checkpointer.replay(input);
         const side = this.attribution?.jsonAt(at) ?? undefined;
-        await this.#deps.checkpointer.save(this.ref, at, e, true, side);
+        await this.#deps.checkpointer.save(this.ref, at, e, true, side, threads);
         this.stats.checkpoints++;
         this.#checkpointFailures = 0;
         this.#deps.metrics.checkpoints.inc({ tenant, reason });
@@ -2040,6 +2049,7 @@ export class RoomHost {
         initialSeq: cp.seq,
         base,
         baseBytes,
+        ...(found.threads.length ? { threads: found.threads } : {}),
         log,
         snapshots,
         perms,
