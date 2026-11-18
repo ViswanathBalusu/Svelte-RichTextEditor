@@ -18,4 +18,14 @@ declare module '@docedit/layout-kernel/wasm/docedit_layout_kernel.js' {
   export const abi_version: KernelGlueModule['abi_version'];
   export const kernel_version: KernelGlueModule['kernel_version'];
   export const checksum: KernelGlueModule['checksum'];
+  export const sha256_hex: KernelGlueModule['sha256_hex'];
+  export const face_load: KernelGlueModule['face_load'];
+  export const face_release: KernelGlueModule['face_release'];
+  export const face_release_owner: KernelGlueModule['face_release_owner'];
+  export const face_release_all: KernelGlueModule['face_release_all'];
+  export const face_has: KernelGlueModule['face_has'];
+  export const face_owner: KernelGlueModule['face_owner'];
+  export const faces_count: KernelGlueModule['faces_count'];
+  export const faces_bytes_held: KernelGlueModule['faces_bytes_held'];
+  export const font_epoch: KernelGlueModule['font_epoch'];
 }

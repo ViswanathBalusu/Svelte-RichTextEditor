@@ -7,15 +7,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { KernelGlueModule } from '@docedit/layout-kernel';
+import { KERNEL_ABI_VERSION, type KernelGlueModule } from '@docedit/layout-kernel';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { DiagnosticDetail } from '../src/events.ts';
 import {
   classifyStartError,
   loadLayoutKernel,
   type KernelSource,
 } from '../src/features/layout-kernel.ts';
-import { requestLayoutKernel, resetLayoutKernelRequests } from '../src/layout-kernel-request.ts';
 
 const dist = resolve(import.meta.dirname, '../../layout-kernel/dist');
 const built = existsSync(resolve(dist, 'docedit_layout_kernel_bg.wasm'));
@@ -46,7 +44,6 @@ function serve(
 
 afterEach(() => {
   vi.restoreAllMocks();
-  resetLayoutKernelRequests();
 });
 
 describe('classifyStartError', () => {
@@ -71,16 +68,14 @@ describe('classifyStartError', () => {
 });
 
 describe.skipIf(!built)('loadLayoutKernel on the build of the crate', () => {
-  it('compiles with instantiateStreaming when the server says application/wasm', async () => {
-    const streaming = vi.spyOn(WebAssembly, 'instantiateStreaming');
-    const buffered = vi.spyOn(WebAssembly, 'instantiate');
+  it('compiles with compileStreaming when the server says application/wasm', async () => {
+    const streaming = vi.spyOn(WebAssembly, 'compileStreaming');
     const { kernel, report } = await loadLayoutKernel({
       source,
       fetch: serve('application/wasm'),
     });
     expect(streaming).toHaveBeenCalledTimes(1);
-    expect(buffered).not.toHaveBeenCalled();
-    expect(kernel.abi).toBe(1);
+    expect(kernel.abi).toBe(KERNEL_ABI_VERSION);
     expect(kernel.checksum(new TextEncoder().encode('a'))).toBe(0xe40c292c);
     expect(report).toMatchObject({
       feature: 'layout-kernel',
@@ -92,19 +87,16 @@ describe.skipIf(!built)('loadLayoutKernel on the build of the crate', () => {
     expect(report.ms).toBeGreaterThanOrEqual(0);
   });
 
-  it('falls back to instantiate from an ArrayBuffer when the media type is not application/wasm', async () => {
-    const streaming = vi.spyOn(WebAssembly, 'instantiateStreaming');
-    const buffered = vi.spyOn(WebAssembly, 'instantiate');
+  it('falls back to compile from the bytes when the media type is not application/wasm', async () => {
+    const streaming = vi.spyOn(WebAssembly, 'compileStreaming');
+    const buffered = vi.spyOn(WebAssembly, 'compile');
     for (const type of ['application/octet-stream', 'text/plain; charset=utf-8', null]) {
       streaming.mockClear();
       buffered.mockClear();
       const { kernel, report } = await loadLayoutKernel({ source, fetch: serve(type) });
       expect(streaming).not.toHaveBeenCalled();
-      // The bytes go to `WebAssembly.instantiate`; the runtime may call it again inside its own start.
-      expect(
-        buffered.mock.calls.some((c) => c[0] instanceof Uint8Array),
-        type ?? 'none',
-      ).toBe(true);
+      expect(buffered, type ?? 'none').toHaveBeenCalledTimes(1);
+      expect(buffered.mock.calls[0]?.[0]).toBeInstanceOf(Uint8Array);
       expect(kernel.version).toMatch(/^\d+\.\d+\.\d+$/);
       expect(report).toMatchObject({ kind: 'loaded', streaming: false, bytes: wasmBytes().length });
     }
@@ -153,7 +145,7 @@ describe.skipIf(!built)('loadLayoutKernel on the build of the crate', () => {
   });
 
   it('names the directive when the browser refuses to compile', async () => {
-    vi.spyOn(WebAssembly, 'instantiateStreaming').mockRejectedValue(
+    vi.spyOn(WebAssembly, 'compileStreaming').mockRejectedValue(
       new Error("Refused to compile WebAssembly module because 'wasm-unsafe-eval' is not allowed"),
     );
     await expect(
@@ -172,57 +164,5 @@ describe.skipIf(!built)('loadLayoutKernel on the build of the crate', () => {
     await expect(
       loadLayoutKernel({ source: missing, fetch: serve('application/wasm') }),
     ).rejects.toMatchObject({ code: 'chunk_failed' });
-  });
-});
-
-describe.skipIf(!built)('requestLayoutKernel', () => {
-  const loader = { loadLayoutKernel };
-  const load = (fetchImpl: typeof fetch) => async () => ({
-    loader: {
-      loadLayoutKernel: (o: Parameters<typeof loadLayoutKernel>[0]) =>
-        loader.loadLayoutKernel({ ...o, fetch: fetchImpl }),
-    },
-    source,
-  });
-
-  it('reports a load through the callback, once for each request, and loads once for all', async () => {
-    const fetcher = serve('application/wasm');
-    const reports: DiagnosticDetail[] = [];
-    const [a, b] = await Promise.all([
-      requestLayoutKernel((d) => reports.push(d), { load: load(fetcher) }),
-      requestLayoutKernel((d) => reports.push(d), { load: load(fetcher) }),
-    ]);
-    expect(a).not.toBeNull();
-    expect(b).toBe(a);
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(reports.map((r) => r.kind)).toEqual(['loaded', 'loaded']);
-  });
-
-  it('reports a failure, resolves to null and tries again on the next request', async () => {
-    const reports: DiagnosticDetail[] = [];
-    const first = await requestLayoutKernel((d) => reports.push(d), {
-      load: load(serve(null, 'gone', 503)),
-    });
-    expect(first).toBeNull();
-    expect(reports[0]).toMatchObject({
-      kind: 'load-failed',
-      code: 'fetch_failed',
-      ms: null,
-      directive: null,
-    });
-    const second = await requestLayoutKernel((d) => reports.push(d), {
-      load: load(serve('application/wasm')),
-    });
-    expect(second).not.toBeNull();
-    expect(reports[1]?.kind).toBe('loaded');
-  });
-
-  it('reports a loader chunk that fails to load as chunk_failed', async () => {
-    const reports: DiagnosticDetail[] = [];
-    const result = await requestLayoutKernel((d) => reports.push(d), {
-      load: () => Promise.reject(new Error('Failed to fetch dynamically imported module')),
-    });
-    expect(result).toBeNull();
-    expect(reports[0]).toMatchObject({ kind: 'load-failed', code: 'chunk_failed' });
   });
 });

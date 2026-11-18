@@ -70,7 +70,8 @@ import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
 import { selectView, VIEW_STRINGS, type ViewName } from './view-select.ts';
 import { frameScheduler } from './status.ts';
-import { requestLayoutKernel } from './layout-kernel-request.ts';
+import { fallbackFor, noticeReason, showPageViewNotice } from './kernel-fallback.ts';
+import { ElementKernel } from './layout-kernel-request.ts';
 import { EMBEDDING_VERSION, RELEASE } from './version.ts';
 
 /** `getToken` (05 §8.1): returns a token for the document, held in memory only. */
@@ -195,6 +196,10 @@ export class DocEditorElement extends Base {
    * host's value; setting it again clears this.
    */
   #viewOverride: ViewName | null = null;
+  /** The message that says the page view is not available because the kernel did not start (WASM-003). */
+  #kernelNotice: HTMLElement | null = null;
+  /** The element's layout kernel: its worker runs while the page view is asked for (WASM-004). */
+  #kernel: ElementKernel | null = null;
   /** The block the editor moves to as soon as the web view is shown (FE-072 criterion 4). */
   #pendingBlock: string | null = null;
   #grace: ReturnType<typeof setTimeout> | null = null;
@@ -434,9 +439,32 @@ export class DocEditorElement extends Base {
    * the web view meanwhile and the kernel waits for it. Touch devices never get the page view (FE-113).
    */
   #prepareKernel(view: string | null): void {
+    this.#kernelNotice?.remove();
+    this.#kernelNotice = null;
     if (view !== 'print') return;
     if (typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches) return;
-    void requestLayoutKernel((detail) => this.#emit('de-diagnostic', detail));
+    // One kernel for each element: it owns the layout worker (WASM-004) and keeps its lifecycle.
+    this.#kernel ??= new ElementKernel((detail) => {
+      this.#emit('de-diagnostic', detail);
+      if (detail.kind === 'load-failed') this.#degradeKernel(detail);
+    });
+    void this.#kernel.start();
+  }
+
+  /**
+   * The kernel did not start (WASM-003). The host hears which feature degraded and which directive it
+   * lacks. Where canvas measurement is an acceptable fallback (S5), the page view will use it and
+   * nothing is shown; in Firefox the page view is not available, and a plain message says why and
+   * offers the web view and the read view. Editing, saving and the read view are not affected.
+   */
+  #degradeKernel(failure: DocEditorEventMap['de-diagnostic']): void {
+    const fallback = fallbackFor(navigator.userAgent);
+    this.#emit('de-diagnostic', { ...failure, kind: 'degraded', ms: null, fallback });
+    if (fallback !== 'web-view' || this.getAttribute('view') !== 'print') return;
+    this.#kernelNotice?.remove();
+    this.#kernelNotice = showPageViewNotice(this.#root, noticeReason(failure), (view) =>
+      this.setAttribute('view', view),
+    );
   }
 
   #attributes(): {
@@ -454,6 +482,8 @@ export class DocEditorElement extends Base {
   }
 
   #suspend(): void {
+    // The layout worker stops with the element; the first use after a resume creates it again (WASM-004).
+    this.#kernel?.stop();
     if (!this.#session || this.#suspended) return;
     this.#suspended = true;
     // Listeners on the page, observers and the channel go; the core and the journal stay (FE-005).
@@ -524,6 +554,9 @@ export class DocEditorElement extends Base {
     this.#reload = false;
     this.#clearFailure();
     void current?.close();
+    // The faces the kernel holds belong to the document that is closed (a tenant's own fonts go
+    // with its documents; WASM-005). The next document names the faces it needs.
+    if (current && this.#kernel?.running) void this.#kernel.releaseFaces(null).catch(() => {});
     const session: Session = new Session({
       docId,
       backend:
@@ -1075,6 +1108,9 @@ export class DocEditorElement extends Base {
     this.#closeReadView();
     this.#hideWebLabel();
     this.#clearFailure();
+    // The worker and its memory are released (WASM-004).
+    this.#kernel?.destroy();
+    this.#kernel = null;
     const session = this.#session;
     this.#session = null;
     this.#sessionKey = null;

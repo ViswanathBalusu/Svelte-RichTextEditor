@@ -100,6 +100,24 @@ export function kernelFiles(): Plugin {
   };
 }
 
+/**
+ * The layout worker's script (WASM-004) is built as a module worker of its own, an asset next to the
+ * chunks, never inlined as a blob or base64. It takes the kernel's files through the same plugin.
+ */
+function layoutWorker(): NonNullable<InlineConfig['worker']> {
+  return {
+    format: 'es',
+    plugins: () => [kernelFiles()],
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
+      },
+    },
+  };
+}
+
 function base(outDir: string): InlineConfig {
   return {
     configFile: false,
@@ -126,6 +144,7 @@ export function libraryConfig(): InlineConfig {
     // Relative asset URLs: a lazy file (the kernel's WebAssembly) is found next to the chunk that
     // names it, wherever the host serves the component from (WASM-002).
     base: './',
+    worker: layoutWorker(),
     plugins: [kernelFiles(), ...componentSvelte('tree')],
     build: {
       ...config.build,
@@ -211,6 +230,7 @@ export function demoConfig(fragments: 'tree' | 'html', withDemo: boolean): Inlin
     for (const name of DEMO_SCRIPTS) input[name] = join(elementDir, 'demo', `${name}.ts`);
   return {
     ...config,
+    worker: layoutWorker(),
     plugins: [kernelFiles(), ...componentSvelte(fragments)],
     build: {
       ...config.build,
