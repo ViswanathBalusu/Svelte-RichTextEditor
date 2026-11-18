@@ -65,7 +65,7 @@ A client presents a JSON Web Token. Two issuers are supported:
 | `grp` | Optional array of group identifiers the user belongs to |
 | `docs` | Object mapping document identifiers (at most 20) to the user's role in each: `viewer`, `commenter`, `suggester`, `editor`, `owner`, `filler` |
 | `wfp`, `amr`, `auth_time` | For workflow participants (12, section 7) |
-| `wfr` | Optional array of role placeholder identifiers (12, section 3.1) that the user may fill outside a workflow, in the documents named by `docs` (12, section 13, "Form mode without a workflow"). The claim name is configurable per tenant; `wfr` is the default (owner decision 5a of 2026-11-15) |
+| `wfr` | Optional array of role placeholder identifiers (12, section 3.1) that the user may fill outside a workflow, in the documents named by `docs` (12, section 13, "Form mode without a workflow"). The claim name is configurable per tenant; `wfr` is the default (owner decision 5a of 2026-11-15). `POST /tokens` takes the roles as the member `wfr` and writes them under the claim name of the tenant |
 | `access_since` | Optional. The time the host first gave this user access, for the history visibility setting `since_access` |
 | `restrict` | Optional array of `no-export`, `no-copy`, `no-print` |
 

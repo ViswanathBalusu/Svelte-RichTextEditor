@@ -32,6 +32,8 @@ export interface OracleUser {
   sub: string;
   role: DocRole;
   groups?: readonly string[];
+  /** The role placeholders a filler may fill outside a workflow (12 §13); none by default. */
+  participantRoles?: readonly string[];
 }
 
 export interface OracleGrant {
@@ -71,6 +73,8 @@ export function judge(
   after: unknown,
   user: OracleUser,
   perms: PermissionState,
+  /** Fields (by identifier) that changed after the commit's base, for P9. */
+  fieldsChangedSinceBase: ReadonlySet<string> = new Set(),
 ): OracleVerdict {
   const b = toNode(before);
   const a = toNode(after);
@@ -79,8 +83,8 @@ export function judge(
     session: 'tck-oracle',
     role: user.role,
     groups: [...(user.groups ?? [])],
-    participantRoles: [],
-    participantActive: false,
+    participantRoles: [...(user.participantRoles ?? [])],
+    participantActive: (user.participantRoles ?? []).length > 0,
   };
   const access = computeAccess(conn, regionInfos(b), perms, Date.now());
   const verdict = outcomeCheck({
@@ -90,7 +94,7 @@ export function judge(
     access,
     perms,
     suggestionOwners: new Map(),
-    fieldsChangedSinceBase: new Set(),
+    fieldsChangedSinceBase,
     serverAuthored: false,
     origin: 'input',
   });

@@ -115,6 +115,10 @@ export const REST_SHAPES: readonly NamedShape[] = [
         name: opt(text()),
         grp: opt(arr(text()), 'Group identifiers.'),
         wfp: opt(text(), 'Workflow participant (12 §7).'),
+        wfr: opt(
+          arr(text({ minLength: 1 }), { unique: true }),
+          'Role placeholders the user may fill outside a workflow, in the documents named by `docs` (12 §3.1, §13). The service writes them under the claim name the tenant configures, `wfr` by default (05 §3.1).',
+        ),
         amr: opt(arr(text()), 'Authentication methods (12 §7).'),
         auth_time: opt(count(), 'When the host authenticated the participant (12 §7).'),
         access_since: opt(

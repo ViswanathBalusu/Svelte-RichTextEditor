@@ -10609,6 +10609,15 @@
             "description": "Workflow participant (12 §7).",
             "type": "string"
           },
+          "wfr": {
+            "description": "Role placeholders the user may fill outside a workflow, in the documents named by `docs` (12 §3.1, §13). The service writes them under the claim name the tenant configures, `wfr` by default (05 §3.1).",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
           "amr": {
             "description": "Authentication methods (12 §7).",
             "type": "array",

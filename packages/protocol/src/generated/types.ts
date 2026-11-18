@@ -393,6 +393,8 @@ export interface TokenRequest {
   grp?: string[];
   /** Workflow participant (12 §7). */
   wfp?: string;
+  /** Role placeholders the user may fill outside a workflow, in the documents named by `docs` (12 §3.1, §13). The service writes them under the claim name the tenant configures, `wfr` by default (05 §3.1). */
+  wfr?: string[];
   /** Authentication methods (12 §7). */
   amr?: string[];
   /** When the host authenticated the participant (12 §7). */
