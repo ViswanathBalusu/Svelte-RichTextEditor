@@ -2849,12 +2849,13 @@ As an integrating developer, I want a profile for relay servers, so that a relay
 
 **Acceptance criteria**
 
-- [ ] Given a server with `mode` `relay`, when the kit selects profiles, then it runs `core-relay` and not the profiles that need document semantics.
+- [x] Given a server with `mode` `relay`, when the kit selects profiles, then it runs `core-relay` and not the profiles that need document semantics.
 - [ ] Given a commit whose `base` is not the head, when it is submitted to a relay, then it is rejected with `stale_base`.
 - [ ] Given commits from a client at the head, when they are submitted, then they are stored and relayed unchanged.
-- [ ] Given discovery of a relay, when features are read, then `regions`, `suggest-enforced` and `fields` are absent.
+- [x] Given discovery of a relay, when features are read, then `regions`, `suggest-enforced` and `fields` are absent.
 
-**Notes:** Phase inferred: relay mode has no phase in 11; it is placed with the published kit in phase 4.
+**Evidence:** packages/tck/test/pro-124-core-relay.test.ts (Node.js, 7 cases), code in packages/tck/src/profiles/core-relay.ts and index.ts (the profile replaces the pending entry). Criterion 1: `notApplicable` gives null for `core-relay` on a server with `mode: relay` and a reason on an authority server; the profiles applicable to a relay include `core-relay` and none of `core`, `semantics`, `perm-doc`, `authz`, `registry`, `fuzz` (also packages/tck/test/relay-selection.test.ts, PRO-101). Criterion 4: the scenario `core-relay.discovery.mode-and-features` passes for a discovery with `mode: relay` and none of `regions`, `suggest-enforced`, `fields`, and fails for each of them and for `mode: authority`; the discovery is a document the test serves to the scenario, not a relay's.
+**Notes:** Phase inferred: relay mode has no phase in 11; it is placed with the published kit in phase 4. Lane w5, 2026-11-18: criteria 1 and 4 ticked. Criteria 2 and 3 stay unticked: they submit commits to a relay, and no relay server that speaks DEP exists to run scenarios against. `Relay` in `@docedit/authority` (SYN-044) is a library (the room-side of 04 §14), and `services/document-service` and the kit's mock target are in authority mode. A scenario written without a relay to run it against would be untested; a relay target built here only for the kit would be scaffolding. Needed: a relay server (a DEP front over `Relay`, with the bootstrap contract of 05 §11).
 
 ### PRO-125 Provide the `authority-service` profile
 
