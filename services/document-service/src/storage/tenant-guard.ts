@@ -18,7 +18,8 @@ export interface GuardedMigration {
 /**
  * Tables that hold no tenant data, with the migration that says why. Each must really lack a
  * `tenant_id` column, which the tests check, so that an entry does not outlive its table.
- *   - node_leases (0033_node_leases.sql): a lease names a node, not a document.
+ *   - node_leases (0033_node_leases.sql): a lease names a node, not a document. Owner decision 195
+ *     (docs/owner-decisions-2026-11-15.md) allows it without a tenant column.
  */
 export const TENANT_EXEMPT: ReadonlySet<string> = new Set(['node_leases']);
 
