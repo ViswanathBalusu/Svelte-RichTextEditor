@@ -60,6 +60,10 @@ Bad:
 - **Fallback when WebAssembly is blocked.** Canvas measurement behind the same shaper interface in Chromium, Edge and WebKit. In Firefox, the element stays in the web view and says why (S5). The kernel detects a refused compile itself, since WebKit does not report it (S2).
 - **Conditions of the WASM epic.** C-WASM holds if the page view goes ahead. C-RUST does not hold.
 
+## Decision of the owner (2026-11-15, decision 27)
+
+The owner chose to build the Rust WebAssembly module, which overrides the S10 recommendation above, knowing its measured cost (2.1 times the download, a second toolchain, 21 crates). C-RUST holds, so the 16 stories of the WASM epic may start ([owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)). Decision 3 above is therefore answered by the owner and not by S10's measurement. WASM-001 builds the toolchain: the Rust workspace is `crates/` (pinned toolchain 1.89.0, `crates/Containerfile` for Podman, `crates/Cargo.lock`), and the npm package is `packages/layout-kernel`.
+
 ## Revisit when
 
 - S5 or S10 reports (done, 2026-11-06; see "Result of S10").

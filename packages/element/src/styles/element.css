@@ -415,13 +415,6 @@ table.de-suggest-gone {
   white-space: nowrap;
 }
 
-/* The element that `prosemirror-view` draws around a block that carries a suggestion mark (a paragraph,
-   a row, a table) has no box of its own, so the block keeps its place in its parent's layout and a
-   suggested row stays in line with the others (FE-045 criterion 6; docs/adr/0385-w1-...). */
-.de-suggest-wrap {
-  display: contents;
-}
-
 /* Each author has a colour and a second cue, a line style; both are custom properties so that the
    cells of a suggested row and a table take them too. */
 [data-suggestion-tone='0'] {

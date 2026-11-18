@@ -29,7 +29,13 @@ import { lockFor, type WorkflowStateName } from '@docedit/authority';
 import { uuid7 } from '@docedit/model';
 import type { RoomNotifier } from '../seams.ts';
 import { recordOf } from './record.ts';
-import type { AuditStore, DocRef, GrantStore, LogStore } from '../storage/types.ts';
+import {
+  RevisionConflictError,
+  type AuditStore,
+  type DocRef,
+  type GrantStore,
+  type LogStore,
+} from '../storage/types.ts';
 import type {
   WorkflowResourceStore,
   WorkflowResourceView,
@@ -62,8 +68,10 @@ export interface TransitionRequest {
    */
   readonly note?: Readonly<Record<string, string | number | null>>;
   /**
-   * Write a grants revision, and so a control commit, even when the new state changes no lock (FRW-054:
-   * `completed` to `finalised` keeps the lock, and the transition is still part of the chain, 12 §6.2).
+   * Whether to write a grants revision, and so a control commit, when the transition keeps the lock
+   * of the state it leaves. The default is yes: every transition is part of the chain (12 §6.2;
+   * FRW-030 criterion 1, and FRW-054: `completed` to `finalised` keeps the lock). `false` is for a
+   * caller that must not.
    */
   readonly anchor?: boolean;
 }
@@ -147,23 +155,48 @@ export async function recordTransition(
       `recordTransition: the lock of state ${write.to} is not decided (FRW-029)`,
     );
 
+  // A transition from a state the workflow has already left is refused before anything is written:
+  // the grants revision of a transition that did not happen would be a control commit for nothing.
+  // The conditional write below is still the guard against a race that starts after this read.
+  const now = await deps.workflows.read(ref.tenant, ref.doc);
+  if (now === null) return { ok: false, problem: { code: 'not_found' } };
+  if (now.state !== from.state || now.rev !== from.rev)
+    return { ok: false, problem: { code: 'conflict', state: now.state, rev: now.rev } };
+
   // 1 and 2: the lock, stored under a new grants revision, and the room told of it.
-  const before = await deps.grants.current(ref);
   const headBefore = (await deps.logs.head(ref)).seq;
   let revision: number | null = null;
-  const change: { documentState?: typeof lock.documentState; workflowActive?: boolean } = {};
-  if (before.documentState !== lock.documentState) change.documentState = lock.documentState;
-  if (before.workflowActive !== lock.workflowActive) change.workflowActive = lock.workflowActive;
-  if (Object.keys(change).length > 0 || anchor === true) {
-    const after = await deps.grants.change(ref, change, {
-      actor,
-      ifRevision: before.revision,
-    });
-    revision = after.revision;
-    // A notifier that pushes the workflow (FRW-035) is told once, after the state moves, with the
-    // record and these permissions together: the room then sends `perm.changed` and `wf.changed` in
-    // order, with the access the new record implies. Any other is told of the lock now.
-    if (deps.notifier.workflowChanged === undefined) deps.notifier.permissionsChanged(ref, after);
+  // Every transition is a control commit (12 §6.2, last paragraph; FRW-030 criterion 1). One that
+  // changes the lock has it through the grants revision of the lock. One that leaves the lock as it
+  // was by design (`sent` to `in_progress`, a completion that moves the order on) raises the grants
+  // revision with nothing changed, so that it has a place in the chain too. A repeat after a stop
+  // finds the lock in force and raises nothing, for a transition that changes the lock; for one that
+  // does not, the repeat raises a second revision (ADR 0382, point 6).
+  const fromLock = lockFor(from.state as WorkflowStateName);
+  const keepsLock =
+    fromLock !== null &&
+    fromLock !== undefined &&
+    fromLock.documentState === lock.documentState &&
+    fromLock.workflowActive === lock.workflowActive;
+  // Another change of the grants (a second participant opening the document at the same time, an
+  // owner's edit of a grant) may take the revision between the read and the write: read again.
+  for (let attempt = 0; ; attempt++) {
+    const before = await deps.grants.current(ref);
+    const change: { documentState?: typeof lock.documentState; workflowActive?: boolean } = {};
+    if (before.documentState !== lock.documentState) change.documentState = lock.documentState;
+    if (before.workflowActive !== lock.workflowActive) change.workflowActive = lock.workflowActive;
+    if (Object.keys(change).length === 0 && !(anchor !== false && keepsLock)) break;
+    try {
+      const after = await deps.grants.change(ref, change, { actor, ifRevision: before.revision });
+      revision = after.revision;
+      // A notifier that pushes the workflow (FRW-035) is told once, after the state moves, with the
+      // record and these permissions together: the room then sends `perm.changed` and `wf.changed`
+      // in order, with the access the new record implies. Any other is told of the lock now.
+      if (deps.notifier.workflowChanged === undefined) deps.notifier.permissionsChanged(ref, after);
+      break;
+    } catch (e) {
+      if (!(e instanceof RevisionConflictError) || attempt >= 5) throw e;
+    }
   }
   await deps.afterLock?.();
 

@@ -25,6 +25,7 @@
               "headerRows": 0,
               "borders": null,
               "cellMargins": null,
+              "suggest": null,
               "preserved": null,
               "ext": {}
             },
@@ -36,6 +37,7 @@
                   "height": null,
                   "heightRule": "auto",
                   "cantSplit": false,
+                  "suggest": null,
                   "preserved": null,
                   "ext": {}
                 },
@@ -78,6 +80,7 @@
                           "tabs": null,
                           "borders": null,
                           "shading": null,
+                          "suggest": null,
                           "preserved": null,
                           "ext": {}
                         },

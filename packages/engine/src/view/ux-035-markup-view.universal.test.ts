@@ -11,6 +11,7 @@
  * test/ux-035-markup-view.test.ts.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { addBlockEntry, entry } from '../block-suggestion.ts';
 import { internals } from '../testing.ts';
 import { STYLE_IDS, styledDocument, styledEditorAccess } from '../../test/fixtures.ts';
 import { EditorCore } from './web.ts';
@@ -47,16 +48,11 @@ describe.skipIf(!isBrowser)('the markup views in the body view (UX-035)', () => 
       });
       if (ic.state.doc.textBetween(from, from + 2).length !== 2)
         throw new Error('paragraph too short');
-      ic.dispatch(
-        ic.state.tr
-          .addMark(from, from + 1, schema.marks['ins']!.create({ id: 'ins-ux035', user: 'alice' }))
-          .addMark(
-            from + 1,
-            from + 2,
-            schema.marks['del']!.create({ id: 'del-ux035', user: 'bob' }),
-          )
-          .addNodeMark(quote, schema.marks['del']!.create({ id: 'bdel-ux035', user: 'carol' })),
-      );
+      const marked = ic.state.tr
+        .addMark(from, from + 1, schema.marks['ins']!.create({ id: 'ins-ux035', user: 'alice' }))
+        .addMark(from + 1, from + 2, schema.marks['del']!.create({ id: 'del-ux035', user: 'bob' }));
+      addBlockEntry(marked, quote, entry('del', 'bdel-ux035', 'carol'));
+      ic.dispatch(marked);
       core.setSuggestionLabel((kind, user) =>
         kind === 'ins' ? `Inserted by ${user}` : `Deleted by ${user}`,
       );

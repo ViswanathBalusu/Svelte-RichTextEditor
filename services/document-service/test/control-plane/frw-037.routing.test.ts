@@ -317,7 +317,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
-      'writes no control commit for a completion that routing leaves as it was',
+      'writes one control commit for a completion that routing leaves as it was (the transition, FRW-030 criterion 1)',
       async () => {
         const people = [person('p1', 'tenant', 'filler', 1), person('p2', 'landlord', 'filler', 2)];
         const { doc, fillTotal } = await sentWorkflow(
@@ -339,7 +339,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ['p1', 'completed'],
           ['p2', 'active'],
         ]);
-        expect((await controls(doc)).length).toBe(controlBefore);
+        // The completion is a transition and has its own control commit; routing adds no other.
+        expect((await controls(doc)).length).toBe(controlBefore + 1);
       },
       90_000,
     );

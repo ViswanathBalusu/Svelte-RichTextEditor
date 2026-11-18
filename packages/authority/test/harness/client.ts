@@ -26,6 +26,7 @@ import type {
   ToClient,
 } from '../../src/room/types.ts';
 import { stepsEqual, stepsToJson } from '../../src/steps.ts';
+import { addSuggestion, entriesAt, removeSuggestion } from '../block-suggest.ts';
 import { schema as defaultSchema } from '../fixtures.ts';
 import type { Schema } from 'prosemirror-model';
 
@@ -93,6 +94,22 @@ function textSpots(doc: Node): Spot[] {
       n.forEach((c, o) => visit(c, pos + 1 + o));
     };
     visit(child, at);
+  });
+  return out;
+}
+
+/** The tabs of the body that carry a node mark, with the scope each sits in. */
+function markedTabs(doc: Node): Array<{ node: Node; pos: number; scope: string }> {
+  const out: Array<{ node: Node; pos: number; scope: string }> = [];
+  const body = doc.child(doc.childCount - 1);
+  const bodyStart = doc.content.size - body.nodeSize + 1;
+  body.forEach((child, offset) => {
+    const at = bodyStart + offset;
+    const scope = child.type.name === 'region' ? `region:${String(child.attrs['id'])}` : 'body';
+    child.descendants((n, pos) => {
+      if (n.type.name === 'tab' && n.marks.length) out.push({ node: n, pos: at + 1 + pos, scope });
+      return true;
+    });
   });
   return out;
 }
@@ -612,29 +629,56 @@ export class SimClient {
           break;
         }
         case 10: {
-          // Mark a whole paragraph (addNodeMark): a suggested deletion or insertion of the block.
+          // A suggested deletion or insertion of a whole paragraph is an entry of its `suggest`
+          // attribute (03 §5; owner decision 92); an inline node (a tab) still takes node marks, so
+          // half of the time a tab is put in and marked (addNodeMark).
           if (!spot) return false;
           const m = mode(spot.scope);
           if (m === 'none') return false;
+          if (b % 2) {
+            const tab = this.schema.nodes['tab']!.create(
+              null,
+              null,
+              m === 'suggest' ? [ins()] : [],
+            );
+            tr.insert(spot.pos, tab);
+            tr.addNodeMark(spot.pos, m === 'edit' && b % 4 === 3 ? ins() : del());
+            break;
+          }
           const $p = doc.resolve(spot.pos);
           if ($p.parent.type.name !== 'paragraph') return false;
-          tr.addNodeMark($p.before($p.depth), m === 'edit' && b % 2 ? ins() : del());
+          tr.step(
+            addSuggestion(tr.doc, $p.before($p.depth), m === 'edit' && b % 4 === 2 ? ins() : del()),
+          );
           break;
         }
         case 11: {
-          // Take a mark off a paragraph again (removeNodeMark): any where one may edit, one's own
-          // where one only suggests.
+          // Take a suggestion off again: a mark off a tab (removeNodeMark) or an entry off a
+          // paragraph (`suggest`). Any where one may edit, one's own where one only suggests.
+          if (a % 2) {
+            const tabs = markedTabs(doc);
+            if (!tabs.length) return false;
+            const t = tabs[b % tabs.length]!;
+            const m = mode(t.scope);
+            const mark = t.node.marks.find((x) => m === 'edit' || x.attrs['user'] === me);
+            if (m === 'none' || !mark) return false;
+            tr.removeNodeMark(t.pos, mark);
+            break;
+          }
           const marked = textSpots(doc).filter((s) => {
             const $s = doc.resolve(s.pos);
-            return $s.parent.type.name === 'paragraph' && $s.parent.marks.length > 0;
+            return (
+              $s.parent.type.name === 'paragraph' && entriesAt(doc, $s.before($s.depth)).length > 0
+            );
           });
           if (!marked.length) return false;
           const s = marked[a % marked.length]!;
           const m = mode(s.scope);
           const $s = doc.resolve(s.pos);
-          const mark = $s.parent.marks.find((x) => m === 'edit' || x.attrs['user'] === me);
-          if (m === 'none' || !mark) return false;
-          tr.removeNodeMark($s.before($s.depth), mark);
+          const at = $s.before($s.depth);
+          const entry = entriesAt(doc, at).find((x) => m === 'edit' || x.attrs.user === me);
+          if (m === 'none' || !entry) return false;
+          tr.step(removeSuggestion(tr.doc, at, entry.attrs.id));
           break;
         }
       }
@@ -759,12 +803,21 @@ export class SimClient {
           break;
         }
         case 8: {
-          // A node mark in someone else's name on a paragraph of the restricted region.
+          // A block suggestion in someone else's name on a paragraph of the restricted region, or a
+          // node mark in someone else's name on an inline node (a tab put in first).
           const legal =
             paragraphs.find((p) => p.node.attrs['id'] === 'pLegal000000001B') ??
             paragraphs[a % paragraphs.length]!;
           const mark = this.schema.marks['del']!.create({ id: 'sForgedNodeMark1', user: 'carol' });
-          json = [new AddNodeMarkStep(legal.pos, mark).toJSON()];
+          if (b % 2) json = [addSuggestion(doc, legal.pos, mark).toJSON()];
+          else {
+            const at = legal.pos + 1;
+            const tab = this.schema.nodes['tab']!.create();
+            json = [
+              new ReplaceStep(at, at, new Slice(Fragment.from(tab), 0, 0)).toJSON(),
+              new AddNodeMarkStep(at, mark).toJSON(),
+            ];
+          }
           break;
         }
         case 9: {

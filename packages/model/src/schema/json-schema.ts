@@ -5,7 +5,7 @@
  * the order of children, identity and references, table geometry, limits measured over the whole
  * document, the math gate, forbidden combinations that depend on attributes, and feature gating.
  */
-import { DEFINITION_ID_PATTERN, NODE_MARK_HOSTS } from '../definition/cdm1.ts';
+import { DEFINITION_ID_PATTERN } from '../definition/cdm1.ts';
 import type { CdmDefinition, Grammar, MarkDef, NodeDef } from '../definition/grammar.ts';
 import { CLARK_NAME_PATTERN, refPattern } from '../validate/grammar-check.ts';
 import { allowedChildren, minChildren } from './content-expr.ts';
@@ -13,10 +13,9 @@ import { allowedChildren, minChildren } from './content-expr.ts';
 type Schema = Record<string, unknown>;
 
 const NO_CONTROL_PATTERN = '^[^\\u0000-\\u0008\\u000B-\\u001F\\u007F-\\u009F]*$';
-const SUGGESTION_MARKS = ['ins', 'del', 'fmt'];
 
 export const NOT_EXPRESSIBLE = [
-  'I1 in part: the order and cardinality of children (content expressions); exactly one paragraph in a footnote; node marks only on paragraph, table_row and table; node types, marks, attributes and attribute values (the `field` kind `formValue`) that belong to a feature missing from `requires`; the `hidden_region` placeholder and the redaction marker, which exist only in projections',
+  'I1 in part: the order and cardinality of children (content expressions); exactly one paragraph in a footnote; no marks on blocks (block suggestions are the suggest attribute of paragraph, table_row and table); node types, marks, attributes and attribute values (the `field` kind `formValue`) that belong to a feature missing from `requires`; the `hidden_region` placeholder and the redaction marker, which exist only in projections',
   'I2: identifiers present and unique; a non-null identifier never changes; a suggestion identifier belongs to one user',
   'I3: regions and section breaks are direct children of the body; a removed region identifier is never reused',
   'I4: every reference resolves, to a definition of the right kind, a numbering level that the definition has and a field target of the kind its field needs; cited sources exist; assets are attached to the document',
@@ -143,12 +142,7 @@ export function generateJsonSchema(def: CdmDefinition): Schema {
         }
         properties['content'] = content;
       }
-      if (NODE_MARK_HOSTS.includes(n.name)) {
-        properties['marks'] = {
-          type: 'array',
-          items: { anyOf: SUGGESTION_MARKS.map((m) => ({ $ref: `#/$defs/mark.${m}` })) },
-        };
-      } else if (n.inline) {
+      if (n.inline) {
         // Inline atoms carry marks as text does (spike S11, change 1).
         properties['marks'] = {
           type: 'array',

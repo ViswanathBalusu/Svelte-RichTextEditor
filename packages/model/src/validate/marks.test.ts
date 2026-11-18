@@ -1,6 +1,6 @@
 // Marks (03 §5): character formatting (CDM-037), link schemes (CDM-038), suggestion marks
 // (CDM-039) and block-level suggestions (CDM-040), including the steps that make them (04 §4).
-import { AddMarkStep, AddNodeMarkStep, RemoveNodeMarkStep } from 'prosemirror-transform';
+import { AddMarkStep, AddNodeMarkStep, AttrStep } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import {
   addDefs,
@@ -286,8 +286,14 @@ describe('suggestion marks that coexist (CDM-039)', () => {
   });
 });
 
+/** Sets the block suggestions of a paragraph, a row or a table (owner decision 92). */
+const suggest = (node: Json, ...entries: Json[]): Json => {
+  node['attrs'] = { ...(node['attrs'] as Json), suggest: entries };
+  return node;
+};
+
 describe('suggested changes to whole paragraphs, rows and tables (CDM-040)', () => {
-  it('accepts ins, del and fmt as node marks on a paragraph, a table row and a table, and nowhere else', () => {
+  it('accepts ins, del and fmt in `suggest` on a paragraph, a table row and a table, and nowhere else', () => {
     const d = sinkDoc();
     expect(
       validate(d, {
@@ -301,21 +307,23 @@ describe('suggested changes to whole paragraphs, rows and tables (CDM-040)', () 
       }).valid,
     ).toBe(true);
     const onTable = exampleDoc();
-    bodyOf(onTable).push({
-      ...table(
-        'tTable0000000001',
-        [1000],
-        [
-          {
-            ...row('rRow000000000001', [cell('cCell0000000000A')]),
-            marks: [ins('sRowInsert000001', 'alice')],
-          },
-        ],
+    bodyOf(onTable).push(
+      suggest(
+        table(
+          'tTable0000000001',
+          [1000],
+          [
+            suggest(
+              row('rRow000000000001', [cell('cCell0000000000A')]),
+              ins('sRowInsert000001', 'alice'),
+            ),
+          ],
+        ),
+        del('sTableDelete0001', 'bob'),
       ),
-      marks: [del('sTableDelete0001', 'bob')],
-    });
+    );
     expect(invariants(onTable)).toEqual([]);
-    for (const [what, host] of [
+    for (const [what, host, expected] of [
       [
         'cell',
         (d: Json) =>
@@ -325,13 +333,18 @@ describe('suggested changes to whole paragraphs, rows and tables (CDM-040)', () 
               [1000],
               [
                 row('rRow000000000001', [
-                  { ...cell('cCell0000000000A'), marks: [ins('sCell00000000001', 'bob')] },
+                  suggest(cell('cCell0000000000A'), ins('sCell00000000001', 'bob')),
                 ]),
               ],
             ),
           ),
+        'unknown_attribute',
       ],
-      ['region', (d: Json) => (bodyOf(d)[1]!.marks = [ins('sRegion000000001', 'bob')])],
+      [
+        'region',
+        (d: Json) => suggest(bodyOf(d)[1]!, ins('sRegion000000001', 'bob')),
+        'unknown_attribute',
+      ],
       [
         'figure',
         (d: Json) =>
@@ -342,41 +355,69 @@ describe('suggested changes to whole paragraphs, rows and tables (CDM-040)', () 
               asset: '0192f0c4-7b1e-7c3a-9a54-3f2f1f6f8a10',
               width: 10,
               height: 10,
+              suggest: [ins('sFigure000000001', 'bob')],
             },
-            marks: [ins('sFigure000000001', 'bob')],
           }),
+        'unknown_attribute',
       ],
       [
         'equation',
         (d: Json) =>
           bodyOf(d).push({
             type: 'equation_block',
-            attrs: { id: 'eqBlock000000001', latex: 'x' },
-            marks: [del('sEq0000000000001', 'bob')],
+            attrs: {
+              id: 'eqBlock000000001',
+              latex: 'x',
+              suggest: [del('sEq0000000000001', 'bob')],
+            },
           }),
+        'unknown_attribute',
       ],
       [
         'toc',
         (d: Json) =>
           bodyOf(d).push({
             type: 'toc',
-            attrs: { id: 'tocMain000000001' },
-            marks: [del('sToc000000000001', 'bob')],
+            attrs: { id: 'tocMain000000001', suggest: [del('sToc000000000001', 'bob')] },
           }),
+        'unknown_attribute',
+      ],
+      [
+        'a mark on a paragraph',
+        (d: Json) => (bodyOf(d)[0]!.marks = [ins('sMarkOnBlock0001', 'bob')]),
+        'node_mark_host',
+      ],
+      [
+        'a mark on a table row',
+        (d: Json) =>
+          bodyOf(d).push(
+            table(
+              'tTable0000000001',
+              [1000],
+              [
+                {
+                  ...row('rRow000000000001', [cell('cCell0000000000A')]),
+                  marks: [ins('sMarkOnRow00001', 'bob')],
+                },
+              ],
+            ),
+          ),
+        'node_mark_host',
       ],
     ] as const) {
       const d = exampleDoc();
       host(d);
-      expect(codes(d), what).toContain('node_mark_host');
+      expect(codes(d), what).toContain(expected);
     }
   });
 
-  it('reads an ins or del node mark as a new or removed block, and fmt as a change with the previous values', () => {
+  it('reads an ins or del entry as a new or removed block, and fmt as a change with the previous values', () => {
     const d = exampleDoc();
-    bodyOf(d)[0]!.marks = [ins('sNewBlock0000001', 'alice')];
-    bodyOf(d)[2]!.marks = [
+    suggest(bodyOf(d)[0]!, ins('sNewBlock0000001', 'alice'));
+    suggest(
+      bodyOf(d)[2]!,
       fmt('sRestyle00000001', 'carol', { attrs: { style: 'Heading1', align: null } }),
-    ];
+    );
     expect(validate(d, ctx).valid).toBe(true);
     const s = suggestionsOf(d['doc']);
     expect(s.map((x) => [x.kind, x.parts[0]!.on, x.parts[0]!.blockId])).toEqual([
@@ -389,41 +430,47 @@ describe('suggested changes to whole paragraphs, rows and tables (CDM-040)', () 
   it('refuses a block fmt whose before names anything but the style, alignment or list level', () => {
     for (const attrs of [{ indentLeft: 720 }, { id: 'pOther0000000001' }, { style: 'Missing!' }]) {
       const d = exampleDoc();
-      bodyOf(d)[2]!.marks = [fmt('sRestyle00000001', 'carol', { attrs })];
+      suggest(bodyOf(d)[2]!, fmt('sRestyle00000001', 'carol', { attrs }));
       expect(codes(d), JSON.stringify(attrs)).toEqual(['fmt_before']);
     }
     const marksOnBlock = exampleDoc();
-    bodyOf(marksOnBlock)[2]!.marks = [
+    suggest(
+      bodyOf(marksOnBlock)[2]!,
       fmt('sRestyle00000001', 'carol', { marks: [{ type: 'bold' }] }),
-    ];
+    );
     expect(codes(marksOnBlock)).toEqual(['fmt_before']);
   });
 
-  it('checks the result of addNodeMark and removeNodeMark steps like any other step', () => {
+  it('refuses one identifier used by two users in `suggest`, as for marks (I2)', () => {
+    const d = exampleDoc();
+    suggest(bodyOf(d)[0]!, ins('sSame00000000001', 'alice'));
+    suggest(bodyOf(d)[2]!, del('sSame00000000001', 'bob'));
+    expect(invariants(d)).toEqual(['I2']);
+  });
+
+  it('checks the result of an attr step on `suggest` like any other step', () => {
     const doc = schema.nodeFromJSON(exampleDoc()['doc']);
     const bodyStart = doc.child(0).nodeSize;
     const firstParagraph = bodyStart + 1;
     const regionPos = firstParagraph + doc.child(1).child(0).nodeSize;
-    const good = new AddNodeMarkStep(
-      firstParagraph,
-      schema.marks['del']!.create({ id: 'sDelBlock0000001', user: 'bob' }),
-    ).apply(doc);
+    const entry = { type: 'del', attrs: { id: 'sDelBlock0000001', user: 'bob' } };
+    const good = new AttrStep(firstParagraph, 'suggest', [entry]).apply(doc);
+    expect(good.failed).toBeNull();
     expect(validateDoc(good.doc!, [], ctx).valid).toBe(true);
-    // ProseMirror applies a node mark on a region; the result is refused (I1).
-    const bad = new AddNodeMarkStep(
-      regionPos,
-      schema.marks['ins']!.create({ id: 'sInsRegion000001', user: 'bob' }),
-    ).apply(doc);
-    expect(bad.failed).toBeNull();
-    expect(validateDoc(bad.doc!, [], ctx).violations.map((v) => v.code)).toEqual([
-      'node_mark_host',
-    ]);
-    const removed = new RemoveNodeMarkStep(regionPos, bad.doc!.nodeAt(regionPos)!.marks[0]!).apply(
-      bad.doc!,
-    );
-    expect(validateDoc(removed.doc!, [], ctx).valid).toBe(true);
+    const bad = new AttrStep(firstParagraph, 'suggest', [
+      { type: 'comment', attrs: { id: 'sNoSuchKind00001', user: 'bob' } },
+    ]).apply(doc);
+    expect(validateDoc(bad.doc!, [], ctx).valid).toBe(false);
+    // A region has no `suggest` attribute, and ProseMirror refuses a node mark there.
+    expect(
+      new AddNodeMarkStep(
+        regionPos,
+        schema.marks['ins']!.create({ id: 'sInsRegion000001', user: 'bob' }),
+      ).apply(doc).failed,
+    ).not.toBeNull();
+    const cleared = new AttrStep(firstParagraph, 'suggest', null).apply(good.doc!);
+    expect(validateDoc(cleared.doc!, [], ctx).valid).toBe(true);
   });
-
   it('cannot attach a block suggestion to a table cell or to a column: neither is defined', () => {
     const d = exampleDoc();
     bodyOf(d).push(

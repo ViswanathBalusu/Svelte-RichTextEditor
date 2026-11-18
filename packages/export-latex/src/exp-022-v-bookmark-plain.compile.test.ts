@@ -2,7 +2,7 @@
  * Bookmark text of headings in the compiled PDF (Node.js, sandbox): EXP-022 criterion 2, the plain
  * form of a heading in a bookmark. Lane V-EXP-017-032 (2026-11-13). The first heading has a bold
  * run and TeX special characters; its bookmark must be the typed text. The second heading has a
- * backslash; its bookmark is not yet the typed text (recorded as `it.fails`, see the story Notes).
+ * backslash; its bookmark was not the typed text until class 0.2.14 (`docedit.strexp`).
  * The outline is read from the compiled PDF with `test/exp-023-pdf-links.ts`.
  *
  * The tests skip when `sandboxReady()` reports that sandboxed compiles cannot run here (EXP-070).
@@ -64,12 +64,9 @@ describe.skipIf(!ready)(
       expect(outline[0]?.title).toBe(FIRST);
     });
 
-    it.fails(
-      'gives a heading with a backslash its typed text in the outline (known defect, EXP-022 Notes)',
-      () => {
-        const { outline } = pdfLinks(c.compile.pdf!);
-        expect(outline[1]?.title).toBe(SECOND);
-      },
-    );
+    it('gives a heading with a backslash its typed text in the outline (fixed in class 0.2.14)', () => {
+      const { outline } = pdfLinks(c.compile.pdf!);
+      expect(outline[1]?.title).toBe(SECOND);
+    });
   },
 );

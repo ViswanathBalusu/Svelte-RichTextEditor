@@ -118,6 +118,7 @@ describe('the cascade (CDM-041)', () => {
       'style',
       'numbering',
       'numberingRestart',
+      'suggest',
       'preserved',
       'ext',
     ]);

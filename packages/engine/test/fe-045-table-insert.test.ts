@@ -12,6 +12,7 @@ import { DocumentCore } from '../src/headless.ts';
 import { spikeDocument } from '../src/spike-document.ts';
 import { resolveSuggestions } from '../src/suggestion-resolve.ts';
 import { insertTable } from '../src/table.ts';
+import { blockEntries } from '../src/block-suggestion.ts';
 import { internals } from '../src/testing.ts';
 import { editorAccess } from './fixtures.ts';
 import { microtask } from './support.ts';
@@ -37,7 +38,7 @@ function tables(doc: PMNode): PMNode[] {
   return out;
 }
 
-const marksOf = (node: PMNode): string[] => node.marks.map((m) => m.type.name);
+const marksOf = (node: PMNode): string[] => blockEntries(node).map((e) => e.type);
 
 function inserted(c: DocumentCore): void {
   const i = internals(c);
@@ -51,7 +52,7 @@ describe('inserting a whole table as a suggestion (FE-045 criterion 3)', () => {
     const found = tables(internals(c).state.doc);
     expect(found).toHaveLength(1);
     const table = found[0]!;
-    expect(table.marks.map((m) => [m.type.name, m.attrs['user']])).toEqual([['ins', 'alice']]);
+    expect(blockEntries(table).map((e) => [e.type, e.attrs.user])).toEqual([['ins', 'alice']]);
     expect(table.childCount).toBe(2);
     table.forEach((row) => expect(marksOf(row)).toEqual([]));
     expect(validate(c.getContent()).violations).toEqual([]);

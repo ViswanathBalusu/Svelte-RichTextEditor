@@ -108,6 +108,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     }
 
     const base = async (ref: { tenant: string; doc: string }) => (await h.parts.logs.head(ref)).seq;
+    /** A fill as a client sends it: a refusal that says the commit was not stored is sent again. */
+    async function submit(c: DepClient, ref: { tenant: string; doc: string }, step: unknown) {
+      for (let i = 0; i < 20; i++) {
+        const r = await c.submit(1, { base: await base(ref), steps: [step] });
+        if (r.t !== 'sync.reject' || r.d?.['code'] !== 'unavailable') return r;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      throw new Error('the commit was never stored');
+    }
 
     it.skipIf(skip)(
       'gives a person bound to two roles both roles, and both sets of fields (criterion 3, first half)',
@@ -121,7 +130,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           [TENANT_FIELD, 'Ada'],
           [LANDLORD_FIELD, 'Bea'],
         ] as const) {
-          const ack = await c.submit(1, { base: await base(ref), steps: [set(id, value)] });
+          const ack = await submit(c, ref, set(id, value));
           expect(ack.t, `${id}: ${JSON.stringify(ack)}`).toBe('sync.ack');
         }
       },
@@ -135,21 +144,12 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const second = await connect(doc, 'sub-tenant2', 'tenant2');
         expect(second.fill).toMatchObject({ participant: 'tenant2', roles: ['tenant'] });
         // Either fills the tenant's field; the one who comes second changes what the first wrote.
-        const a = await second.c.submit(1, {
-          base: await base(ref),
-          steps: [set(TENANT_FIELD, 'Cy')],
-        });
+        const a = await submit(second.c, ref, set(TENANT_FIELD, 'Cy'));
         expect(a.t, JSON.stringify(a)).toBe('sync.ack');
-        const b = await first.c.submit(1, {
-          base: await base(ref),
-          steps: [set(TENANT_FIELD, 'Di')],
-        });
+        const b = await submit(first.c, ref, set(TENANT_FIELD, 'Di'));
         expect(b.t, JSON.stringify(b)).toBe('sync.ack');
         // The tenant-only participant has no right to the landlord's field.
-        const refused = await second.c.submit(1, {
-          base: await base(ref),
-          steps: [set(LANDLORD_FIELD, 'Ed')],
-        });
+        const refused = await submit(second.c, ref, set(LANDLORD_FIELD, 'Ed'));
         expect(refused.t).toBe('sync.reject');
       },
     );

@@ -278,8 +278,6 @@ export interface FmtMark {
 
 export type CdmMark = LinkMark | CharStyleMark | BoldMark | ItalicMark | UnderlineMark | StrikeMark | SmallCapsMark | AllCapsMark | VertAlignMark | FontFamilyMark | FontSizeMark | ColorMark | HighlightMark | LangMark | HiddenMark | PreservedMark | InsMark | DelMark | FmtMark;
 
-export type SuggestionNodeMark = InsMark | DelMark | FmtMark;
-
 export interface DocAttrs {
   /** Additive attributes under namespaced keys; every reader preserves it unchanged (03 §11.2). Default: {}. */
   ext?: { [key: string]: JsonValue };
@@ -732,6 +730,8 @@ export interface ParagraphAttrs {
   borders?: { top?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; bottom?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; left?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; right?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; between?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null } | null;
   /** Paragraph shading. Default: null. */
   shading?: { fill: string } | null;
+  /** Block suggestions: `ins`, `del` or `fmt` entries with the suggesting user; null when there are none. On a `fmt` entry, `before` records only `style`, `align` and `numbering` (CDM-040). Default: null. */
+  suggest?: Array<{ type: "ins" | "del" | "fmt"; attrs: { id: string; user: string; before?: JsonValue | null } }> | null;
   /** Attributes and child elements of the original Word element that the model does not represent, or a reference to a shared tree in `preserved_def` (ADR 0017, spike S11). Default: null. */
   preserved?: PreservedElementBody | PreservedTreeRef | null;
   /** Additive attributes under namespaced keys; every reader preserves it unchanged (03 §11.2). Default: {}. */
@@ -743,7 +743,6 @@ export interface ParagraphNode {
   type: "paragraph";
   attrs?: ParagraphAttrs;
   content?: Array<TextNode | ImageNode | BreakNode | TabNode | EquationNode | FootnoteNode | FieldNode | CitationNode | AnchorNode | FormFieldNode | ExtensionInlineNode | PreservedInlineNode>;
-  marks?: SuggestionNodeMark[];
 }
 
 export interface TableAttrs {
@@ -763,6 +762,8 @@ export interface TableAttrs {
   borders?: { top?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; bottom?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; left?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; right?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; insideH?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null; insideV?: { style: "none" | "single" | "double" | "dotted" | "dashed" | "thick"; width?: number; color?: string | null; space?: number } | null } | null;
   /** Default cell margins. Default: null. */
   cellMargins?: { top?: number; bottom?: number; left?: number; right?: number } | null;
+  /** Block suggestions: `ins`, `del` or `fmt` entries with the suggesting user; null when there are none. On a `fmt` entry, `before` records only `style`, `align` and `numbering` (CDM-040). Default: null. */
+  suggest?: Array<{ type: "ins" | "del" | "fmt"; attrs: { id: string; user: string; before?: JsonValue | null } }> | null;
   /** Attributes and child elements of the original Word element that the model does not represent, or a reference to a shared tree in `preserved_def` (ADR 0017, spike S11). Default: null. */
   preserved?: PreservedElementBody | PreservedTreeRef | null;
   /** Additive attributes under namespaced keys; every reader preserves it unchanged (03 §11.2). Default: {}. */
@@ -774,7 +775,6 @@ export interface TableNode {
   type: "table";
   attrs?: TableAttrs;
   content?: Array<TableRowNode>;
-  marks?: SuggestionNodeMark[];
 }
 
 export interface TableRowAttrs {
@@ -786,6 +786,8 @@ export interface TableRowAttrs {
   heightRule?: "auto" | "atLeast" | "exact";
   /** Keep the row on one page. Default: false. */
   cantSplit?: boolean;
+  /** Block suggestions: `ins`, `del` or `fmt` entries with the suggesting user; null when there are none. On a `fmt` entry, `before` records only `style`, `align` and `numbering` (CDM-040). Default: null. */
+  suggest?: Array<{ type: "ins" | "del" | "fmt"; attrs: { id: string; user: string; before?: JsonValue | null } }> | null;
   /** Attributes and child elements of the original Word element that the model does not represent, or a reference to a shared tree in `preserved_def` (ADR 0017, spike S11). Default: null. */
   preserved?: PreservedElementBody | PreservedTreeRef | null;
   /** Additive attributes under namespaced keys; every reader preserves it unchanged (03 §11.2). Default: {}. */
@@ -797,7 +799,6 @@ export interface TableRowNode {
   type: "table_row";
   attrs?: TableRowAttrs;
   content?: Array<TableCellNode>;
-  marks?: SuggestionNodeMark[];
 }
 
 export interface TableCellAttrs {

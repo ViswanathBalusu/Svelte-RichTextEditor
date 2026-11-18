@@ -193,7 +193,7 @@ The component stores a read marker (`seq`) per user and document when the user h
 
 ## 12. Tamper evidence
 
-The hash chain makes silent edits to stored history detectable, including by the operator, if the chain head is anchored outside the operator's control. The service therefore publishes the chain head in the `dep.document.changed` webhook and in every export manifest, so a host can anchor it itself, and periodically writes signed, time-stamped heads to write-once storage. Verification is a command-line tool and an audit export.
+The hash chain makes silent edits to stored history detectable, including by the operator, if the chain head is anchored outside the operator's control. The service therefore publishes the chain head in the `dep.document.changed` webhook and in every export manifest, so a host can anchor it itself, and periodically writes signed, time-stamped heads to write-once storage. It also publishes a salted periodic root over a tenant's heads to a public transparency log, so that a relying party can check history against a party that is neither the operator nor the host (owner decision 143; ADR 0409). The public entry holds no document, tenant or user identifier. Verification is a command-line tool and an audit export.
 
 ## 13. Privacy
 

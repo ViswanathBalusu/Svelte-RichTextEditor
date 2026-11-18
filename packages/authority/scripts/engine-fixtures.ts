@@ -123,10 +123,9 @@ export const BASE_DOC = {
             p('pClause000000002', [t('Notice is in writing.')]),
           ],
         },
-        {
-          ...p('pMiddle000000001', [t('Between the region and the table.')]),
-          marks: [{ type: 'del', attrs: { id: 'sSuggestion00002', user: 'u2' } }],
-        },
+        p('pMiddle000000001', [t('Between the region and the table.')], {
+          suggest: [{ type: 'del', attrs: { id: 'sSuggestion00002', user: 'u2' } }],
+        }),
         {
           type: 'table',
           attrs: { id: 'tTable0000000001', grid: [2000, 2000] },
@@ -149,6 +148,7 @@ export const BASE_DOC = {
             type: 'footnote',
             attrs: { id: 'fnNote0000000001' },
             content: [p('pFootnote0000001', [t('Footnote text.')])],
+            marks: [{ type: 'del', attrs: { id: 'sSuggestion00003', user: 'u2' } }],
           },
           t('.'),
         ]),
@@ -229,12 +229,30 @@ function edit(tr: Transform, rnd: () => number): boolean {
           tr.setNodeAttribute(b.pos, 'style', rnd() < 0.5 ? 'Heading1' : null);
         break;
       case 7: {
-        if (b.node.type.name !== 'paragraph') break;
-        const del = b.node.marks.find((m) => m.type.name === 'del');
-        if (del) tr.removeNodeMark(b.pos, del);
+        if (rnd() < 0.5) {
+          // A block suggestion is the `suggest` attribute of a paragraph (owner decision 92).
+          if (b.node.type.name !== 'paragraph') break;
+          const has = Array.isArray(b.node.attrs['suggest']);
+          tr.setNodeAttribute(
+            b.pos,
+            'suggest',
+            has ? null : [{ type: 'del', attrs: { id: 'sSuggestion00001', user: 'u1' } }],
+          );
+          break;
+        }
+        // An inline node (a footnote) still takes node marks.
+        const notes: Array<{ pos: number; node: Node }> = [];
+        tr.doc.descendants((node, pos) => {
+          if (node.type.name === 'footnote') notes.push({ pos, node });
+          return notes.length === 0;
+        });
+        const note = notes[0];
+        if (!note) break;
+        const del = note.node.marks.find((m) => m.type.name === 'del');
+        if (del) tr.removeNodeMark(note.pos, del);
         else
           tr.addNodeMark(
-            b.pos,
+            note.pos,
             schema.marks['del']!.create({ id: 'sSuggestion00001', user: 'u1' }),
           );
         break;

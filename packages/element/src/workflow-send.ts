@@ -130,7 +130,12 @@ export function workflowSendService(
   const first = source();
   if (first) {
     void refresh();
-    stop = first.port.onChange?.(first.docId, () => void refresh());
+    // The pushed state is applied at once: a participant may not read the resource, and the lock
+    // indicator must not wait for a read (FRW-035 criterion 6). The read follows for the list.
+    stop = first.port.onChange?.(first.docId, (status) => {
+      if (typeof status?.state === 'string') setState(status.state);
+      void refresh();
+    });
   }
 
   return {

@@ -76,7 +76,7 @@ An open shadow root is not a security boundary. The host page can read it. That 
 | Editing under permissions that were just revoked | The log write is conditional on the grants revision (04, G7) |
 | Corrupting the document | Schema, invariant and attribute-grammar checks on every commit, for every step type; step types limited to an allow-list |
 | Stalling or crashing a process that hosts many rooms | Admission control before any work; CPU budgets per connection; heavy work in worker threads; structural limits; fuzzing of the authority |
-| Forging history | Server-side attribution; a hash chain that includes permission and workflow changes; chain heads published to hosts and anchored in write-once storage |
+| Forging history | Server-side attribution; a hash chain that includes permission and workflow changes; chain heads published to hosts, anchored in write-once storage and, as a salted periodic root, in a public transparency log |
 | Changing an approved region | Approvals are bound to a sequence number and a content hash, and no commit of any origin may change an approved region (07, section 11) |
 | Two writers | Epoch-checked writes and the log's primary key; self-fencing on the node lease (06, section 2.1) |
 | Reading deleted text through old versions | One visibility gate on every sequence number a caller can supply (07, section 8) |
@@ -143,4 +143,4 @@ Lock files, dependency review, a software bill of materials per release, signed 
 - A policy for browser extensions that read or modify editor content (grammar checkers, translators). They run with the user's privileges and cannot be prevented, but their edits arrive as ordinary input and pass the same checks.
 - Abuse handling for hosted mode (malware distribution through assets, phishing documents) needs an operational policy.
 - Key management details for per-document encryption keys and for tenant-owned sealing keys.
-- Whether chain heads should also be anchored in a public transparency log.
+- Anchoring chain heads in a public transparency log: decided yes (owner decision 143). A salted periodic root per tenant is published, never a per-document hash (ADR 0409; stories SEC-065 to SEC-068). The choice of log is proposed in that ADR.

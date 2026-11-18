@@ -10,6 +10,7 @@ import type { Node as PMNode } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { validate } from '@docedit/model/validate';
 import { describe, expect, it } from 'vitest';
+import { blockEntries, entry } from '../src/block-suggestion.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { recordAsSuggestion } from '../src/suggestion-edit.ts';
 import { suggestBlockFormat } from '../src/suggestion-block.ts';
@@ -39,15 +40,15 @@ const author = (user: string) => {
   return { user, nextId: () => `${user}-b${++n}` };
 };
 
-/** The `fmt` node marks of the intro paragraph, as { user, id, before }. */
+/** The `fmt` entries of the intro paragraph's `suggest` attribute, as { user, id, before }. */
 function fmtMarks(state: EditorState) {
   const node = state.doc.nodeAt(introPos(state.doc))!;
-  return node.marks
-    .filter((m) => m.type.name === 'fmt')
-    .map((m) => ({
-      user: m.attrs['user'] as string,
-      id: m.attrs['id'] as string,
-      before: m.attrs['before'] as { attrs?: Record<string, unknown> } | null,
+  return blockEntries(node)
+    .filter((e) => e.type === 'fmt')
+    .map((e) => ({
+      user: e.attrs.user,
+      id: e.attrs.id,
+      before: (e.attrs.before ?? null) as { attrs?: Record<string, unknown> } | null,
     }));
 }
 
@@ -112,9 +113,8 @@ describe('block formatting suggestion (FE-044 criterion 3)', () => {
     const listTr = s0.tr.setNodeAttribute(pos, 'list', { listId: 'L1', level: 1 });
     expect(recordAsSuggestion(s0, listTr, author('alice'))).toBeNull();
     // A before naming `list` is what the validator rejects, so the check above is not vacuous.
-    const fmt = s0.schema.marks['fmt']!;
-    const bad = fmt.create({ id: 'x-b1', user: 'alice', before: { attrs: { list: null } } });
-    const s1 = s0.apply(s0.tr.addNodeMark(pos, bad));
+    const bad = entry('fmt', 'x-b1', 'alice', { attrs: { list: null } });
+    const s1 = s0.apply(s0.tr.setNodeAttribute(pos, 'suggest', [bad]));
     expect(fmtBeforeViolations(s1)).toHaveLength(1);
   });
 

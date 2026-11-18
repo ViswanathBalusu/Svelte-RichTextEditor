@@ -263,18 +263,22 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(await rulesCommits(ref)).toHaveLength(1);
         const commits1Seq = commits[0]!.seq;
         expect(await participant(doc, owner, 'ap')).toMatchObject({ state: 'active' });
+        // The head the approver reads: the rules commit and the control commits of the two earlier
+        // completions (FRW-030 criterion 1).
+        const headRead = (await h.parts.logs.head(ref)).seq;
+        expect(headRead).toBeGreaterThan(commits1Seq);
         const last = await complete(doc, 'ap');
         expect(last.status, last.text).toBe(200);
         // The last completion moves the workflow to `completed` and raises `completed` (criterion 4).
         expect(last.json.state).toBe('completed');
         expect(events('completed', doc)).toHaveLength(1);
         expect(events('participant_completed', doc)).toHaveLength(3);
-        // The approver completes at the head they read, which holds the rules commit; the control
-        // commit of the `completed` lock follows it.
-        expect((await participant(doc, owner, 'ap')).completedSeq).toBe(commits1Seq);
+        // The approver completes at the head they read; the control commit of the `completed`
+        // transition follows it.
+        expect((await participant(doc, owner, 'ap')).completedSeq).toBe(headRead);
         const control = (await h.parts.logs.read(ref)).filter((c) => c.kind === 'control');
         expect(control.length).toBeGreaterThan(0);
-        expect(control.at(-1)!.seq).toBeGreaterThan(commits1Seq);
+        expect(control.at(-1)!.seq).toBeGreaterThan(headRead);
         // A call after the workflow ended still changes nothing.
         expect((await complete(doc, 'ap')).status).toBe(200);
         expect(events('completed', doc)).toHaveLength(1);
@@ -312,7 +316,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(await rulesCommits(ref)).toHaveLength(1);
         const p1 = await participant(doc, owner, 'p1');
         expect(p1).toMatchObject({ state: 'completed' });
-        expect(p1.completedSeq).toBe((await h.parts.logs.head(ref)).seq);
+        // The participant completed at the rules commit; the control commit of the transition (FRW-030
+        // criterion 1) follows it.
+        expect(p1.completedSeq).toBe((await rulesCommits(ref))[0]!.seq);
+        expect((await h.parts.logs.head(ref)).seq).toBeGreaterThan(p1.completedSeq as number);
         expect(events('participant_completed', doc)).toHaveLength(1);
         expect((await values(doc))['tenant.total']).toMatch(/^6(\.0+)?$/);
       },

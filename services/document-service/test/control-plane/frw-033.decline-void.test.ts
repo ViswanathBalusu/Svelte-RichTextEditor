@@ -186,7 +186,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect((await filler.open(1, doc)).t).toBe('ch.opened');
         const tree = schema.nodeFromJSON((document() as { doc: unknown }).doc);
         const field = posOf(tree, TENANT_FIELD);
-        const before = await controls(ref);
+        // The first view moved the workflow to `in_progress`, with a control commit of its own
+        // (FRW-030 criterion 1): wait until it is written, so that `before` counts the void alone.
+        let before = await controls(ref);
+        for (let stable = 0; stable < 4;) {
+          await new Promise((r) => setTimeout(r, 50));
+          const now = await controls(ref);
+          stable = now === before ? stable + 1 : 0;
+          before = now;
+        }
         const filled = await filler.submit(1, {
           base: (await h.parts.logs.head(ref)).seq,
           steps: [setValue(field, 'Ada')],

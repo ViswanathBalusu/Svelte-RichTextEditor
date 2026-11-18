@@ -92,8 +92,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         // The served routes that read at an earlier seq: content and commits (row 2), the field
         // values, which are content read by key (FRW-060 criterion 4), the comparison, the
-        // attribution and the threads at a state (lane w9). `history` is in the OpenAPI document but
-        // the control plane does not serve it yet (HIS-026). The thread list answers a caller with no
+        // attribution, the grouped history and the threads at a state (lane w9). The thread list
+        // answers a caller with no
         // role on the document as `not_found`, so as not to say that the document exists.
         // `detail`: whether the refusal keeps the gate's own detail. A user's commits page comes
         // from the data plane (`RoomHost.readCommits`), whose refusal the pipeline passes on as
@@ -125,6 +125,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             at: (s: number) => `/v1/documents/${doc}/attribution?atSeq=${s}`,
           },
           {
+            // The list of grouped commits and versions (PRO-054): `fromSeq` starts a run whose
+            // first state is the one before it, so the head's own list is the one without it.
+            name: 'history',
+            detail: false,
+            head: () => `/v1/documents/${doc}/history`,
+            at: (s: number) => `/v1/documents/${doc}/history?fromSeq=${s}`,
+          },
+          {
             name: 'threads',
             detail: true,
             outsider: { status: 404, code: 'not_found' },
@@ -143,7 +151,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(problem(byOutsider).detail ?? '', route.name).not.toMatch(/history visibility/);
 
           // The viewer holds `view`: the same route at the head answers.
-          const atHead = await h.call('GET', route.at(head.seq), { token: viewer });
+          const atHead = await h.call('GET', route.head ? route.head() : route.at(head.seq), {
+            token: viewer,
+          });
           expect(atHead.status, `${route.name} at the head: ${atHead.text}`).toBe(200);
 
           // The gate is required too: under the default `editors` a viewer's gate is the head, so

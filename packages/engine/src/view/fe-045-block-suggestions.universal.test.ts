@@ -1,20 +1,21 @@
 /**
  * Block suggestions in the mounted body view (FE-045 criterion 6, FE-046 criterion 1 for blocks; lane
- * w1). A row, a table and a paragraph that carry `ins`, `del` and `fmt` node marks are drawn by the
- * shipped `element.css`:
+ * w1). A row, a table and a paragraph that carry `ins`, `del` and `fmt` entries in their `suggest`
+ * attribute (owner decision 92) are drawn by the shipped `element.css`:
  *
- * - the element `prosemirror-view` puts around each marked block has `display: contents`, so a table
- *   with suggested rows keeps its layout: every row is as wide as the table, the cells of a column
- *   start at the same left edge in every row, and the rows follow one another without a gap;
+ * - no element is put around a marked block, so a table with suggested rows keeps its layout: the
+ *   rows are the only children of the row container, every row is as wide as the table, the cells of
+ *   a column start at the same left edge in every row, and the rows follow one another without a gap;
  * - each kind differs from the others without colour (a line, a bar style), and each author has a
  *   colour and a second cue (the line style), also on the cells of a suggested row and table.
  *
  * Runs in real browser engines through `pnpm vitest run --project browser <this file>`; in Node.js
- * there is no DOM, so the suite is skipped there. See docs/adr/0385-w1-FE-044-block-suggestion-rendering.md.
+ * there is no DOM, so the suite is skipped there. See docs/adr/0302-lane-V-FE-033-048.md (option 2).
  */
 import type { Node as PMNode } from 'prosemirror-model';
 import { describe, expect, it, vi } from 'vitest';
 import type { CdmEnvelope } from '../api.ts';
+import { addBlockEntry, entry } from '../block-suggestion.ts';
 import { bodyRange } from '../body.ts';
 import { DocumentCore } from '../headless.ts';
 import { spikeDocument } from '../spike-document.ts';
@@ -99,24 +100,24 @@ async function withView(
 }
 
 describe.skipIf(!isBrowser)('suggested rows keep the table layout (FE-045 criterion 6)', () => {
-  it('draws the wrapper of a marked row without a box, and keeps the rows and cells aligned', async () => {
+  it('draws a marked row with no element around it, and keeps the rows and cells aligned', async () => {
     await withView(async ({ surface, core }) => {
       const i = internals(core);
-      const { schema } = i;
       const rows = positionsOf(i.state.doc, 'table_row');
       expect(rows).toHaveLength(ROWS);
       const [alice, bob] = twoUsers();
-      i.dispatch(
-        i.state.tr
-          .addNodeMark(rows[1]!, schema.marks['ins']!.create({ id: 'row-ins', user: alice }))
-          .addNodeMark(rows[2]!, schema.marks['del']!.create({ id: 'row-del', user: bob })),
-      );
+      const tr0 = i.state.tr;
+      addBlockEntry(tr0, rows[1]!, entry('ins', 'row-ins', alice));
+      addBlockEntry(tr0, rows[2]!, entry('del', 'row-del', bob));
+      i.dispatch(tr0);
       await vi.waitFor(() => expect(surface.querySelector('tr.de-suggest-ins')).not.toBeNull());
 
-      // The element around a marked row has no box.
-      const wrapper = surface.querySelector<HTMLElement>('[data-suggestion="row-ins"]')!;
-      expect(wrapper.classList.contains('de-suggest-wrap')).toBe(true);
-      expect(getComputedStyle(wrapper).display).toBe('contents');
+      // No element around a marked row: the row container holds the rows and nothing else, and no
+      // element carries the attribute that a suggestion mark's element had (FE-045 criterion 1).
+      const marked = surface.querySelector<HTMLElement>('tr.de-suggest-ins')!;
+      expect([...marked.parentElement!.children].every((el) => el.tagName === 'TR')).toBe(true);
+      expect(surface.querySelector('[data-suggestion]')).toBeNull();
+      expect(surface.querySelector('.de-suggest-wrap')).toBeNull();
 
       const table = surface.querySelector<HTMLElement>('table')!;
       const trs = [...table.querySelectorAll<HTMLElement>('tr')];
@@ -165,12 +166,7 @@ describe.skipIf(!isBrowser)('suggested rows keep the table layout (FE-045 criter
       const [alice] = twoUsers();
       const before = surface.querySelector<HTMLElement>('table')!.getBoundingClientRect();
       const [tablePos] = positionsOf(i.state.doc, 'table');
-      i.dispatch(
-        i.state.tr.addNodeMark(
-          tablePos!,
-          i.schema.marks['ins']!.create({ id: 'table-ins', user: alice }),
-        ),
-      );
+      i.dispatch(addBlockEntry(i.state.tr, tablePos!, entry('ins', 'table-ins', alice)));
       await vi.waitFor(() => expect(surface.querySelector('table.de-suggest-ins')).not.toBeNull());
       const table = surface.querySelector<HTMLElement>('table.de-suggest-ins')!;
       // The table sits where it did, with the size it had (the bar is on paragraphs, not on a table).
@@ -189,24 +185,19 @@ describe.skipIf(!isBrowser)(
     it('gives each kind its own line and bar style, and each author a colour and a line style', async () => {
       await withView(async ({ surface, core }) => {
         const i = internals(core);
-        const { schema } = i;
         const [alice, bob] = twoUsers();
         const paragraphs = positionsOf(i.state.doc, 'paragraph').filter(
           (pos) => i.state.doc.resolve(pos).parent.type.name === 'body',
         );
         expect(paragraphs.length).toBeGreaterThanOrEqual(3);
         const rows = positionsOf(i.state.doc, 'table_row');
-        i.dispatch(
-          i.state.tr
-            .addNodeMark(paragraphs[0]!, schema.marks['ins']!.create({ id: 'p-ins', user: alice }))
-            .addNodeMark(paragraphs[1]!, schema.marks['del']!.create({ id: 'p-del', user: bob }))
-            .addNodeMark(
-              paragraphs[2]!,
-              schema.marks['fmt']!.create({ id: 'p-fmt', user: alice, before: null }),
-            )
-            .addNodeMark(rows[0]!, schema.marks['ins']!.create({ id: 'r-ins', user: alice }))
-            .addNodeMark(rows[1]!, schema.marks['del']!.create({ id: 'r-del', user: bob })),
-        );
+        const tr = i.state.tr;
+        addBlockEntry(tr, paragraphs[0]!, entry('ins', 'p-ins', alice));
+        addBlockEntry(tr, paragraphs[1]!, entry('del', 'p-del', bob));
+        addBlockEntry(tr, paragraphs[2]!, entry('fmt', 'p-fmt', alice));
+        addBlockEntry(tr, rows[0]!, entry('ins', 'r-ins', alice));
+        addBlockEntry(tr, rows[1]!, entry('del', 'r-del', bob));
+        i.dispatch(tr);
         await vi.waitFor(() =>
           expect(surface.querySelector('[data-suggestion-id="r-del"]')).not.toBeNull(),
         );

@@ -4,10 +4,10 @@
  * or fetched, and the import report lists it as preserved. This file proves that behaviour on a real
  * Word file with an embedded document (the POI corpus file `EmbeddedDocument.docx`).
  *
- * The criterion as written ("dropped, with a warning") contradicts A2, so it stays unticked until the
- * owner confirms the reworded criterion proposed in docs/adr/0256 (item 1) and in the story's Notes.
- * The importer has no option that lets a tenant strip preserved objects (SR-M18), so that half of
- * the proposed wording is not built and not tested here.
+ * The criterion was "dropped, with a warning"; it contradicted A2, and owner decision 153 of
+ * 2026-11-15 rewrote it as "kept and reported", which is what is tested here. The importer has no
+ * option that lets a tenant strip preserved objects (SR-M18); that is not part of the criterion and
+ * is not built or tested here.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

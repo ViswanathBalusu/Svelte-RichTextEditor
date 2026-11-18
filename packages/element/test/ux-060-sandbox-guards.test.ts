@@ -5,7 +5,7 @@
  * extension gets (`core.extensionApi`, UX-053). Messages are the ones the frame sends over its
  * channel. No stand-in sits between the bridge and the engine.
  */
-import type { Access } from '@docedit/protocol';
+import type { Access, Capability } from '@docedit/protocol';
 import { DocumentCore, type CoreConfig, type ExtensionDocumentApi } from '@docedit/engine/headless';
 import { SPIKE_IDS, internals, spikeDocument } from '@docedit/engine/testing';
 import {
@@ -20,8 +20,8 @@ const READ = ['view', 'comment'] as const;
 
 function access(
   docRole: Access['docRole'],
-  body: readonly string[],
-  region: readonly string[],
+  body: readonly Capability[],
+  region: readonly Capability[],
 ): Access {
   return {
     rev: 1,
