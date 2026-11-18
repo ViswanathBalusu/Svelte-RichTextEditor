@@ -5,11 +5,15 @@
  */
 import type { Node as PMNode } from 'prosemirror-model';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { type MarkupView, suggestionSpecs } from '../suggestion-markup.ts';
+import { type MarkupView, type SuggestionLabel, suggestionSpecs } from '../suggestion-markup.ts';
 
 /** The decoration set of `doc` for `view`. */
-export function suggestionDecorations(doc: PMNode, view: MarkupView): DecorationSet {
-  const decorations = suggestionSpecs(doc, view).map((s) =>
+export function suggestionDecorations(
+  doc: PMNode,
+  view: MarkupView,
+  label?: SuggestionLabel,
+): DecorationSet {
+  const decorations = suggestionSpecs(doc, view, label).map((s) =>
     s.block
       ? Decoration.node(s.from, s.to, { ...s.attrs })
       : Decoration.inline(s.from, s.to, { ...s.attrs }),

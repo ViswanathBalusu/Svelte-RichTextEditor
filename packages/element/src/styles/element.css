@@ -302,6 +302,57 @@ img.ProseMirror-separator {
   text-decoration-line: overline;
 }
 
+/* The other markup views (UX-035): `none` and `original` hide what a suggestion deletes or inserts.
+   `simple` marks each change with a bar, a border that survives forced colours: a changed run or
+   block has the bar in its margin (the negative margin cancels its width so that the text does not
+   move), and a deleted run or block is taken out of the text but leaves the bar where it was. */
+.de-suggest-hidden {
+  display: none;
+}
+
+.de-suggest-changed {
+  border-inline-start: 3px solid currentColor;
+  margin-inline-start: -3px;
+}
+
+span.de-suggest-gone {
+  display: inline-block;
+  inline-size: 0;
+  max-block-size: 1em;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: bottom;
+  border-inline-start: 3px solid currentColor;
+}
+
+/* A deleted block (a paragraph, a row, a table) leaves a rule where it was; a row or a table, which
+   has no height of its own to take away, is taken out without one. */
+.de-suggest-gone:not(span) {
+  block-size: 0;
+  min-block-size: 0;
+  margin-block: 0;
+  padding-block: 0;
+  overflow: hidden;
+  border-block-start: 3px solid currentColor;
+}
+
+tr.de-suggest-gone,
+table.de-suggest-gone {
+  display: none;
+}
+
+/* The words a screen reader hears before a suggestion ("Inserted by Ada"; `data-suggestion-label`,
+   set by the shell). They are drawn out of sight, so the line and the tone stay the visible cue. */
+[data-suggestion-label]::before {
+  content: attr(data-suggestion-label) ': ';
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 [data-suggestion-tone='0'] {
   text-decoration-color: #1a7f37;
   text-decoration-style: solid;

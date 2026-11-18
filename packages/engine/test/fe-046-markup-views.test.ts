@@ -53,9 +53,10 @@ function markedCore(): { c: DocumentCore; introStart: number } {
 }
 
 describe('markup views (FE-046 criterion 4)', () => {
-  it('none gives no decoration', () => {
+  it('none hides the deletion and draws nothing else (UX-035: the text as if all were accepted)', () => {
     const { c } = markedCore();
-    expect(c.markupDecorations('none')).toEqual([]);
+    const classes = classesOf(c.markupDecorations('none'));
+    expect(classes).toEqual(['de-suggest-hidden']);
   });
 
   it('all gives a class for each kind: inline for runs, node for the block mark', () => {
@@ -67,10 +68,10 @@ describe('markup views (FE-046 criterion 4)', () => {
     expect(classes).toContain('de-suggest-fmt');
   });
 
-  it('simple hides the deletion and cues the insertion and the formatting change', () => {
+  it('simple takes the deletion out of the text, leaves a bar, and cues the insertion and the formatting change', () => {
     const { c } = markedCore();
     const classes = classesOf(c.markupDecorations('simple'));
-    expect(classes.filter((k) => k.includes('de-suggest-hidden'))).toHaveLength(1);
+    expect(classes.filter((k) => k.includes('de-suggest-gone'))).toHaveLength(1);
     expect(classes.filter((k) => k.includes('de-suggest-changed'))).toHaveLength(2);
     expect(classes.join(' ')).not.toContain('de-suggest-del');
   });

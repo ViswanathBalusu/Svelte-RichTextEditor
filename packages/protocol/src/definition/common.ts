@@ -67,6 +67,8 @@ export const CLIENT_ORIGINS = [
   'suggestion.reject',
   'fill',
   'assistant',
+  // A change made by an extension through the document API (UX-049; owner decision 173).
+  'extension',
 ] as const;
 export const SERVER_ORIGINS = [
   'restore',

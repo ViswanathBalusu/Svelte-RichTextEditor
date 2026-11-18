@@ -199,7 +199,12 @@ import { scopeDiff } from './scope-diff.ts';
 import { ExtensionApi } from './extension-api.ts';
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
 import { recordAsSuggestion } from './suggestion-edit.ts';
-import { type MarkupView, type SuggestionSpec, suggestionSpecs } from './suggestion-markup.ts';
+import {
+  type MarkupView,
+  type SuggestionLabel,
+  type SuggestionSpec,
+  suggestionSpecs,
+} from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
 import {
@@ -794,6 +799,10 @@ export class DocumentCore implements DocumentApi {
   readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The markup view the body shows for suggestions (UX-035); ll until it is set. */
+  readonly markupView: ReadValue<MarkupView>;
+  /** Names a suggestion for assistive technology (UX-035 criterion 4); the shell sets it. */
+  #suggestionLabel: SuggestionLabel | null = null;
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
@@ -953,6 +962,7 @@ export class DocumentCore implements DocumentApi {
       sameJson,
       hub,
     );
+    this.markupView = new ReadValue<MarkupView>('all', Object.is, hub);
     this.#deferRemote = config.deferRemoteWhileComposing ?? true;
     this.#requires = [...config.doc.requires];
     const doc = readEnvelope(config.doc, this.#schema);
@@ -2366,7 +2376,30 @@ export class DocumentCore implements DocumentApi {
    * plain specs; the web view builds the decoration set from them.
    */
   markupDecorations(view: MarkupView): SuggestionSpec[] {
-    return suggestionSpecs(this.#state.doc, view);
+    return suggestionSpecs(this.#state.doc, view, this.#suggestionLabel ?? undefined);
+  }
+
+  /**
+   * Chooses how suggestions are shown (UX-035; 13 §5): ll, simple, 
+one or original. It is a
+   * view setting of this reader: the document, its revision and the commit log are not touched.
+   */
+  setMarkupView(view: MarkupView): void {
+    this.markupView.set(view);
+  }
+
+  /**
+   * Sets the function that names a suggestion for assistive technology, or clears it (UX-035
+   * criterion 4). The body view draws the text it returns, and draws again when this is called, so
+   * a change of names is shown by setting the function again.
+   */
+  setSuggestionLabel(label: SuggestionLabel | null): void {
+    this.#suggestionLabel = label;
+  }
+
+  /** The function that names a suggestion for assistive technology, or null (UX-035). */
+  get suggestionLabel(): SuggestionLabel | null {
+    return this.#suggestionLabel;
   }
 
   /**

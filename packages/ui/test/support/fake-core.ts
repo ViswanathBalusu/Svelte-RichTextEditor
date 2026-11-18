@@ -50,6 +50,7 @@ import type {
   ProofingFindingView,
   ProofingStatus,
 } from '../../src/core-api.ts';
+import type { MarkupView } from '../../src/shell/markup-views.ts';
 
 /** `shared`: every view of the core notifies in one frame pass, as the engine does. */
 export type Notify = 'sync' | 'frame' | 'shared' | ((run: () => void) => void);
@@ -111,6 +112,8 @@ export interface FakeCoreOptions {
   /** `settings.trackChanges` is `everyone` (UX-038); with `extended` only. */
   trackedForEveryone?: boolean;
   views?: readonly ViewName[];
+  /** Offers the markup views of suggestions (UX-035); with xtended only. */
+  markupViews?: boolean;
   permissions?: AccessObject | null;
   styles?: readonly StyleSummary[];
   /**
@@ -382,6 +385,9 @@ export class FakeCore implements CoreApi {
   readonly trackedForEveryone?: Value<boolean>;
   readonly view?: Value<ViewName>;
   readonly views?: Value<readonly ViewName[]>;
+  readonly markupView?: Value<MarkupView>;
+  /** The function the shell gave to name suggestions (UX-035 criterion 4); null when cleared. */
+  suggestionLabel: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null = null;
   readonly permissions?: Value<AccessObject | null>;
   readonly stats?: Value<DocumentStats>;
   readonly language?: Value<string | null>;
@@ -448,6 +454,8 @@ export class FakeCore implements CoreApi {
         setMode: undefined,
         setView: undefined,
         setRegionLabels: undefined,
+        setMarkupView: undefined,
+        setSuggestionLabel: undefined,
         selectBlock: undefined,
         blockChangedSince: undefined,
         search: undefined,
@@ -463,6 +471,8 @@ export class FakeCore implements CoreApi {
     this.trackedForEveryone = new Value<boolean>(options.trackedForEveryone === true, notify);
     this.view = new Value<ViewName>('web', notify);
     this.views = new Value<readonly ViewName[]>(options.views ?? ['web'], notify);
+    if (options.markupViews) this.markupView = new Value<MarkupView>('all', notify);
+    else Object.assign(this, { setMarkupView: undefined, setSuggestionLabel: undefined });
     this.permissions = new Value<AccessObject | null>(
       options.permissions === undefined
         ? {
@@ -715,6 +725,15 @@ export class FakeCore implements CoreApi {
     if (!this.views?.get().includes(view)) return false;
     this.view?.set(view);
     return true;
+  }
+
+  setMarkupView(view: MarkupView): void {
+    this.#record('setMarkupView', view);
+    this.markupView?.set(view);
+  }
+
+  setSuggestionLabel(label: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null): void {
+    this.suggestionLabel = label;
   }
 
   setRegionLabels(labels: Readonly<Record<string, RegionLabel>>): void {

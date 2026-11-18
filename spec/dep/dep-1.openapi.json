@@ -8712,6 +8712,7 @@
           "suggestion.reject",
           "fill",
           "assistant",
+          "extension",
           "restore",
           "import",
           "migration",

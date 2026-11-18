@@ -834,7 +834,7 @@ import type { StoryPart, StoryVariant, StoryVariantInfo } from './header-footer.
 import type { ClipboardInput, ClipboardPayload, CutResult } from './clipboard.ts';
 import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
-import type { MarkupView, SuggestionSpec } from './suggestion-markup.ts';
+import type { MarkupView, SuggestionLabel, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
 import type { SectionWarning } from './breaks-sections.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
@@ -1039,6 +1039,12 @@ export interface DocumentApi {
 
   /** The decorations of the markup view `view` for the current document, as plain specs (FE-046). */
   markupDecorations(view: MarkupView): SuggestionSpec[];
+  /** The markup view the body shows for suggestions; ll until it is set (UX-035). */
+  readonly markupView: ReadView<MarkupView>;
+  /** Chooses the markup view. A setting of this reader: no step, no commit (UX-035). */
+  setMarkupView(view: MarkupView): void;
+  /** Sets the function that names a suggestion for assistive technology, or clears it (UX-035). */
+  setSuggestionLabel(label: SuggestionLabel | null): void;
   /** The client's copy of every thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadView<readonly (ThreadRange & { readonly id: string })[]>;
   /** Sets a thread's range as the service reports it at `seq` (FE-048). */

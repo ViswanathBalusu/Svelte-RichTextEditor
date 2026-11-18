@@ -619,6 +619,34 @@
       "aliases": []
     },
     {
+      "id": "review.markup.all",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "review.markup.none",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "review.markup.original",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "review.markup.simple",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "view.catchUp",
       "group": "header",
       "capability": "catch-up",
