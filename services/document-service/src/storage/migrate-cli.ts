@@ -9,6 +9,8 @@
  * broken. Neither needs a database.
  */
 import pg from 'pg';
+import { ShardMap } from '../control-plane/jobs/sharding.ts';
+import { migrateShards } from './shards.ts';
 import { tenantProblems } from './tenant-guard.ts';
 import {
   expectedSchemaVersion,
@@ -45,6 +47,30 @@ if (command === 'notes' || command === 'check') {
   >;
   console.log(releaseNotes(migrations, versions, notes));
   process.exit(0);
+}
+
+// Several shards (BE-070): a JSON object of shard name to database URL, migrated one after the
+// other in the order written; a failure stops the rollout and names the shard.
+const shardUrls = process.env['DOCEDIT_SHARD_DATABASE_URLS'];
+if (shardUrls) {
+  const urls = JSON.parse(shardUrls) as Record<string, string>;
+  const map = new ShardMap(Object.keys(urls), {});
+  const pools = Object.fromEntries(
+    Object.entries(urls).map(([shard, u]) => [shard, new pg.Pool({ connectionString: u, max: 1 })]),
+  );
+  try {
+    const applied = await migrateShards(map, pools);
+    for (const [shard, versions] of Object.entries(applied))
+      console.log(
+        `${shard}: ${versions.length ? `applied ${versions.join(', ')}` : 'nothing to apply'}`,
+      );
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 1;
+  } finally {
+    await Promise.all(Object.values(pools).map((p) => p.end()));
+  }
+  process.exit(process.exitCode ?? 0);
 }
 
 const url = process.env['DOCEDIT_DATABASE_URL'];

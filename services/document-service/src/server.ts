@@ -224,6 +224,11 @@ export interface ServiceParts {
   queue: JobQueue;
   /** Set when the parts run on PostgreSQL: the readiness probe and `close()` use it. */
   pool: Pool | null;
+  /**
+   * The readiness probe, for parts that span several databases (sharded PostgreSQL, BE-070). It
+   * replaces the probe over `pool`, which looks at one database only. Absent: `pool` is probed.
+   */
+  readiness?: () => Promise<Readiness>;
   // --- Phase 1b. --------------------------------------------------------------------------------
   idempotency: IdempotencyStore;
   assetRegistry: AssetRegistry;
@@ -1432,7 +1437,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(opts.importer ? { importsOffered: true } : {}),
   });
 
-  const ready = () => readiness(parts.pool);
+  const ready = () => (parts.readiness ? parts.readiness() : readiness(parts.pool));
   const probe =
     (fn: () => Promise<Reply>): PlainHandler =>
     () =>
