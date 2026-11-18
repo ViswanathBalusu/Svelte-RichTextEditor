@@ -38,7 +38,7 @@ import { project, type HiddenSet } from '@docedit/authority';
 import type { CdmEnvelope } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { buildBundle, classFiles } from './bundle-io.ts';
-import { imageId as readImageId } from './container.ts';
+import { imageDigest as readImageDigest, imageId as readImageId } from './container.ts';
 import { chainHeadOf, contentAt, documentLang, type ContentStores } from './content.ts';
 import { diagnostic, LOG_LIMITS, parseLog, type ParsedLog } from './diagnostics.ts';
 import type { FontFileCheck } from './font-files.ts';
@@ -131,6 +131,13 @@ export interface ExportHandlerDeps {
   /** The image that compiles; its identifier goes into the result manifest. */
   image?: string;
   imageId?: (image: string) => Promise<string | null>;
+  /**
+   * The manifest digest of the image (`sha256:...`), recorded in the bundle's `manifest.json` and in the
+   * result manifest (EXP-073 criterion 2; EXP-076 criterion 4). When `imageId` is replaced and this is
+   * not, no digest is looked up and none is recorded, so a test that stubs the image identity does not
+   * call the container runtime.
+   */
+  imageDigest?: (image: string) => Promise<string | null>;
   /** The key of bundle seals; drawn per process when absent. */
   sealKey?: Uint8Array;
   /**
@@ -278,6 +285,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
   const now = deps.now ?? Date.now;
   const compile = deps.compile ?? compileInSandbox;
   const image = deps.image ?? IMAGE;
+  const readDigest = deps.imageDigest ?? (deps.imageId ? async () => null : readImageDigest);
   const sealKey = deps.sealKey ?? new Uint8Array(randomBytes(32));
   const pinned = { classFiles: classFiles(), classVersion: CLASS_VERSION };
 
@@ -435,6 +443,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     const plan: JobPlan = planned.plan;
 
     const t1 = now();
+    const digest = await readDigest(image);
     const fonts = await deps.fonts();
     if (deps.checkFontFiles) {
       const check = await deps.checkFontFiles(fonts);
@@ -453,6 +462,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       envelope,
       {
         fonts,
+        imageDigest: digest,
         tagging: plan.tagging,
         pdfStandard: plan.pdfStandard,
         renderer: 'node',
@@ -571,7 +581,13 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       const limit = limitReached(r, log);
       if (limit) {
         diagnostics.push(limitDiagnostic(limit, r));
-        throw failed('too_large', limitMessage(limit, r), diagnostics);
+        // The job ends `failed` (EXP-071 criterion 2) and its result still says that the page
+        // references did not converge, and how many passes ran (EXP-061 criterion 4).
+        throw new JobFailure('too_large', limitMessage(limit, r), false, {
+          diagnostics: dedupe(diagnostics),
+          converged: r.converged,
+          passes: r.passes.length,
+        });
       }
       if (r.passes.length === 0 && r.exitCode !== 0 && !r.log)
         throw failed('unavailable', 'the sandbox did not run the compile', diagnostics, true);
@@ -651,7 +667,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         cdm: bundle.manifest.cdm,
         options: bundle.manifest.options,
       },
-      image: { name: image, id: await (deps.imageId ?? readImageId)(image) },
+      image: { name: image, id: await (deps.imageId ?? readImageId)(image), digest },
       // The pin and the hashes of both compiles of a sealing export (EXP-079 criterion 3).
       ...(pair?.ok && payload.sealing
         ? {
