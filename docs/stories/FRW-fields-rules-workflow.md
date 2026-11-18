@@ -1532,11 +1532,14 @@ As an integrating developer, I want any spreadsheet-format output of field value
 **Acceptance criteria**
 
 - [ ] Given a field value whose first character is `=`, `+`, `-` or `@`, when it is written to a spreadsheet-format output, then the cell is not interpreted as a formula by the spreadsheet applications in the test matrix.
-- [ ] Given a value with none of those characters, then it is written unchanged.
-- [ ] Given a `number` field with a negative value, then the output is a number or is neutralised in a way the integrating developer can read back; the behaviour is documented.
-- [ ] Given the same value read through `GET /documents/{id}/field-values`, then it is returned unchanged, because neutralisation applies only to the spreadsheet output.
+- [ ] Given a field value whose first character is `=`, `+`, `-` or `@`, when it is written to a spreadsheet-format output, then the cell is not interpreted as a formula by the spreadsheet applications in the test matrix.
+- [x] Given a value with none of those characters, then it is written unchanged.
+- [x] Given a `number` field with a negative value, then the output is a number or is neutralised in a way the integrating developer can read back; the behaviour is documented.
+- [x] Given the same value read through `GET /documents/{id}/field-values`, then it is returned unchanged, because neutralisation applies only to the spreadsheet output.
 
-**Notes:** Condition: only if the platform produces a spreadsheet-format output of field values. 12 §9 mentions "exported spreadsheets" but no such export is specified in 12, 05 or 09 (Open questions). Phase `cond`.
+**Evidence (lane w4, 2026-11-18):** `services/document-service/src/control-plane/field-csv.ts` (new; `neutraliseCell`, `csvCell`, `fieldValuesCsv`; the rule and the negative-number reading are in its header comment) and `services/document-service/src/control-plane/frw-064.field-csv.test.ts` (vitest, Node.js 22.18, 5 tests, passed with `pnpm exec vitest run --project node`): criterion 2 and the output side of criterion 1 (an apostrophe in front of `=`, `+`, `-`, `@`; quoting of commas and quotes); criterion 3 (a negative number is written `'-12.50`, and one leading apostrophe is removed to read it back); criterion 4 over HTTP in the memory harness (`GET /v1/documents/{id}/field-values` returns `=1+1` as stored, with no apostrophe). Decision 44 of `docs/owner-decisions-2026-11-15.md` ("CSV, with formula neutralising") is the source of the spreadsheet output.
+
+**Notes:** Lane w4, 2026-11-18: criterion 1 stays unticked. The rule is in place in `fieldValuesCsv`, but no route yet returns the CSV, so the cell is not written by any endpoint, and the test matrix of spreadsheet applications (Excel, LibreOffice, Google Sheets, or a named set) was not run here. Still open: the CSV route and its media type (not chosen; decision 44 says only CSV), and whether a tab or a carriage return at the start also needs neutralising (OWASP lists them; the owner's list names four characters, so only those four are handled). Criterion 3 is ticked on the reading that the apostrophe rule is the documented behaviour; the wording belongs in the spec of 12 §9 at the owner's review. Phase `cond` is now met by decision 44, but the spec still says the export is not specified.
 
 ## Protocol additions (12 §10)
 
