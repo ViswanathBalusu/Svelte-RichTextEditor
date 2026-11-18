@@ -312,7 +312,7 @@ As an author who writes in a right-to-left or complex script, I want the page vi
 - [ ] Caret positions and selections in mixed-direction lines map to logical offsets consistently with the layout tree.
 - [ ] The work follows the plan that 02 §11 requires; this story does not decide that plan.
 
-**Notes:** C-RUST, phase 4 (right-to-left and complex-script content are phase 4 in 11 §7).
+**Notes:** C-RUST, phase 4 (right-to-left and complex-script content are phase 4 in 11 §7). Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold (see WASM-013). S10 recommended harfbuzzjs with line breaking in TypeScript (ADR 0016, "Result of S10"), so there is no Rust kernel to add UAX #9 reordering or shaping to. The story depends on WASM-008 (blocked for the same reason) and FE-112, which depends on SPK-013 (not held). Criterion 4 asks that the work follow the 02 §11 plan, and this story does not decide that plan. Any bidirectional or shaping work on the TypeScript and harfbuzzjs path is a different story.
 
 ### WASM-016 Line-breaking rules for East Asian and South-East Asian scripts
 
