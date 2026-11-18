@@ -40,6 +40,7 @@ import {
   type AssetRegistry,
 } from './control-plane/assets.ts';
 import { ContentReader } from './control-plane/content.ts';
+import type { HandlerDeps } from './control-plane/kit.ts';
 import { Placement } from './control-plane/room-routing.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
 import { DebouncedEventSink } from './control-plane/event-throttle.ts';
@@ -296,7 +297,13 @@ export interface ServiceParts {
    * A read replica of the database for the read-only routes: lists and pinned content. Absent:
    * every read goes to the primary. Its log tells how far it has applied each document.
    */
-  replica?: { logs: LogStore; documents: DocumentStore; grants: GrantStore };
+  replica?: {
+    logs: LogStore;
+    documents: DocumentStore;
+    grants: GrantStore;
+    /** The version rows, for history reads on the replica (BE-064). */
+    versions?: VersionStorePort;
+  };
   /** The tenants' quota values; the `exportMinutes` budget is read at each export (EXP-009). */
   quotas?: QuotaSource;
 }
@@ -649,6 +656,21 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ? createPool({ connectionString: config.databaseUrl, connectionTimeoutMillis: 5000 })
     : null;
   const base = db ? pgParts(db, now) : memoryParts(now);
+  // BE-064: with a replica URL the read-only routes can be served from the standby. It is a second
+  // pool over the same schema; it is only read from, and what it holds is what the standby applied.
+  const replicaDb =
+    db && config.replicaDatabaseUrl
+      ? createPool({ connectionString: config.replicaDatabaseUrl, connectionTimeoutMillis: 5000 })
+      : null;
+  if (replicaDb) {
+    const replicaGrants = new PgGrantStore(replicaDb);
+    base.replica = {
+      logs: new PgLogStore(replicaDb, { permissions: (ref) => replicaGrants.current(ref) }),
+      documents: new PgDocumentStore(replicaDb),
+      grants: replicaGrants,
+      versions: new PgVersionStore(replicaDb),
+    };
+  }
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
@@ -680,7 +702,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
           now,
         })
       : undefined;
-  if (parts.replica && opts.readSessions === undefined)
+  const readSessionsMax = opts.readSessions ?? config.readSessions ?? undefined;
+  const readLagDocuments = opts.readLagDocuments ?? config.readLagDocuments ?? undefined;
+  if (parts.replica && readSessionsMax === undefined)
     throw new Error('a read replica needs readSessions, the sessions kept for read-your-writes');
   // The node labels every control-plane series too (06 §11; BE-086 criterion 2).
   const metrics = new Metrics({ node: config.node });
@@ -1276,6 +1300,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   // same immutable checkpoints, answers a read only when its log holds what the read needs.
   let reads: ReadRouter<ReadStores> | null = null;
   let readSessions: ReadSessions | null = null;
+  let replicaDeps: Partial<HandlerDeps> | null = null;
   const replica = parts.replica;
   if (replica) {
     const replicaContent = new ContentReader({
@@ -1296,9 +1321,16 @@ export async function startService(opts: StartOptions): Promise<Service> {
         primarySeq: (tenant, doc) => headSeq(logs, { tenant, doc }),
       },
       metrics,
-      ...(opts.readLagDocuments !== undefined ? { lagDocuments: opts.readLagDocuments } : {}),
+      ...(readLagDocuments !== undefined ? { lagDocuments: readLagDocuments } : {}),
     });
-    readSessions = new ReadSessions(opts.readSessions!);
+    readSessions = new ReadSessions(readSessionsMax!);
+    replicaDeps = {
+      logs: replica.logs,
+      documents: replica.documents,
+      grants: replica.grants,
+      content: replicaContent,
+      ...(replica.versions ? { versions: replica.versions } : {}),
+    };
   }
   const pinnedCache = opts.pinnedCache
     ? new PinnedCache({
@@ -1310,6 +1342,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   const handlers = createHandlers({
     ...(reads ? { reads } : {}),
     ...(readSessions ? { readSessions } : {}),
+    ...(replicaDeps ? { replicaDeps } : {}),
     ...(pinnedCache ? { pinnedCache } : {}),
     comparePool: pool,
     documents: parts.documents,
@@ -1493,6 +1526,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         await new Promise<void>((resolve) => server.close(() => resolve()));
         await pool.close();
         if (db) await db.end().catch(() => undefined);
+        if (replicaDb) await replicaDb.end().catch(() => undefined);
       })()),
   };
 }
