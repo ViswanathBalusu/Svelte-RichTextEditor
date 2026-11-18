@@ -29,6 +29,7 @@ import {
   PeopleDirectory,
   SettingsStore,
   Strings,
+  createCommandRegistry,
   headerMode,
   themeMode,
   toolbarMode,
@@ -158,6 +159,25 @@ export interface MountedEditor extends EditorHandle {
 }
 
 export { SettingsStore };
+
+/**
+ * The states `de-command-state` watches (05 §8.1; FE-028; UX-005): the core's commands by their
+ * names, and the registry's commands by their identifiers (`format.bold`), which the host's
+ * `exec` and `queryCommand` take. A command that is not offered is left out.
+ */
+function commandStates(
+  core: EditorCore,
+  registry: ReturnType<typeof createCommandRegistry>,
+): Record<string, { enabled: boolean; active: boolean }> {
+  const out: Record<string, { enabled: boolean; active: boolean }> = {};
+  for (const [name, state] of Object.entries(core.commands.get()))
+    if (state) out[name] = { enabled: state.enabled, active: state.active };
+  for (const entry of registry.list()) {
+    const state = registry.state(entry.id);
+    if (state.offered) out[entry.id] = { enabled: state.enabled, active: state.active === true };
+  }
+  return out;
+}
 
 /**
  * The shell settings the attributes give (05 §8.1 `toolbar`, `locale`, `theme`); unknown values
@@ -392,11 +412,15 @@ export function mountEditor(options: MountOptions): MountedEditor {
     onUnknown: (keys) =>
       console.warn(`doc-editor: unknown string keys ignored: ${keys.join(', ')}`),
   });
+  // The one command registry (13 §4; UX-005): the shell's toolbars and menus read it, and so do the
+  // host's `exec` and `queryCommand`, so the host's buttons agree with the built-in ones.
+  const registry = createCommandRegistry(shell, { hasString: (key) => strings.has(key) });
   const app = mount(App, {
     target: root,
     props: {
       core: shell,
       strings,
+      registry,
       people,
       searchPrincipals,
       docId: options.docId,
@@ -414,7 +438,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
   app.setExtensions(options.extensions());
   const stopShortcuts = attachShortcuts(root, (command) => core.run(command));
 
-  const api = hostApi(core);
+  const api = hostApi(core, registry);
 
   return {
     core,
@@ -434,9 +458,19 @@ export function mountEditor(options: MountOptions): MountedEditor {
     fill: { onFieldChange: (listener) => core.onFieldChange(listener), fill },
     // What `de-selection` and `de-command-state` watch (FE-028); read-only, no content.
     watch: {
-      revision: core.revision,
+      // A change of the registry's states is a reason to look again, as a new revision is (UX-005).
+      revision: {
+        subscribe: (listener) => {
+          const offCore = core.revision.subscribe(listener);
+          const offRegistry = registry.onStateChange(() => listener());
+          return () => {
+            offCore();
+            offRegistry();
+          };
+        },
+      },
       selectionScope: () => core.selectionScope(),
-      commandStates: () => core.commands.get(),
+      commandStates: () => commandStates(core, registry),
     },
     attach(channel: SyncChannel, at: AttachAt) {
       return core.attach(channel, at);
@@ -490,6 +524,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       viewers.clear();
       stopShortcuts();
       void unmount(app);
+      registry.destroy();
       core.destroy();
     },
   };
