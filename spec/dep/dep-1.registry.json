@@ -1421,6 +1421,37 @@
       "owner": "FRW"
     },
     {
+      "operationId": "voidWorkflow",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/void",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "manage",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "2XX",
+      "spec": "12 §6.2, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "participantDecline",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/participants/{pid}/decline",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "2XX",
+      "spec": "12 §6.2, §10",
+      "owner": "FRW"
+    },
+    {
       "operationId": "participantConsent",
       "method": "POST",
       "path": "/documents/{id}/workflow/participants/{pid}/consent",
@@ -1454,21 +1485,6 @@
       "operationId": "participantComplete",
       "method": "POST",
       "path": "/documents/{id}/workflow/participants/{pid}/complete",
-      "security": [
-        "user",
-        "service"
-      ],
-      "feature": "workflow",
-      "ifMatch": "none",
-      "idempotencyKey": false,
-      "success": "2XX",
-      "spec": "12 §10",
-      "owner": "FRW"
-    },
-    {
-      "operationId": "participantDecline",
-      "method": "POST",
-      "path": "/documents/{id}/workflow/participants/{pid}/decline",
       "security": [
         "user",
         "service"

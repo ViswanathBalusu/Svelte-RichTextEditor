@@ -79,6 +79,17 @@ Region grants are not in the token. They are stored by the document service and 
 
 Host backends call the control plane with a service credential: an API key, or a JWT with the type header `dep-svc+jwt`, signed with keys that are registered separately from user-token keys. A user token can never become a service credential through a claim. A service call that acts for a user names that user in the `DEP-Actor` header, and history attributes the change to them.
 
+### 3.2.1 Agent tokens
+
+An assistant acts for a user under an agent identity (13 section 6.2; ADR 0234 part A). The server learns that a connection is an agent's only from its verified credential, never from the client's `origin` hint (04 section 2).
+
+- The document service keeps an agent registry per tenant: an agent identifier (`agt`), a display name, the owning host and the documents it may act on. A service credential registers an agent with `POST /agents` (a route that joins the table in 6.2 when it is added to the protocol definition). A user token cannot register an agent or become one.
+- An **agent token** is a short-lived JWT with the type header `dep-agent+jwt`, signed with keys registered separately from user-token keys. Its claims are `sub` (the user the assistant acts for), `agt`, `act` (`{ "sub": "<agt>" }`, the actor claim in the manner of RFC 8693), `tid`, `doc`, `aud` and a short `exp`.
+- Only the service mints an agent token (`POST /tokens` with a service credential, or a host signing key registered as an agent issuer). A browser never signs one.
+- A host backend that calls the control plane for an agent sends `DEP-Agent: <agt>` with its service credential and `DEP-Actor`. The service honours `DEP-Agent` only when that agent is registered to the same credential and the document is in its list. A user token cannot set it.
+- `author.agent` on a stored commit is the `agt` of the verified token, and `origin` is `assistant`. A commit on a user connection that claims `origin: "assistant"` is stored as an ordinary commit with the hint recorded as a claim.
+- Disabling an agent changes `rev`, so it loses access at once.
+
 ### 3.3 Revocation
 
 Grant changes take effect immediately (section 5.5). To end a user's access before the token expires, the host backend calls `POST /sessions/revoke` with the `sub` and optionally a document. The service records a watermark: tokens for that user issued before it are refused on both planes, so a revoked client cannot simply reconnect. The room closes that user's channels.

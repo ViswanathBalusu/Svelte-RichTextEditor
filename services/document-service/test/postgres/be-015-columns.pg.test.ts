@@ -123,7 +123,11 @@ describe.skipIf(unavailable !== null)('BE-015 columns, keys and references of 06
 
   for (const [table, sketch] of Object.entries(SKETCH)) {
     it(`${table}: columns, primary key and references match the sketch`, async () => {
-      const cols = await db.admin.query<{ column_name: string; data_type: string; is_nullable: string }>(
+      const cols = await db.admin.query<{
+        column_name: string;
+        data_type: string;
+        is_nullable: string;
+      }>(
         `SELECT column_name, data_type, is_nullable FROM information_schema.columns
           WHERE table_schema = 'public' AND table_name = $1`,
         [table],

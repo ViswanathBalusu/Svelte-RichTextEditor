@@ -3803,6 +3803,23 @@
         "participants"
       ]
     },
+    "WorkflowReason": {
+      "title": "WorkflowReason",
+      "description": "The body of `decline` and `void` (12 §6.2).",
+      "$comment": "12 §6.2, §10; gaps: G95",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Why the workflow is stopped: the participant who declines, or the owner who voids, says. A reason that is blank after trimming is refused.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
     "WorkflowPlaceholder": {
       "title": "WorkflowPlaceholder",
       "description": "A workflow request or response the prose does not define. Placeholder.",

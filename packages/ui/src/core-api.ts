@@ -727,6 +727,27 @@ export interface CoreApi {
    * Inserted by Ada (UX-035 criterion 4); null removes them.
    */
   setSuggestionLabel?(label: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null): void;
+  /**
+   * The suggestions of the document in order, with what the user may do with each (UX-036,
+   * UX-037). Read again when `revision` moves. Absent: the review tools are not offered.
+   */
+  suggestionItems?(): readonly ReviewItem[];
+  /** Moves to the next (1) or previous (-1) suggestion after the selection and shows it; null when none (UX-036). */
+  stepSuggestion?(direction: 1 | -1): ReviewItem | null;
+  /** Selects a suggestion and shows it; false for an unknown identifier (UX-036, UX-037). */
+  revealSuggestion?(id: string): boolean;
+  /** Accepts or rejects the suggestions in the selection, or the one the caret is in: one commit (UX-036). */
+  resolveAtSelection?(action: 'accept' | 'reject'): ReviewReport;
+  /**
+   * Accepts or rejects every suggestion in the selection or the document, or only an author's, or
+   * only one suggestion: one commit; those in a scope without `edit` stay pending and are counted.
+   */
+  resolveSuggestions?(
+    action: 'accept' | 'reject',
+    target?: 'selection' | 'document',
+    author?: string,
+    suggestion?: string,
+  ): ReviewReport;
 
   /**
    * Spelling and grammar (UX-041; 13 §6.1). Absent, or `available` false, when the host gave no
@@ -1469,6 +1490,38 @@ export interface ThreadDetail {
 export type ThreadWrite =
   | { readonly ok: true; readonly detail: ThreadDetail }
   | { readonly ok: false; readonly code: string; readonly latest?: ThreadDetail };
+
+/** One suggestion as the review tools see it (UX-036, UX-037; 03 §5). */
+export interface ReviewItem {
+  readonly id: string;
+  /** Insertion, deletion or formatting change; `block` says it is on a block, not on text. */
+  readonly kind: 'ins' | 'del' | 'fmt';
+  readonly block: boolean;
+  /** The author's identifier, `user` on the suggestion mark. */
+  readonly user: string;
+  /** Position in the document, for order and for stepping. */
+  readonly from: number;
+  readonly to: number;
+  /** The words the suggestion covers, cut when long; empty for a block with no text. */
+  readonly text: string;
+  /**
+   * The server time of the commit that introduced it, when the core knows it (08 §14). Absent for
+   * a suggestion that was already in the document when it was loaded: the core has no record of
+   * its commit (the suggestion-to-commit index of HIS-042 would give it).
+   */
+  readonly committedAt?: string | null;
+  /** The capabilities the user has in the suggestion's scope. */
+  readonly caps: readonly Capability[];
+  /** Whether the user may accept or reject it now (`edit` in its scope, document not locked). */
+  readonly canResolve: boolean;
+}
+
+/** What an accept or reject did: the suggestions handled, those left pending, and where. */
+export interface ReviewReport {
+  readonly handled: number;
+  readonly skipped: number;
+  readonly skippedScopes: readonly string[];
+}
 
 /** Comment threads (05 §6.2). Creating one is a control-plane request, never a commit (13 §5). */
 export interface ThreadsService {

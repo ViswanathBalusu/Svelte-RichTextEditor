@@ -11,3 +11,7 @@ export const INTERNAL = 'docedit.internal';
  * one that accepts or rejects suggestions (FE-047).
  */
 export const SUGGESTED = 'docedit.suggested';
+
+/** The origin of a commit that accepts or rejects suggestions (FE-047; 08 §14; UX-036). */
+export const RESOLVE_ORIGIN = 'docedit.resolveOrigin';
+export type ResolveOrigin = 'suggestion.accept' | 'suggestion.reject';

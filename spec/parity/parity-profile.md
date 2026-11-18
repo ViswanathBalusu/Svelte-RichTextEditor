@@ -125,6 +125,7 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `view.commandSearch` | command-search |
 | `view.permissions` | regions-and-permissions |
 | `view.checker` | accessibility-checker |
+| `view.review` | suggestions |
 | `view.sources` | citations |
 | `view.fieldProperties` | fields-and-forms |
 | `view.rules` | fields-and-forms |
@@ -153,6 +154,12 @@ Every command of the built-in registry (UX-003) names the row it delivers; the b
 | `review.markup.simple` | suggestions |
 | `review.markup.none` | suggestions |
 | `review.markup.original` | suggestions |
+| `review.next` | suggestions |
+| `review.previous` | suggestions |
+| `review.accept` | suggestions |
+| `review.reject` | suggestions |
+| `review.acceptAll` | suggestions |
+| `review.rejectAll` | suggestions |
 | `view.layout.web` | views |
 | `view.layout.read` | views |
 | `view.layout.print` | views |

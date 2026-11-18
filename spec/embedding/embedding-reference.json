@@ -620,6 +620,20 @@
       "aliases": []
     },
     {
+      "id": "review.accept",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "review.acceptAll",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "review.comment",
       "group": "review",
       "capability": "comments",
@@ -649,6 +663,34 @@
     },
     {
       "id": "review.markup.simple",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "review.next",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "review.previous",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "review.reject",
+      "group": "review",
+      "capability": "suggestions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "review.rejectAll",
       "group": "review",
       "capability": "suggestions",
       "keys": [],
@@ -755,6 +797,13 @@
       "id": "view.recovered",
       "group": "view",
       "capability": "recovery-journal",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.review",
+      "group": "view",
+      "capability": "suggestions",
       "keys": [],
       "aliases": []
     },

@@ -26,7 +26,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   PgSearchIndex,
   SEARCH_ENTRIES_TABLE,
-  SEARCH_INDEX_DDL,
   SEARCH_TOKENS_TABLE,
 } from '../../src/control-plane/search-index-pg.ts';
 import { ADMIN, postgresUnavailable } from '../support/env.ts';
@@ -44,7 +43,24 @@ const VOCABULARY = 20_000;
 const WORDS_PER_DOC = 100;
 const RUNS = 30;
 const LIMIT = 20;
-const TENANT = 't-w5-be-053';
+const TENANT = '00000000-0000-4000-8000-000000be0053';
+
+/**
+ * The two tables of migration 0086 without row-level security, for a bare database: the spike
+ * measures the query shapes, and the database it makes has no migrations.
+ */
+const SPIKE_DDL = `
+CREATE TABLE ${SEARCH_ENTRIES_TABLE} (
+  tenant_id uuid NOT NULL, doc_id uuid NOT NULL, visibility text NOT NULL,
+  seq bigint NOT NULL CHECK (seq >= 0), PRIMARY KEY (tenant_id, doc_id, visibility));
+CREATE TABLE ${SEARCH_TOKENS_TABLE} (
+  tenant_id uuid NOT NULL, doc_id uuid NOT NULL, visibility text NOT NULL, token text NOT NULL,
+  occurrences integer NOT NULL CHECK (occurrences > 0),
+  PRIMARY KEY (tenant_id, doc_id, visibility, token),
+  FOREIGN KEY (tenant_id, doc_id, visibility)
+    REFERENCES ${SEARCH_ENTRIES_TABLE} (tenant_id, doc_id, visibility) ON DELETE CASCADE);
+CREATE INDEX ${SEARCH_TOKENS_TABLE}_token ON ${SEARCH_TOKENS_TABLE} (tenant_id, token);
+`;
 
 /** A seeded generator, so that every run draws the same queries. */
 function prng(seed: number): () => number {
@@ -119,9 +135,9 @@ describe.skipIf(unavailable !== null)('BE-053 search spike: PostgreSQL full-text
     }
     pool = new pg.Pool({ ...ADMIN, database: name, max: 4 });
     await pool.query(
-      `CREATE TABLE docs (tenant text NOT NULL, doc text PRIMARY KEY, vec tsvector NOT NULL)`,
+      `CREATE TABLE docs (tenant uuid NOT NULL, doc uuid PRIMARY KEY, vec tsvector NOT NULL)`,
     );
-    await pool.query(SEARCH_INDEX_DDL);
+    await pool.query(SPIKE_DDL);
     const setting = (n: string) =>
       pool.query<{ v: string }>('SELECT current_setting($1) AS v', [n]);
     const version = await setting('server_version');
@@ -159,7 +175,7 @@ describe.skipIf(unavailable !== null)('BE-053 search spike: PostgreSQL full-text
       const load = await timed(() =>
         pool.query(
           `INSERT INTO docs (tenant, doc, vec)
-           SELECT $1, 'd' || i,
+           SELECT $1::uuid, md5('d' || i)::uuid,
                   to_tsvector('simple', (
                     SELECT string_agg('w' || (1 + floor($2::int * power(random(), 4)))::int, ' ')
                     FROM generate_series(1, $3::int + (i * 0))))
@@ -183,11 +199,11 @@ describe.skipIf(unavailable !== null)('BE-053 search spike: PostgreSQL full-text
         await pool.query(`TRUNCATE ${SEARCH_ENTRIES_TABLE} CASCADE`);
         const t = await timed(async () => {
           await pool.query(
-            `INSERT INTO ${SEARCH_ENTRIES_TABLE} (tenant, doc, visibility, seq)
+            `INSERT INTO ${SEARCH_ENTRIES_TABLE} (tenant_id, doc_id, visibility, seq)
              SELECT tenant, doc, 'full', 1 FROM docs`,
           );
           await pool.query(
-            `INSERT INTO ${SEARCH_TOKENS_TABLE} (tenant, doc, visibility, token, occurrences)
+            `INSERT INTO ${SEARCH_TOKENS_TABLE} (tenant_id, doc_id, visibility, token, occurrences)
              SELECT d.tenant, d.doc, 'full', u.lexeme, coalesce(array_length(u.positions, 1), 1)
              FROM docs d, LATERAL unnest(d.vec) AS u`,
           );
@@ -208,10 +224,10 @@ describe.skipIf(unavailable !== null)('BE-053 search spike: PostgreSQL full-text
         const qs = queriesOf(b, 53 + bi);
         const fts = (terms: string[]) =>
           pool.query(
-            `SELECT d.doc, ts_rank(d.vec, q) AS score
+            `SELECT d.doc::text AS doc, ts_rank(d.vec, q) AS score
              FROM docs d, to_tsquery('simple', $2) q
              WHERE d.tenant = $1 AND d.vec @@ q
-             ORDER BY score DESC, d.doc COLLATE "C" LIMIT ${LIMIT}`,
+             ORDER BY score DESC, d.doc::text COLLATE "C" LIMIT ${LIMIT}`,
             [TENANT, terms.join(' & ')],
           );
         const tok = (terms: string[]) =>
@@ -243,7 +259,7 @@ describe.skipIf(unavailable !== null)('BE-053 search spike: PostgreSQL full-text
         if (tokens && size <= 10_000 && counted.every((n) => n <= 5_000)) {
           const terms = qs[0]!;
           const a = await pool.query<{ doc: string }>(
-            `SELECT doc FROM docs WHERE tenant = $1 AND vec @@ to_tsquery('simple', $2)`,
+            `SELECT doc::text AS doc FROM docs WHERE tenant = $1 AND vec @@ to_tsquery('simple', $2)`,
             [TENANT, terms.join(' & ')],
           );
           const b2 = await index.search(TENANT, terms.join(' '), {
@@ -265,7 +281,7 @@ describe.skipIf(unavailable !== null)('BE-053 search spike: PostgreSQL full-text
               pool.query(
                 `UPDATE docs SET vec = to_tsvector('simple', (
                    SELECT string_agg('w' || (1 + floor($2::int * power(random(), 4)))::int, ' ')
-                   FROM generate_series(1, $3::int))) WHERE doc = $1`,
+                   FROM generate_series(1, $3::int))) WHERE doc = md5($1)::uuid`,
                 [`d${1 + Math.floor((i * 7919) % size)}`, VOCABULARY, WORDS_PER_DOC],
               ),
             )
