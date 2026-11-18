@@ -111,7 +111,7 @@ import type { Metrics } from './metrics.ts';
 import { PresenceRelay } from './presence.ts';
 import type { Settings } from './settings.ts';
 import { assetRefsIn, type AssetAttachments } from './asset-attachments.ts';
-import { AttributionTracker, contentSizeOf, openAttribution } from './attribution.ts';
+import { contentSizeOf, openAttribution, type AttributionTracker } from './attribution.ts';
 import { admissionFor } from './sec-028-admission.ts';
 import { BroadcastWindow } from './syn-041-coalescing.ts';
 import type { Base, Encoded } from './tasks.ts';
