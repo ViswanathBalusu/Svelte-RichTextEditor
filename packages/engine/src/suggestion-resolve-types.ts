@@ -13,6 +13,8 @@ export interface ResolveScope {
   readonly to: number;
   /** Only the suggestions whose `user` is this name; absent means every author (FE-047 criterion 5). */
   readonly author?: string;
+  /** Only the suggestion whose mark has this identifier (UX-036: accept or reject one). */
+  readonly suggestion?: string;
   /** Whether the text in `[from, to)` may change for this user. Absent means it may. */
   readonly editable?: (from: number, to: number) => boolean;
 }

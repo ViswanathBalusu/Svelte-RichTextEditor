@@ -35,11 +35,13 @@ import {
   headerMode,
   themeMode,
   toolbarMode,
+  type Capability,
   type CoreApi,
   type DocumentStats,
   type EditorMode,
   type ExportService,
   type ResolveUsers,
+  type ReviewItem,
   type ShellSettings,
 } from '@docedit/ui';
 import { flushSync, mount, unmount } from 'svelte';
@@ -188,6 +190,31 @@ export { SettingsStore };
  * names, and the registry's commands by their identifiers (`format.bold`), which the host's
  * `exec` and `queryCommand` take. A command that is not offered is left out.
  */
+const CAPABILITIES: readonly Capability[] = [
+  'view',
+  'comment',
+  'suggest',
+  'edit',
+  'fill',
+  'structure',
+  'manage',
+];
+
+/** A suggestion of the core as the shell's review tools take it (UX-036): the capabilities typed. */
+function reviewItem(s: ReturnType<EditorCore['suggestionItems']>[number]): ReviewItem {
+  return {
+    id: s.id,
+    kind: s.kind,
+    block: s.block,
+    user: s.user,
+    from: s.from,
+    to: s.to,
+    text: s.text,
+    caps: s.caps.filter((c): c is Capability => (CAPABILITIES as readonly string[]).includes(c)),
+    canResolve: s.canResolve,
+  };
+}
+
 function commandStates(
   core: EditorCore,
   registry: ReturnType<typeof createCommandRegistry>,
@@ -507,6 +534,16 @@ export function mountEditor(options: MountOptions): MountedEditor {
     markupView: core.markupView,
     setMarkupView: (view) => core.setMarkupView(view),
     setSuggestionLabel: (label) => core.setSuggestionLabel(label),
+    // The review tools (UX-036): the list, next and previous, accept and reject.
+    suggestionItems: () => core.suggestionItems().map(reviewItem),
+    stepSuggestion: (direction) => {
+      const found = core.stepSuggestion(direction);
+      return found === null ? null : reviewItem(found);
+    },
+    revealSuggestion: (id) => core.revealSuggestion(id),
+    resolveAtSelection: (action) => core.resolveAtSelection(action),
+    resolveSuggestions: (action, target, author, suggestion) =>
+      core.resolveSuggestions(action, target, author, suggestion),
     // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,

@@ -45,6 +45,8 @@ export type {
   PanelInfo,
   PeerCaret,
   PresencePeer,
+  ReviewItem,
+  ReviewReport,
   PrincipalInfo,
   PrincipalQuery,
   ReadView,

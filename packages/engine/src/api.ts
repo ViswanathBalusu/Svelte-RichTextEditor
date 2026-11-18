@@ -843,6 +843,7 @@ import type { ResolveAction, SuggestionReport, SuggestionTarget } from './sugges
 import type { MarkupView, SuggestionLabel, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
 import type { ThreadSelection } from './comment-decorations.ts';
+import type { SuggestionItem } from './suggestion-list.ts';
 import type { SectionWarning } from './breaks-sections.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
 import type { LocatedFinding, ProofingClock, ProofingInfo, ProofingPort } from './proofing.ts';
@@ -1036,7 +1037,18 @@ export interface DocumentApi {
     action: ResolveAction,
     target?: SuggestionTarget,
     author?: string,
+    suggestion?: string,
   ): SuggestionReport;
+  /** The suggestions of the document in order, with what the user may do with each (UX-036, UX-037). */
+  suggestionItems(): readonly SuggestionItem[];
+  /** Moves to the next (1) or previous (-1) suggestion after the selection and reveals it; null when there is none (UX-036). */
+  stepSuggestion(direction: 1 | -1): SuggestionItem | null;
+  /** Accepts or rejects the suggestions in the selection, or the one the caret is in (UX-036). */
+  resolveAtSelection(action: ResolveAction): SuggestionReport;
+  /** Moves the selection to a suggestion and brings it into view; false for an unknown id (UX-036). */
+  revealSuggestion(id: string): boolean;
+  /** The suggestion last revealed; `n` counts the reveals (UX-036). */
+  readonly revealedSuggestion: ReadView<{ readonly id: string; readonly n: number } | null>;
 
   /**
    * The range-based API for one extension (UX-053; 13 §7.1): ranges held and mapped, reads, writes

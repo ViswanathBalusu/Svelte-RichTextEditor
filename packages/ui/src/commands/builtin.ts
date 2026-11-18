@@ -247,6 +247,16 @@ export interface ShellCommandHost1b {
    * without one (criterion 5).
    */
   proofingStep?(direction: 1 | -1): boolean;
+  /**
+   * Moves to the next or previous suggestion (UX-036). Optional: the review commands are registered
+   * only while the core can list suggestions.
+   */
+  reviewStep?(direction: 1 | -1): boolean;
+  /**
+   * Accepts or rejects the suggestion the caret is in or those in the selection (`caret`), or all of
+   * them in the selection, else in the document (`all`) (UX-036). Optional, like `reviewStep`.
+   */
+  reviewResolve?(action: 'accept' | 'reject', scope: 'caret' | 'all'): boolean;
 }
 
 /** Query names the shell answers (ShellQueries). */
@@ -285,6 +295,7 @@ export const SHELL_QUERY_NAMES = [
   'shell.pane.rules',
   'shell.storyOpen',
   'shell.commentAllowed',
+  'shell.reviewAny',
   'shell.exportAllowed',
   'shell.printAllowed',
 ] as const;
@@ -683,6 +694,43 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
         toolbar: false,
         run: () => host.setMarkupView!(view),
       };
+  // The review tools (UX-036): step through the suggestions, and accept or reject them. They are
+  // reached from command search and the menus (and the review pane, UX-037). Accept and reject are
+  // registered only while the user may resolve a suggestion (criterion 3), by the shell.
+  if (host.reviewStep)
+    for (const [id, direction] of [
+      ['review.next', 1],
+      ['review.previous', -1],
+    ] as const)
+      out[id] = {
+        id,
+        label: `command.${id}` as StringKey,
+        icon: 'review',
+        group: 'review',
+        enabled: 'shell.reviewAny',
+        changesContent: false,
+        capability: 'suggestions',
+        toolbar: false,
+        run: () => host.reviewStep!(direction),
+      };
+  if (host.reviewResolve)
+    for (const [id, action, scope] of [
+      ['review.accept', 'accept', 'caret'],
+      ['review.reject', 'reject', 'caret'],
+      ['review.acceptAll', 'accept', 'all'],
+      ['review.rejectAll', 'reject', 'all'],
+    ] as const)
+      out[id] = {
+        id,
+        label: `command.${id}` as StringKey,
+        icon: 'review',
+        group: 'review',
+        enabled: 'shell.reviewAny',
+        changesContent: true,
+        capability: 'suggestions',
+        toolbar: false,
+        run: () => host.reviewResolve!(action, scope),
+      };
   for (const view of VIEWS)
     out[`view.layout.${view}`] = {
       id: `view.layout.${view}`,
@@ -711,6 +759,8 @@ export function builtinCommands(): Entry[] {
     setMode: none,
     setView: none,
     setMarkupView: none,
+    reviewStep: none,
+    reviewResolve: none,
     closeStory: none,
     commandSearch: none,
   });

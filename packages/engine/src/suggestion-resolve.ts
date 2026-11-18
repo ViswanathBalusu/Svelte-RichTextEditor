@@ -96,7 +96,10 @@ export function resolveSuggestions(
     const to = Math.min(pos + node.nodeSize, scope.to);
     if (from >= to) return false;
     const mine = node.marks.filter(
-      (m) => isSuggestion(m) && (scope.author === undefined || m.attrs['user'] === scope.author),
+      (m) =>
+        isSuggestion(m) &&
+        (scope.author === undefined || m.attrs['user'] === scope.author) &&
+        (scope.suggestion === undefined || m.attrs['id'] === scope.suggestion),
     );
     if (mine.length > 0) segments.push({ from, to, marks: node.marks, mine });
     return false;

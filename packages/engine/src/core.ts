@@ -207,7 +207,7 @@ import {
 import { type Refusal, canWrite, capsOf, checkChange, depScope, guardPlugin } from './guard.ts';
 import { idTypesOf, identifierPlugin } from './ids.ts';
 import { type Internals, register } from './internals.ts';
-import { INTERNAL, REMOTE, SUGGESTED } from './meta.ts';
+import { INTERNAL, REMOTE, RESOLVE_ORIGIN, SUGGESTED, type ResolveOrigin } from './meta.ts';
 import { scopeDiff } from './scope-diff.ts';
 import { ExtensionApi } from './extension-api.ts';
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
@@ -221,6 +221,7 @@ import {
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
 import type { ThreadSelection } from './comment-decorations.ts';
+import { listSuggestions, type SuggestionItem } from './suggestion-list.ts';
 import {
   type AssistantRequest,
   type HostAttachment,
@@ -819,6 +820,8 @@ export class DocumentCore implements DocumentApi {
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
   /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
   readonly selectedThread: ReadValue<ThreadSelection | null>;
+  /** The suggestion last revealed by next, previous or the review pane; the body scrolls to it (UX-036). */
+  readonly revealedSuggestion: ReadValue<{ readonly id: string; readonly n: number } | null>;
   /** The thread whose highlight the reader chose in the body; `n` counts the choices (UX-030). */
   readonly pickedThread: ReadValue<{ readonly id: string; readonly n: number } | null>;
   /** The markup view the body shows for suggestions (UX-035); ll until it is set. */
@@ -991,6 +994,11 @@ export class DocumentCore implements DocumentApi {
     );
     this.markupView = new ReadValue<MarkupView>('all', Object.is, hub);
     this.selectedThread = new ReadValue<ThreadSelection | null>(null, sameJson, hub);
+    this.revealedSuggestion = new ReadValue<{ readonly id: string; readonly n: number } | null>(
+      null,
+      sameJson,
+      hub,
+    );
     this.pickedThread = new ReadValue<{ readonly id: string; readonly n: number } | null>(
       null,
       sameJson,
@@ -1094,7 +1102,10 @@ export class DocumentCore implements DocumentApi {
       const historyMeta = isHistoryTransaction(tr)
         ? (tr.getMeta('history$') as { redo?: boolean } | undefined)
         : undefined;
-      const origin = historyMeta === undefined ? undefined : historyMeta.redo ? 'redo' : 'undo';
+      // Accepting and rejecting suggestions are commits of their own too, with origin
+      // `suggestion.accept` or `suggestion.reject` (08 §14; UX-036 criterion 1).
+      const resolved = tr.getMeta(RESOLVE_ORIGIN) as ResolveOrigin | undefined;
+      const origin = historyMeta === undefined ? resolved : historyMeta.redo ? 'redo' : 'undo';
       this.#sync = local(this.#sync, queued, state.doc, origin);
       this.#session?.localEdit();
     }
@@ -3266,6 +3277,7 @@ one or original. It is a
     action: ResolveAction,
     target: SuggestionTarget = 'selection',
     author?: string,
+    suggestion?: string,
   ): SuggestionReport {
     const state = this.#state;
     const range = this.#suggestionRange(target);
@@ -3277,11 +3289,12 @@ one or original. It is a
       blocked.add(scope);
       return false;
     };
-    const r = resolveSuggestions(
-      state,
-      action,
-      author === undefined ? { ...range, editable } : { ...range, author, editable },
-    );
+    const r = resolveSuggestions(state, action, {
+      ...range,
+      ...(author !== undefined ? { author } : {}),
+      ...(suggestion !== undefined ? { suggestion } : {}),
+      editable,
+    });
     const skippedScopes = [...blocked].sort();
     const notice = (): void => {
       if (blocked.size === 0) return;
@@ -3297,13 +3310,82 @@ one or original. It is a
     }
     const before = state.doc;
     // Accepting or rejecting is never itself recorded as a suggestion (FE-041).
-    this.dispatchTransaction(r.tr.setMeta(SUGGESTED, true));
+    this.dispatchTransaction(
+      r.tr
+        .setMeta(SUGGESTED, true)
+        .setMeta(RESOLVE_ORIGIN, action === 'accept' ? 'suggestion.accept' : 'suggestion.reject'),
+    );
     if (this.#state.doc === before) {
       // The guard refused the whole change (it recorded its own refusal).
       return { handled: 0, skipped: r.handled + r.skipped, skippedScopes };
     }
     notice();
     return { handled: r.handled, skipped: r.skipped, skippedScopes };
+  }
+
+  /**
+   * The suggestions of the document in document order, with what the user may do with each one
+   * (UX-036, UX-037). `caps` are the capabilities in the suggestion's scope; with no access
+   * information (a local document) every right is held, as `resolveSuggestions` takes it.
+   */
+  suggestionItems(): readonly SuggestionItem[] {
+    const doc = this.#state.doc;
+    const access = this.#accessValue;
+    return listSuggestions(doc).map((s) => {
+      const scope = this.#scopeIn(doc, s.from);
+      return {
+        ...s,
+        caps: access === null ? FULL_CAPS : (capsOf(access, depScope(scope)) as readonly string[]),
+        canResolve: this.#mayResolve(scope),
+      };
+    });
+  }
+
+  /**
+   * Moves to the next or previous suggestion after the selection and reveals it (UX-036 criterion
+   * 1), wrapping at the ends. Returns it, or null when the document holds none.
+   */
+  stepSuggestion(direction: 1 | -1): SuggestionItem | null {
+    const items = this.suggestionItems();
+    if (items.length === 0) return null;
+    const head = this.#state.selection.from;
+    const target =
+      direction === 1
+        ? (items.find((s) => s.from > head) ?? items[0])
+        : ([...items].reverse().find((s) => s.from < head) ?? items[items.length - 1]);
+    if (target === undefined) return null;
+    this.revealSuggestion(target.id);
+    return target;
+  }
+
+  /**
+   * Accepts or rejects what the selection holds (UX-036 criterion 1): the suggestions inside a
+   * selection, or, with a caret, the suggestion the caret is in. The report also names the
+   * suggestion when one was chosen by the caret.
+   */
+  resolveAtSelection(action: ResolveAction): SuggestionReport {
+    const { from, empty } = this.#state.selection;
+    if (!empty) return this.resolveSuggestions(action, 'selection');
+    const at = listSuggestions(this.#state.doc).find((s) => s.from <= from && from <= s.to);
+    return at === undefined
+      ? { handled: 0, skipped: 0, skippedScopes: [] }
+      : this.resolveSuggestions(action, 'document', undefined, at.id);
+  }
+
+  /**
+   * Moves the selection to the suggestion `id` and brings it into view (UX-036 criterion 1: next
+   * and previous). A setting of this reader: the document is not touched. False for an unknown id.
+   */
+  revealSuggestion(id: string): boolean {
+    const item = listSuggestions(this.#state.doc).find((s) => s.id === id);
+    if (item === undefined) return false;
+    const doc = this.#state.doc;
+    const selection = item.block
+      ? TextSelection.near(doc.resolve(Math.min(item.from + 1, doc.content.size)))
+      : TextSelection.between(doc.resolve(item.from), doc.resolve(item.to));
+    this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
+    this.revealedSuggestion.set({ id, n: (this.revealedSuggestion.get()?.n ?? 0) + 1 });
+    return true;
   }
 
   /** Whether the user may accept or reject suggestions in a scope: `edit` there (P4). */

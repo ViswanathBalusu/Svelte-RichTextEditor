@@ -84,6 +84,7 @@
   import { fillProgress } from './shell/fill.ts';
   import { focusTarget, landmarkKeys, landmarksIn, nextLandmark } from './shell/landmarks.ts';
   import { modeOptions } from './shell/modes.ts';
+  import { reviewOffers } from './shell/review-rules.ts';
   import { START_TRACK, stepMode, type ModeTrack } from './shell/suggest-mode.ts';
   import { NoticeTracker, type Notice } from './shell/notices.ts';
   import { PaneRegistry, type PaneComponent } from './shell/panes.ts';
@@ -627,6 +628,31 @@
     shellQueries.set('shell.commentAllowed', state.allowed, state.allowed ? null : state.reason);
   });
 
+  // The review commands (UX-036): they work on the suggestions the core lists now.
+  const reviewItems = $derived.by(() => {
+    void revision?.current;
+    return core.suggestionItems?.() ?? [];
+  });
+  $effect(() => {
+    if (!core.suggestionItems) return;
+    const any = reviewItems.length > 0;
+    shellQueries.set('shell.reviewAny', any, any ? null : 'noSuggestions');
+    // The authors' names are asked for now, so that the first step already says them.
+    people.request(reviewItems.map((i) => i.user));
+  });
+  // Accept and reject are offered where the user may resolve a suggestion; a user with `suggest`
+  // and not `edit` is offered neither, for other people's suggestions and for their own (criterion 3).
+  const mayResolveAny = $derived(
+    reviewItems.length === 0 ||
+      reviewItems.some((i) => i.canResolve && reviewOffers(i.caps).accept),
+  );
+
+  let reviewSync: (() => void) | null = null;
+  $effect(() => {
+    void mayResolveAny;
+    reviewSync?.();
+  });
+
   // The export command's state (UX-040 criterion 1): `no-export` in the access restrictions
   // disables it with the reason, and the registry publishes the change at once (criterion 4).
   $effect(() => {
@@ -816,6 +842,50 @@
           },
         }
       : {}),
+    // The review tools (UX-036): next and previous say what they moved to; accept and reject say
+    // how many were handled and how many were left pending where the user may not edit.
+    ...(core.suggestionItems && core.stepSuggestion
+      ? {
+          reviewStep: (direction: 1 | -1) => {
+            const item = core.stepSuggestion?.(direction) ?? null;
+            if (!item) {
+              announce('review.none');
+              return false;
+            }
+            const kind = tr.t(`review.kind.${item.kind}` as StringKey);
+            const name = nameOf(item.user);
+            void say(
+              item.text === ''
+                ? tr.t('review.step.noText', { kind, name })
+                : tr.t('review.step', { kind, name, text: item.text }),
+            );
+            return true;
+          },
+        }
+      : {}),
+    ...(core.resolveAtSelection && core.resolveSuggestions
+      ? {
+          reviewResolve: (action: 'accept' | 'reject', scope: 'caret' | 'all') => {
+            const report =
+              scope === 'caret'
+                ? core.resolveAtSelection!(action)
+                : core.resolveSuggestions!(action, selection.current.empty ? 'document' : 'selection');
+            if (report.handled === 0 && report.skipped === 0) {
+              announce(core.suggestionItems?.().length ? 'review.nothingHere' : 'review.none');
+              return false;
+            }
+            const done = tr.t(action === 'accept' ? 'review.accepted' : 'review.rejected', {
+              count: report.handled,
+            });
+            void say(
+              report.skipped > 0
+                ? `${done} ${tr.t('review.left', { count: report.skipped })}`
+                : done,
+            );
+            return report.handled > 0;
+          },
+        }
+      : {}),
     closeStory: () => {
       if (panel.current?.kind !== 'story') return false;
       core.closePanel();
@@ -895,6 +965,33 @@
       unregister.push(() => {
         stop();
         for (const off of held) off();
+      });
+    }
+    // The review commands (UX-036). Stepping is always offered with the list; accept and reject
+    // follow what the user may resolve (`mayResolveAny`), so a suggester sees neither.
+    if (core.suggestionItems && core.stepSuggestion) {
+      add(host1b['review.next']);
+      add(host1b['review.previous']);
+    }
+    if (core.suggestionItems && core.resolveAtSelection && core.resolveSuggestions) {
+      let held: Array<() => void> = [];
+      const sync = (): void => {
+        if (mayResolveAny && held.length === 0) {
+          for (const id of ['review.accept', 'review.reject', 'review.acceptAll', 'review.rejectAll']) {
+            const entry = host1b[id];
+            if (entry && registry.backs(entry)) held.push(registry.register(entry));
+          }
+        } else if (!mayResolveAny && held.length > 0) {
+          for (const off of held) off();
+          held = [];
+        }
+      };
+      reviewSync = sync;
+      sync();
+      unregister.push(() => {
+        for (const off of held) off();
+        held = [];
+        reviewSync = null;
       });
     }
     if (core.exports || (props.filters && core.getContent)) add(host1b['document.export']);

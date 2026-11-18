@@ -579,6 +579,15 @@ export class EditorCore extends DocumentCore {
       if (this.selectedThread.get() === null) return;
       v.dom.querySelector(`.${COMMENT_SELECTED_CLASS}`)?.scrollIntoView({ block: 'center' });
     });
+    // Next, previous and the review pane bring a suggestion into view, even when the editing surface
+    // has no focus: ProseMirror scrolls only from the DOM selection (UX-036 criterion 1).
+    const unreveal = this.revealedSuggestion.subscribe(() => {
+      const id = this.revealedSuggestion.get()?.id;
+      if (!id || !this.#view) return;
+      this.#view.dom
+        .querySelector(`[data-suggestion-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: 'center' });
+    });
     // A result of the proofing port, or a navigation, draws the findings again (UX-041).
     const unproof = this.proofing.subscribe(() => this.#view?.setProps({}));
     // Choosing another markup view draws the suggestions again; the document is not touched (UX-035).
@@ -630,6 +639,7 @@ export class EditorCore extends DocumentCore {
       unfind();
       unthread();
       unselect();
+      unreveal();
       unproof();
       unmarkup();
       undirection();
