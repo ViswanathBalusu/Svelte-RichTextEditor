@@ -51,10 +51,19 @@ const ASSET_ATTRIBUTE_NAMES: ReadonlySet<string> = new Set(
   [...ASSET_ATTRIBUTES.values()].flatMap((s) => [...s]),
 );
 
+/** The asset a signature or initials value names, or undefined (`{ asset, mode }`, 12 §3.3). */
+function signatureAsset(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const asset = (value as { asset?: unknown }).asset;
+  return typeof asset === 'string' ? asset : undefined;
+}
+
 /**
  * The asset identifiers named in a piece of JSON: a document, a step, a slice. A node of a type
  * with an asset attribute names its value; a step that sets an attribute with an asset attribute's
- * name names its value. The result can hold more than the commit references (a value that is not an
+ * name names its value. The value of a signature or initials field is `{ asset, mode }` (12 §3.3):
+ * a form field whose `value` has an `asset`, and a step that sets `value` to such an object, name
+ * that asset too, so that a signing commit attaches the image (FRW-046). The result can hold more than the commit references (a value that is not an
  * asset): the caller keeps only identifiers it knows.
  */
 export function assetRefsIn(json: unknown): Set<string> {
@@ -86,6 +95,14 @@ export function assetRefsIn(json: unknown): Set<string> {
       typeof n.value === 'string'
     )
       out.add(n.value);
+    if (n.type === 'form_field' && n.attrs && typeof n.attrs === 'object') {
+      const a = signatureAsset((n.attrs as Record<string, unknown>)['value']);
+      if (a !== undefined) out.add(a);
+    }
+    if (n.attr === 'value') {
+      const a = signatureAsset(n.value);
+      if (a !== undefined) out.add(a);
+    }
     for (const x of Object.values(n)) if (x && typeof x === 'object') stack.push(x);
   }
   return out;

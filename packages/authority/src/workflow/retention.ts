@@ -7,12 +7,20 @@
  * - The audit entry records counts and the instant only. It names no row and holds no personal data,
  *   so the entry itself can be kept after the evidence is gone.
  *
- * Open (not decided here, FRW-084 and FRW-043 Notes): the default retention period, and the instant
- * the retention clock starts from (collection, completion or the end of the workflow). The caller
- * passes both. Erasure of one participant's values in commit payloads (FRW-043 criterion 3) and the
- * purge job that deletes rows, together with the chain check of criterion 1, are the workflow
- * service's and are not built.
+ * The default period is decided (owner decision 31 in docs/owner-decisions-2026-11-15.md; FRW-084;
+ * docs/adr/0394-w4-FRW-084-evidence-retention.md): evidence is kept as long as the signed document
+ * exists and is deleted with it. That is a rule with no period and no clock, so the default
+ * `EVIDENCE_RETENTION_DEFAULT` is `null` and `planPurge` removes nothing by age; the document's
+ * purge (HIS-039) removes the rows. A caller may still pass a period in milliseconds, counted from
+ * the collection time of each row, for a tenant that sets one (not decided, FRW-084 criterion 1).
+ * Erasure of one participant (FRW-043 criterion 3) is `eraseParticipant` in the document service.
  */
+
+/**
+ * The retention of evidence when no period is set: for the life of the document (decision 31).
+ * `null` means no removal by age.
+ */
+export const EVIDENCE_RETENTION_DEFAULT: number | null = null;
 
 /** One evidence row, as far as the purge decision needs it. */
 export interface EvidenceRow {
@@ -24,8 +32,11 @@ export interface EvidenceRow {
 export interface PurgeInput {
   readonly rows: readonly EvidenceRow[];
   readonly nowMs: number;
-  /** The retention period in milliseconds. Required: no default is decided (FRW-084). */
-  readonly retentionMs: number;
+  /**
+   * The retention period in milliseconds, counted from each row's collection time. `null` is the
+   * default of decision 31: the rows stay as long as the document exists, so none is removed by age.
+   */
+  readonly retentionMs: number | null;
   readonly legalHold: boolean;
 }
 
@@ -50,12 +61,14 @@ export interface PurgePlan {
 export function planPurge(input: PurgeInput): PurgePlan {
   if (!Number.isSafeInteger(input.nowMs) || input.nowMs < 0)
     throw new RangeError('planPurge: nowMs is not a non-negative safe integer');
-  if (!Number.isSafeInteger(input.retentionMs) || input.retentionMs <= 0)
-    throw new RangeError('planPurge: retentionMs is not a positive safe integer');
+  const period = input.retentionMs;
+  if (period !== null && (!Number.isSafeInteger(period) || period <= 0))
+    throw new RangeError('planPurge: retentionMs is not a positive safe integer or null');
   const remove: string[] = [];
   const keep: string[] = [];
   for (const row of input.rows) {
-    const expired = !input.legalHold && input.nowMs - row.collectedAtMs >= input.retentionMs;
+    const expired =
+      !input.legalHold && period !== null && input.nowMs - row.collectedAtMs >= period;
     (expired ? remove : keep).push(row.id);
   }
   return {

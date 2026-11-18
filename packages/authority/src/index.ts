@@ -84,6 +84,14 @@ export {
 export { STANDARD_RULES } from './permissions/standard.ts';
 export { FILL_RULE, checkFill } from './permissions/fill.ts';
 export {
+  checkSign,
+  checkSignConditions,
+  fieldsToDateSign,
+  signedDate,
+  type SignConditions,
+} from './permissions/sign.ts';
+export { DEFAULT_RULE_BUDGET, ruleGate, type RuleGate } from './room/rules.ts';
+export {
   IMPORT_LABEL_PREFIXES,
   SUGGESTION_RULE,
   baselineText,
@@ -349,6 +357,7 @@ export {
   type EvidenceCommitPayload,
 } from './workflow/evidence.ts';
 export {
+  EVIDENCE_RETENTION_DEFAULT,
   planPurge,
   type EvidenceRow,
   type PurgeAudit,
@@ -439,8 +448,11 @@ export {
 export { fieldOwnersOf, snapshotOf } from './workflow/snapshot.ts';
 export {
   applicableItems,
+  signatureImageHash,
+  signingEvents,
   type EvidenceItem,
   type ParticipantKind,
+  type SigningFact,
 } from './workflow/participant-evidence.ts';
 export {
   DAY_MS,

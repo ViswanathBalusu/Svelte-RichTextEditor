@@ -1581,7 +1581,7 @@
       ],
       "feature": "sign",
       "ifMatch": "none",
-      "idempotencyKey": false,
+      "idempotencyKey": true,
       "success": "2XX",
       "spec": "12 §8.1, §10",
       "owner": "FRW"

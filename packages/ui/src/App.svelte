@@ -721,6 +721,8 @@
     registerCommand(entry: Parameters<CommandRegistry['register']>[0]): void;
     /** The range-based document API, or null when the core or the host does not offer it (UX-053). */
     readonly document: ExtensionDocumentApi | null;
+    /** Runs `dispose` when the extension is removed, as its commands are (UX-060: a sandbox frame). */
+    onRemove(dispose: () => void): void;
   }
   const extensionHost = untrack(
     () =>
@@ -747,6 +749,9 @@
             document: docApi,
             registerCommand(entry) {
               track(registry.register(entry));
+            },
+            onRemove(dispose) {
+              track(dispose);
             },
           };
         },

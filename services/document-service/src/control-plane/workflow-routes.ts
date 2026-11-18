@@ -36,7 +36,9 @@ import {
   verifyParticipantCode,
   type AccessCodeProblem,
 } from '../workflow/access-code-service.ts';
+import { acceptConsent, type ConsentProblem } from '../workflow/consent-service.ts';
 import { recordOf } from '../workflow/record.ts';
+import { signField, type SignProblem } from '../workflow/sign-service.ts';
 import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
 import { checkIfMatch } from './http.ts';
@@ -577,12 +579,222 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     });
   };
 
+  /** The answer to a problem of the consent step. */
+  const consentProblem = (doc: string, p: ConsentProblem): ApiError => {
+    switch (p.code) {
+      case 'not_found':
+        return new ApiError('not_found', `document ${doc} has no such participant`);
+      case 'invalid_state':
+        return new ApiError('conflict', `the workflow is ${p.state}`);
+      case 'no_consent':
+        return new ApiError('conflict', 'the workflow names no consent text');
+      case 'not_applicable':
+        return new ApiError('conflict', `a participant of kind ${p.kind} accepts no consent text`);
+      case 'awaiting_code':
+        return new ApiError('conflict', 'the participant has not yet given their access code');
+      case 'text_missing':
+        return new ApiError(
+          'conflict',
+          'the service holds no text for the consent the workflow names',
+        );
+    }
+  };
+
+  /**
+   * `POST /documents/{id}/workflow/participants/{pid}/consent` (12 §7, §8.1 step 1; FRW-044; method
+   * and prefix assumed, G95; ADR 0395, proposed). The caller is the participant: a user whose token
+   * binds to `pid`. The body is empty or `{}`: the text, its version and its hash are the service's,
+   * so a body that carries any member, a hash included, is `validation_failed`. The answer is the
+   * acceptance as recorded: the text identifier, the version, the hash the service computed and the
+   * server time.
+   */
+  const consentRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const pid = ctx.params['pid']!;
+    if (!d.consentTexts || !d.evidence || !d.workflows)
+      throw new ApiError('not_found', 'this server keeps no consent texts');
+    const body = (await ctx.body()) as Record<string, unknown> | null | undefined;
+    if (body !== null && body !== undefined) {
+      if (typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length > 0)
+        throw new ApiError(
+          'validation_failed',
+          'the consent request has no body: the service holds the text',
+          {
+            violations: [{ path: '/', rule: 'an empty body' }],
+          },
+        );
+    }
+    const identity = ctx.caller.identity;
+    await liveDocument(ctx, doc);
+    const current = await store().read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (!current.participants.some((p) => p.id === pid))
+      throw new ApiError('not_found', `document ${doc} has no such participant`);
+    if (ctx.caller.kind !== 'user' || identity === null || identity.docs[doc] === undefined)
+      throw new ApiError('forbidden', 'only the participant accepts the consent');
+    const bound = bindParticipant(
+      {
+        sub: identity.sub,
+        ...(identity.asserted?.wfp !== undefined ? { wfp: identity.asserted.wfp } : {}),
+      },
+      recordOf(current),
+    );
+    if (!bound.ok || bound.participant.id !== pid)
+      throw new ApiError('forbidden', 'the token is not bound to this participant');
+    const agent = ctx.req.headers['user-agent'];
+    const out = await acceptConsent(
+      { workflows: d.workflows, evidence: d.evidence, texts: d.consentTexts, now: d.now },
+      {
+        ref: k.refOf(ctx, doc),
+        participant: pid,
+        facts: {
+          address: ctx.req.socket.remoteAddress ?? null,
+          userAgent: typeof agent === 'string' && agent.length > 0 ? agent.slice(0, 512) : null,
+          amr: identity.asserted?.amr ?? null,
+        },
+      },
+    );
+    if (!out.ok) throw consentProblem(doc, out.problem);
+    return json(
+      200,
+      {
+        textId: out.accepted.textId,
+        version: out.accepted.version,
+        hash: out.accepted.hash,
+        acceptedAt: new Date(out.accepted.atMs).toISOString(),
+      },
+      { 'Cache-Control': 'private, no-store' },
+    );
+  };
+
+  /** The answer to a problem of the signing. */
+  const signProblem = (doc: string, p: SignProblem): ApiError => {
+    switch (p.code) {
+      case 'not_found':
+        return new ApiError('not_found', `document ${doc} has no such ${p.what}`);
+      case 'invalid_state':
+        return new ApiError('conflict', `the workflow is ${p.state}`);
+      case 'refused':
+        return new ApiError('forbidden', p.reason);
+      case 'consent':
+        return new ApiError('forbidden', `the consent is not on record: ${p.reason}`);
+      case 'already_signed':
+        return new ApiError('conflict', 'the field is already signed');
+      case 'not_stored':
+        return new ApiError('conflict', `the signing was not stored (${p.reason})`);
+      case 'adoption': {
+        const a = p.problem;
+        switch (a.code) {
+          case 'validation_failed':
+            return new ApiError('validation_failed', `${a.path} must be ${a.rule}`, {
+              violations: [{ path: a.path, rule: a.rule }],
+            });
+          case 'not_found':
+            return new ApiError('not_found', 'no such signature image for this document');
+          case 'forbidden':
+            return new ApiError('forbidden', 'the image was not adopted by the signer');
+          case 'not_ready':
+            return new ApiError('conflict', `the image is ${a.state}, not ready`);
+          case 'failed':
+            return new ApiError('conflict', `the image failed its checks: ${a.reason}`);
+          case 'not_an_image':
+            return new ApiError('conflict', 'the asset is not an image');
+          case 'corrupt':
+            return new ApiError('conflict', 'the stored image does not match its recorded hash');
+        }
+      }
+    }
+  };
+
+  /**
+   * `POST /documents/{id}/fields/{fid}/sign` (12 §8.1 step 3; FRW-046; ADR 0397, proposed). The
+   * caller is the participant: a user token bound to a participant of the workflow. The body names
+   * the adopted image, `{ asset, mode }`. The service checks the P7 conditions and the consent,
+   * writes one commit with origin `sign` that sets the field and the `dateSigned` fields of its role,
+   * records the evidence and raises `field_completed`. A repeat (same `Idempotency-Key`, or the same
+   * request) writes one commit. A refusal writes nothing.
+   */
+  const signRoute: Handler = async (ctx) => {
+    const doc = ctx.params['id']!;
+    const fid = ctx.params['fid']!;
+    if (!d.consentTexts || !d.evidence || !d.workflows || !d.assetRegistry || !d.outbox)
+      throw new ApiError('not_found', 'this server does not offer signing');
+    const body = (await ctx.body()) as { asset?: unknown; mode?: unknown } | null;
+    if (body === null || typeof body !== 'object' || Array.isArray(body))
+      throw new ApiError('validation_failed', 'the body is { asset, mode }', {
+        violations: [{ path: '/', rule: 'an object with asset and mode' }],
+      });
+    for (const key of Object.keys(body))
+      if (key !== 'asset' && key !== 'mode')
+        throw new ApiError('validation_failed', `the body has no member ${key}`, {
+          violations: [{ path: `/${key}`, rule: 'asset and mode only' }],
+        });
+    const identity = ctx.caller.identity;
+    await liveDocument(ctx, doc);
+    const current = await store().read(ctx.caller.tenant, doc);
+    if (current === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    if (ctx.caller.kind !== 'user' || identity === null || identity.docs[doc] === undefined)
+      throw new ApiError('forbidden', 'only a participant signs');
+    const bound = bindParticipant(
+      {
+        sub: identity.sub,
+        ...(identity.asserted?.wfp !== undefined ? { wfp: identity.asserted.wfp } : {}),
+      },
+      recordOf(current),
+    );
+    if (!bound.ok) throw new ApiError('forbidden', 'the token is not bound to a participant');
+    const agent = ctx.req.headers['user-agent'];
+    const out = await signField(
+      {
+        workflows: d.workflows,
+        evidence: d.evidence,
+        texts: d.consentTexts,
+        assets: d.assetRegistry,
+        finals: d.assets,
+        logs: d.logs,
+        content: d.content,
+        grants: d.grants,
+        outbox: d.outbox,
+        events: d.events,
+        now: d.now,
+        ...(d.outboxWaitMs !== undefined ? { waitMs: d.outboxWaitMs } : {}),
+      },
+      {
+        ref: k.refOf(ctx, doc),
+        actor: ctx.caller.actor,
+        participant: bound.participant.id,
+        field: fid,
+        body: { asset: body.asset, mode: body.mode },
+        facts: {
+          address: ctx.req.socket.remoteAddress ?? null,
+          userAgent: typeof agent === 'string' && agent.length > 0 ? agent.slice(0, 512) : null,
+          amr: identity.asserted?.amr ?? null,
+        },
+      },
+    );
+    if (!out.ok) throw signProblem(doc, out.problem);
+    const { signed } = out;
+    return json(
+      200,
+      {
+        field: fid,
+        value: signed.value,
+        seq: signed.seq,
+        chainHash: signed.chainHash,
+        ...(signed.dateSigned !== null ? { dateSigned: signed.dateSigned } : {}),
+      },
+      { 'Cache-Control': 'private, no-store' },
+    );
+  };
+
   return {
     getWorkflow,
     putWorkflow,
     sendWorkflow: sendWorkflowRoute,
     remindWorkflow: remindWorkflowRoute,
     participantVerify: verifyAccessCodeRoute,
+    participantConsent: consentRoute,
+    signField: signRoute,
     registerAccessCode: registerAccessCodeRoute,
     voidWorkflow: voidWorkflowRoute,
     participantDecline: declineRoute,

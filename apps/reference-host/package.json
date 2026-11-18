@@ -9,12 +9,14 @@
   },
   "scripts": {
     "build": "vite build",
+    "build:admin": "vite build --config admin/vite.config.ts",
     "start": "node src/server/main.ts",
     "setup": "node scripts/setup.ts",
     "seed": "node scripts/seed.ts",
     "stack": "pwsh -NoProfile -File scripts/stack.ps1",
     "test": "vitest run --config vitest.config.ts",
     "test:e2e": "playwright test -c playwright.config.ts",
+    "test:e2e:admin": "playwright test -c playwright.admin.config.ts",
     "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.node.json && tsc -p tsconfig.e2e.json"
   },
   "dependencies": {

@@ -5,5 +5,11 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["scripts/**/*.ts", "test/**/*.ts", "src/lib/server/**/*.ts", "vite.config.ts"]
+  "include": [
+    "scripts/**/*.ts",
+    "test/**/*.ts",
+    "src/lib/server/**/*.ts",
+    "vite.config.ts",
+    "admin/vite.config.ts"
+  ]
 }

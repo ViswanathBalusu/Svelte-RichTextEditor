@@ -1,7 +1,11 @@
 // The purge decision for workflow evidence (12 §7, §14; FRW-043 criteria 2 and 4, decision level).
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { planPurge, type EvidenceRow } from '../src/workflow/retention.ts';
+import {
+  EVIDENCE_RETENTION_DEFAULT,
+  planPurge,
+  type EvidenceRow,
+} from '../src/workflow/retention.ts';
 
 const row = fc.record({
   id: fc.stringMatching(/^ev_[a-z0-9]{1,8}$/),
@@ -87,6 +91,34 @@ describe('the purge refuses inputs it cannot reason about', () => {
     );
     expect(() => planPurge({ rows: rs, nowMs: -1, retentionMs: 1, legalHold: false })).toThrow(
       RangeError,
+    );
+  });
+});
+
+describe('the default keeps evidence for the life of the document (FRW-084; owner decision 31)', () => {
+  it('has no period by default, and a period of null removes nothing by age (property)', () => {
+    expect(EVIDENCE_RETENTION_DEFAULT).toBeNull();
+    fc.assert(
+      fc.property(
+        rows,
+        fc.integer({ min: 0, max: 4_000_000_000 }),
+        fc.boolean(),
+        (rs, nowMs, hold) => {
+          const plan = planPurge({
+            rows: rs,
+            nowMs,
+            retentionMs: EVIDENCE_RETENTION_DEFAULT,
+            legalHold: hold,
+          });
+          expect(plan.remove).toEqual([]);
+          expect(plan.keep).toEqual(rs.map((r) => r.id));
+          expect(plan.audit).toMatchObject({
+            removedCount: 0,
+            keptCount: rs.length,
+            legalHold: hold,
+          });
+        },
+      ),
     );
   });
 });

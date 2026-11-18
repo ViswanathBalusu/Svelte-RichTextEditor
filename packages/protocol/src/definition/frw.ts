@@ -422,6 +422,7 @@ export const FRW_EXTENSION: DepExtension = {
       spec: '12 §8.1, §10',
       security: ['user', 'service'],
       feature: 'sign',
+      idempotencyKey: true,
       body: ref('WorkflowPlaceholder'),
       success: { status: '2XX', body: ref('WorkflowPlaceholder') },
       gaps: ['G95'],
