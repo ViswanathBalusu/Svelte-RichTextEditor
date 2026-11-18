@@ -91,6 +91,9 @@ import {
   type WorkflowResourceStore,
 } from './workflow/workflow-resource.ts';
 import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
+import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-store.ts';
+import { PgReminderStore } from './workflow/reminder-store-pg.ts';
+import { sweepTenant } from './workflow/schedule-sweep.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
 import { SearchIndex } from './control-plane/search-index.ts';
@@ -256,6 +259,8 @@ export interface ServiceParts {
   documentKeys?: DocumentKeys;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
+  /** The count of scheduled reminders raised per participant (FRW-034). Absent: none are raised. */
+  reminders?: ReminderStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
   quotaAdmin?: QuotaAdminService;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: none is asked. */
@@ -489,6 +494,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
     workflows: new PgWorkflowResourceStore(pool, { now }),
+    reminders: new PgReminderStore(pool),
     quotaAdmin: quotaAdminOver(
       new PgQuotaStore(pool, (tenant) =>
         // `tenants` is under row-level security, so the question runs in the tenant's own context.
@@ -533,6 +539,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
     workflows: new MemoryWorkflowResourceStore(),
+    reminders: new MemoryReminderStore(),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
       // reaches it is registered; the memory store has no other tenant table to ask.
@@ -1059,6 +1066,38 @@ export async function startService(opts: StartOptions): Promise<Service> {
             deletes: true,
             forTenant: async (tenant: string, at: number, scope: { held: ReadonlySet<string> }) =>
               (await purge.run(tenant, scope.held, at)).purged.length,
+          } satisfies ScheduledTask,
+        ]
+      : []),
+    // The deadline and the reminders of running workflows (FRW-034): one run a minute for each
+    // tenant; the sweep raises each reminder once however many instances run it.
+    ...(parts.workflows && parts.reminders
+      ? [
+          {
+            name: 'workflow.schedule',
+            everyMs: 60 * 1000,
+            forTenant: async (tenant: string) => {
+              const done = await sweepTenant(
+                {
+                  workflows: parts.workflows!,
+                  reminders: parts.reminders!,
+                  grants: parts.grants,
+                  logs: parts.logs,
+                  notifier: dataPlane,
+                  ...(parts.audit ? { audit: parts.audit } : {}),
+                  now,
+                  events,
+                },
+                tenant,
+              );
+              for (const f of done.failed)
+                logger.error({
+                  event: 'workflow.schedule.error',
+                  tenant,
+                  message: `${f.doc}: ${f.error}`,
+                });
+              return done.expired.length + done.reminded.length;
+            },
           } satisfies ScheduledTask,
         ]
       : []),

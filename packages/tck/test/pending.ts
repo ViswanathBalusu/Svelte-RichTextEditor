@@ -35,6 +35,7 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation POST /documents/{id}/workflow/send': WORKFLOW,
   'operation POST /documents/{id}/workflow/correct': WORKFLOW,
   'operation POST /documents/{id}/workflow/resume': WORKFLOW,
+  'operation POST /documents/{id}/workflow/remind': WORKFLOW,
   'operation POST /documents/{id}/workflow/void': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/consent': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/verify': WORKFLOW,

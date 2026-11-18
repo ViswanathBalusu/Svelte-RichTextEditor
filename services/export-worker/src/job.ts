@@ -478,7 +478,11 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     }
 
     const t0 = now();
-    const { envelope: fullEnvelope, title } = await contentAt(
+    const {
+      envelope: fullEnvelope,
+      title,
+      classification,
+    } = await contentAt(
       deps.stores,
       { tenant, doc: payload.doc },
       payload.incarnation,
@@ -521,6 +525,8 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         seq: payload.seq,
         chainHead: pdfChainHead,
         title: title ?? 'Document',
+        // The classification marking (EXP-089): absent when the document has no label.
+        ...(classification ? { classification } : {}),
         // 09 §3.1: `date` fields print the server's instant at job creation in the job's time zone.
         instant: new Date(job.createdAt).toISOString(),
         timeZone: plan.timeZone,

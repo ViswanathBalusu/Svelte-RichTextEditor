@@ -161,8 +161,10 @@ export const EN_GB = {
   'reason.query.none': 'There is no further part you can edit.',
   'reason.query.noFormat': 'Select the text whose formatting you want to copy.',
   'reason.query.noEdit': 'You do not have permission to edit this document.',
-  'reason.query.no-export': 'Your access does not allow export.',
-  'reason.query.no-print': 'Your access does not allow printing.',
+  'reason.query.no-export':
+    'Your access does not allow export. Restrictions deter casual copying and are not a security boundary.',
+  'reason.query.no-print':
+    'Your access does not allow printing. Restrictions deter casual copying and are not a security boundary.',
   'reason.query.noSuggest': 'You do not have permission to suggest changes in this document.',
   'reason.query.noFill': 'You have no fields to fill in this document.',
   'reason.query.suggestOnly':
@@ -229,6 +231,29 @@ export const EN_GB = {
   'review.kind.del': 'Deletion',
   'review.kind.fmt': 'Formatting change',
   'review.none': 'There are no suggestions.',
+  'review.gone': 'That suggestion has already been resolved.',
+  // The review pane (UX-037).
+  'review.pane.kind.insertion': 'Insertion',
+  'review.pane.kind.deletion': 'Deletion',
+  'review.pane.kind.formatting': 'Formatting change',
+  'review.pane.kind.block': 'Block change',
+  'review.pane.filter.author': 'Author',
+  'review.pane.filter.everyone': 'Everyone',
+  'review.pane.list': 'Suggestions',
+  'review.pane.empty': 'There are no suggestions to show.',
+  'review.pane.noText': 'no text',
+  'review.pane.row.name': '{kind} by {author}: {excerpt}',
+  'review.pane.row.nameAt': '{kind} by {author}, {time}: {excerpt}',
+  'review.pane.show': 'Show',
+  'review.pane.show.label': 'Show the suggestion by {author} in the document',
+  'review.pane.accept': 'Accept',
+  'review.pane.accept.label': 'Accept the suggestion by {author}',
+  'review.pane.reject': 'Reject',
+  'review.pane.reject.label': 'Reject the suggestion by {author}',
+  'review.pane.acceptAll': 'Accept all',
+  'review.pane.rejectAll': 'Reject all',
+  'review.pane.acceptAllBy': 'Accept all by {author}',
+  'review.pane.rejectAllBy': 'Reject all by {author}',
   'review.nothingHere': 'No suggestion at the cursor or in the selection.',
   'review.accepted': {
     one: '{count} suggestion accepted.',
@@ -383,6 +408,35 @@ export const EN_GB = {
   'checker.locked': 'You cannot fix this. Ask someone who can.',
   'checker.locked.who': 'You cannot fix this. {who}',
   'pane.assistant': 'Assistant',
+  // The assistant pane (UX-045). The answer and the prompt are content; the rest is interface.
+  'command.view.assistant': 'Assistant',
+  'synonyms.view.assistant': 'ai; draft; rewrite; summarise; ask a question',
+  'assistant.label': 'Assistant',
+  'assistant.prompt': 'What should the assistant do?',
+  'assistant.prompt.hint':
+    'Nothing in the document changes until you approve it. The answer is shown here first.',
+  'assistant.draft': 'Draft',
+  'assistant.rewrite': 'Rewrite selection',
+  'assistant.summary': 'Summarise',
+  'assistant.question': 'Ask a question',
+  'assistant.cancel': 'Cancel',
+  'assistant.retry': 'Try again',
+  'assistant.dismiss': 'Clear',
+  'assistant.insert': 'Insert as suggestion',
+  'assistant.response': 'Response',
+  'assistant.progress': 'The assistant is working.',
+  'assistant.done':
+    'The assistant has answered. The answer is in the pane and the document is unchanged.',
+  'assistant.cancelled': 'The request was cancelled. Nothing was applied.',
+  'assistant.error.rate_limited':
+    'The assistant is busy: too many requests. Nothing was applied. You can try again.',
+  'assistant.error.quota_exceeded':
+    'The assistant quota has been used up. Nothing was applied. You can try again later.',
+  'assistant.error.port_failure':
+    'The assistant did not answer. Nothing was applied. You can try again.',
+  'assistant.refused.no-view': 'You cannot view this part of the document.',
+  'assistant.refused.no-change':
+    'A draft or a rewrite would put text into the document, and your access here does not allow that.',
   'pane.pdf': 'PDF preview',
   'pane.failed': 'This pane could not be opened.',
   'pane.close': 'Close {pane}',
@@ -433,6 +487,7 @@ export const EN_GB = {
   'synonyms.mode.edit': 'write; change',
   'synonyms.mode.review': 'track changes; suggest',
   'synonyms.mode.view': 'read only; read',
+  'synonyms.view.review': 'suggestions; track changes; changes; list of changes; review',
   'synonyms.review.next': 'track changes; review; go to change; find suggestion',
   'synonyms.review.previous': 'track changes; review; go back; earlier suggestion',
   'synonyms.review.accept': 'track changes; approve; keep change; take change',
@@ -496,6 +551,7 @@ export const EN_GB = {
 
   // Sources (UX-103). Titles, names, identifiers and excerpts are content.
   'command.view.sources': 'Sources',
+  'command.view.review': 'Review pane',
   'pane.sources': 'Sources',
   'sources.label': 'Sources of this document',
   'sources.empty': 'This document has no sources.',

@@ -2418,9 +2418,13 @@ export function connectionOf(
   identity: VerifiedIdentity,
   role: RoomConnection['role'],
 ): RoomConnection {
+  // FRW-038: a token with `wfp` fills as the participant the room binds it to, or not at all; the
+  // raw `sub` and `wfp` go to the room, which holds the workflow, and its roles come from there.
+  const wfp = identity.asserted?.wfp;
   return {
     ...identity.connection,
     role,
+    ...(wfp !== undefined ? { participantClaim: { sub: identity.sub, wfp } } : {}),
     ...(identity.accessSince !== undefined ? { accessSince: identity.accessSince } : {}),
     ...(identity.restrict.length > 0 ? { restrictions: identity.restrict } : {}),
   };

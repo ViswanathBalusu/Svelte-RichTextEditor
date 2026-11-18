@@ -58,6 +58,7 @@ import type { PdfSource } from './pdf/messages.ts';
 import type { PdfViewerFrame } from './pdf/viewer-frame.ts';
 import { grantsService, regionsView } from './permissions-shell.ts';
 import type { AttachAt, EditorHandle, ReadView } from './session.ts';
+import { assistantBridge } from './assistant.ts';
 import { attachShortcuts } from './shortcuts.ts';
 import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
@@ -294,6 +295,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
     ...(options.assetImage ? { assetImage: options.assetImage } : {}),
     ...(options.drawEquation ? { drawEquation: options.drawEquation } : {}),
   });
+  // The backend's assistant port, as the pane reads it (UX-045). The request is built by the core from
+  // the selection and the scopes the reader may view (UX-047).
+  const assistant = assistantBridge((task, prompt) => {
+    const { omitted: _omitted, ...request } = core.assistantRequest(task, prompt);
+    return request;
+  });
   const stylePath = attachStyles(root, {
     nonce: config.styleNonce,
     forceFallback: config.forceStyleFallback,
@@ -509,6 +516,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     language: core.language,
     // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
     // port `proofing.get().available` is false and the shell shows no proofing control.
+    // The assistant pane, offered only while the backend's assistant port is attached (UX-045).
+    assistant: assistant.api,
     proofing: core.proofing,
     proofingStep: (direction) => core.proofingStep(direction),
     applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
@@ -663,7 +672,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
       commandStates: () => commandStates(core, registry),
     },
     attach(channel: SyncChannel, at: AttachAt) {
-      return core.attach(channel, at);
+      assistant.attach(at.assistant);
+      const detach = core.attach(channel, at);
+      return () => {
+        assistant.attach(undefined);
+        detach();
+      };
     },
     flushJournal() {
       return core.flushJournal();

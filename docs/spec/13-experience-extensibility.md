@@ -65,7 +65,7 @@ An optional backend port for spelling and grammar. Results are decorations with 
 A provider-neutral port for drafting, rewriting, summarising and answering questions about the document.
 
 - **Identity.** An assistant acts for a user under a delegated agent identity. Its commits carry `origin: "assistant"` and `author.agent`, so history always shows what a person wrote and what a model wrote for them.
-- **Writes arrive as suggestions.** The agent identity is capped at `suggest`. Rule P4 already enforces that on the server, so an assistant cannot change text without a person accepting it.
+- **Writes arrive as suggestions.** The agent identity is capped at `suggest` by the room, from a separate agent token (05 section 3.2.1; 07 section 4; ADR 0234 part A). An assistant's direct edit is refused by the server (owner decision 119). Rule P4 then applies to its commits as to any suggester, so an assistant cannot change text without a person accepting it.
 - **Context.** Limited to scopes the user can view. The port exposes the selection, the surrounding blocks and the outline; hosts decide what else to attach.
 - **Prompt injection.** Document text, comments and field values are untrusted input to a model. The component marks them as data in the prompt, requires the user's approval before any side effect, blocks model-generated links and images that were not in the source, and never lets model output reach the LaTeX pipeline except as ordinary escaped text. The link allow-list and asset-only images of 10 already help.
 

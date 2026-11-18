@@ -697,6 +697,13 @@
       "aliases": []
     },
     {
+      "id": "view.assistant",
+      "group": "view",
+      "capability": "assistant",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "view.catchUp",
       "group": "header",
       "capability": "catch-up",
@@ -797,6 +804,13 @@
       "id": "view.recovered",
       "group": "view",
       "capability": "recovery-journal",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.review",
+      "group": "view",
+      "capability": "suggestions",
       "keys": [],
       "aliases": []
     },

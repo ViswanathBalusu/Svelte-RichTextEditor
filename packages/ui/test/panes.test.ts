@@ -58,10 +58,13 @@ describe('the registry knows the panes of 13 section 3 at start (UX-019, criteri
     expect(() => new PaneRegistry([]).register(pane({ id: 'Bad Name' }))).toThrow(/lower case/);
   });
 
-  it('gives the built-in panes with content a loader, and leaves review, history and the rest to the host', () => {
+  it('gives the built-in panes with content a loader, and leaves the PDF and the rest to the host', () => {
     const registry = new PaneRegistry();
     expect(registry.get('outline')?.load).toBeTypeOf('function');
-    expect(registry.get('review')?.load).toBeUndefined();
+    // The review pane is built in (UX-037): it shows what `suggestionItems` of the core lists.
+    expect(registry.get('review')?.load).toBeTypeOf('function');
+    // The assistant pane is built in (UX-045); it is offered only while a port is attached.
+    expect(registry.get('assistant')?.load).toBeTypeOf('function');
     for (const d of BUILT_IN_PANES) if (d.load) expect(typeof d.load).toBe('function');
   });
 });

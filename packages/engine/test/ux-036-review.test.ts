@@ -194,12 +194,15 @@ describe('another person resolves a suggestion first (UX-036 criterion 4)', () =
     await until(() => ada.core.suggestionItems().length === 3, 'ada sees three');
     await until(() => bob.core.suggestionItems().length === 3, 'bob sees three');
     const adaIds = (): string[] => ada.core.suggestionItems().map((s) => s.id);
+    // The review pane re-reads the list when `revision` moves (UX-037 criterion 4).
+    const revisionBefore = ada.core.revision.get();
 
     expect(
       bob.core.resolveSuggestions('accept', 'document', undefined, 'sSamInsert000001').handled,
     ).toBe(1);
     await until(() => !adaIds().includes('sSamInsert000001'), 'ada sees it resolved');
     expect(adaIds()).toEqual(['sTessDelete00001', 'sTessInsert00001']);
+    expect(ada.core.revision.get()).toBeGreaterThan(revisionBefore);
     expect(textOfNode(internals(ada.core).state.doc, IDS.intro)).toBe('Hello big world');
 
     // Ada resolves the same one a moment later: nothing to handle, nothing thrown, nothing sent.

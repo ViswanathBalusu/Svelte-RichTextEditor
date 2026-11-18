@@ -347,6 +347,30 @@ export interface ClassificationLabel {
   readonly name: string;
 }
 
+/** What an assistant request is for (13 §6.2): the port's own task names. */
+export type AssistantTaskName = 'draft' | 'rewrite' | 'summarise' | 'answer';
+
+/** One piece of an assistant's answer, as the pane reads it (UX-045). */
+export type AssistantStreamChunk =
+  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'done' }
+  | { readonly kind: 'error'; readonly code: string; readonly message: string };
+
+/**
+ * The assistant as the shell sees it (UX-045). `request` builds the request from the selection, the
+ * blocks around it and the outline the reader may view (UX-047), sends it to the port and streams the
+ * answer. It changes nothing in the document. Aborting `signal` stops the request at the port.
+ */
+export interface AssistantApi {
+  /** True while the host's assistant port is attached. */
+  readonly available: ReadView<boolean>;
+  request(
+    task: AssistantTaskName,
+    prompt: string,
+    signal: AbortSignal,
+  ): AsyncIterable<AssistantStreamChunk>;
+}
+
 /** One proofing finding as the interface reads it (UX-041): text, kind and suggestions, no position. */
 export interface ProofingFindingView {
   readonly id: string;
@@ -748,6 +772,12 @@ export interface CoreApi {
     author?: string,
     suggestion?: string,
   ): ReviewReport;
+
+  /**
+   * The assistant port as the pane uses it (UX-045; 13 §6.2). Absent, or `available` false, when the
+   * host gave no assistant port: no assistant pane or command is offered then.
+   */
+  readonly assistant?: AssistantApi;
 
   /**
    * Spelling and grammar (UX-041; 13 §6.1). Absent, or `available` false, when the host gave no
@@ -1504,6 +1534,12 @@ export interface ReviewItem {
   readonly to: number;
   /** The words the suggestion covers, cut when long; empty for a block with no text. */
   readonly text: string;
+  /**
+   * The server time of the commit that introduced it, when the core knows it (08 §14). Absent for
+   * a suggestion that was already in the document when it was loaded: the core has no record of
+   * its commit (the suggestion-to-commit index of HIS-042 would give it).
+   */
+  readonly committedAt?: string | null;
   /** The capabilities the user has in the suggestion's scope. */
   readonly caps: readonly Capability[];
   /** Whether the user may accept or reject it now (`edit` in its scope, document not locked). */

@@ -45,9 +45,11 @@ describe('assistant and proofing request code stay out of the initial chunk (UX-
     expect(sources.some((s) => s.file === 'proofing/request.ts')).toBe(true);
   });
 
-  it('no module outside src/assistant imports it statically', () => {
+  it('no module outside src/assistant imports it statically, except a pane (a pane is its own chunk)', () => {
+    // The assistant pane (UX-045) is loaded by `import()` in shell/panes.ts, so what it imports
+    // statically goes into the pane's chunk and not into the initial one.
     for (const { file, text } of sources)
-      if (!file.startsWith('assistant/'))
+      if (!file.startsWith('assistant/') && !file.startsWith('panes/'))
         expect(ASSISTANT.test(text), `${file} imports assistant code statically`).toBe(false);
   });
 
