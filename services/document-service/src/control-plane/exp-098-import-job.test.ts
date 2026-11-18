@@ -336,6 +336,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 describe('import notifications (memory)', () => {
   let h: Harness;
   let refuse = false;
+  const requestIds: Array<string | undefined> = [];
   const importer: DocxImporter = async (bytes) => {
     if (refuse) throw new Error('the file is damaged');
     return { envelope: contentFor(new TextDecoder().decode(bytes)), warnings: [] };
@@ -343,7 +344,10 @@ describe('import notifications (memory)', () => {
 
   beforeAll(async () => {
     h = await startHarness('memory', { importer, config: { jobIdleMs: 20, jobLeaseMs: 2000 } });
-    h.stub.replaceContent = async () => ({ seq: 1 });
+    h.stub.replaceContent = async (_ref, _content, _actor, opts) => {
+      requestIds.push(opts?.requestId);
+      return { seq: 1 };
+    };
   });
   afterAll(async () => {
     await h?.close();
@@ -409,6 +413,13 @@ describe('import notifications (memory)', () => {
     expect(await notice(job, 'import.completed')).toMatchObject({
       notification: { data: { state: 'completed', seq: 1 } },
     });
+  });
+
+  it('hands the job identifier to the data plane as the request, so a retry is one commit (SYN-030 criterion 3)', async () => {
+    refuse = false;
+    const job = await runJob();
+    await notice(job, 'import.completed');
+    expect(requestIds).toContain(job);
   });
 
   it('raises import.failed with the code when the job fails (EXP-098 criterion 3)', async () => {

@@ -19,6 +19,7 @@
  */
 import { isSnapshot } from '@docedit/authority';
 import { uuid7 } from '@docedit/model';
+import { derivedCommitId } from './commit-id.ts';
 import type {
   AuditEvent,
   AuditStore,
@@ -120,7 +121,14 @@ export async function enqueueRepair(opts: {
 }): Promise<OutboxItem> {
   const { plan } = opts;
   if (!plan.changes) throw new Error('the document is not broken: the repair would change nothing');
-  const commitId = uuid7();
+  // Deterministic (SYN-030 criterion 3): a repair of this head to this content is one request.
+  const commitId = derivedCommitId(
+    'repair',
+    plan.ref.tenant,
+    plan.ref.doc,
+    String(plan.head),
+    plan.targetHash,
+  );
   const item: NewOutboxItem = {
     tenant: plan.ref.tenant,
     doc: plan.ref.doc,
