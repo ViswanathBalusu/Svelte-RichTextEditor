@@ -139,16 +139,13 @@ function piecesOf(c: Case): { pieces: string[]; unchecked: string[] } {
 }
 
 /**
- * Cases that fail in the compiled PDF on this machine, and are kept as known failures (`it.fails`,
- * so the suite turns red when they start to pass): the paragraph that follows a display equation is
- * not in the PDF, and the equation blocks are drawn on top of each other, in the local TeX Live run
- * (the page image shows three overlapping equations and no paragraph). Not seen to be a defect of
- * the class or of this machine's TeX Live; the cause is open (see the Notes of EXP-115).
+ * Cases that fail in the compiled PDF and are kept as known failures (`it.fails`, so the suite
+ * turns red when they start to pass). None now: the two cases with a display equation failed until
+ * class 0.2.11, because the clip of a display equation left the page's origin displaced by the
+ * width of the equation (EXP-052 criterion 5, Notes), so that the paragraph after it was drawn off
+ * the page.
  */
-const KNOWN_FAILING = new Set([
-  'numbering-sequences/equations-share-the-equation-sequence',
-  'numbering-references/equation',
-]);
+const KNOWN_FAILING = new Set<string>([]);
 
 const FILES = [
   'numbering-lists',
