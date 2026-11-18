@@ -237,6 +237,8 @@ export type CoreQueryName1b =
  * - `markRegion`: `{ title }`; the core wraps the selected blocks in a region with policy
  *   `inherit` (PRM-033);
  * - `setRegionPolicy`: `{ region, policy }`, `inherit` or `restricted` (PRM-036);
+ * - `renameRegion`: `{ region, title }`; the core refuses it without `structure` and `edit` in the
+ *   region (PRM-034);
  * - `nextEditableRegion`: none (PRM-027);
  * - `insertField`: `{ kind }` (FRW-072);
  * - `insertRecovered`, `discardRecovered`: `{ id }`, the item's `id` or its index as a string
@@ -251,6 +253,7 @@ export type CoreCommandName =
   | 'setLanguage'
   | 'markRegion'
   | 'setRegionPolicy'
+  | 'renameRegion'
   | 'nextEditableRegion'
   | 'insertField'
   | 'insertRecovered'

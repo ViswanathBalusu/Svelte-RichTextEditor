@@ -21,7 +21,7 @@
   import type { StringKey } from '../i18n/en-GB.ts';
   import { live } from '../live.ts';
   import { capabilitiesAnywhere } from '../shell/modes.ts';
-  import { grantableCandidates, whoCanEdit } from '../shell/regions.ts';
+  import { grantableCandidates, mayEditRegion, whoCanEdit } from '../shell/regions.ts';
 
   const shell = useShell()!;
   const core = shell.core;
@@ -191,6 +191,33 @@
     void save([...rest, grant]);
   }
 
+  // Rename (PRM-034 criterion 1 and 5): a commit through the core, which needs `structure` and `edit`
+  // in the region (07 §2). Without them the control is disabled and the text says which is missing.
+  const structure = $derived(
+    permissions ? capabilitiesAnywhere(permissions.current).has('structure') : false,
+  );
+  const offersRename = $derived(core.commandNames?.includes('renameRegion') ?? false);
+  const mayRename = $derived(
+    selected !== null && structure && mayEditRegion(permissions?.current, selected.id),
+  );
+  const renameWhy = $derived<StringKey | null>(
+    mayRename ? null : structure ? 'permissions.rename.noEdit' : 'permissions.rename.noStructure',
+  );
+  const selectedTitle = $derived(selected?.title ?? null);
+  let renameTo = $state('');
+  $effect(() => {
+    renameTo = selectedTitle ?? '';
+  });
+
+  function rename(event: SubmitEvent): void {
+    event.preventDefault();
+    if (!selected || !mayRename) return;
+    const title = renameTo.trim();
+    if (title === '' || title === selected.title) return;
+    const done = core.runNamed?.('renameRegion', { region: selected.id, title }) ?? false;
+    shell.announce(done ? 'permissions.rename.done' : 'permissions.rename.failed');
+  }
+
   // Policy (PRM-036): a commit through the core, which needs `manage` (07 §5.2 P2).
   function setPolicy(policy: 'inherit' | 'restricted'): void {
     if (!selected || !manage) return;
@@ -249,6 +276,28 @@
   {#if selected}
     <section class="de-permissions-region" aria-labelledby={`${id}-title`}>
       <h3 class="de-subhead" id={`${id}-title`} data-content>{titleOf(selected)}</h3>
+      {#if offersRename && selected.title !== null}
+        <form class="de-form" onsubmit={rename} data-rename>
+          <label class="de-field" for={`${id}-rename`}>{tr.t('permissions.rename.label')}</label>
+          <input
+            id={`${id}-rename`}
+            class="de-input"
+            type="text"
+            bind:value={renameTo}
+            disabled={!mayRename}
+            aria-describedby={renameWhy ? `${id}-rename-why` : undefined}
+          />
+          <button
+            type="submit"
+            class="de-button"
+            disabled={!mayRename || renameTo.trim() === '' || renameTo.trim() === selected.title}
+            >{tr.t('permissions.rename.save')}</button
+          >
+          {#if renameWhy}
+            <p class="de-hint" id={`${id}-rename-why`}>{tr.t(renameWhy)}</p>
+          {/if}
+        </form>
+      {/if}
       {#if selected.policy !== 'confidential'}
         <fieldset class="de-fieldset" disabled={!manage} aria-describedby={manage ? undefined : `${id}-readonly`}>
           <legend>{tr.t('permissions.policy.label')}</legend>

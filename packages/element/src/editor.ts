@@ -285,9 +285,17 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // Named commands of phase 1b that the shell runs (ui CoreCommandName). `insertField` takes the
     // palette's `{ kind }` and inserts that form field kind at the caret (FRW-072).
     // `setRegionPolicy` takes `{ region, policy }` (PRM-036); the engine refuses it without `manage`.
+    // `renameRegion` takes the permissions pane's `{ region, title }` (PRM-034); the engine refuses it
+    // without `structure` and `edit` in the region.
     // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
     // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
-    commandNames: ['insertField', 'setRegionPolicy', 'markRegion', 'nextEditableRegion'],
+    commandNames: [
+      'insertField',
+      'setRegionPolicy',
+      'renameRegion',
+      'markRegion',
+      'nextEditableRegion',
+    ],
     runNamed: (name, args) => {
       if (name === 'markRegion') {
         const title = (args as { title?: unknown } | undefined)?.title;
@@ -295,6 +303,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
         return core.run('markRegion', { title });
       }
       if (name === 'nextEditableRegion') return core.run('nextEditableRegion');
+      if (name === 'renameRegion') {
+        const a = args as { region?: unknown; title?: unknown } | undefined;
+        if (typeof a?.region !== 'string' || typeof a.title !== 'string') return false;
+        return core.run('renameRegion', { region: a.region, title: a.title });
+      }
       if (name === 'setRegionPolicy') {
         const a = args as { region?: unknown; policy?: unknown } | undefined;
         if (typeof a?.region !== 'string') return false;
@@ -346,7 +359,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,
     ...(port?.regions
-      ? { regions: regionsView(port.regions.bind(port), options.docId, [core.permissions]) }
+      ? {
+          regions: regionsView(port.regions.bind(port), options.docId, [
+            core.permissions,
+            core.regionTitles,
+          ]),
+        }
       : {}),
     ...(port?.grants && port.updateGrants
       ? {

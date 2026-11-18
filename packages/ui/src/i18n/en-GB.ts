@@ -676,6 +676,13 @@ export const EN_GB = {
     'Only the people given a role here, and document owners, can edit this region. Other document editors can view and comment. A role cannot be given to everyone on a region like this.',
   'permissions.policy.set': 'Who may edit changed.',
   'permissions.policy.failed': 'Who may edit could not be changed.',
+  'permissions.rename.label': 'Name of the region',
+  'permissions.rename.save': 'Rename',
+  'permissions.rename.done': 'Region renamed.',
+  'permissions.rename.failed': 'The region could not be renamed.',
+  'permissions.rename.noStructure':
+    'Only people who can change the structure of the document can rename a region.',
+  'permissions.rename.noEdit': 'You cannot edit this region, so you cannot rename it.',
   'permissions.grants': 'People and groups with a role',
   'permissions.grants.none': 'Nobody has a role on this region.',
   'permissions.add': 'Give a role',
