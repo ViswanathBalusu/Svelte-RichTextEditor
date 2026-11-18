@@ -298,6 +298,8 @@ export interface SelectionSummary {
   /** The paragraph style at the selection, or null when the selected paragraphs differ. */
   style: string | null;
   marks: string[];
+  /** The language mark at the selection (a BCP 47 tag), or null for the document's default (UX-018). */
+  lang?: string | null;
 }
 
 /** The shape of the `de-selection` detail (05 §8.1): a DEP scope identifier and a block. */
