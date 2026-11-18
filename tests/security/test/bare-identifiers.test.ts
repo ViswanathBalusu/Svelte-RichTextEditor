@@ -61,6 +61,11 @@ const CATALOGUE: Record<string, 'probed' | 'not-served'> = {
   // UX-079 (ADR 0330 section 2): the test-ping and the replay of one delivery name a webhook by its own identifier.
   'POST /webhooks/{id}/ping': 'not-served',
   'POST /webhooks/{id}/deliveries/{deliveryId}/replay': 'not-served',
+  // FRW-062, FRW-063: the handlers exist, but this scenario composes no template store, so a
+  // template and a bulk send answer as a missing route do. Their tenant scope is in
+  // frw-062.tenant-scope.test.ts and the sweep of sec-045-route-sweep.test.ts.
+  'GET /templates/{tid}': 'not-served',
+  'GET /bulk-sends/{bid}': 'not-served',
 };
 
 const withId = (route: string, ids: Record<string, string>) =>

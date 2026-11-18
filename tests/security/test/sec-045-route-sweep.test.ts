@@ -89,6 +89,7 @@ const KNOWN_PARAMS = [
   'id',
   'rid',
   'tid',
+  'bid',
   'cid',
   'aid',
   'jid',
@@ -141,6 +142,10 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   signField: 'this server does not offer signing',
   // HIS-040: the route needs a purge pool, which only an operator supplies.
   tombstoneCommit: 'this server does not remove payloads',
+  // FRW-062, FRW-063: the handlers exist; this scenario composes no template store and B has no
+  // template or bulk send. The tenant scope of both lookups is proven in their own tests.
+  getTemplate: 'no template',
+  getBulkSend: 'no bulk send',
 };
 /** A body the route would accept from the object's own tenant, where the route takes one. */
 function bodyFor(operationId: string): unknown {
@@ -359,6 +364,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       ids['pid'] = 'participant-1';
       ids['fid'] = 'ffField000000001';
       ids['deliveryId'] = uuid7();
+      ids['bid'] = uuid7();
     });
     afterAll(async () => {
       await h?.close();
@@ -410,6 +416,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         '/v1/origins',
         '/v1/keys',
         '/v1/quotas',
+        '/v1/templates',
       ];
       // Every operation without a path parameter that reads is in the list above.
       const reads = operations.filter((o) => o.params.length === 0 && o.method === 'GET');
