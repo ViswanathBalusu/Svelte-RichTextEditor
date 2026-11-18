@@ -36,6 +36,7 @@ import {
   keep,
   sandboxReady,
 } from '../test/harness.ts';
+import { dangerousIn } from '../test/trace-denylist.ts';
 
 const ready = (await sandboxReady()).ok;
 
@@ -187,6 +188,9 @@ describe.skipIf(!ready)(
 
       const extra = [...controlNames(random.compile.log)].filter((n) => !allowed.has(n));
       expect(extra).toEqual([]);
+      // The denylist of dangerous primitives (decision 212, ADR 0320) is the reading of "nothing
+      // unexpected": none of its words is in the random trace unless the baseline has it too.
+      expect(dangerousIn(extra)).toEqual([]);
     }, 900_000);
 
     it('negative control: an unexpandable command the emitters did not write is reported', async () => {
