@@ -725,6 +725,9 @@ importers:
 
   services/signing-service:
     dependencies:
+      '@docedit/authority':
+        specifier: workspace:*
+        version: link:../../packages/authority
       asn1js:
         specifier: 3.0.10
         version: 3.0.10
