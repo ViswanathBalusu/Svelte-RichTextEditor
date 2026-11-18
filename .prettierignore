@@ -19,3 +19,5 @@ packages/*/src/generated/
 packages/tck/fixtures/
 # Clipboard samples are kept as the programs write them; formatting would change what the cleaners see (FE-054).
 packages/engine/test/clipboard-corpus/
+# The reference host demo stack writes its own setup files here (git-ignored, never formatted).
+apps/reference-host/.stack/
