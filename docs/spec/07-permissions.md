@@ -180,7 +180,7 @@ Every row has negative tests in the conformance kit.
 
 ## 14. Audit
 
-Every grant change, state change, lease break, session revocation, restore, workflow transition, and every rejection with `permission_denied` or `invalid_op` is written to the audit trail with the actor, the document, the scopes and the server time. Changes of permission state are also control commits in the hash-chained log. Rejections raise the throttled webhook `dep.commit.rejected`.
+Every grant change, state change, lease break, session revocation, restore, workflow transition, and every rejection with `permission_denied` or `invalid_op` is written to the audit trail with the actor, the document, the scopes and the server time. A content change made with a service credential (a prefill, a content replacement) is written as well, with the person it is attributed to (the user named in `DEP-Actor`, or `system`), the credential that made it and the commit's origin (owner decision 174). Changes of permission state are also control commits in the hash-chained log. Rejections raise the throttled webhook `dep.commit.rejected`.
 
 ## 15. DOCX mapping
 

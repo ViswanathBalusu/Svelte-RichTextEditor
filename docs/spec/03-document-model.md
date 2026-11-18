@@ -275,7 +275,7 @@ A ProseMirror schema silently drops attributes it does not declare. New optional
 
 - A migration is a pure function from a document at version n to a document at version n+1. It is recorded as a snapshot commit (04, section 3.2) with origin `migration`, with a checkpoint on each side.
 - Migrations never run by themselves when a document is opened. An operator enables version n+1 for a tenant only when every service node and every component version the tenant still embeds supports it. The service supports versions n and n-1 side by side for a published window.
-- Every commit records the schema version and engine version it was made with. Reading history older than a migration uses the checkpoint written before it and the matching older model package, which stays published.
+- Every commit records the schema version and engine version it was made with. Reading history older than a migration uses the checkpoint written before it and the matching older model package, which stays published and runnable for as long as the history is kept (owner decision 58, ADR 0384). History is never rewritten to a newer format. A version after the last migration is rebuilt from the checkpoint written after it and needs only the current package.
 
 ## 12. Example
 

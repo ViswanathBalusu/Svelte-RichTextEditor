@@ -15,6 +15,7 @@ import type { AddressInfo } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { podmanSandbox, type AssetUrlKeys, type Sandbox } from '@docedit/asset-worker';
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
+import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
 import { ValkeyTokenBuckets } from './data-plane/valkey-buckets.ts';
 import { DEFAULT_FEATURES, DEFAULT_RATES } from './data-plane/settings.ts';
@@ -76,6 +77,14 @@ import { QuotaAdminService, type QuotaAdminStore } from './control-plane/quota-a
 import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
 import { HoldService, MemoryHoldStore, type HoldStore } from './control-plane/holds.ts';
+import { ErasureRequests } from './control-plane/erasure-requests.ts';
+import { CommitTombstone, type TombstoneStore } from './control-plane/commit-tombstone.ts';
+import {
+  DAY_MS,
+  DocumentPurge,
+  type PurgeStore,
+  type SearchPurge,
+} from './control-plane/document-purge.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
 import {
   MemoryWorkflowResourceStore,
@@ -102,6 +111,11 @@ import {
 } from './control-plane/metrics.ts';
 import { Pipeline, type PlainHandler, type Reply } from './control-plane/pipeline.ts';
 import { auditPartitionsTask } from './control-plane/audit-partitions-task.ts';
+import {
+  PayloadThinning,
+  payloadThinningTask,
+  type ThinningStore,
+} from './control-plane/payload-thinning.ts';
 import { SCHEDULE_KIND, Scheduler, type ScheduledTask } from './control-plane/scheduler.ts';
 import { applySeed, parseSeed } from './control-plane/seed.ts';
 import {
@@ -109,6 +123,7 @@ import {
   PgTenantRegistry,
   type TenantRegistry,
 } from './control-plane/tenants.ts';
+import { registerProcessMetrics } from './control-plane/process-metrics.ts';
 import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-hooks.ts';
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
@@ -199,6 +214,23 @@ export interface ServiceParts {
   retention?: RetentionService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080). Absent: the routes are not offered. */
   holds?: HoldService;
+  /**
+   * The rows of the purge of deleted documents (HIS-039). Needs a pool that connects as a member of
+   * docedit_purge (migration 0073), so `pgParts` does not make it. Absent: no purge task runs.
+   */
+  purgeStore?: PurgeStore;
+  /** The search entries the purge removes with a document (HIS-039). Optional. */
+  searchPurge?: SearchPurge;
+  /**
+   * The rows of a commit tombstone (HIS-040). Like `purgeStore` it needs a pool that connects as a
+   * member of `docedit_purge`. Absent: the route is not offered.
+   */
+  tombstoneStore?: TombstoneStore;
+  /**
+   * The rows of the thinning of old payloads (HIS-032). Like `purgeStore` it needs a pool that
+   * connects as a member of `docedit_purge`. Absent: no thinning task runs.
+   */
+  thinningStore?: ThinningStore;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
@@ -376,6 +408,28 @@ function holdsOver(
 }
 
 /**
+ * The erasure of a person (HIS-038): over the parts' user directory and audit trail. A person is only
+ * deferred by a hold on a document they wrote in, so the documents asked about are the held ones.
+ * The pending requests live in memory (erasure-requests.ts).
+ */
+function erasuresOver(parts: ServiceParts, now: () => number): ErasureRequests | undefined {
+  const { audit, holds, logs } = parts;
+  if (!audit) return undefined;
+  return new ErasureRequests({
+    users: parts.users,
+    audit,
+    heldDocuments: async (tenant) => (holds ? holds.heldDocuments(tenant) : new Set<string>()),
+    documentsOf: async (tenant, surrogate) => {
+      const wrote: string[] = [];
+      for (const doc of holds ? await holds.heldDocuments(tenant) : [])
+        if ((await logs.read({ tenant, doc })).some((c) => c.user === surrogate)) wrote.push(doc);
+      return wrote;
+    },
+    now,
+  });
+}
+
+/**
  * The tenant quota values of `/quotas` (UX-078) over a quota store and the parts' audit trail. The
  * store refuses a tenant it does not know (PostgreSQL asks the `tenants` table).
  */
@@ -531,6 +585,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
+  const erasures = erasuresOver(parts, now);
+  const tombstones =
+    parts.tombstoneStore && parts.audit && parts.checkpointIndex
+      ? new CommitTombstone({
+          store: parts.tombstoneStore,
+          documents: parts.documents,
+          checkpoints: parts.checkpointIndex,
+          objects: parts.objects,
+          audit: parts.audit,
+          held: async (tenant, doc) => (parts.holds ? parts.holds.inForce(tenant, doc) : false),
+          now,
+        })
+      : undefined;
   if (parts.replica && opts.readSessions === undefined)
     throw new Error('a read replica needs readSessions, the sessions kept for read-your-writes');
   // The node labels every control-plane series too (06 §11; BE-086 criterion 2).
@@ -668,6 +735,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
     node: config.node,
     limits: rateLimits,
     ...(liveQuotas ? { quotas: liveQuotas } : {}),
+    // BE-044: a document references only the assets attached to it or uploaded for it by the submitter.
+    ...(parts.assetRegistry
+      ? { assets: new RegistryAssetAttachments(parts.logs, parts.assetRegistry) }
+      : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
     now,
     checkpoints,
@@ -878,7 +949,42 @@ export async function startService(opts: StartOptions): Promise<Service> {
     );
 
   // Scheduled maintenance (BE-052): one job per task and slot in the queue.
+  const purge =
+    parts.purgeStore && parts.audit
+      ? new DocumentPurge({
+          store: parts.purgeStore,
+          objects: parts.objects,
+          audit: parts.audit,
+          ...(parts.searchPurge ? { search: parts.searchPurge } : {}),
+          retentionMs: config.purgeAfterDays * DAY_MS,
+          now,
+        })
+      : null;
+  const thinning =
+    parts.thinningStore && parts.retention && parts.audit
+      ? new PayloadThinning({
+          store: parts.thinningStore,
+          retention: parts.retention,
+          audit: parts.audit,
+          now,
+        })
+      : null;
   const tasks: ScheduledTask[] = [
+    // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
+    // scheduler hands the task the documents under a legal hold, and the task leaves them alone.
+    ...(thinning ? [payloadThinningTask(thinning)] : []),
+    // The purge of deleted documents past their retention (HIS-039); held documents are left alone.
+    ...(purge
+      ? [
+          {
+            name: 'documents.purge',
+            everyMs: 60 * 60 * 1000,
+            deletes: true,
+            forTenant: async (tenant: string, at: number, scope: { held: ReadonlySet<string> }) =>
+              (await purge.run(tenant, scope.held, at)).purged.length,
+          } satisfies ScheduledTask,
+        ]
+      : []),
     {
       name: 'idempotency.purge',
       everyMs: 60 * 60 * 1000,
@@ -947,6 +1053,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   scaleTimer?.unref();
   rescale();
 
+  const processMetrics = registerProcessMetrics(metrics);
   metrics.gauge(
     'docedit_jobs',
     'Queued and running jobs by kind, priority and state (BE-050 criterion 5).',
@@ -1062,6 +1169,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
+    ...(erasures ? { erasures } : {}),
+    ...(tombstones ? { tombstones } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),
@@ -1168,6 +1277,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       (closed ??= (async () => {
         stopping = true;
         if (scaleTimer) clearInterval(scaleTimer);
+        processMetrics.stop();
         await scaling;
         // Each export worker finishes the job it runs before it stops (BE-065 criterion 3).
         await exportWorkers?.stop();

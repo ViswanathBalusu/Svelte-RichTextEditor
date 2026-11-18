@@ -121,6 +121,8 @@ describe('no ID reference is set from script (FE-108 criterion 2)', () => {
   // The rule reads component markup. A reference set with `setAttribute` or a reflected property in
   // the shell, the element, the editing core or the painter would escape it, so there may be none.
   // (The PDF viewer's page is a document of its own, in a frame, and is not part of any root.)
+  const LIST_OWNER_FILE = 'engine/src/view/list-view.ts';
+  const LIST_OWNER_CALL = "el.setAttribute('aria-owns', ids);";
   function scripts(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
       const full = join(dir, name);
@@ -141,8 +143,21 @@ describe('no ID reference is set from script (FE-108 criterion 2)', () => {
       `setAttribute\\(\\s*['"\`](?:${attributes})['"\`]|\\.htmlFor\\b|\\.aria(?:LabelledBy|DescribedBy|Controls|Owns|ActiveDescendant|Details|ErrorMessage|FlowTo)Elements?\\b`,
     );
     const hits = sources
-      .filter((f) => set.test(readFileSync(f, 'utf8')))
-      .map((f) => relative(packages, f).replaceAll('\\', '/'));
+      .map((f) => ({ f, rel: relative(packages, f).replaceAll('\\', '/') }))
+      .filter(({ f, rel }) => {
+        const text = readFileSync(f, 'utf8');
+        // Decision 91 of 2026-11-15 (FE-105 criterion 3, FE-130 criterion 6): the owner of a list
+        // run names its items in `aria-owns`. Owner and items are siblings in the editing surface,
+        // so the reference never crosses a root. That one call is allowed, and nothing else in
+        // the file.
+        return set.test(rel === LIST_OWNER_FILE ? text.replaceAll(LIST_OWNER_CALL, '') : text);
+      })
+      .map(({ rel }) => rel);
     expect(hits).toEqual([]);
+  });
+
+  it('allows the list owner call only where it is, and it is still there', () => {
+    const text = readFileSync(join(SRC, '..', '..', LIST_OWNER_FILE), 'utf8');
+    expect(text.split(LIST_OWNER_CALL).length - 1).toBe(1);
   });
 });

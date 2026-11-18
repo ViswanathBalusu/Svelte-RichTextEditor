@@ -36,6 +36,7 @@ import {
   type CoreApi,
   type DocumentStats,
   type EditorMode,
+  type ExportService,
   type ResolveUsers,
   type ShellSettings,
 } from '@docedit/ui';
@@ -86,6 +87,11 @@ export interface MountOptions {
    * `regions` read the shell offers the permissions pane; with its grants reads, the grant controls.
    */
   permissions?: PermissionsPort | null;
+  /**
+   * The export dialog's jobs (UX-101), when the backend has the exports port. Without it the shell
+   * offers no export command.
+   */
+  exports?: ExportService;
   /** The manifest's family-to-alias lookup (FE-062 criterion 1); absent when none was read. */
   fontAlias?: (family: string) => string | undefined;
   /** The signed URL of an asset, for the web view's pictures (FE-067 criterion 3); absent without assets. */
@@ -487,6 +493,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
     focusField: (id) => core.focusField(id),
     status,
     pdf,
+    ...(options.exports ? { exports: options.exports } : {}),
+    // How suggestions are shown (UX-035), and the words that name them for assistive technology.
+    markupView: core.markupView,
+    setMarkupView: (view) => core.setMarkupView(view),
+    setSuggestionLabel: (label) => core.setSuggestionLabel(label),
     // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,

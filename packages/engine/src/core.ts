@@ -156,6 +156,7 @@ import {
   EQUATION_NODES,
   LATEX_MAX_CODE_POINTS,
   MATH_NESTING_MAX,
+  insertEquation,
   latexRefusal,
   setEquationLatex,
 } from './equation-commands.ts';
@@ -211,7 +212,12 @@ import { scopeDiff } from './scope-diff.ts';
 import { ExtensionApi } from './extension-api.ts';
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
 import { recordAsSuggestion } from './suggestion-edit.ts';
-import { type MarkupView, type SuggestionSpec, suggestionSpecs } from './suggestion-markup.ts';
+import {
+  type MarkupView,
+  type SuggestionLabel,
+  type SuggestionSpec,
+  suggestionSpecs,
+} from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
 import {
@@ -270,6 +276,7 @@ import {
 } from './table-style-sort.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
+import { setParagraphFormat } from './paragraph-format.ts';
 import { PresenceClient } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
 import { skippedPreservedAtoms } from './preserved-find.ts';
@@ -521,6 +528,7 @@ const COMMANDS: readonly CommandName[] = [
   'setFigureLayout',
   'increaseIndent',
   'decreaseIndent',
+  'setParagraphFormat',
   'nextEditableRegion',
 ];
 
@@ -539,6 +547,7 @@ const BLOCK_ONLY_COMMANDS: ReadonlySet<CommandName> = new Set<CommandName>([
   'insertSectionBreak',
   'insertToc',
   'insertCaption',
+  'insertEquation',
   'setEquationLatex',
   'resizeFigure',
   'setFigureLayout',
@@ -560,6 +569,7 @@ const AUTHORING: ReadonlySet<CommandName> = new Set<CommandName>([
   'insertSymbol',
   'insertCaption',
   'insertReference',
+  'insertEquation',
   'setEquationLatex',
 ]);
 
@@ -610,6 +620,8 @@ function hasAuthoringArgs(name: CommandName, args: CommandArgs): boolean {
       return args.figure !== undefined;
     case 'insertReference':
       return args.reference !== undefined;
+    case 'insertEquation':
+      return args.newEquation !== undefined;
     case 'setEquationLatex':
       return args.equation !== undefined;
     default:
@@ -804,6 +816,10 @@ export class DocumentCore implements DocumentApi {
   readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The markup view the body shows for suggestions (UX-035); ll until it is set. */
+  readonly markupView: ReadValue<MarkupView>;
+  /** Names a suggestion for assistive technology (UX-035 criterion 4); the shell sets it. */
+  #suggestionLabel: SuggestionLabel | null = null;
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
@@ -968,6 +984,7 @@ export class DocumentCore implements DocumentApi {
       sameJson,
       hub,
     );
+    this.markupView = new ReadValue<MarkupView>('all', Object.is, hub);
     this.#deferRemote = config.deferRemoteWhileComposing ?? true;
     this.#requires = [...config.doc.requires];
     const doc = readEnvelope(config.doc, this.#schema);
@@ -2015,6 +2032,15 @@ export class DocumentCore implements DocumentApi {
         if (ref === undefined) return null;
         return insertReference(state, ref.target, ref.format ?? null, { writable }, dispatch);
       }
+      case 'insertEquation':
+        return args.newEquation === undefined
+          ? null
+          : insertEquation(
+              state,
+              args.newEquation.display,
+              { writable, id: this.#newId() },
+              dispatch,
+            );
       case 'setEquationLatex': {
         const eq = args.equation;
         if (eq === undefined) return null;
@@ -2076,6 +2102,10 @@ export class DocumentCore implements DocumentApi {
       return changeIndent(name === 'increaseIndent' ? 'increase' : 'decrease', (pos) =>
         this.canEdit(this.#scopeAt(pos)),
       );
+    if (name === 'setParagraphFormat')
+      return args.paragraphFormat === undefined
+        ? null
+        : setParagraphFormat(args.paragraphFormat, (pos) => this.canEdit(this.#scopeAt(pos)));
     if (name === 'nextEditableRegion') return nextEditableRegion((scope) => this.canEdit(scope));
     if (name === 'markRegion')
       return args.title === undefined
@@ -2111,9 +2141,16 @@ export class DocumentCore implements DocumentApi {
       case 'insertSymbol':
       case 'insertCaption':
       case 'insertReference':
+      case 'insertEquation':
       case 'setEquationLatex':
         if (!hasAuthoringArgs(name, args)) return null;
-        return (state, dispatch) => this.#authoring(name, args, state, dispatch)?.ok === true;
+        return (state, dispatch) => {
+          const outcome = this.#authoring(name, args, state, dispatch);
+          // FE-136 criterion 5: the new equation opens in the math editor (FE-070).
+          if (name === 'insertEquation' && dispatch && outcome?.ok === true && 'pos' in outcome)
+            this.requestEquationEdit(Number(outcome.pos));
+          return outcome?.ok === true;
+        };
       case 'bold':
         return toggleMark(s.marks['bold']!, { value: true }, WHOLE_SELECTION);
       case 'italic':
@@ -2379,9 +2416,26 @@ export class DocumentCore implements DocumentApi {
       });
       return false;
     }
+    const usedBefore =
+      name === 'setPageSetup' ? this.#headerVariantsInUse() : new Set<StoryVariant>();
     const done = command(this.#state, this.dispatch);
+    if (done && name === 'setPageSetup') {
+      // FE-137 criterion 2: a variant just turned on has its stories, and its header opens in the
+      // panel (FE-057). The caret stays where the panel puts it.
+      const turnedOn = [...this.#headerVariantsInUse()].find((v) => !usedBefore.has(v));
+      if (turnedOn !== undefined && this.editStory('header', turnedOn)) return done;
+    }
     if (done && name !== 'insertFootnote' && name !== 'editHeader') this.focus();
     return done;
+  }
+
+  /** The header variants the body's page setup uses now. */
+  #headerVariantsInUse(): Set<StoryVariant> {
+    return new Set(
+      storyVariantsOf(this.#state.doc)
+        .filter((v) => v.part === 'header')
+        .map((v) => v.variant),
+    );
   }
 
   exec(name: CommandName, args?: CommandArgs): boolean {
@@ -2404,7 +2458,30 @@ export class DocumentCore implements DocumentApi {
    * plain specs; the web view builds the decoration set from them.
    */
   markupDecorations(view: MarkupView): SuggestionSpec[] {
-    return suggestionSpecs(this.#state.doc, view);
+    return suggestionSpecs(this.#state.doc, view, this.#suggestionLabel ?? undefined);
+  }
+
+  /**
+   * Chooses how suggestions are shown (UX-035; 13 §5): ll, simple, 
+one or original. It is a
+   * view setting of this reader: the document, its revision and the commit log are not touched.
+   */
+  setMarkupView(view: MarkupView): void {
+    this.markupView.set(view);
+  }
+
+  /**
+   * Sets the function that names a suggestion for assistive technology, or clears it (UX-035
+   * criterion 4). The body view draws the text it returns, and draws again when this is called, so
+   * a change of names is shown by setting the function again.
+   */
+  setSuggestionLabel(label: SuggestionLabel | null): void {
+    this.#suggestionLabel = label;
+  }
+
+  /** The function that names a suggestion for assistive technology, or null (UX-035). */
+  get suggestionLabel(): SuggestionLabel | null {
+    return this.#suggestionLabel;
   }
 
   /**

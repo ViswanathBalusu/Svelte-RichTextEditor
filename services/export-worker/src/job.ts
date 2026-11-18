@@ -22,6 +22,7 @@ import {
   bundleAltTextReport,
   cdmWriter,
   htmlText,
+  markdownText,
   texArchive,
   type Diagnostic,
   type FontManifest,
@@ -38,7 +39,7 @@ import { project, type HiddenSet } from '@docedit/authority';
 import type { CdmEnvelope } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { buildBundle, classFiles } from './bundle-io.ts';
-import { imageId as readImageId } from './container.ts';
+import { imageDigest as readImageDigest, imageId as readImageId } from './container.ts';
 import { chainHeadOf, contentAt, documentLang, type ContentStores } from './content.ts';
 import { diagnostic, LOG_LIMITS, parseLog, type ParsedLog } from './diagnostics.ts';
 import type { FontFileCheck } from './font-files.ts';
@@ -92,7 +93,7 @@ export type ExportAttemptState = 'completed' | 'failed' | 'aborted';
 export interface ExportMetrics {
   /** How the attempt ended. */
   state: ExportAttemptState;
-  /** The job's target: `pdf`, `tex` or `cdm` (or the refused value, cut to 20 characters). */
+  /** The job's target: `pdf`, `tex`, `cdm`, `html` or `md` (or the refused value, cut to 20 characters). */
   target: string;
   /** From the job's creation to the start of this attempt, ms. */
   queueWaitMs: number;
@@ -131,6 +132,13 @@ export interface ExportHandlerDeps {
   /** The image that compiles; its identifier goes into the result manifest. */
   image?: string;
   imageId?: (image: string) => Promise<string | null>;
+  /**
+   * The manifest digest of the image (`sha256:...`), recorded in the bundle's `manifest.json` and in the
+   * result manifest (EXP-073 criterion 2; EXP-076 criterion 4). When `imageId` is replaced and this is
+   * not, no digest is looked up and none is recorded, so a test that stubs the image identity does not
+   * call the container runtime.
+   */
+  imageDigest?: (image: string) => Promise<string | null>;
   /** The key of bundle seals; drawn per process when absent. */
   sealKey?: Uint8Array;
   /**
@@ -157,6 +165,9 @@ export const CDM_OUTPUT_FILE = 'output.json';
 
 /** The file of the `html` target under the job's prefix (EXP-087; docs/adr/0371-w2-exp-087-html-job.md). */
 export const HTML_OUTPUT_FILE = 'output.html';
+
+/** The file of the `md` target under the job's prefix (EXP-088). */
+export const MD_OUTPUT_FILE = 'output.md';
 
 /** The file of the `tex` target under the job's prefix: the bundle as one archive (EXP-085). */
 export const TEX_OUTPUT_FILE = 'source.tar';
@@ -278,6 +289,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
   const now = deps.now ?? Date.now;
   const compile = deps.compile ?? compileInSandbox;
   const image = deps.image ?? IMAGE;
+  const readDigest = deps.imageDigest ?? (deps.imageId ? async () => null : readImageDigest);
   const sealKey = deps.sealKey ?? new Uint8Array(randomBytes(32));
   const pinned = { classFiles: classFiles(), classVersion: CLASS_VERSION };
 
@@ -295,11 +307,12 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       payload.target !== 'pdf' &&
       payload.target !== 'cdm' &&
       payload.target !== 'tex' &&
-      payload.target !== 'html'
+      payload.target !== 'html' &&
+      payload.target !== 'md'
     )
       throw new JobFailure(
         'validation_failed',
-        `this worker exports pdf, tex, cdm and html, not ${payload.target.slice(0, 20)}`,
+        `this worker exports pdf, tex, cdm, html and md, not ${payload.target.slice(0, 20)}`,
       );
     // The control plane keys cached results by the class version (EXP-006): a worker with another
     // class leaves the job to one that has it.
@@ -419,6 +432,51 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       return htmlOut as unknown as Record<string, unknown>;
     }
 
+    // The Markdown target (09 §11; EXP-088): the direct writer reads the projected envelope, as the
+    // html target does. The worker reads no picture bytes, so a picture is written as its alternative
+    // text with `image_asset_missing`; the writer's diagnostics are the job's warnings (criteria 1, 3).
+    if (payload.target === 'md') {
+      const mdContent = await contentAt(
+        deps.stores,
+        { tenant, doc: payload.doc },
+        payload.incarnation,
+        payload.seq,
+      );
+      stopIfCancelled(ctx);
+      const mdEnvelope = projectedEnvelope(mdContent.envelope, payload);
+      const mdPlan = planJob(payload.options, documentLang(mdEnvelope));
+      if (!mdPlan.ok)
+        throw failed(
+          'validation_failed',
+          'an export option cannot be honoured',
+          mdPlan.diagnostics,
+        );
+      const mdChainHead = await chainHeadOf(deps.stores, { tenant, doc: payload.doc }, payload.seq);
+      const md = markdownText(mdEnvelope, { suggestions: mdPlan.plan.suggestions });
+      const mdDiagnostics: Diagnostic[] = [...mdPlan.plan.diagnostics, ...md.diagnostics];
+      if (!md.ok)
+        throw failed('unsupported_feature', 'the writer cannot write this document', mdDiagnostics);
+      stopIfCancelled(ctx);
+      await ctx.report('converting', 50);
+      await deps.outputs.putExport(
+        tenant,
+        job.id,
+        MD_OUTPUT_FILE,
+        md.bytes,
+        'text/markdown; charset=utf-8',
+      );
+      const mdOut: ExportOutputs = {
+        output: MD_OUTPUT_FILE,
+        pages: null,
+        layout: null,
+        converged: null,
+        log: null,
+        diagnostics: dedupe(mdDiagnostics),
+        chainHead: mdChainHead,
+      };
+      return mdOut as unknown as Record<string, unknown>;
+    }
+
     const t0 = now();
     const { envelope: fullEnvelope, title } = await contentAt(
       deps.stores,
@@ -435,6 +493,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
     const plan: JobPlan = planned.plan;
 
     const t1 = now();
+    const digest = await readDigest(image);
     const fonts = await deps.fonts();
     if (deps.checkFontFiles) {
       const check = await deps.checkFontFiles(fonts);
@@ -453,6 +512,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       envelope,
       {
         fonts,
+        imageDigest: digest,
         tagging: plan.tagging,
         pdfStandard: plan.pdfStandard,
         renderer: 'node',
@@ -571,7 +631,13 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       const limit = limitReached(r, log);
       if (limit) {
         diagnostics.push(limitDiagnostic(limit, r));
-        throw failed('too_large', limitMessage(limit, r), diagnostics);
+        // The job ends `failed` (EXP-071 criterion 2) and its result still says that the page
+        // references did not converge, and how many passes ran (EXP-061 criterion 4).
+        throw new JobFailure('too_large', limitMessage(limit, r), false, {
+          diagnostics: dedupe(diagnostics),
+          converged: r.converged,
+          passes: r.passes.length,
+        });
       }
       if (r.passes.length === 0 && r.exitCode !== 0 && !r.log)
         throw failed('unavailable', 'the sandbox did not run the compile', diagnostics, true);
@@ -651,7 +717,7 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
         cdm: bundle.manifest.cdm,
         options: bundle.manifest.options,
       },
-      image: { name: image, id: await (deps.imageId ?? readImageId)(image) },
+      image: { name: image, id: await (deps.imageId ?? readImageId)(image), digest },
       // The pin and the hashes of both compiles of a sealing export (EXP-079 criterion 3).
       ...(pair?.ok && payload.sealing
         ? {

@@ -21,6 +21,8 @@
  * - A `field` of kind `formValue` is an atom that shows the value of its target field. Every
  *   mirror is drawn again after each change of the document, so it follows the target without a
  *   reload (FRW-006 criterion 1), and its accessible name says which field it shows (criterion 5).
+ * - A `field` of kind `seq` or `ref` shows its computed text, drawn again after each change of the
+ *   document (computed-field-view.ts; FE-134 criterion 3).
  *
  * Kept out of the core so that the headless entry builds no DOM (FE-121).
  */
@@ -28,7 +30,9 @@ import { type FormFieldValue, type JsonValue, fieldText } from '@docedit/model';
 import { fieldWidth, isRedactionMarker } from '@docedit/model/definition';
 import { DOMSerializer, type Node as PMNode } from 'prosemirror-model';
 import type { NodeView, NodeViewConstructor } from 'prosemirror-view';
+import { type StaleCache, fieldTexts } from '../captions-refs.ts';
 import { formatFieldValue, type FieldFormat } from '../field-display.ts';
+import { computedFieldView } from './computed-field-view.ts';
 import { rolesOf, type FieldEntryState } from '../field-entries.ts';
 import type { FieldRuleState } from '../field-rules.ts';
 
@@ -121,6 +125,20 @@ export class FormFieldViews {
     this.#doc = doc;
     this.#fields = fields;
     return fields;
+  }
+
+  #textsDoc: PMNode | null = null;
+  #texts: ReadonlyMap<number, StaleCache> = new Map();
+
+  /**
+   * The computed text of every `seq` and `ref` field of `doc`, by position (FE-134 criterion 3);
+   * computed once for each version of the document, and only when a view asks.
+   */
+  textsOf(doc: PMNode): ReadonlyMap<number, StaleCache> {
+    if (this.#textsDoc === doc) return this.#texts;
+    this.#texts = new Map(fieldTexts(doc).map((f) => [f.pos, f]));
+    this.#textsDoc = doc;
+    return this.#texts;
   }
 
   /** Draws every live view again from `doc`: after a change of the document, the access or the mode. */
@@ -607,10 +625,17 @@ class MirrorView implements NodeView, Refreshable {
   }
 }
 
-/** The node view of a `field`: a mirror for `formValue`, the schema's drawing for the others. */
+/**
+ * The node view of a `field`: a mirror for `formValue`, the computed text for `seq` and `ref`
+ * (FE-134 criterion 3), the schema's drawing for the others.
+ */
 export function fieldView(views: FormFieldViews): NodeViewConstructor {
-  return (node, view) =>
-    node.attrs['kind'] === 'formValue'
-      ? new MirrorView(node, view.state.doc, views)
-      : { dom: schemaDOM(node) };
+  const computed = computedFieldView(views, schemaDOM);
+  return (node, view, getPos, decorations, innerDecorations) => {
+    const kind = node.attrs['kind'];
+    if (kind === 'formValue') return new MirrorView(node, view.state.doc, views);
+    if (kind === 'seq' || kind === 'ref')
+      return computed(node, view, getPos, decorations, innerDecorations);
+    return { dom: schemaDOM(node) };
+  };
 }

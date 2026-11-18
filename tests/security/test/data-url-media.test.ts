@@ -72,7 +72,30 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       await c.hello(token);
       await c.open(1, doc);
       try {
-        const r = await imageCommit(c, uuid7());
+        // BE-044: a document references only assets uploaded for it, so the control uploads one
+        // (the registry row, then ready as the asset worker leaves it).
+        const up = await h.call('POST', `/v1/documents/${doc}/assets`, {
+          token,
+          body: { filename: 'dot.png', mime: 'image/png', size: 10 },
+        });
+        expect(up.status, up.text).toBe(201);
+        const asset = up.json.asset as string;
+        await h.parts.assetRegistry.settleReady(
+          h.a.id,
+          asset,
+          {
+            sha256: 'a'.repeat(64),
+            bytes: 10,
+            contentType: 'image/png',
+            objectKey: `k/${asset}`,
+            width: 10,
+            height: 10,
+            frames: null,
+            renditions: [],
+          },
+          Date.now(),
+        );
+        const r = await imageCommit(c, asset);
         // The refusals below are about the data URL form, not about images in general.
         expect(r.t).toBe('sync.ack');
       } finally {

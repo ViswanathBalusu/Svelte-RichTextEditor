@@ -10,6 +10,7 @@
  */
 import type { CoreApi, EditorMode, HeaderPaneName, ViewName } from '../core-api.ts';
 import type { StringKey } from '../i18n/en-GB.ts';
+import { MARKUP_VIEWS, type MarkupView } from '../shell/markup-views.ts';
 import type { CommandEntry } from './types.ts';
 
 interface Entry extends CommandEntry {
@@ -233,6 +234,8 @@ export interface ShellCommandHost1b {
   zoom(step: 'in' | 'out' | 'reset'): boolean;
   setMode(mode: EditorMode): boolean;
   setView(view: ViewName): boolean;
+  /** Chooses how suggestions are shown (UX-035); optional, so a core without markup views omits the commands. */
+  setMarkupView?(view: MarkupView): boolean;
   closeStory(): boolean;
   /** Opens command search over the registry (UX-011). */
   commandSearch(): boolean;
@@ -258,6 +261,10 @@ export const SHELL_QUERY_NAMES = [
   'shell.mode.review',
   'shell.mode.view',
   'shell.mode.fill',
+  'shell.markup.all',
+  'shell.markup.simple',
+  'shell.markup.none',
+  'shell.markup.original',
   'shell.modeAvailable.edit',
   'shell.modeAvailable.review',
   'shell.modeAvailable.view',
@@ -661,6 +668,21 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       toolbar: false,
       run: () => host.setMode(mode),
     };
+  // How suggestions are shown (UX-035), one command per view. Off the toolbar, like the modes: they are
+  // chosen from command search and the menus, and the shell shows the choice in the document.
+  if (host.setMarkupView)
+    for (const view of MARKUP_VIEWS)
+      out[`review.markup.${view}`] = {
+        id: `review.markup.${view}`,
+        label: `command.review.markup.${view}` as StringKey,
+        icon: 'review',
+        group: 'review',
+        active: `shell.markup.${view}`,
+        changesContent: false,
+        capability: 'suggestions',
+        toolbar: false,
+        run: () => host.setMarkupView!(view),
+      };
   for (const view of VIEWS)
     out[`view.layout.${view}`] = {
       id: `view.layout.${view}`,
@@ -688,6 +710,7 @@ export function builtinCommands(): Entry[] {
     zoom: none,
     setMode: none,
     setView: none,
+    setMarkupView: none,
     closeStory: none,
     commandSearch: none,
   });

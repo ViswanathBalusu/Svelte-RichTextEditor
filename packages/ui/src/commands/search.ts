@@ -8,8 +8,9 @@
  * - Ranking: a label that starts with the whole query first, then a label that contains it, then
  *   a label that holds every word, then a match on a synonym only. Within a rank, registration
  *   order is kept.
- * - Synonyms have no source yet: `SynonymSource` is an injected function, and the shell passes
- *   none until the locale tables carry synonym keys (13 section 8).
+ * - Synonyms come from the locale table (proposed, docs/adr/0383-w3-UX-011-command-synonyms.md):
+ *   the key `synonyms.<command id>` holds the words, separated by semicolons.
+ *   `synonymsFromStrings` reads them; `SynonymSource` stays injectable.
  */
 import type { CommandRegistry } from './registry.ts';
 import type { CommandView, ExecResult } from './types.ts';
@@ -21,6 +22,28 @@ export interface SearchTranslator {
 
 /** The synonyms of a command in the current locale; empty when there are none. */
 export type SynonymSource = (view: CommandView) => readonly string[];
+
+/** The part of the translator that tells whether a key is in the current locale's table. */
+export interface SynonymTranslator extends SearchTranslator {
+  has(key: string): boolean;
+}
+
+/**
+ * The synonyms of a command from the locale table: the words under `synonyms.<command id>`,
+ * separated by semicolons. A locale without the key gives none, so a command is then found by its
+ * label only.
+ */
+export function synonymsFromStrings(strings: SynonymTranslator): SynonymSource {
+  return (view) => {
+    const key = `synonyms.${view.id}`;
+    if (!strings.has(key)) return [];
+    return strings
+      .text(key)
+      .split(';')
+      .map((word) => word.trim())
+      .filter((word) => word !== '');
+  };
+}
 
 export interface CommandSearchOptions {
   readonly translate: SearchTranslator;

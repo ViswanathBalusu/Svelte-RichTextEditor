@@ -122,7 +122,10 @@ export async function minVisibleSeqOf(opts: {
     editsSomewhere: edits,
     accessSince: opts.as ? undefined : opts.caller.identity?.accessSince,
     head: opts.head,
-    timeOf: async (seq) => (await opts.logs.read(opts.ref, seq, seq))[0]?.time,
+    timeOf: async (seq) =>
+      (opts.logs.readMeta
+        ? await opts.logs.readMeta(opts.ref, seq, seq)
+        : await opts.logs.read(opts.ref, seq, seq))[0]?.time,
   });
 }
 

@@ -1596,6 +1596,22 @@
       "capability": "modes"
     },
     {
+      "id": "review.markup.all",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.markup.simple",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.markup.none",
+      "capability": "suggestions"
+    },
+    {
+      "id": "review.markup.original",
+      "capability": "suggestions"
+    },
+    {
       "id": "view.layout.web",
       "capability": "views"
     },

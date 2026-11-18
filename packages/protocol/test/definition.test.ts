@@ -224,6 +224,10 @@ const OTHER_ROUTES = [
   // UX-080 (08 §11; 13 §10): legal holds through the administration API, service credential only.
   'POST /documents/{id}/holds',
   'GET /holds',
+  // HIS-038 (08 §13): the erasure of a person, service credential only.
+  'POST /users/erase',
+  // HIS-040 (08 §13): the tombstone of one commit payload, service credential only.
+  'POST /documents/{id}/commits/{seq}/tombstone',
 ];
 
 describe('the DEP definition', () => {
@@ -304,6 +308,8 @@ describe('the DEP definition', () => {
         'PUT /documents/{id}/retention',
         'POST /documents/{id}/holds',
         'GET /holds',
+        'POST /users/erase',
+        'POST /documents/{id}/commits/{seq}/tombstone',
         'GET /quotas',
         'PUT /quotas',
         'GET /origins',

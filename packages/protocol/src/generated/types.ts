@@ -88,7 +88,7 @@ export interface Step {
 }
 
 /** Origin of a commit: a client hint (recorded, never trusted) or a server-reserved origin (04 §3.1). */
-export type Origin = "input" | "paste" | "format" | "undo" | "redo" | "suggestion.accept" | "suggestion.reject" | "fill" | "assistant" | "restore" | "import" | "migration" | "repair" | "sign" | "rules" | "prefill" | "control" | (string & {});
+export type Origin = "input" | "paste" | "format" | "undo" | "redo" | "suggestion.accept" | "suggestion.reject" | "fill" | "assistant" | "extension" | "restore" | "import" | "migration" | "repair" | "sign" | "rules" | "prefill" | "control" | (string & {});
 
 /** A step commit as submitted: the payload of `sync.submit` (04 §3.1; 05 §5.3). */
 export interface Commit {
@@ -868,6 +868,43 @@ export interface Hold {
   placedBy: string;
   /** When the hold was placed, ISO 8601 in UTC. */
   placedAt: string;
+}
+
+/** The body of an erasure of a person (HIS-038; 08 section 13). */
+export interface ErasePersonRequest {
+  /** The host's `sub` of the person to erase. Hosts SHOULD NOT use an e-mail address as `sub` (05 section 3.1). */
+  sub: string;
+}
+
+/** What an erasure of a person did (HIS-038; 08 section 13). */
+export interface ErasePersonResult {
+  /** `erased`: the mapping, the display name and the read markers are deleted. `deferred`: a document the person wrote in is under legal hold, so the erasure waits for the release (owner decision 38). */
+  outcome: "erased" | "deferred";
+}
+
+/** The body of a tombstone of one commit payload (HIS-040; 08 section 13). */
+export interface TombstoneRequest {
+  /** Why the payload is removed. Trimmed; at most 500 characters. Recorded in the audit trail. */
+  reason: string;
+}
+
+/** What a tombstone removed and which copies remain (HIS-040; 08 section 13). */
+export interface TombstoneResult {
+  /** The commit whose payload was removed. */
+  seq: number;
+  /** When the payload was removed, ISO 8601 in UTC. */
+  removedAt: string;
+  /** The copies that may still hold the removed text; they are not rewritten. */
+  copies: {
+    /** Checkpoints at or after the commit, built by replaying it; they may still hold the removed text. */
+    checkpoints: number[];
+    /** Object keys of the cold segments whose range covers the commit. */
+    coldSegments: string[];
+    /** The attribution map may still name runs of the commit. */
+    attributionMap: "may-hold-runs";
+    /** What removing those copies involves, in fixed words. */
+    involves: string;
+  };
 }
 
 /** A field in the derived list (12 §3.2; FRW-060). */
@@ -2029,6 +2066,24 @@ export interface Operations {
     query: { cursor?: string; limit?: number };
     body: never;
     response: List<Hold>;
+  };
+  /** POST /users/erase: Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`. (08 §13; 13 §10) */
+  erasePerson: {
+    method: "POST";
+    path: "/users/erase";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: ErasePersonRequest;
+    response: ErasePersonResult;
+  };
+  /** POST /documents/{id}/commits/{seq}/tombstone: Replaces the payload of one commit with a tombstone; the metadata, the payload hash and the chain stay; refused under a legal hold; audited with the actor and the reason; the answer lists the copies that may still hold the text (HIS-040). (08 §13; 13 §10) */
+  tombstoneCommit: {
+    method: "POST";
+    path: "/documents/{id}/commits/{seq}/tombstone";
+    params: { id: string; seq: number };
+    query: Record<string, never>;
+    body: TombstoneRequest;
+    response: TombstoneResult;
   };
   /** GET /documents/{id}/fields: The derived list of fields. (12 §10) */
   listFields: {

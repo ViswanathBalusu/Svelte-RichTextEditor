@@ -5382,6 +5382,160 @@
         "x-dep-requires": "Service credential"
       }
     },
+    "/users/erase": {
+      "post": {
+        "operationId": "erasePerson",
+        "summary": "Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`.",
+        "description": "Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`. Requires: Service credential (07 §12). Specified in 08 §13; 13 §10.",
+        "tags": [
+          "users"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErasePersonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErasePersonResult"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §13; 13 §10",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "Service credential"
+      }
+    },
+    "/documents/{id}/commits/{seq}/tombstone": {
+      "post": {
+        "operationId": "tombstoneCommit",
+        "summary": "Replaces the payload of one commit with a tombstone; the metadata, the payload hash and the chain stay; refused under a legal hold; audited with the actor and the reason; the answer lists the copies that may still hold the text (HIS-040).",
+        "description": "Replaces the payload of one commit with a tombstone; the metadata, the payload hash and the chain stay; refused under a legal hold; audited with the actor and the reason; the answer lists the copies that may still hold the text (HIS-040). Requires: Service credential (07 §12). Specified in 08 §13; 13 §10.",
+        "tags": [
+          "commits"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The sequence number of the commit whose payload is removed.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "description": "The sequence number of the commit whose payload is removed."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TombstoneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TombstoneResult"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §13; 13 §10",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "Service credential"
+      }
+    },
     "/documents/{id}/fields": {
       "get": {
         "operationId": "listFields",
@@ -8647,6 +8801,7 @@
           "suggestion.reject",
           "fill",
           "assistant",
+          "extension",
           "restore",
           "import",
           "migration",
@@ -10911,6 +11066,123 @@
           "reason",
           "placedBy",
           "placedAt"
+        ]
+      },
+      "ErasePersonRequest": {
+        "title": "ErasePersonRequest",
+        "description": "The body of an erasure of a person (HIS-038; 08 section 13).",
+        "$comment": "08 §13; 13 §10",
+        "type": "object",
+        "properties": {
+          "sub": {
+            "description": "The host's `sub` of the person to erase. Hosts SHOULD NOT use an e-mail address as `sub` (05 section 3.1).",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "sub"
+        ]
+      },
+      "ErasePersonResult": {
+        "title": "ErasePersonResult",
+        "description": "What an erasure of a person did (HIS-038; 08 section 13).",
+        "$comment": "08 §13; 13 §10",
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "description": "`erased`: the mapping, the display name and the read markers are deleted. `deferred`: a document the person wrote in is under legal hold, so the erasure waits for the release (owner decision 38).",
+            "type": "string",
+            "enum": [
+              "erased",
+              "deferred"
+            ]
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "TombstoneRequest": {
+        "title": "TombstoneRequest",
+        "description": "The body of a tombstone of one commit payload (HIS-040; 08 section 13).",
+        "$comment": "08 §13; 13 §10",
+        "type": "object",
+        "properties": {
+          "reason": {
+            "description": "Why the payload is removed. Trimmed; at most 500 characters. Recorded in the audit trail.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "TombstoneResult": {
+        "title": "TombstoneResult",
+        "description": "What a tombstone removed and which copies remain (HIS-040; 08 section 13).",
+        "$comment": "08 §13; 13 §10",
+        "type": "object",
+        "properties": {
+          "seq": {
+            "description": "The commit whose payload was removed.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "removedAt": {
+            "description": "When the payload was removed, ISO 8601 in UTC.",
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+          },
+          "copies": {
+            "description": "The copies that may still hold the removed text; they are not rewritten.",
+            "type": "object",
+            "properties": {
+              "checkpoints": {
+                "description": "Checkpoints at or after the commit, built by replaying it; they may still hold the removed text.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "coldSegments": {
+                "description": "Object keys of the cold segments whose range covers the commit.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "attributionMap": {
+                "description": "The attribution map may still name runs of the commit.",
+                "type": "string",
+                "enum": [
+                  "may-hold-runs"
+                ]
+              },
+              "involves": {
+                "description": "What removing those copies involves, in fixed words.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "checkpoints",
+              "coldSegments",
+              "attributionMap",
+              "involves"
+            ]
+          }
+        },
+        "required": [
+          "seq",
+          "removedAt",
+          "copies"
         ]
       },
       "FieldInfo": {

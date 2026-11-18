@@ -323,6 +323,8 @@
         "PUT /documents/{id}/retention",
         "POST /documents/{id}/holds",
         "GET /holds",
+        "POST /users/erase",
+        "POST /documents/{id}/commits/{seq}/tombstone",
         "GET /quotas",
         "PUT /quotas",
         "GET /origins",

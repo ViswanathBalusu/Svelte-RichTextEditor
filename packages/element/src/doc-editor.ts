@@ -18,7 +18,15 @@
  * (FE-001): the base class is chosen with an existence check, and the editor code (engine, shell,
  * Svelte, styles) is a separate chunk loaded with the first document.
  */
-import type { Backend, Content, ResolveUsers, SearchPrincipals } from '@docedit/protocol';
+import { hasPort } from '@docedit/protocol';
+import type {
+  Backend,
+  Content,
+  ExportJob,
+  ResolveUsers,
+  SearchPrincipals,
+} from '@docedit/protocol';
+import type { ExportService } from '@docedit/ui';
 import type {
   CdmFragment,
   CommandArgs,
@@ -30,6 +38,7 @@ import type {
 import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
+import { exportService } from './export-service.ts';
 import type { PrintOutcome } from './print.ts';
 import {
   elementMethods,
@@ -657,6 +666,8 @@ export class DocEditorElement extends Base {
       ...(fontAlias ? { fontAlias } : {}),
       // Pictures are drawn from the signed URLs of the assets port, when the backend has one (FE-067).
       ...this.#assetImage(docId),
+      // The export dialog's jobs go through the backend's exports port, when it has one (UX-101).
+      ...this.#exportService(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       mathFontsUrl: this.#config.katexFontsUrl,
@@ -862,14 +873,36 @@ export class DocEditorElement extends Base {
       backend: session.backend,
       access: session.access,
     };
-    return startExport(source, options, (job) => {
-      if (this.#session !== session) return;
-      const ev = exportEvent(job);
-      this.#emit(ev.name, ev.detail);
-      // A completed export's `layout.json` says where pages start; guides are optional (FE-068).
-      if (job.state === 'completed' && job.result?.layout)
-        void this.#readLayout(session, job.result.layout);
-    });
+    return startExport(source, options, (job) => this.#onExportJob(session, job));
+  }
+
+  /** A report of a job started by the session `session`: raised as an event while it is current. */
+  #onExportJob(session: Session | null, job: ExportJob): void {
+    if (this.#session !== session) return;
+    const ev = exportEvent(job);
+    this.#emit(ev.name, ev.detail);
+    // A completed export's `layout.json` says where pages start; guides are optional (FE-068).
+    if (job.state === 'completed' && job.result?.layout)
+      void this.#readLayout(session, job.result.layout);
+  }
+
+  /**
+   * The shell's export service (UX-101), when the session's backend has the exports port and
+   * announced the feature; otherwise nothing, and the shell offers no export command.
+   */
+  #exportService(docId: string): { exports?: ExportService } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.exports || !hasPort(backend, 'exports')) return {};
+    return {
+      exports: exportService({
+        source: () =>
+          this.#session === session && session
+            ? { docId: session.docId, backend: session.backend, access: session.access }
+            : null,
+        onJob: (job) => this.#onExportJob(session, job),
+      }),
+    };
   }
 
   /**

@@ -11,6 +11,7 @@
  */
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extensions/document-api.ts';
 import type { FieldDraft } from './shell/field-properties.ts';
+import type { MarkupView } from './shell/markup-views.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -503,6 +504,12 @@ export interface ExportOptions {
   readonly profile?: 'preview' | 'final';
   readonly tagging?: 'on' | 'draft' | 'off';
   readonly fields?: 'flatten' | 'blank';
+  /** A standard of the published schema (09 §9.1); absent, the service uses its default. */
+  readonly pdfStandard?: 'ua-2' | 'a-4';
+  /** A language tag for dates and language-dependent text; absent, the schema's default applies. */
+  readonly locale?: string;
+  /** An IANA time zone name; absent, the schema's default applies. */
+  readonly timeZone?: string;
 }
 
 /** A diagnostic of an export (09 §9.2; EXP-065). */
@@ -708,6 +715,17 @@ export interface CoreApi {
   readonly view?: ReadView<ViewName>;
   readonly views?: ReadView<readonly ViewName[]>;
   setView?(view: ViewName): boolean;
+  /**
+   * How suggestions are shown (UX-035; 13 §5): ll until it is set. Choosing a view is a setting of
+   * this reader. It changes no content and sends no commit.
+   */
+  readonly markupView?: ReadView<MarkupView>;
+  setMarkupView?(view: MarkupView): void;
+  /**
+   * Gives the body the words that name a suggestion for assistive technology, for example
+   * Inserted by Ada (UX-035 criterion 4); null removes them.
+   */
+  setSuggestionLabel?(label: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null): void;
 
   /**
    * Spelling and grammar (UX-041; 13 §6.1). Absent, or `available` false, when the host gave no

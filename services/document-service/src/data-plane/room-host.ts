@@ -109,6 +109,7 @@ import type { NodeLease } from './lease.ts';
 import type { Metrics } from './metrics.ts';
 import { PresenceRelay } from './presence.ts';
 import type { Settings } from './settings.ts';
+import { assetRefsIn, type AssetAttachments } from './asset-attachments.ts';
 import { admissionFor } from './sec-028-admission.ts';
 import { BroadcastWindow } from './syn-041-coalescing.ts';
 import type { Base, Encoded } from './tasks.ts';
@@ -151,6 +152,8 @@ export interface HostDeps {
   readonly leases: NodeLeaseStore | undefined;
   /** Whether a visibility function was configured (read restrictions may hide content). */
   readonly restricted: boolean;
+  /** The assets a document may reference (BE-044); without it references are not checked. */
+  readonly assets?: AssetAttachments;
   /** The workflow resources: a room reads its document's workflow at start (FRW-035). */
   readonly workflows?: WorkflowResourceStore | undefined;
 }
@@ -303,6 +306,18 @@ export class HostedRoom {
   #delayed: ReturnType<typeof setTimeout> | null = null;
   #writeDone: Array<() => void> = [];
   #stopped = false;
+  // --- Assets (BE-044) --------------------------------------------------------------------------
+  readonly #assets: AssetAttachments | undefined;
+  /** The assets the room lets a commit reference: its `attachedAssets` (invariant I4). */
+  readonly #known = new Set<string>();
+  /** Assets looked up for this room and found uploaded for the document. */
+  readonly #verified = new Set<string>();
+  /** The assets with a doc_assets row, with the seq that first referenced each. */
+  readonly #persisted = new Map<string, number>();
+  /** A lookup of assets that is waiting, so that later commits keep their order behind it. */
+  #assetGate: Promise<void> | null = null;
+  /** The attachments of each write in flight, kept once it is stored. */
+  readonly #attaching = new WeakMap<WriteRequest, Array<{ asset: string; seq: number }>>();
   #idle: ReturnType<typeof setTimeout> | null = null;
   #expiry: ReturnType<typeof setTimeout> | null = null;
   // --- Phase 1b ---------------------------------------------------------------------------------
@@ -354,6 +369,8 @@ export class HostedRoom {
     initialRevision: number;
     /** The host `sub` of each surrogate the log and the leases name (D42). */
     subs: ReadonlyMap<string, string>;
+    /** The doc_assets rows of the document (BE-044), when the host checks asset references. */
+    attached?: ReadonlyMap<string, number>;
     deps: HostDeps;
     onStop: (room: HostedRoom, reason: string) => void;
     transient?: boolean;
@@ -367,6 +384,19 @@ export class HostedRoom {
     this.#deps = deps;
     this.#onStop = init.onStop;
     this.#subs = new Map(init.subs);
+    // BE-044: what the document may reference is what is attached to it, plus what its content
+    // already names (a document that predates the check keeps its assets).
+    this.#assets = deps.assets;
+    if (deps.assets) {
+      for (const [id, seq] of init.attached ?? []) {
+        this.#persisted.set(id, seq);
+        this.#known.add(id);
+      }
+      for (const id of assetRefsIn(init.base)) this.#known.add(id);
+      for (const c of init.log) for (const id of assetRefsIn(stepsOf(c))) this.#known.add(id);
+      for (const s of init.snapshots.values())
+        for (const id of assetRefsIn(s.json.doc)) this.#known.add(id);
+    }
     this.#lastCheckpointAt = deps.now();
     this.#openedAt = this.#lastCheckpointAt;
     const limits = deps.settings.limits;
@@ -395,6 +425,9 @@ export class HostedRoom {
       // passes the same gate as the converter, so `\def` or `\input` is refused with `invalid_op`
       // before it is stored, not only when a document is exported.
       mathGate: mathGateReason,
+      // Invariant I4 (BE-044): a commit may reference only attached assets and those its submitter
+      // uploaded for the document, which the host adds to this set before it submits the commit.
+      ...(deps.assets ? { attachedAssets: this.#known } : {}),
       // Admission control (04 §12; SYN-037; SEC-028): a commit whose connection or tenant budget
       // is spent is refused `rate_limited` before any deduplication, rebase or apply work.
       ...(admission ? { admission } : {}),
@@ -786,6 +819,70 @@ ecentHead, keeping one entry older than the window. */
   submit(key: string, commit: Commit, envelope: string): void {
     const ch = this.#channels.get(key);
     if (!ch || this.#stopped) return;
+    // BE-044: an asset the room does not know yet is looked up first, for the submitter. While one
+    // lookup waits, later commits of the room wait behind it, so their order is kept.
+    if (this.#assets) {
+      const unknown = [...assetRefsIn(commit.steps)].filter((id) => !this.#known.has(id));
+      if (unknown.length > 0 || this.#assetGate) {
+        const run = async (): Promise<void> => {
+          await this.#verifyAssets(unknown, ch.conn.sub);
+          this.#submitNow(key, commit, envelope);
+        };
+        const gate: Promise<void> = (this.#assetGate ?? Promise.resolve())
+          .then(run)
+          .catch((e: unknown) => this.#report(e, 'asset check'))
+          .finally(() => {
+            if (this.#assetGate === gate) this.#assetGate = null;
+          });
+        this.#assetGate = gate;
+        return;
+      }
+    }
+    this.#submitNow(key, commit, envelope);
+  }
+
+  /**
+   * Makes the assets of `ids` that `user` (or anyone, with null) uploaded for this document known
+   * to the room, so that the room's invariant I4 lets a commit reference them (BE-044). The others
+   * stay unknown and the room refuses the commit that references them with `invalid_op`. A lookup
+   * that fails leaves them unknown: a refusal, never a pass.
+   */
+  async #verifyAssets(ids: readonly string[], user: string | null): Promise<void> {
+    const assets = this.#assets;
+    const fresh = ids.filter((id) => !this.#known.has(id));
+    if (!assets || fresh.length === 0) return;
+    let found: ReadonlySet<string>;
+    try {
+      found = await assets.uploadedBy(this.ref, user, fresh);
+    } catch (e) {
+      this.#report(e, 'asset lookup');
+      return;
+    }
+    for (const id of found) {
+      this.#known.add(id);
+      this.#verified.add(id);
+    }
+  }
+
+  /** The assets the commits of a write attach for the first time, with the `seq` of the first (BE-044). */
+  #attachmentsOf(
+    req: WriteRequest,
+    envelope: JsonEnvelope | undefined,
+  ): Array<{ asset: string; seq: number }> {
+    if (!this.#assets) return [];
+    const out = new Map<string, number>();
+    const take = (refs: Iterable<string>, seq: number): void => {
+      for (const id of refs)
+        if (this.#verified.has(id) && !this.#persisted.has(id) && !out.has(id)) out.set(id, seq);
+    };
+    if (req.snapshot) take(envelope ? assetRefsIn(envelope.doc) : [], req.snapshot.seq);
+    else for (const c of req.commits) take(assetRefsIn(c.steps), c.seq);
+    return [...out].map(([asset, seq]) => ({ asset, seq }));
+  }
+
+  #submitNow(key: string, commit: Commit, envelope: string): void {
+    const ch = this.#channels.get(key);
+    if (!ch || this.#stopped) return;
     const span = this.#deps.tracer.start('dep.commit', ch.port.trace, {
       tenant: this.ref.tenant,
       doc: this.ref.doc,
@@ -839,6 +936,35 @@ ecentHead, keeping one entry older than the window. */
       return Promise.reject(
         new DataPlaneError('workflow_active', 'a workflow is active; the content cannot change'),
       );
+    // BE-044: the assets the operation references are looked up first (a snapshot's for anyone
+    // who uploaded them for this document, a step commit's for its actor).
+    if (this.#assets) {
+      const refs = assetRefsIn(op.kind === 'snapshot' ? op.content.envelope.doc : op.steps);
+      const unknown = [...refs].filter((id) => !this.#known.has(id));
+      if (unknown.length > 0 || this.#assetGate) {
+        const run = async (): Promise<{ seq: number }> => {
+          await this.#verifyAssets(unknown, op.kind === 'snapshot' ? null : op.actor);
+          return this.#requestNow(op);
+        };
+        const result = (this.#assetGate ?? Promise.resolve()).then(run);
+        const gate: Promise<void> = result
+          .then(
+            () => undefined,
+            () => undefined,
+          )
+          .finally(() => {
+            if (this.#assetGate === gate) this.#assetGate = null;
+          });
+        this.#assetGate = gate;
+        return result;
+      }
+    }
+    return this.#requestNow(op);
+  }
+
+  #requestNow(op: ServerOp): Promise<{ seq: number }> {
+    if (this.#stopped)
+      return Promise.reject(new DataPlaneError('unavailable', 'the room stopped serving'));
     const key = `${REQUESTER}${op.id}:${Math.random().toString(36).slice(2)}`;
     if (op.trace) this.#lastTrace = op.trace;
     return new Promise((resolve, reject) => {
@@ -1163,8 +1289,10 @@ ecentHead, keeping one entry older than the window. */
       (result) => {
         const tenant = this.ref.tenant;
         this.#deps.metrics.persistLatency.observe({ tenant }, performance.now() - started);
-        if (result.status === 'ok') this.#deps.metrics.persistBatch.observe({ tenant }, n);
-        else this.#deps.metrics.writeFailures.inc({ tenant, status: result.status });
+        if (result.status === 'ok') {
+          this.#deps.metrics.persistBatch.observe({ tenant }, n);
+          for (const a of this.#attaching.get(req) ?? []) this.#persisted.set(a.asset, a.seq);
+        } else this.#deps.metrics.writeFailures.inc({ tenant, status: result.status });
         this.#written(req, result);
       },
       (e: unknown) => this.#lost(e),
@@ -1198,6 +1326,13 @@ ecentHead, keeping one entry older than the window. */
         hash: content.hash,
         ...(this.#deps.checkpointer.indexed ? { checkpointKey: key } : {}),
       };
+    }
+    // BE-044 criterion 1: the assets these commits reference for the first time are attached in the
+    // transaction that stores them.
+    const attachments = this.#attachmentsOf(req, options.snapshot?.envelope);
+    if (attachments.length > 0) {
+      options.attachments = attachments;
+      this.#attaching.set(req, attachments);
     }
     // The store carries out the fault at its own insert points (AppendOptions.fault).
     if (fail) options.fault = fail;
@@ -1822,6 +1957,7 @@ export class RoomHost {
       const unique = [...new Set(named)].filter((u) => u !== 'system');
       const subs: ReadonlyMap<string, string> =
         d.users && unique.length ? await d.users.subsOf(ref.tenant, unique) : new Map();
+      const attached = d.assets ? await d.assets.attached(ref) : undefined;
       const room = new HostedRoom({
         ref,
         record,
@@ -1839,6 +1975,7 @@ export class RoomHost {
           : {}),
         initialRevision,
         subs,
+        ...(attached ? { attached } : {}),
         deps: d,
         transient,
         onStop: (r) => {

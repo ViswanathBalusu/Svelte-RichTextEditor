@@ -48,6 +48,7 @@
   import Toolbar from './components/Toolbar.svelte';
   import { provideShell } from './context.ts';
   import { createCatchUpController } from './shell/catch-up.ts';
+  import { MARKUP_VIEWS, type MarkupView } from './shell/markup-views.ts';
   import type { FilterRegistry } from './extensions/filters.ts';
   import type { StatusItemRegistry } from './extensions/contributions.ts';
   import {
@@ -726,6 +727,23 @@
     }
   });
 
+  // The markup view in force, for the commands that show which one is chosen (UX-035).
+  const markupView = core.markupView ? live(core.markupView) : null;
+  $effect(() => {
+    if (!markupView) return;
+    for (const view of MARKUP_VIEWS) shellQueries.set(`shell.markup.${view}`, markupView.current === view);
+  });
+
+  // The words that name a suggestion for assistive technology, with the host's names (UX-035
+  // criterion 4). Set again when a name arrives or the language changes.
+  $effect(() => {
+    if (!core.setSuggestionLabel) return;
+    void directory.current;
+    const words = tr;
+    core.setSuggestionLabel((kind, user) => words.t(`review.suggestion.${kind}`, { name: nameOf(user) }));
+    return () => core.setSuggestionLabel?.(null);
+  });
+
   // Suggestion mode where the user may only suggest (PRM-031; 07 §7): the core is asked for `review`
   // in such a scope and for the chosen `edit` again in an editable one. The rules are in suggest-mode.ts.
   let modeTrack: ModeTrack = START_TRACK;
@@ -784,6 +802,15 @@
     },
     setMode: (m: EditorMode) => core.setMode?.(m) ?? false,
     setView: (v: ViewName) => core.setView?.(v) ?? false,
+    // How suggestions are shown (UX-035): offered only when the core has the views.
+    ...(core.setMarkupView
+      ? {
+          setMarkupView: (view: MarkupView) => {
+            core.setMarkupView?.(view);
+            return true;
+          },
+        }
+      : {}),
     closeStory: () => {
       if (panel.current?.kind !== 'story') return false;
       core.closePanel();
@@ -877,6 +904,8 @@
     }
     if (core.view && core.setView)
       for (const v of layoutViews(core.views?.get())) add(host1b[`view.layout.${v}`]);
+    if (core.markupView && core.setMarkupView)
+      for (const view of MARKUP_VIEWS) add(host1b[`review.markup.${view}`]);
   });
 
   onDestroy(() => {

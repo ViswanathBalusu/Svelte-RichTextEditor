@@ -65,6 +65,8 @@ import { quotaRoutes } from './quota-admin-routes.ts';
 import { registryRoutes } from './registry-routes.ts';
 import { retentionRoutes } from './retention-routes.ts';
 import { holdRoutes } from './hold-routes.ts';
+import { eraseRoutes } from './erase-routes.ts';
+import { tombstoneRoutes } from './tombstone-routes.ts';
 import { searchRoutes } from './search-routes.ts';
 import { webhookRoutes } from './webhook-routes.ts';
 
@@ -723,6 +725,20 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     // The ETag the caller matched is the head it replaces: the same PUT again is the same commit.
     const { seq } = await apply(ref, envelope, ctx.caller.actor, { head: current.etag });
     k.wrote(ctx, doc, seq);
+    // The audit trail names the person the change is attributed to and the credential that made it
+    // (owner decision 174; UX-097 criterion 1; 07 §14). Identifiers, the origin and the seq only.
+    if (d.audit)
+      await d.audit.record([
+        {
+          id: uuid7(),
+          tenant: ref.tenant,
+          doc: ref.doc,
+          actor: ctx.caller.actor,
+          kind: 'commit.service',
+          data: { origin: 'replace', credential: ctx.caller.credential, seq, scopes: [] },
+          at: d.now(),
+        },
+      ]);
     // The hash-chain head of the commit, for an independent anchor (05 §7; PRO-069 criterion 3).
     const chainHead = (await d.logs.state?.(ref))?.chainHead ?? null;
     emit(ctx, 'dep.document.changed', doc, { seq, ...(chainHead !== null ? { chainHead } : {}) });
@@ -773,6 +789,8 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...quotaRoutes(k),
     ...registryRoutes(k),
     ...holdRoutes(k),
+    ...eraseRoutes(k),
+    ...tombstoneRoutes(k),
     ...searchRoutes(k),
     ...workflowRoutes(k),
     getFonts,

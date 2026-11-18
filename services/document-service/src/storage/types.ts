@@ -62,6 +62,12 @@ export interface LogStore {
   read(ref: DocRef, fromSeq?: number, toSeq?: number): Promise<LogCommit[]>;
   head(ref: DocRef): Promise<LogHead>;
   /**
+   * The metadata of the stored commits with fromSeq <= seq <= toSeq, in order, with no payload: so it
+   * also answers for a commit whose payload was removed (a tombstone, thinning; HIS-040, HIS-032).
+   * A list of history needs no more. Optional: callers fall back to `read`.
+   */
+  readMeta?(ref: DocRef, fromSeq: number, toSeq: number): Promise<CommitMetaRow[]>;
+  /**
    * The stored commit with this identifier, or null (04 §5 step 2, "then in the log"). A room holds
    * only the commits after its checkpoint; this finds the older ones, so that a redelivered
    * server-authored commit is acknowledged at its seq (BE-039). Optional: test doubles may omit it.
@@ -72,6 +78,11 @@ export interface LogStore {
   /** The head with the chain head (BE-079 criterion 4). Optional: test doubles may omit it. */
   state?(ref: DocRef): Promise<HeadState>;
   /**
+   * The assets attached to the document so far, with the seq of the commit that first referenced
+   * each (doc_assets, BE-044). Optional: test doubles may omit it.
+   */
+  attachedAssets?(ref: DocRef): Promise<ReadonlyMap<string, number>>;
+  /**
    * The commits whose scopes include `scope`, newest first, behind the caller's gate (HIS-016;
    * `field:<id>` answers "who filled this field"). Optional: test doubles may omit it.
    */
@@ -80,6 +91,19 @@ export interface LogStore {
     scope: string,
     gate?: { after?: number; upTo?: number },
   ): Promise<ScopeCommit[]>;
+}
+
+/** The metadata of a stored commit, without its payload (`readMeta`). */
+export interface CommitMetaRow {
+  seq: number;
+  kind: LogCommit['kind'];
+  user: string;
+  /** The session, or the server's own session for a commit the server wrote. */
+  session: string;
+  /** Server time, Unix milliseconds. */
+  time: number;
+  origin: string;
+  scopes: string[];
 }
 
 /** One commit that changed a scope, as `scopeHistory` returns it (the shape of history's CommitMeta). */
@@ -111,6 +135,12 @@ export interface AppendOptions {
      */
     checkpointKey?: string;
   };
+  /**
+   * Assets the commits of this request attach to the document for the first time (BE-044 criterion
+   * 1): one `doc_assets` row each, with `seq` as its `first_seq`, written in the same transaction as
+   * the commits. A row that exists is kept.
+   */
+  attachments?: ReadonlyArray<{ asset: string; seq: number }>;
   /** A test fault for this write only (BE-079); set by the fault hooks, never in production. */
   fault?: WriteFault;
 }
