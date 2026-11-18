@@ -13,8 +13,11 @@ import type {
   HistoryPaneItem,
   HistoryPaneQuery,
   HistoryPaneResult,
+  HistoryCompareResult,
   HistoryPort,
   HistoryVersionOpen,
+  HistoryWhoQuery,
+  HistoryWhoResult,
   ResolveUsers,
 } from '../../src/core-api.ts';
 
@@ -29,6 +32,17 @@ export interface VersionLog {
   closed: number;
   /** The outcome the next `openVersion` gives; absent: the version opens. */
   outcome?: 'forbidden' | 'not_found' | 'failed';
+  /** HIS-013: the comparisons asked for, what the view was told to draw, and where focus was sent. */
+  compared?: [number, number | null][];
+  drawn?: number;
+  deletions?: boolean[];
+  focused?: number[];
+  /** The outcome the next `compare` gives; absent: it succeeds. */
+  compareOutcome?: 'forbidden' | 'not_found' | 'failed';
+  /** HIS-015: the questions asked, the blocks the reader has selected, and the next outcome. */
+  asked?: { seq: number; region: string | null; blocks: string[] | null }[];
+  selected?: string[];
+  whoOutcome?: 'forbidden' | 'not_found' | 'failed' | 'empty';
 }
 
 /** Groups end at a state a reader can open, in the `versions` mode. */
@@ -70,9 +84,80 @@ function openVersion(
           body.remove();
         };
       },
+      selectedBlocks: () => [...(log.selected ?? [])],
+      showComparison() {
+        log.drawn = (log.drawn ?? 0) + 1;
+      },
+      showDeletions(on) {
+        (log.deletions ??= []).push(on);
+      },
+      focusChange(index) {
+        (log.focused ??= []).push(index);
+        return true;
+      },
       close() {
         log.closed++;
       },
+    },
+  });
+}
+
+/** The answer of "who wrote this": two people, one of them erased, and text brought back by a restore. */
+function whoWrote(query: HistoryWhoQuery): Promise<HistoryWhoResult> {
+  const log = versionLog();
+  (log.asked ??= []).push({
+    seq: query.seq,
+    region: query.region,
+    blocks: query.blocks ? [...query.blocks] : null,
+  });
+  if (log.whoOutcome === 'empty') return Promise.resolve({ ok: true, seq: query.seq, authors: [] });
+  if (log.whoOutcome !== undefined) return Promise.resolve({ ok: false, reason: log.whoOutcome });
+  return Promise.resolve({
+    ok: true,
+    seq: query.seq,
+    authors: [
+      { user: 'u1', runs: 2, firstTime: '2026-11-13T09:00:00Z', lastTime: '2026-11-13T09:04:00Z' },
+      {
+        user: 'u-erased',
+        runs: 1,
+        firstTime: '2026-11-13T09:01:00Z',
+        lastTime: '2026-11-13T09:01:00Z',
+      },
+      {
+        user: 'u2',
+        restoredBy: 'u1',
+        runs: 1,
+        firstTime: '2026-11-12T08:00:00Z',
+        lastTime: '2026-11-12T08:00:00Z',
+      },
+    ],
+  });
+}
+
+/** The changes the harness's comparison returns: text, a field, an added block and a removed one. */
+function compare(from: number, to: number | null): Promise<HistoryCompareResult> {
+  const log = versionLog();
+  (log.compared ??= []).push([from, to]);
+  if (log.compareOutcome !== undefined)
+    return Promise.resolve({ ok: false, reason: log.compareOutcome });
+  return Promise.resolve({
+    ok: true,
+    comparison: {
+      fromSeq: from,
+      toSeq: to ?? 30,
+      changes: [
+        {
+          kind: 'modified',
+          blockId: 'pA',
+          region: 'r1',
+          user: 'u1',
+          seq: 22,
+          spans: [{ op: 'insert', at: 0, text: 'New', user: 'u1', seq: 22 }],
+        },
+        { kind: 'field', fieldId: 'f1', blockId: 'pB', user: 'u2', seq: 24 },
+        { kind: 'added', blockId: 'pC', user: 'u1', seq: 25 },
+        { kind: 'removed', blockId: 'pD', region: 'r1', user: 'u2', seq: 26 },
+      ],
     },
   });
 }
@@ -161,7 +246,7 @@ export function historyPort(mode: HistoryHarnessMode, resolveUsers: ResolveUsers
   return {
     resolveUsers,
     ...(createVersion ? { createVersion } : {}),
-    ...(mode === 'versions' ? { openVersion } : {}),
+    ...(mode === 'versions' || mode === 'named' ? { openVersion, compare, whoWrote } : {}),
     onChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

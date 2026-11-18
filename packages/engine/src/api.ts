@@ -7,7 +7,9 @@
  * `outline()` of 02 §5.1 is `outline.get()`: the outline is a read view, so that the interface can
  * subscribe to it.
  */
-import type { StepJson } from '@docedit/authority';
+import type { FieldReport, StepJson } from '@docedit/authority';
+
+export type { FieldReport };
 import type {
   Access,
   Limits,
@@ -482,8 +484,25 @@ export interface RecoveredItem {
   commit: string | null;
   /** Names the item for `insertRecovered` and `discardRecovered` (UX-017): the commit, else the `seq` and its place. */
   id?: string;
+  /**
+   * Why it was set aside, in three words (FE-010 criterion 6): `rejected` (the server refused the
+   * commit), `dropped` (a rebase removed it because another change took away what it applied to) or
+   * `unsent` (a reload, a reset or a stale commit left it unsent). It follows from `reason`.
+   */
+  kind?: 'rejected' | 'dropped' | 'unsent';
   /** The text it inserted. */
   text: string;
+  /**
+   * What it inserted, as a CDM fragment, or null when it inserted nothing (a deletion): the pane can
+   * show it and a host can read it (FE-010 criterion 6).
+   */
+  fragment?: CdmFragment | null;
+  /**
+   * The DEP scope it was meant for (`body`, `region:<id>`, `defs`, `story:<id>`), or null when
+   * unknown (an item written to the journal before this field existed). For a `permission_denied`
+   * rejection it is the scope the server named, as `scope` says.
+   */
+  region?: string | null;
   seq: number;
   /**
    * For a `permission_denied` rejection: the scope whose change was refused, as the shell names it
@@ -549,6 +568,39 @@ export interface EquationRequest extends EquationTarget {
 export type EquationConfirmation =
   | { readonly ok: true; readonly confirmed: boolean }
   | { readonly ok: false; readonly reason: string; readonly message?: string };
+
+/**
+ * The outcome of setting the value of a form field through the embedding API (12 §10; FRW-069). It
+ * resolves once the document service has answered, or after the timeout with `confirmed` false.
+ * `code` is what refused the fill: `permission_denied` (the field is not this person's to fill, P7),
+ * `field_invalid` (the value does not fit the field, I15), `conflict` (someone else changed the
+ * field first, P9), `not_found` (the document has no field with that key) or another code of the
+ * protocol (04 §9).
+ */
+export type FieldFillOutcome =
+  | { readonly ok: true; readonly confirmed: boolean }
+  | { readonly ok: false; readonly code: string; readonly message: string };
+
+/**
+ * The field members of the embedding API over the core (12 §10; FRW-069). The two that move focus
+ * need a view, so a core without one does not offer them.
+ */
+export interface FieldsApi {
+  /** The values of the form fields by key, as the document holds them now (decimals are strings). */
+  fieldValues(): Record<string, unknown>;
+  /** Fills the field with `key` as the current user: a normal commit, checked by the guard and the authority. */
+  fillField(
+    key: string,
+    value: unknown,
+    options?: { readonly timeoutMs?: number },
+  ): Promise<FieldFillOutcome>;
+  /** The fields that are required and empty, or whose entry has a problem; it changes nothing. */
+  validateFields(): FieldReport[];
+  /** Moves focus to the control of the field with `key`; false when there is none. */
+  focusFieldByKey?(key: string): boolean;
+  /** Moves focus to the next field the person may fill; false when there is none. */
+  nextFillableField?(): boolean;
+}
 
 /** The sync client's state as plain data (FE-033 criterion 7). */
 export interface SyncSummary {
@@ -620,6 +672,8 @@ export interface FindState {
   readonly query: string;
   readonly count: number;
   readonly current: number | null;
+  /** False when the find ignores case (UX-020); absent when case matters, the default. */
+  readonly matchCase?: boolean;
 }
 
 /** One match for a navigation pane (FE-059 criterion 6): its place and the text around it. */
@@ -802,7 +856,13 @@ export interface DocumentApi {
    * Finds `query` in the body and highlights nothing itself: the matches are the core's and the
    * view draws them (FE-059). An empty query clears the find. Changes no document.
    */
-  findText(query: string): FindState;
+  findText(query: string, options?: { readonly matchCase?: boolean }): FindState;
+  /**
+   * Selects match `index` (0-based, as in `findResults()`) and scrolls it into view; false when
+   * there is no such match, or `blockId` and `text` are given and the match there is another one
+   * (the document changed since the results were read; UX-020 criterion 3).
+   */
+  selectFindMatch(index: number, expected?: { blockId: string | null; text: string }): boolean;
   /** Moves the selection to the next match, wrapping at the end; false when there is none. */
   findNext(): boolean;
   /** Moves the selection to the previous match, wrapping at the start; false when there is none. */

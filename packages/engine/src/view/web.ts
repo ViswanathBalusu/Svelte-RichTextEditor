@@ -41,6 +41,8 @@ import { FormFieldViews, fieldView, formFieldView } from './form-field-view.ts';
 import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
+import type { ComparisonSpec } from '../comparison-markup.ts';
+import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
@@ -164,6 +166,8 @@ export class EditorCore extends DocumentCore {
   #shimResult: 'native' | 'instance' | 'none' | null = null;
   /** The blocks before which a page guide is drawn (FE-068); empty when guides are off. */
   #pageGuides: ReadonlySet<string> = new Set();
+  /** The comparison drawn in a version view (HIS-013); null in the live editor. */
+  #comparison: readonly ComparisonSpec[] | null = null;
   #view: EditorView | null = null;
   /** The live form field controls and mirrors of the body view (FRW-004, FRW-006). */
   readonly #fieldViews = new FormFieldViews();
@@ -296,6 +300,16 @@ export class EditorCore extends DocumentCore {
   }
 
   /**
+   * Draws a comparison in the document (HIS-013): the specs of comparisonSpecs, or null to remove
+   * them. Like the page guides, the view is redrawn without a transaction and the document is not
+   * changed. Used by the read-only version view; the live editor never sets one.
+   */
+  setComparison(specs: readonly ComparisonSpec[] | null): void {
+    this.#comparison = specs;
+    this.#view?.setProps({});
+  }
+
+  /**
    * The caret's rectangle in viewport coordinates: the head of the selection of the view that has
    * focus (the panel's sub-editor when focus is there, otherwise the body). The shell opens a menu
    * there when it is asked for from the keyboard (UX-008; ui `CoreApi.caretRect`). Null while no
@@ -316,6 +330,31 @@ export class EditorCore extends DocumentCore {
       control.focus();
       return true;
     }
+    return false;
+  }
+
+  /** Moves focus to the control of the form field with `key`; false for a key no field has (FRW-069). */
+  focusFieldByKey(key: string): boolean {
+    let id: string | null = null;
+    this.editorState.doc.descendants((node) => {
+      if (id !== null || node.type.name !== 'form_field') return id === null;
+      if (node.attrs['key'] === key && typeof node.attrs['id'] === 'string') id = node.attrs['id'];
+      return false;
+    });
+    return id !== null && this.focusField(id);
+  }
+
+  /**
+   * Moves focus to the next form field the person may fill, in document order, after the one that
+   * last had focus (the first one when none had). It does not wrap: after the last one there is none
+   * (FRW-069; wrapping is an open question of the story). False when no control took focus.
+   */
+  nextFillableField(): boolean {
+    const active = this.selectedField();
+    const fields = this.fillFields();
+    const from = active === null ? -1 : fields.findIndex((f) => f.id === active);
+    for (const f of fields.slice(from + 1))
+      if (this.fieldFillable(f.id) && this.focusField(f.id)) return true;
     return false;
   }
 
@@ -450,10 +489,15 @@ export class EditorCore extends DocumentCore {
         // The suggestion marks in the `all` view are drawn too (FE-046 criterion 4; FE-045 criterion 1).
         decorations: (state) => {
           const f = this.findState.get();
-          return findDecorations(state.doc, { query: f.query, current: f.current })
+          return findDecorations(state.doc, {
+            query: f.query,
+            current: f.current,
+            ...(f.matchCase === false ? { matchCase: false } : {}),
+          })
             .add(state.doc, suggestionDecorations(state.doc, 'all').find())
             .add(state.doc, commentDecorations(state.doc, this.threadRanges.get()).find())
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
+            .add(state.doc, comparisonDecorations(state.doc, this.#comparison).find())
             .add(
               state.doc,
               proofingDecorations(
