@@ -196,7 +196,7 @@ As an author who turns hyphenation on, I want the page view to hyphenate with th
 - [ ] Every bundled pattern file's licence is recorded in the borrow list; a language whose patterns are not permissively licensed is not bundled.
 - [ ] Given a language without patterns, its text is not hyphenated and nothing fails.
 
-**Notes:** C-RUST, phase 3.
+**Notes:** C-RUST, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold (S10 chose harfbuzzjs with line breaking in TypeScript, ADR 0016, "Result of S10"), and the story depends on WASM-008, which is blocked. Hyphenation needs a line breaker that calls it, and none exists in the kernel. The borrow list (SPK-026, `docs/research/2026-11-06-borrow-list.md`) already records hyphenation patterns per language with their licences, which is the input the fourth criterion needs when a pattern file is bundled. EXP-015 (the PDF side's hyphenation settings) is the other half; the match with the house class's minimum counts waits on both. Bundling pattern data with no consumer would add size to a module that does not exist.
 
 ## Verification and budgets
 
