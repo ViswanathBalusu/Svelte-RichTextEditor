@@ -83,6 +83,15 @@ export interface LogStore {
    */
   attachedAssets?(ref: DocRef): Promise<ReadonlyMap<string, number>>;
   /**
+   * Attaches assets to a document outside a commit (`doc_assets` rows, kept if they exist): a fork
+   * attaches the assets its content references, with `seq` 0, so that they resolve (HIS-022, I4).
+   * Optional: test doubles may omit it.
+   */
+  attachAssets?(
+    ref: DocRef,
+    attachments: ReadonlyArray<{ asset: string; seq: number }>,
+  ): Promise<void>;
+  /**
    * The commits whose scopes include `scope`, newest first, behind the caller's gate (HIS-016;
    * `field:<id>` answers "who filled this field"). Optional: test doubles may omit it.
    */

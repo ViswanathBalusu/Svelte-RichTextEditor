@@ -43,6 +43,11 @@ export interface ShellContext {
    * catch-up port; the header reads its badge and the catch-up pane draws it.
    */
   readonly catchUp?: CatchUpController | undefined;
+  /**
+   * Asks the host to copy the version at `atSeq` into a new document (HIS-022): the element raises
+   * `de-fork-request`. Present only when the host handles it; the shell never calls the fork itself.
+   */
+  readonly requestFork?: ((atSeq: number) => void) | undefined;
   /** A followed comment link, taken by the comments pane (UX-034); null when none is waiting. */
   readonly linkedThread: Writable<LinkedTarget | null>;
 }

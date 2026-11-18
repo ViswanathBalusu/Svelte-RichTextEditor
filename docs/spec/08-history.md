@@ -170,7 +170,15 @@ Old versions can contain text that was deleted before a person was given access.
 | `all` | Everyone with `view` sees full history |
 | `since_access` | A person sees history from the time in their token's `access_since` claim. It needs the host to supply that claim, because document-level access lives in the host |
 
-The setting is enforced by one gate on every place a sequence number can be supplied, including channel resume (07, section 8).
+The setting is enforced by one gate on every place a sequence number can be supplied, including channel resume (07, section 8). The gate is a number, `minVisibleSeq(user)`, per user and moment:
+
+| Setting | `minVisibleSeq(user)` |
+|---|---|
+| `editors` | 0 for a person who holds `edit` somewhere in the document through their role or a grant; otherwise the head |
+| `all` | 0 |
+| `since_access` | The last commit stored at or before the token's `access_since` claim, so that the state current at that moment is visible. Without the claim it is the head: the gate fails closed, for editors too |
+
+"`edit` somewhere" counts the role and matching grants only, not the temporary limits of 07, section 4: a lock, an approval or a lease does not take history away from an editor. A document's setting wins over the tenant's, the tenant's is the default for documents without one, and without either the setting is `editors`. Only tenant administrators change either, through the administration API. A change applies at once, history already written included (owner decision 140; ADR 0034).
 
 ## 10. Changes since last visit
 
