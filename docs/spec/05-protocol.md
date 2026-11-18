@@ -79,7 +79,12 @@ Region grants are not in the token. They are stored by the document service and 
 
 ### 3.2 Service credentials
 
-Host backends call the control plane with a service credential: an API key, or a JWT with the type header `dep-svc+jwt`, signed with keys that are registered separately from user-token keys. A user token can never become a service credential through a claim. A service call that acts for a user names that user in the `DEP-Actor` header, and history attributes the change to them.
+Host backends call the control plane with a service credential: an API key, or a JWT with the type header `dep-svc+jwt`, signed with keys that are registered separately from user-token keys. A user token can never become a service credential through a claim. A service call that acts for a user names that user in the `DEP-Actor` header, and history attributes the change to them. The header follows these rules (owner decision 174; ADR 0114, UX-096):
+
+- **Which calls.** The service reads `DEP-Actor` on every call that carries a service credential. It names the user by `sub`, which is an opaque identifier of 1 to 255 characters with no whitespace or control characters. Any other value is refused with `validation_failed` (400). The service maps the `sub` to the tenant's surrogate identifier, and creations, content changes (a prefill, a content replacement) and grant changes record that surrogate. Without the header the actor is `system`, never a person.
+- **Whose rights bound the call.** The rights of the named user bound the call, and the service credential does not widen them. A service credential cannot be used to do what the user it names may not do. Where the service does not hold a right of the user (a document role and groups are claims of the user's tokens, 3.3), it takes the narrower reading and fails closed (ADR 0379 for the history gate).
+- **What is recorded.** The surrogate of the named user is the actor of the commit. The audit entry records the user and the service credential that made the call, and the commit's origin (07 section 14). History and the audit trail therefore name both the person and the integration.
+- **A user token.** `DEP-Actor` on a call made with a user token is ignored. The caller stays the holder of the token. A user can never become another person by a header.
 
 ### 3.2.1 Agent tokens
 
