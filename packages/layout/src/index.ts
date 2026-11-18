@@ -13,6 +13,7 @@
  * Universal: no DOM and no Node.js API (FND-004). Measurement is injected.
  */
 export * from './measure.ts';
+export * from './math-measure.ts';
 export * from './flow.ts';
 export * from './tree.ts';
 export * from './paginate.ts';

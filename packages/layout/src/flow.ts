@@ -50,6 +50,8 @@ export interface FlowText {
   readonly size: number;
   /** For `noteRef`: the footnote's identifier. For `field`: the field kind. */
   readonly ref?: string;
+  /** For `equation`: the LaTeX source, which a math measurer sizes (FE-064 criterion 4). */
+  readonly latex?: string;
 }
 
 export interface FlowTab {
@@ -144,6 +146,9 @@ export interface FlowBox {
   readonly align: 'left' | 'center' | 'right';
   readonly keepNext: boolean;
   readonly regionId: string | null;
+  /** For `equation`: the LaTeX source and the font around it, which a math measurer sizes. */
+  readonly latex?: string;
+  readonly font?: FlowFont;
 }
 
 export interface FlowBreak {
@@ -580,6 +585,12 @@ function fieldText(node: CdmNode): string {
   }
 }
 
+/** The LaTeX source of an equation node, when it has one, as the property a flow node carries. */
+const latexOf = (node: CdmNode): { latex: string } | Record<string, never> => {
+  const latex = str(node.attrs?.['latex']);
+  return latex === null ? {} : { latex };
+};
+
 /** Stand-in text for an atom: spaces become no-break spaces so that it never breaks. */
 const atomText = (s: string): string => s.replace(/ /g, ' ') || ' ';
 
@@ -722,6 +733,7 @@ function paragraphBlocks(
           kind: 'text',
           role: 'equation',
           text: atomText(str(node.attrs?.['latex']) ?? ''),
+          ...latexOf(node),
           // Italic unless the run says otherwise: a mark the run carries wins.
           font: fontOf(
             ctx,
@@ -1012,6 +1024,8 @@ function blockOf(
           align: 'center',
           keepNext: false,
           regionId,
+          ...latexOf(node),
+          font,
         },
       ];
     }
