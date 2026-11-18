@@ -170,6 +170,7 @@ export const ATTRIBUTE_EMITTERS: Readonly<Record<string, EmitterName | null>> = 
   'paragraph.tabs': 'enumLookup',
   'paragraph.borders': null,
   'paragraph.shading': 'color',
+  'paragraph.suggest': null, // read by settleSuggestions, which turns entries into marks (09 §10)
   'paragraph.preserved': null,
   'paragraph.suggest': null,
   'paragraph.ext': null,
@@ -181,6 +182,7 @@ export const ATTRIBUTE_EMITTERS: Readonly<Record<string, EmitterName | null>> = 
   'table.headerRows': 'generatedId',
   'table.borders': 'dimen',
   'table.cellMargins': 'dimen',
+  'table.suggest': null, // read by settleSuggestions, which turns entries into marks (09 §10)
   'table.preserved': null,
   'table.suggest': null,
   'table.ext': null,
@@ -188,6 +190,7 @@ export const ATTRIBUTE_EMITTERS: Readonly<Record<string, EmitterName | null>> = 
   'table_row.height': null,
   'table_row.heightRule': null,
   'table_row.cantSplit': null,
+  'table_row.suggest': null, // read by settleSuggestions, which turns entries into marks (09 §10)
   'table_row.preserved': null,
   'table_row.suggest': null,
   'table_row.ext': null,
