@@ -22,16 +22,24 @@ describe('capabilities', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Capabilities;
     expect(body).toEqual(capabilities(new AuthorityService().calls));
-    expect(body.calls).toEqual(['open', 'materialise', 'evaluateRules']);
+    expect(body.calls).toEqual([
+      'open',
+      'materialise',
+      'applyCommit',
+      'restoreSteps',
+      'diff',
+      'attribution',
+      'evaluateRules',
+    ]);
   });
 
   it('do not offer a feature whose call is not built', () => {
     const { features } = capabilities(new AuthorityService().calls);
-    // `applyCommit` (PRO-104) and the history calls (PRO-106) are not implemented here yet.
-    for (const f of ['regions', 'suggest-enforced', 'fields', 'history', 'read-restrictions'])
-      expect(features, f).not.toContain(f);
-    // `evaluateRules` is built (PRO-107), so `rules` is offered.
-    expect(features).toContain('rules');
+    // Reader projection is not a call of 05 §10 and no service offers it (ADR 0019).
+    for (const f of ['read-restrictions']) expect(features, f).not.toContain(f);
+    // `applyCommit` (PRO-104) and `evaluateRules` (PRO-107) are built, so these are offered.
+    for (const f of ['regions', 'suggest-enforced', 'fields', 'rules', 'history'])
+      expect(features).toContain(f);
     // Features of the backend's own planes do not depend on the service.
     for (const f of ['presence', 'comments', 'workflow', 'leases'])
       expect(features, f).toContain(f);
@@ -53,9 +61,9 @@ describe('capabilities', () => {
   });
 
   it('say what is missing in the refusal', () => {
-    expect(sidecarProblems(['regions'])).toMatchObject([
-      { code: 'needs_authority_service', feature: 'regions' },
+    expect(sidecarProblems(['read-restrictions'])).toMatchObject([
+      { code: 'needs_authority_service', feature: 'read-restrictions' },
     ]);
-    expect(sidecarProblems(['regions'])[0]!.message).toContain('applyCommit');
+    expect(sidecarProblems(['read-restrictions'])[0]!.message).toContain('projection');
   });
 });

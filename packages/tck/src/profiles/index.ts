@@ -7,6 +7,7 @@ import type { ProfileDef } from '../scenario.ts';
 import { AUTHZ } from './authz.ts';
 import { COMMENTS } from './comments.ts';
 import { CORE_CHANNELS } from './core-channels.ts';
+import { CORE_RELAY_PROFILE } from './core-relay.ts';
 import { CORE_REST } from './core-rest.ts';
 import { CORE_SESSION } from './core-session.ts';
 import { CORE_SYNC } from './core-sync.ts';
@@ -62,14 +63,7 @@ export const PROFILES: readonly ProfileDef[] = [
   FUZZ,
   FIELDS,
   PERM_FILL,
-  later(
-    'core-relay',
-    'The core profile for relays',
-    '05 §9; 04 §14',
-    { kind: 'mode', mode: 'relay' },
-    ['PRO-124'],
-    'PRO-124: no relay scenarios yet',
-  ),
+  CORE_RELAY_PROFILE,
   PERM_SUGGEST,
   HISTORY,
   COMMENTS,

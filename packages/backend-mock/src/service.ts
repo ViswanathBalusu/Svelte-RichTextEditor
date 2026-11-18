@@ -13,7 +13,7 @@ import {
   type MockBackendOptions,
   type MockToken,
 } from './backend.ts';
-import { type GrantSpec, MockDocument } from './document.ts';
+import { type DocumentHooks, type GrantSpec, MockDocument } from './document.ts';
 
 export interface MockServiceOptions {
   /** The server clock, Unix milliseconds (default `Date.now`). */
@@ -51,7 +51,7 @@ export class MockService implements BackendHost {
   private readonly mathGate: MockServiceOptions['mathGate'];
   private readonly baseNow: () => number;
   private clockOffset = 0;
-  private readonly docs = new Map<string, MockDocument>();
+  protected readonly docs = new Map<string, MockDocument>();
   private serial = 0;
   private readonly watermarks = new Map<string, number>();
   private readonly denied = new Set<string>();
@@ -109,16 +109,18 @@ export class MockService implements BackendHost {
         `invalid CDM content: ${result.violations.map((v) => `${v.invariant} ${v.path} ${v.message}`).join('; ')}`,
       );
     const id = opts.id ?? uuid7();
-    this.docs.set(
-      id,
-      new MockDocument(id, content, opts.grants ?? [], {
-        now: () => this.now(),
-        limits: this.limits,
-        presence: this.presence,
-        ...(this.mathGate ? { mathGate: this.mathGate } : {}),
-      }),
-    );
+    this.docs.set(id, new MockDocument(id, content, opts.grants ?? [], this.hooks(id)));
     return id;
+  }
+
+  /** What every document of this service is given; a persistent service adds its store (PRO-100). */
+  protected hooks(_docId: string): DocumentHooks {
+    return {
+      now: () => this.now(),
+      limits: this.limits,
+      presence: this.presence,
+      ...(this.mathGate ? { mathGate: this.mathGate } : {}),
+    };
   }
 
   /** `PATCH /documents/{id}/grants`: replaces the region grants. */

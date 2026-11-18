@@ -25,7 +25,7 @@ export type {
 export { CORE_MEMBERS, LIMIT_NAMES } from './core.ts';
 export { OPTIONAL_MEMBERS } from './optional.ts';
 export { ContractFailure } from './assert.ts';
-export { contractDocument, importedDocument, IDS, USERS } from './fixtures.ts';
+export { contractDocument, importedDocument, IDS, USERS, posIn } from './fixtures.ts';
 
 /** Every contract case: the core ports, then the optional ports. */
 export function portContract(factory: HarnessFactory, opts: ContractOptions): ContractCase[] {

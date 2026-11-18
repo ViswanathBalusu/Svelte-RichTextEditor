@@ -9,6 +9,10 @@
  * |---|---|
  * | `open` | `POST /v1/authority/documents/{doc}/open` |
  * | `materialise` | `GET /v1/authority/states/{stateId}/content?seq=N` |
+ * | `applyCommit` | `POST /v1/authority/states/{stateId}/commits` (a rejection is `200` with `{ rejected }`) |
+ * | `restoreSteps` | `POST /v1/authority/states/{stateId}/restore-steps` (a refusal is `200` with `{ refused }`) |
+ * | `diff` | `POST /v1/authority/states/{stateId}/diff` |
+ * | `attribution` | `POST /v1/authority/states/{stateId}/attribution` |
  * | `migrate` | `POST /v1/authority/documents/{doc}/migrate` (a document of an older `cdm` is not a state) |
  * | `evaluateRules` | `POST /v1/authority/states/{stateId}/evaluate-rules` |
  * | what the service supports | `GET /v1/authority/capabilities` |
@@ -162,6 +166,37 @@ export async function route(routes: Routes, req: HttpRequest): Promise<HttpRespo
         },
         body: r.text,
       };
+    }
+    if (call === 'commits') {
+      if (method !== 'POST') return methodNotAllowed('POST');
+      const parsed = parseBody(req.contentType, req.body);
+      if (!parsed.ok) return problem(parsed.error);
+      const r = await service.applyCommit(stateId, parsed.value);
+      if (!r.ok) return problem(r.error);
+      return r.accepted
+        ? json(200, {
+            stateId: r.stateId,
+            seq: r.seq,
+            steps: r.steps,
+            scopes: r.scopes,
+            rebased: r.rebased,
+            commits: r.commits,
+          })
+        : json(200, { rejected: r.rejected });
+    }
+    if (call === 'restore-steps' || call === 'diff' || call === 'attribution') {
+      if (method !== 'POST') return methodNotAllowed('POST');
+      const parsed = parseBody(req.contentType, req.body);
+      if (!parsed.ok) return problem(parsed.error);
+      const r =
+        call === 'restore-steps'
+          ? await service.restoreSteps(stateId, parsed.value)
+          : call === 'diff'
+            ? await service.diff(stateId, parsed.value)
+            : await service.attribution(stateId, parsed.value);
+      if (!r.ok) return problem(r.error);
+      const { ok: _ok, ...answer } = r;
+      return json(200, answer);
     }
     if (call === 'evaluate-rules') {
       if (method !== 'POST') return methodNotAllowed('POST');
