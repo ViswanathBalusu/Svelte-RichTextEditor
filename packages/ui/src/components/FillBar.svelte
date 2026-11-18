@@ -10,6 +10,7 @@
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
   import { fillProgress } from '../shell/fill.ts';
+  import AccessCodeForm from './AccessCodeForm.svelte';
 
   interface Props {
     fill: ReadView<FillSummary | null>;
@@ -33,7 +34,9 @@
 
 {#if summary && progress}
   <div class="de-fill-bar" role="region" aria-label={tr.t('fill.label')} lang={tr.locale}>
-    {#if !summary.active}
+    {#if !summary.active && summary.inactive === 'unverified' && shell.core.accessCode}
+      <AccessCodeForm service={shell.core.accessCode} />
+    {:else if !summary.active}
       <span data-status="fill-inactive"
         >{summary.inactive === 'paused' ? tr.t('fill.paused') : tr.t('fill.waiting')}</span
       >

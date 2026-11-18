@@ -174,6 +174,7 @@ export {
   controlCommitId,
   type RoomInit,
   type AuthoredRequest,
+  type AnchorRequest,
   type SnapshotRequest,
   type Preconditions,
   type Requester,

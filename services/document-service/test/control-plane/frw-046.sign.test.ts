@@ -275,10 +275,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           }
         ).signings[0]!;
         const head = await h.parts.logs.head(ref);
-        expect(head.seq).toBe(commit.seq);
+        // A control commit that anchors the salted hash of the evidence follows the signing, and is the
+        // head (FRW-041).
+        const anchors = (await h.parts.logs.read(ref)).filter((c) => c.evidence !== undefined);
+        expect(anchors).toHaveLength(1);
+        expect(anchors[0]!.seq).toBeGreaterThan(commit.seq);
+        expect(head.seq).toBe(anchors[0]!.seq);
         expect(fact).toMatchObject({
           seq: commit.seq,
-          chainHash: (await h.parts.logs.state!(ref)).chainHead,
+          chainHash: first.json.chainHash,
           fieldKey: 'tenant.sig',
           mode: 'drawn',
           imageHash: row.sha256,

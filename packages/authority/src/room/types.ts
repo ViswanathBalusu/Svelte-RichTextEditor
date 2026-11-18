@@ -67,6 +67,19 @@ export interface StoredCommit {
    * with the commit and in the document's record; a room replaying the log applies it.
    */
   requires?: string[];
+  /**
+   * The salted hash of the workflow evidence of one signing or completion, on a control commit that
+   * only anchors it (12 §7; ADR 0013; FRW-041). Never the evidence and never the salt. Such a
+   * control commit does not record a grants revision.
+   */
+  evidence?: EvidenceAnchor;
+}
+
+/** What a control commit carries of workflow evidence: the origin and the salted hash. */
+export interface EvidenceAnchor {
+  readonly origin: 'sign' | 'rules';
+  /** SHA-256 over the salt and the canonical evidence, lower-case hex. */
+  readonly evidenceHash: string;
 }
 
 /** Why a snapshot commit replaced the document (04 §3.2; 05 §5.3 `sync.reset`). */

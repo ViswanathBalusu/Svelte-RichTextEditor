@@ -353,6 +353,7 @@ function toStoredCommit(row: CommitRow): LogCommit {
   if (row.base !== null) c.base = int(row.base);
   if (row.rebased !== null) c.rebased = row.rebased;
   if (row.token_jti !== null) c.jti = row.token_jti;
+  if (payload.evidence !== undefined) c.evidence = payload.evidence;
   return c;
 }
 

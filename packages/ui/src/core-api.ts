@@ -675,7 +675,11 @@ export interface FieldRoleInfo {
 export interface FillSummary {
   /** False while the participant may not fill: waiting for an earlier one, or paused. */
   readonly active: boolean;
-  readonly inactive?: 'waiting' | 'paused' | null;
+  /**
+   * Why the participant may not fill: `waiting` for an earlier participant, `paused` while the owner
+   * corrects, `unverified` until the access code of the participant is submitted (FRW-039).
+   */
+  readonly inactive?: 'waiting' | 'paused' | 'unverified' | null;
   /**
    * The fields, in document order: every field of the document this reader may see, so that the
    * fields of other roles can be marked (FRW-077), or only the participant's own, without
@@ -908,6 +912,8 @@ export interface CoreApi {
   readonly rules?: RulesService;
   /** The send dialog's checks and the send action (FRW-028). Absent: no "send for completion" command. */
   readonly workflowSend?: WorkflowSendService;
+  /** Submits the participant's access code (FRW-039). Absent: the bar shows no code input. */
+  readonly accessCode?: AccessCodeService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
   readonly mathEditor?: MathEditorService;
 }
@@ -1168,6 +1174,21 @@ export interface WorkflowParticipantView {
  * The send dialog's port over the core and the backend's workflow port (FRW-028; 12 §6.2). The
  * checks run over the document the reader holds and the participants the workflow resource lists.
  */
+/** What the server said to an access code (FRW-039; 12 §7). The code itself is never kept. */
+export type AccessCodeOutcome =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      /** `wrong`: not the code; `rate_limited`: too many attempts, see `retryAfterMs`; `failed`: anything else. */
+      readonly reason: 'wrong' | 'rate_limited' | 'failed';
+      readonly retryAfterMs?: number;
+    };
+
+/** The participant's access code, submitted to the participant's verify endpoint (FRW-039). */
+export interface AccessCodeService {
+  submit(code: string): Promise<AccessCodeOutcome>;
+}
+
 export interface WorkflowSendService {
   /** The workflow's state (`draft`, `sent`, ...); null while it has not been read. */
   readonly state: ReadView<string | null>;

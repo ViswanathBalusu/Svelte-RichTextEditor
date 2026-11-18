@@ -142,8 +142,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       }
       return log(ref);
     }
-    const label = (c: { kind: string; origin: string }) =>
-      c.kind === 'control' ? 'control' : c.origin;
+    // A control commit that anchors the salted hash of evidence (FRW-041) is told from the one that
+    // records a transition.
+    const label = (c: { kind: string; origin: string; evidence?: unknown }) =>
+      c.kind === 'control' ? (c.evidence === undefined ? 'control' : 'evidence') : c.origin;
 
     /** The commits a step added: they are the ones after `seen`, and each is a step of the log's order. */
     async function added(ref: { tenant: string; doc: string }, seen: number) {
@@ -274,12 +276,12 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           send: ['control'],
           'first open': ['control'],
           fill: ['input'],
-          'consent and signature': ['sign'],
+          'consent and signature': ['sign', 'evidence'],
           correct: ['control'],
           'the owner edits the text': ['input'],
           resume: ['control'],
-          'p1 completes': ['control'],
-          'p2 completes: completed': ['control'],
+          'p1 completes': ['control', 'evidence'],
+          'p2 completes: completed': ['control', 'evidence'],
           finalised: ['control'],
         });
         // The control commits have no steps, and they and the others are one total order: the seqs

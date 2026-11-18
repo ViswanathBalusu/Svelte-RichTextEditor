@@ -60,8 +60,11 @@ export function fillView(
       const fill = core.permissions.get()?.fill ?? null;
       const active = fill?.active ?? false;
       // Why the participant may not fill: the server's own word for them (`wf.changed`, FRW-035),
-      // `paused` while the owner corrects; every other reason reads as waiting.
-      const inactive = workflow?.get()?.participant?.state === 'paused' ? 'paused' : 'waiting';
+      // `paused` while the owner corrects, `unverified` until the access code is right (FRW-039);
+      // every other reason reads as waiting.
+      const own = workflow?.get()?.participant?.state;
+      const inactive =
+        own === 'paused' ? 'paused' : own === 'unverified' ? 'unverified' : 'waiting';
       now = {
         active,
         ...(active ? {} : { inactive }),
