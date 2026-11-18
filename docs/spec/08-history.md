@@ -154,7 +154,7 @@ Pasted text is attributed to the person who pasted it. When a restore brings bac
 
 - **Restore** always moves forward. The service records a `pre-restore` version first and a `restore` version after.
 - **Restoring a whole document** is a snapshot commit: clients reload. It requires `manage` and is refused while a workflow is active.
-- **Restoring one region** computes steps from the current region to the target content: blocks are aligned by identifier, unchanged blocks are left alone, changed blocks are replaced, missing blocks are inserted and extra blocks are removed. Comment ranges and attribution in unchanged blocks survive. If the steps would be too large for a commit, the restore falls back to a snapshot commit.
+- **Restoring one region** computes steps from the current region to the target content: blocks are aligned by identifier, unchanged blocks are left alone, changed blocks are replaced, missing blocks are inserted and extra blocks are removed. Comment ranges and attribution in unchanged blocks survive. If the steps would be too large for one commit, the restore is split into several linked commits: consecutive commits of origin `restore` by the same person, each checked against the head the one before made, between the `pre-restore` and the `restore` version (owner decision 36; ADR 0408). A single block too large for a commit is refused with `too_large`.
 - The room re-checks the permission rules of 07, section 13, when it applies a restore, not only when the request arrives.
 - A restored block gets a new identifier if its old identifier is in use elsewhere in the current document.
 - A `dryRun` returns the comparison a restore would produce.

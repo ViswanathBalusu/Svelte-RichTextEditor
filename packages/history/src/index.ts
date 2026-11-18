@@ -121,6 +121,8 @@ export {
   derivedId,
   markRestored,
   planRestore,
+  restorePartPreconditions,
+  splitSteps,
   type RestoreContext,
   type RestoreNotes,
   type RestorePlan,
