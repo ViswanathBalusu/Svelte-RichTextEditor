@@ -26,7 +26,7 @@ import { uuid7 } from '@docedit/model';
 import type { ServerMessage } from '@docedit/protocol';
 import { KitFailure, check, equal, isObject, jsonEqual, oneOf } from '../assert.ts';
 import type { ScenarioContext } from '../context.ts';
-import { IDS, insertText, posIn } from '../documents.ts';
+import { IDS, contractDocument, insertText, posIn } from '../documents.ts';
 import { Http, expectStatus } from '../rest.ts';
 import { scenario, type ProfileDef, type ScenarioDef } from '../scenario.ts';
 import { acked, join, opened, readContent, submit, type Member } from './support.ts';
@@ -102,7 +102,7 @@ export const FAULT_INJECTION: ProfileDef = {
   id: 'fault-injection',
   title: 'Durability, fencing, log rewind and the grants revision, through the test hooks',
   spec: '05 §11; 04 §5; 06 §8',
-  stories: ['PRO-126'],
+  stories: ['PRO-126', 'PRO-043'],
   requires: { kind: 'features', features: [TEST_HOOKS_FEATURE] },
   scenarios: [
     s({
@@ -523,6 +523,65 @@ export const FAULT_INJECTION: ProfileDef = {
         );
         const next = await acked(wire, 1, { base: o.head, steps: [insertText(at, 'd')] });
         equal(next.seq, o.head + 1, 'the new node stores the next commit at the next seq');
+      },
+    }),
+    s({
+      id: 'idempotency-retention',
+      title:
+        'a key used again within the retention time repeats the first result, and a key used after that time creates anew (the retention is read from the test-mode timers)',
+      spec: '05 §6.1; 10 §3.2',
+      covers: { operations: ['POST /documents'] },
+      timeoutMs: 120_000,
+      async run(ctx) {
+        // The retention target is 24 hours (05 §6.1), too long to wait for. Test mode shortens it and
+        // publishes the value at `GET /_test/timers` (PRO-109, owner decision 191).
+        const timers = expectStatus(await hook(ctx, 'GET', '/timers'), 200, 'the test-mode timers');
+        const retention = (timers.json as { idempotencyTtlMs?: unknown } | undefined)
+          ?.idempotencyTtlMs;
+        check(
+          typeof retention === 'number' && Number.isInteger(retention) && retention > 0,
+          'the timers state the idempotency retention in whole milliseconds',
+          'a positive integer',
+          retention,
+        );
+        const ttl = retention as number;
+        check(
+          ttl <= 60_000,
+          'the test-mode retention is short enough to wait for',
+          'at most 60 000 ms',
+          ttl,
+        );
+
+        const key = `tck-${uuid7()}`;
+        const body = { content: contractDocument(), title: 'retained' };
+        const create = () =>
+          ctx.service.call('POST', '/documents', {
+            body,
+            headers: { 'idempotency-key': key },
+          });
+        const first = await create();
+        check(first.status === 201, 'the first request creates', 201, first.status);
+        const firstId = (first.json as { id: string }).id;
+
+        // Within the retention time: the first result, and nothing new.
+        const again = await create();
+        equal(
+          (again.json as { id?: string } | undefined)?.id,
+          firstId,
+          'a repeat within the retention time returns the first document',
+        );
+
+        // After the retention time: the key is new, so the same request creates a second document.
+        await ctx.sleep(ttl + Math.max(250, Math.ceil(ttl / 10)));
+        const late = await create();
+        check(late.status === 201, 'a repeat after the retention time creates', 201, late.status);
+        const lateId = (late.json as { id: string }).id;
+        check(
+          lateId !== firstId,
+          'a key used after the retention time is treated as new',
+          'a different document',
+          lateId,
+        );
       },
     }),
   ],
