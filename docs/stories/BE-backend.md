@@ -1929,11 +1929,13 @@ As an operator who runs the service myself, I want the documentation to say plai
 
 **Acceptance criteria**
 
-- [ ] Given the self-hosting guide, when it describes recovery, then it states that the recovery point is whatever the operator's PostgreSQL provides and the recovery time is the operator's.
-- [ ] Given the guide, when it lists settings, then it names synchronous replication as the way to a recovery point of zero for one failure.
-- [ ] Given the guide, when it describes a restore, then it includes the reconciliation of the object store from the log and the verification tool (BE-081, BE-078).
+- [x] Given the self-hosting guide, when it describes recovery, then it states that the recovery point is whatever the operator's PostgreSQL provides and the recovery time is the operator's.
+- [x] Given the guide, when it lists settings, then it names synchronous replication as the way to a recovery point of zero for one failure.
+- [x] Given the guide, when it describes a restore, then it includes the reconciliation of the object store from the log and the verification tool (BE-081, BE-078).
 
-**Notes:** `cond`: only if self-hosted distribution ships.
+**Evidence:** services/document-service/docs/self-hosting-recovery.md (the section of the self-hosting guide on recovery). Criterion 1: the recovery point is what the operator's PostgreSQL provides and the recovery time is the operator's (the "What decides your recovery point and time" section). Criterion 2: the section names synchronous replication (`synchronous_standby_names`, `synchronous_commit`) as the way to a recovery point of zero for one node failure. Criterion 3: the restore procedure names the incarnation command (`recovery-cli.ts incarnation`, dry run first) and the verification tool (`recovery-cli.ts verify`, `rebuild`), both in services/document-service/src/data-plane/recovery-cli.ts. Read against the code only: no restore was run, so the procedure itself is not rehearsed here (BE-082 criterion 3 and BE-078 criterion 2 stay as they are).
+
+**Notes:** `cond`: only if self-hosted distribution ships. Lane w5, 2026-11-18: the condition holds, because the owner decided on 2026-11-17 that hosted and self-hosted both apply from the start (docs/owner-decisions-2026-11-15.md, decision 28). All three criteria are ticked on the guide. The guide is written from 06 §9 and the recovery tools as they exist; it names the commands the tools take, and it does not claim that the tools meet the open criteria of BE-078 or BE-081.
 
 ## Cost model, observability and support
 
