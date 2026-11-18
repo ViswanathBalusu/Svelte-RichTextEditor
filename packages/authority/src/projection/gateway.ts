@@ -23,6 +23,7 @@ import type {
   ThreadRequest,
 } from '../room/room.ts';
 import type { ThreadAnchor } from '../room/threads.ts';
+import type { WorkflowRecord } from '../workflow/lifecycle.ts';
 import {
   type CommitInput,
   type Effects,
@@ -570,6 +571,11 @@ export class ProjectionGateway {
   /** The control plane changed permissions and notified the room. */
   permissionsChanged(perms: PermissionState): Effects {
     return this.finish(this.room.permissionsChanged(perms));
+  }
+
+  /** The workflow moved (FRW-035): `perm.changed` and `wf.changed` go to each channel. */
+  workflowChanged(record: WorkflowRecord, perms?: PermissionState): Effects {
+    return this.finish(this.room.workflowChanged(record, perms));
   }
 
   /**

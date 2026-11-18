@@ -18,10 +18,11 @@ export const FIELD_IDS = {
   name: 'fName00000000001',
   rent: 'fRent00000000001',
   sign: 'fSign00000000001',
+  signed: 'fDate00000000001',
   para: 'pFields000000001',
 } as const;
 
-/** A document with three fields: a text and a number field for two roles and a signature. */
+/** A document with four fields: a text and a number field for two roles, a signature and its date. */
 export function fieldsDocument(): CdmEnvelope {
   const env = contractDocument();
   // Fields are a CDM feature (03 §11): a document that uses them lists it in requires (I1).
@@ -47,6 +48,8 @@ export function fieldsDocument(): CdmEnvelope {
       field(FIELD_IDS.rent, 'rent', 'number', 'role_landlord'),
       { type: 'text', text: ' Signed: ' },
       field(FIELD_IDS.sign, 'signature', 'signature', 'role_tenant'),
+      { type: 'text', text: ' On: ' },
+      field(FIELD_IDS.signed, 'signedOn', 'dateSigned', 'role_tenant'),
     ],
   });
   body.content!.push(paragraph('pAfter0000000001', ''));
@@ -104,7 +107,7 @@ export const FIELDS: ProfileDef = {
         const keys = items.map((i) => i.key).sort();
         equal(
           JSON.stringify(keys),
-          JSON.stringify(['name', 'rent', 'signature']),
+          JSON.stringify(['name', 'rent', 'signature', 'signedOn']),
           'the derived list of fields (12 §3.2)',
         );
         const values = await ctx.service.as(editor.token, 'GET', `/documents/${doc}/field-values`);
@@ -268,7 +271,25 @@ export const FIELDS: ProfileDef = {
             }),
           ],
         });
-        await refusedWith(ctx, r, ['permission_denied'], 'a signature value from a client (P8)');
+        // Invariants (step 6) come before permissions (step 7, 04 §5), and a service that checks
+        // asset references (BE-044; I4) refuses an asset that is not attached to the document as
+        // invalid_op first. The signature value below names an asset the kit never uploaded, so
+        // either refusal is the service saying no; the date below names no asset and must be P8.
+        await refusedWith(
+          ctx,
+          r,
+          ['permission_denied', 'invalid_op'],
+          'a signature value from a client (P8)',
+        );
+        await refusedWith(
+          ctx,
+          await submit(editor.wire, 1, {
+            base: editor.content.seq,
+            steps: [fill(editor.content.doc, FIELD_IDS.signed, '2026-11-17')],
+          }),
+          ['permission_denied'],
+          'a date-signed value from a client (P8)',
+        );
       },
     }),
     fd({

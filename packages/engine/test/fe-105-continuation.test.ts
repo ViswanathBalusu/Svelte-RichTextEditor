@@ -110,7 +110,10 @@ function readBack(state: EditorState): {
   const set = listSemanticsKey.getState(state)!;
   const attrs: Record<string, Record<string, string>> = {};
   for (const d of set.find() as Array<Decoration & { type: { attrs: Record<string, string> } }>) {
-    attrs[String(state.doc.nodeAt(d.from)!.attrs['id'])] = d.type.attrs;
+    if (!d.type.attrs) continue; // a list owner widget (FE-105 criterion 3)
+    attrs[String(state.doc.nodeAt(d.from)!.attrs['id'])] = Object.fromEntries(
+      Object.entries(d.type.attrs).filter(([k]) => k !== 'id'),
+    );
   }
   const computed = computeLabels(state.doc as unknown as PMNode);
   const labels: Record<string, string | undefined> = {};

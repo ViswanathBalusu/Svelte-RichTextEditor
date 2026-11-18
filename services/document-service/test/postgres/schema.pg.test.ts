@@ -98,6 +98,8 @@ describe.skipIf(unavailable !== null)('schema (PostgreSQL)', () => {
         'workflow_renewal_state',
         'tenant_quotas',
         'workflow_resource',
+        // HIS-040 (migration 0074).
+        'commit_tombstones',
       ].sort(),
     );
     expect(await keyColumns('doc_commits', 'p')).toEqual([['doc_id', 'seq']]);
@@ -259,10 +261,10 @@ describe.skipIf(unavailable !== null)('schema (PostgreSQL)', () => {
     );
     // 11 tables of the storage layer, 7 of the control plane (0004 to 0006, packet A2), 3 of the
     // control plane's phase 1b (0040 to 0042, packet C), 5 of phase 1b packet A (0030 to 0033) and
-    // 14 of migrations 0050 to 0070; the 64 hash partitions of each log table (0002) and the 5
-    // monthly partitions of audit_events that migration 0031 creates (the month before, this
-    // month and the coming three).
-    expect(rows.length).toBe(11 + 7 + 3 + 5 + 14 + 2 * 64 + 5);
+    // 14 of migrations 0050 to 0070, 1 of migration 0074 (commit_tombstones, HIS-040); the 64 hash
+    // partitions of each log table (0002) and the 5 monthly partitions of audit_events that
+    // migration 0031 creates (the month before, this month and the coming three).
+    expect(rows.length).toBe(11 + 7 + 3 + 5 + 14 + 1 + 2 * 64 + 5);
     // A table in TENANT_EXEMPT holds no tenant data (node_leases, 0033: a lease names a node). It
     // must really have no tenant_id, so that the exemption cannot hide a tenant table. Whether the
     // exemption meets BE-011 is open for the owner (ADR 0332).

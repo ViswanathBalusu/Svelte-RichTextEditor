@@ -274,7 +274,8 @@ export interface WorkflowStatus {
   /** The receiving participant's status. */
   participant?: {
     id: string;
-    state: "active" | "completed" | (string & {});
+    /** The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's. */
+    state: "active" | "completed" | "waiting" | "paused" | "copy" | "closed" | (string & {});
   };
 }
 
@@ -869,6 +870,43 @@ export interface Hold {
   placedAt: string;
 }
 
+/** The body of an erasure of a person (HIS-038; 08 section 13). */
+export interface ErasePersonRequest {
+  /** The host's `sub` of the person to erase. Hosts SHOULD NOT use an e-mail address as `sub` (05 section 3.1). */
+  sub: string;
+}
+
+/** What an erasure of a person did (HIS-038; 08 section 13). */
+export interface ErasePersonResult {
+  /** `erased`: the mapping, the display name and the read markers are deleted. `deferred`: a document the person wrote in is under legal hold, so the erasure waits for the release (owner decision 38). */
+  outcome: "erased" | "deferred";
+}
+
+/** The body of a tombstone of one commit payload (HIS-040; 08 section 13). */
+export interface TombstoneRequest {
+  /** Why the payload is removed. Trimmed; at most 500 characters. Recorded in the audit trail. */
+  reason: string;
+}
+
+/** What a tombstone removed and which copies remain (HIS-040; 08 section 13). */
+export interface TombstoneResult {
+  /** The commit whose payload was removed. */
+  seq: number;
+  /** When the payload was removed, ISO 8601 in UTC. */
+  removedAt: string;
+  /** The copies that may still hold the removed text; they are not rewritten. */
+  copies: {
+    /** Checkpoints at or after the commit, built by replaying it; they may still hold the removed text. */
+    checkpoints: number[];
+    /** Object keys of the cold segments whose range covers the commit. */
+    coldSegments: string[];
+    /** The attribution map may still name runs of the commit. */
+    attributionMap: "may-hold-runs";
+    /** What removing those copies involves, in fixed words. */
+    involves: string;
+  };
+}
+
 /** A field in the derived list (12 §3.2; FRW-060). */
 export interface FieldInfo {
   id: string;
@@ -907,6 +945,8 @@ export interface Workflow {
     };
     state?: string;
     completedSeq?: number;
+    /** When the participant first opened the document (12 §6.3; FRW-031). */
+    firstViewedAt?: string;
   }>;
   routing?: Array<{ [key: string]: unknown }>;
   deadline?: string;
@@ -2027,6 +2067,24 @@ export interface Operations {
     body: never;
     response: List<Hold>;
   };
+  /** POST /users/erase: Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`. (08 §13; 13 §10) */
+  erasePerson: {
+    method: "POST";
+    path: "/users/erase";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: ErasePersonRequest;
+    response: ErasePersonResult;
+  };
+  /** POST /documents/{id}/commits/{seq}/tombstone: Replaces the payload of one commit with a tombstone; the metadata, the payload hash and the chain stay; refused under a legal hold; audited with the actor and the reason; the answer lists the copies that may still hold the text (HIS-040). (08 §13; 13 §10) */
+  tombstoneCommit: {
+    method: "POST";
+    path: "/documents/{id}/commits/{seq}/tombstone";
+    params: { id: string; seq: number };
+    query: Record<string, never>;
+    body: TombstoneRequest;
+    response: TombstoneResult;
+  };
   /** GET /documents/{id}/fields: The derived list of fields. (12 §10) */
   listFields: {
     method: "GET";
@@ -2070,6 +2128,15 @@ export interface Operations {
     params: { id: string };
     query: Record<string, never>;
     body: Workflow;
+    response: Workflow;
+  };
+  /** POST /documents/{id}/workflow/send: Sends the document for completion: checks the send list, locks the document, activates the first participants (12 §6.2). The method and path are assumed. (12 §6.2, §10) */
+  sendWorkflow: {
+    method: "POST";
+    path: "/documents/{id}/workflow/send";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
     response: Workflow;
   };
   /** POST /documents/{id}/workflow/participants/{pid}/consent: Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */

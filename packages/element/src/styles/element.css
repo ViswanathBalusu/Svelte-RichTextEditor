@@ -434,3 +434,52 @@ table.de-suggest-gone {
     text-decoration: underline dotted;
   }
 }
+
+/*
+ * Pictures and their resize handle (FE-132 criterion 2). The picture box takes the stored size in
+ * CSS pixels (set through CSSOM by the node view); the handle sits in its bottom corner and is a
+ * focusable slider. It is hidden where the editing surface is not editable.
+ */
+.de-editing-surface .de-figure-image,
+.de-editing-surface .de-image {
+  position: relative;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+}
+
+.de-editing-surface .de-image img {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.de-editing-surface .de-resize-handle {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-end: 0;
+  inline-size: 12px;
+  block-size: 12px;
+  box-sizing: border-box;
+  background: var(--de-focus, #0969da);
+  border: 2px solid var(--de-sheet, #fff);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.de-editing-surface .de-resize-handle:focus-visible {
+  outline: 2px solid var(--de-focus, #0969da);
+  outline-offset: 2px;
+}
+
+.de-editing-surface .ProseMirror[contenteditable='false'] .de-resize-handle {
+  display: none;
+}
+
+/* A continuous section break that changes the margins (FE-135 criterion 6): the note says so in text. */
+.de-section-warning {
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.5rem;
+  border-inline-start: 3px solid var(--de-focus, #0969da);
+  background: var(--de-field-background, #eaeef2);
+  font-family: var(--de-font-ui, system-ui, sans-serif);
+  font-size: 0.875em;
+}

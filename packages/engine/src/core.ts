@@ -175,6 +175,7 @@ import {
   picturePlaceholderPlugin,
   removePlaceholder,
 } from './picture-placeholder.ts';
+import { FieldRules, type FieldRuleState } from './field-rules.ts';
 import {
   type EnterResult,
   type FieldChange,
@@ -263,6 +264,7 @@ import {
 } from './table-style-sort.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
+import { setParagraphFormat } from './paragraph-format.ts';
 import { PresenceClient } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
 import { skippedPreservedAtoms } from './preserved-find.ts';
@@ -514,6 +516,7 @@ const COMMANDS: readonly CommandName[] = [
   'setFigureLayout',
   'increaseIndent',
   'decreaseIndent',
+  'setParagraphFormat',
   'nextEditableRegion',
 ];
 
@@ -849,6 +852,11 @@ export class DocumentCore implements DocumentApi {
   readonly #fieldEntries = new FieldEntries({
     state: () => this.#state,
     dispatch: (tr) => this.dispatchTransaction(tr),
+  });
+  /** The rules as the editor applies them while a person fills (FRW-023). */
+  readonly #fieldRules = new FieldRules({
+    state: () => this.#state,
+    roles: () => this.#accessValue?.fill?.roles ?? [],
   });
   /** The form field whose control last took focus (FRW-073). */
   #activeField: string | null = null;
@@ -1722,6 +1730,10 @@ export class DocumentCore implements DocumentApi {
    */
   fieldFillable(id: string): boolean {
     if (this.#readOnly || this.#effective === 'view') return false;
+    // A field a rule hides or disables, or one that is computed, is not one to fill (FRW-023); the
+    // authority decides on its own evaluation, and its answer wins (FRW-022 criterion 6).
+    const rule = this.#fieldRules.of(id);
+    if (rule !== null && (!rule.visible || !rule.enabled || rule.computed)) return false;
     const tr = this.#fieldEntries.probe(id);
     if (!tr) return false;
     return (
@@ -1819,7 +1831,30 @@ export class DocumentCore implements DocumentApi {
    * what the guided bar and the summary of fill mode count (12 §11; FRW-076, FRW-078).
    */
   fillFields(): FieldStatus[] {
-    return this.#fieldEntries.status();
+    const status = this.#fieldEntries.status();
+    const rules = this.#fieldRules.states();
+    if (rules.size === 0) return status;
+    // The rules change what counts (FRW-023 criteria 1 and 2): a hidden field is not required and
+    // has no problem; a field a rule requires is required; a failing `validate` is a problem.
+    return status.map((f) => {
+      const rule = rules.get(f.id);
+      if (!rule) return f;
+      if (!rule.visible) return { ...f, required: false, invalid: null };
+      return {
+        ...f,
+        required: rule.required,
+        invalid: f.invalid ?? (rule.messages.length > 0 ? ('other' as const) : null),
+      };
+    });
+  }
+
+  /**
+   * What the rules say about the field `id` for the document as it stands (FRW-023): visible,
+   * enabled, required, the messages of the `validate` effects that fail, and a formula's computed
+   * value. Null when the document has no rule or none that compiles.
+   */
+  fieldRuleState(id: string): FieldRuleState | null {
+    return this.#fieldRules.of(id);
   }
 
   /**
@@ -2042,6 +2077,10 @@ export class DocumentCore implements DocumentApi {
       return changeIndent(name === 'increaseIndent' ? 'increase' : 'decrease', (pos) =>
         this.canEdit(this.#scopeAt(pos)),
       );
+    if (name === 'setParagraphFormat')
+      return args.paragraphFormat === undefined
+        ? null
+        : setParagraphFormat(args.paragraphFormat, (pos) => this.canEdit(this.#scopeAt(pos)));
     if (name === 'nextEditableRegion') return nextEditableRegion((scope) => this.canEdit(scope));
     if (name === 'markRegion')
       return args.title === undefined

@@ -8,10 +8,12 @@
  * (`erasure.run`, with the delay). The rule is `decideErasure` and `releaseDeferred` of
  * `@docedit/history`.
  *
- * What is not here: the route that calls `erase` (the erase operation of HIS-038 has none), a
- * release operation on the hold store (holds.ts has none), a durable store for the pending
- * requests, and the query that lists the documents a person has written in. The last is passed as
- * `documentsOf`. A pending request keeps the surrogate only, never the host `sub`; the `sub` is
+ * The route `POST /users/erase` (operation `erasePerson`, erase-routes.ts) calls `erase` with the
+ * service credential's actor (HIS-038 criterion 6).
+ *
+ * What is not here: a release operation on the hold store (holds.ts has none), a durable store for
+ * the pending requests, and the query that lists the documents a person has written in. The last
+ * is passed as `documentsOf`. A pending request keeps the surrogate only, never the host `sub`; the `sub` is
  * read back from the mapping row when the request runs.
  */
 import {
@@ -66,7 +68,10 @@ export class ErasureRequests {
 
   /** Erases the person at once, or defers the request while a document of theirs is held. */
   async erase(tenant: string, sub: string, actor: string): Promise<EraseOutcome> {
-    const surrogate = (await this.#d.users.resolve(tenant, sub)).surrogate;
+    // A person the service has never seen is not mapped, so there is nothing to erase and nothing
+    // to audit; `resolve` would create the row only to delete it again.
+    const surrogate = await this.#d.users.surrogateOf(tenant, sub);
+    if (surrogate === null) return 'unknown_person';
     const decision = decideErasure(
       { person: surrogate, requestedBy: actor, requestedAt: this.#d.now() },
       await this.#d.documentsOf(tenant, surrogate),

@@ -265,6 +265,65 @@ describe('the export job handler (EXP-001)', () => {
     expect(codes(job)).toContain('limit_memory');
   });
 
+  it('records that page references did not converge when a final export reaches a limit (EXP-061 criterion 4)', async () => {
+    // Pass 1 ended; pass 2 was killed by the wall clock before `converged 1` was written.
+    const { compile } = fakeCompile({
+      ok: false,
+      exitCode: 255,
+      timedOut: true,
+      pdf: null,
+      layoutRaw: null,
+      converged: false,
+      passes: [
+        { pass: 1, rc: 0, ms: 60_000 },
+        { pass: 2, rc: 137, ms: 50_000 },
+      ],
+    });
+    const job = await harness({ compile }).run({ options: { profile: 'final' } });
+    // EXP-071 criterion 2 still holds: the job ends failed, with the limit named.
+    expect(job.state).toBe('failed');
+    expect(job.error).toMatchObject({ code: 'too_large' });
+    expect(codes(job)).toContain('limit_time');
+    // The result says what the story asks, and how many passes ran.
+    expect(job.result).toMatchObject({ converged: false, passes: 2 });
+  });
+
+  it('records the digest of the image in the bundle and in the result manifest (EXP-073 criterion 2; EXP-076 criterion 4)', async () => {
+    const digest = `sha256:${'d'.repeat(64)}`;
+    const { compile, calls } = fakeCompile();
+    const h = harness({ compile, imageDigest: async () => digest });
+    const job = await h.run();
+    expect(job.state, JSON.stringify(job.error)).toBe('completed');
+    const bundleManifest = JSON.parse(String(calls[0]!.files['manifest.json'])) as {
+      imageDigest: string | null;
+    };
+    expect(bundleManifest.imageDigest).toBe(digest);
+    const result = JSON.parse(new TextDecoder().decode(h.stored[3]!.bytes)) as {
+      image: { id: string; digest: string | null };
+      bundle: { classVersion: string };
+    };
+    // Both values are recorded: the identifier of the image and its manifest digest.
+    expect(result.image).toEqual({
+      name: expect.any(String),
+      id: `sha256:${'b'.repeat(64)}`,
+      digest,
+    });
+    expect(result.bundle.classVersion).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('records no digest, and does not fail, when the image has none', async () => {
+    const { compile, calls } = fakeCompile();
+    const h = harness({ compile, imageDigest: async () => null });
+    const job = await h.run();
+    expect(job.state, JSON.stringify(job.error)).toBe('completed');
+    expect(JSON.parse(String(calls[0]!.files['manifest.json']))).toMatchObject({
+      imageDigest: null,
+    });
+    expect(JSON.parse(new TextDecoder().decode(h.stored[3]!.bytes))).toMatchObject({
+      image: { digest: null },
+    });
+  });
+
   it('fails a job whose document did not compile, with the diagnostics at their blocks', async () => {
     const probe = fakeCompile();
     await harness({ compile: probe.compile }).run();

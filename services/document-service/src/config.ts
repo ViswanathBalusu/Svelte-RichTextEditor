@@ -87,6 +87,8 @@ export interface ServiceConfig {
   assetUrlKey: string | null;
   /** Lifetime of pre-signed uploads, seconds. */
   uploadSeconds: number;
+  /** Days between the soft delete of a document and its purge (HIS-039; owner decision 30). */
+  purgeAfterDays: number;
   /** Run the asset worker in this process with its Podman sandbox. */
   assetWorker: boolean;
   /** 06 §10: at most one preview compile per document in this window. */
@@ -175,6 +177,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   assetOrigin: null,
   assetUrlKey: null,
   uploadSeconds: 900,
+  purgeAfterDays: 30,
   assetWorker: false,
   previewWindowMs: 10_000,
   exportCacheMaxAgeMs: 7 * 24 * 60 * 60 * 1000,
@@ -343,6 +346,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     assetOrigin: env['DOCEDIT_ASSET_ORIGIN'] || null,
     assetUrlKey: env['DOCEDIT_ASSET_URL_KEY'] || null,
     uploadSeconds: int(env, 'DOCEDIT_UPLOAD_SECONDS', DEFAULTS.uploadSeconds),
+    purgeAfterDays: int(env, 'DOCEDIT_PURGE_AFTER_DAYS', DEFAULTS.purgeAfterDays),
     assetWorker: flag(env, 'DOCEDIT_ASSET_WORKER', DEFAULTS.assetWorker),
     previewWindowMs: int(env, 'DOCEDIT_PREVIEW_WINDOW_MS', DEFAULTS.previewWindowMs),
     exportCacheMaxAgeMs: int(env, 'DOCEDIT_EXPORT_CACHE_MS', DEFAULTS.exportCacheMaxAgeMs),

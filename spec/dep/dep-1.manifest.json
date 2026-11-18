@@ -3,7 +3,7 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "d4a49e2fe25834da98c0a5c4eb2ed209fc514f4202c473189b19be99b6ff899c",
+  "definitionHash": "91ffb09bc188f7617ba5416be63712394b75a3b20fae3f97eaae1b7f3b6ef8b6",
   "cdm": {
     "min": 1,
     "max": 1,
@@ -13,7 +13,7 @@
   },
   "counts": {
     "messages": 28,
-    "operations": 77,
+    "operations": 80,
     "webhooks": 35,
     "notifications": 19,
     "errors": 32,
@@ -21,9 +21,9 @@
     "decisions": 55
   },
   "files": {
-    "spec/dep/dep-1.asyncapi.json": "af29d22a2e77bdbeeb590a34a631a90e9ac5cdee38e2a720531fe2052efb635c",
-    "spec/dep/dep-1.openapi.json": "fac9eb6d740656d777744120ab513c5a133421c55b36dc04b20754b8d7ea01c6",
-    "spec/dep/dep-1.schema.json": "4bfa68658e5e644d35784b8184b22bef909903cfa07b4e49d5913bfbbb00ffb2",
+    "spec/dep/dep-1.asyncapi.json": "24c3d37ed0dd1d5f2d5506bcb27c773eb098ab8a04a37abb20706af0c5c89d1a",
+    "spec/dep/dep-1.openapi.json": "1d0612266e9084c3ce3b9798ea68bb064fc312855b2ab402107ceb50920808d7",
+    "spec/dep/dep-1.schema.json": "af63e78206a5f391b993f2e39bcaade03381504de673d75420a789ed25475163",
     "spec/dep/webhooks/dep.document.created.v1.schema.json": "1e16a104e436cdf8f6213fc1f051a4d9a1ec58a4c2c5eeb25829ed86ae672c54",
     "spec/dep/webhooks/dep.document.deleted.v1.schema.json": "890c2efa8c1731ef2208fbf3c86629fa2eabf2b1eef70dd74e6e8eb52a53e404",
     "spec/dep/webhooks/dep.document.state_changed.v1.schema.json": "9cc6359f41bf28afce274afe4a664fbdd0cb18ac1bc118a80341fb83f32954fb",
@@ -59,8 +59,8 @@
     "spec/dep/webhooks/dep.workflow.expired.v1.schema.json": "4ad4a18731fb63da62332c0f500ec149172442f084e873a360b6c0731bce0aad",
     "spec/dep/webhooks/dep.workflow.completed.v1.schema.json": "43a4356cd40e4588fb12dcc1feee6235ca67718e9f47fd37eb35d6b6fbeefd5c",
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "c47aa94072f380e6f929e7409eb2963b6795cf90b5319c853e80afc36b152b7d",
-    "spec/dep/dep-1.registry.json": "6d49ecb02466056538c9becc913d88f994fcf9b127bac06538498b53d422b334",
+    "spec/dep/dep-1.registry.json": "d8885f762cf4b6a35a2d404f9c9eb704fb40583dc8adc99660dd35ba45f48fc8",
     "spec/dep/dep-1.gaps.json": "f70571d7f428401e290c77458e3c9c1ee5c1cc15ea07c929bc7e0f6f534dffeb",
-    "packages/protocol/src/generated/types.ts": "95e6e7d0f2363c4511c1eb1b99e7324034805ee54ed04eb575e7dd4aedc7e007"
+    "packages/protocol/src/generated/types.ts": "85a128f6ae677897311efed3fac967ca152d26d3ac6556983c1d021750b7433c"
   }
 }

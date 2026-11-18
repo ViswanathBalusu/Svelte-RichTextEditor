@@ -126,6 +126,37 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/his-028-catch-up.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FE-135 closed (2026-11-17).
+  [
+    'columns',
+    [
+      { path: 'packages/engine/test/fe-135-section-starts.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-135-section-after-sources.test.ts', kind: 'unit' },
+    ],
+  ],
+  [
+    'breaks',
+    [
+      { path: 'packages/engine/src/fe-135-break-mark.universal.test.ts', kind: 'unit' },
+      { path: 'packages/engine/src/view/fe-135-section-warning.universal.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-135-136-core-authoring.test.ts', kind: 'unit' },
+    ],
+  ],
+  [
+    'footnotes',
+    [
+      { path: 'packages/element/e2e/fe-135-footnote.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/fe-135-footnote-number.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when UX-011 closed (2026-11-17): the search over the registry in Node, and the dialog in a browser run.
+  [
+    'command-search',
+    [
+      { path: 'packages/ui/e2e/ux-011-command-search.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/command-search.test.ts', kind: 'unit' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

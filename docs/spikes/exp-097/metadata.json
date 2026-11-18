@@ -1,0 +1,456 @@
+{
+  "collected": "2026-11-18",
+  "candidates": {
+    "mammoth": {
+      "runtime": "Node.js",
+      "registry": "npm",
+      "latest": "1.13.0",
+      "latestDate": "2026-09-26",
+      "licence": "BSD-2-Clause",
+      "dependencies": [
+        "lop",
+        "jszip",
+        "argparse",
+        "base64-js",
+        "underscore",
+        "xmlbuilder",
+        "@xmldom/xmldom",
+        "dingbat-to-unicode"
+      ],
+      "repo": {
+        "repo": "mwilliamson/mammoth.js",
+        "licence": "BSD-2-Clause",
+        "pushed": "2026-10-16",
+        "archived": false,
+        "openIssues": 62,
+        "latestRelease": "1.2.5",
+        "latestReleaseDate": "2016-11-13"
+      },
+      "advisories": [
+        {
+          "id": "GHSA-rmjr-87wv-gf87",
+          "aliases": [
+            "CVE-2025-11849",
+            "PYSEC-2026-1603"
+          ],
+          "published": "2025-10-17",
+          "fixed": [
+            "1.11.0"
+          ],
+          "summary": "Mammoth is vulnerable to Directory Traversal"
+        }
+      ]
+    },
+    "@xmldom/xmldom": {
+      "runtime": "Node.js",
+      "registry": "npm",
+      "latest": "0.9.12",
+      "latestDate": "2026-08-21",
+      "licence": "MIT",
+      "advisories": [
+        {
+          "id": "GHSA-27p8-2357-5qqv",
+          "aliases": [
+            "CVE-2026-83608"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.8.15",
+            "0.9.12"
+          ],
+          "summary": "xmldom: DocType `name` Injection Bypasses requireWellFormed"
+        },
+        {
+          "id": "GHSA-2v35-w6hq-6mfw",
+          "aliases": [
+            "CVE-2026-41673"
+          ],
+          "published": "2026-04-22",
+          "fixed": [
+            "0.8.13",
+            "0.9.10"
+          ],
+          "summary": "xmldom: Uncontrolled recursion in XML serialization leads to DoS"
+        },
+        {
+          "id": "GHSA-3px3-54cx-rmw9",
+          "aliases": [
+            "CVE-2026-83609"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.9.12"
+          ],
+          "summary": "xmldom: Creation-time XML Name/QName validation is bypassable via an embedded line terminator, allowing injection on the default serialization path"
+        },
+        {
+          "id": "GHSA-4w3w-2rp5-g8jm",
+          "aliases": [
+            "CVE-2026-83605"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.9.11",
+            "0.8.14"
+          ],
+          "summary": "xmldom: Attribute name injection via setAttribute() bypasses requireWellFormed"
+        },
+        {
+          "id": "GHSA-5fg8-2547-mr8q",
+          "aliases": [
+            "CVE-2021-32796"
+          ],
+          "published": "2021-08-03",
+          "fixed": [
+            "0.7.0"
+          ],
+          "summary": "Misinterpretation of malicious XML input"
+        },
+        {
+          "id": "GHSA-6gmq-8vp8-gcm6",
+          "aliases": [
+            "CVE-2026-83610"
+          ],
+          "published": "2026-09-02",
+          "fixed": [
+            "0.8.15",
+            "0.9.12"
+          ],
+          "summary": "xmldom: XML fragment injection via invalid EntityReference.nodeName during requireWellFormed serialization"
+        },
+        {
+          "id": "GHSA-6h8r-xr42-gp59",
+          "aliases": [
+            "CVE-2026-83611"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.8.15",
+            "0.9.12"
+          ],
+          "summary": "xmldom: Parser silently accepts a not-well-formed end tag whose name is followed by a line break and trailing content"
+        },
+        {
+          "id": "GHSA-6mj3-qw4j-hgrw",
+          "aliases": [
+            "CVE-2026-83612"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.9.12"
+          ],
+          "summary": "xmldom: HTML raw-text closing-tag case mismatch causes output amplification"
+        },
+        {
+          "id": "GHSA-8344-3jmq-59r6",
+          "aliases": [
+            "CVE-2026-83613"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.8.15",
+            "0.9.12"
+          ],
+          "summary": "xmldom: Quadratic-time attribute deduplication"
+        },
+        {
+          "id": "GHSA-93r5-fhx6-vmg9",
+          "aliases": [
+            "CVE-2026-83614"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.8.15",
+            "0.9.12"
+          ],
+          "summary": "xmldom: Quadratic-time parsing via the malformed-input recovery path — `parseElementStartPart` re-scan and `normalize()` adjacent-text merge"
+        },
+        {
+          "id": "GHSA-965w-775f-mr7g",
+          "aliases": [
+            "CVE-2026-83615"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.8.15",
+            "0.9.12"
+          ],
+          "summary": "xmldom: Quadratic-memory consumption"
+        },
+        {
+          "id": "GHSA-c7q8-3ch8-vqpv",
+          "aliases": [
+            "CVE-2026-83616"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.8.15",
+            "0.9.12"
+          ],
+          "summary": "xmldom: Processing Instruction Target Injection Bypasses requireWellFormed"
+        },
+        {
+          "id": "GHSA-crh6-fp67-6883",
+          "aliases": [
+            "CVE-2022-39353"
+          ],
+          "published": "2022-11-01",
+          "fixed": [
+            "0.7.7",
+            "0.8.4",
+            "0.9.0-beta.4"
+          ],
+          "summary": "xmldom allows multiple root nodes in a DOM"
+        },
+        {
+          "id": "GHSA-f6ww-3ggp-fr8h",
+          "aliases": [
+            "CVE-2026-41674"
+          ],
+          "published": "2026-04-22",
+          "fixed": [
+            "0.8.13",
+            "0.9.10"
+          ],
+          "summary": "xmldom has XML injection through unvalidated DocumentType serialization"
+        },
+        {
+          "id": "GHSA-g53g-w8rj-fmg7",
+          "aliases": [
+            "CVE-2026-83606"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.9.11"
+          ],
+          "summary": "xmldom PI grammar regex ReDoS: quadratic backtracking on unterminated processing instructions"
+        },
+        {
+          "id": "GHSA-j759-j44w-7fr8",
+          "aliases": [
+            "CVE-2026-41672"
+          ],
+          "published": "2026-04-22",
+          "fixed": [
+            "0.8.13",
+            "0.9.10"
+          ],
+          "summary": "xmldom has XML node injection through unvalidated comment serialization"
+        },
+        {
+          "id": "GHSA-jxjr-3g7g-3944",
+          "aliases": [
+            "CVE-2026-83617"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.9.12"
+          ],
+          "summary": "xmldom: requireWellFormed element/attribute name validation is bypassable via an embedded line terminator"
+        },
+        {
+          "id": "GHSA-vr34-hp96-76pp",
+          "aliases": [
+            "CVE-2026-83618"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.9.12"
+          ],
+          "summary": "xmldom: requireWellFormed DocType publicId/systemId validation is bypassable via an embedded line terminator"
+        },
+        {
+          "id": "GHSA-w2rr-34g9-rvrj",
+          "aliases": [
+            "CVE-2026-83607"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.9.11",
+            "0.8.14"
+          ],
+          "summary": "xmldom: Element name injection via createElement() bypasses requireWellFormed"
+        },
+        {
+          "id": "GHSA-wh4c-j3r5-mjhp",
+          "aliases": [
+            "CVE-2026-34601"
+          ],
+          "published": "2026-04-01",
+          "fixed": [
+            "0.8.12",
+            "0.9.9"
+          ],
+          "summary": "xmldom: XML injection via unsafe CDATA serialization allows attacker-controlled markup insertion"
+        },
+        {
+          "id": "GHSA-x4fp-j954-r2f4",
+          "aliases": [
+            "CVE-2026-83619"
+          ],
+          "published": "2026-09-08",
+          "fixed": [
+            "0.8.15"
+          ],
+          "summary": "xmldom: End-tag Whitespace-Trim Regex ReDoS — quadratic backtracking in the 0.8.x end-tag parser"
+        },
+        {
+          "id": "GHSA-x6wf-f3px-wcqx",
+          "aliases": [
+            "CVE-2026-41675"
+          ],
+          "published": "2026-04-22",
+          "fixed": [
+            "0.8.13",
+            "0.9.10"
+          ],
+          "summary": "xmldom has XML node injection through unvalidated processing instruction serialization"
+        }
+      ]
+    },
+    "@rgrove/parse-xml": {
+      "runtime": "Node.js",
+      "registry": "npm",
+      "latest": "5.2.0",
+      "latestDate": "2026-11-12",
+      "licence": "ISC",
+      "repo": {
+        "repo": "rgrove/parse-xml",
+        "licence": "ISC",
+        "pushed": "2026-11-12",
+        "archived": false,
+        "openIssues": 1,
+        "latestRelease": "v5.2.0",
+        "latestReleaseDate": "2026-11-12"
+      },
+      "advisories": []
+    },
+    "DocumentFormat.OpenXml": {
+      "runtime": ".NET",
+      "registry": "NuGet",
+      "latest": "3.5.1",
+      "licence": "MIT (repository licence)",
+      "repo": {
+        "repo": "dotnet/Open-XML-SDK",
+        "licence": "MIT",
+        "pushed": "2026-11-16",
+        "archived": false,
+        "openIssues": 134,
+        "latestRelease": "v3.5.1",
+        "latestReleaseDate": "2026-03-18"
+      },
+      "advisories": []
+    },
+    "org.docx4j:docx4j-core": {
+      "runtime": "JVM",
+      "registry": "Maven Central",
+      "latest": "17.3.6",
+      "lastUpdated": "20261108060332",
+      "repo": {
+        "repo": "plutext/docx4j",
+        "licence": null,
+        "pushed": "2026-11-14",
+        "archived": false,
+        "openIssues": 190,
+        "latestRelease": null,
+        "latestReleaseDate": null
+      },
+      "advisories": [
+        {
+          "id": "GHSA-gc95-3vw8-vg43",
+          "aliases": [
+            "CVE-2026-53752"
+          ],
+          "published": "2026-08-17",
+          "fixed": [
+            "11.5.14"
+          ],
+          "summary": "docx4j: Stack Overflow via Cyclic `w:basedOn` Style Chain leads to Denial of Service"
+        }
+      ]
+    },
+    "org.apache.poi:poi-ooxml": {
+      "runtime": "JVM",
+      "registry": "Maven Central",
+      "latest": "6.0.0",
+      "lastUpdated": "20261022153855",
+      "repo": {
+        "repo": "apache/poi",
+        "licence": null,
+        "pushed": "2026-11-17",
+        "archived": false,
+        "openIssues": 46,
+        "latestRelease": null,
+        "latestReleaseDate": null
+      },
+      "advisories": [
+        {
+          "id": "GHSA-gmg8-593g-7mv3",
+          "aliases": [
+            "CVE-2025-31672"
+          ],
+          "published": "2025-04-09",
+          "fixed": [
+            "5.4.0"
+          ],
+          "summary": "Apache POI OOXML Vulnerable to Improper Input Validation in OOXML File Parsing"
+        }
+      ]
+    },
+    "python-docx": {
+      "runtime": "Python",
+      "registry": "PyPI",
+      "latest": "1.2.0",
+      "latestDate": "2025-06-17",
+      "licence": "MIT",
+      "repo": {
+        "repo": "python-openxml/python-docx",
+        "licence": "MIT",
+        "pushed": "2026-08-01",
+        "archived": false,
+        "openIssues": 554,
+        "latestRelease": null,
+        "latestReleaseDate": null
+      },
+      "advisories": [
+        {
+          "id": "GHSA-34wj-p5jm-2p96",
+          "aliases": [
+            "CVE-2016-5851",
+            "PYSEC-2016-21"
+          ],
+          "published": "2022-05-13",
+          "fixed": [
+            "0.8.6"
+          ],
+          "summary": "Improper Restriction of XML External Entity Reference in python-docx"
+        },
+        {
+          "id": "PYSEC-2016-21",
+          "aliases": [
+            "CVE-2016-5851",
+            "GHSA-34wj-p5jm-2p96"
+          ],
+          "published": "2016-12-21",
+          "fixed": [
+            "0.8.6"
+          ],
+          "summary": null
+        }
+      ]
+    },
+    "pandoc": {
+      "runtime": "Haskell binary",
+      "repo": {
+        "repo": "jgm/pandoc",
+        "licence": "GPL-2.0",
+        "pushed": "2026-11-15",
+        "archived": false,
+        "openIssues": 1045,
+        "latestRelease": "3.14",
+        "latestReleaseDate": "2026-11-12"
+      },
+      "advisories": []
+    }
+  }
+}

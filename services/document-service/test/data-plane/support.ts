@@ -335,6 +335,12 @@ export class GatedLogStore implements LogStore {
   head(ref: DocRef): ReturnType<LogStore['head']> {
     return this.inner.head(ref);
   }
+
+  /** The head state of the inner store, when it has one (HIS-034 tests read it). */
+  state(ref: DocRef): ReturnType<NonNullable<LogStore['state']>> {
+    if (!this.inner.state) throw new Error('the inner log store has no head state');
+    return this.inner.state(ref);
+  }
 }
 
 /** Waits until `check` holds, polling. */
