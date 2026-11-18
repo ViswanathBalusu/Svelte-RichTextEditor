@@ -2337,6 +2337,36 @@
         "seq"
       ]
     },
+    "ConnectHint": {
+      "title": "ConnectHint",
+      "description": "Where a client should open its channel (06 §2.1). A hint only: it grants nothing.",
+      "$comment": "05 §6.2; 06 §2.1",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "The WebSocket URL to open the channel on.",
+          "type": "string"
+        },
+        "node": {
+          "description": "The node the URL belongs to; empty when the service names no node.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where the URL came from: the owner of the document, rendezvous routing over the live nodes, or the address of the service itself.",
+          "type": "string",
+          "enum": [
+            "owner",
+            "routing",
+            "entry"
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "node",
+        "source"
+      ]
+    },
     "Activity": {
       "title": "Activity",
       "description": "Changes and comment activity by other people since the caller's read marker (08 §10). Placeholder: not defined by the prose.",
@@ -3729,6 +3759,12 @@
               },
               "firstViewedAt": {
                 "description": "When the participant first opened the document (12 §6.3; FRW-031).",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+              },
+              "activatedAt": {
+                "description": "When the participant last became active: the anchor of the reminders (FRW-034).",
                 "type": "string",
                 "format": "date-time",
                 "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"

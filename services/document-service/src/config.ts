@@ -46,6 +46,12 @@ export interface ServiceConfig {
   exportTargets: string[];
   /** This node's identifier for ownership claims (06 §2.1). */
   node: string;
+  /**
+   * The WebSocket URL that clients of other nodes are told to use for this node, written on its
+   * lease row (BE-061; owner decision 200). Default none: the node then announces no address and
+   * `GET /documents/{id}/connect` answers with the address of the service itself.
+   */
+  nodeAddress: string | null;
   workers: number;
   workerTimeoutMs: number;
   maxBodyBytes: number;
@@ -160,6 +166,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   maxRebaseSteps: null,
   viewKey: null,
   exportTargets: ['pdf'],
+  nodeAddress: null,
   workers: 2,
   workerTimeoutMs: 60_000,
   maxBodyBytes: 1024 * 1024,
@@ -331,6 +338,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     viewKey: env['DOCEDIT_VIEW_KEY'] ? Buffer.from(env['DOCEDIT_VIEW_KEY'], 'base64') : null,
     exportTargets: list(env['DOCEDIT_EXPORT_TARGETS'], DEFAULTS.exportTargets),
     node: env['DOCEDIT_NODE_ID'] ?? `${hostname()}-${process.pid}`,
+    nodeAddress: env['DOCEDIT_NODE_ADDRESS'] ?? null,
     workers: Math.max(1, int(env, 'DOCEDIT_WORKERS', DEFAULTS.workers)),
     workerTimeoutMs: int(env, 'DOCEDIT_WORKER_TIMEOUT_MS', DEFAULTS.workerTimeoutMs),
     maxBodyBytes: int(env, 'DOCEDIT_MAX_BODY_BYTES', DEFAULTS.maxBodyBytes),

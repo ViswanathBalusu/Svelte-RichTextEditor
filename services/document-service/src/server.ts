@@ -37,6 +37,7 @@ import {
   type AssetRegistry,
 } from './control-plane/assets.ts';
 import { ContentReader } from './control-plane/content.ts';
+import { Placement } from './control-plane/room-routing.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
 import { DebouncedEventSink } from './control-plane/event-throttle.ts';
 import { CompileBudget } from './control-plane/exp-009-compile-budget.ts';
@@ -91,6 +92,12 @@ import {
   type WorkflowResourceStore,
 } from './workflow/workflow-resource.ts';
 import { PgWorkflowResourceStore } from './workflow/workflow-resource-pg.ts';
+import { MemoryReminderStore, type ReminderStore } from './workflow/reminder-store.ts';
+import { PgReminderStore } from './workflow/reminder-store-pg.ts';
+import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
+import { PgEvidenceLedger } from './workflow/evidence-ledger-pg.ts';
+import { sweepTenant } from './workflow/schedule-sweep.ts';
+import { recordParticipantOpened } from './workflow/participant-view.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
 import { SearchIndex } from './control-plane/search-index.ts';
@@ -168,7 +175,7 @@ import type { KeyService } from './storage/key-service.ts';
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
-import type { CreateDataPlane, DataPlane, ErrorContext, Span } from './seams.ts';
+import type { CreateDataPlane, DataPlane, ErrorContext, ParticipantOpened, Span } from './seams.ts';
 import { createPool, inTenant, isUuid, sqlState, type Pool } from './storage/db.ts';
 import { PgDocumentStore } from './storage/document-store.ts';
 import { PgGrantStore } from './storage/grant-store.ts';
@@ -256,6 +263,10 @@ export interface ServiceParts {
   documentKeys?: DocumentKeys;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
+  /** The count of scheduled reminders raised per participant (FRW-034). Absent: none are raised. */
+  reminders?: ReminderStore;
+  /** The workflow evidence ledger (FRW-041): evidence in its own workflow table, hashes for the chain. */
+  evidence?: EvidenceLedger;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
   quotaAdmin?: QuotaAdminService;
   /** The tenant's data-loss prevention hook, asked before an export (UX-086). Absent: none is asked. */
@@ -489,6 +500,8 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     retention: retentionOver(new PgRetentionStore(pool), documents, audit, now),
     holds: holdsOver(new PgHoldStore(pool), documents, audit, now),
     workflows: new PgWorkflowResourceStore(pool, { now }),
+    reminders: new PgReminderStore(pool),
+    evidence: new PgEvidenceLedger(pool, { now }),
     quotaAdmin: quotaAdminOver(
       new PgQuotaStore(pool, (tenant) =>
         // `tenants` is under row-level security, so the question runs in the tenant's own context.
@@ -533,6 +546,8 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     retention: retentionOver(new MemoryRetentionStore(), store, audit, now),
     holds: holdsOver(new MemoryHoldStore(), store, audit, now),
     workflows: new MemoryWorkflowResourceStore(),
+    reminders: new MemoryReminderStore(),
+    evidence: new MemoryEvidenceLedger(now),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
       // reaches it is registered; the memory store has no other tenant table to ask.
@@ -817,6 +832,25 @@ export async function startService(opts: StartOptions): Promise<Service> {
       ? { assets: new RegistryAssetAttachments(parts.logs, parts.assetRegistry) }
       : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
+    // FRW-040: the first view of a participant, from the connection, with its evidence.
+    ...(parts.workflows && parts.evidence
+      ? {
+          participantOpened: (open: ParticipantOpened) =>
+            recordParticipantOpened(
+              {
+                workflows: parts.workflows!,
+                grants: parts.grants,
+                logs: parts.logs,
+                notifier: dataPlane,
+                ...(parts.audit ? { audit: parts.audit } : {}),
+                now,
+                evidence: parts.evidence!,
+                events,
+              },
+              open,
+            ).then(() => undefined),
+        }
+      : {}),
     now,
     checkpoints,
     settings: {
@@ -873,6 +907,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.audit ? { audit: parts.audit } : {}),
     ...(parts.outbox ? { outbox: parts.outbox } : {}),
     ...(parts.leases ? { leases: parts.leases } : {}),
+    ...(config.nodeAddress !== null ? { address: config.nodeAddress } : {}),
     // The room raises refused commits here (PRM-053 criterion 3): the caller's sink or the dispatcher.
     ...(opts.events || webhooks ? { events } : {}),
   });
@@ -1062,6 +1097,38 @@ export async function startService(opts: StartOptions): Promise<Service> {
           } satisfies ScheduledTask,
         ]
       : []),
+    // The deadline and the reminders of running workflows (FRW-034): one run a minute for each
+    // tenant; the sweep raises each reminder once however many instances run it.
+    ...(parts.workflows && parts.reminders
+      ? [
+          {
+            name: 'workflow.schedule',
+            everyMs: 60 * 1000,
+            forTenant: async (tenant: string) => {
+              const done = await sweepTenant(
+                {
+                  workflows: parts.workflows!,
+                  reminders: parts.reminders!,
+                  grants: parts.grants,
+                  logs: parts.logs,
+                  notifier: dataPlane,
+                  ...(parts.audit ? { audit: parts.audit } : {}),
+                  now,
+                  events,
+                },
+                tenant,
+              );
+              for (const f of done.failed)
+                logger.error({
+                  event: 'workflow.schedule.error',
+                  tenant,
+                  message: `${f.doc}: ${f.error}`,
+                });
+              return done.expired.length + done.reminded.length;
+            },
+          } satisfies ScheduledTask,
+        ]
+      : []),
     {
       name: 'idempotency.purge',
       everyMs: 60 * 60 * 1000,
@@ -1234,6 +1301,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     publicUrl,
     restPath: REST_PATH,
     wsPath: WS_PATH,
+    ...(parts.leases ? { placement: new Placement(parts.leases) } : {}),
     features: announced,
     exportTargets: config.exportTargets,
     signedUrlMs: config.signedUrlSeconds * 1000,

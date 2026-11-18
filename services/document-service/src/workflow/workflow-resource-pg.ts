@@ -87,6 +87,7 @@ function participantsOf(stored: unknown): WorkflowResourceView['participants'] {
       state: _state,
       completedSeq: _completedSeq,
       firstViewedAt: _firstViewedAt,
+      activatedAt: _activatedAt,
       ...draft
     } = own(p);
     return draft;
@@ -94,12 +95,13 @@ function participantsOf(stored: unknown): WorkflowResourceView['participants'] {
   const checked = checkParticipants(drafts);
   if (!checked.ok) return [];
   return checked.participants.map((draft, i) => {
-    const { state, completedSeq, firstViewedAt } = own(stored[i]);
+    const { state, completedSeq, firstViewedAt, activatedAt } = own(stored[i]);
     return {
       ...draft,
       ...(typeof state === 'string' ? { state } : {}),
       ...(typeof completedSeq === 'number' ? { completedSeq } : {}),
       ...(typeof firstViewedAt === 'string' ? { firstViewedAt } : {}),
+      ...(typeof activatedAt === 'string' ? { activatedAt } : {}),
     };
   });
 }
@@ -163,6 +165,25 @@ export class PgWorkflowResourceStore implements WorkflowResourceStore {
     const row = inserted.rows[0];
     if (row === undefined) return { ok: false, problem: { code: 'exists' } };
     return { ok: true, resource: viewOf(row) };
+  }
+
+  /** The tenant's workflows that are `sent` or `in_progress`, for the scheduled sweep (FRW-034). */
+  listRunning(tenant: string): Promise<readonly WorkflowResourceView[]> {
+    return inTenant(
+      this.#pool,
+      tenant,
+      async (c) => {
+        const r = await c.query<Row>(
+          `SELECT ${COLUMNS}
+             FROM ${WORKFLOW_RESOURCE_TABLE}
+            WHERE tenant_id = $1 AND state IN ('sent', 'in_progress')
+            ORDER BY doc_id`,
+          [tenant],
+        );
+        return r.rows.map(viewOf);
+      },
+      { readOnly: true },
+    );
   }
 
   /** The resource of a document with its ETag, or null when the document has no workflow. */

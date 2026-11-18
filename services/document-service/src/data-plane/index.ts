@@ -154,14 +154,16 @@ class DepDataPlane implements DataPlane {
           // The hook that makes the database unreachable (BE-079) cuts the renewals too, so a long
           // outage ends in the node's loss of proof and in the stop of BE-018 (BE-077 criterion 4).
           store: {
-            renew: (node, leaseMs) =>
+            renew: (node, leaseMs, address) =>
               this.#faults.databaseDown
                 ? Promise.reject(new Error('the database is unreachable'))
-                : deps.leases!.renew(node, leaseMs),
+                : deps.leases!.renew(node, leaseMs, address),
             alive: (node) => deps.leases!.alive(node),
+            live: () => deps.leases!.live(),
             release: (node) => deps.leases!.release(node),
           },
           node: deps.node,
+          address: deps.address,
           settings: s.lease,
           onLost: (why) => this.#host.fence(why),
           onError: s.onError,
@@ -311,6 +313,9 @@ class DepDataPlane implements DataPlane {
         metrics: this.metricsRegistry,
         tracer: this.#tracer,
         address,
+        ...(this.#deps.participantOpened
+          ? { participantOpened: this.#deps.participantOpened }
+          : {}),
       });
       this.#sessions.add(session);
       if (this.#closing) session.goaway(0);

@@ -1,0 +1,53 @@
+# The authority service as a container (05 §10; BE-007). Build from the repository root with Podman:
+#
+#   podman build -f services/authority-service/Containerfile \
+#     --ignorefile services/authority-service/Containerfile.dockerignore \
+#     -t localhost/docedit-authority-service:dev .
+#
+# Run it (settings are environment variables, see src/config.ts):
+#
+#   podman run --rm -p 127.0.0.1:8090:8090 -e DOCEDIT_AUTHORITY_HOST=0.0.0.0 \
+#     localhost/docedit-authority-service:dev
+#
+# The image holds the service and the packages it reads, with their production dependencies, and no
+# other service, no test and no secret. It runs as the unprivileged user `node`. It binds 127.0.0.1
+# unless DOCEDIT_AUTHORITY_HOST says otherwise, so a container needs that variable to be reached
+# through a published port. The interface has no login of its own: set DOCEDIT_AUTHORITY_TOKEN, and
+# put the service on a private network.
+#
+# Node.js 22.18.0 on Debian 12, pinned by its multi-arch index digest (as packages/tck/Containerfile).
+FROM docker.io/library/node:22.18.0-bookworm-slim@sha256:752ea8a2f758c34002a0461bd9f1cee4f9a3c36d48494586f60ffce1fc708e0e
+
+ENV CI=true NODE_ENV=production
+WORKDIR /app
+# The pnpm of the workspace (package.json `packageManager`); corepack of Node.js 22.18 cannot run it.
+RUN npm install --global pnpm@12.18.0
+
+# The workspace manifests first, so that the dependency layer is cached.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY services/authority-service/package.json services/authority-service/
+COPY packages/authority/package.json packages/authority/
+COPY packages/history/package.json packages/history/
+COPY packages/model/package.json packages/model/
+COPY packages/protocol/package.json packages/protocol/
+COPY packages/rules/package.json packages/rules/
+COPY packages/corpus/package.json packages/corpus/
+RUN pnpm install --frozen-lockfile --prod --filter "@docedit/authority-service..."
+
+COPY services/authority-service/src services/authority-service/src
+COPY packages/authority/src packages/authority/src
+COPY packages/authority/fixtures packages/authority/fixtures
+COPY packages/history/src packages/history/src
+COPY packages/model/src packages/model/src
+COPY packages/model/fixtures packages/model/fixtures
+COPY packages/protocol/src packages/protocol/src
+COPY packages/rules/src packages/rules/src
+COPY packages/corpus/src packages/corpus/src
+# The published definitions that the model and the protocol read (SYN-002).
+COPY spec spec
+
+USER node
+EXPOSE 8090
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.DOCEDIT_AUTHORITY_PORT || 8090) + '/v1/authority/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+ENTRYPOINT ["node", "services/authority-service/src/main.ts"]

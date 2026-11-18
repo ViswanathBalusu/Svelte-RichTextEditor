@@ -426,6 +426,26 @@ export {
 } from './workflow/correction.ts';
 export { fieldOwnersOf, snapshotOf } from './workflow/snapshot.ts';
 export {
+  applicableItems,
+  type EvidenceItem,
+  type ParticipantKind,
+} from './workflow/participant-evidence.ts';
+export {
+  DAY_MS,
+  deadlinePassed,
+  expireIfDue,
+  isReminderPolicy,
+  isRunning,
+  newReminders,
+  parseDeadline,
+  reminderEligible,
+  remindersDue,
+  remindTargets,
+  type ExpiryResult,
+  type RemindResult,
+  type ReminderPolicy,
+} from './workflow/schedule.ts';
+export {
   declineWorkflow,
   openWorkflow,
   voidWorkflow,

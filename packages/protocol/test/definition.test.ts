@@ -168,6 +168,7 @@ const PROSE_ROUTES = [
   'POST /documents/{id}/fork',
   'PUT /documents/{id}/read-marker',
   'GET /documents/{id}/activity',
+  'GET /documents/{id}/connect',
   'GET /documents/{id}/threads',
   'POST /documents/{id}/threads',
   'GET /threads/{tid}',
@@ -216,6 +217,7 @@ const OTHER_ROUTES = [
   'POST /documents/{id}/workflow/send',
   'POST /documents/{id}/workflow/correct',
   'POST /documents/{id}/workflow/resume',
+  'POST /documents/{id}/workflow/remind',
   'POST /documents/{id}/workflow/void',
   'POST /documents/{id}/workflow/participants/{pid}/consent',
   'POST /documents/{id}/workflow/participants/{pid}/verify',
@@ -412,6 +414,7 @@ describe('the DEP definition', () => {
       'G64',
       'G65',
       'G73',
+      'G78',
       'G97',
     ]);
   });

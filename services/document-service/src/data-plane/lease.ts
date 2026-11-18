@@ -15,6 +15,8 @@ import type { LeaseSettings } from './settings.ts';
 export interface NodeLeaseOptions {
   store: NodeLeaseStore;
   node: string;
+  /** The WebSocket address the node announces on its lease row (BE-061), or none. */
+  address?: string | undefined;
   settings: LeaseSettings;
   /** Milliseconds from a monotonic clock (default `performance.now`). */
   monotonic?: () => number;
@@ -66,7 +68,9 @@ export class NodeLease {
     this.#renewing ??= (async () => {
       const sent = this.#mono();
       try {
-        await this.#o.store.renew(this.#o.node, this.#o.settings.durationMs);
+        const { store, node, address, settings } = this.#o;
+        if (address === undefined) await store.renew(node, settings.durationMs);
+        else await store.renew(node, settings.durationMs, address);
         this.stats.renewed++;
         this.#validUntil = sent + this.#o.settings.durationMs - this.#o.settings.marginMs;
         this.#lost = false;

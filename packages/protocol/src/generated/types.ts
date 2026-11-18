@@ -591,6 +591,16 @@ export interface ReadMarker {
   seq: number;
 }
 
+/** Where a client should open its channel (06 §2.1). A hint only: it grants nothing. */
+export interface ConnectHint {
+  /** The WebSocket URL to open the channel on. */
+  url: string;
+  /** The node the URL belongs to; empty when the service names no node. */
+  node: string;
+  /** Where the URL came from: the owner of the document, rendezvous routing over the live nodes, or the address of the service itself. */
+  source: "owner" | "routing" | "entry";
+}
+
 /** Changes and comment activity by other people since the caller's read marker (08 §10). Placeholder: not defined by the prose. */
 export type Activity = { [key: string]: unknown };
 
@@ -947,6 +957,8 @@ export interface Workflow {
     completedSeq?: number;
     /** When the participant first opened the document (12 §6.3; FRW-031). */
     firstViewedAt?: string;
+    /** When the participant last became active: the anchor of the reminders (FRW-034). */
+    activatedAt?: string;
   }>;
   routing?: Array<{ [key: string]: unknown }>;
   deadline?: string;
@@ -1731,6 +1743,15 @@ export interface Operations {
     body: never;
     response: Activity;
   };
+  /** GET /documents/{id}/connect: The WebSocket URL of the node that owns the document (a hint). (05 §6.2; 06 §2.1) */
+  getConnect: {
+    method: "GET";
+    path: "/documents/{id}/connect";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: ConnectHint;
+  };
   /** GET /documents/{id}/threads: Comment threads; `?seq` maps ranges to that seq. (05 §6.2; 07 §6) */
   listThreads: {
     method: "GET";
@@ -2158,6 +2179,15 @@ export interface Operations {
   resumeWorkflow: {
     method: "POST";
     path: "/documents/{id}/workflow/resume";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: Workflow;
+  };
+  /** POST /documents/{id}/workflow/remind: Raises `reminder_due` now for each active participant who has not completed, without waiting for the schedule (12 §6.2). The method and path are assumed. (12 §6.2, §10) */
+  remindWorkflow: {
+    method: "POST";
+    path: "/documents/{id}/workflow/remind";
     params: { id: string };
     query: Record<string, never>;
     body: never;

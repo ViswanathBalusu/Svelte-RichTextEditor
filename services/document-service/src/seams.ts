@@ -107,6 +107,30 @@ export interface RoomNotifier {
 }
 
 /** What the data plane needs from the composition. */
+/**
+ * What the data plane knows about a channel opened by a participant's token, all of it taken from
+ * the connection and the server's clock, never from a message of the client (FRW-040 criterion 2).
+ */
+export interface ParticipantOpened {
+  readonly tenant: string;
+  readonly doc: string;
+  /** The token's raw `sub` and `wfp`: the binding to a participant is the workflow's (FRW-038). */
+  readonly sub: string;
+  readonly wfp: string;
+  /** The per-tenant surrogate of the user (BE-013), for the audit entry. */
+  readonly actor: string;
+  /** The session of the connection (04 G6). */
+  readonly session: string;
+  /** The remote address of the socket, and the `User-Agent` of the upgrade request. */
+  readonly address: string;
+  readonly userAgent: string | null;
+  /** The host's assertions, as given (never checked). */
+  readonly amr: readonly string[] | null;
+  readonly authTime: number | null;
+  /** Server time of the open, Unix milliseconds. */
+  readonly at: number;
+}
+
 export interface DataPlaneDeps {
   readonly logs: LogStore;
   readonly ownership: OwnershipStore;
@@ -115,6 +139,11 @@ export interface DataPlaneDeps {
   readonly verify: VerifyToken;
   /** This node's identifier for ownership claims (06 §2.1). */
   readonly node: string;
+  /**
+   * The WebSocket URL clients of other nodes are told to use for this node (BE-061; owner decision
+   * 200). It is written on the node's lease row at each renewal. Absent: the node announces none.
+   */
+  readonly address?: string | undefined;
   /** Server time, Unix milliseconds. */
   readonly now: () => number;
   /** The node's shared rate limits (BE-030); the data plane makes its own when absent. */
@@ -154,6 +183,12 @@ export interface DataPlaneDeps {
    * that `ch.opened` carries it. Without it no room has a workflow.
    */
   readonly workflows?: WorkflowResourceStore;
+  /**
+   * Called when a channel opens for a token with a `wfp` claim (FRW-040): the first view of a
+   * participant is recorded, with the facts only the connection knows. It runs after the channel is
+   * open and never delays it; a failure is reported, not sent to the client. Absent: nothing is done.
+   */
+  readonly participantOpened?: (open: ParticipantOpened) => Promise<void> | void;
   // --- Added by packet A2 (additive). ---------------------------------------------------------
   /**
    * The per-tenant user mapping (BE-013; S6 gap G11): storage and rooms hold surrogates, the wire

@@ -42,6 +42,8 @@ test.describe('bidirectional text in the web view (FE-111, criterion 2)', () => 
       return { x: r.left + 2, y: r.top + r.height / 2 };
     }, editor);
     await page.mouse.click(at.x, at.y);
+    // End moves to the logical end of the line; Firefox sometimes put the click at the start.
+    await page.keyboard.press('End');
     await page.keyboard.type(TYPED);
 
     const text = await page.evaluate((sel) => {
@@ -88,5 +90,75 @@ test.describe('bidirectional text in the web view (FE-111, criterion 2)', () => 
     expect(fromReference.at(-1)).not.toBe('');
     expect(fromEditor.at(-1)).not.toBe('');
     expect(fromEditor).toEqual(fromReference);
+  });
+
+  // Editing in the middle of mixed text (lane w1, 2026-11-18): move the caret by the arrow keys,
+  // delete both ways, and type. The text that results is the text a plain contenteditable element
+  // gives for the same key presses, in each browser.
+  test('moving the caret and deleting and typing in the middle of mixed text give what the browser gives', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mountEditor(page, { doc: 'rtl' });
+
+    const at = await page.evaluate((sel) => {
+      const root = document.querySelector(sel)!.shadowRoot!;
+      const r = (root.querySelector('p.de-p') as HTMLElement).getBoundingClientRect();
+      return { x: r.left + 2, y: r.top + r.height / 2 };
+    }, editor);
+    await page.mouse.click(at.x, at.y);
+    // End moves to the logical end of the line; Firefox sometimes put the click at the start.
+    await page.keyboard.press('End');
+    await page.keyboard.type(TYPED);
+    expect(
+      await page.evaluate((sel) => {
+        const root = document.querySelector(sel)!.shadowRoot!;
+        return (root.querySelector('p.de-p') as HTMLElement).textContent;
+      }, editor),
+    ).toBe(FIRST + TYPED);
+
+    const keys = [
+      ...Array<string>(5).fill('ArrowRight'),
+      'Backspace',
+      'Backspace',
+      'x',
+      'Delete',
+      'Delete',
+      'ArrowLeft',
+      'ArrowLeft',
+      'y',
+    ];
+    for (const k of keys) await page.keyboard.press(k);
+    const fromEditor = await page.evaluate((sel) => {
+      const root = document.querySelector(sel)!.shadowRoot!;
+      return (root.querySelector('p.de-p') as HTMLElement).textContent;
+    }, editor);
+
+    await page.evaluate(
+      ({ first, typed }: { first: string; typed: string }) => {
+        const ref = document.createElement('div');
+        ref.id = 'w1-fe-111-edit-reference';
+        ref.setAttribute('contenteditable', 'true');
+        ref.setAttribute('dir', 'rtl');
+        ref.style.cssText = 'position:fixed;left:0;top:0;width:360px;font-size:16px;';
+        ref.textContent = first + typed;
+        document.body.append(ref);
+        ref.focus();
+        const range = document.createRange();
+        range.selectNodeContents(ref);
+        range.collapse(false);
+        const s = document.getSelection()!;
+        s.removeAllRanges();
+        s.addRange(range);
+      },
+      { first: FIRST, typed: TYPED },
+    );
+    for (const k of keys) await page.keyboard.press(k);
+    const fromReference = await page.evaluate(
+      () => document.getElementById('w1-fe-111-edit-reference')!.textContent,
+    );
+
+    expect(fromEditor).not.toBe(FIRST + TYPED);
+    expect(fromEditor).toBe(fromReference);
   });
 });

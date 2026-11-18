@@ -296,6 +296,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           `/documents/${doc}/history?region=${CONF}`,
           `/documents/${doc}/history?field=${SENS}`,
           `/documents/${doc}/activity`,
+          `/documents/${doc}/connect`,
           `/documents/${doc}/versions`,
           `/documents/${doc}/regions`,
           `/documents/${doc}/fields`,

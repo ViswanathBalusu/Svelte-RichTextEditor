@@ -5,6 +5,7 @@
 // How a connection obtains its agent identity is the open decision UX-044 (ADR 0234 Part A,
 // proposed); this test gives the connection the identity and checks only what is recorded.
 import { type Connection, type Effects, Room, type StoredCommit } from '@docedit/authority';
+import { Transform } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import { AttributionMap, applyCommit, authorLabel, commitAuthor } from '../src/attribution.ts';
 import { REQUIRES, baseDoc, posInside, schema, typeAt, uuid } from './fixtures.ts';
@@ -47,7 +48,16 @@ function submitOne(who: Connection, origin: 'assistant' | 'input', text: string)
   const r = newRoom();
   r.open('writer', who);
   r.open('observer', person('observer'));
-  const tr = typeAt(baseDoc(), 'pIntro0000000001', 0, text);
+  // An agent connection holds at most `suggest` (UX-044, UX-046), so its text is a suggestion.
+  const tr =
+    who.agent === undefined
+      ? typeAt(baseDoc(), 'pIntro0000000001', 0, text)
+      : new Transform(baseDoc()).insert(
+          posInside(baseDoc(), 'pIntro0000000001'),
+          schema.text(text, [
+            schema.marks['ins']!.create({ id: 'sHis017000000001', user: who.sub }),
+          ]),
+        );
   const steps = tr.steps.map((s) => s.toJSON()) as unknown[];
   let fx: Effects = r.submit('writer', { id: uuid(), base: 0, steps, origin } as never);
   const all: Effects = { send: [...fx.send], write: null };

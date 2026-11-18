@@ -183,7 +183,7 @@ Buckets use versioning, per-tenant encryption keys and replication to a second l
 
 ### 4.3 Redis or Valkey (from stage 2)
 
-Presence fan-out between nodes, the internal bus for room forwarding and announcements, rate-limit counters, follower streams. Nothing in it is a source of truth. Correctness never depends on an announcement arriving (section 2.3).
+Presence fan-out between nodes, the internal bus for room forwarding and announcements (Valkey streams, section 16), rate-limit counters, follower streams. Nothing in it is a source of truth. Correctness never depends on an announcement arriving (section 2.3).
 
 ### 4.4 Assets
 
@@ -281,7 +281,7 @@ Specified in 05, section 10.
 
 ## 16. Open issues
 
-- The internal bus in stage 2 could be Redis streams or NATS. The choice does not affect the protocol.
+- Decided: the internal bus in stage 2 is Valkey streams, with Redis as a compatible substitute (owner decision 136, 2026-11-15; [ADR 0243](../adr/0243-lane-BE-053-065.md)). NATS is the alternative if a stage 2 run shows that the bus is the limit. The choice does not affect the protocol.
 - Whether follower nodes are needed before stage 3.
 - The memory cost of an open document needs measuring.
 - Search across documents is only sketched. Ranking, permissions in results and the move from PostgreSQL full-text search to a search engine need their own document.

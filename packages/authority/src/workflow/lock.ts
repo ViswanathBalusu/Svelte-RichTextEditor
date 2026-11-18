@@ -17,9 +17,11 @@
  *   corrects the body and the fields as an editor of a draft would (FRW-032 criterion 3), and no
  *   participant fills, because a participant of a `correcting` workflow is paused
  *   (docs/adr/0385-w4-FRW-032-correct-and-resume.md, proposed);
- * - `finalised` and `expired` are not decided here. 12 does not say whether the terminal states
- *   are locked (FRW-029 Open questions). `lockFor` returns null for them, so no caller can take a
- *   default by accident.
+ * - `expired` locks the document and ends fill, as the other states that end a workflow do: the
+ *   deadline stops the process, and an owner's edit would change what the participants were sent
+ *   (FRW-034 criterion 1; docs/adr/0389-w4-FRW-034-expire-and-remind.md, proposed);
+ * - `finalised` is not decided here. 12 does not say whether it is locked (FRW-029 Open
+ *   questions). `lockFor` returns null for it, so no caller can take a default by accident.
  */
 import type { WorkflowStateName } from './lifecycle.ts';
 
@@ -39,12 +41,12 @@ export function lockFor(state: WorkflowStateName): WorkflowLock | null {
       return { documentState: 'locked', workflowActive: true };
     case 'declined':
     case 'voided':
+    case 'expired':
     case 'completed':
       return { documentState: 'locked', workflowActive: false };
     case 'correcting':
       return { documentState: 'active', workflowActive: false };
     case 'finalised':
-    case 'expired':
       return null;
   }
 }

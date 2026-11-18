@@ -1,0 +1,38 @@
+{
+  "x-note": "The authority service of 05 section 10 as a compose service (BE-007). JSON is valid YAML, so `podman compose -f services/authority-service/compose.json up --build` reads this file. Like infra/containers/compose.json it uses host networking and binds 127.0.0.1 only: on the WSL Podman machine a socket bound to loopback in the VM is relayed to Windows' loopback, and published ports are not. Put DOCEDIT_AUTHORITY_HOST=0.0.0.0 and a published port in an override for any other network. The service keeps no data, so there is no volume. The caller's storage, for rebuilding a state this replica does not hold, is DOCEDIT_AUTHORITY_STORAGE_URL (src/storage.ts). Tokens come from the environment, which a secret store fills; they are never written here. There is no Helm entry yet: the chart of BE-006 does not exist.",
+  "name": "docedit-authority",
+  "services": {
+    "authority-service": {
+      "image": "${DOCEDIT_AUTHORITY_IMAGE:-localhost/docedit-authority-service:dev}",
+      "build": {
+        "context": "../..",
+        "dockerfile": "services/authority-service/Containerfile"
+      },
+      "network_mode": "host",
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "environment": {
+        "DOCEDIT_AUTHORITY_HOST": "${DOCEDIT_AUTHORITY_HOST:-127.0.0.1}",
+        "DOCEDIT_AUTHORITY_PORT": "${DOCEDIT_AUTHORITY_PORT:-8090}",
+        "DOCEDIT_AUTHORITY_CAPACITY": "${DOCEDIT_AUTHORITY_CAPACITY:-64}",
+        "DOCEDIT_AUTHORITY_ALLOW_MIGRATIONS": "${DOCEDIT_AUTHORITY_ALLOW_MIGRATIONS:-false}",
+        "DOCEDIT_AUTHORITY_TOKEN": "${DOCEDIT_AUTHORITY_TOKEN:-}",
+        "DOCEDIT_AUTHORITY_STORAGE_URL": "${DOCEDIT_AUTHORITY_STORAGE_URL:-}",
+        "DOCEDIT_AUTHORITY_STORAGE_TOKEN": "${DOCEDIT_AUTHORITY_STORAGE_TOKEN:-}"
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + process.env.DOCEDIT_AUTHORITY_PORT + '/v1/authority/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+        ],
+        "interval": "10s",
+        "timeout": "3s",
+        "retries": 3
+      },
+      "labels": { "org.docedit.service": "authority-service" }
+    }
+  }
+}
