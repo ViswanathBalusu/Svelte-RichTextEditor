@@ -60,6 +60,7 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'fieldEntry'
       | 'checkFieldEntry'
       | 'fieldFillable'
+      | 'fieldRuleState'
       | 'enterFieldValue'
       | 'validateFields'
       // FRW-070, FRW-078: the fields of fill mode without their values, and the entries a person made.
@@ -94,7 +95,11 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'words'
       // UX-017: the recovered edits pane puts an item back into the document or drops it.
       | 'insertRecovered'
-      | 'discardRecovered';
+      | 'discardRecovered'
+      // UX-035: the markup view of suggestions and the label that names one for assistive technology.
+      | 'markupView'
+      | 'setMarkupView'
+      | 'setSuggestionLabel';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed

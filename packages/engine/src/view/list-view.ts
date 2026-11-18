@@ -12,8 +12,8 @@
  * - A numbered heading keeps its heading role: it is counted in its list, but no list attributes
  *   replace the heading semantics, which navigation by headings needs. This is a reading taken
  *   here, not stated by the spec (FE-105 notes).
- * - Nothing gives the items a `role="list"` parent yet, which ARIA requires of a `listitem`
- *   (FE-105 criterion 3 stays open).
+ * - ARIA requires a `list` parent of a `listitem`: an empty `role="list"` widget before each run of
+ *   consecutive items owns them through `aria-owns` (`ownerDecorations`, FE-105 criterion 3).
  */
 import type { Node as PMNode, Fragment } from 'prosemirror-model';
 import { Plugin, PluginKey, type Transaction } from 'prosemirror-state';
@@ -129,12 +129,18 @@ export function listDecorations(doc: PMNode): DecorationSet {
     else lists.set(item.list.listId, [item]);
   }
   const out: Decoration[] = [];
-  for (const group of lists.values()) {
+  // The decorated items with their DOM ids, in document order, for the list owners below.
+  const shown = new Map<number, { item: Item; id: string }>();
+  for (const [listId, group] of lists) {
     listSemantics(group.map((item) => item.list)).forEach((s, i) => {
-      const { node, pos } = group[i]!;
+      const item = group[i]!;
+      const { node, pos } = item;
       if (!s || pos === null || headingLevel(node.attrs['style']) !== null) return;
+      const id = `${ITEM_ID}${listId}-${i}`;
+      shown.set(pos, { item, id });
       out.push(
         Decoration.node(pos, pos + node.nodeSize, {
+          id,
           role: s.role,
           'aria-level': String(s['aria-level']),
           'aria-posinset': String(s['aria-posinset']),
@@ -143,8 +149,58 @@ export function listDecorations(doc: PMNode): DecorationSet {
       );
     });
   }
+  out.push(...ownerDecorations(shown));
   return DecorationSet.create(doc, out);
 }
+
+/** The DOM id prefix of a list item; the owner of its run names it in `aria-owns`. */
+const ITEM_ID = 'de-li-';
+
+/**
+ * A `role="list"` owner before each run of consecutive items of one list (FE-105 criterion 3,
+ * decision 91 of the owner's answers of 2026-11-15). The model has no list node, and ProseMirror
+ * maps a node view's children one to one, so no element can wrap sibling paragraphs. The owner is
+ * an empty widget placed just before the run's first item; its `aria-owns` names every item of the
+ * run, so in the accessibility tree the items are the owner's children, in their own order and
+ * place, and each `listitem` has a `list` parent. A run is paragraphs that are siblings with no
+ * node between them and the same `listId`.
+ */
+function ownerDecorations(shown: ReadonlyMap<number, { item: Item; id: string }>): Decoration[] {
+  const out: Decoration[] = [];
+  const ordered = [...shown.entries()].sort((a, b) => a[0] - b[0]);
+  let run: { pos: number; end: number; listId: string; ids: string[] } | null = null;
+  const close = (): void => {
+    if (!run) return;
+    const ids = run.ids.join(' ');
+    out.push(
+      Decoration.widget(
+        run.pos,
+        () => {
+          const el = document.createElement('div');
+          el.className = 'de-list-owner';
+          el.setAttribute('role', 'list');
+          el.setAttribute('aria-owns', ids);
+          return el;
+        },
+        { side: -1, key: `${OWNER_KEY}${ids}`, ignoreSelection: true },
+      ),
+    );
+    run = null;
+  };
+  for (const [pos, { item, id }] of ordered) {
+    if (run && run.end === pos && run.listId === item.list.listId) {
+      run.ids.push(id);
+      run.end = pos + item.node.nodeSize;
+      continue;
+    }
+    close();
+    run = { pos, end: pos + item.node.nodeSize, listId: item.list.listId, ids: [id] };
+  }
+  close();
+  return out;
+}
+
+const OWNER_KEY = 'de-list-owner:';
 
 const inlineOnly = (content: Fragment): boolean => {
   let inline = true;

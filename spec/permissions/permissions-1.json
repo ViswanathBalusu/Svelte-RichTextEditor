@@ -287,6 +287,7 @@
         "PUT /documents/{id}/regions/{rid}/state",
         "DELETE /documents/{id}/regions/{rid}/lease",
         "PUT /documents/{id}/workflow",
+        "POST /documents/{id}/workflow/send",
         "DELETE /documents/{id}"
       ],
       "messages": []
@@ -322,6 +323,8 @@
         "PUT /documents/{id}/retention",
         "POST /documents/{id}/holds",
         "GET /holds",
+        "POST /users/erase",
+        "POST /documents/{id}/commits/{seq}/tombstone",
         "GET /quotas",
         "PUT /quotas",
         "GET /origins",

@@ -70,7 +70,7 @@ export function definitionFor(_model?: FootnoteModel): CdmDefinition {
 
 const hidden = (cls: string): DOMOutputSpec => ['div', { class: cls, hidden: '' }];
 
-function paragraphDOM(node: PMNode): DOMOutputSpec {
+export function paragraphDOM(node: PMNode): DOMOutputSpec {
   const attrs: Record<string, string> = { class: 'de-p' };
   const style = node.attrs['style'];
   if (typeof style === 'string') attrs['data-style'] = style;

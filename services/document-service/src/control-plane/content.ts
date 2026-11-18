@@ -240,7 +240,7 @@ export class ContentReader {
       if (e instanceof PayloadAbsentError)
         throw new ApiError(
           'not_found',
-          `the detail of seq ${e.seq} of ${ref.doc} is no longer available (its payload was thinned or moved; 08 §11)`,
+          `the detail of seq ${e.seq} of ${ref.doc} is no longer available (its payload was removed: thinned, moved or replaced by a tombstone; 08 §11, §13)`,
         );
       throw e;
     }

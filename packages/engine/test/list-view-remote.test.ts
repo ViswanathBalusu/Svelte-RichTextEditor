@@ -65,7 +65,10 @@ function attrsById(state: EditorState): Record<string, Record<string, string>> {
   const set = listSemanticsKey.getState(state)!;
   const out: Record<string, Record<string, string>> = {};
   for (const d of set.find() as Array<Decoration & { type: { attrs: Record<string, string> } }>) {
-    out[String(state.doc.nodeAt(d.from)!.attrs['id'])] = d.type.attrs;
+    if (!d.type.attrs) continue; // a list owner widget (FE-105 criterion 3)
+    out[String(state.doc.nodeAt(d.from)!.attrs['id'])] = Object.fromEntries(
+      Object.entries(d.type.attrs).filter(([k]) => k !== 'id'),
+    );
   }
   return out;
 }

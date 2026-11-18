@@ -32,6 +32,7 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation GET /fonts': 'the font manifest has no shape and no feature yet (G75; G06)',
   'operation GET /documents/{id}/workflow': WORKFLOW,
   'operation PUT /documents/{id}/workflow': WORKFLOW,
+  'operation POST /documents/{id}/workflow/send': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/consent': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/verify': WORKFLOW,
   'operation POST /documents/{id}/workflow/participants/{pid}/complete': WORKFLOW,

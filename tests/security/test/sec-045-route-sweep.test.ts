@@ -85,7 +85,19 @@ const operations: Operation[] = Object.entries(openapi['paths'] as Json).flatMap
 const withIdentifier = operations.filter((o) => o.params.length > 0);
 
 /** The path parameters the suite has an identifier of tenant B for. */
-const KNOWN_PARAMS = ['id', 'rid', 'tid', 'cid', 'aid', 'jid', 'pid', 'fid', 'kid', 'origin'];
+const KNOWN_PARAMS = [
+  'id',
+  'rid',
+  'tid',
+  'cid',
+  'aid',
+  'jid',
+  'pid',
+  'fid',
+  'kid',
+  'origin',
+  'seq',
+];
 
 /** Client messages that take an identifier, and those that do not (05 §5). */
 const WITH_IDENTIFIER = [
@@ -119,6 +131,8 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   participantComplete: NOT_OFFERED,
   participantDecline: NOT_OFFERED,
   signField: NOT_OFFERED,
+  // HIS-040: the route needs a purge pool, which only an operator supplies.
+  tombstoneCommit: 'this server does not remove payloads',
 };
 /** A body the route would accept from the object's own tenant, where the route takes one. */
 function bodyFor(operationId: string): unknown {
@@ -131,6 +145,7 @@ function bodyFor(operationId: string): unknown {
     restore: { toSeq: 0 },
     forkDocument: { atSeq: 0 },
     setReadMarker: { seq: 0 },
+    tombstoneCommit: { reason: 'sweep' },
     createThread: { target: { block: 'pIntro0000000001' }, comment: { body: 'from the sweep' } },
     updateThread: { state: 'resolved' },
     createComment: { body: 'from the sweep' },
@@ -268,6 +283,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       });
       ids['doc'] = made('document', doc, doc.json?.id);
       ids['rid'] = REGION;
+      // A commit sequence number in the path (HIS-040); B's document has its first commit.
+      ids['seq'] = '1';
       ownerB = await h.mintToken(h.b, 'bella', { [ids['doc']]: 'owner' });
       const thread = await asB(
         'POST',

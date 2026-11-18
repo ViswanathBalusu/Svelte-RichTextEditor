@@ -23,6 +23,7 @@ import {
   type Connection,
   type Outbound,
   type PermissionState,
+  type WorkflowStatusMessage,
 } from '@docedit/authority';
 import type {
   Access,
@@ -35,6 +36,7 @@ import type {
   SyncCommit,
   SyncReject,
   SyncReset,
+  WorkflowStatus,
 } from '../generated/types.ts';
 import {
   regionKey,
@@ -72,6 +74,7 @@ export type DepEvent =
   | { t: 'sync.caughtUp'; d: SyncCaughtUp }
   | { t: 'sync.reset'; d: SyncReset }
   | { t: 'perm.changed'; d: Access }
+  | { t: 'wf.changed'; d: WorkflowStatus }
   | { t: 'ch.closed'; d: ChannelClosed };
 
 export interface DepOutbound {
@@ -107,6 +110,18 @@ interface Attached {
   rev: number;
   /** `perm.changed` held until the control commit of its revision is delivered (D12). */
   held: Array<{ revision: number; access: RoomAccess }>;
+  /**
+   * `wf.changed` that follows a held `perm.changed`: it goes out right after the `perm.changed` of
+   * `afterRevision`, so that a client never sees the workflow before the access it implies.
+   */
+  heldWorkflow: Array<{ afterRevision: number; status: WorkflowStatus }>;
+}
+
+/** The room's workflow object as the DEP `WorkflowStatus` (FRW-035). */
+function toWorkflowStatus(w: WorkflowStatusMessage): WorkflowStatus {
+  return w.participant === undefined
+    ? { state: w.state }
+    : { state: w.state, participant: { id: w.participant.id, state: w.participant.state } };
 }
 
 const CLOSE_REASONS: Readonly<Record<CloseReason, string>> = {
@@ -162,7 +177,7 @@ export class RoomBridge {
   ): ChannelOpened {
     const src = this.#source();
     const head = msg.head + this.#offset();
-    this.#attached.set(channel, { conn, rev: 1, held: [] });
+    this.#attached.set(channel, { conn, rev: 1, held: [], heldWorkflow: [] });
     const opened: ChannelOpened = {
       head,
       incarnation: msg.incarnation,
@@ -180,6 +195,8 @@ export class RoomBridge {
     if (extra.inflight !== undefined) opened.inflight = extra.inflight;
     // A projecting gateway names the reader's view (ADR 0019); the plain room serves the full view.
     if (msg.view !== undefined) opened.view = msg.view;
+    // The workflow object is the connection's own (FRW-035): the room built it for this channel.
+    if (msg.workflow !== undefined) opened.workflow = toWorkflowStatus(msg.workflow);
     return opened;
   }
 
@@ -274,6 +291,17 @@ export class RoomBridge {
           // with asOfSeq set to that commit (05 §5.9, PRO-033; D12).
           a.held.push({ revision: msg.revision, access: msg.access });
           break;
+        case 'wf.changed':
+          // Sent like `perm.changed` (12 §10): a complete object, after the `perm.changed` the room
+          // sent ahead of it. It waits for no control commit: it grants no access.
+          flush(channel);
+          if (a.held.length > 0)
+            a.heldWorkflow.push({
+              afterRevision: Math.max(...a.held.map((h) => h.revision)),
+              status: toWorkflowStatus(msg.workflow),
+            });
+          else out.push({ channel, event: { t: 'wf.changed', d: toWorkflowStatus(msg.workflow) } });
+          break;
         case 'ch.closed': {
           flush(channel);
           this.#attached.delete(channel);
@@ -324,6 +352,9 @@ export class RoomBridge {
         ),
       },
     });
+    for (const w of a.heldWorkflow.filter((h) => h.afterRevision <= revision))
+      out.push({ channel, event: { t: 'wf.changed', d: w.status } });
+    a.heldWorkflow = a.heldWorkflow.filter((h) => h.afterRevision > revision);
   }
 
   /**
