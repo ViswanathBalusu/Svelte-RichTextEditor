@@ -146,6 +146,8 @@ export interface MountOptions {
   projected?: boolean;
   grants?: RegionGrant[] | null;
   fill?: FillSummary | null;
+  /** The core offers the preview as a role (FRW-075) over two roles; the real roles pane is offered. */
+  rolePreview?: boolean;
   carets?: PeerCaret[];
   /** The document's base direction (`settings.dir`), as the core's `direction` view (UX-065). */
   direction?: 'ltr' | 'rtl';
@@ -307,6 +309,8 @@ let duringInput = false;
 /** The checker's document (UX-066, UX-067): one issue of each kind, and one in region rLegal. */
 let checkerAltFixed = false;
 const checkerSelected: string[] = [];
+/** What the core was asked to do for the preview as a role (FRW-075). */
+const rolePreviewLog: string[] = [];
 /** The assistant's scripted behaviour and what it was asked (UX-045). */
 type AssistantMode = 'ok' | 'rate_limited' | 'quota_exceeded' | 'fail' | 'hang' | 'inject';
 let assistantMode: AssistantMode = 'ok';
@@ -600,6 +604,49 @@ function mountShell(options: MountOptions = {}): void {
     // The roles and the rules panes are stand-ins here; they need only be offered for the links.
     Object.assign(core, { workflowSend: sendHandle, roles: {}, rules: {} });
   }
+  if (options.rolePreview) {
+    rolePreviewLog.length = 0;
+    const listeners = new Set<() => void>();
+    let active: string | null = null;
+    const roleList = [
+      { id: 'role_tenant', name: 'Tenant', color: '#0d47a1', order: 0, fields: [] },
+      { id: 'role_landlord', name: 'Landlord', color: '#b71c1c', order: 1, fields: [] },
+    ];
+    const view = <T>(get: () => T) => ({
+      get,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    });
+    const changed = (): void => {
+      for (const listener of [...listeners]) listener();
+    };
+    Object.assign(core, {
+      roles: {
+        list: view(() => roleList),
+        canChange: view(() => false),
+        add: () => ({ ok: false, reason: 'read-only' }),
+        update: () => ({ ok: false, reason: 'read-only' }),
+        remove: () => ({ ok: false, reason: 'read-only' }),
+      },
+      rolePreview: view(() => active),
+      startRolePreview: (role: string) => {
+        if (!roleList.some((r) => r.id === role)) return false;
+        active = role;
+        rolePreviewLog.push(`start:${role}`);
+        changed();
+        return true;
+      },
+      endRolePreview: () => {
+        if (active === null) return false;
+        active = null;
+        rolePreviewLog.push('end');
+        changed();
+        return true;
+      },
+    });
+  }
   if (options.catchUp)
     Object.assign(core, {
       catchUp: catchUpPort(
@@ -656,6 +703,11 @@ function mountShell(options: MountOptions = {}): void {
   else if (options.commentsPane)
     props['panes'] = {
       comments: async () => (await import('../../src/panes/CommentsPane.svelte')).default,
+    };
+  if (options.rolePreview)
+    props['panes'] = {
+      ...(props['panes'] as Record<string, unknown> | undefined),
+      roles: async () => (await import('../../src/panes/RolesPane.svelte')).default,
     };
   if (options.send)
     props['panes'] = {
@@ -854,6 +906,10 @@ const harness = {
   /** Opens the extension's panel by its identifier, as an extension command would (UX-052). */
   openExtensionPane: () =>
     (need().app['openPaneById'] as (id: string) => Promise<boolean>)(EXTENSION_PANE),
+  /** Opens a pane by its identifier, as a menu command does. */
+  openPane: (id: string) => (need().app['openPaneById'] as (id: string) => Promise<boolean>)(id),
+  /** What the core was asked to do for the preview as a role, in order (FRW-075). */
+  rolePreviewLog: () => [...rolePreviewLog],
   /** Follows a link to a comment (UX-034): the shell's entry, as the host's call would reach it. */
   openLinkedComment: (id: string) =>
     (need().app['openLinkedComment'] as (id: string) => Promise<string>)(id),

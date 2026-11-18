@@ -20,6 +20,17 @@
   const roles = live(service.list);
   const canChange = live(service.canChange);
   const id = `${shell.idPrefix}-roles`;
+  const preview = shell.core.rolePreview ? live(shell.core.rolePreview) : null;
+
+  /** Previews the document as the role, or leaves the preview when it is already that role's (FRW-075). */
+  function togglePreview(role: RoleSummary): void {
+    const core = shell.core;
+    if (preview?.current === role.id) {
+      core.endRolePreview?.();
+      return;
+    }
+    if (!core.startRolePreview?.(role.id)) shell.announce('announce.rolePreview.failed');
+  }
 
   /** A colour for a new role that differs between the first roles; the author may change it. */
   const NEW_COLOURS = ['#1f77b4', '#d95f02', '#2ca02c', '#9467bd', '#8c564b', '#17becf'];
@@ -130,6 +141,18 @@
                   <li data-content data-field={field.id}>{field.label}</li>
                 {/each}
               </ol>
+            </div>
+          {/if}
+          {#if shell.core.startRolePreview}
+            <div class="de-actions">
+              <button
+                type="button"
+                class="de-button"
+                data-roles="preview"
+                aria-pressed={preview?.current === role.id}
+                aria-label={tr.t('roles.preview.name', { role: role.name })}
+                onclick={() => togglePreview(role)}>{tr.t('roles.preview')}</button
+              >
             </div>
           {/if}
           {#if canChange.current}
