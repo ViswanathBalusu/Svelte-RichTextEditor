@@ -1645,9 +1645,9 @@ As an operator at very large scale, I want tenants spread over several PostgreSQ
 
 **Acceptance criteria**
 
-- [ ] Given a tenant-to-shard map, when a request or job runs, then every query goes to its tenant's shard.
-- [ ] Given a commit transaction, when it runs, then it never spans shards, because all of a tenant's tables live on one shard.
-- [ ] Given a migration, when it is rolled out, then it applies to every shard with the same expand-and-contract rules (BE-016).
+- [x] Given a tenant-to-shard map, when a request or job runs, then every query goes to its tenant's shard.
+- [x] Given a commit transaction, when it runs, then it never spans shards, because all of a tenant's tables live on one shard.
+- [x] Given a migration, when it is rolled out, then it applies to every shard with the same expand-and-contract rules (BE-016).
 - [ ] Given a sharded configuration, when the conformance kit and the fault tests (BE-080) run, then they pass.
 
 **Evidence:** Lane w5 (2026-11-18): `services/document-service/src/storage/shards.ts` (`routeByTenant`, `ShardPools`, `migrateShards`, `shardCompatibility`, `ShardedOutbox`, `FanOutNodeLeases`), `src/sharded-parts.ts` (`shardedPgParts`, `shardedReadiness`) and `ServiceParts.readiness` in `server.ts`; `migrate-cli.ts` takes `DOCEDIT_SHARD_DATABASE_URLS`. Tests: `src/storage/shards.test.ts` (routing rules) and `test/postgres/be-070-shards.pg.test.ts` (23 tests, run against the test cluster's PostgreSQL). Criterion 1: documents, jobs and audit events of two tenants are written through the sharded parts, and every table with a `tenant_id` is counted on both databases, so each tenant has rows on its own shard and none on the other; an unknown tenant is refused before any pool connects. Criterion 2: a commit append connects to the tenant's pool only, and an audit batch naming tenants of two shards is refused with `CrossShardError` before either pool connects. Criterion 3: `migrateShards` runs `migrate` on each shard in turn (checksums, one transaction per file, phase recorded), `shardCompatibility` applies the BE-016 rule per shard, and a failure stops the rollout and names the shard. The two shards of the tests are two databases of one PostgreSQL server, so routing and isolation are tested, a second primary's insert rate is not.
