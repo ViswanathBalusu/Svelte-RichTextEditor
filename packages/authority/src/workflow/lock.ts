@@ -20,8 +20,9 @@
  * - `expired` locks the document and ends fill, as the other states that end a workflow do: the
  *   deadline stops the process, and an owner's edit would change what the participants were sent
  *   (FRW-034 criterion 1; docs/adr/0389-w4-FRW-034-expire-and-remind.md, proposed);
- * - `finalised` is not decided here. 12 does not say whether it is locked (FRW-029 Open
- *   questions). `lockFor` returns null for it, so no caller can take a default by accident.
+ * - `finalised` keeps the lock and ends fill, as `completed` does: it is a terminal state (12 §6.2) and
+ *   its sealed PDF is the record of the document as signed (FRW-054; docs/adr/0401-w4-FRW-054-finalise-and-final-route.md,
+ *   proposed). 12 does not say so in words (FRW-029 Open questions).
  */
 import type { WorkflowStateName } from './lifecycle.ts';
 
@@ -31,7 +32,7 @@ export interface WorkflowLock {
   readonly workflowActive: boolean;
 }
 
-/** The lock of a workflow state, or null where this module does not decide it (see the note). */
+/** The lock of a workflow state, or null where this module does not decide it (no state at present; see the note). */
 export function lockFor(state: WorkflowStateName): WorkflowLock | null {
   switch (state) {
     case 'draft':
@@ -43,10 +44,9 @@ export function lockFor(state: WorkflowStateName): WorkflowLock | null {
     case 'voided':
     case 'expired':
     case 'completed':
+    case 'finalised':
       return { documentState: 'locked', workflowActive: false };
     case 'correcting':
       return { documentState: 'active', workflowActive: false };
-    case 'finalised':
-      return null;
   }
 }

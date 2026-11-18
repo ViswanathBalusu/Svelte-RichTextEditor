@@ -47,17 +47,15 @@ describe('the lock a workflow state implies (FRW-029 criteria 2, 3 and 5)', () =
     expect(lockFor('draft')).toEqual({ documentState: 'active', workflowActive: false });
   });
 
-  it('decides no lock for the terminal state 12 leaves open (finalised), and never a lock that is not a state of 12', () => {
+  it('gives finalised the lock of completed (FRW-054; ADR 0401, proposed), and never a lock that is not a state of 12', () => {
+    expect(lockFor('finalised')).toEqual(lockFor('completed'));
     fc.assert(
       fc.property(fc.constantFrom(...WORKFLOW_STATE_NAMES), (state) => {
         const lock = lockFor(state);
-        if (lock === null) {
-          expect(state).toBe('finalised');
-        } else {
-          expect(['active', 'locked']).toContain(lock.documentState);
-          // A workflow that is not running never lets anyone fill.
-          if (state !== 'sent' && state !== 'in_progress') expect(lock.workflowActive).toBe(false);
-        }
+        expect(lock).not.toBeNull();
+        expect(['active', 'locked']).toContain(lock?.documentState);
+        // A workflow that is not running never lets anyone fill.
+        if (state !== 'sent' && state !== 'in_progress') expect(lock?.workflowActive).toBe(false);
       }),
     );
   });

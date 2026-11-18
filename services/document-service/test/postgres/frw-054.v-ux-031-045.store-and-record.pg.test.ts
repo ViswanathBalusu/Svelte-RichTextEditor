@@ -14,6 +14,7 @@ import { S3ObjectStore } from '../../src/objects/s3.ts';
 import { readSealedPdf, sealedHash, sealedPdfKey } from '../../src/objects/sealed-pdf.ts';
 import { storeAndRecordSealedPdf } from '../../src/workflow/sealed-pdf-finalise.ts';
 import { readSealedPdfRecord } from '../../src/workflow/sealed-pdf-pg.ts';
+import { ObjectSealedPdfStore } from '../../src/workflow/sealed-store.ts';
 import { ADMIN, newTenant, postgresUnavailable, SERVICE_USER, settings } from '../support/env.ts';
 
 const S = settings();
@@ -233,5 +234,39 @@ describe.skipIf(unavailable !== null)('store and record a sealed PDF (FRW-054 cr
       store: out.store,
     });
     expect(outcome.status).toBe('completed');
+  });
+
+  it('reads the stored PDF and its record back through the sealed store (FRW-054 criterion 4)', async () => {
+    const tenant = newTenant();
+    const docId = await seedDocument(tenant);
+    const workflowId = `wf-${randomUUID().slice(0, 8)}`;
+    written.push(sealedPdfKey(tenant, docId, workflowId));
+    const sealedStore = new ObjectSealedPdfStore(service, objects);
+    expect(await sealedStore.read(tenant, docId, workflowId)).toBeNull();
+    const bytes = pdf('read-through');
+    const out = await sealedStore.store({
+      tenant,
+      docId,
+      workflowId,
+      bytes,
+      sealedHash: sealedHash(bytes),
+      retainUntilMs,
+    });
+    expect(out.store).toEqual({ ok: true, storedHash: sealedHash(bytes) });
+    const read = await sealedStore.read(tenant, docId, workflowId);
+    expect(read?.bytes).toEqual(bytes);
+    expect(read?.record.storedHash).toBe(sealedHash(bytes));
+    // A second store for the workflow is refused and the first bytes stay.
+    const other = pdf('replacement');
+    const second = await sealedStore.store({
+      tenant,
+      docId,
+      workflowId,
+      bytes: other,
+      sealedHash: sealedHash(other),
+      retainUntilMs,
+    });
+    expect(second.store).toEqual({ ok: false, reason: 'store_failed' });
+    expect((await sealedStore.read(tenant, docId, workflowId))?.bytes).toEqual(bytes);
   });
 });

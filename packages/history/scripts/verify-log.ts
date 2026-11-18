@@ -4,6 +4,7 @@
 //   node packages/history/scripts/verify-log.ts <bundle.json | -> [--anchor <seq>:<hash>]...
 //        [--anchors <file.json>] [--no-replay]
 //
+// A workflow evidence bundle (`docedit-workflow-evidence/1`, FRW-055) gives a verdict with findings.
 // The bundle is the exported log of a document (`docedit-log-bundle/1`; ADR 0051): the metadata
 // rows with their payload hashes and hashes, the payloads that are still held, checkpoints with
 // their content hashes and the chain heads a host or an anchor recorded. The tool recomputes the
@@ -16,6 +17,10 @@ import { readFileSync } from 'node:fs';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import { type Anchor, EXIT, type LogBundle, verifyBundle } from '../src/chain.ts';
 import { isAuditSegment, verifySegment } from '../src/audit-segment.ts';
+import {
+  isWorkflowEvidenceBundle,
+  verifyWorkflowEvidenceBundle,
+} from '../src/workflow-evidence-bundle.ts';
 
 function fail(reason: string): never {
   process.stdout.write(`${JSON.stringify({ status: 'unreadable', reason })}\n`);
@@ -60,6 +65,16 @@ try {
   bundle = parsed as LogBundle;
 } catch {
   fail('the bundle cannot be read as JSON');
+}
+
+// A workflow evidence bundle (FRW-055) is checked as a whole: the log segment and the evidence items.
+if (isWorkflowEvidenceBundle(parsed)) {
+  const verdict = await verifyWorkflowEvidenceBundle(parsed, { anchors });
+  process.stdout.write(`${JSON.stringify(verdict)}
+`);
+  process.exit(
+    verdict.ok ? EXIT.intact : verdict.log.status === 'incomplete' ? EXIT.incomplete : EXIT.altered,
+  );
 }
 
 // An audit segment (HIS-037) is checked from its first seq, with the same checks as a whole log.

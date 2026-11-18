@@ -62,6 +62,7 @@ import type { Views } from './visibility.ts';
 import type { AccessCodeStore } from '../workflow/access-code-store.ts';
 import type { ConsentTextStore } from '../workflow/consent-service.ts';
 import type { EvidenceLedger } from '../workflow/evidence-ledger.ts';
+import type { SealedPdfStore } from '../workflow/sealed-store.ts';
 import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 
 export interface HandlerDeps {
@@ -166,6 +167,8 @@ export interface HandlerDeps {
   consentTexts?: ConsentTextStore;
   /** The workflow evidence ledger (FRW-041), where attempts at an access code are recorded. */
   evidence?: EvidenceLedger;
+  /** The sealed final PDFs (FRW-054). Absent: `GET /documents/{id}/workflow/final` is not offered. */
+  sealedPdfs?: SealedPdfStore;
   /** The tenant's allowed origins and public keys, listed by `/origins` and `/keys` (UX-077). */
   tenantRegistry?: TenantRegistry;
   /** The index of `GET /search` (BE-054 criterion 2). Absent: the route is not offered. */

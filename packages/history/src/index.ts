@@ -144,6 +144,7 @@ export {
   type VerifyStatus,
 } from './chain.ts';
 export * from './audit-segment.ts';
+export * from './workflow-evidence-bundle.ts';
 export {
   activitySince,
   attributionFor,
