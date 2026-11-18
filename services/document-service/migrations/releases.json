@@ -11,7 +11,16 @@
         "0005_document_metadata",
         "0006_jobs",
         "0007_readiness"
-      ]
+      ],
+      "rollback": {
+        "0001_platform": "First release: no older release exists to roll back to. There is no down migration; restore the backup taken before migrating, or drop the database and migrate again.",
+        "0002_documents_and_log": "First release: no older release exists to roll back to. There is no down migration; restore the backup taken before migrating, or drop the database and migrate again.",
+        "0003_grants": "First release: no older release exists to roll back to. There is no down migration; restore the backup taken before migrating, or drop the database and migrate again.",
+        "0004_tenants": "First release: no older release exists to roll back to. There is no down migration; restore the backup taken before migrating, or drop the database and migrate again.",
+        "0005_document_metadata": "First release: no older release exists to roll back to. There is no down migration; restore the backup taken before migrating, or drop the database and migrate again.",
+        "0006_jobs": "First release: no older release exists to roll back to. There is no down migration; restore the backup taken before migrating, or drop the database and migrate again.",
+        "0007_readiness": "First release: no older release exists to roll back to. There is no down migration; restore the backup taken before migrating, or drop the database and migrate again."
+      }
     }
   ]
 }

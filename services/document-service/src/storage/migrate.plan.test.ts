@@ -165,4 +165,45 @@ describe('releaseNotes (BE-016 criterion 5, the table part)', () => {
   it('says so when a release has no database steps', () => {
     expect(releaseNotes([expand('0200_add_col')], [])).toBe('No database steps.\n');
   });
+
+  it('uses the note of releases.json for a migration whose file has none, and the file first', () => {
+    const noHeader = mig('0001_first');
+    const notes = { '0001_first': 'restore the backup', '0200_add_col': 'ignored' };
+    const out = releaseNotes(
+      [noHeader, expand('0200_add_col')],
+      ['0001_first', '0200_add_col'],
+      notes,
+    );
+    expect(out).toContain('| restore the backup |');
+    expect(out).toContain('| drop 0200_add_col |');
+    expect(out).not.toContain('ignored');
+    expect(releaseNotes([noHeader], ['0001_first'])).toContain('not documented');
+  });
+
+  it('documents the rollback of every migration, in every release and in the next one (BE-016 criterion 5)', async () => {
+    const migrations = await loadMigrations();
+    const releases = await loadReleases();
+    const notes = Object.assign({}, ...releases.map((r) => r.rollback ?? {})) as Record<
+      string,
+      string
+    >;
+    const listed = new Set(releases.flatMap((r) => r.migrations));
+    const sets = [
+      ...releases.map((r) => ({ name: r.version, versions: r.migrations })),
+      {
+        name: 'the next release',
+        versions: migrations.map((m) => m.version).filter((v) => !listed.has(v)),
+      },
+    ];
+    for (const s of sets) {
+      const out = releaseNotes(migrations, s.versions, notes);
+      expect(out, s.name).not.toContain('not documented');
+      // One table row for each database step of the release.
+      const rows = out.split('\n').filter((l) => l.startsWith('| `'));
+      expect(rows.length, s.name).toBe(s.versions.length);
+    }
+    // A note in releases.json names a migration the release lists, never another.
+    for (const r of releases)
+      for (const k of Object.keys(r.rollback ?? {})) expect(r.migrations, k).toContain(k);
+  });
 });
