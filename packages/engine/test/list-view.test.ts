@@ -61,8 +61,11 @@ function attrsById(state: EditorState): Record<string, Record<string, string>> {
   const set = listSemanticsKey.getState(state)!;
   const out: Record<string, Record<string, string>> = {};
   for (const d of set.find() as Array<Decoration & { type: { attrs: Record<string, string> } }>) {
+    if (!d.type.attrs) continue; // a list owner widget (FE-105 criterion 3)
     const node = state.doc.nodeAt(d.from)!;
-    out[String(node.attrs['id'])] = d.type.attrs;
+    const { id, ...rest } = d.type.attrs;
+    expect(id).toMatch(/^de-li-/);
+    out[String(node.attrs['id'])] = rest;
   }
   return out;
 }
@@ -130,6 +133,50 @@ describe('list semantics in the web view (FE-105)', () => {
     state = state.apply(numbered);
     expect(attrsById(state)['p2']).toMatchObject({ 'aria-posinset': '2', 'aria-setsize': '2' });
     expect(attrsById(state)['p1']).toMatchObject({ 'aria-posinset': '1', 'aria-setsize': '2' });
+  });
+
+  it('puts one list owner before each run of consecutive items, owning exactly those items', () => {
+    const state = stateOf([
+      para('p1', 'One', 0),
+      para('p2', 'Two', 1),
+      para('p3', 'Plain', null),
+      para('p4', 'Four', 0),
+      para('p5', 'Five', 0),
+    ]);
+    const set = listSemanticsKey.getState(state)!;
+    const all = set.find() as Array<Decoration & { type: { attrs?: Record<string, string> } }>;
+    const itemIds: Record<string, string> = {};
+    for (const d of all) {
+      if (d.type.attrs)
+        itemIds[String(state.doc.nodeAt(d.from)!.attrs['id'])] = d.type.attrs['id']!;
+    }
+    expect(new Set(Object.values(itemIds)).size).toBe(4);
+    const owners = all
+      .filter((d) => !d.type.attrs)
+      .map((d) => ({
+        at: String(state.doc.nodeAt(d.from)!.attrs['id']),
+        key: d.spec.key as string,
+      }))
+      .sort((a, b) => a.at.localeCompare(b.at));
+    // Two runs: p1 and p2, then p4 and p5 (the plain paragraph between them ends the first run).
+    expect(owners.map((o) => o.at)).toEqual(['p1', 'p4']);
+    expect(owners[0]!.key).toBe(`de-list-owner:${itemIds['p1']} ${itemIds['p2']}`);
+    expect(owners[1]!.key).toBe(`de-list-owner:${itemIds['p4']} ${itemIds['p5']}`);
+  });
+
+  it('gives a numbered heading no owner and splits the run around it', () => {
+    const state = stateOf([
+      para('p1', 'One', 0),
+      para('h1', 'Heading', 0, 'Heading1'),
+      para('p2', 'Two', 0),
+    ]);
+    const all = listDecorations(state.doc).find() as Array<
+      Decoration & { type: { attrs?: Record<string, string> } }
+    >;
+    const owners = all
+      .filter((d) => !d.type.attrs)
+      .map((d) => state.doc.nodeAt(d.from)!.attrs['id']);
+    expect(owners.sort()).toEqual(['p1', 'p2']);
   });
 
   it('decorates nothing in a document without numbering', () => {

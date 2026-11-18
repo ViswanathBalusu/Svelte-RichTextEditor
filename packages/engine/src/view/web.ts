@@ -44,6 +44,7 @@ import { picturePlaceholderView } from './picture-placeholder-view.ts';
 import type { ComparisonSpec } from '../comparison-markup.ts';
 import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
+import { paragraphView } from './paragraph-format-view.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
 function viewPlugins(schema: Schema): Plugin[] {
@@ -405,6 +406,8 @@ export class EditorCore extends DocumentCore {
         nodeViews: {
           footnote: footnoteRefView((id) => this.openFootnote(id)),
           table_cell: tableCellView,
+          // FE-129: the indents, spacing, line spacing, borders and shading a paragraph carries.
+          paragraph: paragraphView,
           // FRW-004, FRW-006: a native control for a form field, and a mirror that follows its target.
           form_field: formFieldView(
             {
