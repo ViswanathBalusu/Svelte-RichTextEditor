@@ -68,16 +68,16 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'selectField'
       | 'canEditField'
       | 'editField'
-      // FE-070: the equation editor's request, the equation under the caret and the checks on its source.
-      | 'equationRequest'
-      | 'checkEquationSource'
+      // FE-070: the equation the person selected, the request to edit it, and its confirmation, for the math editor.
       | 'equationAt'
       | 'selectedEquation'
       | 'selectEquation'
       | 'requestEquationEdit'
+      | 'equationRequest'
       | 'equationAccess'
-      | 'confirmEquation'
-      | 'equationLimits';
+      | 'equationLimits'
+      | 'checkEquationSource'
+      | 'confirmEquation';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed
