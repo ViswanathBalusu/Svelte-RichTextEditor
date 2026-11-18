@@ -9,7 +9,7 @@
  *   forced onto the wire anyway is rejected with `permission_denied` and the offending scope.
  */
 import { uuid7 } from '@docedit/model';
-import type { SyncCommit } from '@docedit/protocol';
+import type { Commit } from '@docedit/protocol';
 import { AttrStep } from 'prosemirror-transform';
 import { describe, expect, it } from 'vitest';
 import { internals } from '../src/testing.ts';
@@ -75,7 +75,7 @@ describe('a rename without the rights is disabled and refused (PRM-034 criterion
       id: uuid7(),
       base: content.seq,
       steps: [step.toJSON()],
-    } as unknown as SyncCommit;
+    } as unknown as Commit;
     const refusal = await channel.submit(commit).then(
       () => null,
       (e: unknown) => e as { code?: string; scopes?: string[] },

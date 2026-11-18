@@ -357,7 +357,8 @@ export interface DataPlane extends RoomNotifier {
     actor: string,
     // Added by packet A, phase 1b: the request's `traceparent` (BE-087).
     // HIS-019: `restore` for a whole-document restore (default `import`).
-    opts?: { traceparent?: string; reason?: 'import' | 'restore' },
+    // SYN-030: `requestId` names the caller's request (an import job), so a retry is one commit.
+    opts?: { traceparent?: string; reason?: 'import' | 'restore'; requestId?: string },
   ): Promise<{ seq: number }>;
   // --- Added by packet A1 (additive). ---------------------------------------------------------
   /**

@@ -19,7 +19,7 @@ describe('derivedCommitId', () => {
   });
 
   it('changes with any part, and cannot be forged by moving a boundary between parts', () => {
-    const base = ['prefill', 't1', 'd1', 'user:ada', '12', '[]'] as const;
+    const base: string[] = ['prefill', 't1', 'd1', 'user:ada', '12', '[]'];
     const ids = new Set([derivedCommitId(...base)]);
     for (let i = 0; i < base.length; i++) {
       const changed = [...base];
