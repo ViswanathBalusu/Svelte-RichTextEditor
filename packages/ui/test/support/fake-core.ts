@@ -197,6 +197,7 @@ export class FakeThreads implements ThreadsService {
         ...summary,
         state: next.state,
         replyCount: Math.max(0, next.comments.length - 1),
+        assignee: next.assignee !== undefined ? next.assignee : summary.assignee,
         excerpt: next.detached ? null : summary.excerpt,
       };
     }
@@ -293,8 +294,39 @@ export class FakeThreads implements ThreadsService {
   async setState(id: string, state: 'open' | 'resolved', etag: string): Promise<ThreadWrite> {
     return this.#write('state', id, etag, { state }, (d) => ({ ...d, state }));
   }
+
+  async assign(id: string, assignee: string | null, etag: string): Promise<ThreadWrite> {
+    return this.#write('assign', id, etag, { assignee }, (d) => ({ ...d, assignee }));
+  }
+
+  /** Another client assigns or clears the thread: the copy changes and the pane is told (`thread.updated`). */
+  remoteAssign(id: string, assignee: string | null): void {
+    const d = this.details.get(id)!;
+    this.put({ ...d, assignee });
+  }
   anchor(): CommentAnchor | null {
     return this.current;
+  }
+
+  // --- UX-030: the page and the pane choose a thread for each other.
+  /** The threads the pane asked the document to show, in order. */
+  readonly revealed: string[] = [];
+  /** The highlight the reader chose in the page; `n` counts the choices. */
+  readonly picked = new Value<{ readonly id: string; readonly n: number } | null>(null);
+
+  reveal(thread: ThreadSummary): void {
+    this.revealed.push(thread.id);
+  }
+
+  /** The reader chooses a thread's highlight in the page. */
+  pick(id: string): void {
+    this.picked.set({ id, n: (this.picked.get()?.n ?? 0) + 1 });
+  }
+
+  /** The service reports a changed list (a `thread.*` notice): the pane reads it again. */
+  replaceItems(items: ThreadSummary[]): void {
+    this.items = items;
+    this.changes.set(this.changes.get() + 1);
   }
 
   count(): number {

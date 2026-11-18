@@ -838,6 +838,12 @@ const harness = {
   setThreadCount: (n: number) => void (need().core.threads!.threads = n),
   /** The threads the comments pane lists (UX-030). */
   setThreads: (items: ThreadSummary[]) => void (need().core.threads!.items = items),
+  /** The service reports a changed list: the pane and the header count read it again (UX-030). */
+  replaceThreads: (items: ThreadSummary[]) => need().core.threads!.replaceItems(items),
+  /** The threads the pane asked the document to show (UX-030 criterion 2). */
+  revealedThreads: () => [...(need().core.threads?.revealed ?? [])],
+  /** The reader chooses a thread's highlight in the page (UX-030 criterion 2). */
+  pickThread: (id: string) => need().core.threads!.pick(id),
   refuseNextThread: (code: string) => void (need().core.threads!.refuseNext = code),
   /** The service's copy of each thread, for the thread view (UX-029); each gets a new version. */
   putThreads: (details: Array<Omit<ThreadDetail, 'etag'>>) =>
@@ -847,6 +853,9 @@ const harness = {
   /** Another client replies (comment.created): the pane is told and shows it without a reload. */
   remoteReply: (id: string, author: string, text: string) =>
     need().core.threads!.remoteReply(id, author, text),
+  /** Another client assigns the thread, or clears it with null (thread.updated; UX-032 criterion 2). */
+  remoteAssign: (id: string, assignee: string | null) =>
+    need().core.threads!.remoteAssign(id, assignee),
   /** The next write finds the thread changed: another client replied first (If-Match fails). */
   staleNextThread: (author: string, text: string) => {
     need().core.threads!.staleNext = {

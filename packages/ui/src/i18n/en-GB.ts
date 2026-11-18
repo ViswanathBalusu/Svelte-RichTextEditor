@@ -760,6 +760,8 @@ export const EN_GB = {
     'Your permissions changed, so the comment was not added. Your text is kept.',
   'comment.refused.baseSeqOutOfWindow':
     'The document changed too much since you made the selection. Select the text again; your text is kept.',
+  'comment.refused.mentionHidden':
+    'A person you mentioned cannot see the part of the document this comment is on, so it was not added. Remove the mention to post it. Your text is kept.',
   'comment.refused.failed': 'The comment could not be added. Your text is kept.',
 
   // The comments pane (UX-030). The thread text and the names are content.
@@ -785,6 +787,17 @@ export const EN_GB = {
   'comments.link.unavailable':
     'This comment cannot be shown. It may have been deleted, or you may not be able to view this document.',
   // The thread view (UX-029): replies, edits, resolving, deleting.
+  'comments.show': 'Show in document',
+  'comments.show.label': 'Show in document, thread by {author}',
+  'comments.shown': 'Shown in the document.',
+  'comments.picked': 'Thread by {author} chosen in the document.',
+  // What a refresh of the list announces (UX-030 criterion 4).
+  'comments.announce.created': 'New comment thread by {author}.',
+  'comments.announce.reply': 'New reply in the thread by {author}.',
+  'comments.announce.resolved': 'Thread by {author} resolved.',
+  'comments.announce.reopened': 'Thread by {author} reopened.',
+  'comments.announce.deleted': 'Thread by {author} deleted.',
+  'comments.thread.comment.name': '{author}, {time}, {state}',
   'comments.thread.open': 'Open thread by {author}',
   'comments.thread.back': 'Back to the list',
   'comments.thread.label': 'Thread by {author}',
@@ -811,6 +824,14 @@ export const EN_GB = {
   'comments.thread.threadDeleted': 'Thread deleted.',
   'comments.thread.resolved': 'Thread resolved.',
   'comments.thread.reopened': 'Thread reopened.',
+  // The thread as a task (UX-032). The assignee is shown as text.
+  'comments.thread.task.assigned': 'Task, assigned to {name}.',
+  'comments.thread.task.none': 'Not assigned to anyone.',
+  'comments.thread.assign.label': 'Assign to',
+  'comments.thread.assign.results': 'People to assign the thread to',
+  'comments.thread.assign.clear': 'Clear assignee',
+  'comments.thread.assigned': 'Thread assigned.',
+  'comments.thread.unassigned': 'Assignee cleared.',
 
   // Export (UX-101). Diagnostics' messages come from the service.
   'dialog.export.title': 'Export',
