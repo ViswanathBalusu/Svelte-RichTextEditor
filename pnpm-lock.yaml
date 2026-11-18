@@ -352,6 +352,9 @@ importers:
       '@docedit/export-latex':
         specifier: workspace:*
         version: link:../export-latex
+      '@docedit/layout-kernel':
+        specifier: workspace:*
+        version: link:../layout-kernel
       '@docedit/model':
         specifier: workspace:*
         version: link:../model
@@ -502,6 +505,8 @@ importers:
       '@docx-editor.dev/core':
         specifier: 2.35.0
         version: 2.35.0
+
+  packages/layout-kernel: {}
 
   packages/model:
     dependencies:

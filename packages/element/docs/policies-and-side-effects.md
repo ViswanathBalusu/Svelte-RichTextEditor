@@ -89,6 +89,24 @@ In-page panel (`packages/element/src/features/pdf.ts`, measured in the spike):
   in Chromium, Edge, Firefox and WebKit by `packages/element/e2e/fe-017-pdf-no-worker-policy.spec.ts`
   (lane V-FE-017-032, 2026-11-14). The production viewer frame is not measured here.
 
+## Layout kernel (WebAssembly)
+
+Lane w6, story WASM-002. Needed only when the page view is asked for (`view="print"`); the web and read
+views fetch and compile no WebAssembly. Not measured against a hostile policy in all browsers: the
+directive is S2's (section 6); the load itself is measured in `e2e/wasm-002-kernel-load.spec.ts`.
+
+- File: `assets/docedit_layout_kernel_bg-<hash>.wasm`, next to the `chunks/` folder of the library
+  build, found from the chunk's own URL (`new URL(…, import.meta.url)`). Never inlined as base64.
+- `connect-src`: the origin that serves the component's files (the fetch).
+- `script-src 'wasm-unsafe-eval'`: in the page's policy while the module is compiled on the page's
+  thread. With a layout worker (WASM-004) it moves to the worker script's own response policy.
+- Media type `application/wasm` lets the browser compile while the file downloads; any other type is
+  read whole and compiled from the bytes.
+- Trusted Types names: none. Global side effects: none.
+- Events: `de-diagnostic` carries the load time or the failure code and, for a policy refusal, the
+  directive to add.
+- Omit: nothing, if you never use `view="print"`. The editor works without the directive.
+
 ## Math display (KaTeX)
 
 - `font-src`: the origin of the KaTeX font files. The editor moves the `@font-face` rules of KaTeX to

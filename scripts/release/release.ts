@@ -34,6 +34,7 @@ import {
 import { scanRepository } from '../supply-chain/pin-check.ts';
 import { presence, type Distributable } from './distributables.ts';
 import { parseLockfile } from './lockfile.ts';
+import { compareCratesWithLock, moduleCrates } from './crates.ts';
 import { renderNotices, type NoticeEntry } from './notices.ts';
 import {
   parseRoundTrip,
@@ -303,6 +304,9 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
       const contents = analyseBundle(output, {
         ownPackageDir: join(o.root, d.dir),
         exclude: (p) => exclude.has(p),
+        // The layout kernel's WebAssembly file is a build output (`dist/` is skipped by default):
+        // it is explained by the package that built it (WASM-013).
+        candidateDirs: [join(o.root, 'packages/layout-kernel/dist')],
       });
       const originExceptions = (
         JSON.parse(
@@ -345,6 +349,20 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
             ...(c.note && c.ok ? { exception: c.note } : {}),
           };
         });
+      // A bundle that carries the layout kernel's WebAssembly module also carries the crates
+      // compiled into it: they are in its bill and in its notices (WASM-013).
+      const crates = [...contents.packages.values()].some(
+        (p) => p.name === '@docedit/layout-kernel',
+      )
+        ? moduleCrates(join(o.root, 'crates'))
+        : [];
+      for (const c of crates)
+        notices.push({
+          name: c.name,
+          version: c.version,
+          licence: c.licence ?? 'UNKNOWN',
+          dir: c.dir || null,
+        });
       const rendered = renderNotices(`${d.packageName} ${version}`, notices);
       const stage = join(dir, 'stage', d.id);
       for (const f of contents.files) {
@@ -381,6 +399,7 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
         contents,
         walk,
         extraFiles: extra,
+        crates,
         tarball: { sha256: tarHash.sha256, sha512: sha512(tarball), fileName: basename(tarball) },
         ctx,
       });
@@ -388,6 +407,13 @@ export async function release(o: ReleaseOptions): Promise<{ steps: Step[]; dir: 
       const compared = [
         ...compareWithLock(sbom.doc, ctx.lock, version),
         ...compareWithContents(sbom.doc, contents, d.packageName),
+        ...(crates.length
+          ? compareCratesWithLock(
+              sbom.doc,
+              readFileSync(join(o.root, 'crates/Cargo.lock'), 'utf8'),
+              crates.length,
+            )
+          : []),
         ...packed.paths
           .filter((p) => !listed.includes(p))
           .map((p) => `${p} is in the tarball but not in the bill`),
