@@ -88,7 +88,7 @@ describe('cascade invariants (CDM-041)', () => {
     );
   });
 
-  it('puts the numbering level between the table style and the paragraph style (03 §6, 3 and 4)', () => {
+  it('puts the numbering level after the paragraph style and before direct attributes (03 §6, 3 to 5)', () => {
     fc.assert(
       fc.property(
         value,
@@ -120,7 +120,7 @@ describe('cascade invariants (CDM-041)', () => {
             { tableStyle: 'Grid' },
           );
           if (!r.ok) throw new Error(r.error.message);
-          const expected = [table, level, style, direct]
+          const expected = [table, style, level, direct]
             .filter((v): v is number => v !== null)
             .at(-1);
           expect(r.value.properties.indentLeft).toBe(expected);

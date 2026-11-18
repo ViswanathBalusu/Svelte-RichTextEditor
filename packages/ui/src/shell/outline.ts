@@ -17,6 +17,25 @@ export interface TreeNode {
   setSize: number;
 }
 
+/**
+ * Where the author's place is after the outline changed (UX-020 criterion 2): the same heading when it
+ * is still listed, else the nearest heading before it that still is, else the first one, else none.
+ */
+export function placeAfter(
+  before: readonly string[],
+  place: string | null,
+  after: readonly string[],
+): string | null {
+  if (after.length === 0) return null;
+  if (place === null || after.includes(place)) return place;
+  const kept = new Set(after);
+  for (let i = before.indexOf(place) - 1; i >= 0; i--) {
+    const id = before[i]!;
+    if (kept.has(id)) return id;
+  }
+  return after[0] ?? null;
+}
+
 export function outlineTree(items: readonly OutlineItem[]): {
   roots: TreeNode[];
   flat: TreeNode[];

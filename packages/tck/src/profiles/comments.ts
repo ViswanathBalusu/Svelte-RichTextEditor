@@ -135,8 +135,11 @@ export const COMMENTS: ProfileDef = {
           { range: { from: from + text.length, to: to + text.length, baseSeq: ack.seq } },
           'the range moved by the length of the inserted text',
         );
-        // At the seq the thread was made, the range is where it was made.
-        const then = await ctx.service.as(token, 'GET', `/documents/${doc}/threads`, {
+        // At the seq the thread was made, the range is where it was made. An older state is read by
+        // a person with `edit`: a commenter's history starts at the head under the default setting
+        // (07 §8; PRM-042).
+        const { token: historian } = await ctx.token('historian', { [doc]: 'editor' });
+        const then = await ctx.service.as(historian, 'GET', `/documents/${doc}/threads`, {
           query: { seq: content.seq },
         });
         expectStatus(then, 200, 'the threads at the earlier seq');

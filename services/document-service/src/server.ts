@@ -539,7 +539,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
   const logs = meteredLogs(parts.logs, meter);
   const objectCheckpoints = new ObjectCheckpointStore(parts.objects);
   const checkpoints = meteredCheckpoints(objectCheckpoints, meter, encodeCheckpoint);
-  const assets = new ObjectAssetStore(parts.objects);
+  const assets = new ObjectAssetStore(parts.objects, (tenant, bytes, kind) =>
+    meter.add(tenant, DRIVERS.storedBytes, bytes, { kind }),
+  );
   if (config.webhooks && opts.events)
     throw new Error(
       'config.webhooks and events are exclusive: the webhook dispatcher is the event sink',
@@ -869,15 +871,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
       forTenant: (tenant, at) => parts.idempotency.purge(tenant, at),
     },
     // Abandoned uploads (BE-046 criterion 3): the one copy of the sweep, tested in asset-sweep.ts.
-    // Legal holds (BE-046 criterion 4): the assets of a held document are kept by the sweep.
-    abandonedUploadsTask({
-      assets: parts.assetRegistry,
-      objects: parts.objects,
-      batch: 500,
-      ...(parts.holds
-        ? { heldDocuments: (tenant: string) => parts.holds!.heldDocuments(tenant) }
-        : {}),
-    }),
+    // Legal holds (BE-046 criterion 4): the scheduler hands the sweep the held documents (BE-052).
+    abandonedUploadsTask({ assets: parts.assetRegistry, objects: parts.objects, batch: 500 }),
   ];
   if (parts.audit instanceof PgAuditStore) tasks.push(auditPartitionsTask(parts.audit));
   const scheduler = config.scheduler
@@ -885,6 +880,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
         queue: parts.queue,
         tasks,
         tenants: () => parts.registry.list(),
+        // A hold is on a document (08 §11): deleting tasks keep the held documents' data.
+        ...(parts.holds
+          ? { heldDocuments: (tenant: string) => parts.holds!.heldDocuments(tenant) }
+          : {}),
         metrics,
         now,
         onError: (e, task) =>
@@ -998,6 +997,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(reads ? { reads } : {}),
     ...(readSessions ? { readSessions } : {}),
     ...(pinnedCache ? { pinnedCache } : {}),
+    comparePool: pool,
     documents: parts.documents,
     grants: parts.grants,
     logs,
@@ -1036,6 +1036,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       cacheMaxAgeMs: config.exportCacheMaxAgeMs,
       classVersion: config.exportClassVersion,
       tenantConcurrency: config.exportTenantConcurrency,
+      ...(config.exportProofKey ? { proofKey: config.exportProofKey } : {}),
     },
     ...(parts.outbox ? { outbox: parts.outbox } : {}),
     outboxWaitMs: config.outboxWaitMs,

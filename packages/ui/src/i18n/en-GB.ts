@@ -165,6 +165,18 @@ export const EN_GB = {
   'announce.access.lost': 'You can no longer change this part of the document.',
   'announce.access.gained': 'You can now change this part of the document.',
 
+  // The element's live region (FE-107; 02 §10): the save state, collaborators and the two notices
+  // the element can be given. Names are resolved by the host (UX-025); no sentence quotes content.
+  'announce.sync.saving': 'Saving changes.',
+  'announce.sync.saved': 'All changes saved.',
+  'announce.sync.unsaved': 'Changes are not saved yet.',
+  'announce.sync.readonly': 'This document is read-only.',
+  'announce.edit.rejected': 'An edit was not applied at {where}. {reason}',
+  'announce.presence.arrived': '{name} joined the document.',
+  'announce.presence.left': '{name} left the document.',
+  'announce.presence.unknown': 'A collaborator',
+  'announce.recovered.count': 'Edits set aside for recovery: {count}.',
+
   // Changes that did not happen (11 §3; 07 §7, §9; FE-036). Plain words; never the content (ADR 0019).
   'notice.label': 'Change not made',
   'notice.dismiss': 'Dismiss',
@@ -188,6 +200,14 @@ export const EN_GB = {
   'notice.refused.other': 'That change was not made.',
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',
+  // A deletion refused because a cross-reference still names its target (I4; FE-133). The count is
+  // the number of references; the sentence names neither the target nor the references.
+  'notice.refused.referenced': {
+    one: 'That change was not made: a cross-reference still points to what you tried to delete.',
+    other:
+      'That change was not made: {count} cross-references still point to what you tried to delete.',
+  },
+  'notice.action.showReferences': 'Show references',
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {
@@ -519,6 +539,16 @@ export const EN_GB = {
     'The selected blocks become a region. You can then choose who may edit it in the permissions pane.',
   'dialog.region.empty': 'Enter a title.',
   'dialog.region.create': 'Make region',
+  'dialog.version.title': 'Name this version',
+  'dialog.version.name': 'Name',
+  'dialog.version.note': 'Note (optional)',
+  'dialog.version.hint':
+    'The name and the note are kept with the document as it is now. You can find the version again in the history.',
+  'dialog.version.empty': 'Enter a name.',
+  'dialog.version.save': 'Name version',
+  'dialog.version.forbidden': 'You cannot name a version of this document.',
+  'dialog.version.failed': 'The version could not be named. Try again.',
+  'announce.version.named': 'Version named.',
   'announce.region.created': 'Region made.',
   'announce.region.failed': 'The region could not be made.',
   'announce.language.set': 'Language set.',
@@ -683,6 +713,13 @@ export const EN_GB = {
     'Only the people given a role here, and document owners, can edit this region. Other document editors can view and comment. A role cannot be given to everyone on a region like this.',
   'permissions.policy.set': 'Who may edit changed.',
   'permissions.policy.failed': 'Who may edit could not be changed.',
+  'permissions.rename.label': 'Name of the region',
+  'permissions.rename.save': 'Rename',
+  'permissions.rename.done': 'Region renamed.',
+  'permissions.rename.failed': 'The region could not be renamed.',
+  'permissions.rename.noStructure':
+    'Only people who can change the structure of the document can rename a region.',
+  'permissions.rename.noEdit': 'You cannot edit this region, so you cannot rename it.',
   'permissions.grants': 'People and groups with a role',
   'permissions.grants.none': 'Nobody has a role on this region.',
   'permissions.add': 'Give a role',
@@ -788,6 +825,7 @@ export const EN_GB = {
 
   // The history pane (HIS-009; 08 §4).
   'command.view.history': 'History',
+  'command.history.nameVersion': 'Name this version',
   'history.label': 'History',
   'history.unavailable': 'History is not available for this document.',
   'history.loading': 'Loading history.',
@@ -818,7 +856,69 @@ export const EN_GB = {
   'history.group.origins': 'Origins: {origins}',
   'history.group.named': 'Named version',
   'history.version.by': 'Named by {name} at {time}',
+  'history.version.open': 'Open this version',
+  'history.version.open-at': 'Open this version, {when}',
+  'history.view.label': 'Read-only version, {when}',
+  'history.view.label.named': 'Read-only version {name}, {when}',
+  'history.view.note': 'This is a read-only copy. Changes to the live document do not appear here.',
+  'history.view.leave': 'Back to the live document',
+  'history.view.opening': 'Opening this version.',
+  'history.view.forbidden': 'You cannot open this version.',
+  'history.view.not-found': 'This version no longer exists.',
+  'history.view.failed': 'This version could not be opened.',
 
+  // Who wrote this (HIS-015; 08 §7): authors are named in words, never by colour alone.
+  'history.who.title': 'Who wrote this',
+  'history.who.scope': 'Passage',
+  'history.who.scope.document': 'The whole document',
+  'history.who.scope.selection': 'The selected passage',
+  'history.who.scope.region': 'Region: {name}',
+  'history.who.ask': 'Show who wrote this',
+  'history.who.loading': 'Looking up who wrote this.',
+  'history.who.nothing-selected': 'Select a passage in the version first.',
+  'history.who.empty': 'No text is recorded for this passage.',
+  'history.who.failed': 'Who wrote this could not be found.',
+  'history.who.forbidden': 'You cannot see who wrote this version.',
+  'history.who.line': {
+    one: '{name}: {count} passage, from {first} to {last}.',
+    other: '{name}: {count} passages, from {first} to {last}.',
+  },
+  'history.who.assistant': 'An assistant acted for this person.',
+  'history.who.restored': 'Brought back by {by}.',
+
+  // Comparing two versions (HIS-013; 08 §6).
+  'history.compare.title': 'Compare versions',
+  'history.compare.from': 'Older version',
+  'history.compare.to': 'Newer version',
+  'history.compare.current': 'Current document',
+  'history.compare.run': 'Compare',
+  'history.compare.option.group': 'Changes up to {when}',
+  'history.compare.option.version': '{name}, {when}',
+  'history.compare.loading': 'Comparing the versions.',
+  'history.compare.none': 'These versions have no differences.',
+  'history.compare.failed': 'The versions could not be compared.',
+  'history.compare.forbidden': 'You cannot compare these versions.',
+  'history.compare.navigate': 'Move between changes',
+  'history.compare.previous': 'Previous change',
+  'history.compare.next': 'Next change',
+  'history.compare.deletions': 'Show deleted text',
+  'history.compare.announce': 'Change {n} of {m}: {kind}, by {name}',
+  'history.compare.announce.nobody': 'Change {n} of {m}: {kind}',
+  'history.compare.kind.modified': 'text changed',
+  'history.compare.kind.added': 'added',
+  'history.compare.kind.removed': 'removed',
+  'history.compare.kind.moved': 'moved',
+  'history.compare.kind.formatted': 'formatting changed',
+  'history.compare.kind.field': 'field value changed',
+  'history.compare.kind.definition': 'style or setting changed',
+  'history.compare.summary': 'Summary by region',
+  'history.compare.region.none': 'Outside regions',
+  'history.compare.region.row': {
+    one: '{region}: {count} change',
+    other: '{region}: {count} changes',
+  },
+  'history.compare.fields': 'Field changes',
+  'history.compare.field.row': '{field} was changed by {name}',
   // Names of the core's own surfaces (CoreApi.setLabels).
   'surface.body': 'Document',
   'surface.footnote': 'Footnote text',

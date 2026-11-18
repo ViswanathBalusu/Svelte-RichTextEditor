@@ -39,7 +39,11 @@ if (command === 'notes' || command === 'check') {
     ? release.migrations
     : migrations.map((m) => m.version).filter((v) => !listed.has(v));
   console.log(`Database steps of ${release ? release.version : 'the next release'}:\n`);
-  console.log(releaseNotes(migrations, versions));
+  const notes = Object.assign({}, ...releases.map((r) => r.rollback ?? {})) as Record<
+    string,
+    string
+  >;
+  console.log(releaseNotes(migrations, versions, notes));
   process.exit(0);
 }
 

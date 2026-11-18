@@ -255,6 +255,8 @@ As the project owner, I want to decide from customer evidence whether to build e
 
 **Notes:** absorbed FE-074 during the cross-check. How customer evidence is collected is not specified. The last criterion was added with the A2 decision; 00 §5 said lossless round-trip makes the layout engine chase Word's behaviour, and ADR 0017 leaves that choice to this gate.
 
+Lane w9 (2026-11-17): nothing ticked; blocked on the owner and on evidence that does not exist yet. The story is the owner's decision at the end of phase 2, "from customer evidence" (11 §5), and phase 2 is not finished. The owner's decisions of 2026-11-15 do not list it, so it is still open. The spec gives no default for the three alternatives, so none is proposed here and no ADR 0005 text was changed. What the gate will need, from 11 §5, §6 and §9 risk 1: evidence of whether customers need editable pages (how it is gathered is not specified), a choice of one alternative, and a statement of what evidence would reopen a "no". Its dependencies SPK-018, SPK-020 and SPK-023 are separate stories. Criteria 2 and 3 follow from the choice, criterion 4 follows from it, and criterion 5 needs the Word-pagination evidence of ADR 0017.
+
 ## Spikes
 
 ### SPK-014 S1: ProseMirror inside an open shadow root

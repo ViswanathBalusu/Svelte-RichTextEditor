@@ -41,6 +41,8 @@ import { FormFieldViews, fieldView, formFieldView } from './form-field-view.ts';
 import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
+import type { ComparisonSpec } from '../comparison-markup.ts';
+import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
@@ -164,6 +166,8 @@ export class EditorCore extends DocumentCore {
   #shimResult: 'native' | 'instance' | 'none' | null = null;
   /** The blocks before which a page guide is drawn (FE-068); empty when guides are off. */
   #pageGuides: ReadonlySet<string> = new Set();
+  /** The comparison drawn in a version view (HIS-013); null in the live editor. */
+  #comparison: readonly ComparisonSpec[] | null = null;
   #view: EditorView | null = null;
   /** The live form field controls and mirrors of the body view (FRW-004, FRW-006). */
   readonly #fieldViews = new FormFieldViews();
@@ -296,6 +300,16 @@ export class EditorCore extends DocumentCore {
   }
 
   /**
+   * Draws a comparison in the document (HIS-013): the specs of comparisonSpecs, or null to remove
+   * them. Like the page guides, the view is redrawn without a transaction and the document is not
+   * changed. Used by the read-only version view; the live editor never sets one.
+   */
+  setComparison(specs: readonly ComparisonSpec[] | null): void {
+    this.#comparison = specs;
+    this.#view?.setProps({});
+  }
+
+  /**
    * The caret's rectangle in viewport coordinates: the head of the selection of the view that has
    * focus (the panel's sub-editor when focus is there, otherwise the body). The shell opens a menu
    * there when it is asked for from the keyboard (UX-008; ui `CoreApi.caretRect`). Null while no
@@ -407,6 +421,20 @@ export class EditorCore extends DocumentCore {
           EQUATION_NODES.has(node.type.name) && this.requestEquationEdit(nodePos),
         // Copy and cut are the core's (FE-050, FE-055): the browser's own copy would write ProseMirror's format.
         handleDOMEvents: {
+          // A link to a place in the document is followed with Ctrl or Command and a click while the
+          // text is editable (a plain click places the caret), and with a plain click where it is not
+          // (FE-133 criterion 3). The browser's own jump to a fragment is stopped either way: the
+          // shadow root has no such target.
+          click: (view, event) => {
+            const target = event.target;
+            const anchor = target instanceof Element ? target.closest('a[href^="#"]') : null;
+            if (anchor === null) return false;
+            if (view.editable && !(event.ctrlKey || event.metaKey)) return false;
+            const href = anchor.getAttribute('href');
+            if (href !== null) this.run('followInternalLink', { href });
+            event.preventDefault();
+            return true;
+          },
           // Enter on a selected equation opens the math editor (FE-070). A DOM handler, not `handleKeyDown`,
           // so that a read-only view opens it too (ProseMirror runs `handleKeyDown` only in editable views).
           keydown: (view, event) => {
@@ -461,10 +489,15 @@ export class EditorCore extends DocumentCore {
         // The suggestion marks in the `all` view are drawn too (FE-046 criterion 4; FE-045 criterion 1).
         decorations: (state) => {
           const f = this.findState.get();
-          return findDecorations(state.doc, { query: f.query, current: f.current })
+          return findDecorations(state.doc, {
+            query: f.query,
+            current: f.current,
+            ...(f.matchCase === false ? { matchCase: false } : {}),
+          })
             .add(state.doc, suggestionDecorations(state.doc, 'all').find())
             .add(state.doc, commentDecorations(state.doc, this.threadRanges.get()).find())
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
+            .add(state.doc, comparisonDecorations(state.doc, this.#comparison).find())
             .add(
               state.doc,
               proofingDecorations(

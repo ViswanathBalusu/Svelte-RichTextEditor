@@ -14,6 +14,7 @@ import type {
   HistoryPaneItem,
   HistoryPaneQuery,
   HistoryPort,
+  HistoryVersionView,
 } from '../core-api.ts';
 
 export type HistoryStatus = 'loading' | 'ready' | 'empty' | 'error';
@@ -26,8 +27,31 @@ export interface HistoryFilter {
   readonly user: string | null;
 }
 
+/**
+ * The old version the user has opened from the list (HIS-010), if any. `key` names the list item it
+ * came from, so the pane can mark it and return focus to it.
+ */
+export type ViewingState =
+  | { readonly status: 'opening'; readonly key: string; readonly seq: number }
+  | {
+      readonly status: 'open';
+      readonly key: string;
+      readonly seq: number;
+      readonly time: string;
+      readonly name: string | null;
+      readonly view: HistoryVersionView;
+    }
+  | {
+      readonly status: 'refused';
+      readonly key: string;
+      readonly seq: number;
+      readonly reason: 'forbidden' | 'not_found' | 'failed';
+    };
+
 export interface HistoryPaneState {
   readonly status: HistoryStatus;
+  /** The version being read, or null. */
+  readonly viewing: ViewingState | null;
   readonly filter: HistoryFilter;
   readonly items: readonly HistoryPaneItem[];
   readonly nextCursor: string | null;
@@ -50,6 +74,27 @@ export interface HistoryController {
   loadMore(): Promise<void>;
   /** Asks for the first page again. */
   reload(): Promise<void>;
+  /** Opens the state an item stands for, read-only (HIS-010). False when the item cannot be opened. */
+  open(item: HistoryPaneItem): Promise<boolean>;
+  /** Opens the state at `seq`, for a caller that has no list item (a comparison with the current document). */
+  openAt(key: string, what: { seq: number; time: string; name: string | null }): Promise<boolean>;
+  /** Leaves the version: the state is released and the list shows again. */
+  leave(): void;
+  /** Releases anything the pane holds (an open version); the pane calls it when it closes. */
+  dispose(): void;
+}
+
+/** The key of a list item. */
+export function itemKey(item: HistoryPaneItem): string {
+  return `${item.kind}:${item.id}`;
+}
+
+/** The `seq`, time and name that opening an item uses; null when the item has no state to open. */
+export function openingOf(
+  item: HistoryPaneItem,
+): { seq: number; time: string; name: string | null } | null {
+  if (item.kind === 'version') return { seq: item.seq, time: item.time, name: item.name };
+  return item.toSeq === undefined ? null : { seq: item.toSeq, time: item.to, name: null };
 }
 
 export const NO_FILTER: HistoryFilter = { namedOnly: false, region: null, field: null, user: null };
@@ -104,6 +149,7 @@ export function createHistoryController(port: HistoryPort): HistoryController {
   const listeners = new Set<() => void>();
   let current: HistoryPaneState = {
     status: 'loading',
+    viewing: null,
     filter: NO_FILTER,
     items: [],
     nextCursor: null,
@@ -189,6 +235,61 @@ export function createHistoryController(port: HistoryPort): HistoryController {
     await reload();
   };
 
+  // Each opening takes a number too: leaving, or opening another, makes an earlier reply late.
+  let opening = 0;
+
+  const release = (): void => {
+    const was = current.viewing;
+    if (was?.status === 'open') was.view.close();
+  };
+
+  const openAt = async (
+    key: string,
+    what: { seq: number; time: string; name: string | null },
+  ): Promise<boolean> => {
+    if (port.openVersion === undefined) return false;
+    release();
+    const mine = ++opening;
+    set({ viewing: { status: 'opening', key, seq: what.seq } });
+    let result;
+    try {
+      result = await port.openVersion(what.seq, { time: what.time, name: what.name });
+    } catch {
+      result = { ok: false as const, reason: 'failed' as const };
+    }
+    if (mine !== opening) {
+      // The user left, or opened another version, while this one was loading.
+      if (result.ok) result.view.close();
+      return false;
+    }
+    if (!result.ok) {
+      set({ viewing: { status: 'refused', key, seq: what.seq, reason: result.reason } });
+      return false;
+    }
+    set({
+      viewing: {
+        status: 'open',
+        key,
+        seq: what.seq,
+        time: result.view.time,
+        name: result.view.name,
+        view: result.view,
+      },
+    });
+    return true;
+  };
+
+  const open = (item: HistoryPaneItem): Promise<boolean> => {
+    const what = openingOf(item);
+    return what === null ? Promise.resolve(false) : openAt(itemKey(item), what);
+  };
+
+  const leave = (): void => {
+    opening++;
+    release();
+    if (current.viewing !== null) set({ viewing: null });
+  };
+
   // The choices are read once; a port that fails offers none and the list still works.
   port
     .choices()
@@ -204,5 +305,13 @@ export function createHistoryController(port: HistoryPort): HistoryController {
     setFilter,
     loadMore,
     reload,
+    open,
+    openAt,
+    leave,
+    dispose() {
+      opening++;
+      release();
+      listeners.clear();
+    },
   };
 }

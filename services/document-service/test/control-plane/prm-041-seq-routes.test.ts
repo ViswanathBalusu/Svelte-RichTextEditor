@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { SEQ_INPUTS } from '../../src/data-plane/gate.ts';
 
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
-const CONTROL_GATE = /minVisibleSeqOf\(|refuseBelowGate\(/;
+const CONTROL_GATE = /minVisibleSeqOf\(|refuseBelowGate\(|refuseSeqBelowGate\(/;
 const ROOM_GATE = /stateAllowed\(|rangeAllowed\(|minVisibleSeq\(/;
 
 /** Built routes and the file that serves each, with the call that applies the gate there. */
@@ -26,16 +26,14 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
   'GET /documents/{id}/attribution': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/versions': { file: 'control-plane/versions-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/restore': { file: 'control-plane/restore-route.ts', gate: CONTROL_GATE },
+  'POST /documents/{id}/fork': { file: 'control-plane/history-routes.ts', gate: CONTROL_GATE },
+  // PRM-042: the threads at a state are refused below the gate, as the content is.
+  'GET /documents/{id}/threads': { file: 'control-plane/thread-routes.ts', gate: CONTROL_GATE },
 };
 
 /** Gated inputs that are not gated yet, or whose route is not built; each with its reason. */
 const OPEN: Record<string, { file: string; reason: string }> = {
-  'POST /documents/{id}/fork': {
-    file: 'control-plane/history-routes.ts',
-    reason: 'the fork applies no gate to atSeq (PRM-042 criterion 4)',
-  },
   'GET /documents/{id}/history': { file: '', reason: 'route not built (HIS-026, phase 2)' },
-  'GET /documents/{id}/threads': { file: '', reason: 'route not built (PRM-042 criterion 1)' },
 };
 
 const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
@@ -53,10 +51,5 @@ describe('every sequence input is gated or named as open (PRM-041 criterion 1)',
   it('each built route calls the gate in the file that serves it', () => {
     for (const [where, { file, gate }] of Object.entries(BUILT))
       expect(read(file), `${where} in ${file}`).toMatch(gate);
-  });
-
-  it('the open routes that exist still do not call the gate (fails when the gate lands)', () => {
-    const forkFile = OPEN['POST /documents/{id}/fork']!.file;
-    expect(read(forkFile)).not.toMatch(CONTROL_GATE);
   });
 });

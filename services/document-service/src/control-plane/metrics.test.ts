@@ -78,6 +78,24 @@ describe('tenant meter exposition (BE-085 criterion 2)', () => {
     expect(text).toContain(`${DRIVERS.commits}{tenant="${OTHER}"} 5`);
   });
 
+  it('counts the whole commit as log bytes, more than its step payload, per tenant (BE-085 criterion 1)', async () => {
+    const metrics = new Metrics();
+    const meter = new TenantMeter(metrics);
+    const logs = meteredLogs(fakeLogs(), meter);
+    const req = commitWith('hello');
+    await logs.append({ tenant: TENANT, doc: DOC }, req, undefined);
+    const whole = Buffer.byteLength(JSON.stringify(req.commits[0]), 'utf8');
+    const steps = Buffer.byteLength(
+      JSON.stringify((req.commits[0] as unknown as { steps: unknown }).steps),
+      'utf8',
+    );
+    const read = meter.read(TENANT);
+    expect(read[DRIVERS.logBytes]).toBe(whole);
+    expect(read[DRIVERS.payloadBytes]).toBe(steps);
+    expect(whole).toBeGreaterThan(steps);
+    expect(meter.read(OTHER)[DRIVERS.logBytes]).toBeUndefined();
+  });
+
   it("reads one tenant's counters without another tenant's samples", () => {
     const metrics = new Metrics();
     const meter = new TenantMeter(metrics);

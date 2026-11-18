@@ -29,10 +29,12 @@ import {
   PeopleDirectory,
   SettingsStore,
   Strings,
+  createCommandRegistry,
   headerMode,
   themeMode,
   toolbarMode,
   type CoreApi,
+  type DocumentStats,
   type EditorMode,
   type ResolveUsers,
   type ShellSettings,
@@ -147,11 +149,36 @@ export interface MountedEditor extends EditorHandle {
   openPane(id: string): Promise<boolean>;
   /** Replaces the host's string replacements while the shell is mounted (UX-063, UX-064). */
   setStrings(overrides: StringOverrides): void;
+  /**
+   * A message of the shell's catalogue in the locale in use, with the host's replacements applied
+   * (UX-064); null for a key the catalogue does not have. The announcer reads its sentences here
+   * (FE-107 criterion 6).
+   */
+  text(key: string, params: Readonly<Record<string, string | number>>): string | null;
   /** Brings the host's extensions in line with the list the element holds (UX-050). */
   setExtensions(list: readonly unknown[]): void;
 }
 
 export { SettingsStore };
+
+/**
+ * The states `de-command-state` watches (05 §8.1; FE-028; UX-005): the core's commands by their
+ * names, and the registry's commands by their identifiers (`format.bold`), which the host's
+ * `exec` and `queryCommand` take. A command that is not offered is left out.
+ */
+function commandStates(
+  core: EditorCore,
+  registry: ReturnType<typeof createCommandRegistry>,
+): Record<string, { enabled: boolean; active: boolean }> {
+  const out: Record<string, { enabled: boolean; active: boolean }> = {};
+  for (const [name, state] of Object.entries(core.commands.get()))
+    if (state) out[name] = { enabled: state.enabled, active: state.active };
+  for (const entry of registry.list()) {
+    const state = registry.state(entry.id);
+    if (state.offered) out[entry.id] = { enabled: state.enabled, active: state.active === true };
+  }
+  return out;
+}
 
 /**
  * The shell settings the attributes give (05 §8.1 `toolbar`, `locale`, `theme`); unknown values
@@ -260,6 +287,25 @@ export function mountEditor(options: MountOptions): MountedEditor {
     focus: () => core.focus(),
     // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
     selectBlock: (id) => core.selectBlock(id),
+    // The navigation pane's search (UX-020 criterion 3): the core's find over the body this reader
+    // holds, with the text around each match; choosing a result selects that match and scrolls to it.
+    // The pane's "match case" is the find's option (the engine's own default stays case-sensitive).
+    search: (query, options) => {
+      const state = core.findText(query, { matchCase: options?.matchCase === true });
+      return Promise.resolve({
+        query,
+        total: state.count,
+        matches: core.findResults().map((r) => ({
+          index: r.index,
+          blockId: r.blockId ?? '',
+          before: r.before,
+          text: r.text,
+          after: r.after,
+        })),
+      });
+    },
+    selectMatch: (match) =>
+      core.selectFindMatch(match.index, { blockId: match.blockId || null, text: match.text }),
     // Where a menu asked for from the keyboard opens (UX-008 criterion 1).
     caretRect: () => core.caretRect(),
     mountBody: (target) => core.mountBody(target),
@@ -285,16 +331,57 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // Named commands of phase 1b that the shell runs (ui CoreCommandName). `insertField` takes the
     // palette's `{ kind }` and inserts that form field kind at the caret (FRW-072).
     // `setRegionPolicy` takes `{ region, policy }` (PRM-036); the engine refuses it without `manage`.
+    // `copyFormat` and `pasteFormat` are the format painter's (UX-009); `insertRecovered` and
+    // `discardRecovered` take `{ id }` and are the recovered edits pane's (UX-017); `setLanguage`
+    // takes `{ lang }` (UX-018).
+    // `renameRegion` takes the permissions pane's `{ region, title }` (PRM-034); the engine refuses it
+    // without `structure` and `edit` in the region.
     // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
     // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
     // `nextEditableRegion` takes no arguments and moves the caret (PRM-027).
-    commandNames: ['insertField', 'setRegionPolicy', 'markRegion', 'nextEditableRegion'],
+    // `showReferences` takes no arguments and selects a cross-reference that blocked the last
+    // refused deletion (FE-133 criterion 5).
+    commandNames: [
+      'insertField',
+      'setRegionPolicy',
+      'renameRegion',
+      'markRegion',
+      'nextEditableRegion',
+      'showReferences',
+      'copyFormat',
+      'pasteFormat',
+      'insertRecovered',
+      'discardRecovered',
+      'setLanguage',
+    ],
     runNamed: (name, args) => {
+      if (name === 'showReferences') return core.showReferences();
       if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
+      // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
+      // puts it on the selection through the guards; neither takes an argument.
+      if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
+      // The language dialog (UX-018): the `lang` mark of a BCP 47 tag on the selection, or none (the
+      // document's default) for null; the core checks the tag and the user's right to change it.
+      if (name === 'setLanguage') {
+        const lang = (args as { lang?: unknown } | undefined)?.lang;
+        if (lang !== null && typeof lang !== 'string') return false;
+        return core.run('lang', { lang });
+      }
+      // The recovered edits pane (UX-017): `{ id }` names an item of the core's recovered view.
+      if (name === 'insertRecovered' || name === 'discardRecovered') {
+        const id = (args as { id?: unknown } | undefined)?.id;
+        if (typeof id !== 'string') return false;
+        return name === 'insertRecovered' ? core.insertRecovered(id) : core.discardRecovered(id);
+      }
       if (name === 'markRegion') {
         const title = (args as { title?: unknown } | undefined)?.title;
         if (typeof title !== 'string') return false;
         return core.run('markRegion', { title });
+      }
+      if (name === 'renameRegion') {
+        const a = args as { region?: unknown; title?: unknown } | undefined;
+        if (typeof a?.region !== 'string' || typeof a.title !== 'string') return false;
+        return core.run('renameRegion', { region: a.region, title: a.title });
       }
       if (name === 'setRegionPolicy') {
         const a = args as { region?: unknown; policy?: unknown } | undefined;
@@ -317,6 +404,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
     carets: core.carets,
     features: core.features,
     counts: core.counts,
+    // The status bar's word count, made off the typing path, and the document's default language
+    // (UX-018). There is no typeset result here, so no page count: the web view shows none (02 §7).
+    stats: derived<DocumentStats>([core.words], () => ({ words: core.words.get(), pages: null })),
+    language: core.language,
     // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
     // port `proofing.get().available` is false and the shell shows no proofing control.
     proofing: core.proofing,
@@ -347,7 +438,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,
     ...(port?.regions
-      ? { regions: regionsView(port.regions.bind(port), options.docId, [core.permissions]) }
+      ? {
+          regions: regionsView(port.regions.bind(port), options.docId, [
+            core.permissions,
+            core.regionTitles,
+          ]),
+        }
       : {}),
     ...(port?.grants && port.updateGrants
       ? {
@@ -377,11 +473,15 @@ export function mountEditor(options: MountOptions): MountedEditor {
     onUnknown: (keys) =>
       console.warn(`doc-editor: unknown string keys ignored: ${keys.join(', ')}`),
   });
+  // The one command registry (13 §4; UX-005): the shell's toolbars and menus read it, and so do the
+  // host's `exec` and `queryCommand`, so the host's buttons agree with the built-in ones.
+  const registry = createCommandRegistry(shell, { hasString: (key) => strings.has(key) });
   const app = mount(App, {
     target: root,
     props: {
       core: shell,
       strings,
+      registry,
       people,
       searchPrincipals,
       docId: options.docId,
@@ -399,7 +499,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
   app.setExtensions(options.extensions());
   const stopShortcuts = attachShortcuts(root, (command) => core.run(command));
 
-  const api = hostApi(core);
+  const api = hostApi(core, registry);
 
   return {
     core,
@@ -419,9 +519,19 @@ export function mountEditor(options: MountOptions): MountedEditor {
     fill: { onFieldChange: (listener) => core.onFieldChange(listener), fill },
     // What `de-selection` and `de-command-state` watch (FE-028); read-only, no content.
     watch: {
-      revision: core.revision,
+      // A change of the registry's states is a reason to look again, as a new revision is (UX-005).
+      revision: {
+        subscribe: (listener) => {
+          const offCore = core.revision.subscribe(listener);
+          const offRegistry = registry.onStateChange(() => listener());
+          return () => {
+            offCore();
+            offRegistry();
+          };
+        },
+      },
       selectionScope: () => core.selectionScope(),
-      commandStates: () => core.commands.get(),
+      commandStates: () => commandStates(core, registry),
     },
     attach(channel: SyncChannel, at: AttachAt) {
       return core.attach(channel, at);
@@ -451,6 +561,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     setStrings(overrides: StringOverrides) {
       strings.setOverrides(overrides);
     },
+    text(key, params) {
+      return strings.current.has(key) ? strings.current.text(key, params) : null;
+    },
     setExtensions(list: readonly unknown[]) {
       app.setExtensions(list);
     },
@@ -472,6 +585,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       viewers.clear();
       stopShortcuts();
       void unmount(app);
+      registry.destroy();
       core.destroy();
     },
   };

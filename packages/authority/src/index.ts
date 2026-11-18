@@ -190,6 +190,7 @@ export {
   HISTORY_VISIBILITIES,
   editsSomewhere,
   minVisibleSeq,
+  minVisibleSeqAsync,
   rangeVisible,
   stateVisible,
   type GateInput,
@@ -449,6 +450,7 @@ export {
   type Span,
   type StepRoute,
 } from './projection/projection.ts';
+export { projectCommitPage, visibleScopes } from './projection/page.ts';
 export {
   ProjectionGateway,
   viewToken,

@@ -109,7 +109,7 @@ describe('roles and groups through token refresh (PRM-021)', () => {
 });
 
 describe('bounded send queues (BE-027)', () => {
-  it('closes a channel that falls behind with slow_consumer; a resume gets every commit once; others keep up', async () => {
+  it('closes a channel that falls behind with slow_consumer; a resume gets every commit once; others keep up [neg:code slow_consumer]', async () => {
     const p = await plane({
       settings: { sendQueueBytes: 256 * 1024, socketHighWater: 32 * 1024 },
     });
@@ -200,7 +200,7 @@ describe('rate limits (BE-030)', () => {
     ).toEqual([]);
   });
 
-  it('answers messages over the connection limit with rate_limited and retryAfterMs, and closes after repeated refusals', async () => {
+  it('answers messages over the connection limit with rate_limited and retryAfterMs, and closes after repeated refusals [neg:code rate_limited]', async () => {
     const p = await plane({
       settings: {
         // hello is not counted against the connection bucket (ADR 0103): ch.open and the first

@@ -117,6 +117,7 @@
         "workflow",
         "sign",
         "seal",
+        "read-restrictions",
         "extensions",
         "preserve"
       ]

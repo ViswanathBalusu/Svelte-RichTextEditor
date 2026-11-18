@@ -5,8 +5,10 @@
  * `validateFields`. The element's methods forward here,
  * so the logic runs in Node.js tests against the headless core. No DOM and no Svelte.
  *
- * `exec` is the core's `run`, which is the path the built-in toolbar and the shell's shortcuts take
- * (`packages/element/src/editor.ts`, `shell.run`), so a host button and the toolbar behave alike.
+ * `exec` and `queryCommand` take the identifiers of the shell's command registry (`format.bold`,
+ * 13 §4; UX-005) and answer from the same registry the built-in toolbar reads, so a host button and
+ * the toolbar agree on enabled and active and pass the same guards. A name the registry does not
+ * know falls to the core (`bold`, `insertField`), and a name neither knows runs nothing and says so.
  */
 import type {
   CdmEnvelope,
@@ -33,6 +35,13 @@ export type { FieldFillOutcome, FieldReport };
 /** The confirmed document (04 §7) as `getContent()` resolves it (PRO-084). */
 export type ConfirmedContent = CdmEnvelope & { seq: number };
 
+/** The part of ui's command registry this layer reads: the state of a command and running it. */
+export interface HostRegistry {
+  get(idOrAlias: string): unknown;
+  state(idOrAlias: string): { readonly enabled: boolean; readonly active: boolean | null };
+  exec(idOrAlias: string, args?: unknown): { readonly ran: boolean };
+}
+
 export interface HostApi {
   /** Resolves when nothing is in flight or queued; rejects at `timeoutMs` (PRO-083, FE-012). */
   flush(opts?: { timeoutMs?: number }): Promise<void>;
@@ -42,10 +51,13 @@ export interface HostApi {
   getSelectionContent(): CdmFragment | null;
   /** Inserts a fragment at the selection through the guards as typing (PRO-084, FE-027). */
   insertContent(fragment: CdmFragment): InsertResult;
-  /** Runs a command through the path the toolbar uses; false when it does not apply (PRO-085). */
-  exec(command: CommandName, args?: CommandArgs): boolean;
-  /** Whether a command is enabled and active for the user's current access (PRO-085). */
-  queryCommand(command: CommandName, args?: CommandArgs): CommandState;
+  /**
+   * Runs a command through the path the toolbar uses; false when nothing ran: the command is
+   * unknown, not enabled for this user and mode, or had no effect (PRO-085, UX-005).
+   */
+  exec(command: CommandName | (string & {}), args?: CommandArgs): boolean;
+  /** Whether a command is enabled and active for the user's current access (PRO-085, UX-005). */
+  queryCommand(command: CommandName | (string & {}), args?: CommandArgs): CommandState;
   /** Moves focus to the next field the user may fill; false when no field took focus (FRW-069). */
   nextField(): boolean;
   /** Moves focus to the field with `key`; false, and no error, for a key no field has (FRW-069). */
@@ -58,14 +70,39 @@ export interface HostApi {
   validateFields(): FieldReport[];
 }
 
-export function hostApi(core: CoreHostApi): HostApi {
+/** Never offered, never enabled: what an unknown identifier reports. */
+export const UNKNOWN_COMMAND: CommandState = { enabled: false, active: false };
+
+/**
+ * The members that act on the core. With a `registry`, an identifier it knows is answered from it
+ * (UX-005); any other name goes to the core, which throws for one it does not know, and that is
+ * reported as nothing run (`exec`) or a command that is not enabled (`queryCommand`).
+ */
+export function hostApi(core: CoreHostApi, registry?: HostRegistry): HostApi {
   return {
     flush: (opts) => core.flush(opts),
     getContent: async () => core.confirmedContent(),
     getSelectionContent: () => core.getSelectionContent(),
     insertContent: (fragment) => core.insertContent(fragment),
-    exec: (command, args) => core.exec(command, args),
-    queryCommand: (command, args) => core.queryCommand(command, args),
+    exec: (command, args) => {
+      if (registry?.get(command) !== undefined) return registry.exec(command, args).ran;
+      try {
+        return core.exec(command as CommandName, args);
+      } catch {
+        return false;
+      }
+    },
+    queryCommand: (command, args) => {
+      if (registry?.get(command) !== undefined) {
+        const state = registry.state(command);
+        return { enabled: state.enabled, active: state.active === true };
+      }
+      try {
+        return core.queryCommand(command as CommandName, args);
+      } catch {
+        return UNKNOWN_COMMAND;
+      }
+    },
     nextField: () => core.nextFillableField?.() ?? false,
     focusField: (key) => core.focusFieldByKey?.(key) ?? false,
     getFieldValues: () => core.fieldValues?.() ?? {},

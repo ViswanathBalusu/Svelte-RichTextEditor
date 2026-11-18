@@ -732,7 +732,13 @@ export class Session {
     if (d.token !== undefined) {
       try {
         identity = await this.#deps.verify(d.token);
-      } catch {
+      } catch (e) {
+        // SEC-014 criterion 2: a revoked token is told apart from any other refusal. The codes of
+        // `ch.rejected` do not include `revoked`, so the answer is an `error` that answers the
+        // `ch.open` (05 §5.2 lists `error` among its replies; the quota refusal below does the
+        // same). It is not fatal: the connection's own session is judged on its own token.
+        if (socketCodeOf(e) === 'revoked')
+          return this.#error('revoked', 'the token of the channel was revoked', m.id, m.ch);
         return reject('forbidden', 'the token of the channel was refused');
       }
       if (identity.tenant !== this.#identity!.tenant || identity.sub !== this.#identity!.sub)

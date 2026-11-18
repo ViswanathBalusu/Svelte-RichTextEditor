@@ -34,6 +34,8 @@ import type {
   SyncState,
 } from './events.ts';
 import type { AssetsPort as PictureAssetsPort, JournalPort } from '@docedit/engine';
+// A value import from the headless entry only: the view code stays in its own chunk.
+import { type RestorePlan, readRestorePlan, restoreBase } from '@docedit/engine/headless';
 import { pictureAssets } from './assets.ts';
 import { type IdbJournal, openIdbJournal } from './journal-idb.ts';
 import { AUTH_CODES, codeOf, messageOf } from './errors.ts';
@@ -49,6 +51,7 @@ import { ChangeReporter, StatusReporter, type Scheduler } from './status.ts';
 import { SelectionEvents, type SelectionWatch } from './selection-events.ts';
 import { HeaderEvents, type HeaderWatch } from './header-events.ts';
 import { FillEvents, type FillWatch } from './fill.ts';
+import { NotificationDispatcher } from './notifications.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -61,6 +64,8 @@ export interface AttachAt {
   view?: string;
   /** The recovery journal (FE-008); absent where the browser keeps none. */
   journal?: JournalPort;
+  /** Unconfirmed work an earlier visit left in the journal, to put back (FE-009). */
+  restore?: RestorePlan;
   /** Lets the core reopen the channel and reload content on its own (FE-033). */
   sync?: Pick<SyncPort, 'open' | 'loadContent'>;
   limits?: Partial<Limits>;
@@ -191,6 +196,11 @@ export class Session {
   /** The recovery journal in IndexedDB (FE-008), when the browser gives one; closed on teardown. */
   #idbJournal: IdbJournal | null = null;
   #channel: SyncChannel | null = null;
+  /**
+   * Where the `event` messages of the channel arrive (PRO-035). Parts of the element register for
+   * the types they act on; a type the definition does not list is ignored.
+   */
+  readonly notifications = new NotificationDispatcher();
   readonly #unsubscribe: Unsubscribe[] = [];
   readonly #status: StatusReporter;
   #change: ChangeReporter | null = null;
@@ -275,8 +285,39 @@ export class Session {
           .then((m) => m.loadKatexFonts(katexFontsUrl))
           .catch(() => {});
 
+      // The journal opens first: work an earlier visit left unconfirmed is put back (FE-009). It is
+      // opened before the channel, so that the attach below stays in the task that opened the
+      // channel (D21).
       this.#phase = 'loading';
-      const content = await backend.sync.loadContent(this.docId);
+      const journal = await openDefaultJournal();
+      if (this.closed) {
+        journal?.close();
+        return;
+      }
+      this.#idbJournal = journal;
+      const plan = journal ? await readRestorePlan(journal, this.docId) : null;
+      // The content the journal's work was made on: the document at the commit's `base`, pinned, so
+      // that the work is sent again under its own identifier and rebased by the usual catch-up
+      // (04 §9). Where that cannot be read, the head is loaded and the work is set aside.
+      let content: Content | null = null;
+      let resumeAt: { incarnation: string; inflight: string | null } | null = null;
+      const base = plan ? restoreBase(plan) : null;
+      if (plan && base) {
+        try {
+          const pinned = await backend.sync.loadContent(this.docId, base.seq);
+          if (pinned.seq === base.seq) {
+            content = pinned;
+            resumeAt = {
+              incarnation: base.incarnation ?? pinned.incarnation,
+              inflight: plan.entry?.id ?? null,
+            };
+          }
+        } catch {
+          content = null;
+        }
+        if (this.closed) return;
+      }
+      content ??= await backend.sync.loadContent(this.docId);
       if (this.closed) return;
 
       this.#phase = 'mounting';
@@ -286,28 +327,23 @@ export class Session {
       if (this.closed) return editor.destroy();
       this.#editor = editor;
 
-      // The journal opens before the channel, so that the attach below stays in the task that
-      // opened the channel (D21).
-      const journal = await openDefaultJournal();
-      if (this.closed) {
-        journal?.close();
-        return;
-      }
-      this.#idbJournal = journal;
       this.#phase = 'opening';
-      const resume: Resume = { seq: content.seq, incarnation: content.incarnation };
+      const incarnation = resumeAt?.incarnation ?? content.incarnation;
+      const resume: Resume = { seq: content.seq, incarnation };
       if (content.view !== undefined) resume.view = content.view;
+      if (resumeAt?.inflight) resume.inflight = resumeAt.inflight;
       const channel = await backend.sync.open(this.docId, { resume });
       if (this.closed) return channel.close();
       // In the same task as open() resolved, before anything else is awaited: the core reads
       // `channel.opened` and subscribes first, so no message passes it by (decision D21).
       const at: AttachAt = {
         seq: content.seq,
-        incarnation: content.incarnation,
+        incarnation,
         sync: backend.sync,
       };
       if (content.view !== undefined) at.view = content.view;
       if (journal) at.journal = journal;
+      if (plan) at.restore = plan;
       const welcome = backend.auth.session;
       if (welcome) {
         at.limits = welcome.limits;
@@ -360,6 +396,7 @@ export class Session {
     // Every `perm.changed` of the channel the session opened, and whatever the core takes later
     // from a channel it reopened itself: both raise each revision once.
     this.#unsubscribe.push(channel.onAccess((access) => this.#onAccess(access)));
+    this.#unsubscribe.push(channel.onEvent((n) => void this.notifications.dispatch(n)));
     // When the page is hidden, every pending journal write is started and awaited (FE-011). This
     // does not wait for `pagehide`, which browsers do not reliably deliver.
     if (typeof document !== 'undefined' && editor.flushJournal) {

@@ -456,6 +456,8 @@
 
   // The format painter (UX-009): armed by its command, applied by the next pointer selection or by
   // Enter, cancelled by Escape; the armed state is the command's pressed state.
+  /** How long a pointer gesture waits for the core's view of its selection (UX-009). */
+  const PAINTER_SETTLE_MS = 120;
   let painterArmed = $state(false);
 
   function painter(): boolean {
@@ -482,7 +484,9 @@
   }
 
   // Dialogs of the shell.
-  let dialog = $state<'language' | 'region' | 'export' | 'comment' | 'math' | null>(null);
+  let dialog = $state<'language' | 'region' | 'export' | 'comment' | 'math' | 'version' | null>(
+    null,
+  );
   // The equation the math editor is open on (FE-070): taken when the request arrives.
   let equation = $state.raw<EquationRef | null>(null);
   if (core.mathEditor) {
@@ -793,6 +797,7 @@
     if (paneRegistry.get('comments')?.load) add(host1a.comments);
     if (paneRegistry.get('catch-up')?.load) add(host1a.catchUp);
     if (offered('history')) add(host1a.history);
+    if (offered('history') && core.history?.createVersion) add(host1b['history.nameVersion']);
     if (props.onShareRequest) add(host1a.share);
     if (core.search) add(host1b['view.find']);
     if (offered('styles')) add(host1b['view.styles']);
@@ -1015,10 +1020,27 @@
       on(node, 'contextmenu', onContextMenu),
       on(node, 'pointerup', () => {
         if (!painterArmed) return;
-        // The selection the gesture made reaches the core's view in the next frame.
-        requestAnimationFrame(() => {
-          if (painterArmed && !core.selection.get().empty) paint();
+        // The browser tells the editing surface of the selection the gesture made a little after
+        // the pointer is released, so the view may still show the selection before the gesture (a
+        // click on the target would then paint the source again). Wait for the view to change; if
+        // it does not within a short time, the view is already current.
+        const before = core.selection.get();
+        let settled = false;
+        let stopWatching = (): void => {};
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          stopWatching();
+          clearTimeout(timer);
+          requestAnimationFrame(() => {
+            if (painterArmed && !core.selection.get().empty) paint();
+          });
+        };
+        stopWatching = core.selection.subscribe(() => {
+          if (core.selection.get() !== before) settle();
         });
+        timer = setTimeout(settle, PAINTER_SETTLE_MS);
       }),
     ];
     return () => {
@@ -1247,7 +1269,14 @@
     <MiniToolbar anchor={miniAnchor} />
   {/if}
   {#if dialogs}
-    {@const { LanguageDialog, RegionDialog, CommentBox, ExportDialog, MathEditorDialog } = dialogs}
+    {@const {
+      LanguageDialog,
+      RegionDialog,
+      CommentBox,
+      ExportDialog,
+      MathEditorDialog,
+      VersionDialog,
+    } = dialogs}
     {#if dialog === 'math' && core.mathEditor && equation}
       <MathEditorDialog
         editor={core.mathEditor}
@@ -1263,6 +1292,15 @@
       <LanguageDialog
         initial={selection.current.lang ?? null}
         onApply={applyLanguage}
+        onClose={() => (dialog = null)}
+      />
+    {:else if dialog === 'version' && core.history?.createVersion}
+      <VersionDialog
+        history={core.history}
+        onNamed={() => {
+          dialog = null;
+          announce('announce.version.named');
+        }}
         onClose={() => (dialog = null)}
       />
     {:else if dialog === 'region'}

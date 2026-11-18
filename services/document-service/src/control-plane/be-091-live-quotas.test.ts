@@ -33,7 +33,7 @@ function setup(known: string[] = ['t1', 't2']) {
 }
 
 describe('commit rate and CPU budget windows (BE-091)', () => {
-  it('admits commits as a sliding-window model says, for any increasing times and limits', () => {
+  it('admits commits as a sliding-window model says, for any increasing times and limits [neg:code quota_exceeded]', () => {
     fc.assert(
       fc.property(
         fc.integer({ min: 1, max: 6 }),

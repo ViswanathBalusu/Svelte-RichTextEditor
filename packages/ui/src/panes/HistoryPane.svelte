@@ -8,15 +8,32 @@
   without the port the history control is not offered and the pane says so.
 -->
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { useShell } from '../context.ts';
   import type { CoreApi, HistoryPaneItem } from '../core-api.ts';
+  import {
+    createWhoController,
+    type WhoController,
+    type WhoScope,
+    type WhoState,
+  } from '../shell/history-who.ts';
+  import {
+    authorOf,
+    compareChoices,
+    createCompareController,
+    fieldChanges,
+    summaryByRegion,
+    type CompareController,
+    type CompareState,
+  } from '../shell/history-compare.ts';
   import { sourceTranslator } from '../i18n/strings.ts';
   import {
     activeFilters,
     authorLabel,
     createHistoryController,
+    itemKey,
     NO_FILTER,
+    openingOf,
     type HistoryController,
     type HistoryPaneState,
   } from '../shell/history-pane.ts';
@@ -36,6 +53,20 @@
   let controller: HistoryController | null = null;
   let snapshot = $state.raw<HistoryPaneState | null>(null);
   let hasPort = $state(true);
+  let canOpen = $state(false);
+  let canCompare = $state(false);
+  let canAsk = $state(false);
+  let who: WhoController | null = null;
+  let answer = $state.raw<WhoState | null>(null);
+  let askScope = $state('document');
+  let compare: CompareController | null = null;
+  let cmp = $state.raw<CompareState | null>(null);
+  let pickFrom = $state('');
+  let pickTo = $state('current');
+  /** Where focus was when a version was opened; it returns there when the user leaves (HIS-010). */
+  let returnTo: HTMLElement | null = null;
+  let viewHost = $state.raw<HTMLElement | null>(null);
+  let titleEl = $state.raw<HTMLElement | null>(null);
 
   onMount(() => {
     const port = props.core?.history;
@@ -45,12 +76,50 @@
     }
     const ctl = createHistoryController(port);
     controller = ctl;
+    canOpen = port.openVersion !== undefined;
+    canCompare = port.compare !== undefined && canOpen;
+    canAsk = port.whoWrote !== undefined && canOpen;
+    const wc = createWhoController(port, ctl);
+    who = wc;
+    answer = wc.state();
+    const offWho = wc.subscribe(() => {
+      answer = wc.state();
+    });
+    const cc = createCompareController(port, ctl);
+    compare = cc;
+    cmp = cc.state();
+    const offCompare = cc.subscribe(() => {
+      cmp = cc.state();
+    });
     snapshot = ctl.state();
     const off = ctl.subscribe(() => {
       snapshot = ctl.state();
     });
     void ctl.reload();
-    return off;
+    // A version named from the command shows at once (HIS-006): the host says the list changed.
+    const offChange = port.onChange?.(() => void ctl.reload());
+    return () => {
+      off();
+      offWho();
+      offCompare();
+      offChange?.();
+      ctl.dispose();
+    };
+  });
+
+  // The open version is drawn in its own host, apart from the live editor; leaving removes it.
+  // $derived keeps the same view while other parts of the state change, so it is not drawn again.
+  const openView = $derived(snapshot?.viewing?.status === 'open' ? snapshot.viewing.view : null);
+  $effect(() => {
+    // Another version, or none: an answer about the earlier one no longer stands.
+    void openView;
+    who?.clear();
+  });
+  $effect(() => {
+    const v = openView;
+    const host = viewHost;
+    if (v === null || host === null) return;
+    return v.mount(host);
   });
 
   function when(iso: string): string {
@@ -100,21 +169,322 @@
     });
   }
 
-  function itemKey(item: HistoryPaneItem): string {
-    return `${item.kind}:${item.id}`;
-  }
-
   function ask(patch: Parameters<HistoryController['setFilter']>[0]): void {
     void controller?.setFilter(patch);
+  }
+
+  /** The `<button>` the user pressed, remembered so that focus can return to it (HIS-010). */
+  function openItem(item: HistoryPaneItem, event: MouseEvent): void {
+    const root = (event.currentTarget as HTMLElement).getRootNode() as Document | ShadowRoot;
+    returnTo = (root.activeElement as HTMLElement | null) ?? (event.currentTarget as HTMLElement);
+    void controller?.open(item);
+  }
+
+  /**
+   * Leaves the version. Focus goes back to the control that opened it, or to the pane's heading if
+   * that control is gone; the live editor is not touched.
+   */
+  // The older end of a comparison starts at the newest state the list offers.
+  $effect(() => {
+    if (snapshot === null) return;
+    const keys = compareChoices(snapshot.items).map((c) => c.key);
+    if (!keys.includes(pickFrom)) pickFrom = keys[0] ?? '';
+  });
+
+  function kindText(kind: string): string {
+    const known = [
+      'modified',
+      'added',
+      'removed',
+      'moved',
+      'formatted',
+      'field',
+      'definition',
+    ] as const;
+    return known.includes(kind as (typeof known)[number])
+      ? tr.t(`history.compare.kind.${kind as (typeof known)[number]}`)
+      : kind;
+  }
+
+  function personName(userId: string | null, names: ReadonlyMap<string, string | null>): string {
+    if (userId === null) return tr.t('history.unknown-person');
+    return names.get(userId) ?? tr.t('history.unknown-person');
+  }
+
+  /** What the live region says on a move: the position, the kind and the author (HIS-013 criterion 2). */
+  function announcement(state: CompareState): string {
+    const row = state.rows[state.index];
+    if (row === undefined) return '';
+    const author = authorOf(row.change);
+    const params = { n: state.index + 1, m: state.rows.length, kind: kindText(row.change.kind) };
+    return author === null
+      ? tr.t('history.compare.announce.nobody', params)
+      : tr.t('history.compare.announce', { ...params, name: personName(author, state.names) });
+  }
+
+  function choiceLabel(choice: { time: string; name: string | null }): string {
+    return choice.name === null
+      ? tr.t('history.compare.option.group', { when: when(choice.time) })
+      : tr.t('history.compare.option.version', { name: choice.name, when: when(choice.time) });
+  }
+
+  function regionLabel(region: string | null, state: HistoryPaneState): string {
+    return region === null
+      ? tr.t('history.compare.region.none')
+      : (state.choices.regions.find((r) => r.id === region)?.label ?? region);
+  }
+
+  function fieldLabel(field: string, state: HistoryPaneState): string {
+    return state.choices.fields.find((f) => f.id === field)?.label ?? field;
+  }
+
+  function runCompare(state: HistoryPaneState, event: MouseEvent): void {
+    const choices = compareChoices(state.items);
+    const a = choices.find((c) => c.key === pickFrom) ?? choices[0];
+    const b = pickTo === 'current' ? null : (choices.find((c) => c.key === pickTo) ?? null);
+    if (a === undefined) return;
+    const button = event.currentTarget as HTMLElement;
+    returnTo = button;
+    void compare?.run(a, b);
+  }
+
+  function onViewKey(event: KeyboardEvent): void {
+    if (event.key !== 'F3' || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (cmp?.status !== 'ready') return;
+    event.preventDefault();
+    if (event.shiftKey) compare?.previous();
+    else compare?.next();
+  }
+
+  function whoScope(): WhoScope {
+    if (askScope === 'selection') return { kind: 'selection' };
+    if (askScope.startsWith('region:')) return { kind: 'region', id: askScope.slice(7) };
+    return { kind: 'document' };
+  }
+
+  function leave(): void {
+    compare?.close();
+    controller?.leave();
+    const target = returnTo !== null && returnTo.isConnected ? returnTo : titleEl;
+    returnTo = null;
+    // The list draws again after this call; focus moves once it has.
+    void tick().then(() => {
+      const again = target !== null && target.isConnected ? target : titleEl;
+      again?.focus();
+    });
+  }
+
+  function viewLabel(v: { time: string; name: string | null }): string {
+    const whenText = when(v.time);
+    return v.name === null
+      ? tr.t('history.view.label', { when: whenText })
+      : tr.t('history.view.label.named', { name: v.name, when: whenText });
+  }
+
+  function refusal(reason: 'forbidden' | 'not_found' | 'failed'): string {
+    if (reason === 'forbidden') return tr.t('history.view.forbidden');
+    return reason === 'not_found' ? tr.t('history.view.not-found') : tr.t('history.view.failed');
   }
 </script>
 
 <section class="de-history" aria-labelledby={`${id}-title`}>
-  <h2 class="de-subhead" id={`${id}-title`}>{tr.t('history.label')}</h2>
+  <h2 class="de-subhead" id={`${id}-title`} tabindex="-1" bind:this={titleEl}>
+    {tr.t('history.label')}
+  </h2>
 
   {#if !hasPort}
     <p role="status" data-status="unavailable">{tr.t('history.unavailable')}</p>
   {:else if snapshot}
+    {#if snapshot.viewing?.status === 'open'}
+      <!-- The old version: a second, read-only state, apart from the live editor (HIS-010). -->
+      <!-- F3 and Shift+F3 move between changes from anywhere in the view, also from the document,
+           where focus lands on a change (HIS-013 criterion 2). -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <section
+        class="de-history-view"
+        data-version-view
+        aria-label={viewLabel(snapshot.viewing)}
+        onkeydown={onViewKey}
+      >
+        <p>{tr.t('history.view.note')}</p>
+        <button type="button" class="de-list-button" onclick={leave}>
+          {tr.t('history.view.leave')}
+        </button>
+        {#if cmp?.status === 'ready'}
+          <div class="de-history-compare" data-compare>
+            {#if cmp.rows.length === 0}
+              <p data-status="no-differences">{tr.t('history.compare.none')}</p>
+            {:else}
+              <div role="group" aria-label={tr.t('history.compare.navigate')}>
+                <button
+                  type="button"
+                  class="de-list-button"
+                  aria-keyshortcuts="Shift+F3"
+                  onclick={() => compare?.previous()}
+                >
+                  {tr.t('history.compare.previous')}
+                </button>
+                <button
+                  type="button"
+                  class="de-list-button"
+                  aria-keyshortcuts="F3"
+                  onclick={() => compare?.next()}
+                >
+                  {tr.t('history.compare.next')}
+                </button>
+                <label class="de-check">
+                  <input
+                    type="checkbox"
+                    checked={cmp.showDeleted}
+                    onchange={(e) => compare?.setShowDeleted(e.currentTarget.checked)}
+                  />
+                  {tr.t('history.compare.deletions')}
+                </label>
+              </div>
+              <p role="status" aria-live="polite" data-compare-announce>{announcement(cmp)}</p>
+              <h3 class="de-subhead">{tr.t('history.compare.summary')}</h3>
+              <ul data-compare-summary>
+                {#each summaryByRegion(cmp.rows.map((r) => r.change)) as row (row.region ?? '')}
+                  <li>
+                    {tr.t('history.compare.region.row', {
+                      region: regionLabel(row.region, snapshot),
+                      count: row.count,
+                    })}
+                  </li>
+                {/each}
+              </ul>
+              {#if fieldChanges(cmp.rows.map((r) => r.change)).length > 0}
+                <h3 class="de-subhead">{tr.t('history.compare.fields')}</h3>
+                <ul data-compare-fields>
+                  {#each fieldChanges(cmp.rows.map((r) => r.change)) as f (f.index)}
+                    <li>
+                      {tr.t('history.compare.field.row', {
+                        field: fieldLabel(f.field, snapshot),
+                        name: personName(f.user, cmp.names),
+                      })}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            {/if}
+          </div>
+        {/if}
+        {#if canAsk}
+          <div class="de-history-who" data-who>
+            <h3 class="de-subhead" id={`${id}-who`}>{tr.t('history.who.title')}</h3>
+            <label>
+              {tr.t('history.who.scope')}
+              <select data-who-scope bind:value={askScope}>
+                <option value="document">{tr.t('history.who.scope.document')}</option>
+                {#if openView?.selectedBlocks !== undefined}
+                  <option value="selection">{tr.t('history.who.scope.selection')}</option>
+                {/if}
+                {#each snapshot.choices.regions as region (region.id)}
+                  <option value={`region:${region.id}`}>
+                    {tr.t('history.who.scope.region', { name: region.label })}
+                  </option>
+                {/each}
+              </select>
+            </label>
+            <button
+              type="button"
+              class="de-list-button"
+              data-who-ask
+              onclick={() => void who?.ask(whoScope())}
+            >
+              {tr.t('history.who.ask')}
+            </button>
+            <div role="status" aria-live="polite" data-who-status={answer?.status ?? 'idle'}>
+              {#if answer?.status === 'loading'}{tr.t('history.who.loading')}{/if}
+              {#if answer?.status === 'nothing'}{tr.t('history.who.nothing-selected')}{/if}
+              {#if answer?.status === 'refused'}
+                {answer.reason === 'forbidden'
+                  ? tr.t('history.who.forbidden')
+                  : tr.t('history.who.failed')}
+              {/if}
+              {#if answer?.status === 'ready' && answer.authors.length === 0}
+                {tr.t('history.who.empty')}
+              {/if}
+            </div>
+            {#if answer?.status === 'ready' && answer.authors.length > 0}
+              <ul data-who-answer aria-labelledby={`${id}-who`}>
+                {#each answer.authors as line (`${line.user}|${line.agent ?? ''}|${line.restoredBy ?? ''}`)}
+                  <li>
+                    {tr.t('history.who.line', {
+                      name: personName(line.user, answer.names),
+                      count: line.runs,
+                      first: when(line.firstTime),
+                      last: when(line.lastTime),
+                    })}
+                    {#if line.agent !== undefined}
+                      {tr.t('history.who.assistant')}
+                    {/if}
+                    {#if line.restoredBy !== undefined}
+                      {tr.t('history.who.restored', { by: personName(line.restoredBy, answer.names) })}
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        {/if}
+        <div class="de-history-view-body" bind:this={viewHost}></div>
+      </section>
+    {/if}
+    {#if snapshot.viewing?.status === 'opening'}
+      <p role="status" data-status="opening">{tr.t('history.view.opening')}</p>
+    {/if}
+    {#if snapshot.viewing?.status === 'refused'}
+      <p role="alert" data-status="refused" data-reason={snapshot.viewing.reason}>
+        {refusal(snapshot.viewing.reason)}
+      </p>
+    {/if}
+    {#if cmp?.status === 'loading'}
+      <p role="status" data-status="comparing">{tr.t('history.compare.loading')}</p>
+    {/if}
+    {#if cmp?.status === 'refused'}
+      <p role="alert" data-status="compare-refused" data-reason={cmp.reason}>
+        {cmp.reason === 'forbidden'
+          ? tr.t('history.compare.forbidden')
+          : tr.t('history.compare.failed')}
+      </p>
+    {/if}
+    <div class="de-history-list" hidden={snapshot.viewing?.status === 'open'}>
+      {#if canCompare && compareChoices(snapshot.items).length > 0}
+        {@const choices = compareChoices(snapshot.items)}
+        <form
+          class="de-history-compare-form"
+          aria-labelledby={`${id}-compare`}
+          onsubmit={(e) => e.preventDefault()}
+        >
+          <h3 class="de-subhead" id={`${id}-compare`}>{tr.t('history.compare.title')}</h3>
+          <label>
+            {tr.t('history.compare.from')}
+            <select data-compare-from bind:value={pickFrom}>
+              {#each choices as choice (choice.key)}
+                <option value={choice.key}>{choiceLabel(choice)}</option>
+              {/each}
+            </select>
+          </label>
+          <label>
+            {tr.t('history.compare.to')}
+            <select data-compare-to bind:value={pickTo}>
+              <option value="current">{tr.t('history.compare.current')}</option>
+              {#each choices as choice (choice.key)}
+                <option value={choice.key}>{choiceLabel(choice)}</option>
+              {/each}
+            </select>
+          </label>
+          <button
+            type="button"
+            class="de-list-button"
+            data-compare-run
+            onclick={(e) => runCompare(snapshot!, e)}
+          >
+            {tr.t('history.compare.run')}
+          </button>
+        </form>
+      {/if}
     <form class="de-history-filters" aria-labelledby={`${id}-filters`} onsubmit={(e) => e.preventDefault()}>
       <h3 class="de-subhead" id={`${id}-filters`}>{tr.t('history.filters')}</h3>
       <label class="de-check">
@@ -190,6 +560,7 @@
               </p>
               <p>{tr.t('history.group.authors', { authors: authors(item.authors, snapshot) })}</p>
               <p>{tr.t('history.group.origins', { origins: item.origins.join(', ') })}</p>
+              {@render openButton(item)}
             </li>
           {:else}
             <li data-history="version">
@@ -204,6 +575,7 @@
                   time: when(item.time),
                 })}
               </p>
+              {@render openButton(item)}
             </li>
           {/if}
         {/each}
@@ -214,5 +586,21 @@
         </button>
       {/if}
     {/if}
+    </div>
   {/if}
 </section>
+
+{#snippet openButton(item: HistoryPaneItem)}
+  {@const what = openingOf(item)}
+  {#if canOpen && what !== null}
+    <button
+      type="button"
+      class="de-list-button"
+      data-open-version
+      aria-label={tr.t('history.version.open-at', { when: when(what.time) })}
+      onclick={(e) => openItem(item, e)}
+    >
+      {tr.t('history.version.open')}
+    </button>
+  {/if}
+{/snippet}

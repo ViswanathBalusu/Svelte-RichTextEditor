@@ -101,9 +101,15 @@ export class ObjectCheckpointStore implements CheckpointStore {
 /** Assets, exports and sealed PDFs of one tenant (06 §4.2, §4.4; BE-003). */
 export class ObjectAssetStore implements AssetStore {
   readonly #store: ObjectStore;
+  readonly #stored: ((tenant: string, bytes: number, kind: string) => void) | undefined;
 
-  constructor(store: ObjectStore) {
+  /**
+   * `stored` is told the bytes of each export output and sealed PDF written, with its kind (the
+   * per-tenant meter of BE-085); a failed write is not told.
+   */
+  constructor(store: ObjectStore, stored?: (tenant: string, bytes: number, kind: string) => void) {
     this.#store = store;
+    this.#stored = stored;
   }
 
   /** An upload before validation (06 §4.4). */
@@ -136,20 +142,19 @@ export class ObjectAssetStore implements AssetStore {
     bytes: Uint8Array,
     contentType: string,
   ): Promise<void> {
-    return new TenantObjects(this.#store, tenant).put(
-      objectKeys.exportFile(tenant, job, name),
-      bytes,
-      { contentType },
-    );
+    return new TenantObjects(this.#store, tenant)
+      .put(objectKeys.exportFile(tenant, job, name), bytes, { contentType })
+      .then(() => this.#stored?.(tenant, bytes.length, 'export'));
   }
 
   /** A sealed PDF: written once; a second write is refused with ObjectExistsError. */
   putSealed(tenant: string, doc: string, workflow: string, bytes: Uint8Array): Promise<void> {
-    return new TenantObjects(this.#store, tenant).put(
-      objectKeys.final(tenant, doc, workflow),
-      bytes,
-      { contentType: 'application/pdf', ifAbsent: true },
-    );
+    return new TenantObjects(this.#store, tenant)
+      .put(objectKeys.final(tenant, doc, workflow), bytes, {
+        contentType: 'application/pdf',
+        ifAbsent: true,
+      })
+      .then(() => this.#stored?.(tenant, bytes.length, 'sealed'));
   }
 
   getSealed(tenant: string, doc: string, workflow: string): Promise<Uint8Array | null> {

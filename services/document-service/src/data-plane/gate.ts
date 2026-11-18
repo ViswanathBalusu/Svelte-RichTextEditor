@@ -83,7 +83,7 @@ export const SEQ_INPUTS: readonly SeqInput[] = [
     where: 'POST /documents/{id}/exports',
     field: 'body.seq',
     rule: 'state',
-    note: 'the control plane (visibleFrom in handlers.ts) until it calls this gate',
+    note: 'the control plane: export-routes.ts calls minVisibleSeqOf and refuseBelowGate',
   },
   {
     where: 'POST /documents/{id}/versions',
@@ -191,8 +191,13 @@ export function gateOf(conn: RoomConnection, s: StoredState): number {
 }
 
 /** Whether the content at `seq` may be read (a single state). */
-export function stateAllowed(gate: number, seq: number, head: number): boolean {
-  return stateVisible(gate, seq, head);
+export function stateAllowed(
+  gate: number,
+  seq: number,
+  head: number,
+  named?: (seq: number) => boolean,
+): boolean {
+  return stateVisible(gate, seq, head, named);
 }
 
 /** Whether the commits after `from` may be sent (a run). */

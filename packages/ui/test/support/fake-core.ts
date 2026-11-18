@@ -180,11 +180,13 @@ export const FAKE_COMMANDS = [
   'setLanguage',
   'markRegion',
   'setRegionPolicy',
+  'renameRegion',
   'nextEditableRegion',
   'insertField',
   'insertRecovered',
   'discardRecovered',
   'finishFill',
+  'showReferences',
 ];
 
 export const FAKE_QUERIES = [
@@ -590,6 +592,16 @@ export class FakeCore implements CoreApi {
         this.#bump();
         return true;
       }
+      case 'renameRegion': {
+        const caps = this.permissions?.get()?.caps ?? [];
+        const title = typeof a['title'] === 'string' ? a['title'].trim() : '';
+        if (!caps.includes('structure') || title === '') return false;
+        this.regions?.set(
+          (this.regions.get() ?? []).map((r) => (r.id === a['region'] ? { ...r, title } : r)),
+        );
+        this.#bump();
+        return true;
+      }
       case 'nextEditableRegion': {
         const next = this.#nextEditable();
         if (!next) return false;
@@ -719,9 +731,14 @@ export class FakeCore implements CoreApi {
     return Promise.resolve(true);
   }
 
-  refuse(reason: string, scopes: readonly string[] = []): void {
+  refuse(reason: string, scopes: readonly string[] = [], count?: number): void {
     const n = (this.refusal?.get()?.n ?? 0) + 1;
-    this.refusal?.set({ n, reason, scopes: [...scopes] });
+    this.refusal?.set({
+      n,
+      reason,
+      scopes: [...scopes],
+      ...(count === undefined ? {} : { count }),
+    });
   }
 
   /** Work was set aside: a rejected commit or unsent work (the core's `recovered` view). */

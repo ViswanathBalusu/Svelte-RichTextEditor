@@ -51,6 +51,13 @@ try {
   stop(`the font manifest of ${IMAGE} cannot be read`);
 }
 
+// EXP-067 criterion 4: with the key the worker runs only jobs the control plane queued. The key is
+// the one the service holds (DOCEDIT_EXPORT_PROOF_KEY); without it a job is not checked.
+if (!config.exportProofKey)
+  logger.warn({
+    event: 'export-worker.queue-proof-off',
+    message: 'DOCEDIT_EXPORT_PROOF_KEY is not set: the worker does not check who queued a job',
+  });
 const pool = createPool({ connectionString: config.databaseUrl!, connectionTimeoutMillis: 5000 });
 pool.on('error', () => {});
 const grants = new PgGrantStore(pool);
@@ -59,6 +66,7 @@ const logs = new PgLogStore(pool, { permissions: (ref) => grants.current(ref) })
 const worker = createExportWorker({
   queue: new PgJobQueue(pool),
   deps: {
+    ...(config.exportProofKey ? { queueProofKey: config.exportProofKey } : {}),
     stores: {
       logs,
       checkpoints: new ObjectCheckpointStore(objects),

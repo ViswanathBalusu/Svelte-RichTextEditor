@@ -229,7 +229,7 @@ export interface ShellCommandHost1b {
   painter(): boolean;
   applyFormat(): boolean;
   /** Opens a dialog of the shell. */
-  openDialog(name: 'language' | 'region' | 'export' | 'comment'): boolean;
+  openDialog(name: 'language' | 'region' | 'export' | 'comment' | 'version'): boolean;
   zoom(step: 'in' | 'out' | 'reset'): boolean;
   setMode(mode: EditorMode): boolean;
   setView(view: ViewName): boolean;
@@ -521,6 +521,18 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       needs: 'markRegion',
       contextMenu: ['text'],
       run: () => host.openDialog('region'),
+    },
+    // Name the current state of the document (HIS-006; 08 §4): opens the dialog for a name and a
+    // note. It writes no content, so a locked document keeps it; the host's history port offers it
+    // only to a user who may name versions, and the service refuses anyone else.
+    'history.nameVersion': {
+      id: 'history.nameVersion',
+      label: 'command.history.nameVersion',
+      group: 'review',
+      changesContent: false,
+      feature: 'history',
+      capability: 'version-history',
+      run: () => host.openDialog('version'),
     },
     // Comment on the selection (UX-028): opens the comment box for the anchor the core gives. It
     // changes nothing in the document, so a locked or approved document keeps it (criterion 4);

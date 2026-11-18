@@ -34,4 +34,16 @@ The project owner answered these in the working session of 2026-11-15. They are 
 | 24 | Session records | HIS-003 | Kept as long as the document's history. Proposed by the session and not objected to: the control plane of the document service holds them in its own table, and a user agent string is reduced to family and major version. |
 | 25 | Link targets in PDF | EXP-043 | Hex encoding of the whole target is the rule. Reword criterion 3. |
 
+## Added on 2026-11-17
+
+The owner answered these in the working session of 2026-11-17. They are settled in the same way.
+
+| # | Topic | Stories | Decision |
+|---|---|---|---|
+| 26 | Page view (the SPK-013 gate, pending item 25) | SPK-013, SPK-022, FE-075, FE-076, FE-079, FE-089, FE-092, FE-094, FE-095, FE-097 to FE-102, the WASM epic | The full editable page view (alternative (c) of 11 §5). Condition C-WASM holds. Not asked yet: whether the page view must reproduce Word's page breaks for imported files; until it is, ADR 0005's assumption (the house class) stands. |
+| 27 | Rust module in the browser | WASM-001, WASM-007, WASM-008, WASM-009, WASM-013 to WASM-016, SPK-023 | Build the Rust WebAssembly module. This overrides the recommendation of spike S10 (harfbuzzjs with line breaking in TypeScript), which the owner was shown with its measured cost (2.1 times the download, a second toolchain, 21 crates). Condition C-RUST holds, so all 16 WASM stories may start. ADR 0016 moves from proposed to accepted on this point. |
+| 28 | Hosted or self-hosted first (11 §10 decision 8) | BE-041, BE-076, BE-082, BE-083, BE-095, BE-097, SEC-061 | Both from the start. The stories conditional on a hosted mode and those conditional on a self-hosted mode all apply. |
+
+The owner will review the decisions that have a proposed default (Part B of `owner-blockers-2026-11-17.md`) before any is treated as settled. Until then they stay open: use the default and say so in the story's Notes, as before.
+
 Still open, not asked yet: the PDF text-string encoding and the bookmark string path (EXP-043 criteria 1 and 4), the baseline for comparing published artifact sets (PRO-006), new third-party libraries (Floating UI, a Markdown renderer, a UAX 14 implementation), migration sequencing for search and webhook tables, and the items listed in `docs/owner-decisions-pending.md`.

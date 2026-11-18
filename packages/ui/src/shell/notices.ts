@@ -18,6 +18,8 @@ export interface Notice {
   readonly count: number;
   /** Increases with every notice, so that the same message twice is shown and announced twice. */
   readonly serial: number;
+  /** A named command of the core that the notice offers (a button next to the message), if any. */
+  readonly action?: 'showReferences';
 }
 
 const REFUSALS: Readonly<Record<string, StringKey>> = {
@@ -33,6 +35,8 @@ const REFUSALS: Readonly<Record<string, StringKey>> = {
   // A copy the output restriction refused (UX-040 criterion 2): the user is told why, and that
   // nothing was copied; a copy is not a change, so the general "change not made" words do not fit.
   'no-copy': 'notice.refused.noCopy',
+  // A deletion a cross-reference still names (I4; FE-133 criterion 5): the notice offers to show them.
+  referenced: 'notice.refused.referenced',
 };
 
 const REJECTIONS: Readonly<Record<string, StringKey>> = {
@@ -100,6 +104,17 @@ export class NoticeTracker {
     // Suggestions a resolve command skipped are counted and named as such (FE-047 criterion 6).
     const skipped = next.count;
     const counted = next.reason === 'scope' && typeof skipped === 'number' && skipped > 0;
+    // A deletion a reference still names: the count is the number of references, and the notice
+    // offers to show them.
+    if (next.reason === 'referenced') {
+      return {
+        kind: 'refusal',
+        key: refusalKey('referenced'),
+        count: typeof skipped === 'number' && skipped > 0 ? skipped : 1,
+        serial: ++this.#serial,
+        action: 'showReferences',
+      };
+    }
     return {
       kind: 'refusal',
       key: counted ? 'notice.suggestions.skipped' : refusalKey(String(next.reason)),

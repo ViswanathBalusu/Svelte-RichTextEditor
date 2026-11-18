@@ -30,6 +30,21 @@ export interface RegionSpan {
   end: number;
 }
 
+/**
+ * The identifiers and titles of the regions that are direct children of the body, as one string
+ * (PRM-034 criterion 1). Two documents give the same string when no region was added, removed or
+ * renamed between them.
+ */
+export function regionTitleKey(doc: Node): string {
+  const body = doc.lastChild;
+  if (!body || body.type.name !== 'body') return '';
+  const out: Array<[unknown, unknown]> = [];
+  body.forEach((child) => {
+    if (child.type.name === 'region') out.push([child.attrs['id'], child.attrs['title']]);
+  });
+  return JSON.stringify(out);
+}
+
 /** The region a position lies in, or null (regions are direct children of the body, I3). */
 export function regionAt($pos: ResolvedPos): RegionSpan | null {
   if ($pos.depth < 2) return null;
@@ -43,6 +58,19 @@ export function regionAt($pos: ResolvedPos): RegionSpan | null {
     start: pos + 1,
     end: pos + region.nodeSize - 1,
   };
+}
+
+/**
+ * The DEP scope of a position of `doc` (05 §5.3): the definitions (`defs`), a story (`story:<id>`),
+ * a region (`region:<id>`) or the body (`body`).
+ */
+export function scopeOfPosition(doc: Node, pos: number): string {
+  const $pos = doc.resolve(pos);
+  const top = $pos.depth > 0 ? $pos.node(1) : null;
+  if (top?.type.name === 'defs') return 'defs';
+  if (top?.type.name === 'story') return `story:${String(top.attrs['id'])}`;
+  const r = regionAt($pos);
+  return r ? `region:${r.id ?? ''}` : 'body';
 }
 
 /**

@@ -230,6 +230,12 @@ export async function migrate(
 export interface Release {
   version: string;
   migrations: string[];
+  /**
+   * Rollback notes for migrations whose file has no `-- rollback:` header and cannot get one,
+   * because a file that changed after it was applied is refused (the baseline, 0001 to 0007).
+   * The note in the file wins when both exist.
+   */
+  rollback?: Record<string, string>;
 }
 
 export async function loadReleases(dir = MIGRATIONS_DIR): Promise<Release[]> {
@@ -237,10 +243,18 @@ export async function loadReleases(dir = MIGRATIONS_DIR): Promise<Release[]> {
   const parsed = JSON.parse(text) as { releases?: unknown };
   if (!Array.isArray(parsed.releases)) throw new Error('releases.json: an object with releases[]');
   return parsed.releases.map((r, i) => {
-    const x = r as { version?: unknown; migrations?: unknown };
+    const x = r as { version?: unknown; migrations?: unknown; rollback?: unknown };
     if (typeof x.version !== 'string' || !Array.isArray(x.migrations))
       throw new Error(`releases.json /releases/${i}: version and migrations[]`);
-    return { version: x.version, migrations: x.migrations.map(String) };
+    const release: Release = { version: x.version, migrations: x.migrations.map(String) };
+    if (x.rollback !== undefined) {
+      if (typeof x.rollback !== 'object' || x.rollback === null || Array.isArray(x.rollback))
+        throw new Error(`releases.json /releases/${i}/rollback: an object of notes by migration`);
+      release.rollback = Object.fromEntries(
+        Object.entries(x.rollback).map(([k, v]) => [k, String(v)]),
+      );
+    }
+    return release;
   });
 }
 
@@ -287,13 +301,14 @@ export function planProblems(
 export function releaseNotes(
   migrations: readonly Migration[],
   versions: readonly string[],
+  notes: Readonly<Record<string, string>> = {},
 ): string {
   const chosen = migrations.filter((m) => versions.includes(m.version));
   if (chosen.length === 0) return 'No database steps.\n';
   const lines = ['| Migration | Phase | What it does | How to roll back |', '|---|---|---|---|'];
   for (const m of chosen)
     lines.push(
-      `| \`${m.version}\` | ${m.phase}${m.contracts ? ` (completes \`${m.contracts}\`)` : ''} | ${m.summary.replace(/\|/g, '\\|')} | ${(m.rollback ?? 'not documented').replace(/\|/g, '\\|')} |`,
+      `| \`${m.version}\` | ${m.phase}${m.contracts ? ` (completes \`${m.contracts}\`)` : ''} | ${m.summary.replace(/\|/g, '\\|')} | ${(m.rollback ?? notes[m.version] ?? 'not documented').replace(/\|/g, '\\|')} |`,
     );
   return `${lines.join('\n')}\n`;
 }

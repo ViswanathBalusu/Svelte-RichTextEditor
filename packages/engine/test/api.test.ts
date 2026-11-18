@@ -47,6 +47,14 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'resumeSync'
       // SYN-036: the peers of `presence` with their positions in the visible document.
       | 'peerSelections'
+      // PRM-034: the element re-reads the region list when a region is renamed, added or removed.
+      | 'regionTitles'
+      // UX-017: the recovered edits pane puts a set-aside edit back or drops it, by its id.
+      | 'insertRecovered'
+      | 'discardRecovered'
+      // UX-018: the status bar's word count and the document language at the selection.
+      | 'words'
+      | 'language'
       // FRW-004: the entries of form fields, for the field controls of the web view. The fill
       // methods of the embedding API (12 §10) are FRW-069's and are not on the document API yet.
       | 'fieldEntry'
@@ -99,7 +107,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'focusField'
       // FRW-069: focus by key, and the next field the person may fill.
       | 'focusFieldByKey'
-      | 'nextFillableField';
+      | 'nextFillableField'
+      // HIS-013: a read-only version view draws a comparison over its document.
+      | 'setComparison';
     expectTypeOf<Exclude<keyof EditorCore, WebAllowed>>().toEqualTypeOf<never>();
   });
 });

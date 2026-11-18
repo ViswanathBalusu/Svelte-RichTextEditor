@@ -60,7 +60,7 @@ const SIZE_MIN = 20;
 const SIZE_MAX = 32760;
 
 /** The direct formatting marks that clear formatting removes (03 §5). */
-const DIRECT_MARKS: readonly string[] = [
+export const DIRECT_MARKS: readonly string[] = [
   'bold',
   'italic',
   'underline',
@@ -75,6 +75,9 @@ const DIRECT_MARKS: readonly string[] = [
   'lang',
   'hidden',
 ];
+
+/** The marks the format painter copies: the direct formatting and the character style (UX-009). */
+export const PAINTED_MARKS: readonly string[] = [...DIRECT_MARKS, 'charStyle'];
 
 export function isValueFormat(name: CommandName): name is ValueFormatName {
   return VALUE_FORMAT_COMMANDS.has(name);

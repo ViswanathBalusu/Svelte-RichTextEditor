@@ -8,8 +8,10 @@ import type { Access, Content } from '@docedit/protocol';
 import { describe, expect, it } from 'vitest';
 import {
   NOT_LOADED_COMMAND,
+  UNKNOWN_COMMAND,
   elementMethods,
   hostApi,
+  type HostRegistry,
   type MountedSession,
 } from '../src/host-api.ts';
 import { Session, type EditorHandle, type SessionHost } from '../src/session.ts';
@@ -109,6 +111,61 @@ describe('exec and queryCommand (PRO-085)', () => {
 
   it('answers disabled and inactive when no document is loaded', () => {
     expect(NOT_LOADED_COMMAND).toEqual({ enabled: false, active: false });
+  });
+});
+
+describe('exec and queryCommand over the command registry (UX-005)', () => {
+  /** A registry that knows `format.bold` and answers as the shell's registry does, with the core's access. */
+  function registryOver(core: DocumentCore, calls: string[]): HostRegistry {
+    const known = new Set(['format.bold']);
+    const state = () => {
+      const s = core.queryCommand('bold');
+      return { enabled: s.enabled, active: s.active };
+    };
+    return {
+      get: (id) => (known.has(id) ? { id } : undefined),
+      state: () => state(),
+      exec: (id) => {
+        calls.push(id);
+        return { ran: state().enabled && core.exec('bold') };
+      },
+    };
+  }
+
+  it('answers a registry identifier from the registry, as the built-in toolbar does', () => {
+    const core = new DocumentCore({ doc: spikeDocument(), access: editorAccess(), schedule });
+    const calls: string[] = [];
+    const api = hostApi(core, registryOver(core, calls));
+    expect(api.queryCommand('format.bold')).toEqual({ enabled: true, active: false });
+    expect(api.exec('format.bold')).toBe(true);
+    expect(calls).toEqual(['format.bold']);
+    expect(api.queryCommand('format.bold')).toEqual({ enabled: true, active: true });
+  });
+
+  it('runs nothing for a registry command that is not enabled', () => {
+    const core = new DocumentCore({ doc: spikeDocument(), access: readerAccess(), schedule });
+    const before = JSON.stringify(core.getContent().doc);
+    const api = hostApi(core, registryOver(core, []));
+    expect(api.queryCommand('format.bold').enabled).toBe(false);
+    expect(api.exec('format.bold')).toBe(false);
+    expect(JSON.stringify(core.getContent().doc)).toBe(before);
+  });
+
+  it('keeps the core names working beside the registry identifiers', () => {
+    const core = new DocumentCore({ doc: spikeDocument(), access: editorAccess(), schedule });
+    const api = hostApi(core, registryOver(core, []));
+    expect(api.exec('bold')).toBe(true);
+    expect(api.queryCommand('bold').active).toBe(true);
+  });
+
+  it('runs nothing and says so for an unknown identifier, with or without a registry', () => {
+    const core = new DocumentCore({ doc: spikeDocument(), access: editorAccess(), schedule });
+    const before = JSON.stringify(core.getContent().doc);
+    for (const api of [hostApi(core), hostApi(core, registryOver(core, []))]) {
+      expect(api.queryCommand('format.nonsense')).toEqual(UNKNOWN_COMMAND);
+      expect(api.exec('format.nonsense')).toBe(false);
+    }
+    expect(JSON.stringify(core.getContent().doc)).toBe(before);
   });
 });
 

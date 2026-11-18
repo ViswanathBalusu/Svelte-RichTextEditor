@@ -210,12 +210,11 @@ test('FE-008 criterion 6: a tab killed between the journal write and the send le
   const how = await killTab(page, browserName);
   test.info().annotations.push({ type: 'kill', description: how });
 
-  // The document is opened again in a new tab of the same browser context.
+  // A new tab of the same browser context. The journal is read before any editor opens the
+  // document: opening it sends the entry again or sets it aside (FE-009), which is tested in
+  // fe-009-resubmit-reopen.spec.ts.
   const again = await context.newPage();
   await openEmbed(again);
-  await openDocument(again, docId, false);
-  // Let the reopened editor settle; nothing it does on opening may remove the entry.
-  await again.waitForTimeout(500);
 
   // The entry is still present after the kill, under the identifier it was journalled under, and
   // with the queue nothing typed is missing.
@@ -223,11 +222,4 @@ test('FE-008 criterion 6: a tab killed between the journal write and the send le
   expect(after.commits.length).toBeGreaterThan(0);
   expect(after.commits).toEqual(before.commits);
   expect(journalled(after)).toBe(TYPED);
-  // The reopened editor shows the server's document: resubmitting the entry is FE-009's.
-  const shown = await again.evaluate(async () => {
-    const el = document.querySelector('doc-editor[data-test="fe008"]')!;
-    const e = (window as unknown as { __embed: Embed }).__embed;
-    return (await e.harness(el)).nodeText(e.SPIKE_IDS.last);
-  });
-  expect(shown ?? '').not.toContain('Journalled');
 });

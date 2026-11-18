@@ -2,15 +2,42 @@
   "instant": "2026-11-06T10:00:00.000Z",
   "references": [
     {
-      "file": "exp-114-sample-ua2-a4f.pdf",
-      "source": "inline sample (test/docs.ts, as EXP-111 criterion 1)",
-      "title": "exp-114-sample",
+      "file": "exp-114-corpus-form-fields-ua2-a4f.pdf",
+      "source": "shared corpus document form-fields (FND-006)",
+      "title": "exp-114-form-fields",
       "options": {
         "tagging": "on",
         "pdfStandard": "ua-2+a-4f"
       },
       "flavours": ["ua2", "4f"],
-      "sha256": "738400d3e9faa36477ff84083c9b0ede44ee3ce89e32bd549098bee78dd95c4c"
+      "corpus": "form-fields",
+      "sha256": "c2dd07c7e9b12ac726c065fc2eee85a08bac6b0ec0bce236f05a26114383b1b0"
+    },
+    {
+      "file": "exp-114-corpus-pages-1-ua2-a4f.pdf",
+      "source": "shared corpus document pages-1 (FND-006)",
+      "title": "exp-114-pages-1",
+      "options": {
+        "tagging": "on",
+        "pdfStandard": "ua-2+a-4f"
+      },
+      "flavours": ["ua2", "4f"],
+      "corpus": "pages-1",
+      "sha256": "be03fda918998e93d72e11a30c6e1a3b70c83b6ce603e54d21cd235d437e2f46"
+    },
+    {
+      "file": "exp-114-corpus-pages-20-ua2-a4f.pdf",
+      "source": "shared corpus document pages-20 (FND-006)",
+      "title": "exp-114-pages-20",
+      "options": {
+        "tagging": "on",
+        "pdfStandard": "ua-2+a-4f"
+      },
+      "flavours": ["4f"],
+      "corpus": "pages-20",
+      "without": ["cjk.*"],
+      "sha256": "5d1ce2d3397943f72e259d4bdb486afe3a043d51a707aa08145681d4a0d5d093",
+      "note": "fails PDF/UA-2 (veraPDF 8.2.5.26, tables shall be regular, 4 checks) on the tables with row and column spans; only PDF/A-4f is checked"
     },
     {
       "file": "exp-114-s4-01p-ua2-a4f.pdf",
@@ -22,6 +49,29 @@
       },
       "flavours": ["ua2", "4f"],
       "sha256": "23c6729ef2c870c79e9f94ca321911f49c28b6c25daabe5ed33eb9ece343f24c"
+    },
+    {
+      "file": "exp-114-sample-ua2-a4f.pdf",
+      "source": "inline sample (test/docs.ts, as EXP-111 criterion 1)",
+      "title": "exp-114-sample",
+      "options": {
+        "tagging": "on",
+        "pdfStandard": "ua-2+a-4f"
+      },
+      "flavours": ["ua2", "4f"],
+      "sha256": "738400d3e9faa36477ff84083c9b0ede44ee3ce89e32bd549098bee78dd95c4c"
+    },
+    {
+      "file": "exp-114-suggestions-markup.pdf",
+      "source": "inline suggestions sample (suggestions option markup, EXP-083)",
+      "title": "exp-114-suggestions",
+      "options": {
+        "tagging": "on",
+        "pdfStandard": "ua-2+a-4f",
+        "suggestions": "markup"
+      },
+      "flavours": ["ua2", "4f"],
+      "sha256": "104398404649d57b82aa75650a7edabbdd8d8f83079391e58fca9fcc5a01ae27"
     }
   ]
 }

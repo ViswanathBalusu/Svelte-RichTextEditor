@@ -25,8 +25,8 @@ import {
   STEP_LIMIT,
   attributionAt,
   attributionFor,
-  compare,
   unionHidden,
+  type AttributionJson,
   type Change,
   type Comparison,
   type HistoryError,
@@ -39,6 +39,7 @@ import { json, type Kit } from './kit.ts';
 import { guard, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { readerView } from './visibility.ts';
+import { compareTask, type CompareAnswer, type CompareTask } from './workers/compare-task.ts';
 import type { DocRef, DocumentRecord } from '../storage/types.ts';
 
 interface Head {
@@ -95,7 +96,18 @@ export async function historyViewOf(k: Kit, ctx: Ctx, doc: string) {
   /** What the caller's current access hides in any of the documents (ADR 0019; HIS-046). */
   const hiddenIn = (...docs: JsonNode[]) =>
     unionHidden(...docs.map((j) => readerView(d.views, conn, j, perms).hidden));
-  return { record, ref, head, headDoc: full.doc, full, perms, gate, conn, hiddenIn };
+  return {
+    record,
+    ref,
+    head,
+    headDoc: full.doc,
+    full,
+    perms,
+    gate,
+    namedSeqs: [...named],
+    conn,
+    hiddenIn,
+  };
 }
 
 /** Refuses a `seq` above the head or below the gate before any rebuild work. */
@@ -171,6 +183,8 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
   const getDiff: Handler = async (ctx) => {
     const doc = ctx.params['id']!;
     guard(ctx.caller, 'read.history', doc);
+    // The document is resolved first, so a caller of another tenant is refused before any parameter is read.
+    const v = await viewOf(ctx, doc);
     const fromSeq = seqParam(ctx, 'fromSeq', true)!;
     const toSeq = seqParam(ctx, 'toSeq', true)!;
     const rawGranularity = ctx.url.searchParams.get('granularity');
@@ -183,38 +197,40 @@ export function historyReadRoutes(k: Kit): Record<string, Handler> {
     const region = ctx.url.searchParams.get('region') ?? undefined;
     if (toSeq < fromSeq)
       throw new ApiError('validation_failed', `fromSeq ${fromSeq} is above toSeq ${toSeq}`);
-    const v = await viewOf(ctx, doc);
     checkSeq(fromSeq, v.gate);
     checkSeq(toSeq, v.gate);
     const inc = v.head.incarnation;
     const from = await d.content.rebuild(v.ref, inc, fromSeq);
     const to = toSeq === fromSeq ? from : await d.content.rebuild(v.ref, inc, toSeq);
-    const nodes = new Map([
-      [fromSeq, schema.nodeFromJSON(from.doc)],
-      [toSeq, schema.nodeFromJSON(to.doc)],
-    ]);
     // The steps are read only for versions near enough to be compared from them (08 §6).
     const commits =
       toSeq - fromSeq <= STEP_LIMIT ? await d.logs.read(v.ref, fromSeq + 1, toSeq) : [];
-    const request = {
-      fromSeq,
-      toSeq,
-      ...(region !== undefined ? { region } : {}),
-      ...(granularity !== null ? { granularity } : {}),
-    };
-    const source = {
-      schema,
+    const hidden = v.hiddenIn(v.headDoc, from.doc, to.doc);
+    const task = (attribution: AttributionJson | null): CompareTask => ({
+      request: {
+        fromSeq,
+        toSeq,
+        ...(region !== undefined ? { region } : {}),
+        ...(granularity !== null ? { granularity } : {}),
+      },
       incarnation: inc,
-      content: (seq: number) => nodes.get(seq),
-      commits: (after: number, upTo: number) =>
-        commits.filter((c) => c.seq > after && c.seq <= upTo),
-    };
-    const ctxOf = { gate: v.gate, hidden: v.hiddenIn(v.headDoc, from.doc, to.doc) };
-    let r = compare(request, source, ctxOf);
+      docs: toSeq === fromSeq ? { [fromSeq]: from.doc } : { [fromSeq]: from.doc, [toSeq]: to.doc },
+      commits: [...commits],
+      gate: { min: v.gate.min, head: v.gate.head, named: v.namedSeqs },
+      hidden: { regions: [...hidden.regions], values: [...hidden.values], titles: hidden.titles },
+      attribution,
+    });
+    // The comparison runs in a worker thread, never on the loop that serves requests and rooms
+    // (HIS-011 criterion 4); without a pool (small tests, tools) it runs inline.
+    const run = async (t: CompareTask): Promise<CompareAnswer> =>
+      d.comparePool
+        ? (await d.comparePool.run<{ result: CompareAnswer }>('compare', t)).result
+        : compareTask(t);
+    let r = await run(task(null));
     // A comparison by alignment names the authors from the attribution map at `toSeq`.
     if (r.ok && r.comparison.method === 'aligned') {
       const map = await attributionMapAt(v.ref, v.record, inc, toSeq);
-      r = compare(request, { ...source, attribution: () => map }, ctxOf);
+      r = await run(task(map.toJSON()));
     }
     if (!r.ok) throw problemOf(r);
     return json(200, await nameUsers(k, ctx, r.comparison), {
