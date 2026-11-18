@@ -146,7 +146,7 @@ Old versions can contain text that was deleted before a person was given access.
 
 ## 10. Leases
 
-A lease gives one user exclusive editing of a region for a short time, for teams that want check-out behaviour. It is optional (feature `leases`). A lease has an identifier, a holder and an expiry (default five minutes); the holder extends it with a heartbeat, up to a maximum total of eight hours. It ends when released, when it expires, or when a user with `manage` breaks it. While a lease is held, other users' capabilities in the region are limited as in section 4. Leases are not locks in the document and are not needed for correctness.
+A lease gives one user exclusive editing of a region for a short time, for teams that want check-out behaviour. It is optional (feature `leases`). A lease has an identifier, a holder and an expiry (default five minutes); the holder extends it with a heartbeat, up to a maximum total of eight hours. It ends when released, when it expires, or when a user with `manage` breaks it. While a lease is held, other users' capabilities in the region are limited as in section 4. Leases are not locks in the document and are not needed for correctness. A lease changes nobody's grants, so a former holder's pending commit is checked as any commit is, under their grants once the lease has ended: it is accepted if the grants allow it and otherwise rejected with `permission_denied`, its content going to recovered edits (owner decision 135).
 
 ## 11. Region states
 
