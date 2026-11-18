@@ -1253,7 +1253,11 @@ export const OPERATIONS: readonly OperationDef[] = [
     security: BOTH,
     feature: 'history',
     requires: 'view and the history-visibility gate (07 §8)',
-    query: { region: opt(nodeId()) },
+    query: {
+      region: opt(nodeId()),
+      seq: opt(seq(), 'The version asked about; the head when omitted.'),
+      blocks: opt(text(), 'Block identifiers, separated by commas (a block range).'),
+    },
     success: ok(ref('Attribution')),
     gaps: ['G68'],
     owner: PRO,

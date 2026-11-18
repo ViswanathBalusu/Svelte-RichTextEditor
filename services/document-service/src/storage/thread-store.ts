@@ -72,6 +72,8 @@ export interface StoredThread {
   /** The creator's surrogate (never the host's `sub`; HIS-003). */
   createdBy: string;
   createdAt: number;
+  /** The head seq a range target was mapped to when the thread was made; null for a block. */
+  rangeSeq: number | null;
   /** Comments in the order they were made, without deleted ones. */
   comments: StoredComment[];
 }
@@ -92,6 +94,11 @@ export interface ThreadStore {
   create(ref: DocRef, thread: NewThread): Promise<StoredThread>;
   /** The thread with this identifier in the tenant, whatever its document (a bare identifier). */
   get(tenant: string, id: string): Promise<StoredThread | undefined>;
+  /**
+   * The threads of a document in identifier order (UUID version 7: creation order), those after
+   * `after` when it is given, at most `limit` (PRO-059 criterion 4).
+   */
+  list(ref: DocRef, opts: { after?: string; limit: number }): Promise<StoredThread[]>;
   /** Removes the thread and its comments; false when there was no such thread. */
   delete(tenant: string, id: string): Promise<boolean>;
   /** Changes the state or the assignee; undefined when there is no such thread. */
@@ -112,6 +119,7 @@ export interface ThreadStore {
 }
 
 interface ThreadRow {
+  range_seq: string | number | null;
   id: string;
   doc_id: string;
   scope: string;
@@ -179,6 +187,7 @@ export class PgThreadStore implements ThreadStore {
         assignee: null,
         createdBy: thread.createdBy,
         createdAt: thread.createdAt,
+        rangeSeq: range === null ? null : thread.rangeSeq,
         comments: [thread.comment],
       };
     });
@@ -186,39 +195,26 @@ export class PgThreadStore implements ThreadStore {
 
   get(tenant: string, id: string): Promise<StoredThread | undefined> {
     if (!isUuid(id)) return Promise.resolve(undefined);
+    return inTenant(this.#pool, tenant, (c) => this.#readThread(c, id), { readOnly: true });
+  }
+
+  list(ref: DocRef, opts: { after?: string; limit: number }): Promise<StoredThread[]> {
+    if (opts.after !== undefined && !isUuid(opts.after)) return Promise.resolve([]);
     return inTenant(
       this.#pool,
-      tenant,
+      ref.tenant,
       async (c) => {
-        const r = await c.query<ThreadRow>(
-          `select id, doc_id, scope, state, target, assignee, created_by, created_at
-             from threads where id = $1`,
-          [id],
+        const ids = await c.query<{ id: string }>(
+          `select id from threads where doc_id = $1 and ($2::uuid is null or id > $2::uuid)
+            order by id limit $3`,
+          [ref.doc, opts.after ?? null, opts.limit],
         );
-        const row = r.rows[0];
-        if (!row) return undefined;
-        const cs = await c.query<CommentRow>(
-          `select id, author, body, created_at, edited_at from comments
-            where thread_id = $1 and deleted_at is null order by created_at, id`,
-          [id],
-        );
-        return {
-          id: row.id,
-          docId: row.doc_id,
-          scope: row.scope,
-          state: row.state,
-          target: row.target,
-          assignee: row.assignee,
-          createdBy: row.created_by,
-          createdAt: millis(row.created_at) ?? 0,
-          comments: cs.rows.map((x) => ({
-            id: x.id,
-            author: x.author,
-            body: x.body,
-            createdAt: millis(x.created_at) ?? 0,
-            editedAt: millis(x.edited_at),
-          })),
-        };
+        const out: StoredThread[] = [];
+        for (const row of ids.rows) {
+          const thread = await this.#readThread(c, row.id);
+          if (thread) out.push(thread);
+        }
+        return out;
       },
       { readOnly: true },
     );
@@ -341,7 +337,7 @@ export class PgThreadStore implements ThreadStore {
   /** The thread with its live comments, read inside the caller's transaction. */
   async #readThread(c: PoolClient, id: string): Promise<StoredThread | undefined> {
     const r = await c.query<ThreadRow>(
-      `select id, doc_id, scope, state, target, assignee, created_by, created_at
+      `select id, doc_id, scope, state, target, assignee, created_by, created_at, range_seq
          from threads where id = $1`,
       [id],
     );
@@ -361,6 +357,7 @@ export class PgThreadStore implements ThreadStore {
       assignee: row.assignee,
       createdBy: row.created_by,
       createdAt: millis(row.created_at) ?? 0,
+      rangeSeq: row.range_seq === null ? null : Number(row.range_seq),
       comments: cs.rows.map((x) => ({
         id: x.id,
         author: x.author,
@@ -387,6 +384,7 @@ export class MemoryThreadStore implements ThreadStore {
       assignee: null,
       createdBy: thread.createdBy,
       createdAt: thread.createdAt,
+      rangeSeq: 'range' in thread.target ? thread.rangeSeq : null,
       comments: [{ ...thread.comment }],
     };
     this.#threads.set(MemoryThreadStore.#key(ref.tenant, thread.id), stored);
@@ -399,6 +397,16 @@ export class MemoryThreadStore implements ThreadStore {
   async get(tenant: string, id: string): Promise<StoredThread | undefined> {
     const t = this.#threads.get(MemoryThreadStore.#key(tenant, id));
     return t === undefined ? undefined : this.#view(t);
+  }
+
+  async list(ref: DocRef, opts: { after?: string; limit: number }): Promise<StoredThread[]> {
+    const after = opts.after;
+    return [...this.#threads.values()]
+      .filter((t) => t.tenant === ref.tenant && t.docId === ref.doc)
+      .filter((t) => after === undefined || t.id > after)
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, opts.limit)
+      .map((t) => this.#view(t));
   }
 
   async delete(tenant: string, id: string): Promise<boolean> {
@@ -479,6 +487,7 @@ export class MemoryThreadStore implements ThreadStore {
       assignee: t.assignee,
       createdBy: t.createdBy,
       createdAt: t.createdAt,
+      rangeSeq: t.rangeSeq,
       comments: t.comments.map((c) => ({ ...c })),
     };
   }

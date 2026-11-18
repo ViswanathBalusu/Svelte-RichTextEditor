@@ -84,7 +84,7 @@ export interface ContentReaderOptions {
   responseEntries: number;
 }
 
-interface Rebuilt {
+export interface Rebuilt {
   seq: number;
   doc: JsonNode;
   cdm: number;

@@ -54,22 +54,40 @@ function expand(text: string, env: Record<string, string>): string {
 
 const cli = readEnv(envPath)['DOCEDIT_CONTAINER_CLI'] ?? 'podman';
 const env = readEnv(envPath);
-const compose = JSON.parse(readFileSync(composePath, 'utf8')) as {
-  services: Record<string, ComposeService>;
-};
-// FND-010 criterion 2: the sandbox settings are in compose.base.json and the service extends them.
-// The members this test reads are scalars and lists the extending service does not set, so a
-// shallow merge, the extended service first, gives what infra/compose-extends.ps1 resolves.
-const local = compose.services['export-worker'];
-const baseFile = (local as { extends?: { file: string; service: string } } | undefined)?.extends;
-const base = baseFile
-  ? (
-      JSON.parse(readFileSync(new URL(baseFile.file, composePath), 'utf8')) as {
-        services: Record<string, ComposeService>;
-      }
-    ).services[baseFile.service]
-  : undefined;
-const service = local === undefined ? undefined : { ...base, ...local };
+type Raw = Record<string, unknown>;
+
+/** Compose's rule for `extends` (FND-010; infra/containers/compose-extends.ps1): the local members win. */
+function merge(base: unknown, local: unknown, key: string): unknown {
+  if (isMap(base) && isMap(local)) {
+    const out: Raw = { ...base };
+    for (const [k, v] of Object.entries(local)) out[k] = k in out ? merge(out[k], v, k) : v;
+    return out;
+  }
+  if (
+    Array.isArray(base) &&
+    Array.isArray(local) &&
+    !['command', 'entrypoint', 'test'].includes(key)
+  )
+    return [...base, ...local];
+  return local;
+}
+const isMap = (v: unknown): v is Raw => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** The service with its `extends` resolved against the shared definitions in compose.base.json. */
+function resolved(file: URL, name: string): ComposeService | undefined {
+  const services = (JSON.parse(readFileSync(file, 'utf8')) as { services: Record<string, Raw> })
+    .services;
+  const own = services[name];
+  if (own === undefined) return undefined;
+  const ext = own['extends'];
+  if (!isMap(ext)) return own as unknown as ComposeService;
+  const baseFile = new URL(String(ext['file']), file);
+  const base = resolved(baseFile, String(ext['service']));
+  const { extends: _extends, ...local } = own;
+  return merge(base, local, '') as ComposeService;
+}
+
+const service = resolved(composePath, 'export-worker');
 
 function podman(args: string[]): string {
   return execFileSync(cli, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();

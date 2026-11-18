@@ -2043,6 +2043,28 @@
             }
           },
           {
+            "name": "seq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "The version asked about; the head when omitted.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "description": "The version asked about; the head when omitted."
+          },
+          {
+            "name": "blocks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Block identifiers, separated by commas (a block range).",
+              "type": "string"
+            },
+            "description": "Block identifiers, separated by commas (a block range)."
+          },
+          {
             "$ref": "#/components/parameters/DepActor"
           },
           {

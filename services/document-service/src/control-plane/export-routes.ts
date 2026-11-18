@@ -21,6 +21,7 @@ import { minVisibleSeqOf, refuseBelowGate, regionInfosOfJson } from './gate.ts';
 import { checkIfMatch } from './http.ts';
 import type { JobRecord } from './jobs/queue.ts';
 import { json, type Kit } from './kit.ts';
+import { admitExportConcurrency } from './live-quota-rest.ts';
 import { capabilitiesOn, guard, roleOn, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { exportView, projectContent, readerView } from './visibility.ts';
@@ -42,6 +43,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
     // Row 12 of 07 §12: `view`, unless restricted with `no-export`.
     guard(ctx.caller, 'export', doc);
     // The tenant's monthly compile-minute budget (EXP-009 criterion 2): refused before any job.
+    await d.quotaSource?.load?.(ctx.caller.tenant);
     const spent = d.compileBudget?.refusal(ctx.caller.tenant, d.now());
     if (spent)
       throw new ApiError(
@@ -237,6 +239,11 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
         notBefore = latest.createdAt + policy.previewWindowMs;
       }
     }
+    // BE-092 criterion 3: a tenant at its export concurrency quota is refused, not queued.
+    if (kind === EXPORT_KIND)
+      await admitExportConcurrency(d.quotaSource, ctx.caller.tenant, (t) =>
+        d.queue.activeCount(t, EXPORT_KIND),
+      );
     const job = await d.queue.enqueue(ctx.caller.tenant, {
       kind,
       doc,

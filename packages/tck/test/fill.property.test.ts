@@ -15,6 +15,7 @@ import {
   Room,
   regionInfos,
   type Connection,
+  type Effects,
 } from '@docedit/authority';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import fc from 'fast-check';
