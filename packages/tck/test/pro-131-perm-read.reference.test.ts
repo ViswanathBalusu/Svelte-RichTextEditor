@@ -19,7 +19,12 @@ describe('PRO-131: the perm-read profile against the reference service (in memor
       });
       const scenarios = report.profiles.flatMap((p) => p.scenarios);
       const byId = Object.fromEntries(scenarios.map((s) => [s.id, s]));
-      for (const id of ['perm-read.leak', 'perm-read.converge', 'perm-read.placeholder'])
+      for (const id of [
+        'perm-read.leak',
+        'perm-read.converge',
+        'perm-read.placeholder',
+        'perm-read.hidden-value',
+      ])
         expect(byId[id]?.outcome, JSON.stringify(byId[id]?.failure)).toBe('passed');
     } finally {
       await target.stop();

@@ -74,7 +74,12 @@ describe.skipIf(unavailable !== null)(
       }
     }, 120_000);
 
-    for (const id of ['perm-read.leak', 'perm-read.converge', 'perm-read.placeholder'])
+    for (const id of [
+      'perm-read.leak',
+      'perm-read.converge',
+      'perm-read.placeholder',
+      'perm-read.hidden-value',
+    ])
       it(`${id} passes on PostgreSQL`, () => {
         const s = scenarios.find((x) => x.id === id);
         expect(s?.outcome, JSON.stringify(s?.failure)).toBe('passed');
