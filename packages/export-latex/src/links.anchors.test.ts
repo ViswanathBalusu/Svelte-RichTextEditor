@@ -4,7 +4,7 @@
  * the link annotations of a PDF are not inspected (criterion 3). Criterion 1 is only partly met:
  * `url` leaves `&`, `#` and `%` unencoded (they are inert inside its hexadecimal payload), which the
  * story's wording asks to be percent-encoded; see the story's Notes. Criterion 5 (the link title
- * through `pdfString`) is not met: the converter writes it with `pdfHexString`.
+ * through `pdfString`) is tested in `exp-030-link-title.compile.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
 import { blockLines, doc, nid, para, run, type J } from '../test/docs.ts';

@@ -343,8 +343,17 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
     const row = rows[r]!;
     const rowId = idOf(row);
     void rowId;
-    if (r < headerRows && headerShade) line(ctx, tex`\rowcolor[HTML]{${headerShade}}`);
     const cells = placed[r] ?? [];
+    // \rowcolor paints the whole row, after the content of a span that hangs from a row above. So
+    // a row that a shaded span covers colours its other cells one by one (EXP-041 criterion 3).
+    const coveredShaded = cells.some(
+      (p) =>
+        p.covered &&
+        p.origin !== null &&
+        (attr(p.origin, 'shading') as { fill?: string } | null | undefined)?.fill !== undefined,
+    );
+    if (r < headerRows && headerShade && !coveredShaded)
+      line(ctx, tex`\rowcolor[HTML]{${headerShade}}`);
     cells.forEach((p, i) => {
       if (i > 0) line(ctx, t('&%'));
       // The cell's left edge is written only in the first column; every other edge belongs to the
@@ -370,11 +379,12 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
             : EMPTY;
       if (open !== EMPTY) line(ctx, open);
       if (p.cell && !p.covered) {
-        const shade = colourOf(
+        const ownShade = colourOf(
           ctx,
           (attr(p.cell, 'shading') as { fill?: string } | null | undefined)?.fill,
           idOf(p.cell),
         );
+        const shade = ownShade ?? (coveredShaded && r < headerRows ? headerShade : null);
         if (shade) line(ctx, tex`\cellcolor[HTML]{${shade}}%`);
         const cm = (attr(p.cell, 'margins') ?? margins) as Record<string, number>;
         const top = num(cm['top']) ?? 0;
@@ -410,6 +420,9 @@ export function table(ctx: Ctx, flow: Flow, node: J, content: ContentWriter): vo
               idOf(p.cell!),
               `a cell spans ${p.rowspan} rows and holds content; heights are not measured, so the content may be taller than the rows it spans (09 §3.2)`,
             );
+          // The shading of a span covers all its rows: \cellcolor colours the first row, the class
+          // paints the covered rows under the content when the page is shipped out.
+          if (shade) line(ctx, tex`\DErowfill{${int(p.rowspan)}}{${shade}}%`);
           line(ctx, tex`\DErowspan{${int(p.rowspan)}}{%`);
           inner();
           line(ctx, t('}%'));

@@ -3,18 +3,19 @@
  * 03 §5; CDM-040). A pure transaction builder over an editor state, like `suggestion-block.ts`: it
  * returns the transaction, and the caller decides when to dispatch it.
  *
- * - A row a suggester inserts carries one `ins` node mark naming the user; the row stays in the
+ * - A row a suggester inserts carries one `ins` entry of its `suggest` attribute (owner decision 92)
+ *   naming the user; the row stays in the
  *   table as the suggestion (criterion 1).
- * - A row a suggester deletes stays, with one `del` node mark (criterion 2). A table inserted or
- *   deleted as a whole carries the same marks on the `table` node (criterion 3). Inserting a table
+ * - A row a suggester deletes stays, with one `del` entry (criterion 2). A table inserted or
+ *   deleted as a whole carries the same entries on the `table` node (criterion 3). Inserting a table
  *   is not an operation here: `insertTable` is not a table operation of `table.ts`.
  * - Column insertion and deletion are not defined as block suggestions in version 1, so the
  *   builder refuses them with `suggestion` and the core reports that reason (criterion 5).
  *
  * Decisions taken here, not in the spec (recorded in docs/adr/0132-engine-3-backlog-batch.md):
- * - a row or table that carries this user's own `ins` mark is removed outright when this user
+ * - a row or table that carries this user's own `ins` entry is removed outright when this user
  *   deletes it, because deleting one's own insertion leaves nothing to suggest;
- * - a row or table that already carries a `del` mark is not marked a second time: the builder
+ * - a row or table that already carries a `del` entry is not marked a second time: the builder
  *   refuses it with `suggestion`;
  * - an inserted row keeps the header block as it is: it is not counted as a header row.
  *
@@ -23,6 +24,14 @@
 import type { Node as PMNode, Schema } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { CommandUnavailable } from './api.ts';
+import {
+  addBlockEntry,
+  entry,
+  hasKind,
+  hasOwn,
+  withEntry,
+  type SuggestionEntry,
+} from './block-suggestion.ts';
 import type { SuggestionAuthor } from './suggestion-edit.ts';
 import { gridOf, locateCell, type TableOp, tableRefusal } from './table.ts';
 
@@ -37,12 +46,8 @@ export const SUGGESTED_TABLE_OPS: ReadonlySet<TableOp> = new Set<TableOp>([
 /** The result of a table suggestion: the transaction, or why the change cannot be recorded. */
 export type TableSuggestion = { tr: Transaction } | { refusal: CommandUnavailable };
 
-function markOf(schema: Schema, type: 'ins' | 'del', author: SuggestionAuthor) {
-  return schema.marks[type]!.create({ id: author.nextId(), user: author.user });
-}
-
-function ownMark(node: PMNode, type: 'ins' | 'del', user: string) {
-  return node.marks.find((m) => m.type.name === type && m.attrs['user'] === user) ?? null;
+function entryOf(type: 'ins' | 'del', author: SuggestionAuthor): SuggestionEntry {
+  return entry(type, author.nextId(), author.user);
 }
 
 /** A new row of empty cells, one per grid column, as the table commands make it. */
@@ -76,29 +81,29 @@ export function suggestTableOp(
     case 'insertRowBelow': {
       const above = op === 'insertRowAbove';
       const at = above ? loc.rowPos : loc.rowPos + loc.table.child(loc.row).nodeSize;
-      const row = emptyRow(schema, gridOf(loc.table).length).mark([markOf(schema, 'ins', author)]);
+      const row = withEntry(emptyRow(schema, gridOf(loc.table).length), entryOf('ins', author));
       tr.insert(at, row);
       return { tr };
     }
 
     case 'deleteRow': {
       const row = loc.table.child(loc.row);
-      if (row.marks.some((m) => m.type.name === 'del')) return { refusal: 'suggestion' };
-      if (ownMark(row, 'ins', author.user)) {
+      if (hasKind(row, 'del')) return { refusal: 'suggestion' };
+      if (hasOwn(row, 'ins', author.user)) {
         tr.delete(loc.rowPos, loc.rowPos + row.nodeSize);
       } else {
-        tr.addNodeMark(loc.rowPos, markOf(schema, 'del', author));
+        addBlockEntry(tr, loc.rowPos, entryOf('del', author));
       }
       return { tr };
     }
 
     case 'deleteTable': {
       const table = loc.table;
-      if (table.marks.some((m) => m.type.name === 'del')) return { refusal: 'suggestion' };
-      if (ownMark(table, 'ins', author.user)) {
+      if (hasKind(table, 'del')) return { refusal: 'suggestion' };
+      if (hasOwn(table, 'ins', author.user)) {
         tr.delete(loc.tablePos, loc.tablePos + table.nodeSize);
       } else {
-        tr.addNodeMark(loc.tablePos, markOf(schema, 'del', author));
+        addBlockEntry(tr, loc.tablePos, entryOf('del', author));
       }
       return { tr };
     }

@@ -25,7 +25,7 @@ import { ADMIN, SERVICE_USER, postgresUnavailable, settings } from '../support/e
 import { runKit } from '../../../../packages/tck/src/runner.ts';
 import type { KitReport } from '../../../../packages/tck/src/report.ts';
 import { KIT_ORIGIN } from '../../../../packages/tck/test/targets/reference.ts';
-import { unsandboxed } from '@docedit/asset-worker';
+import { startAssetOrigin, unsandboxed, type RunningOrigin } from '@docedit/asset-worker';
 import { imageFontManifest } from '../../../export-worker/src/fonts.ts';
 import { createExportHandler, type ExportHandlerDeps } from '../../../export-worker/src/job.ts';
 import { IMAGE } from '../../../export-worker/src/sandbox.ts';
@@ -59,6 +59,7 @@ describe.skipIf(unavailable !== null)(
     const secret = randomBytes(32).toString('base64url');
     const dbName = `docedit_v_pro_120_131_${randomBytes(6).toString('hex')}`;
     let service: Service | null = null;
+    let origin: RunningOrigin | null = null;
     let report: KitReport | null = null;
 
     // The font manifest and the export sandbox run `podman run`; on the WSL machine that needs
@@ -159,8 +160,16 @@ describe.skipIf(unavailable !== null)(
       }
       // The asset branch (PRO-131 criterion 1): the asset worker runs in this process, unsandboxed
       // as in the other asset tests of this service, and signed URLs name a separate asset origin.
-      env['DOCEDIT_ASSET_ORIGIN'] = 'https://assets.tests.example';
-      env['DOCEDIT_ASSET_URL_KEY'] = `k1:${randomBytes(32).toString('base64')}`;
+      // Export results and asset URLs are served by the asset origin (SEC-036 criterion 6), so the
+      // origin runs here on an ephemeral port over the service's own object store, and the leak
+      // oracle fetches the owner's and the readers' export files from it.
+      const urlSecret = randomBytes(32);
+      origin = await startAssetOrigin({
+        objects: { get: (key) => service!.parts.objects.get(key) },
+        keys: { current: { id: 'k1', secret: urlSecret } },
+      });
+      env['DOCEDIT_ASSET_ORIGIN'] = origin.url;
+      env['DOCEDIT_ASSET_URL_KEY'] = `k1:${urlSecret.toString('base64')}`;
       service = await startService({
         config: configFromEnv(env),
         jobHandlers: { export: createExportHandler(deps) },
@@ -179,6 +188,7 @@ describe.skipIf(unavailable !== null)(
       if (savedCgroups === undefined) delete process.env['DOCEDIT_CONTAINER_CGROUPS'];
       else process.env['DOCEDIT_CONTAINER_CGROUPS'] = savedCgroups;
       await service?.close();
+      await origin?.close();
       try {
         const store = new S3ObjectStore(s3);
         for (const key of await store.list(`tenants/${tenant}/`)) await store.delete(key);

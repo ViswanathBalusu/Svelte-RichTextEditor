@@ -363,6 +363,11 @@
       "summary": "The workflow was reported `completed` to this session (12 §10; FRW-071)."
     },
     {
+      "name": "de-diagnostic",
+      "detail": "DiagnosticDetail",
+      "summary": "A feature that loads on demand reported how it went, or that it is not available (WASM-002, WASM-003; proposed, ADR 0410). The detail has codes, counts and a directive name, never content."
+    },
+    {
       "name": "de-error",
       "detail": "ErrorDetail",
       "summary": ""

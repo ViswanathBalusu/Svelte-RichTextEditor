@@ -42,6 +42,7 @@ import {
   type CloseReason,
   type Connection,
   type Effects,
+  type EvidenceAnchor,
   type LogCommit,
   type PermissionState,
   type Preconditions,
@@ -52,6 +53,7 @@ import {
   type SnapshotCommit,
   type SnapshotReason,
   type StepJson,
+  type ThreadAnchor,
   type ToClient,
   type WriteRequest,
   type WriteResult,
@@ -235,6 +237,14 @@ export type ServerOp =
       steps: unknown;
       preconditions?: Preconditions;
       trace?: TraceContext | null;
+    }
+  | {
+      /** A control commit that anchors the salted hash of workflow evidence (FRW-041). */
+      kind: 'anchor';
+      id: string;
+      actor: 'system';
+      evidence: EvidenceAnchor;
+      trace?: TraceContext | null;
     };
 
 interface Request {
@@ -367,6 +377,8 @@ export class HostedRoom {
     base: Base;
     /** Its canonical size, an estimate where the bytes are unknown. */
     baseBytes: number;
+    /** The comment ranges saved with the checkpoint, each at `initialSeq` (SYN-032). */
+    threads?: readonly ThreadAnchor[];
     /** Stored commits after `initialSeq`, in order. */
     log: readonly LogCommit[];
     /** The content of each snapshot commit in `log`. */
@@ -423,6 +435,7 @@ export class HostedRoom {
       initial: init.initial,
       initialSeq: init.initialSeq,
       requires: init.record.requires,
+      ...(init.threads?.length ? { threads: init.threads } : {}),
       log: init.log,
       snapshotContent: snapshotDoc,
       perms: init.perms,
@@ -520,7 +533,8 @@ export class HostedRoom {
     // control commit goes first, before any channel can submit, so that every commit checked
     // against a revision follows that revision's control commit (04 G7; 07 §9; PRM-019).
     let recorded = init.initialRevision;
-    for (const c of init.log) if (c.kind === 'control') recorded = c.revision;
+    for (const c of init.log)
+      if (c.kind === 'control' && c.evidence === undefined) recorded = c.revision;
     if (init.perms.revision !== recorded) this.#apply(this.#gateway.permissionsChanged(init.perms));
     this.#scheduleExpiry();
     this.#scheduleCheckpoint();
@@ -950,6 +964,7 @@ ecentHead, keeping one entry older than the window. */
       );
     // BE-044: the assets the operation references are looked up first (a snapshot's for anyone
     // who uploaded them for this document, a step commit's for its actor).
+    if (op.kind === 'anchor') return this.#requestNow(op);
     if (this.#assets) {
       const refs = assetRefsIn(op.kind === 'snapshot' ? op.content.envelope.doc : op.steps);
       const unknown = [...refs].filter((id) => !this.#known.has(id));
@@ -983,7 +998,9 @@ ecentHead, keeping one entry older than the window. */
       this.#requests.set(key, { resolve, reject, actor: op.actor });
       const as = requesterOf(op.actor);
       let fx: Effects;
-      if (op.kind === 'snapshot') {
+      if (op.kind === 'anchor') {
+        fx = this.#gateway.anchor(key, { id: op.id, evidence: op.evidence });
+      } else if (op.kind === 'snapshot') {
         let content: Doc;
         try {
           content = schemaOf().nodeFromJSON(op.content.envelope.doc);
@@ -1591,6 +1608,11 @@ ecentHead, keeping one entry older than the window. */
       requires: [...this.#room.requiresList],
       commits: this.#since.slice(0, n),
     };
+    // The comment ranges at `at` (SYN-032 criterion 6; owner decision 81): the room holds them at
+    // its durable head, so they are taken now, with the steps, and only when that head is `at`. A
+    // checkpoint below the head (a repair) gets none: anchors of a later `seq` would be mapped over
+    // the wrong steps when a room opened from it.
+    const threads = this.#room.head === at ? this.#room.threadAnchors() : [];
     const tenant = this.ref.tenant;
     const span = this.#deps.tracer.start('dep.checkpoint', this.#lastTrace, {
       tenant,
@@ -1603,7 +1625,7 @@ ecentHead, keeping one entry older than the window. */
       try {
         const e = await this.#deps.checkpointer.replay(input);
         const side = this.attribution?.jsonAt(at) ?? undefined;
-        await this.#deps.checkpointer.save(this.ref, at, e, true, side);
+        await this.#deps.checkpointer.save(this.ref, at, e, true, side, threads);
         this.stats.checkpoints++;
         this.#checkpointFailures = 0;
         this.#deps.metrics.checkpoints.inc({ tenant, reason });
@@ -2060,6 +2082,7 @@ export class RoomHost {
         initialSeq: cp.seq,
         base,
         baseBytes,
+        ...(found.threads.length ? { threads: found.threads } : {}),
         log,
         snapshots,
         perms,

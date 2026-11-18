@@ -1,12 +1,13 @@
 /**
  * Accepting and rejecting block-level suggestions (FE-047 criterion 4; 02 §5.2; 03 §5; CDM-040). The
- * text pass of `suggestion-resolve.ts` leaves node marks alone; this module plans and applies them.
+ * text pass of `suggestion-resolve.ts` leaves the `suggest` attribute of blocks alone (owner decision
+ * 92); this module plans and applies them.
  * The meaning follows the same P4 baseline as the text pass, applied to a block (a paragraph, a whole
  * table row or a whole table):
- * - `ins` accepted: the mark goes and the block stays; rejected: the block is removed.
- * - `del` accepted: the block is removed; rejected: the mark goes and the block stays.
- * - `fmt` accepted: the mark goes and the new attributes stay; rejected: the attributes return to the
- *   `before` recorded on the mark (`{ attrs: { style, align, list } }`, CDM-040).
+ * - `ins` accepted: the entry goes and the block stays; rejected: the block is removed.
+ * - `del` accepted: the block is removed; rejected: the entry goes and the block stays.
+ * - `fmt` accepted: the entry goes and the new attributes stay; rejected: the attributes return to the
+ *   `before` recorded on the entry (`{ attrs: { style, align, numbering } }`, CDM-040).
  *
  * Decisions taken here, not in the spec (see the story Notes and docs/adr/0132-engine-3-backlog-batch.md):
  * - a block removed by an accepted `del` or a rejected `ins` takes its contents, and every suggestion
@@ -21,13 +22,18 @@
  * of the plan are those of the state the plan was made from; `applyBlockPlan` maps them through the
  * transaction's earlier steps. Universal logic over ProseMirror state only.
  */
-import type { Mark, Node as PMNode } from 'prosemirror-model';
+import type { Node as PMNode } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
+import {
+  blockEntries,
+  markEntries,
+  setBlockEntries,
+  type SuggestionEntry,
+} from './block-suggestion.ts';
 import type { ResolveAction, ResolveScope } from './suggestion-resolve-types.ts';
 
 /** The block types that may carry suggestion node marks in version 1 (CDM-040). */
 const BLOCK_TYPES: ReadonlySet<string> = new Set(['paragraph', 'table_row', 'table']);
-const SUGGESTION_TYPES: ReadonlySet<string> = new Set(['ins', 'del', 'fmt']);
 
 /** One block's operation: removal, or the removal of its marks with an optional restore. */
 export interface BlockOp {
@@ -37,8 +43,8 @@ export interface BlockOp {
   readonly end: number;
   /** Whether the block goes. Its marks and contents go with it. */
   readonly removes: boolean;
-  /** The suggestion marks taken off the block (empty when the block goes). */
-  readonly marks: readonly Mark[];
+  /** The suggestions taken off the block (empty when the block goes). */
+  readonly entries: readonly SuggestionEntry[];
   /** The attributes to set back to `before` (rejected `fmt` only), or null. */
   readonly restore: Readonly<Record<string, unknown>> | null;
 }
@@ -54,11 +60,9 @@ export interface BlockPlan {
   readonly skipped: number;
 }
 
-const isSuggestion = (m: Mark): boolean => SUGGESTION_TYPES.has(m.type.name);
-
-/** The `before` attributes recorded on an `fmt` mark, or null when it records none. */
-function recordedAttrs(mark: Mark): Readonly<Record<string, unknown>> | null {
-  const before: unknown = mark.attrs['before'];
+/** The `before` attributes recorded on an `fmt` entry, or null when it records none. */
+function recordedAttrs(entry: SuggestionEntry): Readonly<Record<string, unknown>> | null {
+  const before: unknown = entry.attrs.before;
   if (before === null || typeof before !== 'object') return null;
   const attrs: unknown = (before as { attrs?: unknown }).attrs;
   if (attrs === null || typeof attrs !== 'object' || Array.isArray(attrs)) return null;
@@ -71,13 +75,16 @@ export function planBlockSuggestions(
   action: ResolveAction,
   scope: ResolveScope,
 ): BlockPlan {
-  const mineOf = (node: PMNode): Mark[] =>
-    node.marks.filter(
-      (m) =>
-        isSuggestion(m) &&
-        (scope.author === undefined || m.attrs['user'] === scope.author) &&
-        (scope.suggestion === undefined || m.attrs['id'] === scope.suggestion),
+  // The suggestions of a node the scope selects: its block suggestions, and the marks of text and
+  // inline nodes (which count when they are inside a block that goes).
+  const mineOf = (node: PMNode): SuggestionEntry[] =>
+    [...blockEntries(node), ...markEntries(node.marks)].filter(
+      (e) =>
+        (scope.author === undefined || e.attrs.user === scope.author) &&
+        (scope.suggestion === undefined || e.attrs.id === scope.suggestion),
     );
+  const blockMine = (node: PMNode): SuggestionEntry[] =>
+    blockEntries(node).filter((e) => mineOf(node).includes(e));
   const found: { pos: number; node: PMNode }[] = [];
   state.doc.nodesBetween(scope.from, scope.to, (node, pos) => {
     const end = pos + node.nodeSize;
@@ -93,7 +100,7 @@ export function planBlockSuggestions(
   let skipped = 0;
   for (const { pos, node } of found) {
     if (claimed.some((c) => pos >= c.from && pos < c.to)) continue;
-    const mine = mineOf(node);
+    const mine = blockMine(node);
     if (mine.length === 0) continue;
     const end = pos + node.nodeSize;
     if (scope.editable && !scope.editable(pos, end)) {
@@ -101,9 +108,7 @@ export function planBlockSuggestions(
       continue;
     }
     const removes = mine.some(
-      (m) =>
-        (m.type.name === 'ins' && action === 'reject') ||
-        (m.type.name === 'del' && action === 'accept'),
+      (m) => (m.type === 'ins' && action === 'reject') || (m.type === 'del' && action === 'accept'),
     );
     if (removes) {
       let inside = 0;
@@ -113,14 +118,14 @@ export function planBlockSuggestions(
       });
       handled += mine.length + inside;
       claimed.push({ from: pos, to: end });
-      ops.push({ pos, end, removes: true, marks: [], restore: null });
+      ops.push({ pos, end, removes: true, entries: [], restore: null });
       continue;
     }
     handled += mine.length;
-    const fmts = mine.filter((m) => m.type.name === 'fmt');
+    const fmts = mine.filter((m) => m.type === 'fmt');
     const last = fmts[fmts.length - 1];
     const restore = action === 'reject' && last !== undefined ? recordedAttrs(last) : null;
-    ops.push({ pos, end, removes: false, marks: mine, restore });
+    ops.push({ pos, end, removes: false, entries: mine, restore });
   }
   ops.sort((a, b) => b.pos - a.pos);
   return { ops, claimed, handled, skipped };
@@ -141,6 +146,14 @@ export function applyBlockPlan(tr: Transaction, plan: BlockPlan): void {
       for (const [attr, value] of Object.entries(op.restore))
         if (value !== undefined) tr.setNodeAttribute(from, attr, value);
     }
-    for (const mark of op.marks) tr.removeNodeMark(from, mark);
+    const node = tr.doc.nodeAt(from);
+    if (node)
+      setBlockEntries(
+        tr,
+        from,
+        blockEntries(node).filter(
+          (e) => !op.entries.some((x) => x.type === e.type && x.attrs.id === e.attrs.id),
+        ),
+      );
   }
 }

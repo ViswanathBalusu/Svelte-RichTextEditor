@@ -295,9 +295,12 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // The `seq` and the chain head are those of the control commit the transition wrote.
         const controls = (await h.parts.logs.read(ref)).filter((c) => c.kind === 'control');
         const seqs = rows.map((r) => (JSON.parse(r.body) as { data: { seq: number } }).data.seq);
+        // The send, the first view (which raises none), the correction and the resume each wrote
+        // one (FRW-030 criterion 1).
+        expect(controls).toHaveLength(4);
         expect(seqs[0]).toBe(controls[0]!.seq);
-        expect(seqs[2]).toBe(controls[1]!.seq);
-        expect(seqs[3]).toBe(controls[2]!.seq);
+        expect(seqs[2]).toBe(controls[2]!.seq);
+        expect(seqs[3]).toBe(controls[3]!.seq);
       },
     );
 
@@ -331,16 +334,20 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
 describe('the events no path raises yet (FRW-036 criterion 1)', () => {
   it('lists the events a built path raises, so that the rest is stated rather than assumed', () => {
-    const notRaised = WORKFLOW_EVENT_NAMES.filter((n) => !RAISED_BY_A_BUILT_PATH.includes(n));
+    // The other nine are delivered by frw-036.every-event.test.ts, each through its own route.
+    const notRaised = WORKFLOW_EVENT_NAMES.filter(
+      (n) => !RAISED_BY_A_BUILT_PATH.includes(n) && n !== 'finalised',
+    );
     expect(notRaised).toEqual([
-      'participant_viewed', // recordFirstView returns it; nothing calls it when a channel opens (FRW-031, FRW-038)
-      'field_completed', // after a fill or sign commit: FRW-047
-      'participant_completed', // recordCompletion returns it; the complete route is FRW-047
-      'auth_failed', // the verification failure: FRW-040 and after
-      'reminder_due', // the reminder schedule runs nowhere yet
-      'expired', // the deadline job
-      'completed', // recordCompletion returns it; the complete route is FRW-047
-      'finalised', // the finalisation job: FRW-049
+      'participant_viewed', // the first view, at the channel open (FRW-040)
+      'field_completed', // the sign route (FRW-046)
+      'participant_completed', // the complete route (FRW-047)
+      'auth_failed', // a wrong access code (FRW-039)
+      'reminder_due', // the action remind and the schedule (FRW-034)
+      'expired', // the deadline sweep (FRW-034)
+      'completed', // the last participant's completion (FRW-047)
     ]);
+    // `finalised`: `finaliseSealed` (FRW-054) has no caller in the service until the signing service
+    // of FRW-052 and FRW-053 hands it sealed bytes, so no occurrence can be delivered.
   });
 });

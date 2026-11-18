@@ -48,15 +48,26 @@ export interface FillSource {
 }
 
 /** The shell's fill summary over the core: null outside the fill mode. */
-export function fillView(core: FillSource): View<FillSummary | null> {
+export function fillView(
+  core: FillSource,
+  workflow?: View<{ readonly participant?: { readonly state: string } | undefined } | null>,
+): View<FillSummary | null> {
   let last: FillSummary | null = null;
   let lastKey = 'null';
   const read = (): FillSummary | null => {
     let now: FillSummary | null = null;
     if (core.mode.get().effective === 'fill') {
       const fill = core.permissions.get()?.fill ?? null;
+      const active = fill?.active ?? false;
+      // Why the participant may not fill: the server's own word for them (`wf.changed`, FRW-035),
+      // `paused` while the owner corrects, `unverified` until the access code is right (FRW-039);
+      // every other reason reads as waiting.
+      const own = workflow?.get()?.participant?.state;
+      const inactive =
+        own === 'paused' ? 'paused' : own === 'unverified' ? 'unverified' : 'waiting';
       now = {
-        active: fill?.active ?? false,
+        active,
+        ...(active ? {} : { inactive }),
         roles: [...(fill?.roles ?? [])],
         fields: core.fillFields().map((f) => ({
           id: f.id,
@@ -83,6 +94,7 @@ export function fillView(core: FillSource): View<FillSummary | null> {
         core.revision.subscribe(listener),
         core.mode.subscribe(listener),
         core.permissions.subscribe(listener),
+        ...(workflow ? [workflow.subscribe(listener)] : []),
       ];
       return () => {
         for (const stop of stops) stop();

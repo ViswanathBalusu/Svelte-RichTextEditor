@@ -10644,6 +10644,15 @@
             },
             "uniqueItems": true
           },
+          "exportTargets": {
+            "description": "The export targets the deployment offers (`pdf`, `tex`, and others by name), present when the `exports` feature is announced. A client offers these and no other; a service refuses a target that is not in the list with `validation_failed`. Absent: the deployment does not say, and a client offers the PDF and the LaTeX bundle (UX-101; ADR 0382).",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
           "mode": {
             "description": "A relay never announces `regions`, `suggest-enforced` or `fields` (04 §14).",
             "type": "string",

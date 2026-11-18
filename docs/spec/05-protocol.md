@@ -36,12 +36,13 @@ The reasons for this shape are in [ADR 0008](../adr/0008-protocol-planes-and-enc
   "engines": ["pm-steps/1"],
   "cdm": { "min": 1, "max": 1 },
   "features": ["presence", "regions", "suggest-enforced", "history", "comments", "assets", "exports", "leases", "fields", "read-restrictions"],
+  "exportTargets": ["pdf", "tex"],
   "mode": "authority",
   "jwks_uri": "https://docs.example.com/.well-known/jwks.json"
 }
 ```
 
-`rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
+`rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `exportTargets` is optional and present when `exports` is announced: the export targets the deployment offers (`pdf`, `tex`, and others by name; ADR 0382, option 1, with the other proposed defaults accepted by the owner's decisions 116 to 220). A client offers these targets and no others, and a service refuses a target that is not in the list with `validation_failed`. When it is absent the deployment does not say, and a client offers the PDF and the LaTeX bundle. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
 
 `read-restrictions` says that the server hides content from readers by projection (ADR 0019, proposed): the view token of section 5.2, the empty `steps` of section 5.3 and the `access_changed` cause of `ch.closed` apply only to a server that announces it. The name is a proposal of the conformance kit (ADR 0042, item 4), not yet a decision of the owner. The CDM schema for projections, `spec/cdm/cdm-1.projection.json`, adds the `hidden_region` placeholder node, which stands where a reader may not see a region.
 
@@ -79,7 +80,12 @@ Region grants are not in the token. They are stored by the document service and 
 
 ### 3.2 Service credentials
 
-Host backends call the control plane with a service credential: an API key, or a JWT with the type header `dep-svc+jwt`, signed with keys that are registered separately from user-token keys. A user token can never become a service credential through a claim. A service call that acts for a user names that user in the `DEP-Actor` header, and history attributes the change to them.
+Host backends call the control plane with a service credential: an API key, or a JWT with the type header `dep-svc+jwt`, signed with keys that are registered separately from user-token keys. A user token can never become a service credential through a claim. A service call that acts for a user names that user in the `DEP-Actor` header, and history attributes the change to them. The header follows these rules (owner decision 174; ADR 0114, UX-096):
+
+- **Which calls.** The service reads `DEP-Actor` on every call that carries a service credential. It names the user by `sub`, which is an opaque identifier of 1 to 255 characters with no whitespace or control characters. Any other value is refused with `validation_failed` (400). The service maps the `sub` to the tenant's surrogate identifier, and creations, content changes (a prefill, a content replacement) and grant changes record that surrogate. Without the header the actor is `system`, never a person.
+- **Whose rights bound the call.** The rights of the named user bound the call, and the service credential does not widen them. A service credential cannot be used to do what the user it names may not do. Where the service does not hold a right of the user (a document role and groups are claims of the user's tokens, 3.3), it takes the narrower reading and fails closed (ADR 0379 for the history gate).
+- **What is recorded.** The surrogate of the named user is the actor of the commit. The audit entry records the user and the service credential that made the call, and the commit's origin (07 section 14). History and the audit trail therefore name both the person and the integration.
+- **A user token.** `DEP-Actor` on a call made with a user token is ignored. The caller stays the holder of the token. A user can never become another person by a header.
 
 ### 3.2.1 Agent tokens
 
@@ -278,7 +284,7 @@ S  {"t":"event","ch":1,"d":{"type":"export.completed","resource":"/exports/0192f
 - **Idempotency.** `POST` requests that create something, and `PUT /documents/{id}/content`, accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
 - **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200.
 - **Tracing.** Requests may carry `traceparent`; responses carry a request identifier.
-- **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A user token that does not cover it, and a user who is not the requester of an export or import job, get `not_found`, so that the identifier is not confirmed (owner decision 57; a service credential covers every document of its tenant). The same holds for comments and imports (`/comments/{cid}`, `/imports/{jid}`).
+- **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A caller whose token does not cover that document, and a user who may not see the resource (another user's export or import job), gets `not_found`, the answer for an identifier that names nothing, with the same body apart from the identifier (owner decision 57 of 2026-11-15; SEC-016). A caller who sees the resource but lacks the capability gets `forbidden`.
 
 Callers are end users (every request is checked against that user's permissions) and host backends (service credential). The authorisation matrix in 07, section 12, lists the capability each resource needs.
 
@@ -412,6 +418,7 @@ All events are `CustomEvent`s with `bubbles: true` and `composed: true`. They ca
 | `de-export-progress`, `de-export-completed`, `de-export-failed` | Job state |
 | `de-auth-required` | `getToken` failed or the token was refused |
 | `de-share-request`, `de-fork-request` | The user asked for something the host owns. `de-fork-request` carries `{ docId, atSeq }` (HIS-022) |
+| `de-diagnostic` | `{ feature, kind, ms, bytes, streaming, code, directive, fallback }`: a lazily loaded feature loaded, failed to load or is not available, and which directive the host lacks (WASM-002, WASM-003; proposed, ADR 0410). No content |
 | `de-error` | `{ code, message, fatal }` |
 
 Fill-mode methods and events are in 12, section 10. Theming uses CSS custom properties with the prefix `--de-` and `::part()` names listed in 02. An iframe variant of this API over `postMessage` is deferred.

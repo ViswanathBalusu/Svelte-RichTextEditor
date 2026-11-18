@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CdmEnvelope, DocRole, Restriction, RegionGrant } from '@docedit/protocol';
-import type { Catalogue, CatalogueEntry } from './catalogue.ts';
+import type { Catalogue, CatalogueEntry, CatalogueTemplate } from './catalogue.ts';
 import { ServiceError, type ServiceClient } from './service.ts';
 
 export interface Template {
@@ -29,9 +29,21 @@ export interface SeedDocument {
   creator: string;
 }
 
+/** A template of the gallery (UX-100): a document the host marks through `POST /templates`. */
+export interface SeedServiceTemplate {
+  key: string;
+  name: string;
+  description: string;
+  /** A file next to documents.json with the CDM content of the template document (03). */
+  content: string;
+  creator: string;
+}
+
 export interface DocumentsSeed {
   templates: Template[];
   documents: SeedDocument[];
+  /** Absent in seeds written before the gallery; read as none. */
+  serviceTemplates?: SeedServiceTemplate[];
 }
 
 export async function loadDocumentsSeed(seedDir: string): Promise<DocumentsSeed> {
@@ -39,6 +51,14 @@ export async function loadDocumentsSeed(seedDir: string): Promise<DocumentsSeed>
 }
 
 export async function templateContent(seedDir: string, template: Template): Promise<CdmEnvelope> {
+  return JSON.parse(await readFile(join(seedDir, template.content), 'utf8')) as CdmEnvelope;
+}
+
+/** The CDM content of a gallery template's document, from its seed file. */
+export async function serviceTemplateContent(
+  seedDir: string,
+  template: SeedServiceTemplate,
+): Promise<CdmEnvelope> {
   return JSON.parse(await readFile(join(seedDir, template.content), 'utf8')) as CdmEnvelope;
 }
 
@@ -102,6 +122,158 @@ export async function createFromTemplate(
     createdAt: now.toISOString(),
     roles,
     accessSince: Object.fromEntries(Object.keys(roles).map((sub) => [sub, now.toISOString()])),
+    deletedAt: null,
+  };
+  await h.catalogue.put(entry);
+  return entry;
+}
+
+/**
+ * The kinds of field the service sets itself, so that no prefill may carry them (12 §9; the same
+ * list as `SERVER_SET_FIELD_KINDS` of the model). The gallery never offers them, and a test checks
+ * that the service refuses what the gallery leaves out.
+ */
+export const SERVER_SET_KINDS: readonly string[] = [
+  'signature',
+  'initials',
+  'dateSigned',
+  'formula',
+];
+
+/** A field of a template that the author may give a value when starting from it. */
+export interface PrefillField {
+  key: string;
+  label: string;
+  kind: 'text' | 'number' | 'date' | 'checkbox' | 'choice';
+  /** The role placeholder the field belongs to, or null. */
+  assignee: string | null;
+}
+
+/**
+ * Registers a template of the gallery (UX-100): the document is created through the service, marked
+ * with `POST /templates`, and the host's catalogue records what its gallery shows. Registering the
+ * same `key` again finds the template instead of making a second one, so seeding can be repeated.
+ */
+export async function registerTemplate(
+  h: HostDocuments,
+  input: {
+    key: string;
+    name: string;
+    description: string;
+    content: CdmEnvelope;
+    creator: string;
+  },
+): Promise<CatalogueTemplate> {
+  const known = h.catalogue.templateByKey(input.key);
+  if (known) return known;
+  const now = (h.now ?? (() => new Date()))();
+  const externalId = `refhost-template-${input.key}`;
+  const doc =
+    (await h.service.findByExternalId(externalId)) ??
+    (await h.service.createDocument(
+      { content: input.content, externalId, title: input.name },
+      externalId,
+      input.creator,
+    ));
+  // A document is the template of at most one row: when the host was reset but the service was
+  // not, the row exists and is found by its document.
+  const existing = (await h.service.listTemplates()).find((t) => t.document === doc.id);
+  const template =
+    existing ??
+    (await h.service.createTemplate({ document: doc.id, name: input.name }, input.creator));
+  const entry: CatalogueTemplate = {
+    id: template.id,
+    document: doc.id,
+    key: input.key,
+    name: input.name,
+    description: input.description,
+    createdBy: input.creator,
+    createdAt: now.toISOString(),
+  };
+  await h.catalogue.putTemplate(entry);
+  return entry;
+}
+
+/** Registers every template of the seed's gallery (UX-100); repeating it changes nothing. */
+export async function registerSeedTemplates(
+  h: HostDocuments,
+  seed: DocumentsSeed,
+): Promise<CatalogueTemplate[]> {
+  const out: CatalogueTemplate[] = [];
+  for (const t of seed.serviceTemplates ?? [])
+    out.push(
+      await registerTemplate(h, {
+        key: t.key,
+        name: t.name,
+        description: t.description,
+        content: await serviceTemplateContent(h.seedDir, t),
+        creator: t.creator,
+      }),
+    );
+  return out;
+}
+
+/** The fields of a template that may be prefilled: the kinds the author can set (12 §9). */
+export async function prefillableFields(
+  h: HostDocuments,
+  template: CatalogueTemplate,
+): Promise<PrefillField[]> {
+  const fields = await h.service.listFields(template.document);
+  return fields
+    .filter((f) => !SERVER_SET_KINDS.includes(f.kind) && !f.readOnly)
+    .map((f) => ({
+      key: f.key,
+      label: f.label,
+      kind: f.kind as PrefillField['kind'],
+      assignee: f.assignee,
+    }));
+}
+
+/**
+ * Starts a document from a template of the gallery (UX-100 criteria 2 and 3). The service forks
+ * the template at a pinned `seq` and prefills the values in the same call (`POST /documents` with
+ * `template`, 12 §9); the host then records the new document in its catalogue, with the person
+ * who started it as its owner. A value for a key the gallery does not offer is refused here, and a
+ * kind the service sets itself is refused by the service too.
+ */
+export async function createFromGalleryTemplate(
+  h: HostDocuments,
+  input: {
+    template: CatalogueTemplate;
+    title: string;
+    creator: string;
+    values?: Record<string, unknown>;
+    externalId?: string;
+  },
+): Promise<CatalogueEntry> {
+  const now = (h.now ?? (() => new Date()))();
+  const title = cleanTitle(input.title);
+  const values = input.values ?? {};
+  const offered = new Set((await prefillableFields(h, input.template)).map((f) => f.key));
+  for (const key of Object.keys(values))
+    if (!offered.has(key))
+      throw new RangeError(`the field "${key}" cannot be filled in at the start`);
+  const externalId = input.externalId ?? `refhost-${randomUUID()}`;
+  const doc = await h.service.createDocument(
+    {
+      template: input.template.id,
+      title,
+      externalId,
+      ...(Object.keys(values).length > 0 ? { values } : {}),
+    },
+    externalId,
+    input.creator,
+  );
+  const entry: CatalogueEntry = {
+    id: doc.id,
+    externalId,
+    title: doc.title ?? title,
+    template: input.template.key,
+    ...(doc.template ? { templateSeq: doc.template.seq } : {}),
+    createdBy: input.creator,
+    createdAt: now.toISOString(),
+    roles: { [input.creator]: 'owner' },
+    accessSince: { [input.creator]: now.toISOString() },
     deletedAt: null,
   };
   await h.catalogue.put(entry);

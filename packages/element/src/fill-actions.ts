@@ -19,7 +19,7 @@
  * The port must report the current status to a listener when it is added, as `ch.opened` carries it
  * (decision D20), and then each change. No DOM: this runs in Node.js tests against a stand-in port.
  */
-import type { WorkflowPort } from '@docedit/protocol';
+import { PortError, type WorkflowPort } from '@docedit/protocol';
 
 /** The workflow port members the service uses. */
 export interface FillActionsSource {
@@ -62,7 +62,29 @@ export type CompleteFillingOutcome =
   | { readonly ok: true; readonly result: unknown }
   | { readonly ok: false; readonly failures: readonly FillFailure[] };
 
+/** The workflow state and the participant's own status, as the port last reported them. */
+export interface WorkflowStatusView {
+  get(): {
+    readonly state: string;
+    readonly participant?: { readonly id: string; readonly state: string } | undefined;
+  } | null;
+  subscribe(listener: () => void): () => void;
+}
+
+/** What the server said to an access code; the same shape as the shell's `AccessCodeOutcome`. */
+export type VerifyOutcome =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'wrong' | 'rate_limited' | 'failed';
+      readonly retryAfterMs?: number;
+    };
+
 export interface FillActions {
+  /** Submits the participant's access code to their verify endpoint (FRW-039). */
+  verify(code: string): Promise<VerifyOutcome>;
+  /** What `wf.changed` last said (FRW-035): the guided bar reads it. */
+  readonly status: WorkflowStatusView;
   completeFilling(): Promise<CompleteFillingOutcome>;
   decline(reason: string): Promise<unknown>;
   /** Stops following the workflow. */
@@ -81,8 +103,11 @@ export function fillActionsService(
 ): FillActions {
   let status: Status | null = null;
   let raised = false;
+  const listeners = new Set<() => void>();
   const apply = (next: Status): void => {
+    const changed = JSON.stringify(next) !== JSON.stringify(status);
     status = next;
+    if (changed) for (const listener of [...listeners]) listener();
     if (next.state === 'completed' && !raised) {
       raised = true;
       onWorkflowComplete();
@@ -112,6 +137,13 @@ export function fillActionsService(
   }
 
   return {
+    status: {
+      get: () => status,
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
     async completeFilling() {
       const { act, docId, participant } = active();
       const failures = core.validateFields();
@@ -121,6 +153,26 @@ export function fillActionsService(
       }
       const result = await act(docId, participant, 'complete');
       return { ok: true, result };
+    },
+    async verify(code) {
+      const current = source();
+      const act = current?.port.participant;
+      const participant = status?.participant;
+      if (!current || !act || participant === undefined) return { ok: false, reason: 'failed' };
+      try {
+        await act.call(current.port, current.docId, participant.id, 'verify', { code });
+        return { ok: true };
+      } catch (error) {
+        if (!(error instanceof PortError)) return { ok: false, reason: 'failed' };
+        if (error.code === 'rate_limited') {
+          const detail = error.details?.['retryAfterMs'];
+          const ms = error.retryAfterMs ?? (typeof detail === 'number' ? detail : undefined);
+          return ms === undefined
+            ? { ok: false, reason: 'rate_limited' }
+            : { ok: false, reason: 'rate_limited', retryAfterMs: ms };
+        }
+        return { ok: false, reason: error.code === 'forbidden' ? 'wrong' : 'failed' };
+      }
     },
     async decline(reason) {
       const { act, docId, participant } = active();
@@ -132,6 +184,7 @@ export function fillActionsService(
     },
     dispose() {
       stop?.();
+      listeners.clear();
     },
   };
 }

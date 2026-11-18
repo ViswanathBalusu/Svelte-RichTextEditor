@@ -1641,7 +1641,9 @@ class Importer {
       contentStart: headEnd,
       contentEnd: tr.endTagStart,
     };
-    const node = withMarks({ type: 'table_row', attrs, content: cells }, marks);
+    // A suggested row keeps its suggestion in `suggest`, not in marks (owner decision 92).
+    if (marks.length) attrs['suggest'] = sortMarks(marks) as unknown as JsonValue;
+    const node: JsonNode = { type: 'table_row', attrs, content: cells };
     const identity = attrsOf(tr, (n) => !IDENTITY_ATTRS.has(n));
     const target: NodeSource = { part: pc.part, start: tr.start, end: tr.end, hash: '' };
     if (Object.keys(identity).length) target.identity = identity;

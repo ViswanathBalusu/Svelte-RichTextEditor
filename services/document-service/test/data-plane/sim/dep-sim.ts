@@ -40,6 +40,7 @@ import {
 import {
   changedScopes,
   oracleViolations,
+  sugsOf,
 } from '../../../../../packages/authority/test/harness/oracle.ts';
 import type { Op } from '../../../../../packages/authority/test/harness/sim.ts';
 import {
@@ -835,8 +836,8 @@ export class DepSimulation {
         for (const v of oracleViolations({ user, perms, time: c.time, before, after: doc, owners }))
           failures.push(`commit ${c.seq} by ${c.user}: ${v}`);
       doc.descendants((n) => {
-        for (const m of n.marks)
-          if (['ins', 'del', 'fmt'].includes(m.type.name) && !owners.has(String(m.attrs['id'])))
+        for (const m of sugsOf(n))
+          if (!owners.has(String(m.attrs['id'])))
             owners.set(String(m.attrs['id']), String(m.attrs['user']));
         return true;
       });

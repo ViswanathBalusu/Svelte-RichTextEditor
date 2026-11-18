@@ -348,6 +348,124 @@ export const HISTORY: ProfileDef = {
       },
     }),
     hs({
+      id: 'matrix.refusals',
+      title:
+        'rows 2, 8, 9 and 10: a caller without view, without edit or without manage is refused at the history routes',
+      spec: '07 §12 rows 2, 8, 9, 10; PRM-058',
+      covers: {
+        operations: [
+          'GET /documents/{id}/content',
+          'GET /documents/{id}/history',
+          'GET /documents/{id}/diff',
+          'GET /documents/{id}/attribution',
+          'POST /documents/{id}/versions',
+          'POST /documents/{id}/restore',
+        ],
+        errors: ['forbidden'],
+      },
+      async run(ctx) {
+        const s = await series(ctx);
+        const { doc } = s;
+        const other = await ctx.document();
+        const base = `/documents/${doc}`;
+        const refused = (res: HttpResponse, what: string) => {
+          equal(problemCode(res), 'forbidden', `${what} is refused`);
+          equal(res.status, 403, `${what}: the status`);
+        };
+
+        // Row 2: `view` is required before the gate is looked at. A user with a role on another
+        // document only is refused at every route that reads at a seq, even at the head.
+        const { token: outsider } = await ctx.token('outsider', { [other]: 'owner' });
+        refused(
+          await get(ctx, outsider, `${base}/content`, { seq: s.s3 }),
+          'content by an outsider',
+        );
+        refused(await get(ctx, outsider, `${base}/history`), 'the history by an outsider');
+        refused(
+          await get(ctx, outsider, `${base}/diff`, { fromSeq: s.s3, toSeq: s.s3 }),
+          'a comparison by an outsider',
+        );
+        refused(
+          await get(ctx, outsider, `${base}/attribution`, { atSeq: s.s3 }),
+          'the attribution by an outsider',
+        );
+        // The same routes serve a user with `view` and a gate that lets the seq through.
+        expectStatus(
+          await get(ctx, s.author.token, `${base}/content`, { seq: s.s1 }),
+          200,
+          'an editor reads content at a seq',
+        );
+
+        // Row 8: naming a version needs `edit` somewhere. The seq is the head, so the gate is not
+        // the reason for the refusal.
+        const { token: viewer } = await ctx.token('viewer', { [doc]: 'viewer' });
+        const { token: commenter } = await ctx.token('commenter', { [doc]: 'commenter' });
+        for (const [who, token] of [
+          ['a viewer', viewer],
+          ['a commenter', commenter],
+        ] as const)
+          refused(
+            await ctx.service.as(token, 'POST', `${base}/versions`, {
+              body: { seq: s.s3, name: 'not mine' },
+            }),
+            `a version named by ${who}`,
+          );
+        expectStatus(
+          await ctx.service.as(s.author.token, 'POST', `${base}/versions`, {
+            body: { seq: s.s3, name: 'mine' },
+          }),
+          201,
+          'an editor names a version at the head',
+        );
+
+        // Row 10: restoring the whole document needs `manage`. The editor is refused and the
+        // head does not move; the owner's dry run is the control.
+        const { token: manager } = await ctx.token('manager', { [doc]: 'owner' });
+        refused(
+          await ctx.service.as(s.author.token, 'POST', `${base}/restore`, {
+            body: { toSeq: s.s1 },
+          }),
+          'a restore by an editor',
+        );
+        expectStatus(
+          await ctx.service.as(manager, 'POST', `${base}/restore`, {
+            body: { toSeq: s.s1, dryRun: true },
+          }),
+          200,
+          'a dry run of a restore by an owner',
+        );
+        equal(
+          (await readContent(ctx, manager, doc)).seq,
+          s.s3,
+          'the head did not move after the refusals',
+        );
+
+        // Row 9: restoring a region needs `edit` in it. (A region that is approved or leased to
+        // someone else is refused too; that needs a state change first and is tested at the
+        // authority, `leases-states.test.ts`.)
+        if (ctx.has('regions')) {
+          for (const [who, token] of [
+            ['a viewer', viewer],
+            ['a commenter', commenter],
+          ] as const)
+            refused(
+              await ctx.service.as(token, 'POST', `${base}/restore`, {
+                body: { toSeq: s.s1, region: IDS.open },
+              }),
+              `a region restore by ${who}`,
+            );
+          expectStatus(
+            await ctx.service.as(manager, 'POST', `${base}/restore`, {
+              body: { toSeq: s.s1, region: IDS.open, dryRun: true },
+            }),
+            200,
+            'a dry run of a region restore by an owner',
+          );
+        }
+        await closeAll(s);
+      },
+    }),
+    hs({
       id: 'restore.dry-run',
       title: 'a restore with dryRun stores nothing',
       spec: '08 §8; 05 §6.2; HIS-021',

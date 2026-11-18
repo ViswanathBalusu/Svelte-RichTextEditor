@@ -506,6 +506,9 @@ export class ClientChannel {
       out.push({ kind: 'opened', opened: d });
     }
     out.push(...this.onAccess(d.access, first));
+    // The workflow object follows the access it implies (FRW-035); a reopened channel brings the
+    // current one, so a client that was disconnected during a transition is told.
+    if (d.workflow !== undefined) out.push({ kind: 'workflow', status: d.workflow });
     if (d.catchUp === 'stream') {
       this.phase = 'catching_up';
       this.heardAt = now;

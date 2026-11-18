@@ -126,7 +126,7 @@ These are requirements on the component's user experience. They are not security
 - The region guard refuses local transactions in scopes without `edit`, `suggest` or `fill`, so the user normally never sees a rejection.
 - A region is isolating. Backspace at the start of its first paragraph and Delete at the end of its last do nothing. Enter at the end stays inside. Selections that start inside a region are clamped to it. There is always a body paragraph after a region (03, section 4.2).
 - A deletion across several scopes removes only the parts the user may edit and says so.
-- "Replace all" skips scopes the user cannot edit and reports how many matches it skipped.
+- "Replace all" skips scopes the user cannot edit and reports how many matches it skipped. Where suggestion mode is on, each replacement is a suggestion: the match is marked deleted and the new text is inserted after it, marked inserted (owner decision 46).
 - A user who may edit only regions can apply existing styles there but cannot change definitions, page setup, headers or footers.
 - Numbering continues across region boundaries because it is computed (03, section 7) and is not stored in the content.
 - In a scope where the user has `suggest` only, the editor is in suggestion mode and cannot leave it.
@@ -184,7 +184,7 @@ Every row has negative tests in the conformance kit.
 
 ## 14. Audit
 
-Every grant change, state change, lease break, session revocation, restore, workflow transition, and every rejection with `permission_denied` or `invalid_op` is written to the audit trail with the actor, the document, the scopes and the server time. A content change made with a service credential (a prefill, a content replacement) is written as well, with the person it is attributed to (the user named in `DEP-Actor`, or `system`), the credential that made it and the commit's origin (owner decision 174). Changes of permission state are also control commits in the hash-chained log. Rejections raise the throttled webhook `dep.commit.rejected`.
+Every grant change, state change, lease break, session revocation, restore, workflow transition, and every rejection with `permission_denied` or `invalid_op` is written to the audit trail with the actor, the document, the scopes and the server time. A content change made with a service credential (a prefill, a content replacement) is written as well, with the person it is attributed to (the user named in `DEP-Actor`, or `system`), the credential that made it and the commit's origin (owner decision 174). A service call that names a user in `DEP-Actor` is bounded by that user's rights and not by the credential's (05 section 3.2): the permission checks of this section and the history gate of section 8 apply to the named user, and the audit entry records both. Changes of permission state are also control commits in the hash-chained log. Rejections raise the throttled webhook `dep.commit.rejected`.
 
 ## 15. DOCX mapping
 

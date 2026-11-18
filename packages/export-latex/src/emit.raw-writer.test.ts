@@ -2,8 +2,10 @@
  * EXP-045 criterion 3 (search part, Node.js only): the raw writer `line` in `context.ts` takes only
  * `Tex`, and this test lists every module that calls it. The list is pinned: a new caller fails the
  * test until a reviewer adds it here. The callers are the converter's structural modules, which
- * build their TeX from `tex` templates, `t()` literals and the emitters; they are not the emitters
- * themselves, so the criterion's "only the emitters call it" is not met (see the story Notes).
+ * build their TeX from `tex` templates, `t()` literals and the emitters. The criterion reads
+ * "only the emitters make the `Tex` values it takes" (ADR 0143, items 4 and 11, default accepted by
+ * the owner, 2026-11-17): the type rule and `emit.guard.test.ts` check that, and this list is the
+ * guard on who calls it.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';

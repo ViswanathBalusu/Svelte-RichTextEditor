@@ -111,7 +111,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     const events = (name: string, doc: string) =>
       h.events.of(`dep.workflow.${name}.v1`).filter((e) => e.subject === doc);
     const controls = async (doc: string) =>
-      (await h.parts.logs.read({ tenant: h.tenant, doc })).filter((c) => c.kind === 'control');
+      (await h.parts.logs.read({ tenant: h.tenant, doc })).filter(
+        // Not the control commit that anchors the salted hash of evidence (FRW-041).
+        (c) => c.kind === 'control' && c.evidence === undefined,
+      );
     const states = (c: DepClient) =>
       c.all('wf.changed', 1).map((m) => (m.d as { state: string }).state);
     /** The status of their own participant in each wf.changed a participant's channel received. */
@@ -317,7 +320,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
-      'writes no control commit for a completion that routing leaves as it was',
+      'writes one control commit for a completion that routing leaves as it was (the transition, FRW-030 criterion 1)',
       async () => {
         const people = [person('p1', 'tenant', 'filler', 1), person('p2', 'landlord', 'filler', 2)];
         const { doc, fillTotal } = await sentWorkflow(
@@ -339,7 +342,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           ['p1', 'completed'],
           ['p2', 'active'],
         ]);
-        expect((await controls(doc)).length).toBe(controlBefore);
+        // The completion is a transition and has its own control commit; routing adds no other.
+        expect((await controls(doc)).length).toBe(controlBefore + 1);
       },
       90_000,
     );

@@ -76,6 +76,17 @@ function pm(env: Json): Node {
   return schema.nodeFromJSON(env['doc']);
 }
 /** Position before the node with this `id` (attribute steps address it). */
+/** The position of the first inline atom (a field, a tab, a picture), which can carry node marks. */
+function firstAtom(doc: Node): number {
+  let found = -1;
+  doc.descendants((n, pos) => {
+    if (found < 0 && n.isInline && n.isAtom && !n.isText) found = pos;
+    return found < 0;
+  });
+  if (found < 0) throw new Error('no inline atom in the document');
+  return found;
+}
+
 function at(doc: Node, id: string): number {
   let found = -1;
   doc.descendants((n, pos) => {
@@ -181,17 +192,17 @@ export function invariantFixtures(): InvariantFixture[] {
 
   // I1 ----------------------------------------------------------------------------------------
   add({
-    name: 'i1-node-mark-on-region',
-    doc: 'addNodeMark: a suggestion as a node mark on a region, which ProseMirror allows and the CDM does not.',
-    base: 'example',
+    name: 'i2-node-mark-on-atom-two-users',
+    doc: 'addNodeMark: an `ins` mark on an inline atom that reuses the identifier of another user.',
+    base: 'kitchen-sink',
     steps: json([
       new AddNodeMarkStep(
-        at(e, 'rG7mK2pQ9xYt4HcD'),
-        schema.marks['ins']!.create({ id: 'sInsRegion000001', user: 'bob' }),
+        firstAtom(s),
+        schema.marks['ins']!.create({ id: 'sAliceInsert0001', user: 'mallory' }),
       ),
     ]),
     context: ctxAll(),
-    expected: ['I1'],
+    expected: ['I2'],
   });
   add({
     name: 'i1-feature-not-required',
@@ -615,17 +626,15 @@ export function invariantFixtures(): InvariantFixture[] {
   });
   add({
     name: 'i11-fmt-before-on-block',
-    doc: 'addNodeMark: a block format suggestion that records an indent.',
+    doc: 'attr: a block format suggestion in `suggest` that records an indent.',
     base: 'example',
     steps: json([
-      new AddNodeMarkStep(
-        at(e, 'pZ9y8X7w6V5u4T3s'),
-        schema.marks['fmt']!.create({
-          id: 'sFmtBlock0000001',
-          user: 'carol',
-          before: { attrs: { indentLeft: 720 } },
-        }),
-      ),
+      new AttrStep(at(e, 'pZ9y8X7w6V5u4T3s'), 'suggest', [
+        {
+          type: 'fmt',
+          attrs: { id: 'sFmtBlock0000001', user: 'carol', before: { attrs: { indentLeft: 720 } } },
+        },
+      ]),
     ]),
     context: ctxAll(),
     expected: ['I11'],
@@ -730,16 +739,16 @@ export function invariantFixtures(): InvariantFixture[] {
       limit: { name: 'fields', side },
     });
   // A removeNodeMark cannot break an invariant alone; with an attribute step it is checked in full.
+  // Node marks are left on inline atoms; blocks carry their suggestions in `suggest`.
+  const markOnAtom = schema.marks['del']!.create({ id: 'sBobDelete000009', user: 'bob' });
   add({
     name: 'i4-then-remove-node-mark',
-    doc: 'attr then removeNodeMark: the result is checked whatever the last step was.',
+    doc: 'attr, addNodeMark and removeNodeMark on an inline atom: the result is checked whatever the last step was.',
     base: 'kitchen-sink',
     steps: json([
       new AttrStep(at(s, 'pList00000000001'), 'style', 'Missing'),
-      new RemoveNodeMarkStep(
-        at(s, 'pSuggested000001'),
-        schema.marks['del']!.create({ id: 'sBobDelete000002', user: 'bob' }),
-      ),
+      new AddNodeMarkStep(firstAtom(s), markOnAtom),
+      new RemoveNodeMarkStep(firstAtom(s), markOnAtom),
     ]),
     context: ctxAll(),
     expected: ['I4'],

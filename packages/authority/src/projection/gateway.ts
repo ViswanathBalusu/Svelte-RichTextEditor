@@ -16,6 +16,7 @@ import type { ThreadAction } from '../permissions/comments.ts';
 import type { Connection, PermissionState } from '../permissions/model.ts';
 import { applySteps, mapsOf, rebaseOver } from '../rebase.ts';
 import type {
+  AnchorRequest,
   AuthoredRequest,
   Room,
   SnapshotRequest,
@@ -326,8 +327,10 @@ export class ProjectionGateway {
       const send = (msg: ToClient) => result.push({ channel: o.channel, msg });
       switch (m.t) {
         case 'sync.commit': {
+          // The salted evidence hash of an anchoring control commit is for verifiers, not clients.
+          const { evidence: _anchored, ...held } = m.commit;
           const commit: StoredCommit = {
-            ...m.commit,
+            ...held,
             steps: stepsToJson(this.outgoing(c, m.commit.seq)),
             scopes: this.visibleScopes(m.commit.scopes, c.hidden),
             retired: m.commit.retired.filter((r) => !c.hidden.regions.has(r)),
@@ -611,6 +614,11 @@ export class ProjectionGateway {
   /** A server-authored step commit through the room (SYN-030). */
   author(requester: string, request: AuthoredRequest): Effects {
     return this.finish(this.room.author(requester, request));
+  }
+
+  /** A control commit that anchors the salted hash of workflow evidence (FRW-041). */
+  anchor(requester: string, request: AnchorRequest): Effects {
+    return this.finish(this.room.anchor(requester, request));
   }
 
   /** Stops the room and closes every channel (see `Room.stop`). */

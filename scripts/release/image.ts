@@ -13,10 +13,12 @@
  *          --out <dir> [--once] [--expect-id <sha256:…>] [--push] [--declared-dir <release files>]
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { presence } from './distributables.ts';
+import { readServiceNotices, stageOverlayContext, texliveNotices } from './image-notices.ts';
 import type { ImageRecord } from './notes.ts';
 import { compareTexWithImage, compareWithImage, createdAt, imageSbom } from './sbom.ts';
 import { stringify, type SpdxDocument } from './spdx.ts';
@@ -60,6 +62,51 @@ export function normaliseId(id: string): string {
 /** The bill's file name: the image name and the version. */
 export const imageSbomName = (image: string, version: string) =>
   `${image}-${version}.image.spdx.json`;
+
+/** The file name that the release gives a file of a distributable (release.ts `artefactName`). */
+export function releaseFile(d: { packageName: string }, version: string, suffix: string): string {
+  return `${d.packageName.replace(/^@/, '').replace('/', '-')}-${version}${suffix}`;
+}
+
+/**
+ * Builds the notices layer on top of `base` as `tag`, twice and the second time without the cache
+ * unless `once`, and returns the identifier of the image. Refuses when the two builds differ.
+ */
+export function addNoticesLayer(o: {
+  cli: string;
+  base: string;
+  tag: string;
+  root: string;
+  thirdParty: string;
+  epoch: number;
+  once: boolean;
+}): string {
+  const inspect = (tag: string) =>
+    normaliseId(exec(o.cli, ['image', 'inspect', '--format', '{{.Id}}', tag]));
+  const dir = mkdtempSync(join(tmpdir(), 'docedit-image-notices-'));
+  try {
+    const file = stageOverlayContext(dir, {
+      base: o.base,
+      root: o.root,
+      thirdParty: o.thirdParty,
+    });
+    exec(o.cli, buildArgs(file, dir, o.tag, o.epoch, false), false);
+    const id = inspect(o.tag);
+    if (!o.once) {
+      const again = `${o.tag}-layer-again`;
+      exec(o.cli, buildArgs(file, dir, again, o.epoch, true), false);
+      const second = inspect(again);
+      exec(o.cli, ['rmi', '--force', again], false);
+      if (second !== id)
+        throw new Error(
+          `the notices layer is not reproducible: two builds gave ${id} and ${second}`,
+        );
+    }
+    return id;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 function exec(file: string, args: string[], capture = true): string {
   const r = spawnSync(file, args, {
@@ -112,16 +159,51 @@ async function main(argv: string[]): Promise<number> {
     containerfile = join(context, 'Containerfile');
   }
 
-  exec(cli, buildArgs(containerfile, context, local, epoch, false), false);
-  const imageId = inspect(local);
+  // An image whose context does not write the notices gets one more layer that holds them
+  // (scripts/release/image-notices.ts); the image of the release is then the one with the layer.
+  const layer = !d.noticesInContext;
+  const base = layer ? `${local}-base` : local;
+  exec(cli, buildArgs(containerfile, context, base, epoch, false), false);
+  const baseId = inspect(base);
   if (!argv.includes('--once')) {
     exec(cli, buildArgs(containerfile, context, `${local}-again`, epoch, true), false);
     const again = inspect(`${local}-again`);
-    console.log(`${d.image}: first build ${imageId}, second build without cache ${again}`);
-    if (again !== imageId)
+    console.log(`${d.image}: first build ${baseId}, second build without cache ${again}`);
+    if (again !== baseId)
       throw new Error(
-        `${d.image} is not reproducible: two builds of one commit gave ${imageId} and ${again}`,
+        `${d.image} is not reproducible: two builds of one commit gave ${baseId} and ${again}`,
       );
+  }
+  const declaredDir = opt('--declared-dir');
+  let tex: TexPackage[] | undefined;
+  let fonts: FontManifest | null = null;
+  if (d.texlive) {
+    const run = (...a: string[]) => exec(cli, ['run', '--rm', '--network=none', ...a]);
+    tex = parseTlmgrInfo(
+      run('--entrypoint', 'tlmgr', base, 'info', '--only-installed', '--data', TLMGR_FIELDS),
+    );
+    fonts = JSON.parse(
+      run('--entrypoint', 'cat', base, '/opt/docedit/fonts/fonts.json'),
+    ) as FontManifest;
+  }
+  let imageId = baseId;
+  if (layer) {
+    let thirdParty: string;
+    if (tex) thirdParty = texliveNotices(`${d.packageName} ${version}`, tex, fonts);
+    else {
+      if (!declaredDir)
+        throw new Error(`${id}: the service's notices are needed for the image (--declared-dir)`);
+      thirdParty = readServiceNotices(join(declaredDir, releaseFile(d, version, '.notices.md')));
+    }
+    imageId = addNoticesLayer({
+      cli,
+      base,
+      tag: local,
+      root,
+      thirdParty,
+      epoch,
+      once: argv.includes('--once'),
+    });
   }
   const expected = opt('--expect-id');
   if (expected && normaliseId(expected) !== imageId)
@@ -135,17 +217,6 @@ async function main(argv: string[]): Promise<number> {
   exec(syft, ['scan', `oci-archive:${archive}`, '-o', `spdx-json=${syftFile}`], false);
   rmSync(archive, { force: true });
   const syftDoc = JSON.parse(readFileSync(syftFile, 'utf8')) as SpdxDocument;
-  let tex: TexPackage[] | undefined;
-  let fonts: FontManifest | null = null;
-  if (d.texlive) {
-    const run = (...a: string[]) => exec(cli, ['run', '--rm', '--network=none', ...a]);
-    tex = parseTlmgrInfo(
-      run('--entrypoint', 'tlmgr', local, 'info', '--only-installed', '--data', TLMGR_FIELDS),
-    );
-    fonts = JSON.parse(
-      run('--entrypoint', 'cat', local, '/opt/docedit/fonts/fonts.json'),
-    ) as FontManifest;
-  }
 
   let digest: string | undefined;
   if (argv.includes('--push')) {
@@ -170,14 +241,8 @@ async function main(argv: string[]): Promise<number> {
     },
   });
   if (tex) result.problems.push(...compareTexWithImage(result.doc, tex));
-  const declaredDir = opt('--declared-dir');
   if (d.serviceInImage) {
-    const declared = declaredDir
-      ? join(
-          declaredDir,
-          `${d.packageName.replace(/^@/, '').replace('/', '-')}-${version}.spdx.json`,
-        )
-      : null;
+    const declared = declaredDir ? join(declaredDir, releaseFile(d, version, '.spdx.json')) : null;
     if (!declared || !existsSync(declared))
       result.problems.push(
         `${id}: the service's bill is needed to compare with the image (--declared-dir)`,

@@ -14,7 +14,9 @@ import {
   type LogCommit,
   type SnapshotReason,
   type StepJson,
+  type ThreadAnchor,
 } from '@docedit/authority';
+import type { AttributionJson } from '@docedit/history';
 import { canonicalize } from '@docedit/model';
 
 /**
@@ -31,6 +33,11 @@ export interface CommitPayload {
   claimed: string[];
   /** A snapshot commit's checkpoint reference and reason. Absent for every other commit. */
   snapshot?: { checkpoint: string; reason: SnapshotReason };
+  /**
+   * The salted hash of the workflow evidence a control commit anchors (12 §7; FRW-041): the origin
+   * (`sign` or `rules`) and the hash, nothing else. Absent from every other commit.
+   */
+  evidence?: { origin: 'sign' | 'rules'; evidenceHash: string };
 }
 
 /** The hashed metadata of one commit: the fields 08 §2 lists, in canonical form. */
@@ -88,6 +95,9 @@ export function encodeCommit(doc: string, c: LogCommit): EncodedCommit {
   // hashes, are what they were before snapshot commits existed.
   if (isSnapshot(c))
     payload.snapshot = { checkpoint: c.snapshot.checkpoint, reason: c.snapshot.reason };
+  // Likewise only an evidence anchor has this member, so no earlier hash changes.
+  if (c.evidence !== undefined)
+    payload.evidence = { origin: c.evidence.origin, evidenceHash: c.evidence.evidenceHash };
   const payloadJson = utf8(canonicalize(payload));
   const meta: CommitMetadata = {
     doc,
@@ -121,6 +131,7 @@ export function decodePayload(stored: Uint8Array): CommitPayload {
   const value = JSON.parse(zstdDecompressSync(stored).toString('utf8')) as CommitPayload;
   const out: CommitPayload = { steps: value.steps, retired: value.retired, claimed: value.claimed };
   if (value.snapshot) out.snapshot = value.snapshot;
+  if (value.evidence) out.evidence = value.evidence;
   return out;
 }
 
@@ -131,6 +142,29 @@ export function encodeContent(canonicalText: string): Buffer {
 
 export function decodeContent<T = unknown>(stored: Uint8Array): T {
   return JSON.parse(zstdDecompressSync(stored).toString('utf8')) as T;
+}
+
+/**
+ * What the side object of a checkpoint holds (06 §2.2 step 3, §8; SYN-032 criterion 6): the comment
+ * ranges at the checkpoint's `seq`, each anchor at that `seq`, and the attribution map (HIS-014,
+ * ADR 0377). `v` is 1 for an object that carries the map.
+ */
+export interface CheckpointSide {
+  v?: 1;
+  seq: number;
+  threads: ThreadAnchor[];
+  attribution?: AttributionJson;
+}
+
+/** The side object as stored: canonical JSON (RFC 8785) compressed with Zstandard, like content. */
+export function encodeSide(side: CheckpointSide): Buffer {
+  return encodeContent(canonicalize(side));
+}
+
+export function decodeSide(stored: Uint8Array): CheckpointSide {
+  const side = decodeContent<Partial<CheckpointSide>>(stored);
+  // An object written with only the attribution map has no ranges and no `seq`.
+  return { ...side, seq: side.seq ?? -1, threads: side.threads ?? [] };
 }
 
 /** hash = SHA-256(previous hash ‖ canonical metadata ‖ SHA-256(canonical payload)) (08 §2). */

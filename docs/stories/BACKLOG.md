@@ -1,6 +1,6 @@
 # Backlog by phase
 
-Generated on 2026-11-18 from the epic files in this folder; regenerate it whenever a story's fields change. 1003 stories. Within a phase, stories are ordered by priority, then by epic in build order (foundations, decisions and spikes, model, sync, permissions, protocol, backend, security, frontend, shell, history, export, fields and workflow, WebAssembly). Order within a phase is not a dependency order: each story's **Depends on** line is.
+Generated on 2026-11-18 from the epic files in this folder; regenerate it whenever a story's fields change. 1007 stories. Within a phase, stories are ordered by priority, then by epic in build order (foundations, decisions and spikes, model, sync, permissions, protocol, backend, security, frontend, shell, history, export, fields and workflow, WebAssembly). Order within a phase is not a dependency order: each story's **Depends on** line is.
 
 ## Phase 0: decisions, spikes and notes (47)
 
@@ -936,7 +936,7 @@ Generated on 2026-11-18 from the epic files in this folder; regenerate it whenev
 | [EXP-059](EXP-export.md#exp-059-decide-whether-forced-line-breaks-parity-level-l2-are-built) | Decide whether forced line breaks (parity level L2) are built | decision | S | could |
 | [FRW-057](FRW-fields-rules-workflow.md#frw-057-show-visible-signature-appearances-at-the-field-positions) | Show visible signature appearances at the field positions | story | M | could |
 
-## Phase 4: scale, interoperability, reach (51)
+## Phase 4: scale, interoperability, reach (55)
 
 | Story | Title | Type | Size | Priority |
 |---|---|---|---|---|
@@ -979,6 +979,10 @@ Generated on 2026-11-18 from the epic files in this folder; regenerate it whenev
 | [BE-067](BE-backend.md#be-067-decide-whether-follower-nodes-are-needed-before-stage-3) | Decide whether follower nodes are needed before stage 3 | spike | S | could |
 | [SEC-011](SEC-security.md#sec-011-decide-the-policy-for-browser-extensions-that-read-or-edit-content) | Decide the policy for browser extensions that read or edit content | decision | S | could |
 | [SEC-063](SEC-security.md#sec-063-decide-whether-to-anchor-chain-heads-in-a-public-transparency-log) | Decide whether to anchor chain heads in a public transparency log | decision | S | could |
+| [SEC-065](SEC-security.md#sec-065-build-the-periodic-salted-root-over-a-tenants-chain-heads) | Build the periodic salted root over a tenant's chain heads | enabler | M | could |
+| [SEC-066](SEC-security.md#sec-066-submit-roots-to-a-public-transparency-log-and-keep-the-receipts) | Submit roots to a public transparency log and keep the receipts | enabler | M | could |
+| [SEC-067](SEC-security.md#sec-067-let-a-relying-party-check-history-against-the-public-log) | Let a relying party check history against the public log | story | M | could |
+| [SEC-068](SEC-security.md#sec-068-prove-the-public-log-holds-nothing-but-a-root) | Prove the public log holds nothing but a root | enabler | S | could |
 | [UX-059](UX-experience.md#ux-059-decision-build-sandboxed-third-party-extensions) | Decision: build sandboxed third-party extensions? | decision | S | could |
 | [UX-084](UX-experience.md#ux-084-search-documents-for-a-host-catalogue) | Search documents for a host catalogue | story | M | could |
 | [UX-086](UX-experience.md#ux-086-policy-hook-for-data-loss-prevention) | Policy hook for data-loss prevention | story | M | could |

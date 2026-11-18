@@ -211,16 +211,46 @@ function docCaps(conn: Connection, perms: PermissionState): Set<Cap> {
 
 // -- suggestions as a character stream ------------------------------------------------------------
 
+/**
+ * A suggestion a node carries: a suggestion mark (text, an inline node), or an entry of the
+ * `suggest` attribute (a paragraph, a table row or a table; 03 §5, owner decision 92).
+ */
+export interface Sug {
+  name: string;
+  attrs: Record<string, unknown>;
+  json: unknown;
+}
+
+export function sugsOf(n: Node): Sug[] {
+  const out: Sug[] = [];
+  for (const m of n.marks)
+    if (['ins', 'del', 'fmt'].includes(m.type.name))
+      out.push({ name: m.type.name, attrs: m.attrs, json: m.toJSON() });
+  const s: unknown = n.attrs['suggest'];
+  if (Array.isArray(s))
+    for (const e of s as Array<{ type: string; attrs: Record<string, unknown> }>)
+      out.push({ name: e.type, attrs: e.attrs, json: e });
+  return out;
+}
+
+/** The attributes of a node without the suggestions it carries, which the streams handle apart. */
+function plainAttrs(n: Node): Record<string, unknown> {
+  if (n.isText) return {};
+  const { suggest: _suggest, ...rest } = n.attrs;
+  return rest;
+}
+
 function baselineStream(nodes: Node[]): string {
   const out: string[] = [];
   const visit = (n: Node) => {
     const marks = n.marks;
-    if (marks.some((m) => m.type.name === 'ins')) return;
+    const sugs = sugsOf(n);
+    if (sugs.some((m) => m.name === 'ins')) return;
     let formatting = marks
       .filter((m) => !['ins', 'del', 'fmt'].includes(m.type.name))
       .map((m) => canonicalize(m.toJSON()));
-    let attrs: Record<string, unknown> = n.isText ? {} : { ...n.attrs };
-    for (const f of marks.filter((m) => m.type.name === 'fmt')) {
+    let attrs: Record<string, unknown> = plainAttrs(n);
+    for (const f of sugs.filter((m) => m.name === 'fmt')) {
       const before = f.attrs['before'] as {
         marks?: unknown[];
         attrs?: Record<string, unknown>;
@@ -250,21 +280,19 @@ function baselineStream(nodes: Node[]): string {
  * hold exactly when this stream, with the submitter's own suggestions taken back, is the same
  * before and after the commit (the reading of ADR 0050 item 2), written here as text.
  */
-function streamWithout(nodes: Node[], rejected: (m: Node['marks'][number]) => boolean): string {
+function streamWithout(nodes: Node[], rejected: (m: Sug) => boolean): string {
   const out: string[] = [];
   const SUGGESTIONS = ['ins', 'del', 'fmt'];
   const visit = (n: Node) => {
-    const mine = n.marks.filter((m) => SUGGESTIONS.includes(m.type.name) && rejected(m));
-    if (mine.some((m) => m.type.name === 'ins')) return;
-    const kept = n.marks.filter((m) => !mine.includes(m));
-    let plain = kept
+    const sugs = sugsOf(n);
+    const mine = sugs.filter(rejected);
+    if (mine.some((m) => m.name === 'ins')) return;
+    let plain = n.marks
       .filter((m) => !SUGGESTIONS.includes(m.type.name))
       .map((m) => canonicalize(m.toJSON()));
-    const others = kept
-      .filter((m) => SUGGESTIONS.includes(m.type.name))
-      .map((m) => canonicalize(m.toJSON()));
-    let attrs: Record<string, unknown> = n.isText ? {} : { ...n.attrs };
-    for (const f of mine.filter((m) => m.type.name === 'fmt')) {
+    const others = sugs.filter((m) => !mine.includes(m)).map((m) => canonicalize(m.json));
+    let attrs: Record<string, unknown> = plainAttrs(n);
+    for (const f of mine.filter((m) => m.name === 'fmt')) {
       const before = f.attrs['before'] as {
         marks?: unknown[];
         attrs?: Record<string, unknown>;
@@ -294,9 +322,9 @@ export function isLabel(user: unknown): boolean {
 function othersMarks(nodes: Node[], user: string): string {
   const out: string[] = [];
   const visit = (n: Node) => {
-    for (const m of n.marks) {
-      if (!['ins', 'del', 'fmt'].includes(m.type.name) || m.attrs['user'] === user) continue;
-      out.push(`${canonicalize(m.toJSON())}:${n.isText ? n.text : n.type.name}`);
+    for (const m of sugsOf(n)) {
+      if (m.attrs['user'] === user) continue;
+      out.push(`${canonicalize(m.json)}:${n.isText ? n.text : n.type.name}`);
     }
     n.forEach(visit);
   };
@@ -346,7 +374,7 @@ function validSuggestion(
   }
   // The user's own suggestions: marks naming them, and in an import the labels of new
   // identifiers (spike S11 change 6). A label never names a user.
-  const own = (m: Node['marks'][number]) =>
+  const own = (m: Sug) =>
     isLabel(m.attrs['user'])
       ? importing && !owners.has(String(m.attrs['id']))
       : m.attrs['user'] === user;
@@ -357,8 +385,8 @@ function validSuggestion(
     return "another user's suggestion changed";
   let bad: string | null = null;
   const visit = (n: Node) => {
-    for (const m of n.marks) {
-      if (!['ins', 'del', 'fmt'].includes(m.type.name) || m.attrs['user'] !== user) continue;
+    for (const m of sugsOf(n)) {
+      if (m.attrs['user'] !== user) continue;
       const owner = owners.get(String(m.attrs['id']));
       if (owner !== undefined && owner !== user)
         bad = `suggestion id ${String(m.attrs['id'])} belongs to ${owner}`;
@@ -419,8 +447,7 @@ function identityViolations(c: OracleCommit, importing: boolean): string[] {
   const out: string[] = [];
   const fresh = new Map<string, string>();
   c.after.descendants((n) => {
-    for (const m of n.marks) {
-      if (!['ins', 'del', 'fmt'].includes(m.type.name)) continue;
+    for (const m of sugsOf(n)) {
       const id = String(m.attrs['id']);
       const who = String(m.attrs['user']);
       const owner = c.owners.get(id) ?? fresh.get(id);

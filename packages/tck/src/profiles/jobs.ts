@@ -210,7 +210,7 @@ export const EXPORTS: ProfileDef = {
         equal(
           problemOf(r, 'a caller of another document').code,
           'not_found',
-          'the token must cover the job document (05 §6.1; owner decision 57)',
+          'a job of a document the token does not cover is not found (05 §6.1; owner decision 57)',
         );
         const service = await ctx.service.call('GET', `/exports/${job.id}`);
         equal(service.status, 200, 'a service credential may read any job of its tenant (D69)');
@@ -558,7 +558,7 @@ export const ASSETS: ProfileDef = {
             'another document',
           ).code,
           'not_found',
-          'completing an asset of another document (owner decision 57)',
+          'completing an asset of another document',
         );
         const r = await ctx.service.as(outsider, 'POST', `/documents/${other}/assets/resolve`, {
           body: { assets: [aid] },

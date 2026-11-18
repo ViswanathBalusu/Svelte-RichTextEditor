@@ -190,6 +190,8 @@ export interface PdfLink {
   destName: string | null;
   /** The index of the page the destination is on, from 0, or null when it does not resolve. */
   destPage: number | null;
+  /** The annotation's /Contents text, or null when it has none. */
+  contents: string | null;
 }
 
 export interface PdfOutlineItem {
@@ -339,6 +341,7 @@ export function pdfLinks(pdf: Uint8Array): PdfLinks {
         page: index,
         rect: [rect[0]!, rect[1]!, rect[2]!, rect[3]!],
         ...resolve(destOf(d)),
+        contents: d['Contents'] === undefined ? null : textString(strOf(get(d['Contents'])) ?? ''),
       });
     }
   });

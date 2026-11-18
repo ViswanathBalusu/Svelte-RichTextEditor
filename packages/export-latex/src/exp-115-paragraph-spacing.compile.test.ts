@@ -12,11 +12,15 @@
  * container (`above` null) and ends at a paragraph of the body, the same difference of the
  * paragraph's own position is compared.
  *
- * Not measured here, and said so: a gap with a table, a figure or an equation on either side (the
- * layout report does not place those blocks the same way), a trailing gap (nothing follows it), a
- * gap across a page boundary, and the containers `footnote` and `story` (a story is printed only
- * when a page setup uses it, which these documents do not do; footnote text is set at the foot of
- * the page). The test lists the gaps that it did not measure.
+ * A gap with a table, a figure or an equation on either side is measured by the position of that block
+ * in the layout report. A gap in the body is compared with a plain case whose table cells keep their
+ * spacing (`plainOf` with `cells` false), so that a table is as high in both cases; a gap in a cell is
+ * compared with the case that has no spacing anywhere.
+ *
+ * Not measured here, and said so: a trailing gap (nothing follows it), the leading gap of a cell, a gap
+ * across a page boundary, and the containers `footnote` and `story` (a story is printed only when a
+ * page setup uses it, which these documents do not do; footnote text is set at the foot of the page).
+ * The test lists the gaps that it did not measure.
  *
  * Node.js only; needs `lualatex` and the local font copy (`test/cdm-local-tex.ts`); skips without
  * them. Evidence:
@@ -50,10 +54,10 @@ const FILE = loadSemantics<File>('paragraph-spacing');
 /** How many gaps of each flow are measured in the PDF (the rest are listed in the header). */
 const MEASURED: Readonly<Record<string, number>> = {
   'region-is-transparent': 4,
-  'table-and-its-cells': 2,
-  'table-style-in-cells': 1,
+  'table-and-its-cells': 4,
+  'table-style-in-cells': 3,
   'section-break-is-transparent': 1,
-  'figure-and-equation': 1,
+  'figure-and-equation': 4,
   'footnote-edges': 0,
   'story-edges': 0,
 };
@@ -61,12 +65,17 @@ const SP_PER_TWIP = 65781.76 / 20;
 const TOL_TWIPS = 1;
 const ready = lualatexAvailable();
 
-/** The case with every paragraph's spacing set to zero by direct properties. */
-function plainOf(c: Flow): Flow {
+/**
+ * The case with the spacing of every paragraph set to zero by direct properties. With `cells` false the
+ * paragraphs inside table cells keep theirs, so that a table is as high as in the spaced case and a
+ * gap next to the table is not mixed with a change of its height.
+ */
+function plainOf(c: Flow, cells: boolean): Flow {
   const copy = structuredClone(c) as Flow;
   const visit = (n: unknown): void => {
     if (!n || typeof n !== 'object') return;
     const node = n as J;
+    if (!cells && node['type'] === 'table_cell') return;
     if (node['type'] === 'paragraph') {
       const attrs = ((node['attrs'] as J | undefined) ?? {}) as J;
       attrs['spaceBefore'] = 0;
@@ -115,11 +124,10 @@ describe.skipIf(!ready)('EXP-115 criterion 1: paragraph spacing flows measured i
       `[paragraph-spacing x LaTeX] flow ${flow.id}${MEASURED[flow.id] === 0 ? ' (not run: no body or cell gap)' : ''}`,
       async () => {
         const body = (flow.body ?? []) as J[];
-        const isParagraph = (id: string | null): boolean =>
-          id !== null && findById(body, id)?.['type'] === 'paragraph';
-        const [spaced, plain] = await Promise.all([
+        const [spaced, plainAll, plainBody] = await Promise.all([
           positions(flow, `${flow.id}-spaced`),
-          positions(plainOf(flow), `${flow.id}-plain`),
+          positions(plainOf(flow, true), `${flow.id}-plain`),
+          positions(plainOf(flow, false), `${flow.id}-plain-body`),
         ]);
         const measured: string[] = [];
         const notMeasured: string[] = [];
@@ -138,12 +146,15 @@ describe.skipIf(!ready)('EXP-115 criterion 1: paragraph spacing flows measured i
               notMeasured.push(`${label} (a footnote or story container)`);
               continue;
             }
-            if (!isParagraph(g.below) || (g.above !== null && !isParagraph(g.above))) {
-              notMeasured.push(label);
+            if (g.below === null) {
+              notMeasured.push(`${label} (a trailing gap: nothing follows it)`);
               continue;
             }
-            const b = spaced(g.below!);
-            const pb = plain(g.below!);
+            // A gap in a cell is compared with the case that has no spacing anywhere; a gap in the
+            // body, with the case whose tables keep theirs.
+            const plain = cell ? plainAll : plainBody;
+            const b = spaced(g.below);
+            const pb = plain(g.below);
             const a = g.above === null ? null : spaced(g.above);
             const pa = g.above === null ? null : plain(g.above);
             if (!b || !pb || (g.above !== null && (!a || !pa))) {

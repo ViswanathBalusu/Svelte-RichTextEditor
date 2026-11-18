@@ -187,16 +187,39 @@ function extraCases(): MatrixCase[] {
     json(wrap(s, at(s, 'pFnUtilities0001'), region({ id: 'rInFootnote00001' }))),
     true,
   );
+  add(
+    'I1',
+    'addNodeMark: a suggestion as a node mark on a region, which a block does not take (owner decision 92)',
+    example,
+    json(
+      new AddNodeMarkStep(
+        at(e, 'rG7mK2pQ9xYt4HcD'),
+        schema.marks['ins']!.create({ id: 'sInsRegion000001', user: 'bob' }),
+      ),
+    ),
+    true,
+  );
   // I2
+  const atom = (x: Node) => x.isInline && x.isAtom && !x.isText;
   add(
     'I2',
-    'addNodeMark: an insertion on a paragraph that reuses another user’s suggestion identifier',
+    'addNodeMark: an insertion on an inline node that reuses another user’s suggestion identifier',
     sink,
     json(
       new AddNodeMarkStep(
-        at(s, 'pHeading00000001'),
+        at(s, atom),
         schema.marks['ins']!.create({ id: 'sAliceInsert0001', user: 'mallory' }),
       ),
+    ),
+  );
+  add(
+    'I2',
+    'attr: a block suggestion that reuses another user’s suggestion identifier',
+    sink,
+    json(
+      new AttrStep(at(s, 'pHeading00000001'), 'suggest', [
+        { type: 'ins', attrs: { id: 'sAliceInsert0001', user: 'mallory' } },
+      ]),
     ),
   );
   // I3
@@ -291,6 +314,21 @@ function extraCases(): MatrixCase[] {
     'replaceAround: a region whose policy is not in the grammar',
     example,
     json(wrap(e, lastE, region({ id: 'rBadPolicy000001', policy: 'secret' }))),
+  );
+  add(
+    'I11',
+    'addNodeMark: a format suggestion on an inline node that records attributes, which text has none of',
+    sink,
+    json(
+      new AddNodeMarkStep(
+        at(s, atom),
+        schema.marks['fmt']!.create({
+          id: 'sFmtAtom00000001',
+          user: 'carol',
+          before: { attrs: { style: 'Normal' } },
+        }),
+      ),
+    ),
   );
   // I13 to I15
   add(

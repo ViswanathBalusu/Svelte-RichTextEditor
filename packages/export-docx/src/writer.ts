@@ -36,6 +36,7 @@ import {
 import {
   CDM1,
   LINK_HREF_PATTERN,
+  SUGGESTION_HOSTS,
   indexDefinition,
   type JsonValue,
 } from '@docedit/model/definition';
@@ -277,13 +278,21 @@ const FOOTNOTE_FORMATS: Readonly<Record<string, string>> = {
 let settledIds = 0;
 const settledId = (): string => `settled${String(++settledIds).padStart(9, '0')}`;
 
+/** The suggestions of a paragraph, a table row or a table: its suggest attribute (owner decision 92). */
+function blockSuggest(n: JsonNode): JsonMark[] {
+  const s = n.attrs?.['suggest'];
+  return Array.isArray(s) ? (s as unknown as JsonMark[]) : [];
+}
+
 function settle(node: JsonNode, mode: 'accept' | 'reject'): JsonNode | null {
   const marks = node.marks ?? [];
-  if (mode === 'accept' && marks.some((m) => m.type === 'del')) return null;
-  if (mode === 'reject' && marks.some((m) => m.type === 'ins')) return null;
+  const onBlock = SUGGESTION_HOSTS.includes(node.type);
+  const sug = onBlock ? blockSuggest(node) : marks;
+  if (mode === 'accept' && sug.some((m) => m.type === 'del')) return null;
+  if (mode === 'reject' && sug.some((m) => m.type === 'ins')) return null;
   const out: JsonNode = { ...node };
   let kept = marks.filter((m) => !SUGGESTION_MARKS.has(m.type));
-  const fmt = marks.find((m) => m.type === 'fmt');
+  const fmt = sug.find((m) => m.type === 'fmt');
   if (mode === 'reject' && fmt) {
     const before = (fmt.attrs?.['before'] ?? {}) as { marks?: JsonMark[]; attrs?: Values };
     if (node.type === 'text' || ix.nodes.get(node.type)?.inline) {
@@ -292,6 +301,10 @@ function settle(node: JsonNode, mode: 'accept' | 'reject'): JsonNode | null {
   }
   if (kept.length) out.marks = kept;
   else delete out.marks;
+  if (onBlock && out.attrs && 'suggest' in out.attrs) {
+    const { suggest: _settled, ...rest } = out.attrs;
+    out.attrs = rest;
+  }
   if (node.content) {
     const content = node.content.map((c) => settle(c, mode)).filter((c): c is JsonNode => !!c);
     if (!content.length) {
@@ -984,14 +997,14 @@ class DirectWriter {
       }
     }
     // Block suggestions on the paragraph: its mark is inserted or deleted, its content too.
-    const own = (n.marks ?? []).filter((m) => m.type === 'ins' || m.type === 'del');
+    const own = blockSuggest(n).filter((m) => m.type === 'ins' || m.type === 'del');
     const block = [
       ...cx.blockSuggestions.filter((m) => !own.some((o) => o.type === m.type)),
       ...own,
     ];
     const markRevision = block.map((m) => this.revisionElement(m, true)).join('');
     if (markRevision) extras.push({ name: w('rPr'), raw: el('w:rPr', {}, markRevision) });
-    const fmt = (n.marks ?? []).find((m) => m.type === 'fmt');
+    const fmt = blockSuggest(n).find((m) => m.type === 'fmt');
     if (fmt) {
       const before = (fmt.attrs?.['before'] ?? {}) as { attrs?: Values };
       const prev = { ...values, ...(before.attrs ?? {}) };
@@ -1221,7 +1234,7 @@ class DirectWriter {
       }),
     });
     const tblPr = itemsXml(mergeContainer(TBLPR, values, [], this.ctx, tblExtras), this.ns);
-    const tableSug = (n.marks ?? []).filter((x) => x.type === 'ins' || x.type === 'del');
+    const tableSug = blockSuggest(n).filter((x) => x.type === 'ins' || x.type === 'del');
     const rows = n.content ?? [];
     const cols = grid.length;
     const width = (col: number, span: number): number =>
@@ -1231,7 +1244,7 @@ class DirectWriter {
     for (const [r, row] of rows.entries()) {
       const rowSug = [
         ...tableSug,
-        ...(row.marks ?? []).filter((x) => x.type === 'ins' || x.type === 'del'),
+        ...blockSuggest(row).filter((x) => x.type === 'ins' || x.type === 'del'),
       ];
       const trExtras: MergedItem[] = [];
       if (r < headerRows) trExtras.push({ name: w('tblHeader'), raw: el('w:tblHeader') });

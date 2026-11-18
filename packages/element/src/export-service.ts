@@ -21,6 +21,28 @@ import { startExport, type ExportRequest, type ExportSource } from './export.ts'
 /** The targets the dialog offers, in order: the PDF and the LaTeX bundle first (UX-101). */
 export const EXPORT_TARGETS: readonly ExportTarget[] = ['pdf', 'tex'];
 
+/** Every target the dialog has a name for (`export.target.<id>` in the shell's strings). */
+const KNOWN_TARGETS: readonly ExportTarget[] = ['pdf', 'tex', 'docx', 'cdm', 'html', 'md'];
+
+/**
+ * The targets the dialog offers for what a deployment announced (`exportTargets` of the discovery
+ * document, 05 §2): the PDF and the LaTeX bundle first when they are announced, then the others in
+ * the order announced. A name the dialog has no string for is left out. When the deployment does
+ * not say (null), the fixed list stands (ADR 0382).
+ */
+export function announcedTargets(
+  announced: readonly string[] | null | undefined,
+): readonly ExportTarget[] {
+  if (!announced) return EXPORT_TARGETS;
+  const known = (id: string): id is ExportTarget =>
+    (KNOWN_TARGETS as readonly string[]).includes(id);
+  const listed = announced.filter(known);
+  return [
+    ...EXPORT_TARGETS.filter((t) => listed.includes(t)),
+    ...listed.filter((t) => !EXPORT_TARGETS.includes(t)),
+  ];
+}
+
 /** What the dialog needs of a job report (the wire job carries more). */
 export function jobView(job: ExportJob): ExportJobView {
   return {
@@ -52,7 +74,7 @@ export interface ExportServiceOptions {
   source: () => ExportSource | null;
   /** Called with every report of every job this service started. */
   onJob?: (job: ExportJob) => void;
-  /** The targets to offer; absent, `EXPORT_TARGETS`. */
+  /** The targets to offer; absent, those the backend announced, or `EXPORT_TARGETS`. */
   targets?: readonly ExportTarget[];
 }
 
@@ -67,10 +89,24 @@ export function exportService(options: ExportServiceOptions): ExportService {
     }
     return e;
   };
-  const targets = options.targets ?? EXPORT_TARGETS;
+  // The deployment's own list, read from the backend when the dialog asks: discovery
+  // is read at connect, before the editor is shown, and the list is the same until it reconnects.
+  // The same array is returned while the announced list is the same, so a reader sees no change.
+  let lastKey = '\0';
+  let last: readonly ExportTarget[] = EXPORT_TARGETS;
+  const targetsNow = (): readonly ExportTarget[] => {
+    if (options.targets) return options.targets;
+    const announced = options.source()?.backend?.exportTargets?.() ?? null;
+    const key = announced ? announced.join(',') : '\0';
+    if (key !== lastKey) {
+      lastKey = key;
+      last = announcedTargets(announced);
+    }
+    return last;
+  };
 
   return {
-    targets: { get: () => targets, subscribe: () => () => {} },
+    targets: { get: targetsNow, subscribe: () => () => {} },
     async request(target: ExportTarget, given: ExportOptions): Promise<{ jobId: string }> {
       // The options the dialog passes are the wire options; nothing is added or renamed here.
       const body: ExportRequest = { target, options: { ...given } };

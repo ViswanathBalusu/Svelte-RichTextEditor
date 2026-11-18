@@ -39,7 +39,8 @@ import type { AssetsPort as PictureAssetsPort, JournalPort } from '@docedit/engi
 import { type RestorePlan, readRestorePlan, restoreBase } from '@docedit/engine/headless';
 import { pictureAssets } from './assets.ts';
 import { type IdbJournal, openIdbJournal } from './journal-idb.ts';
-import { AUTH_CODES, codeOf, messageOf } from './errors.ts';
+import { AUTH_CODES, codeOf, messageOf, retryAfterMsOf } from './errors.ts';
+import type { FailureInfo } from './failure.ts';
 import { manifestFamilyLookup, readOnce, registerManifestFonts } from './font-loader.ts';
 import type { HostApi } from './host-api.ts';
 import {
@@ -134,6 +135,12 @@ export interface EditorHandle {
 
 export interface SessionHost {
   emit<K extends DocEditorEventName>(name: K, detail: DocEditorEventMap[K]): void;
+  /**
+   * The load ended in a failure that the user is told about (PRO-039; decision 45), after the fatal
+   * `de-error` was raised. Not called for the codes that ask the host for a new token. `retryAfterMs`
+   * is the wait the refusal asked for, or null.
+   */
+  failed?(info: FailureInfo): void;
   /** Creates the core and mounts the shell; rejects with a registry code the document cannot be read. */
   mount(
     content: Content,
@@ -601,6 +608,7 @@ export class Session {
       message: `${phase}: ${messageOf(e)}`,
       fatal: true,
     });
+    this.#options.host.failed?.({ code, retryAfterMs: retryAfterMsOf(e) });
   }
 
   /** Focus moves into the editing surface, if one is mounted. */

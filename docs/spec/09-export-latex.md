@@ -90,7 +90,7 @@ The converter MUST write output only through these emitters, and nothing else ma
 | Emitter | Use | Rule |
 |---|---|---|
 | `text` | Body text | Escapes `\ { } $ & # _ % ^ ~`; maps the no-break space and soft hyphen; removes control and bidirectional override characters; NFC; guards a `[` that follows a line break or an item |
-| `pdfString` | Bookmarks, metadata, alternative text | PDF string encoding; no TeX commands survive |
+| `pdfString` | Bookmarks, metadata, alternative text, link titles | PDF string encoding; no TeX commands survive |
 | `kvValue` | Any key-value option | Braced, with `,`, `=`, `]` and braces neutralised |
 | `url` | Link targets | Scheme allow-list of invariant I9 (so no `run:` or `file:` actions); percent-encoding of every character outside RFC 3986, and the whole target reaches TeX hex-encoded, so no character of it is read as TeX (owner decision 25, [owner-decisions-2026-11-15](../owner-decisions-2026-11-15.md)) |
 | `dimen` | Every length | Converted from the CDM's integers and clamped to a safe range |
@@ -125,7 +125,7 @@ The document service MUST validate every `latex` attribute when the commit that 
 - Reject definitions and low-level primitives regardless of spelling, including `\def`, `\let`, `\csname`, `\catcode`, `\input`, `\include`, `\openin`, `\write`, `\directlua`, `\special`, `\immediate`, `\newcommand`, and the `^^` character notation.
 - Reject commands that paint outside their own box or hide other content: `\rlap`, `\llap`, `\smash`, `\raisebox`, `\colorbox`, `\fcolorbox`, `\rule` and `\kern`, `\hskip`, `\hspace` with negative or large arguments. Every dimension argument is bounded. Without this, a person who may edit only one region could cover a price in another region with a white box in the PDF that gets signed.
 - Reject unescaped `%`, `#`, `~` and a stray `&` outside alignment environments. `\text{50% of}` balances its braces but comments out the closing one.
-- Allow only one display environment, `equation` (numbered or not), containing `aligned`, `gathered`, `cases` and the matrix environments, so that the editor and the typesetter count equation numbers the same way.
+- Allow only one display environment, `equation` (numbered or not), and let the class supply it: the converter writes the wrapper around the value, so a value holds `aligned`, `gathered`, `cases` or a matrix environment and is rejected if it names `equation` itself, `align`, `gather`, `multline` or `eqnarray`. This way the editor and the typesetter count equation numbers the same way (owner decision 211, 2026-11-17).
 - Limit length to 4,000 characters and nesting depth to 50. The class clips every equation to its box.
 
 An equation that fails is rejected at edit time. If one reaches the converter anyway, it is replaced with a visible placeholder and a diagnostic.
@@ -177,7 +177,7 @@ What the editor does when its own layout disagrees with a reported break is defi
 
 ### 9.1 Job flow and options
 
-`POST /documents/{id}/exports` creates a job (05, section 6). States: `queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`. Progress is pushed as `export.progress` events. The result holds a signed URL with an expiry, the page count, the URL of `layout.json`, whether page references converged, warnings and diagnostics. A second request for the same bundle and profile returns the first result.
+`POST /documents/{id}/exports` creates a job (05, section 6). States: `queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`. Progress is pushed as `export.progress` events. The result holds a signed URL with an expiry (on the asset origin of 10, section 3.5, with a fixed content type, `nosniff` and a download disposition for each file; never a URL of the object store; owner decision 66), the page count, the URL of `layout.json`, whether page references converged, warnings and diagnostics. A second request for the same bundle and profile returns the first result.
 
 | Option | Values |
 |---|---|

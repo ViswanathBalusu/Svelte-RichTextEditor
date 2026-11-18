@@ -115,6 +115,11 @@ export interface HandlerDeps {
   assetRegistry?: AssetRegistry;
   /** The asset worker's upload checks, pre-signed uploads and signed URLs; absent: no assets. */
   uploads?: AssetUploads | null;
+  /**
+   * The URL of a result file of an export job on the separate asset origin (SEC-036 criterion 6;
+   * owner decision 66). Absent when no asset origin is set: results then get the object store's URLs.
+   */
+  exportUrl?: (tenant: string, job: string, name: string, expiresAt: number) => string;
   /** Lifetime of a pre-signed upload, seconds (a setting). */
   uploadSeconds?: number;
   /** The rebase window in steps that a thread's `baseSeq` must be within; absent: the protocol default. */

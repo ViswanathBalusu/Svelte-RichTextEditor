@@ -75,6 +75,7 @@ local GLUE_LEADERS     = subtype_number("glue", "leaders")
 local GLUE_USER        = subtype_number("glue", "userskip")
 local DISC_EXPLICIT    = subtype_number("disc", "explicit")
 local HLIST_LINE       = subtype_number("hlist", "line")
+local HLIST_INDENT     = subtype_number("hlist", "indent")
 local MATH_BEGIN       = subtype_number("math", "beginmath")
 
 -- Attribute register numbers, set by init().
@@ -99,6 +100,24 @@ end
 -- Characters of catcode 12 (space 10): inert in every context, including \pdfstringdef.
 function docedit.str(hex)
   tex.sprint(-2, decode(hex))
+end
+
+-- The same text for the contexts that turn a title into a PDF string (bookmarks, link contents,
+-- metadata). hyperref reads a catcode-12 backslash there as the start of an escape and garbles the
+-- rest of the string, so a backslash is written as \textbackslash, which every such context knows.
+function docedit.strexp(hex)
+  local s = decode(hex)
+  local pos = 1
+  while true do
+    local i = s:find("\\", pos, true)
+    if not i then
+      tex.sprint(-2, s:sub(pos))
+      return
+    end
+    tex.sprint(-2, s:sub(pos, i - 1))
+    tex.sprint("\\textbackslash ")
+    pos = i + 1
+  end
 end
 
 -- Sets \DE@altlabel globally to the decoded text, as catcode-12 characters: the alternative text
@@ -429,7 +448,9 @@ local function tallest_run(head)
         if d > md then md = d end
       end
     else
-      local lh = has_attribute(n, A.rlh)
+      -- The paragraph indent box carries the paragraph's own font attributes. It is not a run, so it
+      -- must not lift the first line (ADR 0032 §4; EXP-021): an empty line falls back to the paragraph.
+      local lh = not (id == HLIST and getsubtype(n) == HLIST_INDENT) and has_attribute(n, A.rlh)
       if lh and (id == GLYPH or id == HLIST or id == VLIST or id == RULE) and lh > tallest then
         tallest, descent = lh, has_attribute(n, A.rld) or 0
       end
@@ -710,6 +731,90 @@ local function va_of(box)
   return nil
 end
 
+-- The shading of a cell that spans rows (EXP-041 criterion 3). colortbl paints a cell's colour in
+-- its own row, and the content of a row span hangs from the first row, so painting the covered
+-- rows with \cellcolor would hide it. \DErowfill{rows}{RRGGBB} marks the cell; when the page is
+-- shipped out, a filled rectangle is put at the start of the cell's box in the first row. It runs
+-- from the bottom of that row down to the bottom of the last row the span covers, which is the sum
+-- of what lies between (rows, rules and glue), so the content is drawn after it. A row of the
+-- table holds a p-column box; the rows that \cline makes do not.
+local SPAN_ID  = luatexbase.new_whatsit("docedit.span")
+local spans    = {}
+local BP       = 65781.76
+-- The rectangle reaches 1 bp up into the first row, which has the same colour, so that a viewer
+-- that anti-aliases the two edges draws no hairline between them.
+local OVERLAP  = 65782
+
+function docedit.rowfill(rows, hex)
+  spans[#spans + 1] = { rows = rows, hex = hex }
+  local n = node.new(WHATSIT, USER_DEFINED)
+  n.user_id = SPAN_ID
+  n.type = 100
+  n.value = #spans
+  node.write(n)
+  va_used = true
+end
+
+local function span_of(box)
+  local n = getlist(box)
+  while n do
+    if getid(n) == WHATSIT and getsubtype(n) == USER_DEFINED and getfield(n, "user_id") == SPAN_ID then
+      return spans[getfield(n, "value")]
+    end
+    n = getnext(n)
+  end
+  return nil
+end
+
+local function is_table_row(row)
+  local c = getlist(row)
+  while c do
+    if getid(c) == HLIST then
+      local d = getlist(c)
+      while d do
+        if getid(d) == VLIST then return true end
+        d = getnext(d)
+      end
+    end
+    c = getnext(c)
+  end
+  return false
+end
+
+local function paint_span(cell, row, span)
+  local _, _, rd = getwhd(row)
+  local below, left = 0, span.rows - 1
+  local m = getnext(row)
+  while m and left > 0 do
+    local id = getid(m)
+    if id == HLIST then
+      local _, h, d = getwhd(m)
+      below = below + h + d
+      if is_table_row(m) then left = left - 1 end
+    elseif id == GLUE then
+      below = below + (getglue(m) or 0)
+    elseif id == KERN then
+      below = below + getkern(m)
+    elseif id == RULE then
+      local _, h, d = getwhd(m)
+      if h > -1000000000 and d > -1000000000 then below = below + h + d end
+    end
+    m = getnext(m)
+  end
+  if below <= 0 then return end
+  local w = getwhd(cell)
+  local r = tonumber(span.hex:sub(1, 2), 16) / 255
+  local g = tonumber(span.hex:sub(3, 4), 16) / 255
+  local b = tonumber(span.hex:sub(5, 6), 16) / 255
+  local lit = new_node("whatsit", "pdf_literal")
+  direct.setfield(lit, "mode", 0)
+  direct.setfield(lit, "data", string.format(
+    "/Artifact BMC q %.4f %.4f %.4f rg 0 %.4f %.4f %.4f re f Q EMC",
+    r, g, b, -(rd + below) / BP, w / BP, (below + OVERLAP) / BP))
+  direct.setlink(lit, getlist(cell))
+  setlist(cell, lit)
+end
+
 local function va_walk(head, cell, row)
   local n = head
   while n do
@@ -717,6 +822,8 @@ local function va_walk(head, cell, row)
     if id == HLIST then
       va_walk(getlist(n), n, cell)
     elseif id == VLIST then
+      local sp = cell and row and span_of(n)
+      if sp then paint_span(cell, row, sp) end
       local k = cell and row and va_of(n)
       if k then
         local _, rh, rd = getwhd(row)

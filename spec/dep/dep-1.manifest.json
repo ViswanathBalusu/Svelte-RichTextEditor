@@ -3,13 +3,13 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "7a1f9d3b919ba13560e310103bc896019fed0aa46ef230a18e3f5d07cd60e535",
+  "definitionHash": "6273c732d4bbd40a7e2c9e921cfd37ee6f470ef2e8679edf7dd6b060d21f6391",
   "cdm": {
     "min": 1,
     "max": 1,
     "schema": "spec/cdm/cdm-1.schema.json",
     "id": "urn:docedit:cdm:1:draft",
-    "sha256": "b6199182f27e8eee2076c83458d3cc4c24ea51a9266f4ff7700fada9c9d3fef7"
+    "sha256": "0345bc5ee75752eb9e032db3bb3edea70f90b038fce55c8a4c2c47a8dbfb15ad"
   },
   "counts": {
     "messages": 28,
@@ -22,8 +22,8 @@
   },
   "files": {
     "spec/dep/dep-1.asyncapi.json": "7824ed66e63c28d0afb86b13b4ed0e3ee664bfac2219a62eafd1fdf50585d56e",
-    "spec/dep/dep-1.openapi.json": "fa77836fb85308cf4651991eb25fdac453a738f5533cd201764cad9ecf28b426",
-    "spec/dep/dep-1.schema.json": "423396f052f532143cb79a844548fe9c10a8d04459c486ce1a08fd3fff000b88",
+    "spec/dep/dep-1.openapi.json": "403a12999119744e7f647b4b8ec6ff2d5eef5ed154c5873c98002e5a33ced1aa",
+    "spec/dep/dep-1.schema.json": "34e105353878cd5f1cb91ab45c11d1e50ec71bddf0c47245fb4d24cac8ec23b1",
     "spec/dep/webhooks/dep.document.created.v1.schema.json": "1e16a104e436cdf8f6213fc1f051a4d9a1ec58a4c2c5eeb25829ed86ae672c54",
     "spec/dep/webhooks/dep.document.deleted.v1.schema.json": "890c2efa8c1731ef2208fbf3c86629fa2eabf2b1eef70dd74e6e8eb52a53e404",
     "spec/dep/webhooks/dep.document.state_changed.v1.schema.json": "9cc6359f41bf28afce274afe4a664fbdd0cb18ac1bc118a80341fb83f32954fb",
@@ -61,6 +61,6 @@
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "9152416acc7809df32797943418c7a08be2f0169dd5f581a6c712d938774b333",
     "spec/dep/dep-1.registry.json": "d6ef37f834749dc070f0e45cb5699c591c14d5f80a3b93b3e77733151d4a47c4",
     "spec/dep/dep-1.gaps.json": "9f39f72f4a6e61ac2a30bf96e95cda034772f01351a6f23e8d5da99ab4c13533",
-    "packages/protocol/src/generated/types.ts": "631ce3d4f978105419a634ca31d6b3a428ae66b9d551af63d9925a0e78980f9e"
+    "packages/protocol/src/generated/types.ts": "a7945fca2dc9e01f9ac8bdce34f854dcdc47fd84dea365c782db17d9b3a04937"
   }
 }

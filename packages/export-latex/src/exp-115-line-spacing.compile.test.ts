@@ -12,12 +12,10 @@
  * twips of natural height, and a `multiple` of 1.5 carries that to 2). The natural heights that
  * the sizes give are asserted to be within one twip of the fixture's `runs`.
  *
- * The paragraph's own font (style Normal) is set to the size of the shortest run of the case. The
- * class makes the first line of a paragraph at least as tall as the paragraph font's natural height
- * (the `indent` box of `DE@par` carries the paragraph's run attributes, `DElh` in the style
- * macro), which the fixture does not do: its line is the tallest *run* only. With Normal at the
- * default 11 pt (natural 300 twips) over runs of natural 253 the first line is 7 twips taller, and
- * the test "first line ... default paragraph font" below records that as a known failure.
+ * The paragraph's own font (style Normal) is set to the size of the shortest run of the case, for the
+ * empty line and for the cases whose only line is the paragraph mark. Before class 0.2.13 the `indent`
+ * box of `DE@par` lifted the first line to the paragraph font's natural height; the test "first line ...
+ * default paragraph font" below keeps that fixed.
  *
  * The empty line has no word, so the paragraph is measured as the difference between a document
  * with an empty paragraph between two others and one without it; its height is that of the
@@ -223,34 +221,30 @@ describe.skipIf(!ready)('EXP-115 criterion 1: line spacing measured in the PDF',
 });
 
 /**
- * Known failure, kept as `it.fails` so that the suite turns red when it is fixed: with the paragraph
+ * Was a known failure until class 0.2.13 (EXP-021): with the paragraph
  * font at the default 11 pt, the first line of the `single` case is 300 twips high, not the 253 of
  * its only run (the `indent` box carries the paragraph's own run attributes). See the Notes of
  * EXP-115 and EXP-021.
  */
 describe.skipIf(!ready)('EXP-115 criterion 1: the first line and the paragraph font', () => {
-  it.fails(
-    '[line-spacing x LaTeX] first line of a paragraph is the height of its runs, not of the default paragraph font',
-    async () => {
-      const c = CASES.find((x) => x.id === 'single')!;
-      const attrs = {
-        lineSpacing: c.lineSpacing,
-        lineRule: c.lineRule,
-        spaceBefore: 0,
-        spaceAfter: 0,
-      };
-      const line = runNode('R0', c.runs[0]!, false);
-      const content = [...line, { type: 'break', attrs: { kind: 'line' } }, ...line];
-      const words = await compile(
-        [{ type: 'paragraph', attrs: { id: nid('p'), ...attrs }, content }],
-        'first-line',
-        null,
-      );
-      const same = words.filter((w) => w.text === 'R0');
-      expect(Math.abs((same[1]!.yMin - same[0]!.yMin) * 20 - c.expected)).toBeLessThanOrEqual(
-        TOL_TWIPS,
-      );
-    },
-    600_000,
-  );
+  it('[line-spacing x LaTeX] first line of a paragraph is the height of its runs, not of the default paragraph font', async () => {
+    const c = CASES.find((x) => x.id === 'single')!;
+    const attrs = {
+      lineSpacing: c.lineSpacing,
+      lineRule: c.lineRule,
+      spaceBefore: 0,
+      spaceAfter: 0,
+    };
+    const line = runNode('R0', c.runs[0]!, false);
+    const content = [...line, { type: 'break', attrs: { kind: 'line' } }, ...line];
+    const words = await compile(
+      [{ type: 'paragraph', attrs: { id: nid('p'), ...attrs }, content }],
+      'first-line',
+      null,
+    );
+    const same = words.filter((w) => w.text === 'R0');
+    expect(Math.abs((same[1]!.yMin - same[0]!.yMin) * 20 - c.expected)).toBeLessThanOrEqual(
+      TOL_TWIPS,
+    );
+  }, 600_000);
 });
