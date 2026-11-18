@@ -14,7 +14,7 @@
  *
  * Universal code: no Node.js or browser API. The web view adds `mount` in `view/version-web.ts`.
  */
-import type { SyncPort } from '@docedit/protocol';
+import type { CommentsPort, SyncPort } from '@docedit/protocol';
 import type {
   CdmEnvelope,
   CommandArgs,
@@ -36,10 +36,19 @@ export interface VersionInput {
   /** The version's name, when it is a named version. */
   readonly name?: string | null;
   /**
-   * The `seq` of the checkpoint the comment ranges come from (HIS-010 criterion 4), when the host
-   * has one. Between checkpoints the ranges are those of the nearest earlier one.
+   * The comment ranges at this `seq` (HIS-010 criterion 4; owner decision 81): the service maps each
+   * thread's range through the commits up to the `seq` (`GET /threads?seq=`), so they are in the
+   * positions of that time. A thread made after the `seq` is not in the list. Absent when the host
+   * has no comments port or the read failed; the version then shows no comment ranges.
    */
-  readonly checkpointSeq?: number | null;
+  readonly comments?: readonly VersionThreadRange[] | null;
+}
+
+/** A thread's range in the document of a version. `from` equals `to` when its text was deleted by then. */
+export interface VersionThreadRange {
+  readonly id: string;
+  readonly from: number;
+  readonly to: number;
 }
 
 /** The core options a version view may take from the live editor (never `doc`, `mode` or `access`). */
@@ -68,7 +77,8 @@ export class VersionDocument {
   readonly seq: number;
   readonly time: string;
   readonly name: string | null;
-  readonly checkpointSeq: number | null;
+  /** Whether the comment ranges of this `seq` were read and are drawn (criterion 4). */
+  readonly commentsShown: boolean;
   /** Always true: no command changes this state. */
   readonly readOnly = true as const;
   protected readonly core: DocumentCore;
@@ -78,8 +88,11 @@ export class VersionDocument {
     this.seq = input.seq;
     this.time = input.time;
     this.name = input.name ?? null;
-    this.checkpointSeq = input.checkpointSeq ?? null;
+    this.commentsShown = input.comments != null;
     this.core = core;
+    // The ranges are those of this `seq`, so they are set as they stand: no mapping is needed.
+    for (const t of input.comments ?? [])
+      core.setThreadRange(t.id, { from: t.from, to: t.to }, input.seq);
   }
 
   /** Opens a version in a core of its own, without a view. */
@@ -95,9 +108,22 @@ export class VersionDocument {
     return this.core.connection.get();
   }
 
-  /** Whether the comment ranges are those of an earlier checkpoint, not of this exact `seq` (criterion 4). */
-  get approximateComments(): boolean {
-    return this.checkpointSeq === null || this.checkpointSeq < this.seq;
+  /**
+   * The comment ranges of the version, in its positions (criterion 4). A range whose text was
+   * deleted by this `seq` is `detached`. Empty when `commentsShown` is false.
+   */
+  commentRanges(): readonly {
+    readonly id: string;
+    readonly from: number;
+    readonly to: number;
+    readonly detached: boolean;
+  }[] {
+    return this.core.threadRanges.get().map((r) => ({
+      id: r.id,
+      from: r.from,
+      to: r.to,
+      detached: r.detached,
+    }));
   }
 
   /**
@@ -142,6 +168,11 @@ export interface VersionOpener {
   readonly sync: Pick<SyncPort, 'loadContent'>;
   readonly docId: string;
   readonly options?: VersionCoreOptions;
+  /**
+   * The comments port; only `threads` is used, with a `seq`, so that the version shows the comment
+   * ranges of that time (HIS-010 criterion 4). Without it, or when the read fails, none are shown.
+   */
+  readonly comments?: Pick<CommentsPort, 'threads'>;
   /** Builds the state; the web view passes its own constructor so the version can be mounted. */
   readonly make?: (input: VersionInput, options: VersionCoreOptions) => VersionDocument;
 }
@@ -168,7 +199,6 @@ export async function openVersion(
   label: {
     readonly time: string;
     readonly name?: string | null;
-    readonly checkpointSeq?: number | null;
   },
 ): Promise<VersionOpen> {
   let read;
@@ -184,7 +214,7 @@ export async function openVersion(
     content: { cdm: read.cdm, requires: [...read.requires], doc: read.doc },
     time: label.time,
     name: label.name ?? null,
-    checkpointSeq: label.checkpointSeq ?? null,
+    comments: opener.comments ? await threadRangesAt(opener.comments, opener.docId, seq) : null,
   };
   const options = opener.options ?? {};
   try {
@@ -195,5 +225,38 @@ export async function openVersion(
   } catch {
     // A document this build cannot open (03 §2) is not a version it can show.
     return { ok: false, reason: 'failed' };
+  }
+}
+
+/** The most pages of threads one version reads; a document with more shows the ranges of these. */
+const THREAD_PAGES_MAX = 20;
+
+/**
+ * The comment ranges at `seq` (`GET /threads?seq=`, ranges mapped to that seq by the service),
+ * or null when the read failed: a version without its comments is still a version (HIS-010
+ * criterion 4). Block threads have no range and are left out; a service that has no comments
+ * (`not_found`) or refuses them leaves the version without ranges.
+ */
+async function threadRangesAt(
+  comments: Pick<CommentsPort, 'threads'>,
+  docId: string,
+  seq: number,
+): Promise<readonly VersionThreadRange[] | null> {
+  const out: VersionThreadRange[] = [];
+  let cursor: string | undefined;
+  try {
+    for (let page = 0; page < THREAD_PAGES_MAX; page++) {
+      const r = await comments.threads(docId, cursor === undefined ? { seq } : { seq, cursor });
+      for (const t of r.items) {
+        const target = t.target;
+        if (target && 'range' in target)
+          out.push({ id: t.id, from: target.range.from, to: target.range.to });
+      }
+      if (r.nextCursor === null) return out;
+      cursor = r.nextCursor;
+    }
+    return out;
+  } catch {
+    return null;
   }
 }
