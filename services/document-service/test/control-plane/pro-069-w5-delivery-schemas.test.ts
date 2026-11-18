@@ -116,7 +116,12 @@ function eventOf(type: string, data: DepEvent['data']): DepEvent {
 
 /** What every schema requires of `data`, and nothing more. */
 const dataOf = (type: string): DepEvent['data'] =>
-  type === 'dep.document.changed.v1' ? { seq: 7, chainHead: CHAIN } : { seq: 7 };
+  type === 'dep.document.changed.v1'
+    ? { seq: 7, chainHead: CHAIN }
+    : // A workflow event names the workflow, the document, the chain head and, for a participant's, the participant (FRW-036).
+      type.startsWith('dep.workflow.')
+      ? { seq: 7, chainHead: CHAIN, workflow: uuid7(), document: uuid7(), participant: 'p1' }
+      : { seq: 7 };
 
 describe('PRO-069 criterion 4: a delivery of every event type passes the schema of its type', () => {
   it('lists the published types, so that a new schema is covered without a change here', () => {

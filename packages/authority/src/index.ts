@@ -425,7 +425,12 @@ export {
   type ResumeResult,
 } from './workflow/correction.ts';
 export { fieldOwnersOf, snapshotOf } from './workflow/snapshot.ts';
-export { openWorkflow } from './workflow/lifecycle.ts';
+export {
+  declineWorkflow,
+  openWorkflow,
+  voidWorkflow,
+  type Refusal as WorkflowRefusal,
+} from './workflow/lifecycle.ts';
 export {
   sendProblem,
   transitionProblem,

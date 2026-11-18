@@ -133,6 +133,23 @@ export const FRW_EXTENSION: DepExtension = {
       ),
     },
     {
+      name: 'WorkflowReason',
+      owner: FRW,
+      shape: obj(
+        {
+          reason: req(
+            text({ minLength: 1, maxLength: 2000 }),
+            'Why the workflow is stopped: the participant who declines, or the owner who voids, says. A reason that is blank after trimming is refused.',
+          ),
+        },
+        {
+          doc: 'The body of `decline` and `void` (12 §6.2).',
+          spec: '12 §6.2, §10',
+          gaps: ['G95'],
+        },
+      ),
+    },
+    {
       name: 'WorkflowPlaceholder',
       owner: FRW,
       shape: obj(
@@ -277,7 +294,40 @@ export const FRW_EXTENSION: DepExtension = {
       gaps: ['G95'],
       owner: FRW,
     },
-    ...(['consent', 'verify', 'complete', 'decline'] as const).map((action) => ({
+    {
+      operationId: 'voidWorkflow',
+      method: 'POST',
+      path: '/documents/{id}/workflow/void',
+      summary:
+        'Voids a workflow that is sent or in progress, with a reason; the document stays locked (12 §6.2). The method and path are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      requires: 'manage',
+      idempotencyKey: true,
+      body: ref('WorkflowReason'),
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['validation_failed', 'conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    {
+      operationId: 'participantDecline',
+      method: 'POST',
+      path: '/documents/{id}/workflow/participants/{pid}/decline',
+      summary:
+        'The participant declines to proceed, with a reason; the participant whose token is bound to {pid} may, and so may the host with its service credential (12 §6.2). The method and the document prefix are assumed.',
+      spec: '12 §6.2, §10',
+      security: ['user', 'service'],
+      feature: 'workflow',
+      idempotencyKey: true,
+      body: ref('WorkflowReason'),
+      success: { status: '2XX', body: ref('Workflow'), etag: true },
+      codes: ['validation_failed', 'conflict'],
+      gaps: ['G95'],
+      owner: FRW,
+    },
+    ...(['consent', 'verify', 'complete'] as const).map((action) => ({
       operationId: `participant${action.charAt(0).toUpperCase()}${action.slice(1)}`,
       method: 'POST' as const,
       path: `/documents/{id}/workflow/participants/{pid}/${action}`,

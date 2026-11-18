@@ -964,6 +964,12 @@ export interface Workflow {
   };
 }
 
+/** The body of `decline` and `void` (12 §6.2). */
+export interface WorkflowReason {
+  /** Why the workflow is stopped: the participant who declines, or the owner who voids, says. A reason that is blank after trimming is refused. */
+  reason: string;
+}
+
 /** A workflow request or response the prose does not define. Placeholder. */
 export type WorkflowPlaceholder = { [key: string]: unknown };
 
@@ -2157,6 +2163,24 @@ export interface Operations {
     body: never;
     response: Workflow;
   };
+  /** POST /documents/{id}/workflow/void: Voids a workflow that is sent or in progress, with a reason; the document stays locked (12 §6.2). The method and path are assumed. (12 §6.2, §10) */
+  voidWorkflow: {
+    method: "POST";
+    path: "/documents/{id}/workflow/void";
+    params: { id: string };
+    query: Record<string, never>;
+    body: WorkflowReason;
+    response: Workflow;
+  };
+  /** POST /documents/{id}/workflow/participants/{pid}/decline: The participant declines to proceed, with a reason; the participant whose token is bound to {pid} may, and so may the host with its service credential (12 §6.2). The method and the document prefix are assumed. (12 §6.2, §10) */
+  participantDecline: {
+    method: "POST";
+    path: "/documents/{id}/workflow/participants/{pid}/decline";
+    params: { id: string; pid: string };
+    query: Record<string, never>;
+    body: WorkflowReason;
+    response: Workflow;
+  };
   /** POST /documents/{id}/workflow/participants/{pid}/consent: Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */
   participantConsent: {
     method: "POST";
@@ -2179,15 +2203,6 @@ export interface Operations {
   participantComplete: {
     method: "POST";
     path: "/documents/{id}/workflow/participants/{pid}/complete";
-    params: { id: string; pid: string };
-    query: Record<string, never>;
-    body: WorkflowPlaceholder;
-    response: WorkflowPlaceholder;
-  };
-  /** POST /documents/{id}/workflow/participants/{pid}/decline: Participant action `decline` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */
-  participantDecline: {
-    method: "POST";
-    path: "/documents/{id}/workflow/participants/{pid}/decline";
     params: { id: string; pid: string };
     query: Record<string, never>;
     body: WorkflowPlaceholder;
