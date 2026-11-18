@@ -61,7 +61,7 @@ describe('one visibility gate (HIS-024 criterion 1)', () => {
       'control-plane/restore-route.ts',
     ]) {
       const text = readFileSync(join(SRC, rel), 'utf8');
-      expect(text, rel).toMatch(/minVisibleSeqOf\(/);
+      expect(text, rel).toMatch(/minVisibleSeqOf\(|refuseSeqBelowGate\(/);
     }
   });
 

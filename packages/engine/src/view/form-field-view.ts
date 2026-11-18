@@ -300,6 +300,10 @@ class FormFieldView implements NodeView, Refreshable {
     const fillable = this.#port.fillable(this.#id);
     if (c instanceof HTMLSelectElement || c.type === 'checkbox') c.disabled = !fillable;
     else c.readOnly = !fillable;
+    // Tab walks through the fields a person may fill, in document order (FRW-076 criterion 3). A
+    // field of another role is still read by a screen reader, which does not need the tab stop.
+    if (fillable) c.removeAttribute('tabindex');
+    else c.tabIndex = -1;
 
     if (c instanceof HTMLSelectElement) {
       const options = [{ id: '', label: '' }, ...optionsOf(node)];

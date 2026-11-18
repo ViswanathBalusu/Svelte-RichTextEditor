@@ -403,6 +403,8 @@ export interface ViewBridge {
    * end), with no new state: the view reads `editable` again (FE-029).
    */
   lockChanged?(locked: boolean): void;
+  /** The access changed: what a view shows of the fields a person may fill is drawn again (FRW-076). */
+  accessChanged?(): void;
   /**
    * The main-document position of the caret when this view's sub-editor has focus, or null (FE-026
    * criterion 3). `selectionScope()` reports the scope of that position.
@@ -1536,6 +1538,7 @@ export class DocumentCore implements DocumentApi {
       this.#readOnly = false;
     this.#refreshMode();
     this.#publish();
+    for (const b of this.#bridges) b.accessChanged?.();
   }
 
   #setReadOnly(on: boolean): void {
