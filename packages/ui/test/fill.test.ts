@@ -171,7 +171,20 @@ describe('the summary lists what is left (FRW-078, criteria 1 and 4)', () => {
     );
   });
 
-  it('counts an invalid optional field in the list but not in the bar (open question, ADR 0113)', () => {
+  it('the required fields in the list always equal what the bar counts as left (property, FRW-078 criterion 4, owner decision 49)', () => {
+    fc.assert(
+      fc.property(summaryArb, (summary) => {
+        const progress = fillProgress(summary);
+        expect(progress.left.filter((f) => f.required).length).toBe(progress.total - progress.done);
+        // The list is the bar's remainder plus the invalid optional fields, nothing else.
+        const optionalInvalid = progress.left.filter((f) => !f.required);
+        expect(optionalInvalid.every((f) => f.invalid !== null)).toBe(true);
+        expect(progress.left.length).toBe(progress.total - progress.done + optionalInvalid.length);
+      }),
+    );
+  });
+
+  it('counts an invalid optional field in the list but not in the bar (both stay, owner decision 49)', () => {
     const summary: FillSummary = {
       active: true,
       fields: [
