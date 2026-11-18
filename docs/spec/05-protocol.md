@@ -316,7 +316,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/exports/{jid}` | GET, DELETE | State (`queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`), progress, result, diagnostics |
 | `/documents/{id}/imports` | POST | Body: `asset`, `format` (`docx`). Returns a job with warnings on completion |
 | `/imports/{jid}` | GET | |
-| `/fonts` | GET | Font manifest: families, styles, file URLs, hashes, licences, manifest version |
+| `/fonts` | GET | Font manifest: families, styles, file URLs, hashes, licences, manifest version. Tenant-wide: every user of the tenant may read it, with no document in view (decision 95) |
 | `/webhooks`, `/webhooks/{id}` | GET, POST, PATCH, DELETE | Service credential only. Event filters and secret rotation |
 | `/webhooks/{id}/ping` | POST | Service credential only. A test delivery to one subscription, marked as a test; answers 202 with its `deliveryId` (UX-079; decision 177) |
 | `/webhooks/{id}/deliveries/{deliveryId}/replay` | POST | Service credential only. Sends a recent delivery of that subscription again under its own `webhook-id`; answers 202 (UX-079; decision 177) |
