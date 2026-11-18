@@ -114,6 +114,8 @@ export interface MountOptions {
   minimal?: boolean;
   /** The members of phase 1b (ADR 0052). */
   extended?: boolean;
+  /** Offers the markup views of suggestions (UX-035); with xtended only. */
+  markupViews?: boolean;
   notify?: Notify;
   selection?: Partial<SelectionSummary>;
   mode?: EditorMode;
@@ -498,6 +500,7 @@ function mountShell(options: MountOptions = {}): void {
     notify: options.notify ?? 'frame',
     ...(options.minimal ? { minimal: true } : {}),
     ...(options.extended ? { extended: true } : {}),
+    ...(options.markupViews ? { markupViews: true } : {}),
     ...(options.access ? { access: options.access } : {}),
     ...(options.status ? { status: options.status } : {}),
     ...(options.presence ? { presence: options.presence } : {}),
@@ -857,6 +860,10 @@ const harness = {
       .core.callsOf(method)
       .map((c) => c.args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : a))),
   calls: () => need().core.calls.map((c) => c.method),
+  /** The markup view the core holds, and the words the shell gave it for a suggestion (UX-035). */
+  markupView: () => need().core.markupView?.get() ?? null,
+  suggestionLabel: (kind: 'ins' | 'del' | 'fmt', user: string) =>
+    need().core.suggestionLabel?.(kind, user) ?? null,
   labels: () => need().core.labels,
   selection: () => need().core.selection.get(),
   fields: () => need().core.fields,

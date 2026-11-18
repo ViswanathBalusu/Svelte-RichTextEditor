@@ -19,6 +19,14 @@ export interface TestLink {
 }
 
 const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = [
+  // Shipped when UX-011 closed (2026-11-17).
+  [
+    'command-search',
+    [
+      { path: 'packages/ui/e2e/ux-011-command-search.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/command-search.test.ts', kind: 'unit' },
+    ],
+  ],
   [
     'toolbar',
     [

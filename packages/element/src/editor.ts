@@ -491,6 +491,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
     status,
     pdf,
     ...(options.exports ? { exports: options.exports } : {}),
+    // How suggestions are shown (UX-035), and the words that name them for assistive technology.
+    markupView: core.markupView,
+    setMarkupView: (view) => core.setMarkupView(view),
+    setSuggestionLabel: (label) => core.setSuggestionLabel(label),
     // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,

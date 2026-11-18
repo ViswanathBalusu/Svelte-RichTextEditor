@@ -84,6 +84,15 @@ export const EN_GB = {
   'command.mode.edit': 'Editing',
   'command.mode.review': 'Reviewing',
   'command.mode.view': 'Viewing',
+  // How suggestions are shown (UX-035). The first four name the views of 13 §5.
+  'command.review.markup.all': 'Show all markup',
+  'command.review.markup.simple': 'Show simple markup',
+  'command.review.markup.none': 'Show no markup',
+  'command.review.markup.original': 'Show the original',
+  // What a screen reader hears before a suggestion in the text (UX-035 criterion 4).
+  'review.suggestion.ins': 'Inserted by {name}',
+  'review.suggestion.del': 'Deleted by {name}',
+  'review.suggestion.fmt': 'Formatting changed by {name}',
   'command.mode.fill': 'Filling in',
 
   // Task groups of the full toolbar (UX-007). The grouping is this product's own (13 §3).
@@ -393,6 +402,10 @@ export const EN_GB = {
   'synonyms.mode.edit': 'write; change',
   'synonyms.mode.review': 'track changes; suggest',
   'synonyms.mode.view': 'read only; read',
+  'synonyms.review.markup.all': 'markup; track changes; suggestions; show changes',
+  'synonyms.review.markup.simple': 'markup; track changes; suggestions; bars',
+  'synonyms.review.markup.none': 'markup; final; accepted; clean',
+  'synonyms.review.markup.original': 'markup; before changes; rejected; unchanged text',
   'search.list': 'Results',
   'search.gone': 'That place is no longer in the document.',
 
