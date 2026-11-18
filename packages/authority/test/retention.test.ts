@@ -99,17 +99,26 @@ describe('the default keeps evidence for the life of the document (FRW-084; owne
   it('has no period by default, and a period of null removes nothing by age (property)', () => {
     expect(EVIDENCE_RETENTION_DEFAULT).toBeNull();
     fc.assert(
-      fc.property(rows, fc.integer({ min: 0, max: 4_000_000_000 }), fc.boolean(), (rs, nowMs, hold) => {
-        const plan = planPurge({
-          rows: rs,
-          nowMs,
-          retentionMs: EVIDENCE_RETENTION_DEFAULT,
-          legalHold: hold,
-        });
-        expect(plan.remove).toEqual([]);
-        expect(plan.keep).toEqual(rs.map((r) => r.id));
-        expect(plan.audit).toMatchObject({ removedCount: 0, keptCount: rs.length, legalHold: hold });
-      }),
+      fc.property(
+        rows,
+        fc.integer({ min: 0, max: 4_000_000_000 }),
+        fc.boolean(),
+        (rs, nowMs, hold) => {
+          const plan = planPurge({
+            rows: rs,
+            nowMs,
+            retentionMs: EVIDENCE_RETENTION_DEFAULT,
+            legalHold: hold,
+          });
+          expect(plan.remove).toEqual([]);
+          expect(plan.keep).toEqual(rs.map((r) => r.id));
+          expect(plan.audit).toMatchObject({
+            removedCount: 0,
+            keptCount: rs.length,
+            legalHold: hold,
+          });
+        },
+      ),
     );
   });
 });
