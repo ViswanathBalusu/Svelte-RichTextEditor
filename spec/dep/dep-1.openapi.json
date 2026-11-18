@@ -4281,6 +4281,178 @@
         ]
       }
     },
+    "/webhooks/{id}/ping": {
+      "post": {
+        "operationId": "pingWebhook",
+        "summary": "Sends a test delivery to one subscription, marked as a test.",
+        "description": "Sends a test delivery to one subscription, marked as a test. Requires: Service credential (07 §12). Specified in 05 §6.2; 13 §10; ADR 0330 §2 (decision 177).",
+        "tags": [
+          "webhooks"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Subscription identifier.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Subscription identifier."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted: a job was created.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deliveryId": {
+                      "description": "The identifier of the test delivery.",
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "deliveryId"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §6.2; 13 §10; ADR 0330 §2 (decision 177)",
+        "x-dep-owner": "PRO",
+        "x-dep-requires": "Service credential",
+        "x-dep-gaps": [
+          "G76"
+        ]
+      }
+    },
+    "/webhooks/{id}/deliveries/{deliveryId}/replay": {
+      "post": {
+        "operationId": "replayWebhookDelivery",
+        "summary": "Sends a recent delivery of the subscription again, under its own webhook-id.",
+        "description": "Sends a recent delivery of the subscription again, under its own webhook-id. Requires: Service credential (07 §12). Specified in 05 §6.2; 13 §10; ADR 0330 §2 (decision 177).",
+        "tags": [
+          "webhooks"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Subscription identifier.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Subscription identifier."
+          },
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The delivery to send again.",
+              "$comment": "gaps: G59",
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "The delivery to send again."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted: a job was created.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deliveryId": {
+                      "description": "The identifier of the delivery sent.",
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "deliveryId"
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "05 §6.2; 13 §10; ADR 0330 §2 (decision 177)",
+        "x-dep-owner": "PRO",
+        "x-dep-requires": "Service credential",
+        "x-dep-gaps": [
+          "G76"
+        ]
+      }
+    },
     "/audit": {
       "get": {
         "operationId": "getAudit",

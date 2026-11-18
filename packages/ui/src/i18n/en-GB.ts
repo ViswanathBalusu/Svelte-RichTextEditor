@@ -703,6 +703,7 @@ export const EN_GB = {
   'shortcuts.shell.nextLandmark': 'Move to the next part of the editor',
   'shortcuts.shell.previousLandmark': 'Move to the previous part of the editor',
   'shortcuts.shell.contextMenu': 'Open the context menu',
+  'shortcuts.shell.miniToolbar': 'Move focus to the mini toolbar',
   'shortcuts.shell.applyFormat': 'Apply the copied formatting to the selection',
   'shortcuts.shell.cancel': 'Turn the format painter off',
 

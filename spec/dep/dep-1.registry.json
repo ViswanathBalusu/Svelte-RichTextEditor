@@ -1060,6 +1060,34 @@
       "owner": "PRO"
     },
     {
+      "operationId": "pingWebhook",
+      "method": "POST",
+      "path": "/webhooks/{id}/ping",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "202",
+      "spec": "05 §6.2; 13 §10; ADR 0330 §2 (decision 177)",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "replayWebhookDelivery",
+      "method": "POST",
+      "path": "/webhooks/{id}/deliveries/{deliveryId}/replay",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "202",
+      "spec": "05 §6.2; 13 §10; ADR 0330 §2 (decision 177)",
+      "owner": "PRO"
+    },
+    {
       "operationId": "getAudit",
       "method": "GET",
       "path": "/audit",

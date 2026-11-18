@@ -1950,6 +1950,30 @@ export interface Operations {
     body: never;
     response: void;
   };
+  /** POST /webhooks/{id}/ping: Sends a test delivery to one subscription, marked as a test. (05 §6.2; 13 §10; ADR 0330 §2 (decision 177)) */
+  pingWebhook: {
+    method: "POST";
+    path: "/webhooks/{id}/ping";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: {
+  /** The identifier of the test delivery. */
+  deliveryId: string;
+};
+  };
+  /** POST /webhooks/{id}/deliveries/{deliveryId}/replay: Sends a recent delivery of the subscription again, under its own webhook-id. (05 §6.2; 13 §10; ADR 0330 §2 (decision 177)) */
+  replayWebhookDelivery: {
+    method: "POST";
+    path: "/webhooks/{id}/deliveries/{deliveryId}/replay";
+    params: { id: string; deliveryId: string };
+    query: Record<string, never>;
+    body: never;
+    response: {
+  /** The identifier of the delivery sent. */
+  deliveryId: string;
+};
+  };
   /** GET /audit: The audit trail with filters (13 §10). (05 §6.2; 13 §10) */
   getAudit: {
     method: "GET";

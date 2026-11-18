@@ -3,7 +3,7 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "ea0010bae9478480dd2e77b1576a3cb83a3b47793dbd213dba69320a97462e88",
+  "definitionHash": "9bafd1f12dff6d8a031b87a470d46a56b0a4aeda2d6341cd9b3d79154c4fb3b9",
   "cdm": {
     "min": 1,
     "max": 1,
@@ -13,7 +13,7 @@
   },
   "counts": {
     "messages": 28,
-    "operations": 85,
+    "operations": 87,
     "webhooks": 35,
     "notifications": 19,
     "errors": 32,
@@ -22,7 +22,7 @@
   },
   "files": {
     "spec/dep/dep-1.asyncapi.json": "24c3d37ed0dd1d5f2d5506bcb27c773eb098ab8a04a37abb20706af0c5c89d1a",
-    "spec/dep/dep-1.openapi.json": "32b46af5c9176ef7c0074da68fd2a612061cc8fa7662b3b302be3858294e4f04",
+    "spec/dep/dep-1.openapi.json": "8f57801fc909ef2ac0fd49a6959cbc5092f4c0de3c7d34c173cd4c8c7c156882",
     "spec/dep/dep-1.schema.json": "f0b7243b59a1d33b93bb41e74c18d0cc2cbbcc5a021ef53dc48b596408828a30",
     "spec/dep/webhooks/dep.document.created.v1.schema.json": "1e16a104e436cdf8f6213fc1f051a4d9a1ec58a4c2c5eeb25829ed86ae672c54",
     "spec/dep/webhooks/dep.document.deleted.v1.schema.json": "890c2efa8c1731ef2208fbf3c86629fa2eabf2b1eef70dd74e6e8eb52a53e404",
@@ -59,8 +59,8 @@
     "spec/dep/webhooks/dep.workflow.expired.v1.schema.json": "6e3ce533646bb1a9ba1f37ed5e221382d0921c1b1f1308f46f20ffc311fa0b8a",
     "spec/dep/webhooks/dep.workflow.completed.v1.schema.json": "ed324ab76a9225e8f652b3f1cfc201a31929cdf80777f1bdc4e44b60d34c4dca",
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "9152416acc7809df32797943418c7a08be2f0169dd5f581a6c712d938774b333",
-    "spec/dep/dep-1.registry.json": "a7a3d506a598e340215bfcb7bb5ac0d34a78a11eb4dc2ab605f33c1eed98b887",
+    "spec/dep/dep-1.registry.json": "98138bea260ae957522800d6577c394b3aa4b10423b57629370fee9df48212bd",
     "spec/dep/dep-1.gaps.json": "50f64c79e1c56b3b666b9e55e28867668e1a42da5a9881160f824a396f94fc64",
-    "packages/protocol/src/generated/types.ts": "3c753072801ac079644f9520cdb425316673e3b679b23428357dc62740878f61"
+    "packages/protocol/src/generated/types.ts": "800071582be8be8f509507f5d74e0063a5486202b179021eabdfb2d0b1f385ff"
   }
 }

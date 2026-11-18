@@ -285,10 +285,15 @@ export class WebhookDispatcher implements EventSink {
     return row.id;
   }
 
-  /** Sends a recent delivery again under its own `webhook-id`. Resolves to the row after the send. */
-  async replay(tenant: string, delivery: string): Promise<DeliveryRow> {
+  /**
+   * Sends a recent delivery again under its own `webhook-id`. Resolves to the row after the send.
+   * With `subscription`, a delivery of another subscription is not found (ADR 0330 §2).
+   */
+  async replay(tenant: string, delivery: string, subscription?: string): Promise<DeliveryRow> {
     const row = await this.#rows.get(delivery);
     if (!row || row.tenant !== tenant) throw new ApiError('not_found', 'no such delivery');
+    if (subscription !== undefined && row.subscription !== subscription)
+      throw new ApiError('not_found', 'no such delivery');
     this.#log({
       event: 'replay',
       delivery: row.id,

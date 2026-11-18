@@ -55,6 +55,20 @@ test.describe('the mini toolbar (UX-010)', () => {
     await expect(page.locator('[data-mini-toolbar]')).toBeVisible();
   });
 
+  test('Alt+F10 moves focus into the toolbar, and Escape returns it to the selection', async ({
+    page,
+  }) => {
+    const h = await open(page, { extended: true });
+    await focusSurface(page);
+    await h.setSelection({ empty: false, marks: [] });
+    await expect(page.locator('[data-mini-toolbar]')).toBeVisible();
+    await page.keyboard.press('Alt+F10');
+    await expect(page.locator('[data-mini-toolbar] button').first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-mini-toolbar]')).toHaveCount(0);
+    expect((await focused(page)).className).toContain('de-editing-surface');
+  });
+
   test('is not offered where the user may not change the selection', async ({ page }) => {
     const h = await open(page, { extended: true, access: VIEW_ONLY });
     await focusSurface(page);
