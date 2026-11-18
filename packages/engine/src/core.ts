@@ -144,6 +144,7 @@ import {
 } from './equation-commands.ts';
 import { isValueFormat, valueFormatCommand } from './formatting-values.ts';
 import { LIST_COMMANDS, listCommand } from './list-commands.ts';
+import { type FormatSnapshot, paintMarks, paintParagraphs, takeFormat } from './format-painter.ts';
 import {
   type AssetsPort,
   type ImagePasteResult,
@@ -427,6 +428,8 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'canInsertField',
   'canMarkRegion',
   'hasNextEditableRegion',
+  'canCopyFormat',
+  'canPasteFormat',
 ];
 
 /**
@@ -728,6 +731,8 @@ export class DocumentCore implements DocumentApi {
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
+  /** The formatting the painter took (UX-009). */
+  #painted: FormatSnapshot | null = null;
   #problems = 0;
   #equationRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
@@ -1354,6 +1359,10 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('markRegion', { title: REGION_QUERY_TITLE }).enabled;
       case 'hasNextEditableRegion':
         return this.queryCommand('nextEditableRegion').enabled;
+      case 'canCopyFormat':
+        return this.queryCommand('copyFormat').enabled;
+      case 'canPasteFormat':
+        return this.queryCommand('pasteFormat').enabled;
       default:
         return undefined;
     }
@@ -1929,6 +1938,16 @@ export class DocumentCore implements DocumentApi {
         return listCommand(name, args, (pos) => this.canEdit(this.#scopeAt(pos)));
       case 'selectAll':
         return selectAllInBody;
+      case 'copyFormat':
+        // Reading changes nothing, so a reader may take formatting; the snapshot is kept for the paste.
+        return (state, dispatch) => {
+          const taken = takeFormat(state);
+          if (taken === null) return false;
+          if (dispatch) this.#painted = taken;
+          return true;
+        };
+      case 'pasteFormat':
+        return this.#painted === null ? null : this.#pasteFormat(this.#painted);
       case 'undo':
         return historyCommand(undo);
       case 'redo':
@@ -1963,6 +1982,55 @@ export class DocumentCore implements DocumentApi {
           return dispatch ? this.openStory(id) : true;
         };
     }
+  }
+
+  /**
+   * Puts a set-aside item's text at the selection through the guards, as typing would (UX-017
+   * criterion 3). The item stays in the list: only a deliberate discard removes it.
+   */
+  insertRecovered(id: string): boolean {
+    const item = this.recovered.get().items.find((i) => i.id === id);
+    if (item === undefined || item.text === '') return false;
+    return this.pastePlainText(item.text);
+  }
+
+  /** Removes a set-aside item from the list and from the journal (UX-017 criteria 4 and 5). */
+  discardRecovered(id: string): boolean {
+    const { items } = this.recovered.get();
+    const item = items.find((i) => i.id === id);
+    if (item === undefined) return false;
+    const rest = items.filter((i) => i !== item);
+    this.recovered.set({ count: rest.length, items: rest });
+    this.#session?.forgetRecovered(item);
+    return true;
+  }
+
+  /**
+   * The format painter's paste (UX-009). The character formatting and the paragraph properties go
+   * through the guard like any change. Where suggestion mode records the change, each part is a
+   * transaction of its own, because a suggestion is built from mark steps or from attribute steps,
+   * not from both (FE-043, FE-044); elsewhere both are one transaction, one step of the history.
+   */
+  #pasteFormat(snapshot: FormatSnapshot): Command {
+    return (state, dispatch) => {
+      if (takeFormat(state) === null) return false;
+      if (!dispatch) return true;
+      const writable = (pos: number): boolean => this.canEdit(this.#scopeAt(pos));
+      const suggesting = this.#suggestionIn(this.#scopeAt(state.selection.from)).on;
+      // The paragraph steps go first: a step clears the stored marks that a caret's paint sets.
+      if (suggesting) {
+        const paragraphs = state.tr;
+        if (paintParagraphs(paragraphs, snapshot, writable, true) > 0) dispatch(paragraphs);
+        const marks = paintMarks(this.#state.tr, snapshot);
+        if (marks.docChanged || marks.storedMarksSet) dispatch(marks);
+      } else {
+        const both = state.tr;
+        paintParagraphs(both, snapshot, writable, false);
+        paintMarks(both, snapshot);
+        if (both.docChanged || both.storedMarksSet) dispatch(both.scrollIntoView());
+      }
+      return true;
+    };
   }
 
   /**
@@ -2013,6 +2081,7 @@ export class DocumentCore implements DocumentApi {
       name === 'subscript' ||
       name === 'insertFootnote' ||
       isValueFormat(name) ||
+      name === 'pasteFormat' ||
       LIST_COMMANDS.has(name)
     );
   }
@@ -2021,6 +2090,7 @@ export class DocumentCore implements DocumentApi {
   static #changes(name: CommandName): boolean {
     return (
       name !== 'selectAll' &&
+      name !== 'copyFormat' &&
       name !== 'editHeader' &&
       name !== 'followInternalLink' &&
       name !== 'nextEditableRegion'
@@ -3288,11 +3358,13 @@ export class DocumentCore implements DocumentApi {
         this.#publishSync();
         return;
       case 'discarded': {
+        const before = this.recovered.get().items;
         const items = [
-          ...this.recovered.get().items,
-          ...e.items.map((i) => ({
+          ...before,
+          ...e.items.map((i, n) => ({
             reason: i.reason,
             commit: i.commit,
+            id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
             text: i.text,
             seq: i.seq,
             ...this.#rejectionWords(i),
