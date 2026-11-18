@@ -40,6 +40,12 @@ import {
   type ShellSettings,
 } from '@docedit/ui';
 import { flushSync, mount, unmount } from 'svelte';
+import {
+  markRegistryEnd,
+  markShellMounted,
+  markShellStart,
+  timeBodyAttach,
+} from './startup-marks.ts';
 import type { NormalConfig } from './config.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { hostApi, type HostApi } from './host-api.ts';
@@ -314,7 +320,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       core.selectFindMatch(match.index, { blockId: match.blockId || null, text: match.text }),
     // Where a menu asked for from the keyboard opens (UX-008 criterion 1).
     caretRect: () => core.caretRect(),
-    mountBody: (target) => core.mountBody(target),
+    mountBody: (target) => timeBodyAttach(() => core.mountBody(target)),
     mountPanel: (target) => core.mountPanel(target),
     access: core.access,
     revision: core.revision,
@@ -462,6 +468,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     refusal: core.refusal,
     recovered: core.recovered,
     trimmed: core.trimmed,
+    // The report of Replace and Replace all: how many matches changed and how many were skipped (FE-060).
+    replaced: core.replaced,
     // The sources pane (UX-103): the core's sources and the changes to them, as commits.
     sources: sourcesService(core),
     // The roles manager (FRW-074): the core's roles and the changes to them, as commits.
@@ -517,7 +525,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
   });
   // The one command registry (13 §4; UX-005): the shell's toolbars and menus read it, and so do the
   // host's `exec` and `queryCommand`, so the host's buttons agree with the built-in ones.
+  markShellStart();
   const registry = createCommandRegistry(shell, { hasString: (key) => strings.has(key) });
+  markRegistryEnd();
   const app = mount(App, {
     target: root,
     props: {
@@ -537,6 +547,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
   });
   // Run the mount effects now, so the body view exists when `de-ready` is seen.
   flushSync();
+  markShellMounted();
   // The host's extensions are activated once the shell exists; a later change comes through setExtensions.
   app.setExtensions(options.extensions());
   const stopShortcuts = attachShortcuts(root, (command) => core.run(command));

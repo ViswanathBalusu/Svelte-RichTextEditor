@@ -176,6 +176,18 @@ export interface TrimNotice {
 }
 
 /**
+ * What a Replace or Replace all did (FE-060 criterion 3; the core's `replaced` view). `n` counts
+ * them, so the same counts twice are two reports. `replaced` and `skipped` are the real numbers of
+ * matches changed and left alone; the report names no scope and no text.
+ */
+export interface ReplaceNotice {
+  readonly n: number;
+  readonly all: boolean;
+  readonly replaced: number;
+  readonly skipped: number;
+}
+
+/**
  * One piece of work that was set aside (02 §2.2; 04 §8; 07 §9): a commit the server rejected, or
  * unsent work after a rebase failure, a reload or a reset. The shell lists it in the recovered
  * edits pane (UX-017) and announces its arrival.
@@ -666,6 +678,8 @@ export interface CoreApi {
   readonly refusal?: ReadView<RefusalNotice | null>;
   /** The last deletion the core trimmed to the editable parts (FE-037 criterion 2); the shell announces it. */
   readonly trimmed?: ReadView<TrimNotice | null>;
+  /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3); the shell reports it. */
+  readonly replaced?: ReadView<ReplaceNotice | null>;
   /** Work set aside (rejected or unsent); the shell lists it and announces new items (UX-017). */
   readonly recovered?: ReadView<RecoveredEdits>;
 
@@ -768,6 +782,12 @@ export interface CoreApi {
    * does not show (05 §8.3).
    */
   readonly history?: HistoryPort;
+  /**
+   * What others did since the user's last visit (HIS-028; 08 §10): the host's read of
+   * `GET /activity` and `PUT /read-marker`, shaped for the catch-up pane. Absent when the backend
+   * does not announce `history`; the catch-up control is then offered only if the host gives counts.
+   */
+  readonly catchUp?: CatchUpPort;
   /** The sources the document cites (UX-103; CDM-052). Absent: the sources pane is not offered. */
   readonly sources?: SourcesService;
   /** The roles fields are assigned to (FRW-074). Absent: the roles manager is not offered. */
@@ -1164,6 +1184,50 @@ export interface HistoryPort {
    */
   onChange?(listener: () => void): () => void;
   /** The host's directory (UX-025); null for an identifier the host does not know, such as an erased person. */
+  readonly resolveUsers?: ResolveUsers;
+}
+
+/** One thing that waits for the user in the catch-up: a mention of them, or a task assigned to them. */
+export interface CatchUpForYou {
+  readonly kind: 'mention' | 'task';
+  readonly thread: string;
+  /** Who mentioned the user or assigned the task, as the host knows them; null when unknown. */
+  readonly author: string | null;
+  /** The text of the comment that mentions the user, as plain text; null for a task. */
+  readonly excerpt: string | null;
+}
+
+/**
+ * The activity since the user's read marker (`GET /activity`; 08 §10), as the pane needs it. The
+ * `changes` are the comparison from the marker to the head without the user's own changes.
+ */
+export interface CatchUpActivity {
+  /** The user's marker, and the head the activity was computed against. */
+  readonly marker: number;
+  readonly head: number;
+  readonly changes: readonly HistoryChange[];
+  /** How many comments by other people were made since the marker. */
+  readonly comments: number;
+  readonly forYou: readonly CatchUpForYou[];
+}
+
+export type CatchUpResult =
+  | { readonly ok: true; readonly activity: CatchUpActivity }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'failed' };
+
+/** The host's catch-up port. The pane never calls the network. */
+export interface CatchUpPort {
+  load(): Promise<CatchUpResult>;
+  /** Moves the user's read marker to `seq` (`PUT /read-marker`); markers only move forward. */
+  markSeen(seq: number): Promise<{ readonly ok: boolean }>;
+  /**
+   * Whether the user has viewed the head: the marker moves only then (08 §10). Absent: the live
+   * document is the head, so the answer is yes.
+   */
+  viewedHead?(): boolean;
+  /** Called by the host when there may be new activity; the pane then asks again. */
+  onChange?(listener: () => void): () => void;
+  /** The host's directory (UX-025); null for an identifier the host does not know. */
   readonly resolveUsers?: ResolveUsers;
 }
 

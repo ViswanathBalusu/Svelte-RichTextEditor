@@ -47,6 +47,7 @@
   import StatusBar from './components/StatusBar.svelte';
   import Toolbar from './components/Toolbar.svelte';
   import { provideShell } from './context.ts';
+  import { createCatchUpController } from './shell/catch-up.ts';
   import type { FilterRegistry } from './extensions/filters.ts';
   import type { StatusItemRegistry } from './extensions/contributions.ts';
   import {
@@ -311,6 +312,7 @@
       loadedPanes.set(id, component);
     }
     paneFailed = false;
+    if (pane?.id === 'catch-up') void catchUp?.finish();
     pane = { id, component };
     await focusPane(focus);
     return true;
@@ -318,6 +320,8 @@
 
   function closePane(): void {
     if (!pane) return;
+    // Leaving the catch-up moves the user's marker to the head (HIS-028 criterion 4).
+    if (pane.id === 'catch-up') void catchUp?.finish();
     pane = null;
     const back = paneReturn;
     paneReturn = null;
@@ -341,8 +345,16 @@
     closePane();
   }
 
+  // What others did since the last visit: read when the document opens (HIS-028).
+  const catchUp = core.catchUp ? createCatchUpController(core.catchUp) : undefined;
+  onMount(() => {
+    void catchUp?.refresh();
+  });
+  onDestroy(() => catchUp?.dispose());
+
   provideShell({
     core,
+    catchUp,
     registry,
     people,
     strings: translator,
@@ -420,20 +432,29 @@
   // Changes that did not happen: a refusal of the region guard, work the server rejected or the
   // client set aside (11 §3; 07 §9). Shown in the status bar and announced; never naming content.
   let notice: Notice | null = $state.raw(null);
-  if (core.refusal || core.recovered || core.trimmed) {
+  if (core.refusal || core.recovered || core.trimmed || core.replaced) {
     const refusal = core.refusal;
     const recovered = core.recovered;
     const trimmed = core.trimmed;
-    const tracker = new NoticeTracker(refusal?.get(), recovered?.get(), trimmed?.get());
+    const replaced = core.replaced;
+    const tracker = new NoticeTracker(
+      refusal?.get(),
+      recovered?.get(),
+      trimmed?.get(),
+      replaced?.get(),
+    );
     const show = (next: Notice | null) => {
       if (!next) return;
       notice = next;
-      announce(next.key, { count: next.count });
+      announce(next.key, { count: next.count, ...next.params });
     };
     const stops: Array<() => void> = [];
     if (refusal) stops.push(refusal.subscribe(() => show(tracker.refusal(refusal.get()))));
     if (recovered) stops.push(recovered.subscribe(() => show(tracker.recovered(recovered.get()))));
     if (trimmed) stops.push(trimmed.subscribe(() => show(tracker.trimmed(trimmed.get()))));
+    // After the refusal: a Replace all that skipped matches records a refusal first, and the report
+    // with the counts is the notice that stays (FE-060 criterion 3).
+    if (replaced) stops.push(replaced.subscribe(() => show(tracker.replaced(replaced.get()))));
     onDestroy(() => {
       for (const stop of stops) stop();
     });

@@ -110,6 +110,14 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/export-latex/src/exp-085-licences.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when HIS-028 closed (2026-11-17): the controller in Node, and the pane in a browser run.
+  [
+    'catch-up',
+    [
+      { path: 'packages/ui/e2e/his-028-catch-up.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/his-028-catch-up.test.ts', kind: 'unit' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

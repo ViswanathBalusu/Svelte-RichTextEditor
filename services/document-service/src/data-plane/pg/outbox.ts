@@ -6,7 +6,14 @@
  */
 import { uuid7 } from '@docedit/model';
 import { inTenant, int, millis, type Pool, type Queryable } from '../../storage/db.ts';
-import type { NewOutboxItem, OutboxItem, OutboxStore } from '../../storage/types.ts';
+import type {
+  AuditEvent,
+  NewOutboxItem,
+  OutboxItem,
+  OutboxStore,
+  OutboxWriter,
+} from '../../storage/types.ts';
+import { insertAuditEvent } from './audit.ts';
 
 interface Row {
   id: string;
@@ -124,5 +131,46 @@ export class PgOutbox implements OutboxStore {
         [item.id, node],
       ),
     );
+  }
+}
+
+/** The SQLSTATE PostgreSQL gives an insert for which no partition exists (see `pg/audit.ts`). */
+const NO_PARTITION = '23514';
+
+/**
+ * Outbox items and audit events in one transaction under the tenant (BE-039 criterion 1; 06 §3).
+ * When any insert fails the transaction rolls back, so neither an item without its audit event nor
+ * an event without its item is left. An item with the same document and commit identifier as one
+ * already stored is returned instead, as `PgOutbox.enqueue` does. A missing audit partition is
+ * created and the whole unit is tried once more.
+ */
+export class PgOutboxWriter implements OutboxWriter {
+  readonly #pool: Pool;
+
+  constructor(pool: Pool) {
+    this.#pool = pool;
+  }
+
+  async write(
+    tenant: string,
+    unit: { items: readonly NewOutboxItem[]; events: readonly AuditEvent[] },
+  ): Promise<OutboxItem[]> {
+    const once = () =>
+      inTenant(this.#pool, tenant, async (c) => {
+        await insertAuditEvent(c, unit.events);
+        const stored: OutboxItem[] = [];
+        for (const item of unit.items) stored.push(await insertOutboxItem(c, item));
+        return stored;
+      });
+    try {
+      return await once();
+    } catch (e) {
+      if ((e as { code?: unknown }).code !== NO_PARTITION) throw e;
+      await this.#pool.query(
+        "SELECT docedit_audit_partitions(now() - interval '1 month', $1)",
+        [5],
+      );
+      return once();
+    }
   }
 }

@@ -67,6 +67,7 @@ export type {
   InsertResult,
   ModeState,
   PageSetupArgs,
+  ReplaceNotice,
   ReplaceReport,
   StatusSummary,
   OutlineItem,

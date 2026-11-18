@@ -192,3 +192,48 @@ export function svelteHostConfig(): InlineConfig {
     },
   };
 }
+
+/**
+ * The host that is rendered on a server and then hydrated (FE-124 criterion 3): a Svelte 5 host
+ * with its own copy of Svelte and default compile options. `ssrHostClientConfig` builds the
+ * browser bundle that hydrates; `ssrHostServerConfig` builds the server entry, which
+ * `demo/ssr-host/prerender.ts` runs to write the page.
+ */
+export const ssrHostDir = join(demoDir, 'ssr-host');
+export const ssrHostServerDir = join(distDir, 'ssr-host-server');
+
+export function ssrHostClientConfig(): InlineConfig {
+  const config = base(ssrHostDir);
+  return {
+    ...config,
+    plugins: svelte({ configFile: false }) as Plugin[],
+    build: {
+      ...config.build,
+      rollupOptions: {
+        input: { client: join(elementDir, 'demo/ssr-host/client.ts') },
+        output: {
+          entryFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+    },
+  };
+}
+
+export function ssrHostServerConfig(): InlineConfig {
+  const config = base(ssrHostServerDir);
+  return {
+    ...config,
+    plugins: svelte({ configFile: false }) as Plugin[],
+    // The workspace packages are bundled, so that the server entry is one file; Svelte stays a
+    // dependency the server resolves itself.
+    ssr: { noExternal: [/^@docedit\//] },
+    build: {
+      ...config.build,
+      ssr: join(elementDir, 'demo/ssr-host/entry-server.ts'),
+      sourcemap: false,
+      rollupOptions: { output: { entryFileNames: 'entry-server.js' } },
+    },
+  };
+}

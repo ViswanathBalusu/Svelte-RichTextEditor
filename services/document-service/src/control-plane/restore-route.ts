@@ -114,7 +114,11 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('internal', `could not record the pre-restore version: ${pre.message}`);
     // The request's trace goes with the restore through the outbox and the room (BE-087 criterion 3).
     const traceparent = `00-${ctx.trace.traceId}-${ctx.trace.spanId}-01`;
-    const { seq } = await apply(ref, envelope, actor, { reason: 'restore', traceparent });
+    const { seq } = await apply(ref, envelope, actor, {
+      reason: 'restore',
+      traceparent,
+      head: String(headSeq),
+    });
     k.wrote(ctx, doc, seq);
 
     const restored = await store.create(

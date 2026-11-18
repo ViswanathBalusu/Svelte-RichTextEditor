@@ -720,7 +720,8 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
           `region ${rid} is approved; change its state first (07 §11)`,
         );
     }
-    const { seq } = await apply(ref, envelope, ctx.caller.actor);
+    // The ETag the caller matched is the head it replaces: the same PUT again is the same commit.
+    const { seq } = await apply(ref, envelope, ctx.caller.actor, { head: current.etag });
     k.wrote(ctx, doc, seq);
     // The hash-chain head of the commit, for an independent anchor (05 §7; PRO-069 criterion 3).
     const chainHead = (await d.logs.state?.(ref))?.chainHead ?? null;

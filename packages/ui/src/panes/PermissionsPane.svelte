@@ -3,7 +3,8 @@
   this reader may see them (a hidden one only as such, ADR 0019), with their state, who may edit
   each and who can edit it. For a chosen region, someone who manages the document sets the policy,
   with what each policy means in plain words, and gives people and groups a role, found through the
-  host's directory (`searchPrincipals`) and named through `resolveUsers`. Grants are saved with
+  host's directory (`searchPrincipals`) and named through `resolveUsers`. The document's role
+  placeholders are offered beside them (`role:<id>`, FRW-012), found among its own roles. Grants are saved with
   `If-Match`; when someone else saved first, the pane reloads them and says so, and nothing is
   overwritten. Without `manage` the controls are absent or disabled, with the reason. Roles are
   shown with a colour, a shape and their name. Titles and names are content.
@@ -21,7 +22,12 @@
   import type { StringKey } from '../i18n/en-GB.ts';
   import { live } from '../live.ts';
   import { capabilitiesAnywhere } from '../shell/modes.ts';
-  import { grantableCandidates, mayEditRegion, whoCanEdit } from '../shell/regions.ts';
+  import {
+    grantableCandidates,
+    mayEditRegion,
+    roleCandidates,
+    whoCanEdit,
+  } from '../shell/regions.ts';
 
   const shell = useShell()!;
   const core = shell.core;
@@ -29,6 +35,9 @@
   const regionsView = core.regions ? live(core.regions) : null;
   const permissions = core.permissions ? live(core.permissions) : null;
   const directory = live(shell.people.view);
+  const rolesView = core.roles ? live(core.roles.list) : null;
+  /** The document's role placeholders: offered beside users and groups as principals (FRW-012). */
+  const roleList = $derived(rolesView?.current ?? []);
   const id = `${shell.idPrefix}-permissions`;
 
   const ROLES: readonly RegionRole[] = ['viewer', 'commenter', 'suggester', 'editor'];
@@ -47,7 +56,8 @@
   function nameOf(principal: string): string {
     void directory.current;
     if (principal === 'everyone') return tr.t('principal.everyone');
-    if (principal.startsWith('role:')) return tr.t('principal.role');
+    if (principal.startsWith('role:'))
+      return roleList.find((r) => `role:${r.id}` === principal)?.name ?? tr.t('principal.role');
     if (principal.startsWith('group:')) return groupNames.get(principal) ?? tr.t('principal.group');
     const user = principal.startsWith('user:') ? principal.slice(5) : principal;
     shell.people.request([user]);
@@ -124,9 +134,17 @@
     chosen = null;
     clearTimeout(timer);
     const text = query.trim();
-    if (!text || !shell.searchPrincipals) {
+    if (!text) {
       candidates = [];
       searched = false;
+      return;
+    }
+    // Role placeholders are the document's own: they are found here, not asked of the host.
+    const own = roleCandidates(roleList, text);
+    if (!shell.searchPrincipals) {
+      candidates = own;
+      active = own.length ? 0 : -1;
+      searched = true;
       return;
     }
     timer = setTimeout(async () => {
@@ -139,14 +157,18 @@
           limit: 20,
         });
         if (query.trim() !== text) return;
-        candidates = Array.isArray(found) ? grantableCandidates(found, selected?.policy) : [];
+        candidates = [
+          ...(Array.isArray(found) ? grantableCandidates(found, selected?.policy) : []),
+          ...own,
+        ];
         for (const p of candidates)
           if (p.principal.startsWith('group:') && typeof p.name === 'string')
             groupNames.set(p.principal, p.name);
         active = candidates.length ? 0 : -1;
         searched = true;
       } catch {
-        candidates = [];
+        candidates = own;
+        active = own.length ? 0 : -1;
         searched = true;
       }
     }, 200);
@@ -356,7 +378,7 @@
         {#if manage}
           <form class="de-form" onsubmit={add} aria-labelledby={`${id}-add`}>
             <h4 class="de-subhead" id={`${id}-add`}>{tr.t('permissions.add')}</h4>
-            {#if shell.searchPrincipals}
+            {#if shell.searchPrincipals || roleList.length > 0}
               <label class="de-field" for={`${id}-search`}>{tr.t('permissions.search')}</label>
               <input
                 id={`${id}-search`}
@@ -397,7 +419,9 @@
                     <span class="de-hint"
                       >{p.principal.startsWith('group:')
                         ? tr.t('principal.group')
-                        : tr.t('principal.user')}</span
+                        : p.principal.startsWith('role:')
+                          ? tr.t('principal.role')
+                          : tr.t('principal.user')}</span
                     >
                   </li>
                 {/each}

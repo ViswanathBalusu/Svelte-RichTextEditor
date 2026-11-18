@@ -71,6 +71,12 @@ export interface ServiceConfig {
   unavailableRetryAfterS: number;
   /** The bearer secret that `/metrics` takes; null: no metrics endpoint. */
   metricsToken: string | null;
+  /**
+   * Redis or Valkey for the tenant and user rate-limit counters (BE-030 stage 2, BE-063; for example
+   * `redis://host:6379`). Null: the counters are in this process's memory (stage 1). Only counters
+   * live there; a lost or unreachable store loosens limits and never loses data.
+   */
+  valkeyUrl: string | null;
   /** A font set with the converter's `fonts.json` (PRO-067, BE-047); null: no fonts. */
   fontsDir: string | null;
   /** Where the font files are served; default `{publicUrl}/fonts`. */
@@ -163,6 +169,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   idempotencyWaitMs: 10_000,
   unavailableRetryAfterS: 1,
   metricsToken: null,
+  valkeyUrl: null,
   fontsDir: null,
   fontsBaseUrl: null,
   assetOrigin: null,
@@ -330,6 +337,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     idempotencyWaitMs: int(env, 'DOCEDIT_IDEMPOTENCY_WAIT_MS', DEFAULTS.idempotencyWaitMs),
     unavailableRetryAfterS: int(env, 'DOCEDIT_RETRY_AFTER_S', DEFAULTS.unavailableRetryAfterS),
     metricsToken: env['DOCEDIT_METRICS_TOKEN'] || null,
+    valkeyUrl: env['DOCEDIT_VALKEY_URL'] || null,
     fontsDir: env['DOCEDIT_FONTS_DIR'] || null,
     fontsBaseUrl: env['DOCEDIT_FONTS_BASE_URL'] || null,
     assetOrigin: env['DOCEDIT_ASSET_ORIGIN'] || null,

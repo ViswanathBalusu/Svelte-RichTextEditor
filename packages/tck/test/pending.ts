@@ -26,7 +26,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'field wf.changed.participant': WORKFLOW,
   'operation PUT /documents/{id}/regions/{rid}/lease': LEASES,
   'operation DELETE /documents/{id}/regions/{rid}/lease': LEASES,
-  'operation GET /documents/{id}/history': HISTORY,
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,
   'operation GET /imports/{jid}':
     'imports take a service credential and arrive with EXP (G79; D16)',

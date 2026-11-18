@@ -60,11 +60,12 @@ export {
   MemoryCheckpointIndex,
   MemoryNodeLeases,
   MemoryOutbox,
+  MemoryOutboxWriter,
 } from './memory-ports.ts';
 export { PgAuditStore, insertAuditEvent } from './pg/audit.ts';
 export { PgCheckpointIndex } from './pg/checkpoint-index.ts';
 export { PgNodeLeases } from './pg/leases.ts';
-export { PgOutbox, insertOutboxItem } from './pg/outbox.ts';
+export { PgOutbox, PgOutboxWriter, insertOutboxItem } from './pg/outbox.ts';
 
 const SUBPROTOCOL = 'dep.v1';
 
@@ -350,20 +351,37 @@ class DepDataPlane implements DataPlane {
     ref: DocRef,
     content: JsonEnvelope,
     actor: string,
-    opts: { traceparent?: string; reason?: 'import' | 'restore'; requestId?: string } = {},
+    opts: {
+      traceparent?: string;
+      reason?: 'import' | 'restore';
+      requestId?: string;
+      head?: string;
+    } = {},
   ): Promise<{ seq: number }> {
     if (this.#closing || this.#host.draining)
       throw new DataPlaneError('unavailable', 'the service is stopping', 1000);
     const encoded = await this.#host.encode(content);
     if (encoded.bytes > CANONICAL_LIMIT)
       throw new DataPlaneError('too_large', 'the content is larger than 16 MiB (I7)');
-    // With a request identifier (the caller's own: an import job, an idempotency key) the commit
-    // identifier is derived from it, so a retry of the request is one commit (SYN-030 criterion 3;
-    // ADR 0377, proposed). Without one there is nothing that names "the same request", and it is random.
+    // The commit identifier is derived from the request, so a retry is one commit (BE-039 criterion 1;
+    // SYN-030 criterion 3; ADR 0377, proposed). The caller's own request identifier names it (an
+    // import job); otherwise the head the caller authorised the change against and the hash of the
+    // content do (PUT /content with its If-Match, a restore at its head): the same replacement of the
+    // same head is the same request, and a later one, made after the head moved, is another. Only a
+    // caller with neither gets a random identifier.
     const id =
-      opts.requestId === undefined
-        ? uuid7()
-        : derivedCommitId(opts.reason ?? 'import', ref.tenant, ref.doc, actor, opts.requestId);
+      opts.requestId !== undefined
+        ? derivedCommitId(opts.reason ?? 'import', ref.tenant, ref.doc, actor, opts.requestId)
+        : opts.head !== undefined
+          ? derivedCommitId(
+              opts.reason ?? 'import',
+              ref.tenant,
+              ref.doc,
+              actor,
+              `head:${opts.head}`,
+              encoded.hash,
+            )
+          : uuid7();
     const trace = parseTraceparent(opts.traceparent);
     // HIS-019 criterion 1: a whole-document restore is a snapshot commit with reason `restore`.
     const reason = opts.reason ?? 'import';
