@@ -408,6 +408,35 @@ export const EN_GB = {
   'checker.locked': 'You cannot fix this. Ask someone who can.',
   'checker.locked.who': 'You cannot fix this. {who}',
   'pane.assistant': 'Assistant',
+  // The assistant pane (UX-045). The answer and the prompt are content; the rest is interface.
+  'command.view.assistant': 'Assistant',
+  'synonyms.view.assistant': 'ai; draft; rewrite; summarise; ask a question',
+  'assistant.label': 'Assistant',
+  'assistant.prompt': 'What should the assistant do?',
+  'assistant.prompt.hint':
+    'Nothing in the document changes until you approve it. The answer is shown here first.',
+  'assistant.draft': 'Draft',
+  'assistant.rewrite': 'Rewrite selection',
+  'assistant.summary': 'Summarise',
+  'assistant.question': 'Ask a question',
+  'assistant.cancel': 'Cancel',
+  'assistant.retry': 'Try again',
+  'assistant.dismiss': 'Clear',
+  'assistant.insert': 'Insert as suggestion',
+  'assistant.response': 'Response',
+  'assistant.progress': 'The assistant is working.',
+  'assistant.done':
+    'The assistant has answered. The answer is in the pane and the document is unchanged.',
+  'assistant.cancelled': 'The request was cancelled. Nothing was applied.',
+  'assistant.error.rate_limited':
+    'The assistant is busy: too many requests. Nothing was applied. You can try again.',
+  'assistant.error.quota_exceeded':
+    'The assistant quota has been used up. Nothing was applied. You can try again later.',
+  'assistant.error.port_failure':
+    'The assistant did not answer. Nothing was applied. You can try again.',
+  'assistant.refused.no-view': 'You cannot view this part of the document.',
+  'assistant.refused.no-change':
+    'A draft or a rewrite would put text into the document, and your access here does not allow that.',
   'pane.pdf': 'PDF preview',
   'pane.failed': 'This pane could not be opened.',
   'pane.close': 'Close {pane}',
