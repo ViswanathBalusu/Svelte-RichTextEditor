@@ -842,6 +842,7 @@ import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
 import type { MarkupView, SuggestionLabel, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
+import type { ThreadSelection } from './comment-decorations.ts';
 import type { SectionWarning } from './breaks-sections.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
 import type { LocatedFinding, ProofingClock, ProofingInfo, ProofingPort } from './proofing.ts';
@@ -1053,6 +1054,14 @@ export interface DocumentApi {
   setSuggestionLabel(label: SuggestionLabel | null): void;
   /** The client's copy of every thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadView<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
+  readonly selectedThread: ReadView<ThreadSelection | null>;
+  /** The thread whose highlight the reader chose in the body; `n` counts the choices (UX-030). */
+  readonly pickedThread: ReadView<{ readonly id: string; readonly n: number } | null>;
+  /** Chooses a thread in the pane: the body marks and shows it. No step, no commit (UX-030). */
+  selectThread(selection: ThreadSelection | null): void;
+  /** Records that the reader chose a thread's highlight in the body (UX-030). */
+  pickThread(id: string): void;
   /** Sets a thread's range as the service reports it at `seq` (FE-048). */
   setThreadRange(threadId: string, range: { from: number; to: number }, seq: number): void;
   /** Removes a thread's range (the thread was deleted) (FE-048). */

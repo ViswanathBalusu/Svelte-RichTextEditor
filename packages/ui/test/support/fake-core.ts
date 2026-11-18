@@ -297,6 +297,27 @@ export class FakeThreads implements ThreadsService {
     return this.current;
   }
 
+  // --- UX-030: the page and the pane choose a thread for each other.
+  /** The threads the pane asked the document to show, in order. */
+  readonly revealed: string[] = [];
+  /** The highlight the reader chose in the page; `n` counts the choices. */
+  readonly picked = new Value<{ readonly id: string; readonly n: number } | null>(null);
+
+  reveal(thread: ThreadSummary): void {
+    this.revealed.push(thread.id);
+  }
+
+  /** The reader chooses a thread's highlight in the page. */
+  pick(id: string): void {
+    this.picked.set({ id, n: (this.picked.get()?.n ?? 0) + 1 });
+  }
+
+  /** The service reports a changed list (a `thread.*` notice): the pane reads it again. */
+  replaceItems(items: ThreadSummary[]): void {
+    this.items = items;
+    this.changes.set(this.changes.get() + 1);
+  }
+
   count(): number {
     return this.threads;
   }

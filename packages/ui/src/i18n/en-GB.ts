@@ -733,6 +733,17 @@ export const EN_GB = {
   'comments.link.unavailable':
     'This comment cannot be shown. It may have been deleted, or you may not be able to view this document.',
   // The thread view (UX-029): replies, edits, resolving, deleting.
+  'comments.show': 'Show in document',
+  'comments.show.label': 'Show in document, thread by {author}',
+  'comments.shown': 'Shown in the document.',
+  'comments.picked': 'Thread by {author} chosen in the document.',
+  // What a refresh of the list announces (UX-030 criterion 4).
+  'comments.announce.created': 'New comment thread by {author}.',
+  'comments.announce.reply': 'New reply in the thread by {author}.',
+  'comments.announce.resolved': 'Thread by {author} resolved.',
+  'comments.announce.reopened': 'Thread by {author} reopened.',
+  'comments.announce.deleted': 'Thread by {author} deleted.',
+  'comments.thread.comment.name': '{author}, {time}, {state}',
   'comments.thread.open': 'Open thread by {author}',
   'comments.thread.back': 'Back to the list',
   'comments.thread.label': 'Thread by {author}',

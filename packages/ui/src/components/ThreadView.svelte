@@ -204,7 +204,17 @@
   <ul class="de-list de-thread-comments">
     {#each shown.comments as c (c.id)}
       <li class="de-thread-comment" data-comment={c.id}>
-        <div class="de-comment-head">
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <div
+          class="de-comment-head"
+          role="group"
+          tabindex="0"
+          aria-label={tr.t('comments.thread.comment.name', {
+            author: authorOf(c.author),
+            time: time(c),
+            state: tr.t(shown.state === 'open' ? 'comments.state.open' : 'comments.state.resolved'),
+          })}
+        >
           <span class="de-comment-author">{authorOf(c.author)}</span>
           <time datetime={c.createdAt}>{time(c)}</time>
           {#if c.edited}<span class="de-hint">({tr.t('comments.thread.edited')})</span>{/if}

@@ -220,6 +220,7 @@ import {
 } from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
+import type { ThreadSelection } from './comment-decorations.ts';
 import {
   type AssistantRequest,
   type HostAttachment,
@@ -816,6 +817,10 @@ export class DocumentCore implements DocumentApi {
   readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
+  readonly selectedThread: ReadValue<ThreadSelection | null>;
+  /** The thread whose highlight the reader chose in the body; `n` counts the choices (UX-030). */
+  readonly pickedThread: ReadValue<{ readonly id: string; readonly n: number } | null>;
   /** The markup view the body shows for suggestions (UX-035); ll until it is set. */
   readonly markupView: ReadValue<MarkupView>;
   /** Names a suggestion for assistive technology (UX-035 criterion 4); the shell sets it. */
@@ -985,6 +990,12 @@ export class DocumentCore implements DocumentApi {
       hub,
     );
     this.markupView = new ReadValue<MarkupView>('all', Object.is, hub);
+    this.selectedThread = new ReadValue<ThreadSelection | null>(null, sameJson, hub);
+    this.pickedThread = new ReadValue<{ readonly id: string; readonly n: number } | null>(
+      null,
+      sameJson,
+      hub,
+    );
     this.#deferRemote = config.deferRemoteWhileComposing ?? true;
     this.#requires = [...config.doc.requires];
     const doc = readEnvelope(config.doc, this.#schema);
@@ -2468,6 +2479,21 @@ one or original. It is a
    */
   setMarkupView(view: MarkupView): void {
     this.markupView.set(view);
+  }
+
+  /**
+   * Chooses a thread in the comments pane (UX-030): the body marks its range, or its block, and
+   * brings it into view. A setting of this reader: no step, no commit. Null clears the choice.
+   */
+  selectThread(selection: ThreadSelection | null): void {
+    this.selectedThread.set(
+      selection === null ? null : { id: selection.id, block: selection.block },
+    );
+  }
+
+  /** Records that the reader chose a thread's highlight in the body; the pane selects that thread (UX-030). */
+  pickThread(id: string): void {
+    this.pickedThread.set({ id, n: (this.pickedThread.get()?.n ?? 0) + 1 });
   }
 
   /**

@@ -178,6 +178,48 @@ export function paneRows(threads: readonly ThreadInput[]): PaneRow[] {
     }));
 }
 
+/* ----- what changed in the list (UX-030 criterion 4: the change is announced) ----- */
+
+export interface ChangeInput {
+  readonly id: string;
+  readonly state: ThreadState;
+  readonly author: string;
+  readonly replyCount: number;
+}
+
+/** What one refresh of the list changed, as a kind and the person it names. */
+export interface ThreadChange {
+  readonly kind: 'created' | 'reply' | 'resolved' | 'reopened' | 'deleted';
+  /** The thread's author, which is who a created, resolved or reopened announcement names. */
+  readonly author: string;
+}
+
+/**
+ * Compares the list the pane showed with the list it reads now, and says what changed, one change
+ * first: a new thread, then a reply, a state change, a deletion. Null when nothing the pane shows
+ * changed. The strings come from the string tables; this only picks the kind.
+ */
+export function describeThreadChange(
+  before: readonly ChangeInput[],
+  after: readonly ChangeInput[],
+): ThreadChange | null {
+  const was = new Map(before.map((t) => [t.id, t]));
+  const now = new Map(after.map((t) => [t.id, t]));
+  for (const t of after) if (!was.has(t.id)) return { kind: 'created', author: t.author };
+  for (const t of after) {
+    const old = was.get(t.id);
+    if (old && t.replyCount > old.replyCount) return { kind: 'reply', author: t.author };
+  }
+  for (const t of after) {
+    const old = was.get(t.id);
+    if (old && t.state !== old.state) {
+      return { kind: t.state === 'resolved' ? 'resolved' : 'reopened', author: t.author };
+    }
+  }
+  for (const t of before) if (!now.has(t.id)) return { kind: 'deleted', author: t.author };
+  return null;
+}
+
 /* ----- assignment (UX-032 criteria 1 and 2) ----- */
 
 export interface AssignEvent {
