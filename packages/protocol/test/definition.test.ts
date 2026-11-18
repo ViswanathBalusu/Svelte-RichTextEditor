@@ -216,6 +216,7 @@ const OTHER_ROUTES = [
   'POST /documents/{id}/workflow/send',
   'POST /documents/{id}/workflow/correct',
   'POST /documents/{id}/workflow/resume',
+  'POST /documents/{id}/workflow/void',
   'POST /documents/{id}/workflow/participants/{pid}/consent',
   'POST /documents/{id}/workflow/participants/{pid}/verify',
   'POST /documents/{id}/workflow/participants/{pid}/complete',

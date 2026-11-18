@@ -2,7 +2,7 @@
 // delivered as signed CloudEvents webhooks through the real egress proxy (only the resolver and the
 // connector are fakes), once per occurrence, with small data of identifiers, the `seq` and the chain
 // head, and with no contact detail and no evidence personal data. The paths that raise events are the
-// send, the correction and the resume (FRW-027, FRW-032); the first view and the completion return
+// send, the correction, the resume, the decline and the void (FRW-027, FRW-032, FRW-033); the first view and the completion return
 // their events to a route that does not exist yet (FRW-031, FRW-047), and the other events have no
 // occurrence in the service yet: they are listed at the end with the reason.
 import { uuid7 } from '@docedit/model';
@@ -48,7 +48,13 @@ const WORKFLOW_EVENT_NAMES = [
 const TYPES = WORKFLOW_EVENT_NAMES.map((n) => `dep.workflow.${n}.v1`);
 
 /** The raisers that exist: the events they raise. The rest are listed with their reason below. */
-const RAISED_BY_A_BUILT_PATH = ['sent', 'participant_activated', 'corrected'];
+const RAISED_BY_A_BUILT_PATH = [
+  'sent',
+  'participant_activated',
+  'corrected',
+  'participant_declined',
+  'voided',
+];
 
 const PERSON = 'Ada Lovelace <ada@example.com>';
 const PERSON_SUB = 'sub-ada-0192';
@@ -265,9 +271,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(row.body).not.toContain('Ada');
           // The identifiers, the number and the digest hold nothing that reads as a person or a device.
           for (const [name, value] of Object.entries(body.data)) {
-            if (name === 'chainHead') continue;
+            if (['chainHead', 'workflow', 'document'].includes(name)) continue;
             expect(String(value), JSON.stringify(body.data)).not.toMatch(PERSONAL);
           }
+          expect(String(body.data['workflow'])).toMatch(/^[0-9a-f-]{36}$/);
+          expect(String(body.data['document'])).toMatch(/^[0-9a-f-]{36}$/);
           // A participant event names its participant by identifier only (criterion 4).
           if (body.type === 'dep.workflow.participant_activated.v1')
             expect(body.data['participant']).toBe('p1');
@@ -328,10 +336,8 @@ describe('the events no path raises yet (FRW-036 criterion 1)', () => {
       'participant_viewed', // recordFirstView returns it; nothing calls it when a channel opens (FRW-031, FRW-038)
       'field_completed', // after a fill or sign commit: FRW-047
       'participant_completed', // recordCompletion returns it; the complete route is FRW-047
-      'participant_declined', // the decline route: FRW-033
       'auth_failed', // the verification failure: FRW-040 and after
       'reminder_due', // the reminder schedule runs nowhere yet
-      'voided', // the void route: FRW-033
       'expired', // the deadline job
       'completed', // recordCompletion returns it; the complete route is FRW-047
       'finalised', // the finalisation job: FRW-049
