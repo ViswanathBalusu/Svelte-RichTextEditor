@@ -57,6 +57,8 @@ export function hiddenSetOf(access: Access, doc: Node, options: VisibilityOption
   const values = new Set<string>();
   // The keys of the values this connection may not read: the input of the rule closure (FRW-089).
   const keys = new Set<string>();
+  // What a reference may point at inside a hidden region: the reader cannot resolve it (FRW-089).
+  const targets = new Set<string>();
   const hide = (n: Node) => {
     const id = n.attrs['id'];
     if (typeof id === 'string') values.add(id);
@@ -77,25 +79,32 @@ export function hiddenSetOf(access: Access, doc: Node, options: VisibilityOption
       if (access.regions.get(id)?.has('view') === true) fields(block, `region:${id}`);
       else {
         regions.add(id);
+        targets.add(`node:${id}`);
         // The placeholder hides these values, but a rule may still compute from them.
         block.descendants((n) => {
           if (n.type.name === 'form_field' && typeof n.attrs['key'] === 'string')
             keys.add(n.attrs['key']);
+          if (typeof n.attrs['id'] === 'string') targets.add(`node:${n.attrs['id']}`);
+          if (n.type.name === 'anchor' && typeof n.attrs['name'] === 'string')
+            targets.add(`bookmark:${n.attrs['name']}`);
+          if (n.type.name.startsWith('equation') && typeof n.attrs['label'] === 'string')
+            targets.add(`eq:${n.attrs['label']}`);
           return true;
         });
       }
     });
   });
   if (keys.size > 0) addDerivedValues(doc, keys, values);
-  return { regions, values, titles: options.titles ?? false };
+  return { regions, values, keys, targets, titles: options.titles ?? false };
 }
 
 /**
  * Adds the id of every field whose value the rules compute from a key in `hiddenKeys` (FRW-089): a
  * `set` effect that reads a hidden value, a rule whose condition reads one. When the rules of the
  * document do not compile, no closure can be read, so every field value is hidden (fails closed).
+ * The keys of those fields are added to `hiddenKeys`, so that a mirror of one carries no text.
  */
-function addDerivedValues(doc: Node, hiddenKeys: ReadonlySet<string>, values: Set<string>): void {
+function addDerivedValues(doc: Node, hiddenKeys: Set<string>, values: Set<string>): void {
   const compiled = compileDocument(doc.toJSON());
   const closure = compiled.ok
     ? new Set(derivedFromHidden(compiled.ruleSet, hiddenKeys).derived)
@@ -107,8 +116,10 @@ function addDerivedValues(doc: Node, hiddenKeys: ReadonlySet<string>, values: Se
     if (
       typeof id === 'string' &&
       (closure === null || (typeof key === 'string' && closure.has(key)))
-    )
+    ) {
       values.add(id);
+      if (typeof key === 'string') hiddenKeys.add(key);
+    }
     return false;
   });
 }
