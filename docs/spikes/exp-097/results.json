@@ -1,0 +1,9382 @@
+{
+ "corpus": [
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/2010-mcAlternateContent.docx",
+   "wallMs": 892.1259,
+   "ok": true,
+   "ms": 96.0838,
+   "peakMb": 91.49609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/2010-mcAlternateContent.docx",
+   "wallMs": 1094.9658,
+   "ok": true,
+   "ms": 94.58260000000007,
+   "peakMb": 74.6171875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/2010-mcAlternateContent.docx",
+   "wallMs": 719.1518000000001,
+   "ok": true,
+   "ms": 461.6185,
+   "peakMb": 49.25,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/2010-mcAlternateContent.docx",
+   "wallMs": 5512.138199999999,
+   "ok": true,
+   "ms": 17.457000038120896,
+   "peakMb": 26.31640625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/2010-mcAlternateContent.docx",
+   "wallMs": 950.1386000000002,
+   "ok": true,
+   "ms": 97.78470000000004,
+   "peakMb": 75.40625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/2016_image_with_text_effects.docx",
+   "wallMs": 876.6917000000012,
+   "ok": true,
+   "ms": 101.1466999999999,
+   "peakMb": 91.06640625,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/2016_image_with_text_effects.docx",
+   "wallMs": 1115.9617000000017,
+   "ok": true,
+   "ms": 95.3008000000001,
+   "peakMb": 76.484375,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/2016_image_with_text_effects.docx",
+   "wallMs": 793.1597999999994,
+   "ok": true,
+   "ms": 554.6211,
+   "peakMb": 48.46484375,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/2016_image_with_text_effects.docx",
+   "wallMs": 2132.4749999999985,
+   "ok": true,
+   "ms": 8.555900014471263,
+   "peakMb": 26.234375,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/2016_image_with_text_effects.docx",
+   "wallMs": 959.7277000000013,
+   "ok": true,
+   "ms": 117.87919999999997,
+   "peakMb": 77.3125,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/76t52-round-8-control-word365.docx",
+   "wallMs": 968.4560999999976,
+   "ok": true,
+   "ms": 132.33079999999995,
+   "peakMb": 91.7421875,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 74,
+    "total": 86
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/76t52-round-8-control-word365.docx",
+   "wallMs": 812.5529999999999,
+   "ok": true,
+   "ms": 107.06769999999995,
+   "peakMb": 76.75390625,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 86,
+    "total": 86
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/76t52-round-8-control-word365.docx",
+   "wallMs": 596.9285999999993,
+   "ok": true,
+   "ms": 376.5663,
+   "peakMb": 39.765625,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 86,
+    "total": 86
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/76t52-round-8-control-word365.docx",
+   "wallMs": 1758.7900000000009,
+   "ok": true,
+   "ms": 13.463200011756271,
+   "peakMb": 26.6015625,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 84,
+    "total": 86
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/76t52-round-8-control-word365.docx",
+   "wallMs": 802.2402000000002,
+   "ok": true,
+   "ms": 121.93520000000001,
+   "peakMb": 77.09375,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 86,
+    "total": 86
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/DrawingML_GraphicData_wps.docx",
+   "wallMs": 922.4873999999982,
+   "ok": true,
+   "ms": 196.61559999999997,
+   "peakMb": 93.40625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 2,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/DrawingML_GraphicData_wps.docx",
+   "wallMs": 802.0113999999994,
+   "ok": true,
+   "ms": 127.25990000000002,
+   "peakMb": 78.078125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/DrawingML_GraphicData_wps.docx",
+   "wallMs": 762.4765999999981,
+   "ok": true,
+   "ms": 528.9043,
+   "peakMb": 49.9609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/DrawingML_GraphicData_wps.docx",
+   "wallMs": 1566.509900000001,
+   "ok": true,
+   "ms": 11.781999957747757,
+   "peakMb": 26.5625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 2,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/DrawingML_GraphicData_wps.docx",
+   "wallMs": 912.2615000000005,
+   "ok": true,
+   "ms": 137.3152,
+   "peakMb": 79.05859375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/LegacyForms.docx",
+   "wallMs": 861.5303000000022,
+   "ok": true,
+   "ms": 115.58440000000007,
+   "peakMb": 92.4921875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/LegacyForms.docx",
+   "wallMs": 845.7551999999996,
+   "ok": true,
+   "ms": 102.77409999999998,
+   "peakMb": 74.5234375,
+   "counts": {
+    "tables": 0,
+    "images": 5,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/LegacyForms.docx",
+   "wallMs": 605.9951000000001,
+   "ok": true,
+   "ms": 392.3723,
+   "peakMb": 42.2734375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/LegacyForms.docx",
+   "wallMs": 653.4699,
+   "ok": true,
+   "ms": 11.716299981344491,
+   "peakMb": 26.3203125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/LegacyForms.docx",
+   "wallMs": 1114.8292000000001,
+   "ok": true,
+   "ms": 105.93219999999997,
+   "peakMb": 75.81640625,
+   "counts": {
+    "tables": 0,
+    "images": 5,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/binding-simple.docx",
+   "wallMs": 929.7078000000001,
+   "ok": true,
+   "ms": 110.1273000000001,
+   "peakMb": 87.53125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 8,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/binding-simple.docx",
+   "wallMs": 1059.2425999999978,
+   "ok": true,
+   "ms": 94.02859999999998,
+   "peakMb": 72.4765625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 14,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/binding-simple.docx",
+   "wallMs": 603.424500000001,
+   "ok": true,
+   "ms": 344.8953,
+   "peakMb": 39.5546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 14,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/binding-simple.docx",
+   "wallMs": 1100.0800000000054,
+   "ok": true,
+   "ms": 16.32110000355169,
+   "peakMb": 26.57421875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 8,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/binding-simple.docx",
+   "wallMs": 1592.7660000000033,
+   "ok": true,
+   "ms": 126.13539999999989,
+   "peakMb": 74.46484375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 14,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/chart.docx",
+   "wallMs": 1038.448599999996,
+   "ok": true,
+   "ms": 112.49300000000005,
+   "peakMb": 92.79296875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/chart.docx",
+   "wallMs": 1813.0852000000014,
+   "ok": true,
+   "ms": 82.7364,
+   "peakMb": 73.23828125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/chart.docx",
+   "wallMs": 809.9705000000031,
+   "ok": true,
+   "ms": 390.4628,
+   "peakMb": 47.51953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/chart.docx",
+   "wallMs": 1735.1405000000013,
+   "ok": true,
+   "ms": 7.446200004778802,
+   "peakMb": 26.1484375,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/chart.docx",
+   "wallMs": 1832.9862999999968,
+   "ok": true,
+   "ms": 91.65329999999994,
+   "peakMb": 74.32421875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/comment-cards.docx",
+   "wallMs": 991.4354999999996,
+   "ok": true,
+   "ms": 118.6463,
+   "peakMb": 88.4375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 65,
+    "total": 65
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/comment-cards.docx",
+   "wallMs": 1440.9722000000038,
+   "ok": true,
+   "ms": 107.37959999999998,
+   "peakMb": 72.74609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 5,
+    "footnotes": 0,
+    "hyperlinks": 10
+   },
+   "recall": {
+    "found": 65,
+    "total": 65
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/comment-cards.docx",
+   "wallMs": 718.1791999999987,
+   "ok": true,
+   "ms": 438.9718,
+   "peakMb": 39.85546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 5,
+    "footnotes": 1,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 65,
+    "total": 65
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/comment-cards.docx",
+   "wallMs": 1953.5255000000034,
+   "ok": true,
+   "ms": 4.245900025125593,
+   "peakMb": 25.7734375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 5,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 65,
+    "total": 65
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/comment-cards.docx",
+   "wallMs": 1320.5157000000036,
+   "ok": true,
+   "ms": 88.21759999999995,
+   "peakMb": 75.23828125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 5,
+    "footnotes": 0,
+    "hyperlinks": 10
+   },
+   "recall": {
+    "found": 65,
+    "total": 65
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/cr043-tracked.docx",
+   "wallMs": 1000.5896999999968,
+   "ok": true,
+   "ms": 262.4669,
+   "peakMb": 101.5,
+   "counts": {
+    "tables": 5,
+    "images": 2,
+    "tracked": 19,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 297,
+    "total": 439
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/cr043-tracked.docx",
+   "wallMs": 1072.977700000003,
+   "ok": true,
+   "ms": 190.9135,
+   "peakMb": 80.35546875,
+   "counts": {
+    "tables": 6,
+    "images": 1,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 7
+   },
+   "recall": {
+    "found": 417,
+    "total": 439
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/cr043-tracked.docx",
+   "wallMs": 1162.863400000002,
+   "ok": true,
+   "ms": 908.6548,
+   "peakMb": 54.734375,
+   "counts": {
+    "tables": 6,
+    "images": 2,
+    "tracked": 39,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 437,
+    "total": 439
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/cr043-tracked.docx",
+   "wallMs": 2577.8081999999995,
+   "ok": true,
+   "ms": 448.87870003003627,
+   "peakMb": 27.80078125,
+   "counts": {
+    "tables": 6,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 380,
+    "total": 439
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/cr043-tracked.docx",
+   "wallMs": 1742.5123000000021,
+   "ok": true,
+   "ms": 193.01300000000015,
+   "peakMb": 81.4453125,
+   "counts": {
+    "tables": 6,
+    "images": 1,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 7
+   },
+   "recall": {
+    "found": 400,
+    "total": 439
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/create-new-bitmap.docx",
+   "wallMs": 980.6297999999952,
+   "ok": true,
+   "ms": 177.16200000000003,
+   "peakMb": 91,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/create-new-bitmap.docx",
+   "wallMs": 1395.7526999999973,
+   "ok": true,
+   "ms": 115.91830000000004,
+   "peakMb": 77.3125,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/create-new-bitmap.docx",
+   "wallMs": 565.0866999999998,
+   "ok": true,
+   "ms": 339.0493,
+   "peakMb": 40.91015625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/create-new-bitmap.docx",
+   "wallMs": 2907.7252000000008,
+   "ok": true,
+   "ms": 28.023899998515844,
+   "peakMb": 26.62890625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/create-new-bitmap.docx",
+   "wallMs": 1514.8549000000057,
+   "ok": true,
+   "ms": 135.50239999999985,
+   "peakMb": 78.17578125,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/equation-sample.docx",
+   "wallMs": 878.5501000000004,
+   "ok": true,
+   "ms": 91.1757,
+   "peakMb": 92.23828125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/equation-sample.docx",
+   "wallMs": 1951.562199999993,
+   "ok": true,
+   "ms": 97.82109999999989,
+   "peakMb": 74.7265625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/equation-sample.docx",
+   "wallMs": 704.1181999999972,
+   "ok": true,
+   "ms": 396.9152,
+   "peakMb": 40.2109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/equation-sample.docx",
+   "wallMs": 7965.870899999994,
+   "ok": true,
+   "ms": 47.98739997204393,
+   "peakMb": 26.2109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/equation-sample.docx",
+   "wallMs": 820.9417000000103,
+   "ok": true,
+   "ms": 86.27030000000002,
+   "peakMb": 75.09765625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/hyperlinks-internal.docx",
+   "wallMs": 821.0611999999965,
+   "ok": true,
+   "ms": 125.24159999999995,
+   "peakMb": 91.39453125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 16,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/hyperlinks-internal.docx",
+   "wallMs": 1081.8274999999994,
+   "ok": true,
+   "ms": 88.61419999999998,
+   "peakMb": 74.8203125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/hyperlinks-internal.docx",
+   "wallMs": 588.703800000003,
+   "ok": true,
+   "ms": 323.0401,
+   "peakMb": 39.57421875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/hyperlinks-internal.docx",
+   "wallMs": 3681.0622000000003,
+   "ok": true,
+   "ms": 30.07669997168705,
+   "peakMb": 26.0625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/hyperlinks-internal.docx",
+   "wallMs": 1024.6783999999898,
+   "ok": true,
+   "ms": 108.40859999999998,
+   "peakMb": 75.5859375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/inserted-doc.docx",
+   "wallMs": 834.6555999999982,
+   "ok": true,
+   "ms": 126.13519999999994,
+   "peakMb": 90.58984375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/inserted-doc.docx",
+   "wallMs": 770.6272000000026,
+   "ok": true,
+   "ms": 114.59109999999998,
+   "peakMb": 77.38671875,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/inserted-doc.docx",
+   "wallMs": 607.7073999999993,
+   "ok": true,
+   "ms": 353.722,
+   "peakMb": 41.23828125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/inserted-doc.docx",
+   "wallMs": 1295.650999999998,
+   "ok": true,
+   "ms": 20.508699992205948,
+   "peakMb": 26.51953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/inserted-doc.docx",
+   "wallMs": 877.7590999999957,
+   "ok": true,
+   "ms": 119.82210000000009,
+   "peakMb": 76.90625,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/mc-txbx-block-word365.docx",
+   "wallMs": 892.2902000000031,
+   "ok": true,
+   "ms": 119.87810000000002,
+   "peakMb": 92.44140625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/mc-txbx-block-word365.docx",
+   "wallMs": 659.7649999999994,
+   "ok": true,
+   "ms": 96.89939999999996,
+   "peakMb": 77.17578125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/mc-txbx-block-word365.docx",
+   "wallMs": 724.0454999999929,
+   "ok": true,
+   "ms": 494.2113,
+   "peakMb": 49.1796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/mc-txbx-block-word365.docx",
+   "wallMs": 1325.7927000000054,
+   "ok": true,
+   "ms": 17.58370001334697,
+   "peakMb": 26.49609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/mc-txbx-block-word365.docx",
+   "wallMs": 1573.0607000000018,
+   "ok": true,
+   "ms": 107.72469999999998,
+   "peakMb": 77.203125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/review-for-word-word2010.docx",
+   "wallMs": 1081.125800000009,
+   "ok": true,
+   "ms": 264.53589999999997,
+   "peakMb": 94.421875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 20,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 312,
+    "total": 390
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/review-for-word-word2010.docx",
+   "wallMs": 867.295100000003,
+   "ok": true,
+   "ms": 156.13390000000004,
+   "peakMb": 80.25390625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 5,
+    "footnotes": 1,
+    "hyperlinks": 14
+   },
+   "recall": {
+    "found": 386,
+    "total": 390
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/review-for-word-word2010.docx",
+   "wallMs": 730.0250999999989,
+   "ok": true,
+   "ms": 472.1891,
+   "peakMb": 41.12890625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 46,
+    "comments": 5,
+    "footnotes": 2,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 390,
+    "total": 390
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/review-for-word-word2010.docx",
+   "wallMs": 1001.986899999989,
+   "ok": true,
+   "ms": 25.635600031819195,
+   "peakMb": 26.7109375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 5,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 359,
+    "total": 390
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/review-for-word-word2010.docx",
+   "wallMs": 933.741200000004,
+   "ok": true,
+   "ms": 174.72379999999998,
+   "peakMb": 80.59765625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 5,
+    "footnotes": 1,
+    "hyperlinks": 14
+   },
+   "recall": {
+    "found": 386,
+    "total": 390
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/sample-docx.docx",
+   "wallMs": 915.796199999997,
+   "ok": true,
+   "ms": 197.35879999999997,
+   "peakMb": 92.9296875,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 186,
+    "total": 190
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/sample-docx.docx",
+   "wallMs": 799.5795999999973,
+   "ok": true,
+   "ms": 142.65340000000003,
+   "peakMb": 78.390625,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 187,
+    "total": 190
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/sample-docx.docx",
+   "wallMs": 858.1235000000015,
+   "ok": true,
+   "ms": 618.6232,
+   "peakMb": 50.4609375,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 190,
+    "total": 190
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/sample-docx.docx",
+   "wallMs": 851.1356000000087,
+   "ok": true,
+   "ms": 11.192599951755255,
+   "peakMb": 26.8828125,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 188,
+    "total": 190
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/sample-docx.docx",
+   "wallMs": 987.1750000000029,
+   "ok": true,
+   "ms": 158.56899999999996,
+   "peakMb": 79.12890625,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 187,
+    "total": 190
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/sections_multiple.docx",
+   "wallMs": 797.8407000000007,
+   "ok": true,
+   "ms": 102.57150000000001,
+   "peakMb": 91.6640625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/sections_multiple.docx",
+   "wallMs": 728.3736000000063,
+   "ok": true,
+   "ms": 88.84570000000008,
+   "peakMb": 73.56640625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/sections_multiple.docx",
+   "wallMs": 533.9906999999948,
+   "ok": true,
+   "ms": 314.195,
+   "peakMb": 39.796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/sections_multiple.docx",
+   "wallMs": 668.1699999999983,
+   "ok": true,
+   "ms": 9.667599981185049,
+   "peakMb": 26.3828125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/sections_multiple.docx",
+   "wallMs": 1997.5755999999965,
+   "ok": true,
+   "ms": 136.80259999999998,
+   "peakMb": 75.9453125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/tables.docx",
+   "wallMs": 1770.75989999999,
+   "ok": true,
+   "ms": 867.1144999999999,
+   "peakMb": 101.43359375,
+   "counts": {
+    "tables": 11,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 277,
+    "total": 277
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/tables.docx",
+   "wallMs": 2159.7082999999984,
+   "ok": true,
+   "ms": 258.74699999999984,
+   "peakMb": 84.95703125,
+   "counts": {
+    "tables": 13,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 277,
+    "total": 277
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/tables.docx",
+   "wallMs": 1263.6055000000051,
+   "ok": true,
+   "ms": 713.8639,
+   "peakMb": 50.71484375,
+   "counts": {
+    "tables": 13,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 277,
+    "total": 277
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/tables.docx",
+   "wallMs": 2310.436499999996,
+   "ok": true,
+   "ms": 27.69540000008419,
+   "peakMb": 40.0546875,
+   "counts": {
+    "tables": 13,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 277,
+    "total": 277
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/tables.docx",
+   "wallMs": 2280.911500000002,
+   "ok": true,
+   "ms": 256.63390000000004,
+   "peakMb": 85.5234375,
+   "counts": {
+    "tables": 13,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 277,
+    "total": 277
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/textbox.docx",
+   "wallMs": 1068.7030999999988,
+   "ok": true,
+   "ms": 93.10680000000002,
+   "peakMb": 93.41015625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/textbox.docx",
+   "wallMs": 2337.182400000005,
+   "ok": true,
+   "ms": 109.35480000000007,
+   "peakMb": 72.97265625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/textbox.docx",
+   "wallMs": 771.7792999999947,
+   "ok": true,
+   "ms": 395.7459,
+   "peakMb": 40.40625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/textbox.docx",
+   "wallMs": 1694.5439000000042,
+   "ok": true,
+   "ms": 8.561199996620417,
+   "peakMb": 26.44140625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/textbox.docx",
+   "wallMs": 2022.6670000000013,
+   "ok": true,
+   "ms": 105.78800000000001,
+   "peakMb": 75.64453125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/textbox_alternates_contrived.docx",
+   "wallMs": 1053.1159999999945,
+   "ok": true,
+   "ms": 141.8089,
+   "peakMb": 93.46875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 3
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/textbox_alternates_contrived.docx",
+   "wallMs": 2313.521700000012,
+   "ok": true,
+   "ms": 136.52239999999983,
+   "peakMb": 75.8125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 3
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/textbox_alternates_contrived.docx",
+   "wallMs": 1003.7662999999884,
+   "ok": true,
+   "ms": 634.9106,
+   "peakMb": 50.26171875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 3,
+    "total": 3
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/textbox_alternates_contrived.docx",
+   "wallMs": 1892.9444999999978,
+   "ok": true,
+   "ms": 11.117600020952523,
+   "peakMb": 26.2421875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 3
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/textbox_alternates_contrived.docx",
+   "wallMs": 1716.0587000000087,
+   "ok": true,
+   "ms": 99.70530000000008,
+   "peakMb": 77.11328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 3
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/tracked-changes-equations.docx",
+   "wallMs": 1261.5390999999945,
+   "ok": true,
+   "ms": 389.8941,
+   "peakMb": 95.1015625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 114,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/tracked-changes-equations.docx",
+   "wallMs": 1161.7191999999923,
+   "ok": true,
+   "ms": 139.15639999999985,
+   "peakMb": 78.7890625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 114,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/tracked-changes-equations.docx",
+   "wallMs": 649.805400000012,
+   "ok": true,
+   "ms": 379.6125,
+   "peakMb": 40.671875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 39,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 114,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/tracked-changes-equations.docx",
+   "wallMs": 1762.6822000000102,
+   "ok": true,
+   "ms": 17.298600054346025,
+   "peakMb": 26.95703125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 114,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/tracked-changes-equations.docx",
+   "wallMs": 1931.4710999999952,
+   "ok": true,
+   "ms": 166.4014000000002,
+   "peakMb": 78.53515625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 114,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/w14_texteffects.docx",
+   "wallMs": 855.2065000000002,
+   "ok": true,
+   "ms": 93.72750000000008,
+   "peakMb": 89.3203125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/w14_texteffects.docx",
+   "wallMs": 2847.912400000001,
+   "ok": true,
+   "ms": 151.02930000000015,
+   "peakMb": 73.5546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/w14_texteffects.docx",
+   "wallMs": 807.1889000000083,
+   "ok": true,
+   "ms": 411.7918,
+   "peakMb": 39.99609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/w14_texteffects.docx",
+   "wallMs": 2270.1440000000002,
+   "ok": true,
+   "ms": 16.75280003109947,
+   "peakMb": 26.33203125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/w14_texteffects.docx",
+   "wallMs": 2467.330399999977,
+   "ok": true,
+   "ms": 118.97480000000041,
+   "peakMb": 75.6328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "docx4j/waterfall.docx",
+   "wallMs": 981.0896000000066,
+   "ok": true,
+   "ms": 204.49009999999998,
+   "peakMb": 91.421875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "docx4j/waterfall.docx",
+   "wallMs": 1738.594700000016,
+   "ok": true,
+   "ms": 146.84180000000015,
+   "peakMb": 77.4375,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "docx4j/waterfall.docx",
+   "wallMs": 801.5432999999903,
+   "ok": true,
+   "ms": 462.1301,
+   "peakMb": 48.12890625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "docx4j/waterfall.docx",
+   "wallMs": 1951.2514000000083,
+   "ok": true,
+   "ms": 10.617799998726696,
+   "peakMb": 26.72265625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "docx4j/waterfall.docx",
+   "wallMs": 3164.327400000009,
+   "ok": true,
+   "ms": 184.40530000000035,
+   "peakMb": 78.4140625,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/58618.docx",
+   "wallMs": 1017.4069000000018,
+   "ok": true,
+   "ms": 98.25840000000005,
+   "peakMb": 93.34375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/58618.docx",
+   "wallMs": 1784.5566999999864,
+   "ok": true,
+   "ms": 82.42439999999988,
+   "peakMb": 72.94140625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/58618.docx",
+   "wallMs": 709.0870999999752,
+   "ok": true,
+   "ms": 305.7794,
+   "peakMb": 39.0625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/58618.docx",
+   "wallMs": 2599.098399999988,
+   "ok": true,
+   "ms": 6.730199966114014,
+   "peakMb": 26.10546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/58618.docx",
+   "wallMs": 2344.7222000000183,
+   "ok": true,
+   "ms": 94.18899999999985,
+   "peakMb": 75.1328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/60316.docx",
+   "wallMs": 1039.417999999976,
+   "ok": true,
+   "ms": 316.4992,
+   "peakMb": 98.1875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 149
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/60316.docx",
+   "wallMs": 1815.7062999999907,
+   "ok": true,
+   "ms": 266.4025999999999,
+   "peakMb": 79.27734375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 149,
+    "total": 149
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/60316.docx",
+   "wallMs": 1415.685199999978,
+   "ok": true,
+   "ms": 730.748,
+   "peakMb": 52.109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 147,
+    "total": 149
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/60316.docx",
+   "wallMs": 1259.0022999999928,
+   "ok": true,
+   "ms": 20.998399995733052,
+   "peakMb": 27.69921875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 149
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/60316.docx",
+   "wallMs": 4870.755000000005,
+   "ok": true,
+   "ms": 291.3891000000003,
+   "peakMb": 83.0390625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 149,
+    "total": 149
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/61470.docx",
+   "wallMs": 1812.7649000000092,
+   "ok": true,
+   "ms": 299.50199999999995,
+   "peakMb": 91.1484375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/61470.docx",
+   "wallMs": 2323.215200000006,
+   "ok": true,
+   "ms": 135.56220000000008,
+   "peakMb": 73.91015625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/61470.docx",
+   "wallMs": 848.6413999999932,
+   "ok": true,
+   "ms": 370.326,
+   "peakMb": 39.47265625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/61470.docx",
+   "wallMs": 938.6554999999935,
+   "ok": true,
+   "ms": 8.265999960713089,
+   "peakMb": 26.3828125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/61470.docx",
+   "wallMs": 3585.065399999992,
+   "ok": true,
+   "ms": 148.89060000000018,
+   "peakMb": 75.5625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/61745.docx",
+   "wallMs": 1175.6034999999974,
+   "ok": true,
+   "ms": 194.9506,
+   "peakMb": 91.76171875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/61745.docx",
+   "wallMs": 1625.0795999999973,
+   "ok": true,
+   "ms": 122.36980000000017,
+   "peakMb": 74.6796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/61745.docx",
+   "wallMs": 668.6871000000101,
+   "ok": true,
+   "ms": 429.2358,
+   "peakMb": 47.51953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/61745.docx",
+   "wallMs": 6389.62969999999,
+   "ok": true,
+   "ms": 57.74399999063462,
+   "peakMb": 26.26171875,
+   "counts": {
+    "tables": 0,
+    "images": 2,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/61745.docx",
+   "wallMs": 2862.2869000000064,
+   "ok": true,
+   "ms": 100.6594,
+   "peakMb": 76.1953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/Bug54771a.docx",
+   "wallMs": 1234.6974999999802,
+   "ok": true,
+   "ms": 365.3891,
+   "peakMb": 91.07421875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/Bug54771a.docx",
+   "wallMs": 1520.964399999997,
+   "ok": true,
+   "ms": 105.25759999999991,
+   "peakMb": 74.27734375,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/Bug54771a.docx",
+   "wallMs": 803.1236999999965,
+   "ok": true,
+   "ms": 469.1885,
+   "peakMb": 41.70703125,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/Bug54771a.docx",
+   "wallMs": 1079.2528999999922,
+   "ok": true,
+   "ms": 11.043399979826063,
+   "peakMb": 26.64453125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/Bug54771a.docx",
+   "wallMs": 1709.1034999999974,
+   "ok": true,
+   "ms": 161.6364000000001,
+   "peakMb": 74.89453125,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/Bug54849.docx",
+   "wallMs": 1031.3421999999846,
+   "ok": true,
+   "ms": 254.18650000000002,
+   "peakMb": 91.16796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 19
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/Bug54849.docx",
+   "wallMs": 1398.7410999999847,
+   "ok": true,
+   "ms": 133.96960000000013,
+   "peakMb": 75.19140625,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 17,
+    "total": 19
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/Bug54849.docx",
+   "wallMs": 907.1432999999961,
+   "ok": true,
+   "ms": 537.0841,
+   "peakMb": 41.3671875,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 19,
+    "total": 19
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/Bug54849.docx",
+   "wallMs": 1431.790399999998,
+   "ok": true,
+   "ms": 10.536600020714104,
+   "peakMb": 26.58984375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 7,
+    "total": 19
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/Bug54849.docx",
+   "wallMs": 2766.3287000000128,
+   "ok": true,
+   "ms": 137.3051999999998,
+   "peakMb": 76.19921875,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 17,
+    "total": 19
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/Bug55142.docx",
+   "wallMs": 1002.780700000003,
+   "ok": true,
+   "ms": 184.39189999999996,
+   "peakMb": 90.5546875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 2,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/Bug55142.docx",
+   "wallMs": 2633.3859999999986,
+   "ok": true,
+   "ms": 116.48330000000033,
+   "peakMb": 74.296875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/Bug55142.docx",
+   "wallMs": 704.3403000000108,
+   "ok": true,
+   "ms": 405.7763,
+   "peakMb": 40.55859375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 23,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/Bug55142.docx",
+   "wallMs": 1241.9306999999972,
+   "ok": true,
+   "ms": 10.573299950920045,
+   "peakMb": 26.4609375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 2,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/Bug55142.docx",
+   "wallMs": 2165.5148000000045,
+   "ok": true,
+   "ms": 120.49220000000014,
+   "peakMb": 75.75,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/Bug60337.docx",
+   "wallMs": 1411.4273000000103,
+   "ok": true,
+   "ms": 495.36709999999994,
+   "peakMb": 91.265625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 16,
+    "total": 16
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/Bug60337.docx",
+   "wallMs": 2703.241399999999,
+   "ok": true,
+   "ms": 99.17180000000008,
+   "peakMb": 74.25,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 16,
+    "total": 16
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/Bug60337.docx",
+   "wallMs": 787.5034999999916,
+   "ok": true,
+   "ms": 424.1706,
+   "peakMb": 39.453125,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 16,
+    "total": 16
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/Bug60337.docx",
+   "wallMs": 2153.860400000005,
+   "ok": true,
+   "ms": 7.460199994966388,
+   "peakMb": 26.1328125,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 16,
+    "total": 16
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/Bug60337.docx",
+   "wallMs": 4350.434600000008,
+   "ok": true,
+   "ms": 144.9407000000001,
+   "peakMb": 73.80078125,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 16,
+    "total": 16
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/ComplexNumberedLists.docx",
+   "wallMs": 1014.6880999999994,
+   "ok": true,
+   "ms": 148.84259999999995,
+   "peakMb": 94.25,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 52,
+    "total": 52
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/ComplexNumberedLists.docx",
+   "wallMs": 5830.093799999973,
+   "ok": true,
+   "ms": 247.64740000000074,
+   "peakMb": 75.6953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 52,
+    "total": 52
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/ComplexNumberedLists.docx",
+   "wallMs": 748.4910000000091,
+   "ok": true,
+   "ms": 399.9803,
+   "peakMb": 39.0390625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 52,
+    "total": 52
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/ComplexNumberedLists.docx",
+   "wallMs": 7916.401699999988,
+   "ok": true,
+   "ms": 8.529399987310171,
+   "peakMb": 26.2578125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 52,
+    "total": 52
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/ComplexNumberedLists.docx",
+   "wallMs": 5395.419099999999,
+   "ok": true,
+   "ms": 198.35650000000078,
+   "peakMb": 75.66796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 52,
+    "total": 52
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/DiffFirstPageHeadFoot.docx",
+   "wallMs": 1705.6980999999796,
+   "ok": true,
+   "ms": 561.2999000000001,
+   "peakMb": 89.21484375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 51,
+    "total": 51
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/DiffFirstPageHeadFoot.docx",
+   "wallMs": 6587.219199999992,
+   "ok": true,
+   "ms": 102.64450000000033,
+   "peakMb": 73.328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 51,
+    "total": 51
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/DiffFirstPageHeadFoot.docx",
+   "wallMs": 773.8266000000294,
+   "ok": true,
+   "ms": 432.5734,
+   "peakMb": 39.3828125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 51,
+    "total": 51
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/DiffFirstPageHeadFoot.docx",
+   "wallMs": 3067.3792999999714,
+   "ok": true,
+   "ms": 9.193499980028719,
+   "peakMb": 26.30078125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 51,
+    "total": 51
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/DiffFirstPageHeadFoot.docx",
+   "wallMs": 5102.121500000008,
+   "ok": true,
+   "ms": 99.46680000000015,
+   "peakMb": 76.2734375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 51,
+    "total": 51
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/EmbeddedDocument.docx",
+   "wallMs": 833.7870999999577,
+   "ok": true,
+   "ms": 74.99180000000001,
+   "peakMb": 91.38671875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/EmbeddedDocument.docx",
+   "wallMs": 952.3769999999786,
+   "ok": true,
+   "ms": 88.53549999999996,
+   "peakMb": 73.5546875,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/EmbeddedDocument.docx",
+   "wallMs": 656.0886000000173,
+   "ok": true,
+   "ms": 361.7827,
+   "peakMb": 40.953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/EmbeddedDocument.docx",
+   "wallMs": 1249.7011000000057,
+   "ok": true,
+   "ms": 8.85250000283122,
+   "peakMb": 26.10546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/EmbeddedDocument.docx",
+   "wallMs": 1220.6685000000289,
+   "ok": true,
+   "ms": 66.34259999999995,
+   "peakMb": 75.0234375,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/FieldCodes.docx",
+   "wallMs": 953.8015000000014,
+   "ok": true,
+   "ms": 120.86130000000003,
+   "peakMb": 91.16796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/FieldCodes.docx",
+   "wallMs": 1772.4760999999708,
+   "ok": true,
+   "ms": 131.45129999999995,
+   "peakMb": 75.21875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/FieldCodes.docx",
+   "wallMs": 585.423700000043,
+   "ok": true,
+   "ms": 326.9832,
+   "peakMb": 39.2734375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/FieldCodes.docx",
+   "wallMs": 954.530700000003,
+   "ok": true,
+   "ms": 8.366299967747182,
+   "peakMb": 26.375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/FieldCodes.docx",
+   "wallMs": 1695.0671999999904,
+   "ok": true,
+   "ms": 98.71029999999996,
+   "peakMb": 75.07421875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/FldSimple.docx",
+   "wallMs": 937.8868999999831,
+   "ok": true,
+   "ms": 82.11929999999995,
+   "peakMb": 91.5078125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/FldSimple.docx",
+   "wallMs": 1637.423999999999,
+   "ok": true,
+   "ms": 81.16869999999994,
+   "peakMb": 72.91796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/FldSimple.docx",
+   "wallMs": 650.568900000013,
+   "ok": true,
+   "ms": 355.0515,
+   "peakMb": 39.046875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 1,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/FldSimple.docx",
+   "wallMs": 789.5363999999827,
+   "ok": true,
+   "ms": 7.1211999747902155,
+   "peakMb": 26.05859375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/FldSimple.docx",
+   "wallMs": 2207.452900000033,
+   "ok": true,
+   "ms": 102.46749999999997,
+   "peakMb": 74.796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/MultipleBodyBug.docx",
+   "wallMs": 1160.8410999999614,
+   "ok": true,
+   "ms": 354.84890000000007,
+   "peakMb": 91.73046875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 45
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/MultipleBodyBug.docx",
+   "wallMs": 2350.782200000016,
+   "ok": true,
+   "ms": 231.07330000000002,
+   "peakMb": 86.296875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 45
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/MultipleBodyBug.docx",
+   "wallMs": 522.7425999999978,
+   "ok": true,
+   "ms": 282.0752,
+   "peakMb": 38.70703125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 45
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/MultipleBodyBug.docx",
+   "wallMs": 418.9667999999947,
+   "ok": true,
+   "ms": 8.44649999635294,
+   "peakMb": 28.10546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 45
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/MultipleBodyBug.docx",
+   "wallMs": 502.31020000000717,
+   "ok": true,
+   "ms": 115.59159999999997,
+   "peakMb": 88.3125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 45
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/Numbering.docx",
+   "wallMs": 607.2730999999912,
+   "ok": true,
+   "ms": 139.39090000000004,
+   "peakMb": 91.6796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/Numbering.docx",
+   "wallMs": 1241.613000000012,
+   "ok": true,
+   "ms": 66.07369999999992,
+   "peakMb": 78.5625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/Numbering.docx",
+   "wallMs": 550.5971000000136,
+   "ok": true,
+   "ms": 342.146,
+   "peakMb": 39.05859375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/Numbering.docx",
+   "wallMs": 1026.3618000000133,
+   "ok": true,
+   "ms": 8.195400005206466,
+   "peakMb": 26.53125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/Numbering.docx",
+   "wallMs": 1435.5744000000414,
+   "ok": true,
+   "ms": 146.0027,
+   "peakMb": 78.12109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/PageSpecificHeadFoot.docx",
+   "wallMs": 1039.6491999999853,
+   "ok": true,
+   "ms": 257.39300000000003,
+   "peakMb": 90.9921875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 46,
+    "total": 46
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/PageSpecificHeadFoot.docx",
+   "wallMs": 1273.947199999995,
+   "ok": true,
+   "ms": 98.41239999999993,
+   "peakMb": 73.93359375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 46,
+    "total": 46
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/PageSpecificHeadFoot.docx",
+   "wallMs": 532.0634999999893,
+   "ok": true,
+   "ms": 329.6845,
+   "peakMb": 39.5546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 46,
+    "total": 46
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/PageSpecificHeadFoot.docx",
+   "wallMs": 1249.4847999999765,
+   "ok": true,
+   "ms": 10.940700012724847,
+   "peakMb": 26.81640625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 46,
+    "total": 46
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/PageSpecificHeadFoot.docx",
+   "wallMs": 2096.2891999999993,
+   "ok": true,
+   "ms": 99.39940000000001,
+   "peakMb": 73.03125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 46,
+    "total": 46
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/Styles.docx",
+   "wallMs": 809.3479999999981,
+   "ok": true,
+   "ms": 98.7716999999999,
+   "peakMb": 91.99609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/Styles.docx",
+   "wallMs": 917.4222999999765,
+   "ok": true,
+   "ms": 50.69710000000009,
+   "peakMb": 74.4765625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/Styles.docx",
+   "wallMs": 718.2698999999557,
+   "ok": true,
+   "ms": 313.2422,
+   "peakMb": 38.9453125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/Styles.docx",
+   "wallMs": 1298.099199999997,
+   "ok": true,
+   "ms": 7.984099967870861,
+   "peakMb": 26.35546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/Styles.docx",
+   "wallMs": 1339.3543999999529,
+   "ok": true,
+   "ms": 102.40890000000013,
+   "peakMb": 75.68359375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/TestDocument.docx",
+   "wallMs": 830.6655000000028,
+   "ok": true,
+   "ms": 105.86650000000009,
+   "peakMb": 93.42578125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 34,
+    "total": 35
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/TestDocument.docx",
+   "wallMs": 1333.853999999992,
+   "ok": true,
+   "ms": 92.2036999999998,
+   "peakMb": 73.83984375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 35,
+    "total": 35
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/TestDocument.docx",
+   "wallMs": 664.2302999999956,
+   "ok": true,
+   "ms": 363.5085,
+   "peakMb": 39.26953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 35,
+    "total": 35
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/TestDocument.docx",
+   "wallMs": 1309.938300000038,
+   "ok": true,
+   "ms": 7.150399964302778,
+   "peakMb": 26.19140625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 35,
+    "total": 35
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/TestDocument.docx",
+   "wallMs": 809.125800000038,
+   "ok": true,
+   "ms": 56.03009999999995,
+   "peakMb": 77.109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 35,
+    "total": 35
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/VariousPictures.docx",
+   "wallMs": 812.3092999999644,
+   "ok": true,
+   "ms": 116.87649999999996,
+   "peakMb": 93.58203125,
+   "counts": {
+    "tables": 0,
+    "images": 5,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/VariousPictures.docx",
+   "wallMs": 728.148199999996,
+   "ok": true,
+   "ms": 145.0666,
+   "peakMb": 77.484375,
+   "counts": {
+    "tables": 0,
+    "images": 5,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/VariousPictures.docx",
+   "wallMs": 783.3966000000364,
+   "ok": true,
+   "ms": 487.5411,
+   "peakMb": 48.5546875,
+   "counts": {
+    "tables": 0,
+    "images": 5,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/VariousPictures.docx",
+   "wallMs": 1091.3101000000024,
+   "ok": true,
+   "ms": 8.908300020266324,
+   "peakMb": 26.375,
+   "counts": {
+    "tables": 0,
+    "images": 5,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/VariousPictures.docx",
+   "wallMs": 1543.6271000000415,
+   "ok": true,
+   "ms": 142.34919999999988,
+   "peakMb": 77.546875,
+   "counts": {
+    "tables": 0,
+    "images": 5,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 10,
+    "total": 10
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/WithTabs.docx",
+   "wallMs": 834.6313000000082,
+   "ok": true,
+   "ms": 69.00570000000005,
+   "peakMb": 92.99609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 2
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/WithTabs.docx",
+   "wallMs": 1758.1034999999683,
+   "ok": true,
+   "ms": 94.05859999999984,
+   "peakMb": 74.4765625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 2,
+    "total": 2
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/WithTabs.docx",
+   "wallMs": 652.9667999999947,
+   "ok": true,
+   "ms": 387.7084,
+   "peakMb": 38.83984375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 2,
+    "total": 2
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/WithTabs.docx",
+   "wallMs": 1088.0763000000152,
+   "ok": true,
+   "ms": 7.921000011265278,
+   "peakMb": 25.9765625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 2,
+    "total": 2
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/WithTabs.docx",
+   "wallMs": 1519.1440999999759,
+   "ok": true,
+   "ms": 89.31140000000005,
+   "peakMb": 75.96875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 2,
+    "total": 2
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/WordWithAttachments.docx",
+   "wallMs": 965.7809000000125,
+   "ok": true,
+   "ms": 323.2759,
+   "peakMb": 96.06640625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 108,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/WordWithAttachments.docx",
+   "wallMs": 811.3490999999922,
+   "ok": true,
+   "ms": 136.15150000000006,
+   "peakMb": 79.71875,
+   "counts": {
+    "tables": 1,
+    "images": 5,
+    "tracked": 0,
+    "comments": 3,
+    "footnotes": 0,
+    "hyperlinks": 9
+   },
+   "recall": {
+    "found": 114,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/WordWithAttachments.docx",
+   "wallMs": 844.4144000000088,
+   "ok": true,
+   "ms": 565.1297,
+   "peakMb": 44.23046875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 3,
+    "footnotes": 0,
+    "hyperlinks": 3
+   },
+   "recall": {
+    "found": 114,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/WordWithAttachments.docx",
+   "wallMs": 960.7803999999887,
+   "ok": true,
+   "ms": 12.638999964110553,
+   "peakMb": 26.87109375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 3,
+    "footnotes": 0,
+    "hyperlinks": 3
+   },
+   "recall": {
+    "found": 111,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/WordWithAttachments.docx",
+   "wallMs": 2567.570400000026,
+   "ok": true,
+   "ms": 175.13979999999992,
+   "peakMb": 78.5859375,
+   "counts": {
+    "tables": 1,
+    "images": 5,
+    "tracked": 0,
+    "comments": 3,
+    "footnotes": 0,
+    "hyperlinks": 9
+   },
+   "recall": {
+    "found": 114,
+    "total": 114
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/bookmarks.docx",
+   "wallMs": 1025.4709000000148,
+   "ok": true,
+   "ms": 195.25580000000002,
+   "peakMb": 91.6171875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 12,
+    "total": 12
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/bookmarks.docx",
+   "wallMs": 1596.9020000000019,
+   "ok": true,
+   "ms": 198.7887999999998,
+   "peakMb": 72.68359375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 12,
+    "total": 12
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/bookmarks.docx",
+   "wallMs": 756.8153000000166,
+   "ok": true,
+   "ms": 379.5648,
+   "peakMb": 39.31640625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 12,
+    "total": 12
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/bookmarks.docx",
+   "wallMs": 1851.7514999999548,
+   "ok": true,
+   "ms": 11.038099997676909,
+   "peakMb": 26.2109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 12,
+    "total": 12
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/bookmarks.docx",
+   "wallMs": 1425.6289999999572,
+   "ok": true,
+   "ms": 82.76649999999995,
+   "peakMb": 75.8984375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 12,
+    "total": 12
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/bug65738.docx",
+   "wallMs": 1105.350400000054,
+   "ok": true,
+   "ms": 211.8374,
+   "peakMb": 92.21484375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 81,
+    "total": 100
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/bug65738.docx",
+   "wallMs": 2515.4027999999817,
+   "ok": true,
+   "ms": 119.39529999999968,
+   "peakMb": 77.671875,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 6
+   },
+   "recall": {
+    "found": 100,
+    "total": 100
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/bug65738.docx",
+   "wallMs": 888.3625999999931,
+   "ok": true,
+   "ms": 506.2374,
+   "peakMb": 40.83203125,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 6
+   },
+   "recall": {
+    "found": 100,
+    "total": 100
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/bug65738.docx",
+   "wallMs": 954.4953000000096,
+   "ok": true,
+   "ms": 8.581699978094548,
+   "peakMb": 26.6328125,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 6
+   },
+   "recall": {
+    "found": 100,
+    "total": 100
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/bug65738.docx",
+   "wallMs": 2421.778099999996,
+   "ok": true,
+   "ms": 110.82490000000007,
+   "peakMb": 76.875,
+   "counts": {
+    "tables": 2,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 6
+   },
+   "recall": {
+    "found": 100,
+    "total": 100
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/chartex.docx",
+   "wallMs": 586.7017999999807,
+   "ok": true,
+   "ms": 72.47800000000001,
+   "peakMb": 93.91796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/chartex.docx",
+   "wallMs": 1451.4977999999537,
+   "ok": true,
+   "ms": 124.72329999999988,
+   "peakMb": 77.5625,
+   "counts": {
+    "tables": 0,
+    "images": 2,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/chartex.docx",
+   "wallMs": 844.6499999999651,
+   "ok": true,
+   "ms": 496.8368,
+   "peakMb": 49.26171875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/chartex.docx",
+   "wallMs": 1019.4372999999905,
+   "ok": true,
+   "ms": 13.627800042741,
+   "peakMb": 26.81640625,
+   "counts": {
+    "tables": 0,
+    "images": 4,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/chartex.docx",
+   "wallMs": 1309.9937999999966,
+   "ok": true,
+   "ms": 147.53520000000003,
+   "peakMb": 77.875,
+   "counts": {
+    "tables": 0,
+    "images": 2,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/checkboxes.docx",
+   "wallMs": 1426.240300000005,
+   "ok": true,
+   "ms": 563.1463,
+   "peakMb": 96.26171875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/checkboxes.docx",
+   "wallMs": 1581.2247999999672,
+   "ok": true,
+   "ms": 105.88959999999997,
+   "peakMb": 78.5390625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/checkboxes.docx",
+   "wallMs": 733.9513000000152,
+   "ok": true,
+   "ms": 445.7198,
+   "peakMb": 41.84375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/checkboxes.docx",
+   "wallMs": 1025.0045999999857,
+   "ok": true,
+   "ms": 10.395699995569885,
+   "peakMb": 26.72265625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/checkboxes.docx",
+   "wallMs": 2430.7727000000305,
+   "ok": true,
+   "ms": 182.04179999999997,
+   "peakMb": 78.51171875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/comment.docx",
+   "wallMs": 882.74099999998,
+   "ok": true,
+   "ms": 62.23519999999996,
+   "peakMb": 93.4140625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/comment.docx",
+   "wallMs": 1577.5934000000125,
+   "ok": true,
+   "ms": 69.1114,
+   "peakMb": 72.91796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/comment.docx",
+   "wallMs": 600.6539000000339,
+   "ok": true,
+   "ms": 361.7259,
+   "peakMb": 39.7734375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/comment.docx",
+   "wallMs": 862.8033999999752,
+   "ok": true,
+   "ms": 2.393400005530566,
+   "peakMb": 25.96875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/comment.docx",
+   "wallMs": 1526.4820000000182,
+   "ok": true,
+   "ms": 79.64930000000004,
+   "peakMb": 74.25,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/deep-table-cell.docx",
+   "wallMs": 1355.075599999982,
+   "ok": true,
+   "ms": 552.2924,
+   "peakMb": 146.3671875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 3,
+    "total": 15000
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/deep-table-cell.docx",
+   "wallMs": 2196.214500000002,
+   "ok": false,
+   "ms": 492.2568000000001,
+   "peakMb": 147.30078125,
+   "error": "RangeError: Maximum call stack size exceeded",
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/deep-table-cell.docx",
+   "wallMs": 4860.526300000027,
+   "ok": false,
+   "error": "process ended without a result (exit 3221225725): Stack overflow.\r\n   at DocumentFormat.OpenXml.OpenXmlElement.LoadAttributes(System.Xml.XmlReader)\r\n   at DocumentFormat.OpenXml.OpenXmlLeafElement.Populate(Syst"
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/deep-table-cell.docx",
+   "wallMs": 465.27309999999125,
+   "ok": false,
+   "ms": 6.341100030113012,
+   "peakMb": 28.3984375,
+   "error": "XMLSyntaxError: Excessive depth in document: 256 use XML_PARSE_HUGE option, line 512, column 1 (<string>, line 512)",
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/deep-table-cell.docx",
+   "wallMs": 834.357399999979,
+   "ok": false,
+   "ms": 370.2396,
+   "peakMb": 147.96484375,
+   "error": "RangeError: Maximum call stack size exceeded",
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/delins.docx",
+   "wallMs": 612.6148999999859,
+   "ok": true,
+   "ms": 141.75959999999998,
+   "peakMb": 99.12890625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 1,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 52,
+    "total": 223
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/delins.docx",
+   "wallMs": 505.54729999997653,
+   "ok": true,
+   "ms": 128.1363,
+   "peakMb": 80.90625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 18
+   },
+   "recall": {
+    "found": 223,
+    "total": 223
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/delins.docx",
+   "wallMs": 452.01329999999143,
+   "ok": true,
+   "ms": 284.4827,
+   "peakMb": 40.84375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 36,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 7
+   },
+   "recall": {
+    "found": 223,
+    "total": 223
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/delins.docx",
+   "wallMs": 401.71000000002095,
+   "ok": true,
+   "ms": 6.1227999976836145,
+   "peakMb": 27.28515625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 7
+   },
+   "recall": {
+    "found": 77,
+    "total": 223
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/delins.docx",
+   "wallMs": 569.3554000000004,
+   "ok": true,
+   "ms": 149.08829999999995,
+   "peakMb": 80.75,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 18
+   },
+   "recall": {
+    "found": 223,
+    "total": 223
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/endnotes.docx",
+   "wallMs": 482.3457000000053,
+   "ok": true,
+   "ms": 52.030399999999986,
+   "peakMb": 89.46875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 173,
+    "total": 173
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/endnotes.docx",
+   "wallMs": 389.132500000007,
+   "ok": true,
+   "ms": 45.580899999999986,
+   "peakMb": 74.06640625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 173,
+    "total": 173
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/endnotes.docx",
+   "wallMs": 315.5080999999773,
+   "ok": true,
+   "ms": 185.9378,
+   "peakMb": 39.40234375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 173,
+    "total": 173
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/endnotes.docx",
+   "wallMs": 339.032600000035,
+   "ok": true,
+   "ms": 4.872199962846935,
+   "peakMb": 26.08984375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 173,
+    "total": 173
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/endnotes.docx",
+   "wallMs": 431.6741000000038,
+   "ok": true,
+   "ms": 62.323000000000036,
+   "peakMb": 76.10546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 173,
+    "total": 173
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/footnotes.docx",
+   "wallMs": 441.8457000000053,
+   "ok": true,
+   "ms": 38.53539999999998,
+   "peakMb": 92.2734375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/footnotes.docx",
+   "wallMs": 366.5914000000339,
+   "ok": true,
+   "ms": 55.32679999999999,
+   "peakMb": 74.22265625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/footnotes.docx",
+   "wallMs": 328.3168000000296,
+   "ok": true,
+   "ms": 196.27,
+   "peakMb": 39.3203125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/footnotes.docx",
+   "wallMs": 439.1308999999892,
+   "ok": true,
+   "ms": 5.367900012061,
+   "peakMb": 26.09765625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/footnotes.docx",
+   "wallMs": 480.0568000000203,
+   "ok": true,
+   "ms": 59.827499999999986,
+   "peakMb": 75.59375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 6,
+    "total": 6
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/headerFooter.docx",
+   "wallMs": 506.63280000002123,
+   "ok": true,
+   "ms": 50.548400000000015,
+   "peakMb": 91.609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/headerFooter.docx",
+   "wallMs": 371.1748999999836,
+   "ok": true,
+   "ms": 42.269499999999994,
+   "peakMb": 73.4375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/headerFooter.docx",
+   "wallMs": 257.8707000000286,
+   "ok": true,
+   "ms": 141.4473,
+   "peakMb": 38.51171875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/headerFooter.docx",
+   "wallMs": 386.02659999998286,
+   "ok": true,
+   "ms": 6.430500012356788,
+   "peakMb": 26.26171875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/headerFooter.docx",
+   "wallMs": 477.2245999999577,
+   "ok": true,
+   "ms": 48.71469999999999,
+   "peakMb": 76.05859375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/heading123.docx",
+   "wallMs": 603.391799999983,
+   "ok": true,
+   "ms": 73.78960000000006,
+   "peakMb": 91.37109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 259,
+    "total": 259
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/heading123.docx",
+   "wallMs": 498.46919999999227,
+   "ok": true,
+   "ms": 74.29849999999999,
+   "peakMb": 74.40625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 259,
+    "total": 259
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/heading123.docx",
+   "wallMs": 334.7558999999892,
+   "ok": true,
+   "ms": 178.4919,
+   "peakMb": 39.0859375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 259,
+    "total": 259
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/heading123.docx",
+   "wallMs": 427.4733000000124,
+   "ok": true,
+   "ms": 6.024000002071261,
+   "peakMb": 26.26953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 259,
+    "total": 259
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/heading123.docx",
+   "wallMs": 540.2741999999853,
+   "ok": true,
+   "ms": 74.14609999999999,
+   "peakMb": 75.55078125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 259,
+    "total": 259
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/sample.docx",
+   "wallMs": 683.219700000016,
+   "ok": true,
+   "ms": 75.29600000000005,
+   "peakMb": 91.16796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 228,
+    "total": 228
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/sample.docx",
+   "wallMs": 535.6614999999874,
+   "ok": true,
+   "ms": 67.3127,
+   "peakMb": 73.234375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 228,
+    "total": 228
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/sample.docx",
+   "wallMs": 438.4260999999824,
+   "ok": true,
+   "ms": 244.2744,
+   "peakMb": 39.41015625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 228,
+    "total": 228
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/sample.docx",
+   "wallMs": 492.303899999999,
+   "ok": true,
+   "ms": 7.91769998613745,
+   "peakMb": 26.3046875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 228,
+    "total": 228
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/sample.docx",
+   "wallMs": 548.7611000000034,
+   "ok": true,
+   "ms": 66.19800000000004,
+   "peakMb": 73.51953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 228,
+    "total": 228
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/shapes-with-text.docx",
+   "wallMs": 629.0370000000112,
+   "ok": true,
+   "ms": 135.70910000000003,
+   "peakMb": 100.1953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 22
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/shapes-with-text.docx",
+   "wallMs": 510.9277000000002,
+   "ok": true,
+   "ms": 130.8734,
+   "peakMb": 80.28515625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 17,
+    "total": 22
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/shapes-with-text.docx",
+   "wallMs": 913.9028000000399,
+   "ok": true,
+   "ms": 660.8868,
+   "peakMb": 51.5859375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 22,
+    "total": 22
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/shapes-with-text.docx",
+   "wallMs": 2198.783700000029,
+   "ok": true,
+   "ms": 11.620100005529821,
+   "peakMb": 26.86328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 22
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/shapes-with-text.docx",
+   "wallMs": 5603.120700000029,
+   "ok": true,
+   "ms": 291.1409999999996,
+   "peakMb": 81.4609375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 17,
+    "total": 22
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/table-alignment.docx",
+   "wallMs": 2760.078600000008,
+   "ok": true,
+   "ms": 1797.467,
+   "peakMb": 94.92578125,
+   "counts": {
+    "tables": 6,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 54,
+    "total": 54
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/table-alignment.docx",
+   "wallMs": 2488.100600000005,
+   "ok": true,
+   "ms": 177.4332000000004,
+   "peakMb": 79.6015625,
+   "counts": {
+    "tables": 6,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 54,
+    "total": 54
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/table-alignment.docx",
+   "wallMs": 997.9223000000347,
+   "ok": true,
+   "ms": 461.6044,
+   "peakMb": 40.2578125,
+   "counts": {
+    "tables": 6,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 54,
+    "total": 54
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/table-alignment.docx",
+   "wallMs": 1480.5396999999648,
+   "ok": true,
+   "ms": 9.700199996586889,
+   "peakMb": 26.984375,
+   "counts": {
+    "tables": 6,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 54,
+    "total": 54
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/table-alignment.docx",
+   "wallMs": 1601.709899999958,
+   "ok": true,
+   "ms": 183.61619999999994,
+   "peakMb": 80.50390625,
+   "counts": {
+    "tables": 6,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 54,
+    "total": 54
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/table_footnotes.docx",
+   "wallMs": 1027.8685000000405,
+   "ok": true,
+   "ms": 287.97760000000005,
+   "peakMb": 90.8046875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/table_footnotes.docx",
+   "wallMs": 1604.348399999959,
+   "ok": true,
+   "ms": 144.03039999999987,
+   "peakMb": 75.44140625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/table_footnotes.docx",
+   "wallMs": 680.3107999999775,
+   "ok": true,
+   "ms": 373.8933,
+   "peakMb": 40.03125,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/table_footnotes.docx",
+   "wallMs": 2408.6755999999586,
+   "ok": true,
+   "ms": 8.349100011400878,
+   "peakMb": 26.0625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/table_footnotes.docx",
+   "wallMs": 1358.2660000000033,
+   "ok": true,
+   "ms": 149.86829999999986,
+   "peakMb": 76.48828125,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 1,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "poi/testComment.docx",
+   "wallMs": 989.5934000000125,
+   "ok": true,
+   "ms": 253.37890000000004,
+   "peakMb": 91.78515625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "poi/testComment.docx",
+   "wallMs": 1726.6295000000391,
+   "ok": true,
+   "ms": 131.5601999999999,
+   "peakMb": 75.03515625,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "poi/testComment.docx",
+   "wallMs": 1377.2240999999922,
+   "ok": true,
+   "ms": 541.5602,
+   "peakMb": 48.86328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "poi/testComment.docx",
+   "wallMs": 1878.1216999999597,
+   "ok": true,
+   "ms": 9.640300006140023,
+   "peakMb": 26.53515625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "poi/testComment.docx",
+   "wallMs": 3962.8204999999725,
+   "ok": true,
+   "ms": 135.08899999999994,
+   "peakMb": 76.8359375,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 1,
+    "footnotes": 0,
+    "hyperlinks": 2
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/blk-containing-table.docx",
+   "wallMs": 903.5832999999984,
+   "ok": true,
+   "ms": 173.01429999999993,
+   "peakMb": 93.015625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/blk-containing-table.docx",
+   "wallMs": 1102.0077000000165,
+   "ok": true,
+   "ms": 78.34540000000004,
+   "peakMb": 72.875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/blk-containing-table.docx",
+   "wallMs": 407.94799999997485,
+   "ok": true,
+   "ms": 221.2744,
+   "peakMb": 39.1796875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/blk-containing-table.docx",
+   "wallMs": 614.7013999999617,
+   "ok": true,
+   "ms": 7.141700014472008,
+   "peakMb": 26.18359375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/blk-containing-table.docx",
+   "wallMs": 1398.1224999999977,
+   "ok": true,
+   "ms": 117.1112999999998,
+   "peakMb": 74.4921875,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/blk-paras-and-tables.docx",
+   "wallMs": 1324.7207000000053,
+   "ok": true,
+   "ms": 288.46370000000013,
+   "peakMb": 91.15234375,
+   "counts": {
+    "tables": 3,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 18,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/blk-paras-and-tables.docx",
+   "wallMs": 342.03840000001946,
+   "ok": true,
+   "ms": 53.29079999999999,
+   "peakMb": 74.51171875,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/blk-paras-and-tables.docx",
+   "wallMs": 290.71040000003995,
+   "ok": true,
+   "ms": 165.5956,
+   "peakMb": 39.625,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/blk-paras-and-tables.docx",
+   "wallMs": 396.1529000000446,
+   "ok": true,
+   "ms": 8.329999982379377,
+   "peakMb": 26.578125,
+   "counts": {
+    "tables": 3,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/blk-paras-and-tables.docx",
+   "wallMs": 1992.0438000000431,
+   "ok": true,
+   "ms": 98.1069,
+   "peakMb": 75.03125,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 20,
+    "total": 20
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/comments-rich-para.docx",
+   "wallMs": 1136.4302000000025,
+   "ok": true,
+   "ms": 126.51639999999998,
+   "peakMb": 91.79296875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/comments-rich-para.docx",
+   "wallMs": 1806.4064999999828,
+   "ok": true,
+   "ms": 124.08029999999985,
+   "peakMb": 76.375,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 4,
+    "footnotes": 0,
+    "hyperlinks": 9
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/comments-rich-para.docx",
+   "wallMs": 1634.2810000000172,
+   "ok": true,
+   "ms": 672.3089,
+   "peakMb": 48.5703125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 4,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/comments-rich-para.docx",
+   "wallMs": 1474.8613999999943,
+   "ok": true,
+   "ms": 8.374199969694018,
+   "peakMb": 26.3359375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 4,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/comments-rich-para.docx",
+   "wallMs": 1940.1562999999733,
+   "ok": true,
+   "ms": 96.47609999999986,
+   "peakMb": 77.36328125,
+   "counts": {
+    "tables": 0,
+    "images": 1,
+    "tracked": 0,
+    "comments": 4,
+    "footnotes": 0,
+    "hyperlinks": 9
+   },
+   "recall": {
+    "found": 21,
+    "total": 21
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/doc-access-sections.docx",
+   "wallMs": 454.3190000000177,
+   "ok": true,
+   "ms": 36.37540000000001,
+   "peakMb": 90.29296875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/doc-access-sections.docx",
+   "wallMs": 330.02470000000903,
+   "ok": true,
+   "ms": 42.03280000000001,
+   "peakMb": 73.36328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/doc-access-sections.docx",
+   "wallMs": 278.35779999999795,
+   "ok": true,
+   "ms": 154.5194,
+   "peakMb": 38.90625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/doc-access-sections.docx",
+   "wallMs": 517.7978000000003,
+   "ok": true,
+   "ms": 7.863699982408434,
+   "peakMb": 26.09375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/doc-access-sections.docx",
+   "wallMs": 2403.7744999999995,
+   "ok": true,
+   "ms": 79.56840000000011,
+   "peakMb": 75.2109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 11,
+    "total": 11
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/doc-odd-even-hdrs.docx",
+   "wallMs": 1261.7323000000324,
+   "ok": true,
+   "ms": 324.64199999999994,
+   "peakMb": 92.51953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/doc-odd-even-hdrs.docx",
+   "wallMs": 2971.4674999999697,
+   "ok": true,
+   "ms": 157.79880000000003,
+   "peakMb": 74.37109375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/doc-odd-even-hdrs.docx",
+   "wallMs": 755.5169999999925,
+   "ok": true,
+   "ms": 302.1606,
+   "peakMb": 38.93359375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/doc-odd-even-hdrs.docx",
+   "wallMs": 1531.920999999973,
+   "ok": true,
+   "ms": 8.85870005004108,
+   "peakMb": 26.5859375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/doc-odd-even-hdrs.docx",
+   "wallMs": 1720.0039000000106,
+   "ok": true,
+   "ms": 122.55510000000004,
+   "peakMb": 75.20703125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 4,
+    "total": 4
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/hdr-header-footer.docx",
+   "wallMs": 1044.7241000000504,
+   "ok": true,
+   "ms": 95.87270000000001,
+   "peakMb": 93.50390625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/hdr-header-footer.docx",
+   "wallMs": 825.2430999999633,
+   "ok": true,
+   "ms": 109.18560000000002,
+   "peakMb": 74.5625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/hdr-header-footer.docx",
+   "wallMs": 913.7351999999955,
+   "ok": true,
+   "ms": 350.809,
+   "peakMb": 39.4375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/hdr-header-footer.docx",
+   "wallMs": 1150.486799999955,
+   "ok": true,
+   "ms": 8.995500043965876,
+   "peakMb": 26.453125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/hdr-header-footer.docx",
+   "wallMs": 499.6259999999893,
+   "ok": true,
+   "ms": 58.26510000000002,
+   "peakMb": 75.36328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/num-having-numbering-part.docx",
+   "wallMs": 437.84600000001956,
+   "ok": true,
+   "ms": 33.353999999999985,
+   "peakMb": 92.83203125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/num-having-numbering-part.docx",
+   "wallMs": 1140.885799999989,
+   "ok": true,
+   "ms": 78.86670000000004,
+   "peakMb": 73.04296875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/num-having-numbering-part.docx",
+   "wallMs": 555.6230000000214,
+   "ok": true,
+   "ms": 323.2989,
+   "peakMb": 39.04296875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/num-having-numbering-part.docx",
+   "wallMs": 1096.943900000013,
+   "ok": true,
+   "ms": 9.666400030255318,
+   "peakMb": 26.21484375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/num-having-numbering-part.docx",
+   "wallMs": 1958.4054999999935,
+   "ok": true,
+   "ms": 102.93340000000012,
+   "peakMb": 74.4921875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 5,
+    "total": 5
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/par-hyperlinks.docx",
+   "wallMs": 1081.6450000000186,
+   "ok": true,
+   "ms": 216.15030000000002,
+   "peakMb": 90.32421875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 17
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/par-hyperlinks.docx",
+   "wallMs": 1133.0438000000431,
+   "ok": true,
+   "ms": 95.57659999999987,
+   "peakMb": 74.76171875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 17,
+    "total": 17
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/par-hyperlinks.docx",
+   "wallMs": 637.9082000000053,
+   "ok": true,
+   "ms": 255.3784,
+   "peakMb": 38.97265625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 17,
+    "total": 17
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/par-hyperlinks.docx",
+   "wallMs": 1061.8600000000442,
+   "ok": true,
+   "ms": 7.176699989940971,
+   "peakMb": 26.296875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 17,
+    "total": 17
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/par-hyperlinks.docx",
+   "wallMs": 1015.6491000000387,
+   "ok": true,
+   "ms": 117.0598,
+   "peakMb": 75.890625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 4
+   },
+   "recall": {
+    "found": 17,
+    "total": 17
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/par-known-styles.docx",
+   "wallMs": 603.7053000000305,
+   "ok": true,
+   "ms": 76.73370000000006,
+   "peakMb": 90.703125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/par-known-styles.docx",
+   "wallMs": 456.43640000000596,
+   "ok": true,
+   "ms": 93.28559999999999,
+   "peakMb": 78.14453125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/par-known-styles.docx",
+   "wallMs": 369.1512000000221,
+   "ok": true,
+   "ms": 214.0952,
+   "peakMb": 38.921875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/par-known-styles.docx",
+   "wallMs": 389.2265999999945,
+   "ok": true,
+   "ms": 5.156400031410158,
+   "peakMb": 26.61328125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/par-known-styles.docx",
+   "wallMs": 496.3194000000367,
+   "ok": true,
+   "ms": 73.25889999999998,
+   "peakMb": 77.0703125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/par-rendered-page-breaks.docx",
+   "wallMs": 611.0751000000164,
+   "ok": true,
+   "ms": 88.89960000000002,
+   "peakMb": 90.8671875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 19,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/par-rendered-page-breaks.docx",
+   "wallMs": 532.5667000000249,
+   "ok": true,
+   "ms": 70.05649999999997,
+   "peakMb": 74.80078125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 23,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/par-rendered-page-breaks.docx",
+   "wallMs": 389.9126999999862,
+   "ok": true,
+   "ms": 225.6166,
+   "peakMb": 39.00390625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 23,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/par-rendered-page-breaks.docx",
+   "wallMs": 498.3809000000474,
+   "ok": true,
+   "ms": 6.869699980597943,
+   "peakMb": 26.2578125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 23,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/par-rendered-page-breaks.docx",
+   "wallMs": 543.0818999999901,
+   "ok": true,
+   "ms": 62.26029999999997,
+   "peakMb": 75.7265625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "recall": {
+    "found": 23,
+    "total": 23
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/run-char-style.docx",
+   "wallMs": 551.4046000000089,
+   "ok": true,
+   "ms": 46.696500000000015,
+   "peakMb": 89.1796875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/run-char-style.docx",
+   "wallMs": 460.02449999999953,
+   "ok": true,
+   "ms": 63.83030000000002,
+   "peakMb": 73.0546875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/run-char-style.docx",
+   "wallMs": 418.3972000000067,
+   "ok": true,
+   "ms": 267.3548,
+   "peakMb": 39.02734375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/run-char-style.docx",
+   "wallMs": 415.8103000000119,
+   "ok": true,
+   "ms": 4.660299979150295,
+   "peakMb": 26.0078125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/run-char-style.docx",
+   "wallMs": 551.7056000000448,
+   "ok": true,
+   "ms": 71.8358,
+   "peakMb": 76.1640625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 18,
+    "total": 18
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/sct-section-props.docx",
+   "wallMs": 613.3996000000043,
+   "ok": true,
+   "ms": 73.9427,
+   "peakMb": 93.16015625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 15
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/sct-section-props.docx",
+   "wallMs": 524.4377000000095,
+   "ok": true,
+   "ms": 71.0213,
+   "peakMb": 74.19140625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 15
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/sct-section-props.docx",
+   "wallMs": 358.8623999999836,
+   "ok": true,
+   "ms": 196.5159,
+   "peakMb": 39.17578125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 15
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/sct-section-props.docx",
+   "wallMs": 473.632799999963,
+   "ok": true,
+   "ms": 6.20940001681447,
+   "peakMb": 26.3046875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 15
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/sct-section-props.docx",
+   "wallMs": 488.9969000000274,
+   "ok": true,
+   "ms": 52.48719999999997,
+   "peakMb": 75.2890625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 15,
+    "total": 15
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/shp-inline-shape-access.docx",
+   "wallMs": 570.8448999999673,
+   "ok": true,
+   "ms": 72.12189999999998,
+   "peakMb": 93.234375,
+   "counts": {
+    "tables": 0,
+    "images": 2,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/shp-inline-shape-access.docx",
+   "wallMs": 406.05830000003334,
+   "ok": true,
+   "ms": 57.84340000000003,
+   "peakMb": 73.5859375,
+   "counts": {
+    "tables": 0,
+    "images": 2,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/shp-inline-shape-access.docx",
+   "wallMs": 386.64569999999367,
+   "ok": true,
+   "ms": 249.8554,
+   "peakMb": 48.6484375,
+   "counts": {
+    "tables": 0,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/shp-inline-shape-access.docx",
+   "wallMs": 321.8017000000109,
+   "ok": true,
+   "ms": 5.1380000077188015,
+   "peakMb": 26.234375,
+   "counts": {
+    "tables": 0,
+    "images": 5,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/shp-inline-shape-access.docx",
+   "wallMs": 382.1206999999704,
+   "ok": true,
+   "ms": 48.99689999999998,
+   "peakMb": 74.73828125,
+   "counts": {
+    "tables": 0,
+    "images": 2,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/tab-stops.docx",
+   "wallMs": 453.72629999998026,
+   "ok": true,
+   "ms": 42.781600000000026,
+   "peakMb": 91.953125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/tab-stops.docx",
+   "wallMs": 348.97489999997197,
+   "ok": true,
+   "ms": 40.80459999999999,
+   "peakMb": 74.65625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/tab-stops.docx",
+   "wallMs": 273.2191000000457,
+   "ok": true,
+   "ms": 153.1673,
+   "peakMb": 38.95703125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/tab-stops.docx",
+   "wallMs": 322.78800000000047,
+   "ok": true,
+   "ms": 3.9204999920912087,
+   "peakMb": 26.03125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/tab-stops.docx",
+   "wallMs": 384.93539999995846,
+   "ok": true,
+   "ms": 41.76389999999998,
+   "peakMb": 75.58203125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 9,
+    "total": 9
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/tbl-cell-access.docx",
+   "wallMs": 428.6971000000485,
+   "ok": true,
+   "ms": 57.19639999999998,
+   "peakMb": 92.25390625,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 31,
+    "total": 31
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/tbl-cell-access.docx",
+   "wallMs": 345.7380000000121,
+   "ok": true,
+   "ms": 49.40379999999999,
+   "peakMb": 75.91796875,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 31,
+    "total": 31
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/tbl-cell-access.docx",
+   "wallMs": 282.234300000011,
+   "ok": true,
+   "ms": 164.4024,
+   "peakMb": 39.4609375,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 31,
+    "total": 31
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/tbl-cell-access.docx",
+   "wallMs": 315.34250000002794,
+   "ok": true,
+   "ms": 4.536999971605837,
+   "peakMb": 26.26953125,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 31,
+    "total": 31
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/tbl-cell-access.docx",
+   "wallMs": 380.530700000003,
+   "ok": true,
+   "ms": 50.76660000000004,
+   "peakMb": 76.01953125,
+   "counts": {
+    "tables": 4,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 31,
+    "total": 31
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/tbl-cell-props.docx",
+   "wallMs": 397.7556999999797,
+   "ok": true,
+   "ms": 41.205700000000036,
+   "peakMb": 91.58984375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 14,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/tbl-cell-props.docx",
+   "wallMs": 313.18189999996684,
+   "ok": true,
+   "ms": 43.117699999999985,
+   "peakMb": 74.8984375,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 14,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/tbl-cell-props.docx",
+   "wallMs": 295.71199999999953,
+   "ok": true,
+   "ms": 173.3335,
+   "peakMb": 38.94140625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 14,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/tbl-cell-props.docx",
+   "wallMs": 338.9220000000205,
+   "ok": true,
+   "ms": 4.491500032600015,
+   "peakMb": 26.20703125,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 14,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/tbl-cell-props.docx",
+   "wallMs": 424.398199999996,
+   "ok": true,
+   "ms": 61.17309999999998,
+   "peakMb": 75.40625,
+   "counts": {
+    "tables": 1,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 14,
+    "total": 14
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/tbl-having-tables.docx",
+   "wallMs": 509.68129999999655,
+   "ok": true,
+   "ms": 57.34809999999999,
+   "peakMb": 90.80859375,
+   "counts": {
+    "tables": 3,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/tbl-having-tables.docx",
+   "wallMs": 382.14140000002226,
+   "ok": true,
+   "ms": 49.82130000000001,
+   "peakMb": 73.96484375,
+   "counts": {
+    "tables": 3,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/tbl-having-tables.docx",
+   "wallMs": 309.7743999999948,
+   "ok": true,
+   "ms": 170.4832,
+   "peakMb": 39.1171875,
+   "counts": {
+    "tables": 3,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/tbl-having-tables.docx",
+   "wallMs": 382.17009999998845,
+   "ok": true,
+   "ms": 5.266299995128065,
+   "peakMb": 26.15234375,
+   "counts": {
+    "tables": 3,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/tbl-having-tables.docx",
+   "wallMs": 456.63320000004023,
+   "ok": true,
+   "ms": 64.9606,
+   "peakMb": 75.28125,
+   "counts": {
+    "tables": 3,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 0,
+    "total": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "python-docx/txt-font-props.docx",
+   "wallMs": 453.92170000000624,
+   "ok": true,
+   "ms": 40.673,
+   "peakMb": 90.41015625,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 32,
+    "total": 32
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "python-docx/txt-font-props.docx",
+   "wallMs": 312.2712000000174,
+   "ok": true,
+   "ms": 46.63240000000002,
+   "peakMb": 74.2578125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 32,
+    "total": 32
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "python-docx/txt-font-props.docx",
+   "wallMs": 293.8418000000529,
+   "ok": true,
+   "ms": 174.0513,
+   "peakMb": 39.21875,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 32,
+    "total": 32
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "python-docx/txt-font-props.docx",
+   "wallMs": 313.670999999973,
+   "ok": true,
+   "ms": 4.505300021264702,
+   "peakMb": 26.33984375,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 32,
+    "total": 32
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "python-docx/txt-font-props.docx",
+   "wallMs": 1628.1581000000006,
+   "ok": true,
+   "ms": 59.38649999999984,
+   "peakMb": 75.53125,
+   "counts": {
+    "tables": 0,
+    "images": 0,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "recall": {
+    "found": 32,
+    "total": 32
+   },
+   "leaked": false
+  }
+ ],
+ "hostile": [
+  {
+   "candidate": "own-importer",
+   "file": "h1-zip-bomb",
+   "wallMs": 392.1757000000216,
+   "ok": false,
+   "ms": 1.036200000000008,
+   "peakMb": 89.33984375,
+   "error": "ImportError: entry customXml/bomb.xml has a compression ratio above 1000",
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "h1-zip-bomb",
+   "wallMs": 410.21529999998165,
+   "ok": true,
+   "ms": 99.56780000000003,
+   "peakMb": 78.6953125,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "h1-zip-bomb",
+   "wallMs": 421.1619000000064,
+   "ok": true,
+   "ms": 295.9476,
+   "peakMb": 50.4140625,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "h1-zip-bomb",
+   "wallMs": 7064.472099999955,
+   "ok": true,
+   "ms": 12.05570000456646,
+   "peakMb": 26.73046875,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "h1-zip-bomb",
+   "wallMs": 619.1640999999945,
+   "ok": true,
+   "ms": 106.90709999999996,
+   "peakMb": 79.8125,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "h2-dtd-entities",
+   "wallMs": 520.077099999995,
+   "ok": false,
+   "ms": 33.605500000000006,
+   "peakMb": 92.0078125,
+   "error": "ImportError: word/document.xml: document type declarations are refused (EXP-099)",
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "h2-dtd-entities",
+   "wallMs": 397.6424999999581,
+   "ok": false,
+   "ms": 48.61850000000004,
+   "peakMb": 71.60546875,
+   "error": "Error: error: [xmldom error]\tentity not found:&b;\n@#[line:undefined,col:undefined]",
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "h2-dtd-entities",
+   "wallMs": 269.90989999996964,
+   "ok": false,
+   "ms": 131.0238,
+   "peakMb": 35.890625,
+   "error": "XmlException: For security reasons DTD is prohibited in this XML document. To enable DTD processing set the DtdProcessing property on XmlReaderSettings to Parse and pass the settings into XmlReader.Cr",
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "h2-dtd-entities",
+   "wallMs": 411.19940000004135,
+   "ok": true,
+   "ms": 13.869399961549789,
+   "peakMb": 26.90234375,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "h2-dtd-entities",
+   "wallMs": 418.8839000000153,
+   "ok": false,
+   "ms": 43.33910000000003,
+   "peakMb": 73.8828125,
+   "error": "Error: error: [xmldom error]\tentity not found:&b;\n@#[line:undefined,col:undefined]",
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "h3-macro",
+   "wallMs": 442.6453000000329,
+   "ok": false,
+   "ms": 4.790700000000015,
+   "peakMb": 91.046875,
+   "error": "ImportError: macro-enabled files are refused (EXP-099)",
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "h3-macro",
+   "wallMs": 420.7502000000095,
+   "ok": true,
+   "ms": 89.06480000000005,
+   "peakMb": 79.3359375,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "h3-macro",
+   "wallMs": 458.32539999997243,
+   "ok": true,
+   "ms": 322.6074,
+   "peakMb": 50.5078125,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "h3-macro",
+   "wallMs": 393.43859999999404,
+   "ok": true,
+   "ms": 32.554000033997,
+   "peakMb": 26.86328125,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "h3-macro",
+   "wallMs": 496.88219999999274,
+   "ok": true,
+   "ms": 100.59869999999995,
+   "peakMb": 78.57421875,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "h4-external-link",
+   "wallMs": 590.9802000000491,
+   "ok": true,
+   "ms": 102.56119999999999,
+   "peakMb": 91.41015625,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "h4-external-link",
+   "wallMs": 484.5989000000409,
+   "ok": true,
+   "ms": 105.65470000000005,
+   "peakMb": 78.80859375,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "h4-external-link",
+   "wallMs": 516.3220999999903,
+   "ok": true,
+   "ms": 353.6263,
+   "peakMb": 50.4140625,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "h4-external-link",
+   "wallMs": 424.94349999999395,
+   "ok": true,
+   "ms": 16.217300028074533,
+   "peakMb": 26.875,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "h4-external-link",
+   "wallMs": 502.3570999999647,
+   "ok": true,
+   "ms": 95.07149999999996,
+   "peakMb": 79.3125,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "h5-embedded-object",
+   "wallMs": 464.117499999993,
+   "ok": true,
+   "ms": 82.19780000000003,
+   "peakMb": 92.69140625,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "h5-embedded-object",
+   "wallMs": 379.74479999998584,
+   "ok": true,
+   "ms": 75.83679999999998,
+   "peakMb": 79.30859375,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "h5-embedded-object",
+   "wallMs": 482.51600000000326,
+   "ok": true,
+   "ms": 343.0036,
+   "peakMb": 50.47265625,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "h5-embedded-object",
+   "wallMs": 343.2700000000186,
+   "ok": true,
+   "ms": 11.994100001174957,
+   "peakMb": 26.55078125,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "h5-embedded-object",
+   "wallMs": 426.0026000000071,
+   "ok": true,
+   "ms": 77.58330000000001,
+   "peakMb": 79.57421875,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "h6-deep-nesting",
+   "wallMs": 1063.2541000000201,
+   "ok": true,
+   "ms": 214.29280000000006,
+   "peakMb": 139.4609375,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "h6-deep-nesting",
+   "wallMs": 515.814800000051,
+   "ok": false,
+   "ms": 196.05599999999998,
+   "peakMb": 125.79296875,
+   "error": "RangeError: Maximum call stack size exceeded",
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "h6-deep-nesting",
+   "wallMs": 1028.5118999999831,
+   "ok": false,
+   "error": "process ended without a result (exit 3221225725): Stack overflow.\r\n   at DocumentFormat.OpenXml.OpenXmlElement.GetPartRootElement()\r\n   at DocumentFormat.OpenXml.OpenXmlElementExtensionMethods.GetPart(DocumentF"
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "h6-deep-nesting",
+   "wallMs": 376.92270000005374,
+   "ok": false,
+   "ms": 15.20119997439906,
+   "peakMb": 27.53515625,
+   "error": "XMLSyntaxError: Excessive depth in document: 256 use XML_PARSE_HUGE option, line 2, column 8449 (<string>, line 2)",
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "h6-deep-nesting",
+   "wallMs": 604.5722999999998,
+   "ok": false,
+   "ms": 195.36520000000002,
+   "peakMb": 126.296875,
+   "error": "RangeError: Maximum call stack size exceeded",
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "h7-large-table",
+   "wallMs": 719.3673999999883,
+   "ok": true,
+   "ms": 264.34650000000005,
+   "peakMb": 138.44140625,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "h7-large-table",
+   "wallMs": 1138.6260000000475,
+   "ok": true,
+   "ms": 780.5684999999999,
+   "peakMb": 216.90234375,
+   "counts": {
+    "tables": 2,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "h7-large-table",
+   "wallMs": 591.9526999999653,
+   "ok": true,
+   "ms": 442.9257,
+   "peakMb": 63.75,
+   "counts": {
+    "tables": 2,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "h7-large-table",
+   "wallMs": 1447.5504000000074,
+   "ok": true,
+   "ms": 24.14719999069348,
+   "peakMb": 33.3515625,
+   "counts": {
+    "tables": 2,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "h7-large-table",
+   "wallMs": 1330.851100000029,
+   "ok": true,
+   "ms": 913.8625999999999,
+   "peakMb": 214.359375,
+   "counts": {
+    "tables": 2,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "own-importer",
+   "file": "h8-linked-local-file",
+   "wallMs": 727.5904000000446,
+   "ok": true,
+   "ms": 134.78560000000004,
+   "peakMb": 92.796875,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 0
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.13.0",
+   "file": "h8-linked-local-file",
+   "wallMs": 547.8993999999948,
+   "ok": true,
+   "ms": 115.3177,
+   "peakMb": 78.9921875,
+   "counts": {
+    "tables": 1,
+    "images": 3,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "open-xml-sdk-3.5.1",
+   "file": "h8-linked-local-file",
+   "wallMs": 669.249700000044,
+   "ok": true,
+   "ms": 480.1155,
+   "peakMb": 50.6015625,
+   "counts": {
+    "tables": 1,
+    "images": 4,
+    "tracked": 2,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "python-docx-1.2.0",
+   "file": "h8-linked-local-file",
+   "wallMs": 530.482799999998,
+   "ok": true,
+   "ms": 19.548800017219037,
+   "peakMb": 26.70703125,
+   "counts": {
+    "tables": 1,
+    "images": 4,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": false
+  },
+  {
+   "candidate": "mammoth-1.10.0",
+   "file": "h8-linked-local-file",
+   "wallMs": 807.6589999999851,
+   "ok": true,
+   "ms": 153.3537,
+   "peakMb": 78.07421875,
+   "counts": {
+    "tables": 1,
+    "images": 4,
+    "tracked": 0,
+    "comments": 0,
+    "footnotes": 0,
+    "hyperlinks": 1
+   },
+   "leaked": true
+  }
+ ],
+ "truth": {
+  "docx4j/2010-mcAlternateContent.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 1,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/2016_image_with_text_effects.docx": {
+   "tables": 0,
+   "images": 1,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/76t52-round-8-control-word365.docx": {
+   "tables": 4,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 1
+  },
+  "docx4j/DrawingML_GraphicData_wps.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/LegacyForms.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/binding-simple.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/chart.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/comment-cards.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 5,
+   "footnotes": 1,
+   "hyperlinks": 0
+  },
+  "docx4j/cr043-tracked.docx": {
+   "tables": 6,
+   "images": 2,
+   "tracked": 39,
+   "comments": 1,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/create-new-bitmap.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/equation-sample.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/hyperlinks-internal.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 1
+  },
+  "docx4j/inserted-doc.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/mc-txbx-block-word365.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/review-for-word-word2010.docx": {
+   "tables": 1,
+   "images": 0,
+   "tracked": 46,
+   "comments": 5,
+   "footnotes": 2,
+   "hyperlinks": 0
+  },
+  "docx4j/sample-docx.docx": {
+   "tables": 1,
+   "images": 3,
+   "tracked": 2,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 1
+  },
+  "docx4j/sections_multiple.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/tables.docx": {
+   "tables": 13,
+   "images": 1,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/textbox.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/textbox_alternates_contrived.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/tracked-changes-equations.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 39,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/w14_texteffects.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "docx4j/waterfall.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/58618.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 4
+  },
+  "poi/60316.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/61470.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/61745.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/Bug54771a.docx": {
+   "tables": 2,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/Bug54849.docx": {
+   "tables": 2,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 1,
+   "hyperlinks": 0
+  },
+  "poi/Bug55142.docx": {
+   "tables": 1,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/Bug60337.docx": {
+   "tables": 1,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/ComplexNumberedLists.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/DiffFirstPageHeadFoot.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/EmbeddedDocument.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/FieldCodes.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/FldSimple.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/MultipleBodyBug.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/Numbering.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/PageSpecificHeadFoot.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/Styles.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/TestDocument.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 1
+  },
+  "poi/VariousPictures.docx": {
+   "tables": 0,
+   "images": 5,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/WithTabs.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/WordWithAttachments.docx": {
+   "tables": 1,
+   "images": 0,
+   "tracked": 0,
+   "comments": 3,
+   "footnotes": 0,
+   "hyperlinks": 3
+  },
+  "poi/bookmarks.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/bug65738.docx": {
+   "tables": 2,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 6
+  },
+  "poi/chartex.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/checkboxes.docx": {
+   "tables": 1,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/comment.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 1,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/deep-table-cell.docx": {
+   "tables": 5000,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/delins.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 36,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 7
+  },
+  "poi/endnotes.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/footnotes.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 1,
+   "hyperlinks": 0
+  },
+  "poi/headerFooter.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/heading123.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/sample.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/shapes-with-text.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/table-alignment.docx": {
+   "tables": 6,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "poi/table_footnotes.docx": {
+   "tables": 1,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 1,
+   "hyperlinks": 0
+  },
+  "poi/testComment.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 1,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/blk-containing-table.docx": {
+   "tables": 1,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/blk-paras-and-tables.docx": {
+   "tables": 4,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/comments-rich-para.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 4,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/doc-access-sections.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/doc-odd-even-hdrs.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/hdr-header-footer.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/num-having-numbering-part.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/par-hyperlinks.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 4
+  },
+  "python-docx/par-known-styles.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/par-rendered-page-breaks.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 1
+  },
+  "python-docx/run-char-style.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/sct-section-props.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/shp-inline-shape-access.docx": {
+   "tables": 0,
+   "images": 3,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/tab-stops.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/tbl-cell-access.docx": {
+   "tables": 4,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/tbl-cell-props.docx": {
+   "tables": 1,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/tbl-having-tables.docx": {
+   "tables": 3,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  },
+  "python-docx/txt-font-props.docx": {
+   "tables": 0,
+   "images": 0,
+   "tracked": 0,
+   "comments": 0,
+   "footnotes": 0,
+   "hyperlinks": 0
+  }
+ }
+}
