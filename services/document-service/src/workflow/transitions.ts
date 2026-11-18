@@ -62,8 +62,10 @@ export interface TransitionRequest {
    */
   readonly note?: Readonly<Record<string, string | number | null>>;
   /**
-   * Write a grants revision, and so a control commit, even when the new state changes no lock (FRW-054:
-   * `completed` to `finalised` keeps the lock, and the transition is still part of the chain, 12 §6.2).
+   * Whether to write a grants revision, and so a control commit, when the transition keeps the lock
+   * of the state it leaves. The default is yes: every transition is part of the chain (12 §6.2;
+   * FRW-030 criterion 1, and FRW-054: `completed` to `finalised` keeps the lock). `false` is for a
+   * caller that must not.
    */
   readonly anchor?: boolean;
 }
@@ -154,7 +156,19 @@ export async function recordTransition(
   const change: { documentState?: typeof lock.documentState; workflowActive?: boolean } = {};
   if (before.documentState !== lock.documentState) change.documentState = lock.documentState;
   if (before.workflowActive !== lock.workflowActive) change.workflowActive = lock.workflowActive;
-  if (Object.keys(change).length > 0 || anchor === true) {
+  // Every transition is a control commit (12 §6.2, last paragraph; FRW-030 criterion 1). One that
+  // changes the lock has it through the grants revision of the lock. One that leaves the lock as it
+  // was by design (`sent` to `in_progress`, a completion that moves the order on) raises the grants
+  // revision with nothing changed, so that it has a place in the chain too. A repeat after a stop
+  // finds the lock in force and raises nothing, for a transition that changes the lock; for one that
+  // does not, the repeat raises a second revision (ADR 0382, point 6).
+  const fromLock = lockFor(from.state as WorkflowStateName);
+  const keepsLock =
+    fromLock !== null &&
+    fromLock !== undefined &&
+    fromLock.documentState === lock.documentState &&
+    fromLock.workflowActive === lock.workflowActive;
+  if (Object.keys(change).length > 0 || (anchor !== false && keepsLock)) {
     const after = await deps.grants.change(ref, change, {
       actor,
       ifRevision: before.revision,
