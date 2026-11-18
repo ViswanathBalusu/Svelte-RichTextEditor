@@ -1445,6 +1445,8 @@ As an author, I want inline content that an extension provides, so that I can pl
 - [ ] Given the extension is not registered, when the document opens, then the fallback text is shown (UX-058).
 - [ ] Given the document is exported, when the writers run, then the fallback text is rendered.
 
+**Notes (lane w3, round 1, 2026-11-18):** blocked; nothing new ticked. Criterion 1 needs the core to create an `extension_inline` from the extension's offer; the core does not offer that yet. Criteria 2 and 3 are the core's atom behaviour and the fallback view of UX-058, which is not built (its story is unticked). Criterion 4 needs the writers to render the fallback text; this round did not check the writers for that node. The size limit of inline content is still open (decision 176 and the list of unresolved items), so none is set here. No code was changed.
+
 **Notes:** 13 section 7.3 says the payload is "within a size limit"; 03 gives 16 KiB only for the block. The inline limit is unspecified (open questions). Round 2 (lane ui-2, 2026-11-13): `checkInlineInsert` refuses inline content without fallback text and applies no size limit (ADR 0136); tests in packages/ui/test/extension-custom-nodes.test.ts. No criterion is ticked: criterion 1 needs the core to create the node, and criteria 2 to 4 belong to the core, the shell's fallback view and the writers.
 
 ### UX-058 Fallback when the extension is missing
