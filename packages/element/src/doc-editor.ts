@@ -46,6 +46,7 @@ import type { PrintOutcome } from './print.ts';
 import {
   elementMethods,
   type ConfirmedContent,
+  type ExecOutcome,
   type FieldFillOutcome,
   type FieldReport,
   type HostApi,
@@ -867,11 +868,13 @@ export class DocEditorElement extends Base {
   }
 
   /**
-   * Runs a command through the path the toolbar uses; false when it does not apply, is unknown or
-   * no document is loaded (PRO-085). `command` is an identifier of the command registry such as
-   * `format.bold` (UX-005), or a name of the editing core such as `bold`.
+   * Runs a command through the path the toolbar uses (PRO-085). The answer is `{ ok, reason }`
+   * (owner decision 188): `ok` is false when the command is unknown, is not allowed for this user or
+   * mode, changed nothing, or no document is loaded, and `reason` is a code that says which (see
+   * `ExecReason`). `command` is an identifier of the command registry such as `format.bold` (UX-005),
+   * or a name of the editing core such as `bold`.
    */
-  exec(command: CommandName | (string & {}), args?: CommandArgs): boolean {
+  exec(command: CommandName | (string & {}), args?: CommandArgs): ExecOutcome {
     return this.#methods.exec(command, args);
   }
 

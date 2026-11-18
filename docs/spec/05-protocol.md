@@ -398,7 +398,8 @@ The embedding API has its own version, exposed as the static property `DocEditor
 | `flush({ timeoutMs }): Promise<void>` | Resolves when nothing is unconfirmed; rejects at the timeout |
 | `getContent(): Promise<{ seq, cdm, doc }>` | |
 | `getSelectionContent()`, `insertContent(fragment)` | CDM fragments. Insertions pass through the same guards as typing |
-| `exec(command, args?)`, `queryCommand(command)` | Run a command; ask whether it is enabled and active |
+| `exec(command, args?)` | Runs a command and answers `{ ok, reason }`. `ok` is false when nothing ran, and `reason` is then a code: `unknown`, `unannounced`, `no-access`, `mode`, `not-applicable`, `no-effect` or `not-loaded` (never a message, never content). Owner decision 188 |
+| `queryCommand(command)` | Asks whether a command is enabled and active: `{ enabled, active }` |
 | `requestExport(options): Promise<{ jobId }>`, `print()` | `print()` prints the typeset PDF |
 | `focus()`, `destroy()` | |
 

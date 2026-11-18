@@ -24,7 +24,7 @@ test.describe('markup views in the element (UX-035)', () => {
     await openEmbed(page);
     await mountEditor(page);
     const outcome = await page.evaluate((sel) => {
-      const el = document.querySelector(sel) as unknown as { exec(name: string): boolean };
+      const el = document.querySelector(sel) as unknown as { exec(name: string): { ok: boolean } };
       const hooks = (globalThis as unknown as { __embed: { internals(el: Element): unknown } })
         .__embed;
       const core = (
@@ -34,7 +34,7 @@ test.describe('markup views in the element (UX-035)', () => {
       const views = [core.markupView.get()];
       const ran: boolean[] = [];
       for (const view of ['simple', 'none', 'original', 'all']) {
-        ran.push(el.exec(`review.markup.${view}`));
+        ran.push(el.exec(`review.markup.${view}`).ok);
         views.push(core.markupView.get());
       }
       return {
@@ -84,19 +84,19 @@ test.describe('markup views in the element (UX-035)', () => {
 
     // The views: simple bars it, none draws nothing, original hides it, all draws it again.
     await page.evaluate((sel) => {
-      (document.querySelector(sel) as unknown as { exec(name: string): boolean }).exec(
+      (document.querySelector(sel) as unknown as { exec(name: string): { ok: boolean } }).exec(
         'review.markup.simple',
       );
     }, EDITOR);
     await expect(surface.locator('.de-suggest-changed')).toHaveText('ZZ');
     await page.evaluate((sel) => {
-      (document.querySelector(sel) as unknown as { exec(name: string): boolean }).exec(
+      (document.querySelector(sel) as unknown as { exec(name: string): { ok: boolean } }).exec(
         'review.markup.original',
       );
     }, EDITOR);
     await expect(surface.locator('[data-suggestion-id]').first()).toBeHidden();
     await page.evaluate((sel) => {
-      (document.querySelector(sel) as unknown as { exec(name: string): boolean }).exec(
+      (document.querySelector(sel) as unknown as { exec(name: string): { ok: boolean } }).exec(
         'review.markup.none',
       );
     }, EDITOR);

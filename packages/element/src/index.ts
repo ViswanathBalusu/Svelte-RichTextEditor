@@ -10,6 +10,7 @@ export { DocEditorElement, OBSERVED_ATTRIBUTES, type GetToken } from './doc-edit
 export { DEFAULT_TAG, defineDocEditor, type DefineResult } from './register.ts';
 export { EMBEDDING_VERSION, RELEASE } from './version.ts';
 export type { DocEditorConfig } from './config.ts';
+export type { ExecOutcome, ExecReason } from './host-api.ts';
 export type { HostExtension, HostExtensionApi, HostExtensionManifest } from './extensions.ts';
 export {
   FillActionError,

@@ -130,9 +130,11 @@ async function mountWithExports(
 function openDialog(page: Page): Promise<boolean> {
   return page.evaluate(
     (sel) =>
-      (document.querySelector(sel) as unknown as { exec(name: string): boolean }).exec(
-        'document.export',
-      ),
+      (
+        document.querySelector(sel) as unknown as {
+          exec(name: string): { ok: boolean };
+        }
+      ).exec('document.export').ok,
     EDITOR,
   );
 }
