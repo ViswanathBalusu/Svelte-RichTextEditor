@@ -14,10 +14,11 @@
  * through `de-diagnostic`, and rejects the batch that met it. The document lives in the editing
  * core on this thread, so nothing is lost.
  */
-import type { BatchOperation, BlockBatch } from '@docedit/layout-kernel';
+import type { BatchOperation, BlockBatch, FaceRequest, FaceStatus } from '@docedit/layout-kernel';
 import type { DiagnosticDetail } from './events.ts';
 import type {
   BatchStat,
+  FacesResult,
   LayoutWorker,
   LayoutWorkerError,
   WorkerLike,
@@ -107,6 +108,34 @@ export class ElementKernel {
         code: 'kernel_unavailable',
       });
     return worker.batch(op, blocks);
+  }
+
+  /**
+   * Holds these font files in the kernel for `owner` (WASM-005), starting the worker if it was
+   * stopped. Only the files named are fetched, once each for this worker; a file whose hash is not
+   * the manifest's is refused and listed in `failed`. Rejects when no worker can run.
+   */
+  async ensureFaces(owner: string, faces: readonly FaceRequest[]): Promise<FacesResult> {
+    return (await this.#running()).ensureFaces(owner, faces);
+  }
+
+  /** Frees one owner's faces (`owner`), or every face (`null`). */
+  async releaseFaces(owner: string | null): Promise<FaceStatus> {
+    return (await this.#running()).releaseFaces(owner);
+  }
+
+  /** What the worker holds for faces and how large its memory is. */
+  async status(): Promise<FaceStatus> {
+    return (await this.#running()).status();
+  }
+
+  async #running(): Promise<LayoutWorker> {
+    const worker = await this.#ensure();
+    if (worker === null)
+      throw Object.assign(new Error('the layout kernel is not available'), {
+        code: 'kernel_unavailable',
+      });
+    return worker;
   }
 
   /** The element suspends: the worker ends. The next `start` or `batch` creates it again. */

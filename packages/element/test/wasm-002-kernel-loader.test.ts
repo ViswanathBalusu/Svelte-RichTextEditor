@@ -7,7 +7,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { KernelGlueModule } from '@docedit/layout-kernel';
+import { KERNEL_ABI_VERSION, type KernelGlueModule } from '@docedit/layout-kernel';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   classifyStartError,
@@ -75,7 +75,7 @@ describe.skipIf(!built)('loadLayoutKernel on the build of the crate', () => {
       fetch: serve('application/wasm'),
     });
     expect(streaming).toHaveBeenCalledTimes(1);
-    expect(kernel.abi).toBe(1);
+    expect(kernel.abi).toBe(KERNEL_ABI_VERSION);
     expect(kernel.checksum(new TextEncoder().encode('a'))).toBe(0xe40c292c);
     expect(report).toMatchObject({
       feature: 'layout-kernel',

@@ -7,7 +7,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { packBlocks } from '@docedit/layout-kernel';
+import { KERNEL_ABI_VERSION, packBlocks } from '@docedit/layout-kernel';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DiagnosticDetail } from '../src/events.ts';
 import { LayoutWorker, type WorkerLike } from '../src/features/layout-worker-host.ts';
@@ -67,7 +67,7 @@ describe.skipIf(!built)('the layout worker on the build of the crate', () => {
     const world = nodeWorld();
     const { worker, ready } = await LayoutWorker.start({ create: world.create });
     expect(world.made).toHaveLength(1);
-    expect(ready).toMatchObject({ type: 'ready', abi: 1, streaming: true });
+    expect(ready).toMatchObject({ type: 'ready', abi: KERNEL_ABI_VERSION, streaming: true });
     expect(ready.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(ready.module).toBeInstanceOf(WebAssembly.Module);
     expect(worker.module).toBe(ready.module);

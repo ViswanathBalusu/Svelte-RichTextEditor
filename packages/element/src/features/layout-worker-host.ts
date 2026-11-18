@@ -15,6 +15,8 @@ import {
   packBlocks,
   type BatchOperation,
   type BlockBatch,
+  type FaceRequest,
+  type FaceStatus,
   type FromWorker,
   type ToWorker,
 } from '@docedit/layout-kernel';
@@ -74,6 +76,9 @@ export interface StartOptions {
 }
 
 export type Ready = Extract<FromWorker, { type: 'ready' }>;
+
+/** What a request for faces did. */
+export type FacesResult = Extract<FromWorker, { type: 'faces' }>;
 
 interface Pending {
   resolve(message: FromWorker): void;
@@ -183,6 +188,33 @@ export class LayoutWorker {
     });
     if (this.#stats.length > STAT_LIMIT) this.#stats.shift();
     return answer.values;
+  }
+
+  /**
+   * Asks the worker to hold these font files for `owner` (`''` is the platform's fonts, anything
+   * else a tenant), fetching and checking the ones it does not hold. Nothing else is loaded.
+   */
+  async ensureFaces(owner: string, faces: readonly FaceRequest[]): Promise<FacesResult> {
+    const answer = await this.#request({ type: 'faces', id: 0, owner, faces });
+    if (answer.type !== 'faces')
+      throw new LayoutWorkerError('worker_failed', 'the layout worker answered out of turn');
+    return answer;
+  }
+
+  /** Frees the faces of `owner`, or all of them when `owner` is `null`. */
+  async releaseFaces(owner: string | null): Promise<FaceStatus> {
+    const answer = await this.#request({ type: 'release', id: 0, owner });
+    if (answer.type !== 'status')
+      throw new LayoutWorkerError('worker_failed', 'the layout worker answered out of turn');
+    return answer.status;
+  }
+
+  /** What the worker holds for faces, and the size of the kernel's memory. */
+  async status(): Promise<FaceStatus> {
+    const answer = await this.#request({ type: 'status', id: 0 });
+    if (answer.type !== 'status')
+      throw new LayoutWorkerError('worker_failed', 'the layout worker answered out of turn');
+    return answer.status;
   }
 
   /** Ends the worker and releases its memory. Waiting batches are rejected. Safe to call twice. */

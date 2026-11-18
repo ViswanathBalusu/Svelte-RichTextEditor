@@ -60,8 +60,44 @@ export function blockBytes(batch: BlockBatch, index: number): Uint8Array {
   return bytes;
 }
 
+/** One font file the worker may be asked to hold: the editor's alias, where it is served, its hash. */
+export interface FaceRequest {
+  /** The alias the editor registers the file under (`de-font-<hash>`). */
+  readonly alias: string;
+  /** The manifest's URL for the file: the one the FontFace API and the LaTeX workers load. */
+  readonly url: string;
+  /** The manifest's SHA-256 of the file, lowercase hexadecimal. */
+  readonly hash: string;
+}
+
+/** What the worker holds for faces (WASM-005). */
+export interface FaceStatus {
+  /** The number of faces held. */
+  readonly count: number;
+  /** The bytes the faces hold. */
+  readonly bytesHeld: number;
+  /** The font epoch: the faces loaded so far in this worker. */
+  readonly epoch: number;
+  /** The kernel's whole linear memory, faces included; `null` when unknown. */
+  readonly memoryBytes: number | null;
+}
+
 /** Messages from the page to the worker. `id` pairs a request with its answer. */
 export type ToWorker =
+  | {
+      /** Loads the faces of `faces` that are not held yet, for `owner`: `''` is the platform's fonts. */
+      readonly type: 'faces';
+      readonly id: number;
+      readonly owner: string;
+      readonly faces: readonly FaceRequest[];
+    }
+  | {
+      /** Frees the faces of `owner`, or every face when `owner` is `null`. */
+      readonly type: 'release';
+      readonly id: number;
+      readonly owner: string | null;
+    }
+  | { readonly type: 'status'; readonly id: number }
   | {
       readonly type: 'init';
       readonly id: number;
@@ -77,8 +113,27 @@ export type ToWorker =
       readonly offsets: Uint32Array;
     };
 
+/** A face that was not loaded, with the code of the cause. */
+export interface FaceFailure {
+  readonly alias: string;
+  /** `fetch_failed`, or a code of the kernel (`hash_mismatch`, `not_a_font`, `owner_conflict`, …). */
+  readonly code: string;
+  readonly message: string;
+}
+
 /** Messages from the worker to the page. */
 export type FromWorker =
+  | {
+      readonly type: 'faces';
+      readonly id: number;
+      /** Aliases loaded by this request. */
+      readonly loaded: readonly string[];
+      /** Aliases that were held already (or that another request was loading). */
+      readonly already: readonly string[];
+      readonly failed: readonly FaceFailure[];
+      readonly status: FaceStatus;
+    }
+  | { readonly type: 'status'; readonly id: number; readonly status: FaceStatus }
   | {
       readonly type: 'ready';
       readonly id: number;

@@ -9,6 +9,10 @@
  *   page can hand it to the next worker instead of compiling again.
  * - `batch`: runs one operation on a batch of whole blocks and answers with one `Uint32Array`, whose
  *   buffer is transferred.
+ * - `faces`, `release`, `status`: the font faces (WASM-005). The worker fetches the manifest's file
+ *   for each face it does not hold, once however many requests ask, and gives the bytes to the
+ *   kernel, which refuses a file whose SHA-256 is not the manifest's. Nothing is loaded ahead: a
+ *   face that no request names is never fetched. `release` frees an owner's faces or all of them.
  *
  * A trap of the module (or any error in a batch) is caught here and answered as `kernel_trap`; the
  * page then ends this worker. After a trap the instance's memory cannot be trusted, so nothing is
@@ -17,6 +21,10 @@
 import {
   blockBytes,
   blockCount,
+  KernelFaceError,
+  type FaceFailure,
+  type FaceRequest,
+  type FaceStatus,
   type FromWorker,
   type LayoutKernel,
   type ToWorker,
@@ -113,8 +121,116 @@ export function createWorkerCore(options: WorkerCoreOptions): (message: ToWorker
     }
   }
 
+  // Faces being fetched, by alias, so that two requests for one face fetch it once (WASM-005).
+  const loading = new Map<string, Promise<{ outcome: 'new' | 'already' } | FaceFailure>>();
+
+  function status(): FaceStatus {
+    const held = kernel;
+    return {
+      count: held?.faces.count() ?? 0,
+      bytesHeld: held?.faces.bytesHeld() ?? 0,
+      epoch: held?.faces.epoch() ?? 0,
+      memoryBytes: held?.memoryBytes() ?? null,
+    };
+  }
+
+  /** Fetches one face and gives it to the kernel, which checks it against the manifest's hash. */
+  async function loadFace(
+    held: LayoutKernel,
+    owner: string,
+    face: FaceRequest,
+  ): Promise<{ outcome: 'new' | 'already' } | FaceFailure> {
+    if (held.faces.has(face.alias)) {
+      // Held already: the same owner finds it; another owner is refused, and nothing is fetched.
+      if (held.faces.owner(face.alias) === owner) return { outcome: 'already' };
+      return {
+        alias: face.alias,
+        code: 'owner_conflict',
+        message: 'another owner holds this face; release it first',
+      };
+    }
+    const doFetch = options.fetch ?? ((input, init) => fetch(input, init));
+    let bytes: Uint8Array;
+    try {
+      const response = await doFetch(face.url, { credentials: 'same-origin' });
+      if (!response.ok)
+        return {
+          alias: face.alias,
+          code: 'fetch_failed',
+          message: `the font file's server answered ${response.status}`,
+        };
+      bytes = new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+      return {
+        alias: face.alias,
+        code: 'fetch_failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+    try {
+      return { outcome: held.faces.load(owner, face.alias, face.hash, bytes) };
+    } catch (error) {
+      const code = error instanceof KernelFaceError ? error.code : 'face_failed';
+      return {
+        alias: face.alias,
+        code,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async function faces(message: Extract<ToWorker, { type: 'faces' }>): Promise<void> {
+    const held = kernel;
+    const loaded: string[] = [];
+    const already: string[] = [];
+    const failed: FaceFailure[] = [];
+    if (held === null || broken) {
+      for (const face of message.faces)
+        failed.push({
+          alias: face.alias,
+          code: 'kernel_not_running',
+          message: 'the kernel is not running',
+        });
+    } else {
+      const results = await Promise.all(
+        message.faces.map(async (face) => {
+          let pending = loading.get(face.alias);
+          if (pending === undefined) {
+            pending = loadFace(held, message.owner, face).finally(() => loading.delete(face.alias));
+            loading.set(face.alias, pending);
+          }
+          return [face.alias, await pending] as const;
+        }),
+      );
+      for (const [alias, result] of results) {
+        if ('outcome' in result) (result.outcome === 'new' ? loaded : already).push(alias);
+        else failed.push(result);
+      }
+    }
+    options.post({ type: 'faces', id: message.id, loaded, already, failed, status: status() }, []);
+  }
+
+  function release(message: Extract<ToWorker, { type: 'release' }>): void {
+    if (kernel !== null) {
+      if (message.owner === null) kernel.faces.releaseAll();
+      else kernel.faces.releaseOwner(message.owner);
+    }
+    options.post({ type: 'status', id: message.id, status: status() }, []);
+  }
+
   return async (message) => {
-    if (message.type === 'init') await init(message);
-    else batch(message);
+    switch (message.type) {
+      case 'init':
+        return init(message);
+      case 'batch':
+        return batch(message);
+      case 'faces':
+        return faces(message);
+      case 'release':
+        return release(message);
+      case 'status':
+        options.post({ type: 'status', id: message.id, status: status() }, []);
+        return;
+    }
   };
 }

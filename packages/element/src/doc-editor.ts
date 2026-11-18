@@ -549,6 +549,9 @@ export class DocEditorElement extends Base {
     this.#reload = false;
     this.#clearFailure();
     void current?.close();
+    // The faces the kernel holds belong to the document that is closed (a tenant's own fonts go
+    // with its documents; WASM-005). The next document names the faces it needs.
+    if (current && this.#kernel?.running) void this.#kernel.releaseFaces(null).catch(() => {});
     const session: Session = new Session({
       docId,
       backend:
