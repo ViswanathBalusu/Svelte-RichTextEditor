@@ -31,8 +31,10 @@ import type {
   DocRef,
   DocumentStore,
   GrantStore,
+  HomeRegionStore,
   LogStore,
   NodeLeaseStore,
+  NodeTraits,
   OutboxStore,
   OwnershipStore,
 } from './storage/types.ts';
@@ -145,6 +147,17 @@ export interface DataPlaneDeps {
    * 200). It is written on the node's lease row at each renewal. Absent: the node announces none.
    */
   readonly address?: string | undefined;
+  /**
+   * What the node announces on its lease row besides its address: the region it runs in (BE-074)
+   * and the one document it is dedicated to (BE-073). Absent: a general node in no region.
+   */
+  readonly traits?: NodeTraits | undefined;
+  /**
+   * Home regions (BE-074). With them, and with the bus and leases, a channel for a document of a
+   * tenant with a home region is forwarded to a node of that region, and refused with
+   * `unavailable` when no node of it is live.
+   */
+  readonly homeRegions?: Pick<HomeRegionStore, 'resolve'> | undefined;
   /**
    * The internal bus between nodes (BE-062, BE-063). With it, and with `leases`, a channel for a
    * document that another live node owns is opened on that node and forwarded. Absent: a single

@@ -37,6 +37,7 @@ export const PURGE_TABLES: readonly string[] = [
   'document_revocations',
   'tenant_retention',
   'document_keys',
+  'home_regions',
   'jobs',
 ];
 

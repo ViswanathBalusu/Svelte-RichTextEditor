@@ -3,6 +3,7 @@ import { baseDoc, posInside } from '../../../../packages/authority/test/fixtures
 import { routeDocument } from '../../src/control-plane/room-routing.ts';
 import { MemoryNodeLeases } from '../../src/data-plane/memory-ports.ts';
 import type { Bus } from '../../src/data-plane/bus.ts';
+import type { DataPlaneDeps } from '../../src/seams.ts';
 import { MemoryStore } from '../../src/storage/memory.ts';
 import { MemoryCheckpoints, startPlane, type Plane } from './support.ts';
 
@@ -26,7 +27,12 @@ export interface Cluster {
   readonly checkpoints: MemoryCheckpoints;
   readonly tenant: string;
   readonly planes: Map<string, Plane>;
-  start(node: string, bus: Bus | undefined, forwarding?: Record<string, number>): Promise<Plane>;
+  start(
+    node: string,
+    bus: Bus | undefined,
+    forwarding?: Record<string, number>,
+    extra?: Partial<DataPlaneDeps>,
+  ): Promise<Plane>;
   close(): Promise<void>;
 }
 
@@ -42,7 +48,7 @@ export function cluster(): Cluster {
     checkpoints,
     tenant,
     planes,
-    async start(node, bus, forwarding = {}) {
+    async start(node, bus, forwarding = {}, extra = {}) {
       const p = await startPlane({
         stores: { logs: mem, ownership: mem, grants: mem, documents: mem },
         checkpoints,
@@ -53,6 +59,7 @@ export function cluster(): Cluster {
           address: `ws://${node}.test/dep`,
           ...(bus ? { bus } : {}),
           forwarding: { ...FAST_FORWARDING, ...forwarding },
+          ...extra,
         },
         settings: { lease: { durationMs: 800, renewMs: 100, marginMs: 100 } },
       });

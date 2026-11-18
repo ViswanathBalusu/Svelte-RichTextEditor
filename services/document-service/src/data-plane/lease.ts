@@ -9,7 +9,7 @@
  * viewers, which would otherwise never notice that another node took the document (06 §8: "A host
  * is partitioned and serves only viewers"). It refuses new channels until a renewal succeeds.
  */
-import type { NodeLeaseStore } from '../storage/types.ts';
+import type { NodeLeaseStore, NodeTraits } from '../storage/types.ts';
 import type { LeaseSettings } from './settings.ts';
 
 export interface NodeLeaseOptions {
@@ -17,6 +17,8 @@ export interface NodeLeaseOptions {
   node: string;
   /** The WebSocket address the node announces on its lease row (BE-061), or none. */
   address?: string | undefined;
+  /** What the node announces besides its address: its region, or the one document it serves (BE-073, BE-074). */
+  traits?: NodeTraits | undefined;
   settings: LeaseSettings;
   /** Milliseconds from a monotonic clock (default `performance.now`). */
   monotonic?: () => number;
@@ -68,8 +70,9 @@ export class NodeLease {
     this.#renewing ??= (async () => {
       const sent = this.#mono();
       try {
-        const { store, node, address, settings } = this.#o;
-        if (address === undefined) await store.renew(node, settings.durationMs);
+        const { store, node, address, traits, settings } = this.#o;
+        if (traits !== undefined) await store.renew(node, settings.durationMs, address, traits);
+        else if (address === undefined) await store.renew(node, settings.durationMs);
         else await store.renew(node, settings.durationMs, address);
         this.stats.renewed++;
         this.#validUntil = sent + this.#o.settings.durationMs - this.#o.settings.marginMs;

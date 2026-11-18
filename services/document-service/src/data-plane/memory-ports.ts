@@ -13,6 +13,7 @@ import type {
   DocRef,
   NewOutboxItem,
   NodeInfo,
+  NodeTraits,
   NodeLeaseStore,
   OutboxItem,
   OutboxStore,
@@ -213,6 +214,7 @@ export class MemoryOutboxWriter implements OutboxWriter {
 export class MemoryNodeLeases implements NodeLeaseStore {
   readonly #leases = new Map<string, number>();
   readonly #addresses = new Map<string, string>();
+  readonly #traits = new Map<string, NodeTraits>();
   readonly #dbNow: () => number;
   /** Set by a test to make renewals fail, as an unreachable database would. */
   failing = false;
@@ -221,9 +223,11 @@ export class MemoryNodeLeases implements NodeLeaseStore {
     this.#dbNow = dbNow;
   }
 
-  async renew(node: string, leaseMs: number, address?: string): Promise<void> {
+  async renew(node: string, leaseMs: number, address?: string, traits?: NodeTraits): Promise<void> {
     if (this.failing) throw new Error('the database is unreachable');
     this.#leases.set(node, this.#dbNow() + leaseMs);
+    if (traits === undefined) this.#traits.delete(node);
+    else this.#traits.set(node, traits);
     if (address === undefined) this.#addresses.delete(node);
     else this.#addresses.set(node, address);
   }
@@ -233,7 +237,12 @@ export class MemoryNodeLeases implements NodeLeaseStore {
     const now = this.#dbNow();
     return [...this.#leases.entries()]
       .filter(([, until]) => until > now)
-      .map(([node]) => ({ node, address: this.#addresses.get(node) ?? null }))
+      .map(([node]) => ({
+        node,
+        address: this.#addresses.get(node) ?? null,
+        region: this.#traits.get(node)?.region ?? null,
+        dedicated: this.#traits.get(node)?.dedicated ?? null,
+      }))
       .sort((a, b) => (a.node < b.node ? -1 : a.node > b.node ? 1 : 0));
   }
 
@@ -246,6 +255,7 @@ export class MemoryNodeLeases implements NodeLeaseStore {
   async release(node: string): Promise<void> {
     this.#leases.delete(node);
     this.#addresses.delete(node);
+    this.#traits.delete(node);
   }
 
   /** When the lease of `node` expires by the database clock, for tests. */

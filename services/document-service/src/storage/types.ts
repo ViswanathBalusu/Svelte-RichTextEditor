@@ -469,6 +469,18 @@ export interface OutboxWriter {
 export interface NodeInfo {
   readonly node: string;
   readonly address: string | null;
+  /** The region the node runs in (BE-074), or null/absent when it announced none. */
+  readonly region?: string | null;
+  /** The one document this node is dedicated to (BE-073), or null/absent for a general node. */
+  readonly dedicated?: string | null;
+}
+
+/** What a node announces about itself on its lease row besides its address. */
+export interface NodeTraits {
+  /** The region the node runs in; routing for a tenant with a home region considers its nodes only. */
+  readonly region?: string;
+  /** A node that runs the rooms of this one document and no other (a hot document; BE-073). */
+  readonly dedicated?: string;
 }
 
 /** Node-level liveness leases (06 §2.1; BE-018). Expiry is judged by the database clock only. */
@@ -478,13 +490,35 @@ export interface NodeLeaseStore {
    * is the WebSocket URL the node announces for its own channels (BE-061; owner decision 200); a
    * renewal without one leaves no address on the row.
    */
-  renew(node: string, leaseMs: number, address?: string): Promise<void>;
+  renew(node: string, leaseMs: number, address?: string, traits?: NodeTraits): Promise<void>;
   /** Whether `node` holds a lease that has not expired by the database clock. */
   alive(node: string): Promise<boolean>;
   /** The nodes that hold a lease that has not expired by the database clock (BE-060), by name. */
   live(): Promise<NodeInfo[]>;
   /** Ends the lease of `node`. */
   release(node: string): Promise<void>;
+}
+
+/** One assignment of a home region: the tenant's (no document) or one document's. */
+export interface HomeRegionRow {
+  readonly doc: string | null;
+  readonly region: string;
+}
+
+/**
+ * Home regions (06 §7; BE-074 criterion 1). A tenant has at most one, and a document of it may have
+ * its own, which wins for that document. A tenant with none has no home region: routing is then as
+ * on one region.
+ */
+export interface HomeRegionStore {
+  /** The region of the document: its own assignment, else its tenant's, else null. */
+  resolve(ref: DocRef): Promise<string | null>;
+  /** Assigns the region of the tenant, or of one of its documents; replaces an earlier one. */
+  assign(tenant: string, region: string, by: string, doc?: string): Promise<void>;
+  /** Removes an assignment; true when there was one. */
+  clear(tenant: string, doc?: string): Promise<boolean>;
+  /** The tenant's assignments: its own first, then its documents' in identifier order. */
+  list(tenant: string): Promise<HomeRegionRow[]>;
 }
 
 /** The outcome of a write could not be established, not even by reading the log back. */
