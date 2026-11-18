@@ -59,6 +59,7 @@ import { Admission, type AdmissionConfig } from './admission.ts';
 import { featuresUsed } from './features.ts';
 import { DEFAULT_RULE_BUDGET, ruleGate } from './rules.ts';
 import type { WorkflowRecord } from '../workflow/lifecycle.ts';
+import { bindParticipant } from '../workflow/binding.ts';
 import { fillActive } from '../workflow/order.ts';
 import { workflowStatus } from '../workflow/state-view.ts';
 import {
@@ -636,6 +637,22 @@ export class Room {
    * with no participant, or one the record does not list, is left as it is.
    */
   private withWorkflow(conn: Connection): Connection {
+    const claim = conn.participantClaim;
+    if (claim !== undefined) {
+      // FRW-038: a token with `wfp` fills only as the participant it binds to in this workflow, with
+      // that participant's roles, and while the workflow lets them. Anything else: no fill.
+      const bound = this.workflow === null ? null : bindParticipant(claim, this.workflow);
+      if (this.workflow === null || bound === null || !bound.ok) {
+        const { participant: _unbound, ...rest } = conn;
+        return { ...rest, participantRoles: [], participantActive: false };
+      }
+      return {
+        ...conn,
+        participant: bound.participant.id,
+        participantRoles: bound.participant.roles,
+        participantActive: fillActive(this.workflow, bound.participant.id),
+      };
+    }
     if (this.workflow === null || conn.participant === undefined) return conn;
     const id = conn.participant;
     if (!this.workflow.participants.some((p) => p.id === id)) return conn;
@@ -649,14 +666,16 @@ export class Room {
    */
   private isPaused(conn: Connection): boolean {
     const record = this.workflow;
-    if (record === null || record.state !== 'correcting' || conn.participant === undefined)
-      return false;
-    return record.participants.some((p) => p.id === conn.participant);
+    const id = this.withWorkflow(conn).participant;
+    if (record === null || record.state !== 'correcting' || id === undefined) return false;
+    return record.participants.some((p) => p.id === id);
   }
 
   /** The workflow object for a connection, as JSON text for comparison, or null without a workflow. */
   private workflowFor(conn: Connection) {
-    return this.workflow === null ? null : workflowStatus(this.workflow, conn.participant);
+    return this.workflow === null
+      ? null
+      : workflowStatus(this.workflow, this.withWorkflow(conn).participant);
   }
 
   /** Access at the durable head, for the requests that refer to it (threads; 07 §6). */
@@ -1014,7 +1033,7 @@ export class Room {
       (next ??= index.next(docBefore, docAfter, maps, diff));
     const gate = ruleGate(
       docAfter,
-      s.conn.participantRoles,
+      this.withWorkflow(s.conn).participantRoles,
       this.ruleBudget,
       (id) => index.field(id)?.key,
     );

@@ -406,6 +406,13 @@ export interface Connection {
   /** The workflow participant identifier from the token's `wfp` claim (12 §7), when there is one. */
   participant?: string;
   /**
+   * The token's raw `sub` and `wfp` claim, when it carries `wfp` (12 §7; FRW-038). The room binds
+   * them to a participant of the workflow it holds: `participant`, `participantRoles` and
+   * `participantActive` of a connection with a claim come from that binding and from nothing
+   * else, so a token that binds to no one has no fill capability, whatever else it claims.
+   */
+  participantClaim?: { readonly sub: string; readonly wfp: string };
+  /**
    * Output restrictions of the token's `restrict` claim (PRO-015). They reach `access.restrictions`
    * on the wire and a change of them is a change of access (`perm.changed`). Absent means none.
    */
