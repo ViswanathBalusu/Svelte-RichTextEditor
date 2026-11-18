@@ -296,6 +296,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           `/documents/${doc}/history?region=${CONF}`,
           `/documents/${doc}/history?field=${SENS}`,
           `/documents/${doc}/activity`,
+          // The audit segment and the commit that introduced a suggestion (HIS-037, HIS-042).
+          `/documents/${doc}/audit-segment`,
+          `/documents/${doc}/suggestions/sgNone0000000001/introduction`,
           `/documents/${doc}/connect`,
           `/documents/${doc}/versions`,
           `/documents/${doc}/regions`,

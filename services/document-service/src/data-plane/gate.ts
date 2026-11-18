@@ -104,6 +104,18 @@ export const SEQ_INPUTS: readonly SeqInput[] = [
     note: 'phase 2 (HIS-026)',
   },
   {
+    where: 'GET /documents/{id}/audit-segment',
+    field: 'query.fromSeq',
+    rule: 'exempt',
+    note: 'HIS-037: a start below the gate is raised to the gate, never read; only the chain hash of the record just below it travels (audit-segment-route.ts)',
+  },
+  {
+    where: 'GET /documents/{id}/audit-segment',
+    field: 'query.toSeq',
+    rule: 'state',
+    note: 'HIS-037: an end below the gate is refused with forbidden (auditSegment of @docedit/history)',
+  },
+  {
     where: 'GET /documents/{id}/history',
     field: 'query.fromSeq',
     rule: 'range',

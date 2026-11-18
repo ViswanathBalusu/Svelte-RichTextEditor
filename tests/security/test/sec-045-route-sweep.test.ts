@@ -98,6 +98,7 @@ const KNOWN_PARAMS = [
   'kid',
   'origin',
   'seq',
+  'sid',
   'deliveryId',
 ];
 
@@ -126,6 +127,8 @@ const NOT_OFFERED = 'this server does not offer the route';
 const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   createImport: 'this server does not import Word files',
   getImport: 'no import job',
+  // HIS-042: the handler exists; no commit of B's document introduced the made-up identifier.
+  getSuggestionIntroduction: 'no commit introduced this suggestion',
   // ADR 0330 §2 (decision 177): this composition has no webhook dispatcher to send with.
   pingWebhook: 'this server does not send webhook deliveries',
   replayWebhookDelivery: 'this server does not send webhook deliveries',
@@ -301,6 +304,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       ids['rid'] = REGION;
       // A commit sequence number in the path (HIS-040); B's document has its first commit.
       ids['seq'] = '1';
+      // A suggestion identifier of B (HIS-042): the route finds none, whoever asks.
+      ids['sid'] = 'sgTenantB00000001';
       ownerB = await h.mintToken(h.b, 'bella', { [ids['doc']]: 'owner' });
       const thread = await asB(
         'POST',
@@ -413,6 +418,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         `/v1/search?q=${CANARY_TITLE}`,
         '/v1/fonts',
         '/v1/retention',
+        '/v1/history-visibility',
         '/v1/origins',
         '/v1/keys',
         '/v1/quotas',

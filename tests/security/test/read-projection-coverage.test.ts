@@ -132,6 +132,14 @@ const ENDPOINT_REVIEW: Record<string, EndpointEntry> = {
   // The hint names a node and its address and carries no content of a document.
   getConnect: { kind: 'exercised', test: SURFACES_FILE, path: '/connect' },
   getActivity: { kind: 'exercised', test: SURFACES_FILE, path: '/activity' },
+  // A segment holds hashed metadata only, and a reader whose view hides content is refused (HIS-037).
+  getAuditSegment: { kind: 'exercised', test: SURFACES_FILE, path: '/audit-segment' },
+  // Time, user and origin of one commit, never content (HIS-042).
+  getSuggestionIntroduction: {
+    kind: 'exercised',
+    test: SURFACES_FILE,
+    path: '/suggestions/sgNone0000000001/introduction',
+  },
   listThreads: { kind: 'exercised', test: SURFACES_FILE, path: '/threads?seq=' },
   getThread: { kind: 'exercised', test: SURFACES_FILE, path: '/threads/${thread}' },
   getExport: { kind: 'exercised', test: SURFACES_FILE, path: '/exports/' },
