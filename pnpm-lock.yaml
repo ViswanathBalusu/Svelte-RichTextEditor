@@ -302,6 +302,21 @@ importers:
         specifier: 8.22.1
         version: 8.22.1
 
+  packages/backend-local:
+    dependencies:
+      '@docedit/authority':
+        specifier: workspace:*
+        version: link:../authority
+      '@docedit/backend-mock':
+        specifier: workspace:*
+        version: link:../backend-mock
+      '@docedit/model':
+        specifier: workspace:*
+        version: link:../model
+      '@docedit/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+
   packages/backend-mock:
     dependencies:
       '@docedit/authority':

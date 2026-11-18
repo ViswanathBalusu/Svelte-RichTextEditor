@@ -4,8 +4,8 @@
  * from `GET /v1/authority/capabilities`) and announces no more than `features`.
  *
  * `IMPLEMENTED_CALLS` grows as the calls of 05 §10 are built: `open` and `materialise` are PRO-103,
- * `migrate` and `evaluateRules` are PRO-107. `applyCommit`, `mapRanges`, `restoreSteps`, `diff` and
- * `attribution` (PRO-104 to PRO-106) are not here, so the features that need them are not offered.
+ * `migrate` and `evaluateRules` are PRO-107, `applyCommit` is PRO-104. `mapRanges`, `restoreSteps`, `diff` and
+ * `attribution` (PRO-105, PRO-106) are not here, so the features that need them are not offered.
  */
 import {
   type AuthorityServiceCall,
@@ -17,6 +17,7 @@ import {
 export const IMPLEMENTED_CALLS: readonly AuthorityServiceCall[] = [
   'open',
   'materialise',
+  'applyCommit',
   'migrate',
   'evaluateRules',
 ];
