@@ -65,7 +65,9 @@ export type ServiceErrorCode =
   | 'migration_not_enabled'
   | 'migration_failed'
   | 'invalid_rules'
-  | 'budget_exceeded';
+  | 'budget_exceeded'
+  | 'storage_unavailable'
+  | 'unauthorized';
 
 export interface ServiceError {
   code: ServiceErrorCode;
@@ -128,10 +130,23 @@ export interface CheckpointResolver {
   ref(doc: string, ref: CheckpointRef): Promise<JsonEnvelope | undefined>;
 }
 
+/**
+ * The caller's storage, seen from the service: the inputs of `open` for a state it names, or
+ * undefined when the caller has no such state (any more). It throws when storage cannot be reached.
+ */
+export interface StateLoader {
+  load(stateId: string): Promise<OpenRequest | undefined>;
+}
+
 export interface ServiceOptions {
   /** How many loaded documents the service keeps; the least recently used one goes first. */
   capacity?: number;
   resolver?: CheckpointResolver;
+  /**
+   * Where a state the service does not hold is rebuilt from (05 §10: the service "can rebuild any
+   * of them from storage"). Without it a call for such a state answers `unknown_state`.
+   */
+  loader?: StateLoader;
   /**
    * Whether `migrate` runs. The operator turns it on (03 §11.3: a migration is gated by an operator
    * and never triggered by opening a document). Off by default.
@@ -216,6 +231,7 @@ export class AuthorityService {
   readonly #held = new Map<string, HeldState>();
   readonly #capacity: number;
   readonly #resolver: CheckpointResolver | undefined;
+  readonly #loader: StateLoader | undefined;
   readonly #schema = cdmSchema();
   readonly #allowMigrations: boolean;
   readonly #migrations: readonly Migration[];
@@ -225,6 +241,7 @@ export class AuthorityService {
     this.#capacity = options.capacity ?? DEFAULT_CAPACITY;
     if (!(this.#capacity >= 1)) throw new RangeError('the service must hold at least one state');
     this.#resolver = options.resolver;
+    this.#loader = options.loader;
     this.#allowMigrations = options.allowMigrations ?? false;
     this.#migrations = options.migrations ?? [];
     this.#definitions = new Map((options.definitions ?? [CDM1]).map((d) => [d.cdm, d]));
@@ -351,12 +368,9 @@ export class AuthorityService {
       return fail('invalid_request', 'stateId must be 64 lower-case hexadecimal digits');
     if (seq !== undefined && (typeof seq !== 'number' || !Number.isSafeInteger(seq)))
       return fail('invalid_request', 'seq must be an integer');
-    const state = this.#held.get(stateId);
-    if (!state)
-      return fail('unknown_state', 'the service does not hold this state; call open again', {
-        stateId,
-      });
-    this.#touch(state);
+    const found = await this.#state(stateId);
+    if (!found.ok) return found;
+    const state = found.state;
     const at = seq ?? state.head;
     if (at > state.head)
       return fail('not_found', `the state ends at ${state.head}, not ${at}`, { seq: at });
@@ -434,17 +448,12 @@ export class AuthorityService {
    * the fields of a state's head, for the roles given and, optionally, values that replace the
    * stored ones. It is the shared rules package on the head's content, nothing more.
    */
-  evaluateRules(
+  async evaluateRules(
     stateId: unknown,
     request: unknown = {},
-  ): Answer<{ evaluation: EvaluateRulesAnswer }> {
+  ): Promise<Answer<{ evaluation: EvaluateRulesAnswer }>> {
     if (typeof stateId !== 'string' || !HEX64.test(stateId))
       return fail('invalid_request', 'stateId must be 64 lower-case hexadecimal digits');
-    const state = this.#held.get(stateId);
-    if (!state)
-      return fail('unknown_state', 'the service does not hold this state; call open again', {
-        stateId,
-      });
     if (!isObject(request)) return fail('invalid_request', 'the request must be a JSON object');
     const roles = request['roles'] ?? [];
     if (!Array.isArray(roles) || roles.some((r) => typeof r !== 'string'))
@@ -465,7 +474,9 @@ export class AuthorityService {
     const budget = request['budget'];
     if (budget !== undefined && !(typeof budget === 'number' && Number.isSafeInteger(budget)))
       return fail('invalid_request', 'budget must be an integer');
-    this.#touch(state);
+    const found = await this.#state(stateId);
+    if (!found.ok) return found;
+    const state = found.state;
     const envelope: JsonEnvelope = {
       cdm: state.cdm,
       requires: state.requires.get(state.head) ?? [],
@@ -584,6 +595,40 @@ export class AuthorityService {
       return fail('invalid_request', `commit ${meta.seq} has an unknown kind`, { seq: meta.seq });
     const commit: StoredCommit = { ...common, kind: meta.kind, steps: payload.steps };
     return { ok: true, value: { commit } };
+  }
+
+  /**
+   * A state by its identifier: from memory, or rebuilt from the caller's storage when the service
+   * does not hold it (an evicted state, a restart, another replica). Without a loader the answer
+   * is `unknown_state` and the caller calls `open`.
+   */
+  async #state(stateId: string): Promise<Answer<{ state: HeldState }>> {
+    const held = this.#held.get(stateId);
+    if (held) {
+      this.#touch(held);
+      return { ok: true, state: held };
+    }
+    const miss = () =>
+      fail('unknown_state', 'the service does not hold this state; call open again', { stateId });
+    if (!this.#loader) return miss();
+    let request: OpenRequest | undefined;
+    try {
+      request = await this.#loader.load(stateId);
+    } catch (e) {
+      return fail('storage_unavailable', `the state could not be read from storage: ${String(e)}`, {
+        stateId,
+      });
+    }
+    if (!request) return miss();
+    if (request.stateId !== stateId)
+      return fail('state_mismatch', 'storage returned another state than the one asked for', {
+        asked: stateId,
+        got: request.stateId,
+      });
+    const opened = await this.open(request);
+    if (!opened.ok) return opened;
+    const state = this.#held.get(stateId);
+    return state ? { ok: true, state } : miss();
   }
 
   #hold(state: HeldState): void {

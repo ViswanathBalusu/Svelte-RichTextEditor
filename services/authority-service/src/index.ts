@@ -14,6 +14,7 @@ export {
   type ServiceError,
   type ServiceErrorCode,
   type ServiceOptions,
+  type StateLoader,
   type WireCommit,
   type WirePayload,
 } from './service.ts';
@@ -37,3 +38,5 @@ export {
   type Routes,
   type ServerOptions,
 } from './http.ts';
+export { configFromEnv, type AuthorityConfig } from './config.ts';
+export { httpStateLoader, type HttpLoaderOptions } from './storage.ts';

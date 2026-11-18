@@ -242,7 +242,7 @@ describe('evaluateRules (PRO-107 criterion 3)', () => {
         roles: c.given?.roles ?? [],
         ...(c.given?.now ? { now: c.given.now } : {}),
       };
-      const answer = service.evaluateRules(stateId, context);
+      const answer = await service.evaluateRules(stateId, context);
       expect(answer.ok, c.id).toBe(true);
       if (!answer.ok) continue;
       // The package on the same document, called directly.
@@ -280,7 +280,7 @@ describe('evaluateRules (PRO-107 criterion 3)', () => {
         atOpen++;
         continue;
       }
-      const answer = service.evaluateRules(stateId, { roles: c.given?.roles ?? [] });
+      const answer = await service.evaluateRules(stateId, { roles: c.given?.roles ?? [] });
       expect(answer, c.id).toMatchObject({ ok: false, error: { code: 'invalid_rules' } });
       atEvaluate++;
     }
@@ -293,14 +293,14 @@ describe('evaluateRules (PRO-107 criterion 3)', () => {
     const service = new AuthorityService();
     const env = documentOf(c);
     const { stateId } = await openDocument(service, env);
-    const stored = service.evaluateRules(stateId, {});
+    const stored = await service.evaluateRules(stateId, {});
     expect(
       stored.ok && stored.evaluation.fields.find((f) => f.key === 'tenant.spouseName'),
     ).toMatchObject({
       visible: true,
       required: true,
     });
-    const typed = service.evaluateRules(stateId, {
+    const typed = await service.evaluateRules(stateId, {
       values: { 'tenant.maritalStatus': 'single' },
       keys: ['tenant.spouseName'],
     });
@@ -319,7 +319,7 @@ describe('evaluateRules (PRO-107 criterion 3)', () => {
 
   it('refuses an unknown state and a malformed request', async () => {
     const service = new AuthorityService();
-    expect(service.evaluateRules('0'.repeat(64), {})).toMatchObject({
+    expect(await service.evaluateRules('0'.repeat(64), {})).toMatchObject({
       ok: false,
       error: { code: 'unknown_state' },
     });
@@ -332,13 +332,13 @@ describe('evaluateRules (PRO-107 criterion 3)', () => {
       { now: 3 },
       { budget: 'x' },
     ]) {
-      expect(service.evaluateRules(stateId, bad), JSON.stringify(bad)).toMatchObject({
+      expect(await service.evaluateRules(stateId, bad), JSON.stringify(bad)).toMatchObject({
         ok: false,
         error: { code: 'invalid_request' },
       });
     }
-    expect(service.evaluateRules('nope', {})).toMatchObject({ ok: false });
-    expect(service.evaluateRules(stateId, { budget: 1 })).toMatchObject({
+    expect(await service.evaluateRules('nope', {})).toMatchObject({ ok: false });
+    expect(await service.evaluateRules(stateId, { budget: 1 })).toMatchObject({
       ok: false,
       error: { code: 'budget_exceeded' },
     });
