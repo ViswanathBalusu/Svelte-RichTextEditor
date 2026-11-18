@@ -112,6 +112,16 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/export-latex/src/exp-023-toc.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FE-138 closed (2026-11-18): the status bar and the keyboard in three browsers, the
+  // reflow under browser zoom, and the PDF panel's pages drawn again at each zoom.
+  [
+    'zoom',
+    [
+      { path: 'packages/ui/e2e/fe-138-zoom.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/v-fe-129-141-browser-zoom.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-138-pdf-zoom.spec.ts', kind: 'playwright' },
+    ],
+  ],
   // Shipped when FE-137 closed (2026-11-18). The panel is run in the three browsers by the element's
   // spec; the variants turned on by the page setup and the page fields are run through the core and
   // the layout in Node.js.
