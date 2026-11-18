@@ -79,6 +79,8 @@ export interface Settings {
   readonly workers: number;
   /** Longest a worker task may run; the worker is then replaced and the task fails. */
   readonly workerTimeoutMs: number;
+  /** Stored bytes from which a room's checkpoint is parsed in a worker (BE-019). */
+  readonly openInWorkerBytes: number;
   /** Outbox delivery (BE-039): poll interval, lock, batch size. */
   readonly outbox: { readonly pollMs: number; readonly leaseMs: number; readonly batch: number };
   /** How long a drain waits for writes in flight before it stops the rooms anyway (BE-022). */
@@ -184,6 +186,7 @@ export function settingsFrom(s: DataPlaneSettings = {}): Settings {
     },
     workers: s.workers ?? 1,
     workerTimeoutMs: s.workerTimeoutMs ?? 60_000,
+    openInWorkerBytes: s.openInWorkerBytes ?? 262_144,
     outbox: {
       pollMs: s.outbox?.pollMs ?? 1000,
       leaseMs: s.outbox?.leaseMs ?? 30_000,

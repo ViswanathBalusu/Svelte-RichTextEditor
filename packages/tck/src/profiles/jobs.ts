@@ -182,7 +182,8 @@ export const EXPORTS: ProfileDef = {
     }),
     ex({
       id: 'identifiers',
-      title: 'a job is refused to another user of the document and to a caller of another document',
+      title:
+        'a job is not found by another user of the document or by a caller of another document',
       spec: '05 §6.1; D69; review SR-C4',
       covers: {
         operations: ['GET /exports/{jid}', 'DELETE /exports/{jid}'],

@@ -207,7 +207,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const done = await until(h, viewer, job, ['completed']);
         // A viewer requester gets no raw log.
         expect(done.json.result.log).toBeUndefined();
-        // Another user whose token covers the document, even its owner, is refused.
+        // Another user whose token covers the document, even its owner, finds no such job (D69;
+        // owner decision 57).
         expect(
           (
             await h.call('GET', `/v1/exports/${job}`, {
@@ -222,7 +223,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             })
           ).json.code,
         ).toBe('not_found');
-        // A token for another document is refused (PRO-045 criterion 2).
+        // A token for another document finds no such job either (PRO-045 criterion 2).
         expect(
           (
             await h.call('GET', `/v1/exports/${job}`, {

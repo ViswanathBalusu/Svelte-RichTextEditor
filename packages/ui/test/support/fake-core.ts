@@ -972,7 +972,7 @@ export class FakeCore implements CoreApi {
 
   resolveSuggestions(
     action: 'accept' | 'reject',
-    target: 'selection' | 'document' = 'selection',
+    target: 'selection' | 'document' | { readonly id: string } = 'selection',
     author?: string,
     suggestion?: string,
   ): ReviewReport {
@@ -980,7 +980,8 @@ export class FakeCore implements CoreApi {
     return this.#resolve(
       action,
       (s) =>
-        (target === 'document' || (s.from >= from && s.to <= to)) &&
+        (target === 'document' ||
+          (typeof target === 'object' ? s.region === target.id : s.from >= from && s.to <= to)) &&
         (author === undefined || s.user === author) &&
         (suggestion === undefined || s.id === suggestion),
     );

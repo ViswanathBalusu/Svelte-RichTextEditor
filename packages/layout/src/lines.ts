@@ -59,6 +59,8 @@ export interface BreakOpportunities {
   opportunities(text: string, language?: string): readonly number[];
 }
 
+const TWIPS_PER_POINT = 20;
+
 export type LineSpacing =
   | { readonly rule: 'multiple'; readonly factor: number }
   | { readonly rule: 'exact' | 'atLeast'; readonly pt: number };
@@ -266,7 +268,10 @@ export function breakParagraph(
     }
     const natural = fonts.reduce((max, f) => Math.max(max, naturalHeight(f)), tallest);
     const spacing = input.line;
-    if (spacing.rule === 'multiple') return spacing.factor * natural;
+    // A `multiple` height is rounded half up to whole twips, as the model's `lineHeight` does
+    // (owner decision 78): 1.15 times 253 twips is 290.95, and the line is 291.
+    if (spacing.rule === 'multiple')
+      return Math.floor(spacing.factor * natural * TWIPS_PER_POINT + 0.5 + 1e-9) / TWIPS_PER_POINT;
     if (spacing.rule === 'exact') return spacing.pt;
     return Math.max(spacing.pt, natural);
   };

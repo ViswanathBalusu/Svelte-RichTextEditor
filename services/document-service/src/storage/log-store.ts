@@ -681,6 +681,22 @@ export class PgLogStore implements LogStore, OwnershipStore {
     );
   }
 
+  /** Attaches assets outside a commit; a row that exists is kept (HIS-022). */
+  async attachAssets(
+    ref: DocRef,
+    attachments: ReadonlyArray<{ asset: string; seq: number }>,
+  ): Promise<void> {
+    if (attachments.length === 0) return;
+    await this.#inTenant(ref, async (c) => {
+      await c.query(INSERT_DOC_ASSETS, [
+        ref.tenant,
+        ref.doc,
+        attachments.map((a) => a.asset),
+        attachments.map((a) => a.seq),
+      ]);
+    });
+  }
+
   /** The assets attached to the document and the seq that first referenced each (BE-044). */
   async attachedAssets(ref: DocRef): Promise<ReadonlyMap<string, number>> {
     return this.#inTenant(

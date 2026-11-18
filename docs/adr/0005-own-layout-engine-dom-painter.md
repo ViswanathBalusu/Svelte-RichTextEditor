@@ -1,6 +1,6 @@
 # ADR 0005: Own layout engine with a DOM painter, reached in two stages
 
-**Status:** proposed, 2026-09-18.
+**Status:** proposed, 2026-09-18. **Update, 2026-11-18 (SPK-013):** the owner chose the full editable page view on 2026-11-15 (decision 26 of [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)), so the gate described below is passed without the phase 2 customer evidence. The house class sets the page breaks and Word's are not reproduced for imported files (decision 29), which is the assumption of this record. The text engine is the Rust WebAssembly module of ADR 0016 (decision 27). No phase 3 story of FE or WASM is dropped.
 
 ## Context
 

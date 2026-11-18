@@ -317,6 +317,17 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     return clone(d.log.filter((c) => c.seq >= fromSeq && (toSeq === undefined || c.seq <= toSeq)));
   }
 
+  /** Attaches assets outside a commit; a row that exists is kept (HIS-022). */
+  async attachAssets(
+    ref: DocRef,
+    attachments: ReadonlyArray<{ asset: string; seq: number }>,
+  ): Promise<void> {
+    const d = this.#find(ref);
+    if (!d) return;
+    for (const a of attachments)
+      if (!(d.assets ??= new Map()).has(a.asset)) d.assets.set(a.asset, a.seq);
+  }
+
   /** The assets attached to the document and the seq that first referenced each (BE-044). */
   async attachedAssets(ref: DocRef): Promise<ReadonlyMap<string, number>> {
     return new Map(this.#find(ref)?.assets ?? []);

@@ -206,13 +206,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       },
     );
 
-    t()('the reader without access is refused the export job and its cancellation', async () => {
-      const read = await h.call('GET', `/v1/exports/${job}`, { token: frank });
-      expect(read.status).toBe(404);
-      const cancel = await h.call('DELETE', `/v1/exports/${job}`, { token: frank });
-      expect(cancel.status).toBe(404);
-      for (const c of CANARIES) expect(read.text + cancel.text).not.toContain(c);
-    });
+    t()(
+      'the reader without access is not shown the export job or its cancellation (not_found, owner decision 57)',
+      async () => {
+        const read = await h.call('GET', `/v1/exports/${job}`, { token: frank });
+        expect(read.status).toBe(404);
+        const cancel = await h.call('DELETE', `/v1/exports/${job}`, { token: frank });
+        expect(cancel.status).toBe(404);
+        for (const c of CANARIES) expect(read.text + cancel.text).not.toContain(c);
+      },
+    );
 
     t()(
       'the asset is not resolved for a reader without access to a region it is not attached to',

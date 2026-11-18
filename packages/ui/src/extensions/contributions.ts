@@ -36,6 +36,8 @@ export interface PanelContribution {
   readonly label: string;
   /** Loads the panel's component. Called on the first open only. */
   readonly load: () => Promise<PaneComponent>;
+  /** Further props for the component (UX-060: the function that mounts a sandboxed frame). */
+  readonly props?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -70,7 +72,12 @@ export function contributePanel(registry: PaneRegistry, panel: PanelContribution
     return pending;
   };
 
-  return registry.register({ id, label: panel.label.trim(), load: once });
+  return registry.register({
+    id,
+    label: panel.label.trim(),
+    load: once,
+    ...(panel.props ? { props: panel.props } : {}),
+  });
 }
 
 export type StatusPosition = 'start' | 'end';

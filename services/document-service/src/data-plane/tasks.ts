@@ -32,11 +32,29 @@ export interface Encoded {
   readonly bytes: number;
 }
 
+/**
+ * A checkpoint as plain data for a room to open from (BE-019 criterion 5; owner decision 72, ADR
+ * 0333): parsed and validated in a worker, then handed over as text that the main thread reads a
+ * slice at a time, so that it never holds the event loop for the whole document.
+ */
+export interface OpenedParts {
+  readonly cdm: number;
+  readonly requires: readonly string[];
+  /** The canonical size of `doc` before the children of the large containers were taken out. */
+  readonly bytes: number;
+  /** The document with the children of each large container of the root taken out. */
+  readonly doc: JsonNode;
+  /** For each such container: its index in the root and its children as UTF-8 JSON arrays. */
+  readonly split: ReadonlyArray<{ readonly at: number; readonly slices: readonly Uint8Array[] }>;
+}
+
 export interface TaskTypes {
   encode: { input: { envelope: JsonEnvelope }; output: Encoded };
   checkpoint: { input: ReplayInput; output: Encoded };
   materialise: { input: ReplayInput; output: { doc: JsonNode } };
   decode: { input: { encoded: Uint8Array }; output: { envelope: JsonEnvelope } };
+  /** Decodes, parses and checks a stored checkpoint; `slice` is the children per piece. */
+  open: { input: { encoded: Uint8Array; slice: number }; output: OpenedParts };
   /**
    * The words of a checkpoint's text and how often each occurs (BE-054 criterion 5): the indexer
    * job counts here, in a worker thread, so that no room's event loop does it.
@@ -88,6 +106,35 @@ export function decode(input: { encoded: Uint8Array }): { envelope: JsonEnvelope
   };
 }
 
+/**
+ * Parses the checkpoint as the room would (`nodeFromJSON`, then `check`, which throws on a document
+ * that breaks the schema), and cuts the root's large containers into slices of `slice` children.
+ */
+export function open(input: { encoded: Uint8Array; slice: number }): OpenedParts {
+  const env = decode({ encoded: input.encoded }).envelope as JsonEnvelope;
+  schema().nodeFromJSON(env.doc).check();
+  const root = env.doc as unknown as { content?: JsonNode[] };
+  const bytes = Buffer.byteLength(JSON.stringify(root), 'utf8');
+  const split: Array<{ at: number; slices: Uint8Array[] }> = [];
+  const content = root.content ?? [];
+  const kept = content.map((child, at) => {
+    const kids = (child as { content?: unknown[] }).content;
+    if (!kids || kids.length <= input.slice) return child;
+    const slices: Uint8Array[] = [];
+    for (let i = 0; i < kids.length; i += input.slice)
+      slices.push(new Uint8Array(Buffer.from(JSON.stringify(kids.slice(i, i + input.slice)))));
+    split.push({ at, slices });
+    return { ...child, content: [] } as JsonNode;
+  });
+  return {
+    cdm: env.cdm,
+    requires: [...env.requires],
+    bytes,
+    doc: { ...(root as object), content: kept } as unknown as JsonNode,
+    split,
+  };
+}
+
 export function checkpoint(input: ReplayInput): Encoded {
   return encode({
     envelope: {
@@ -117,6 +164,8 @@ export function runTask<K extends TaskName>(
       return materialise(input as ReplayInput) as TaskTypes[K]['output'];
     case 'decode':
       return decode(input as TaskTypes['decode']['input']) as TaskTypes[K]['output'];
+    case 'open':
+      return open(input as TaskTypes['open']['input']) as TaskTypes[K]['output'];
     case 'searchTokens':
       return {
         tokens: [...tokenCounts((input as TaskTypes['searchTokens']['input']).doc)],

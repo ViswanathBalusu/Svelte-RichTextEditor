@@ -111,7 +111,7 @@ The rules are in 09, sections 4, 6.3 and 9.3. In short: only machine-generated L
 
 ### 3.7 Data and tenancy
 
-- Row-level security and a tenant identifier on every table, object path and cache key; per-tenant encryption keys; optional dedicated deployments.
+- Row-level security and a tenant identifier on every table that holds tenant data (not `node_leases`: 06, section 4.1), and on every object path and cache key; per-tenant encryption keys; optional dedicated deployments.
 - Signed URLs are short-lived, scoped to one object, and issued only after a permission check.
 - Logs and metrics never contain document content or tokens. Support works from structural dumps without text (06, section 11).
 - Secrets are held in a secret manager and rotated. Webhook secrets and service credentials have overlap periods for rotation.
@@ -119,7 +119,7 @@ The rules are in 09, sections 4, 6.3 and 9.3. In short: only machine-generated L
 
 ### 3.8 Supply chain
 
-Lock files, dependency review, a software bill of materials per release, signed container images, pinned base images, and a pinned TeX Live with a licence manifest. The editor bundle loads no code at run time from third-party origins. Sandboxed third-party extensions (phase 4; ADR 0393) are an explicit exception with their own review (13, section 7.2).
+Lock files, dependency review, a software bill of materials per release, signed container images, pinned base images, and a pinned TeX Live with a licence manifest. The editor bundle loads no code at run time from third-party origins. Sandboxed third-party extensions (phase 4; ADR 0393) are an explicit exception with their own review (13, section 7.2). The terms of the exception, and the first review of the sandbox, are in `docs/review/2026-11-18-ux-060-sandbox-review.md`: the extension's code runs only in a sandboxed frame with an opaque origin and no network, the host chooses what is installed, and the code of an extension is not part of the release's bill of materials.
 
 ## 4. Privacy
 

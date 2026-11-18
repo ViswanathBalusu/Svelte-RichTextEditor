@@ -16,6 +16,17 @@ export interface PaneProps {
   core: CoreApi;
   /** Closes the pane; focus goes back where it was before the pane opened. */
   close: () => void;
+  /**
+   * A pane that holds a frame of another origin (an extension's sandboxed panel, UX-060) hands
+   * here a key the frame forwarded: Escape closes the pane and a landmark key moves to the next
+   * or previous landmark, as it would from any control of the shell.
+   */
+  frameKey?: (key: {
+    readonly key: string;
+    readonly ctrlKey: boolean;
+    readonly shiftKey: boolean;
+    readonly altKey: boolean;
+  }) => void;
 }
 
 export type PaneComponent = Component<PaneProps>;
@@ -36,6 +47,8 @@ export interface PaneDescriptor {
   readonly capability?: string;
   /** Whether the core offers what the pane shows. */
   readonly available?: (core: CoreApi) => boolean;
+  /** Further props the host gives the component beside `core` and `close` (UX-060). */
+  readonly props?: Readonly<Record<string, unknown>>;
 }
 
 const load = (m: Promise<{ default: unknown }>): Promise<PaneComponent> =>

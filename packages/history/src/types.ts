@@ -72,7 +72,13 @@ export interface HistoryGate {
 
 /** Why a history function refused: codes of the DEP registry (05 §5.8; spec/dep/dep-1.registry.json). */
 export type HistoryErrorCode =
-  'forbidden' | 'not_found' | 'validation_failed' | 'workflow_active' | 'conflict' | 'internal';
+  | 'forbidden'
+  | 'not_found'
+  | 'validation_failed'
+  | 'workflow_active'
+  | 'conflict'
+  | 'too_large'
+  | 'internal';
 
 export interface HistoryError {
   ok: false;

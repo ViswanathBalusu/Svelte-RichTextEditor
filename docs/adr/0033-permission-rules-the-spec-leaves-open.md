@@ -2,6 +2,8 @@
 
 **Status:** proposed, 2026-11-06. Written while building PRM-001, PRM-004, PRM-007, PRM-008, PRM-010 to PRM-012, PRM-034, PRM-056, PRM-063 to PRM-067 and FRW-007 to FRW-010, FRW-088 in `packages/authority`. Not reviewed by the project owner. Where a point is the owner's to decide, this record takes the specification's default and lists the question at the end.
 
+**Update, 2026-11-18 (lane w9):** owner decision 220 of 2026-11-15 ([owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)) accepts the proposed defaults of pending item 28, so item 3 (splits and merges, PRM-065) is accepted as written. The tests that follow it are `packages/authority/test/outcome.structure.test.ts` and the `perm-region.split-merge` and `perm-region.split-restricted` scenarios of the conformance kit (`packages/tck/src/profiles/perm-structure.ts`).
+
 ## Context
 
 07 and 12 state the permission rules, ADR 0009 made a region a container node, and ADR 0019 (proposed) adds read restrictions. Building the outcome check met points that the text leaves open, words for a design that changed, or states only in part. Each is recorded here with the reading the code follows, so that none is decided silently.

@@ -23,7 +23,7 @@ export interface LandmarkEntry<T> {
 }
 
 const FOCUSABLE =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
 
 function visible(el: Element): boolean {
   return !el.closest('[hidden]') && el.getClientRects().length > 0;
@@ -87,6 +87,39 @@ export function focusTarget(landmark: HTMLElement): HTMLElement {
   if (first) return first;
   if (!landmark.hasAttribute('tabindex')) landmark.tabIndex = -1;
   return landmark;
+}
+
+/** A key an extension's frame hands out (UX-060): the name and the three modifiers it reports. */
+export interface FrameKey {
+  readonly key: string;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}
+
+/**
+ * The landmark step a key forwarded out of a sandboxed frame stands for, by the same table the
+ * shell binds (`landmarkKeys`): 1 for the next landmark, -1 for the previous, null for any other
+ * key. A bare F6 is not in the table, so it moves nothing.
+ */
+export function landmarkStep(
+  key: FrameKey,
+  keys: { next: Set<string>; previous: Set<string> },
+  apple: boolean,
+): 1 | -1 | null {
+  const name = [
+    key.shiftKey ? 'Shift' : '',
+    key.ctrlKey ? 'Ctrl' : '',
+    key.altKey ? 'Alt' : '',
+    key.key,
+  ]
+    .filter(Boolean)
+    .join('-');
+  const canonical = canonicalKey(name, apple);
+  if (canonical === null) return null;
+  if (keys.next.has(canonical)) return 1;
+  if (keys.previous.has(canonical)) return -1;
+  return null;
 }
 
 /** The canonical keys that move forward and back, with the table's alternatives. */

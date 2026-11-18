@@ -31,6 +31,11 @@ export interface SuggestionItem extends SuggestionEntry {
   readonly caps: readonly string[];
   /** Whether the user may accept or reject it now: `edit` in its scope and the document not locked (P4). */
   readonly canResolve: boolean;
+  /**
+   * The identifier of the region the suggestion lies in, or null in the body (UX-036 criterion 2:
+   * accept all or reject all over a region, which `resolveSuggestions` takes by this identifier).
+   */
+  readonly region: string | null;
 }
 
 /** The longest excerpt kept: a suggestion's words, with an ellipsis when they are cut. */

@@ -973,6 +973,21 @@
   gap: var(--_de-space-2);
 }
 
+/* The frame of a sandboxed extension's panel (UX-060). */
+.de-sandbox-pane {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 16em;
+}
+
+.de-sandbox-pane iframe {
+  flex: 1 1 auto;
+  inline-size: 100%;
+  min-block-size: 16em;
+  border: 1px solid var(--_de-border);
+  background: var(--_de-surface);
+}
+
 .de-tree,
 .de-tree-group {
   margin: 0;
@@ -1524,6 +1539,11 @@
   color: var(--de-text, #111);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
   font: inherit;
+}
+.de-mini-toolbar[popover] {
+  inset: auto;
+  margin: 0;
+  overflow: visible;
 }
 .de-mini-toolbar-button {
   font: inherit;

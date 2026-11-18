@@ -1,8 +1,9 @@
-// BE-032 criterion 6 for the bare-identifier routes the control plane offers today: an export job
-// (`/exports/{jid}`) and an asset (`/assets/{aid}/complete`) are resolved to their document, and a
-// token that does not cover it, or a user other than the requester, is answered `not_found`, as a
-// missing identifier is (owner decision 57 of 2026-11-15; SEC-016 criterion 4).
-// Runs over the HTTP surface of the harness, in memory and on PostgreSQL where it is available.
+// BE-032 criterion 6 for the bare-identifier routes: an export job (`/exports/{jid}`), an import job
+// (`/imports/{jid}`) and an asset (`/assets/{aid}/complete`) are resolved to their document, and a
+// token that does not cover it, or a user other than the requester, gets `not_found`, so that the
+// identifier is not confirmed (owner decision 57; D69). Threads and comments answer the same
+// (`pro-059-threads.test.ts`). Runs over the HTTP surface of the harness, in memory and on
+// PostgreSQL where it is available.
 import { describe, expect, it } from 'vitest';
 import {
   skipReason,
@@ -10,6 +11,7 @@ import {
   type Harness,
   type Storage,
 } from '../../test/control-plane/support.ts';
+import { IMPORT_KIND } from '../../src/control-plane/imports.ts';
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9Qz wAAAgEBAGFFiq0AAAAASUVORK5CYII=',
@@ -47,6 +49,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           const del = await h.call('DELETE', `/v1/exports/${id}`, { token: stranger });
           expect(del.status).toBe(404);
           expect(del.json.code).toBe('not_found');
+          // The service credential of the tenant still reads it (D69).
+          expect((await h.call('GET', `/v1/exports/${id}`, { token: h.apiKey })).status).toBe(200);
         } finally {
           await h.close();
         }
@@ -69,6 +73,37 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           const read = await h.call('GET', `/v1/exports/${job.json.id}`, { token: other });
           expect(read.status).toBe(404);
           expect(read.json.code).toBe('not_found');
+        } finally {
+          await h.close();
+        }
+      },
+    );
+
+    it.skipIf(skip)(
+      'answers not_found for an import job to a token that does not cover its document, or to another author',
+      async () => {
+        await setup();
+        try {
+          const doc = await h.createDocument({});
+          const other = await h.createDocument({});
+          const job = await h.parts.queue.enqueue(h.tenant, {
+            kind: IMPORT_KIND,
+            doc,
+            createdBy: 'someone-else',
+            maxAttempts: 1,
+            payload: { doc },
+          });
+          const stranger = h.userToken({ [other]: 'editor' }, { sub: 'mallory' });
+          const away = await h.call('GET', `/v1/imports/${job.id}`, { token: stranger });
+          expect(away.status).toBe(404);
+          expect(away.json.code).toBe('not_found');
+          const peer = h.userToken({ [doc]: 'editor' }, { sub: 'eva' });
+          const same = await h.call('GET', `/v1/imports/${job.id}`, { token: peer });
+          expect(same.status).toBe(404);
+          expect(same.json.code).toBe('not_found');
+          expect((await h.call('GET', `/v1/imports/${job.id}`, { token: h.apiKey })).status).toBe(
+            200,
+          );
         } finally {
           await h.close();
         }
