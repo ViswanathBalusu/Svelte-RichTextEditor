@@ -20,8 +20,9 @@
  * raised only by the store step of the sealed PDF (FRW-054). The failure is recorded as
  * `workflow.finalisation_failed` by the export hooks (`exportHooks`, control-plane/exports.ts).
  */
-import { finalExportRequest } from '@docedit/authority';
-import { uuid7 } from '@docedit/model';
+import { finalExportRequest, type CertificateFacts } from '@docedit/authority';
+import { createHash } from 'node:crypto';
+import { canonicalize, uuid7 } from '@docedit/model';
 import type { ContentReader } from '../control-plane/content.ts';
 import { exportRequestKey, EXPORT_KIND, EXPORT_PRIORITIES } from '../control-plane/exports.ts';
 import type { ExportPolicy } from '../control-plane/exports.ts';
@@ -31,6 +32,8 @@ import { exportView, readerView, type Views } from '../control-plane/visibility.
 import { derivedCommitId } from '../data-plane/commit-id.ts';
 import type { AuditStore, DocRef, GrantStore, LogStore } from '../storage/types.ts';
 import type { VersionStorePort } from '../storage/versions-memory.ts';
+import { certificateFactsOf } from './certificate-facts.ts';
+import type { EvidenceLedger } from './evidence-ledger.ts';
 import type { WorkflowResourceView } from './workflow-resource.ts';
 
 export interface FinalExportDeps {
@@ -43,6 +46,8 @@ export interface FinalExportDeps {
   readonly targets: readonly string[];
   readonly versions?: Pick<VersionStorePort, 'create'> | undefined;
   readonly audit?: AuditStore | undefined;
+  /** The evidence the certificate prints; without it a certificate cannot be made. */
+  readonly evidence?: Pick<EvidenceLedger, 'list' | 'settings'> | undefined;
   readonly now: () => number;
   /** Called after a job is queued, so that an in-process runner starts at once. */
   readonly onQueued?: (() => void) | undefined;
@@ -113,6 +118,40 @@ export async function startFinalExport(
   if (request.seq > head.seq) return failed(`no content at seq ${request.seq}`);
   const owner = await senderOf(deps.audit, ref, req.fallbackActor);
 
+  // The certificate of completion (FRW-050): the facts it prints, from the evidence, checked and
+  // ordered by the authority. They go into the job as a member the control plane alone writes.
+  let certificate: CertificateFacts | null = null;
+  if (request.certificate) {
+    if (!deps.evidence) return failed('no evidence ledger for the certificate');
+    const exact = (deps.logs as { chainHeadAt?: (r: DocRef, n: number) => Promise<string | null> })
+      .chainHeadAt;
+    let chainHead = exact
+      ? await exact.call(deps.logs, ref, request.seq)
+      : head.seq === request.seq
+        ? ((await deps.logs.state?.(ref))?.chainHead ?? null)
+        : null;
+    // A document with no commit yet has no chain head: the hash of its canonical content stands
+    // for it, as at the send (docs/adr/0383-w4-FRW-027-send-route.md, point 3).
+    if (chainHead === null && request.seq === 0) {
+      const at = await deps.content.rebuild(ref, head.incarnation, 0);
+      chainHead = createHash('sha256')
+        .update(canonicalize({ cdm: at.cdm, requires: at.requires, doc: at.doc }))
+        .digest('hex');
+    }
+    if (chainHead === null) return failed('the log cannot name the chain head at completedSeq');
+    try {
+      certificate = certificateFactsOf({
+        workflow,
+        rows: await deps.evidence.list(ref.tenant, ref.doc),
+        completedSeq: request.seq,
+        chainHead,
+        captureSettings: await deps.evidence.settings?.(ref.tenant),
+      });
+    } catch (e) {
+      return failed(`the certificate facts are not valid: ${String(e)}`);
+    }
+  }
+
   // 08 §4: the document as it stood at completion. A second creation for the same seq and kind
   // returns the stored one.
   await deps.versions?.create(ref, {
@@ -151,6 +190,7 @@ export async function startFinalExport(
     classVersion: deps.policy.classVersion,
     // Marks the job as the final export of this workflow, for the hooks that record its outcome.
     finalisation: { workflow: workflow.id, certificate: request.certificate },
+    ...(certificate ? { certificate } : {}),
     ...exportView(view),
   };
   const id = derivedCommitId(

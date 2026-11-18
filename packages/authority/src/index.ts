@@ -561,3 +561,16 @@ export {
   type FinalExportVerdict,
   type FinalisationOptions,
 } from './workflow/final-export.ts';
+
+export {
+  buildCertificateFacts,
+  CERTIFICATE_EVENT_KINDS,
+  CERTIFICATE_STATEMENT,
+  type CertificateEventFact,
+  type CertificateEventInput,
+  type CertificateEventKind,
+  type CertificateFacts,
+  type CertificateInput,
+  type CertificateParticipantFact,
+  type CertificateParticipantInput,
+} from './workflow/certificate.ts';

@@ -81,6 +81,12 @@ export interface EvidenceLedger {
   record(tenant: string, event: EvidenceRecordEvent): Promise<RecordedEvidence>;
   /** The document's rows, oldest first. Empty after a purge. */
   list(tenant: string, doc: string): Promise<readonly StoredEvidence[]>;
+  /**
+   * The tenant's capture setting now (FRW-042). The certificate of completion reads it, so that a
+   * tenant that switched capture off gets no address or user agent on it, whatever rows stored
+   * before the change (FRW-050 criterion 5). Absent: the default, on.
+   */
+  settings?(tenant: string): Promise<CaptureSettings>;
 }
 
 /** The text a commitment covers: who, what and the evidence, in canonical form. */
@@ -224,6 +230,10 @@ export class MemoryEvidenceLedger implements EvidenceLedger {
       hash: made.hash,
     });
     return { id: made.id, evidence: made.evidence, hash: made.hash, commit: made.commit };
+  }
+
+  settings(tenant: string): Promise<CaptureSettings> {
+    return Promise.resolve(this.#settings(tenant));
   }
 
   list(tenant: string, doc: string): Promise<readonly StoredEvidence[]> {

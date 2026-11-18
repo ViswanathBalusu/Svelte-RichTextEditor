@@ -76,7 +76,12 @@ function validLocale(tag: string): boolean {
 export type PlanResult = { ok: true; plan: JobPlan } | { ok: false; diagnostics: Diagnostic[] };
 
 /** The plan for `options` (as the control plane passed them, unchanged) and the document's language. */
-export function planJob(options: unknown, documentLang: string | null): PlanResult {
+export function planJob(
+  options: unknown,
+  documentLang: string | null,
+  /** What the job's payload carries besides the options (written by the control plane only). */
+  carried: { certificateFacts?: boolean } = {},
+): PlanResult {
   const o = (
     options && typeof options === 'object' && !Array.isArray(options) ? options : {}
   ) as Record<string, unknown>;
@@ -127,9 +132,15 @@ export function planJob(options: unknown, documentLang: string | null): PlanResu
   )
     invalid('suggestions');
   const certificate = o['certificate'];
-  if (certificate === true)
-    unsupported('certificate', 'the certificate of completion comes with FRW-050');
-  else if (certificate !== undefined && certificate !== false) invalid('certificate');
+  // The certificate of completion (FRW-050) is printed from facts the control plane writes with the
+  // final export of a completed workflow, never from a client's options: without them it is refused.
+  if (certificate === true && carried.certificateFacts !== true)
+    unsupported(
+      'certificate',
+      'the certificate of completion needs the facts of a completed workflow',
+    );
+  else if (certificate !== undefined && certificate !== true && certificate !== false)
+    invalid('certificate');
 
   const locale =
     o['locale'] ?? (documentLang && validLocale(documentLang) ? documentLang : DEFAULT_LOCALE);

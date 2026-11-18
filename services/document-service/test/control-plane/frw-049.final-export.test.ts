@@ -178,6 +178,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       async () => {
         const { doc, ref, ownerActor, completedSeq } = await completed(true);
         const started = await audit(doc, 'workflow.finalisation_started');
+        expect(JSON.stringify(await audit(doc, 'workflow.finalisation_failed'))).toBe('[]');
         expect(started).toHaveLength(1);
         const jobId = started[0]!.data['job'] as string;
         const job = (await h.parts.queue.get(h.tenant, jobId))!;
@@ -190,6 +191,20 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           full: true,
           options: { fields: 'flatten', certificate: true },
         });
+        // The certificate facts (FRW-050): written by the service, from the evidence, at completedSeq.
+        const facts = job.payload['certificate'] as {
+          participants: Array<{ id: string; events: Array<{ kind: string }> }>;
+        };
+        expect(facts).toMatchObject({
+          documentId: doc,
+          completedSeq,
+          networkIdentityIncluded: true,
+        });
+        expect((facts as unknown as { chainHeadHash: string }).chainHeadHash).toMatch(
+          /^[0-9a-f]{64}$/,
+        );
+        expect(facts.participants[0]!.id).toBe('p1');
+        expect(facts.participants[0]!.events.map((e) => e.kind)).toContain('completed');
         expect((await h.parts.logs.head(ref)).seq).toBeGreaterThan(completedSeq);
         const finished = await settle(jobId);
         expect(finished.state).toBe('completed');
@@ -224,6 +239,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             seq: completedSeq,
             options: { fields: 'flatten', certificate: false },
           });
+          // No certificate: the job carries no facts for one.
+          expect(job.payload['certificate']).toBeUndefined();
           expect((await settle(job.id)).state).toBe('completed');
         }
       },
