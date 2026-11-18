@@ -266,6 +266,10 @@ These notes say where each framework sets the things above. They were not run in
 - **Vue.** Tell the compiler that `doc-editor` is a custom element (`compilerOptions.isCustomElement`), and set `config` with the `.prop` modifier or through a ref.
 - **SvelteKit.** The `kit.csp` option in `svelte.config.js` can generate a nonce per request. Read it from the page data and pass it into `config.styleNonce`. Check the generated policy against the list above.
 
+## Reference of the embedding contract (UX-090)
+
+The attributes, properties, methods, events, command identifiers and configuration keys of `<doc-editor>` are listed in `spec/embedding/embedding-reference.md` (and `embedding-reference.json`, for tools). It is generated from the element's source and the command registry by `pnpm generate`, never edited by hand, and a test fails when the committed copy is not the generator's output. Each release publishes it beside the release notes, with the embedding API version and the release it describes. The embedding API is at major 0 and is not frozen.
+
 ## Extensions (UX-050, UX-052; 13 section 7)
 
 You register an extension through the element's `extensions` property: an array of entries, each with a manifest and its code. The editor checks each manifest on its own. An invalid entry, an unsupported API version and an activation that throws are each reported as a `de-error` that names the entry, with `fatal` false, and the other entries still load.
