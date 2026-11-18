@@ -530,7 +530,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
   const logs = meteredLogs(parts.logs, meter);
   const objectCheckpoints = new ObjectCheckpointStore(parts.objects);
   const checkpoints = meteredCheckpoints(objectCheckpoints, meter, encodeCheckpoint);
-  const assets = new ObjectAssetStore(parts.objects);
+  const assets = new ObjectAssetStore(parts.objects, (tenant, bytes, kind) =>
+    meter.add(tenant, DRIVERS.storedBytes, bytes, { kind }),
+  );
   if (config.webhooks && opts.events)
     throw new Error(
       'config.webhooks and events are exclusive: the webhook dispatcher is the event sink',
