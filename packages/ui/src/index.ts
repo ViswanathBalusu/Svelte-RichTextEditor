@@ -215,6 +215,20 @@ export type {
   ExtensionDocumentApi,
 } from './extensions/document-api.ts';
 export {
+  createSandboxBridge,
+  parseAccess,
+  type SandboxAccess,
+  type SandboxBridge,
+  type SandboxLogEntry,
+  type SandboxWriteLevel,
+} from './extensions/sandbox-protocol.ts';
+export { mountSandboxFrame, type SandboxFrame } from './extensions/sandbox-frame.ts';
+export {
+  sandboxedExtension,
+  type SandboxedActivationApi,
+  type SandboxedExtensionOptions,
+} from './extensions/sandbox-extension.ts';
+export {
   FilterRegistrationError,
   FilterRegistry,
   NO_EXPORT,
