@@ -2937,7 +2937,7 @@ As a maintainer, I want to take the owner's decision on when a second server imp
 - [ ] Given the decision, when it is recorded, then the roadmap and PRO-129 are updated.
 - [ ] Given that no partner has asked by the review at the end of phase 4, when the roadmap is reviewed, then the decision is recorded as "not scheduled" and the freeze of 1.0 stays open.
 
-**Notes:** Condition: a partner wants to build one. Until then the freeze is not scheduled.
+**Notes:** Condition: a partner wants to build one. Until then the freeze is not scheduled. Lane w5 (2026-11-18): nothing can be ticked. The owner's answers of 2026-11-15 and 2026-11-17 do not list this decision, and no partner is named anywhere in the repository, so criterion 1 needs the owner's word (a partner, a target tier and a date) and criterion 2 follows it (PRO-129 and the roadmap change only after that decision). Criterion 3 is the review at the end of phase 4, which has not happened. The default of 05 §11 stands in the meantime: the second server is not scheduled and the freeze of 1.0 stays open. No decision record was written, because there is nothing yet to propose.
 
 ### PRO-129 Freeze protocol 1.0 after a second server passes `core`
 
