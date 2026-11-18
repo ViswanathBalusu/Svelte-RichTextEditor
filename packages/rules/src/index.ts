@@ -77,6 +77,9 @@ export {
 
 export { validateFields, type FieldReport } from './validate.ts';
 
+// The fields whose state a change of values can change (FRW-023 criterion 6).
+export { dependentKeys } from './dependents.ts';
+
 // The logic of the rule builder (FRW-024).
 export {
   BUILDER_OPERATORS,

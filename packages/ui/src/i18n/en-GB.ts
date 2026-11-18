@@ -324,6 +324,14 @@ export const EN_GB = {
     other:
       '{count} fields were changed by someone else, so your entries were not saved. The fields now show the current values. Your entries are kept in recovered edits.',
   },
+  // A fill the service refused because a rule of the document stopped it (12 §5.3; FRW-023): {rule}
+  // is the rule's own message, or its identifier when it has none. The field shows the confirmed
+  // document again, and the entry is kept in recovered edits.
+  'notice.rejected.rule': {
+    one: 'Your entry was not saved because a rule of this document stopped it: {rule} The field follows the document as it stands. Your entry is kept in recovered edits.',
+    other:
+      '{count} entries were not saved because a rule of this document stopped them, the first one: {rule} The fields follow the document as it stands. Your entries are kept in recovered edits.',
+  },
   'notice.rejected.field': {
     one: 'A field value could not be saved because it is not valid. It is kept in recovered edits.',
     other:

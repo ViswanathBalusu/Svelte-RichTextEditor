@@ -217,6 +217,8 @@ export interface RecoveredItem {
   readonly changedAt?: string | null;
   /** For a `conflict` that named fields: their identifiers, changed by someone else first (FRW-010). */
   readonly fields?: readonly string[];
+  /** For a rejection that named a rule of the document: the rule and its own words (FRW-023). */
+  readonly rule?: { readonly id: string; readonly message: string | null };
 }
 
 /** Work set aside so far; `de-recovered-edits` carries `count` (05 §8.1). */
