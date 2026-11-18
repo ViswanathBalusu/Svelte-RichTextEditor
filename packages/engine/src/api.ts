@@ -707,6 +707,16 @@ export interface ReplaceReport {
 }
 
 /**
+ * The `replaced` view (FE-060 criterion 3): a `ReplaceReport` with a counter `n`, so that the shell
+ * reports each Replace or Replace all once, even when two have the same counts. It names no scope
+ * and no text (ADR 0019).
+ */
+export interface ReplaceNotice extends ReplaceReport {
+  readonly n: number;
+  readonly all: boolean;
+}
+
+/**
  * The editing mode (the `mode` attribute, 02 §5.2; FE-029): `edit`, `review` (suggestion mode, FE-041),
  * `view` (no changes) and `fill` (the body is read-only; field values are FRW's, FRW-076, FRW-079).
  */
@@ -801,6 +811,8 @@ export interface DocumentApi {
   readonly suggestion: ReadView<SuggestionModeInfo>;
   /** The last deletion that kept protected content (FE-037): `n` counts them. */
   readonly trimmed: ReadView<TrimReport | null>;
+  /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3). */
+  readonly replaced: ReadView<ReplaceNotice | null>;
   readonly recovered: ReadView<RecoveredEdits>;
   readonly syncSummary: ReadView<SyncSummary>;
   /** The last problem the sync client reported, for `de-error`. */

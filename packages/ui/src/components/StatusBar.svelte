@@ -220,7 +220,7 @@
     {#key notice.serial}
       <span class="de-notice" data-status="notice" data-kind={notice.kind}>
         <span class="de-notice-mark" aria-hidden="true"></span>
-        <span class="de-notice-text">{tr.t(notice.key, { count: notice.count })}</span>
+        <span class="de-notice-text">{tr.t(notice.key, { count: notice.count, ...notice.params })}</span>
         {#if notice.action === 'showReferences' && core.runNamed && core.commandNames?.includes('showReferences')}
           <button
             type="button"

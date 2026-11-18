@@ -423,6 +423,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     refusal: core.refusal,
     recovered: core.recovered,
     trimmed: core.trimmed,
+    // The report of Replace and Replace all: how many matches changed and how many were skipped (FE-060).
+    replaced: core.replaced,
     // The sources pane (UX-103): the core's sources and the changes to them, as commits.
     sources: sourcesService(core),
     // The roles manager (FRW-074): the core's roles and the changes to them, as commits.
