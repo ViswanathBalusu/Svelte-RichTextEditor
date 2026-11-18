@@ -216,7 +216,7 @@ As a maintainer, I want the same kernel artefact to run in Node.js, so that layo
 - [ ] Golden outputs recorded in Node.js (advances, segmentation, line starts) are the reference for the cross-browser suite (WASM-011).
 - [ ] In Node.js the kernel loads the manifest's font files by path and hash.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold (SPK-013 is not held, see WASM-003). The story depends on WASM-006, which is blocked for the same reason, so there is no kernel artefact to run in Node.js. The S10 prototypes under `packages/perf/` are measurement code (see WASM-001), not the kernel this story loads, and their outputs are not the golden reference of WASM-011.
 
 ### WASM-011 Identical results in every browser
 
