@@ -36,12 +36,13 @@ The reasons for this shape are in [ADR 0008](../adr/0008-protocol-planes-and-enc
   "engines": ["pm-steps/1"],
   "cdm": { "min": 1, "max": 1 },
   "features": ["presence", "regions", "suggest-enforced", "history", "comments", "assets", "exports", "leases", "fields", "read-restrictions"],
+  "exportTargets": ["pdf", "tex"],
   "mode": "authority",
   "jwks_uri": "https://docs.example.com/.well-known/jwks.json"
 }
 ```
 
-`rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
+`rest` is the complete base URL. Resource paths in this document and in notifications are relative to it. `exportTargets` is optional and present when `exports` is announced: the export targets the deployment offers (`pdf`, `tex`, and others by name; ADR 0382, option 1, with the other proposed defaults accepted by the owner's decisions 116 to 220). A client offers these targets and no others, and a service refuses a target that is not in the list with `validation_failed`. When it is absent the deployment does not say, and a client offers the PDF and the LaTeX bundle. `mode` is `authority` or `relay` (04, section 14); a relay never announces `regions`, `suggest-enforced` or `fields`.
 
 `read-restrictions` says that the server hides content from readers by projection (ADR 0019, proposed): the view token of section 5.2, the empty `steps` of section 5.3 and the `access_changed` cause of `ch.closed` apply only to a server that announces it. The name is a proposal of the conformance kit (ADR 0042, item 4), not yet a decision of the owner. The CDM schema for projections, `spec/cdm/cdm-1.projection.json`, adds the `hidden_region` placeholder node, which stands where a reader may not see a region.
 

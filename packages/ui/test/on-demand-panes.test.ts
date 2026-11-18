@@ -50,9 +50,16 @@ describe('each pane loads on demand, as its own chunk (UX-070, criterion 1)', ()
     // The sandbox panel (UX-060) is a pane descriptor the host builds for each installed extension
     // (`props`, `load` from the installing host), so it has no entry of its own in the table. The
     // check below still refuses any static import of it.
+    // The table is `BUILT_IN_PANES`. The sandbox pane has a loader of its own below it, for the
+    // host to pass to `sandboxedExtension`; the loader is a lazy `import()`, never a static import.
+    const table = paneTable.slice(0, paneTable.indexOf('export const loadSandboxPane'));
+    expect(table).toContain('BUILT_IN_PANES');
+    expect(paneTable).toContain(
+      "export const loadSandboxPane: PaneLoader = () => load(import('../panes/SandboxPane.svelte'));",
+    );
     for (const file of EXTENSION_PANES) {
       expect(paneFiles).toContain(file);
-      expect(paneTable).not.toContain(`panes/${file}`);
+      expect(table).not.toContain(`panes/${file}`);
     }
   });
 

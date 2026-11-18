@@ -155,6 +155,8 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
       engines: ['pm-steps/1'],
       cdm: { min: 1, max: 1 },
       features: [...d.features],
+      // The targets a client may ask for, with the `exports` feature (05 §2; UX-101).
+      ...(d.features.includes('exports') ? { exportTargets: [...d.exportTargets] } : {}),
       mode: 'authority',
       jwks_uri: `${d.publicUrl}/.well-known/jwks.json`,
     });

@@ -339,6 +339,8 @@ export interface Discovery {
   engines: Array<"pm-steps/1" | (string & {})>;
   cdm: CdmRange;
   features: FeatureName[];
+  /** The export targets the deployment offers (`pdf`, `tex`, and others by name), present when the `exports` feature is announced. A client offers these and no other; a service refuses a target that is not in the list with `validation_failed`. Absent: the deployment does not say, and a client offers the PDF and the LaTeX bundle (UX-101; ADR 0382). */
+  exportTargets?: string[];
   /** A relay never announces `regions`, `suggest-enforced` or `fields` (04 §14). */
   mode: "authority" | "relay";
   /** The public keys of the tokens the service mints (`POST /tokens`), so that a host can check them. Never used to verify a host-signed token, whose keys come from the tenant registration (05 §3.1). */

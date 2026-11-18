@@ -1,6 +1,6 @@
 # 0382 UX-101: how a client learns the export targets
 
-**Status:** proposed (2026-11-17, lane w3). Needs the owner's word (it touches the protocol).
+**Status:** accepted, option 1 (2026-11-18). Proposed on 2026-11-17 by lane w3. The owner accepted the proposed defaults in bulk (decisions 116 to 220 of docs/owner-decisions-2026-11-15.md; this point is not in the file's list of points that are still open), so the recommended option stands. Built on 2026-11-18 (lane w3, round 2): the discovery document (05 §2) has an optional member `exportTargets`, present when `exports` is announced; the document service fills it from `DOCEDIT_EXPORT_TARGETS`; `backend-dep` reads it and the exports port answers `targets()`; the element's export service offers those targets (the PDF and the LaTeX bundle first, then the others in the order announced) and the fixed list when the deployment does not say. The member is in the discovery document and not in `welcome`, because discovery is what the client reads first and needs no session.
 
 ## Context
 

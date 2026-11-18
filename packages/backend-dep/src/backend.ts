@@ -367,6 +367,11 @@ export class DepBackend implements Backend {
     return this.negotiated;
   }
 
+  /** The `exportTargets` of the discovery document (05 §2; UX-101), or null before it is read or when absent. */
+  exportTargets(): readonly string[] | null {
+    return this.discovery?.exportTargets ?? null;
+  }
+
   /** Sets the negotiated features and the optional ports that depend on them. */
   private setFeatures(features: Iterable<string>): void {
     this.negotiated = new Set(features);

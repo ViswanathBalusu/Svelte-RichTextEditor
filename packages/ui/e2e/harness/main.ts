@@ -41,7 +41,7 @@ import { FilterRegistry } from '../../src/extensions/filters.ts';
 import type { DocumentChangedEvent, HookQueueStats } from '../../src/extensions/hooks.ts';
 import { StatusItemRegistry, contributePanel } from '../../src/extensions/contributions.ts';
 import { sandboxedExtension } from '../../src/extensions/sandbox-extension.ts';
-import { PaneRegistry, type PaneComponent } from '../../src/shell/panes.ts';
+import { PaneRegistry, loadSandboxPane, type PaneComponent } from '../../src/shell/panes.ts';
 
 /** The identifier of the extension panel the harness contributes (UX-052). */
 export const EXTENSION_PANE = 'ext-notes';
@@ -858,8 +858,7 @@ function mountShell(options: MountOptions = {}): void {
       panel: {
         registry: paneRegistry,
         id: SANDBOX_PANE,
-        load: async () =>
-          (await import('../../src/panes/SandboxPane.svelte')).default as unknown as PaneComponent,
+        load: loadSandboxPane,
       },
       suggesting: () => false,
       log: (entry) => void sandboxLog.push(entry),
