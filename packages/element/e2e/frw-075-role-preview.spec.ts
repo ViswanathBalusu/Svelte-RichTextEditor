@@ -56,7 +56,9 @@ const values = async (page: Page): Promise<Record<string, unknown>> =>
 /** The position of the caret in the editing surface, as the shell's selection summary reports it. */
 const caret = (page: Page): Promise<string> =>
   page.evaluate((sel) => {
-    const root = document.querySelector(sel)!.shadowRoot!;
+    const root = document.querySelector(sel)!.shadowRoot! as ShadowRoot & {
+      getSelection?: () => Selection | null;
+    };
     const s = root.getSelection?.() ?? document.getSelection();
     return `${s?.anchorNode?.textContent ?? ''}|${s?.anchorOffset ?? -1}`;
   }, EDITOR);
