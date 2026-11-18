@@ -165,6 +165,18 @@ export const EN_GB = {
   'announce.access.lost': 'You can no longer change this part of the document.',
   'announce.access.gained': 'You can now change this part of the document.',
 
+  // The element's live region (FE-107; 02 §10): the save state, collaborators and the two notices
+  // the element can be given. Names are resolved by the host (UX-025); no sentence quotes content.
+  'announce.sync.saving': 'Saving changes.',
+  'announce.sync.saved': 'All changes saved.',
+  'announce.sync.unsaved': 'Changes are not saved yet.',
+  'announce.sync.readonly': 'This document is read-only.',
+  'announce.edit.rejected': 'An edit was not applied at {where}. {reason}',
+  'announce.presence.arrived': '{name} joined the document.',
+  'announce.presence.left': '{name} left the document.',
+  'announce.presence.unknown': 'A collaborator',
+  'announce.recovered.count': 'Edits set aside for recovery: {count}.',
+
   // Changes that did not happen (11 §3; 07 §7, §9; FE-036). Plain words; never the content (ADR 0019).
   'notice.label': 'Change not made',
   'notice.dismiss': 'Dismiss',
@@ -188,6 +200,14 @@ export const EN_GB = {
   'notice.refused.other': 'That change was not made.',
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',
+  // A deletion refused because a cross-reference still names its target (I4; FE-133). The count is
+  // the number of references; the sentence names neither the target nor the references.
+  'notice.refused.referenced': {
+    one: 'That change was not made: a cross-reference still points to what you tried to delete.',
+    other:
+      'That change was not made: {count} cross-references still point to what you tried to delete.',
+  },
+  'notice.action.showReferences': 'Show references',
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {

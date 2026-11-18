@@ -2,9 +2,9 @@
  * The live region of the announcements (FE-107; 02 §10), in a real browser with the embed page and
  * its in-memory backend (as element.spec.ts uses them).
  *
- * Checked here: the region is in the element's shadow root, polite and atomic; typing makes the save
- * state change, and each change reaches the region once (criterion 1); a burst of notices given in
- * one task reaches the region in full and in order, one sentence after another (criterion 5).
+ * Checked here: the region is in the element's shadow root, polite and atomic; a burst of notices
+ * given in one task reaches the region in full and in order, one sentence after another
+ * (criterion 5).
  */
 import { expect, test, type Page } from '@playwright/test';
 import { mountEditor, openEmbed } from './embed-helpers.ts';
@@ -59,22 +59,8 @@ test.describe('FE-107 announcements in a live region of the shadow root', () => 
     expect(region).toEqual({ inRoot: true, role: 'status', live: 'polite', atomic: 'true' });
   });
 
-  test('typing changes the save state, and the change reaches the region', async ({ page }) => {
-    await openEmbed(page);
-    await mountEditor(page, { name: 'one', sub: 'ada' });
-    await record(page);
-    await page.locator(`${editor} .de-editing-surface p`, { hasText: 'Last paragraph.' }).click();
-    await page.keyboard.press('End');
-    await page.keyboard.type(' Typed');
-    await expect.poll(() => said(page)).toContain('All changes saved.');
-    const sentences = await said(page);
-    expect(sentences).toContain('Saving changes.');
-    expect(sentences.indexOf('Saving changes.')).toBeLessThan(
-      sentences.lastIndexOf('All changes saved.'),
-    );
-    // Each sentence follows a change: the same save state is never announced twice in a row.
-    for (let i = 1; i < sentences.length; i++) expect(sentences[i]).not.toBe(sentences[i - 1]);
-  });
+  // The save state reaching the region (criterion 1) and typing saying nothing (criterion 7) are
+  // in fe-107-live-regions.spec.ts: a save state is announced only once it has held (ADR 0376).
 
   test('a burst of notices in one task reaches the region in full and in order', async ({
     page,
@@ -86,22 +72,23 @@ test.describe('FE-107 announcements in a live region of the shadow root', () => 
       const e = (window as unknown as { __embed: EmbedHooks }).__embed;
       const announcer = e.internals(document.querySelector(sel)!).announcer!;
       return [
-        announcer.notify({ kind: 'sync', sync: 'unsaved' }),
         announcer.notify({ kind: 'rejected', where: 'the body', reason: 'Read-only.' }),
         announcer.notify({ kind: 'recovered', count: 2 }),
-        announcer.notify({ kind: 'sync', sync: 'saving' }),
         announcer.notify({ kind: 'presence', change: 'arrived', userId: 'nobody' }),
-        announcer.notify({ kind: 'sync', sync: 'saved' }),
+        announcer.notify({ kind: 'rejected', where: 'a table', reason: 'Too large.' }),
+        announcer.notify({ kind: 'recovered', count: 1 }),
+        // A save state is said once it has held, so it comes after the notices of the burst.
+        announcer.notify({ kind: 'sync', sync: 'unsaved' }),
       ];
     }, editor);
     expect(accepted).toEqual([true, true, true, true, true, true]);
     const expected = [
-      'Changes are not saved yet.',
       'An edit was not applied at the body. Read-only.',
       'Edits set aside for recovery: 2.',
-      'Saving changes.',
       'A collaborator joined the document.',
-      'All changes saved.',
+      'An edit was not applied at a table. Too large.',
+      'Edits set aside for recovery: 1.',
+      'Changes are not saved yet.',
     ];
     await expect.poll(() => said(page)).toEqual(expected);
   });

@@ -134,7 +134,7 @@ import {
 import { type InsertFieldOptions, insertField, insertSymbol, insertToc } from './fields-toc.ts';
 import { formFieldCount } from './frw-072-form-fields.ts';
 import { insertCaption, insertReference } from './captions-refs.ts';
-import { referenceGuardPlugin } from './referenced-targets.ts';
+import { referenceGuardPlugin, referencePositions } from './referenced-targets.ts';
 import {
   EQUATION_NODES,
   LATEX_MAX_CODE_POINTS,
@@ -769,6 +769,9 @@ export class DocumentCore implements DocumentApi {
   #readOnly = false;
   #readOnlyRev = -1;
   #refusals = 0;
+  /** The targets of the last deletion refused because a reference names them (FE-133). */
+  #referencedTargets: string[] = [];
+  #referenceCursor = 0;
   #trims = 0;
   #target: { kind: 'footnote' | 'story'; id: string } | null = null;
   readonly #bridges = new Set<ViewBridge>();
@@ -893,7 +896,7 @@ export class DocumentCore implements DocumentApi {
         },
         withParagraphsAfterRegions,
       ),
-      referenceGuardPlugin(),
+      referenceGuardPlugin((targets) => this.#referenceRefused(targets)),
       identifierPlugin(ids),
       trimPlugin((scope) => canWrite(this.#accessValue, this.#locked(), scope)),
       regionParagraphs(),
@@ -1437,6 +1440,44 @@ export class DocumentCore implements DocumentApi {
       scopes: [...r.scopes],
       ...(r.count === undefined ? {} : { count: r.count }),
     });
+  }
+
+  /**
+   * A deletion was refused because a cross-reference still names its target (I4; FE-133 criterion
+   * 5). The targets are kept for `showReferences`; the notice carries only the count of references.
+   */
+  #referenceRefused(targets: readonly string[]): void {
+    this.#referencedTargets = [...targets];
+    this.#referenceCursor = 0;
+    this.#refused({
+      reason: 'referenced',
+      scopes: [],
+      count: referencePositions(this.#state.doc, targets).length,
+    });
+  }
+
+  /**
+   * Moves the selection to a reference that blocked the last refused deletion, the next one at each
+   * call and the first again after the last (FE-133 criterion 5). References the reader may not
+   * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
+   * no reference is left to show.
+   */
+  showReferences(): boolean {
+    if (this.#referencedTargets.length === 0) return false;
+    const doc = this.#state.doc;
+    const shown = referencePositions(doc, this.#referencedTargets).filter((pos) =>
+      this.#canView(this.#scopeIn(doc, pos)),
+    );
+    if (shown.length === 0) return false;
+    const pos = shown[this.#referenceCursor % shown.length]!;
+    this.#referenceCursor = (this.#referenceCursor + 1) % shown.length;
+    const node = doc.nodeAt(pos)!;
+    const selection = NodeSelection.isSelectable(node)
+      ? NodeSelection.create(doc, pos)
+      : TextSelection.near(doc.resolve(pos));
+    this.focus();
+    this.dispatchTransaction(this.#state.tr.setSelection(selection).scrollIntoView());
+    return true;
   }
 
   setAccess(access: Access | null): void {

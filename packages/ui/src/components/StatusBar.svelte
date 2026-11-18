@@ -221,6 +221,15 @@
       <span class="de-notice" data-status="notice" data-kind={notice.kind}>
         <span class="de-notice-mark" aria-hidden="true"></span>
         <span class="de-notice-text">{tr.t(notice.key, { count: notice.count })}</span>
+        {#if notice.action === 'showReferences' && core.runNamed && core.commandNames?.includes('showReferences')}
+          <button
+            type="button"
+            class="de-notice-dismiss"
+            data-notice-action="showReferences"
+            onclick={() => core.runNamed?.('showReferences')}
+            >{tr.t('notice.action.showReferences')}</button
+          >
+        {/if}
         <button type="button" class="de-notice-dismiss" onclick={() => onDismiss?.()}
           >{tr.t('notice.dismiss')}</button
         >
