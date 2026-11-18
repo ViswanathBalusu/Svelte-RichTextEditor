@@ -115,6 +115,12 @@ export interface SourceMap {
   derived: Record<string, DerivedSource>;
   containers: Record<string, ContainerSource>;
   suggestions: Record<string, SuggestionSource>;
+  /**
+   * Identity-bound attributes taken out of the residue of run properties (EXP-116 criterion 3),
+   * by the canonical text of the residue that stays in the `preserved` mark. A run has no node of
+   * its own, so the residue is the key; runs with the same residue share one entry.
+   */
+  runIdentity?: Record<string, IdentityEntry[]>;
   /** CDM style id to Word style id. */
   styles: Record<string, string>;
   /** Story id to its part and the main part's relationship id for it. */
