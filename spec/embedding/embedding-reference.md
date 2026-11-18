@@ -137,6 +137,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `view.permissions` | review | regions-and-permissions |  |  |
 | `view.recovered` | view | recovery-journal |  |  |
 | `view.roles` | view | fields-and-forms |  |  |
+| `view.rules` | view | fields-and-forms |  |  |
 | `view.shortcuts` | view | keyboard-shortcuts |  |  |
 | `view.sources` | view | citations |  |  |
 | `view.styles` | view | styles |  |  |

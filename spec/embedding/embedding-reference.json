@@ -758,6 +758,13 @@
       "aliases": []
     },
     {
+      "id": "view.rules",
+      "group": "view",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
       "id": "view.shortcuts",
       "group": "view",
       "capability": "keyboard-shortcuts",
