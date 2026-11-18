@@ -49,7 +49,7 @@ async function draw(
     if (at < 0) throw new Error('no body text found');
     view.dispatch(view.state.tr.insert(at, node));
     await new Promise((r) => setTimeout(r, 50));
-    const imgs = Array.from(view.dom.querySelectorAll('.de-image img'));
+    const imgs = Array.from(view.dom.querySelectorAll<HTMLImageElement>('.de-image img'));
     const placeholders = Array.from(view.dom.querySelectorAll<HTMLElement>('.de-image'));
     // Elements of a kind that never belong in a document surface.
     const extra = view.dom.querySelectorAll('svg, script, iframe, object, embed').length;

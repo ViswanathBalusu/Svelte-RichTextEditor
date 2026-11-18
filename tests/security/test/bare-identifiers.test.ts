@@ -45,6 +45,9 @@ const CATALOGUE: Record<string, 'probed' | 'not-served'> = {
   'GET /exports/{jid}': 'probed',
   'DELETE /exports/{jid}': 'probed',
   'POST /assets/{aid}/complete': 'probed',
+  // The tenant registry (UX-077): a key and an origin belong to a tenant, not to a document.
+  'DELETE /keys/{kid}': 'probed',
+  'DELETE /origins/{origin}': 'probed',
   'GET /imports/{jid}': 'not-served',
   'GET /threads/{tid}': 'not-served',
   'PATCH /threads/{tid}': 'not-served',
@@ -177,6 +180,41 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const stillThere = await h.call('GET', `/v1/exports/${jidBB}`, { token: h.b.apiKey });
         expect(stillThere.status).toBe(200);
         expect(stillThere.json?.state).not.toBe('cancelled');
+      },
+    );
+
+    t()(
+      "a credential of tenant A cannot remove tenant B's key or origin, and a document token cannot remove its own tenant's",
+      async () => {
+        const kidB = `host-${h.b.id}`;
+        const originB = encodeURIComponent(h.b.origin);
+        const own = await h.call('GET', '/v1/keys', { token: h.b.apiKey });
+        expect(own.status).toBe(200);
+        expect(JSON.stringify(own.json)).toContain(kidB);
+
+        const key = await h.call('DELETE', `/v1/keys/${kidB}`, { token: h.a.apiKey });
+        expect([403, 404]).toContain(key.status);
+        const origin = await h.call('DELETE', `/v1/origins/${originB}`, { token: h.a.apiKey });
+        expect([403, 404]).toContain(origin.status);
+
+        // A user token for one document is not a service credential: it removes nothing of tenant A.
+        const kidA = `host-${h.a.id}`;
+        const asUser = await h.call('DELETE', `/v1/keys/${kidA}`, { token: tokenA });
+        expect(asUser.status).toBe(403);
+        const asUserOrigin = await h.call(
+          'DELETE',
+          `/v1/origins/${encodeURIComponent(h.a.origin)}`,
+          { token: tokenA },
+        );
+        expect(asUserOrigin.status).toBe(403);
+
+        // Nothing landed: tenant B still has its key and its origin, tenant A its own.
+        const after = await h.call('GET', '/v1/keys', { token: h.b.apiKey });
+        expect(JSON.stringify(after.json)).toContain(kidB);
+        const originsB = await h.call('GET', '/v1/origins', { token: h.b.apiKey });
+        expect(JSON.stringify(originsB.json)).toContain(h.b.origin);
+        const keysA = await h.call('GET', '/v1/keys', { token: h.a.apiKey });
+        expect(JSON.stringify(keysA.json)).toContain(kidA);
       },
     );
 

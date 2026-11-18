@@ -1645,7 +1645,7 @@ export interface Operations {
     method: "GET";
     path: "/documents/{id}/attribution";
     params: { id: string };
-    query: { region?: string; seq?: number; blocks?: string };
+    query: { region?: string; atSeq?: number; blocks?: string };
     body: never;
     response: Attribution;
   };
@@ -1888,7 +1888,7 @@ export interface Operations {
     method: "GET";
     path: "/audit";
     params: Record<string, never>;
-    query: { cursor?: string; limit?: number };
+    query: { document?: string; actor?: string; kind?: string; from?: string; to?: string; cursor?: string; limit?: number };
     body: never;
     response: List<AuditEntry>;
   };

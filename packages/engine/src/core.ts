@@ -426,6 +426,7 @@ const QUERY_NAMES: readonly CoreQueryName[] = [
   'hasHeader',
   'canInsertField',
   'canMarkRegion',
+  'hasNextEditableRegion',
 ];
 
 /**
@@ -852,8 +853,8 @@ export class DocumentCore implements DocumentApi {
     this.features = new ReadValue<readonly string[]>([], sameJson, hub);
     this.counts = new ReadValue<ShellCounts>({}, sameJson, hub);
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
-    this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
     this.proofing = new ReadValue<ProofingInfo>(NO_PROOFING, sameJson, hub);
+    this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
     this.findState = new ReadValue<FindState>(
       { query: '', count: 0, current: null },
       sameJson,
@@ -1348,6 +1349,9 @@ export class DocumentCore implements DocumentApi {
         return this.queryCommand('insertField', { field: { kind: 'text' } }).enabled;
       case 'canMarkRegion':
         return this.queryCommand('markRegion', { title: REGION_QUERY_TITLE }).enabled;
+      case 'hasNextEditableRegion':
+        // The command only moves the caret; asked without dispatch it answers whether a region exists (PRM-027).
+        return this.queryCommand('nextEditableRegion').enabled;
       default:
         return undefined;
     }

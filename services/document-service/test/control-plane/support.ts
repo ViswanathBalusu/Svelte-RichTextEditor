@@ -156,6 +156,8 @@ export async function startHarness(
   opts: {
     config?: Partial<ServiceConfig>;
     jobHandlers?: Readonly<Record<string, JobHandler>>;
+    /** The Word importer of EXP-098; with it the node runs import jobs. */
+    importer?: StartOptions['importer'];
     parts?: Partial<ServiceParts>;
     allowWorkerCrash?: boolean;
     views?: Views;
@@ -210,6 +212,7 @@ export async function startHarness(
             },
           }),
       ...(opts.jobHandlers ? { jobHandlers: opts.jobHandlers } : {}),
+      ...(opts.importer ? { importer: opts.importer } : {}),
       ...(opts.allowWorkerCrash ? { allowWorkerCrash: true } : {}),
       ...(opts.views ? { views: opts.views } : {}),
       ...(opts.assetWorker !== undefined ? { assetWorker: opts.assetWorker } : {}),
