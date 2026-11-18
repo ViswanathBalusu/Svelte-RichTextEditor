@@ -626,8 +626,14 @@ export const REST_SHAPES: readonly NamedShape[] = [
         fields: opt(enm(['flatten', 'blank']), 'Default `flatten`.'),
         tagging: opt(enm(['on', 'draft', 'off'])),
         pdfStandard: opt(str({ known: ['ua-2', 'a-4'] })),
-        locale: opt(str({ format: 'language' })),
-        timeZone: opt(text()),
+        locale: opt(
+          str({ format: 'language' }),
+          "Default: the document's language (`settings.lang`), else `en-GB`. The job records the value it used.",
+        ),
+        timeZone: opt(
+          text(),
+          'An IANA zone name. Default `UTC`. The job records the value it used.',
+        ),
         certificate: opt(bool(), 'Append the certificate of completion (12).'),
       },
       { doc: 'Export options (09 §9.1).', spec: '09 §9.1' },

@@ -107,6 +107,8 @@ export const BUILT_IN_ICONS: Readonly<Record<string, IconDrawing>> = {
   insert: { paths: ['M12 5v14', 'M5 12h14'] },
   discard: { paths: ['M4 7h16', 'M9 7V4h6v3', 'M6 7l1 13h10l1-13'] },
   outline: { paths: ['M4 6h16', 'M8 12h12', 'M12 18h8'] },
+  // A four-pointed star: text an assistant wrote (HIS-017). Always beside words, never alone.
+  assistant: { paths: ['M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z'] },
 };
 
 export interface IconsOptions {

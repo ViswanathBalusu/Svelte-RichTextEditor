@@ -543,6 +543,14 @@ export class MockDocument implements ChannelHost {
     }));
   }
 
+  /**
+   * Replaces the leases in force (07 §10), as the lease routes of a service store them: a new
+   * permission revision, announced to the room. A break is a call with the lease left out.
+   */
+  setLeases(leases: PermissionState['leases']): void {
+    this.changePermissions((p) => ({ ...p, leases: leases.map((l) => ({ ...l })) }));
+  }
+
   setState(state: 'active' | 'locked' | 'archived'): void {
     this.state = state;
     for (const a of this.attached.values())

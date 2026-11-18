@@ -65,7 +65,7 @@ For an agent connection (05 section 3.2.1), the capabilities in every scope are 
 
 Then apply these limits, in order:
 
-1. If the document's state is `locked` or `archived`: `view` only, plus `comment` when `locked`, plus `fill` where an active workflow allows it.
+1. If the document's state is `locked` or `archived`: `view` only, plus `comment` when `locked`, plus `fill` where an active workflow allows it, plus `edit` in a region on which the connection holds a grant whose principal is `role:<id>` while the participant bound to that role is active in a workflow that is `sent` or `in_progress` and the document is `locked` (owner decision 132 of 2026-11-15; FRW-086, option a). No other grant keeps `edit` on a locked document, a grant to a role never conveys `structure` or `manage`, and the limits below (an approved region, a lease held by someone else) still apply. A paused participant (`correcting`), one who has completed, and a workflow that is `declined`, `voided` or `expired` hold no `edit`.
 2. If the region's state is `approved`: at most `view` and `comment`, for everyone including owners. An owner must change the state before editing.
 3. If another user holds a lease on the region: at most `view` and `comment`.
 
@@ -146,7 +146,7 @@ Old versions can contain text that was deleted before a person was given access.
 
 ## 10. Leases
 
-A lease gives one user exclusive editing of a region for a short time, for teams that want check-out behaviour. It is optional (feature `leases`). A lease has an identifier, a holder and an expiry (default five minutes); the holder extends it with a heartbeat, up to a maximum total of eight hours. It ends when released, when it expires, or when a user with `manage` breaks it. While a lease is held, other users' capabilities in the region are limited as in section 4. Leases are not locks in the document and are not needed for correctness.
+A lease gives one user exclusive editing of a region for a short time, for teams that want check-out behaviour. It is optional (feature `leases`). A lease has an identifier, a holder and an expiry (default five minutes); the holder extends it with a heartbeat, up to a maximum total of eight hours. It ends when released, when it expires, or when a user with `manage` breaks it. While a lease is held, other users' capabilities in the region are limited as in section 4. Leases are not locks in the document and are not needed for correctness. A lease changes nobody's grants, so a former holder's pending commit is checked as any commit is, under their grants once the lease has ended: it is accepted if the grants allow it and otherwise rejected with `permission_denied`, its content going to recovered edits (owner decision 135).
 
 ## 11. Region states
 
