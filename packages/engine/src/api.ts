@@ -482,8 +482,25 @@ export interface RecoveredItem {
   commit: string | null;
   /** Names the item for `insertRecovered` and `discardRecovered` (UX-017): the commit, else the `seq` and its place. */
   id?: string;
+  /**
+   * Why it was set aside, in three words (FE-010 criterion 6): `rejected` (the server refused the
+   * commit), `dropped` (a rebase removed it because another change took away what it applied to) or
+   * `unsent` (a reload, a reset or a stale commit left it unsent). It follows from `reason`.
+   */
+  kind?: 'rejected' | 'dropped' | 'unsent';
   /** The text it inserted. */
   text: string;
+  /**
+   * What it inserted, as a CDM fragment, or null when it inserted nothing (a deletion): the pane can
+   * show it and a host can read it (FE-010 criterion 6).
+   */
+  fragment?: CdmFragment | null;
+  /**
+   * The DEP scope it was meant for (`body`, `region:<id>`, `defs`, `story:<id>`), or null when
+   * unknown (an item written to the journal before this field existed). For a `permission_denied`
+   * rejection it is the scope the server named, as `scope` says.
+   */
+  region?: string | null;
   seq: number;
   /**
    * For a `permission_denied` rejection: the scope whose change was refused, as the shell names it

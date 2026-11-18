@@ -37,6 +37,7 @@ import type {
 } from '@docedit/protocol';
 import type { Node, Schema } from 'prosemirror-model';
 import { ReplaceAroundStep, ReplaceStep, Step } from 'prosemirror-transform';
+import { scopeOfPosition } from '../regions.ts';
 
 /** The commit in flight (04 §8: at most one). */
 export interface Inflight {
@@ -72,6 +73,12 @@ export interface Discarded {
    * fields that someone else changed first (FRW-010 criterion 5).
    */
   readonly fields?: readonly string[];
+  /**
+   * The DEP scope the first step was made in (`body`, `region:<id>`, `defs`, `story:<id>`): the place
+   * the work was meant for (FE-010 criterion 6). Absent when it could not be found, and for items
+   * written to a journal before this field existed.
+   */
+  readonly region?: string;
 }
 
 /**
@@ -339,9 +346,53 @@ function discard(
   why?: Pick<Discarded, 'scopes' | 'change' | 'fields'>,
 ): Discarded[] {
   if (steps.length === 0) return [];
+  const region = regionOfFirst(s, steps);
   return [
-    { reason, commit, steps: stepsToJson(steps), text: insertedText(steps), seq: s.seq, ...why },
+    {
+      reason,
+      commit,
+      steps: stepsToJson(steps),
+      text: insertedText(steps),
+      seq: s.seq,
+      ...(region === null ? {} : { region }),
+      ...why,
+    },
   ];
+}
+
+/**
+ * The scope the first of `steps` was made in: the unconfirmed steps are applied one by one to the
+ * confirmed document, so each step is looked up in the document it was made on. A step that is not
+ * among them (the sent steps of a commit with no visible work) is read on the confirmed document.
+ */
+function regionOfFirst(s: SyncState, steps: readonly Step[]): string | null {
+  const first = steps[0]!;
+  let doc = s.confirmed;
+  let at: Node | null = null;
+  for (const step of unconfirmed(s)) {
+    if (step === first) {
+      at = doc;
+      break;
+    }
+    try {
+      const result = step.apply(doc);
+      if (!result.doc) break;
+      doc = result.doc;
+    } catch {
+      break;
+    }
+  }
+  let from = -1;
+  first.getMap().forEach((oldStart) => {
+    if (from < 0) from = oldStart;
+  });
+  const base = at ?? s.confirmed;
+  if (from < 0 || from > base.content.size) return null;
+  try {
+    return scopeOfPosition(base, from);
+  } catch {
+    return null;
+  }
 }
 
 /**

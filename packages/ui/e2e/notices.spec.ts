@@ -82,4 +82,17 @@ test.describe('notices for changes that did not happen', () => {
     await h.refuse('placeholder');
     await expect(notice).toContainText('hidden from you cannot be changed, moved or copied');
   });
+
+  test('a change dropped by a rebase is told, and its words are not in the notice (FE-010)', async ({
+    page,
+  }) => {
+    const h = await open(page);
+    await h.setAside([{ reason: 'rebase', commit: null, text: 'typed words', seq: 5 }]);
+    const notice = page.locator('.de-status [data-status="notice"]');
+    await expect(notice).toContainText(
+      'A change could not be combined with other people’s changes. It is kept in recovered edits.',
+    );
+    await expect(page.locator('.de-shell > [role="status"]')).toHaveText(/could not be combined/);
+    await expect(notice).not.toContainText('typed words');
+  });
 });
