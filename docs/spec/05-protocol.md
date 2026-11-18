@@ -311,7 +311,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/comments/{cid}` | PATCH, DELETE | Author only, or `manage` |
 | `/documents/{id}/assets` | POST | Body: `filename`, `mime`, `size`. Returns an asset identifier and a size-bound pre-signed upload into a quarantine area |
 | `/assets/{aid}/complete` | POST | The asset worker validates, re-encodes, hashes and stores the asset, then raises `asset.ready` or `asset.failed` |
-| `/documents/{id}/assets/resolve` | POST | Body: asset identifiers used by the document. Returns short-lived signed URLs, because an `<img>` cannot send a bearer token |
+| `/documents/{id}/assets/resolve` | POST | Body: asset identifiers used by the document, and the caller's own ready uploads for it that no commit references yet (decision 198). Returns short-lived signed URLs, because an `<img>` cannot send a bearer token |
 | `/documents/{id}/exports` | POST | Body: `target` (`pdf`, `tex`, `docx`, `cdm`, `html`, `md`), optional `seq`, `options` (09, section 9.1). Returns `202` with a job. `pending_suggestions` when the document has unresolved suggestions and `options.suggestions` is absent. Refused for callers restricted with `no-export` |
 | `/exports/{jid}` | GET, DELETE | State (`queued`, `converting`, `compiling`, `completed`, `failed`, `cancelled`), progress, result, diagnostics |
 | `/documents/{id}/imports` | POST | Body: `asset`, `format` (`docx`). Returns a job with warnings on completion |

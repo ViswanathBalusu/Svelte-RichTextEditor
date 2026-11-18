@@ -1618,7 +1618,8 @@ export const OPERATIONS: readonly OperationDef[] = [
     spec: '05 §6.2',
     security: BOTH,
     feature: 'assets',
-    requires: 'view on a document the asset is attached to',
+    requires:
+      "view on a document the asset is attached to; the uploader's own ready upload before a commit references it",
     body: ref('ResolveAssetsRequest'),
     success: ok(ref('ResolvedAssets')),
     gaps: ['G72', 'G80'],

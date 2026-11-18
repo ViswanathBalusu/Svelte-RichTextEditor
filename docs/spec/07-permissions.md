@@ -164,7 +164,7 @@ An approval is bound to what was approved: the state record holds the `seq` and 
 | Create a thread, reply | `comment` in the scopes of the target |
 | Resolve, reopen or assign a thread | `comment` in its scope; delete needs the author or `manage` |
 | Upload an asset | `edit`, `suggest` or `fill` somewhere in the document |
-| Read an asset | `view` on a document the asset is attached to |
+| Read an asset | `view` on a document the asset is attached to; the uploader may also read their own ready upload for that document before a commit references it |
 | Named version | `edit` somewhere in the document |
 | Restore a region | `edit` in that region; not approved; not leased to someone else |
 | Restore a document, grants, region state or policy, break a lease, workflow actions, delete | `manage` |
