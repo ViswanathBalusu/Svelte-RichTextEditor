@@ -49,6 +49,7 @@ import {
   type Harness,
   type Storage,
 } from './support/harness.ts';
+import { keyPair } from './support/jws.ts';
 import { WireClient } from './support/wire.ts';
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -84,7 +85,7 @@ const operations: Operation[] = Object.entries(openapi['paths'] as Json).flatMap
 const withIdentifier = operations.filter((o) => o.params.length > 0);
 
 /** The path parameters the suite has an identifier of tenant B for. */
-const KNOWN_PARAMS = ['id', 'rid', 'tid', 'cid', 'aid', 'jid', 'pid', 'fid'];
+const KNOWN_PARAMS = ['id', 'rid', 'tid', 'cid', 'aid', 'jid', 'pid', 'fid', 'kid', 'origin'];
 
 /** Client messages that take an identifier, and those that do not (05 §5). */
 const WITH_IDENTIFIER = [
@@ -106,9 +107,6 @@ const WITHOUT_IDENTIFIER = ['hello', 'ping', 'pong', 'error'];
 const NOT_OFFERED = 'this server does not offer the route';
 const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   listHistory: 'history list: no handler in the document service',
-  getDiff: 'comparison: no handler in the document service',
-  getAttribution: 'attribution: no handler in the document service',
-  listThreads: 'thread list: no handler in the document service',
   createImport: 'imports: no handler in the document service',
   getImport: 'imports: no handler in the document service',
   getWorkflow: 'workflow: no handler in the document service',
@@ -177,15 +175,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             : param;
       const value = ids[key];
       if (!value) throw new Error(`no identifier of tenant B for {${param}} of ${op.operationId}`);
-      return value;
+      return param === 'origin' ? encodeURIComponent(value) : value;
     };
     const pathOf = (op: Operation): string =>
       '/v1' + op.template.replace(/\{(\w+)\}/g, (_m, p: string) => identifier(op, p));
     const query = (op: Operation): string =>
       op.operationId === 'getAttribution'
-        ? '?atSeq=0'
+        ? '?seq=0'
         : op.operationId === 'getDiff'
-          ? '?from=0&to=1'
+          ? '?fromSeq=0&toSeq=0'
           : '';
     const call = (op: Operation, token: string): Promise<CallResult> => {
       const body = bodyFor(op.operationId);
@@ -210,9 +208,13 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const webhook = await asB('GET', `/v1/webhooks/${ids['webhook']}`);
       const holds = await asB('GET', '/v1/holds');
       const job = await asB('GET', `/v1/exports/${ids['export']}`);
-      for (const r of [doc, content, grants, thread, versions, webhook, holds, job])
+      const keys = await asB('GET', '/v1/keys');
+      const origins = await asB('GET', '/v1/origins');
+      for (const r of [doc, content, grants, thread, versions, webhook, holds, job, keys, origins])
         expect(r.status, r.text.slice(0, 200)).toBe(200);
       return {
+        keys: keys.json,
+        origins: origins.json,
         doc: doc.json,
         content: content.json,
         grants: grants.json,
@@ -228,7 +230,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     const expectNothingOfB = (r: Pick<CallResult, 'text'>, what: string, sent = '') => {
       for (const secret of [CANARY_TITLE, CANARY_THREAD, CANARY_TEXT, B_HOOK, h.b.id])
         expect(r.text, `${what} must not carry "${secret}"`).not.toContain(secret);
-      for (const key of ['tid', 'cid', 'webhook', 'export', 'aid'])
+      for (const key of ['tid', 'cid', 'webhook', 'export', 'aid', 'kid'])
         // An identifier the caller sent may come back in the refusal; one it did not send may not.
         if (ids[key] && !sent.includes(ids[key]))
           expect(r.text, `${what} must not carry B's ${key}`).not.toContain(ids[key]);
@@ -286,6 +288,17 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       made('hold', hold, hold.json?.id);
       // B has no import job, workflow participant or form field in this scenario; the identifiers
       // are well-formed ones that name nothing (see NOT_FOUND_FOR_OWNER).
+      // B's own key and origin for the registry routes (UX-077). The key identifier carries no part
+      // of B's tenant identifier, which a refusal must never show.
+      ids['kid'] = `sweep-key-${uuid7()}`;
+      await h.parts.registry.addKey(h.b.id, {
+        kid: ids['kid'],
+        use: 'user',
+        alg: 'EdDSA',
+        jwk: keyPair('EdDSA').jwk,
+      });
+      ids['origin'] = 'https://sweep-b.example.test';
+      await h.parts.registry.addOrigin(h.b.id, ids['origin']);
       ids['import'] = uuid7();
       ids['pid'] = 'participant-1';
       ids['fid'] = 'ffField000000001';
