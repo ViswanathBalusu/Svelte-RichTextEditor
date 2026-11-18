@@ -2394,7 +2394,6 @@ As a maintainer, I want a written recommendation of how the authority service is
 **Evidence (lane V-PRO-086-102, criteria 1 and 3):** `docs/adr/0314-lane-V-PRO-086-102.md`, decision 3 (the recommendation: HTTPS with HTTP/2, canonical JSON, the route for each call of 05 section 10, `open` as NDJSON when large, a rejection as an answer rather than a transport error) and decision 4 (gRPC, MessagePack or CBOR, WebSocket and JSON-RPC over stdio, each ruled out with its reason), decision 5 (the effect on a non-JavaScript client). Written document only; no test applies to it.
 
 **Notes:** Time box: three working days. The spec says "a network interface" but names no transport (Open questions). Output only; the decision is recorded in an ADR by the maintainers. Lane V-PRO-086-102: criteria 1 and 3 are met by the proposed recommendation in the ADR above, which the maintainers have not accepted. Criterion 2 stays open: no `applyCommit` prototype over the binding exists, and the target of 04 section 12 is for the reference machine (ADR 0037), so a measurement here does not meet it. Needed from others: a prototype and a measurement on the reference machine.
-
 ### PRO-103 Load and materialise documents in the authority service
 
 | Type | Phase | Size | Priority | Persona |
@@ -2809,7 +2808,7 @@ As an integrating developer, I want a profile for leases, so that a server that 
 - [ ] Given a user with `manage`, when they break the lease, then it ends at once.
 - [ ] Given a server without `leases`, when the kit runs, then the profile is skipped.
 
-**Notes:** Not built in lane PRO-113-126. The `leases` profile is still a `later` entry with no scenarios (packages/tck/src/profiles/index.ts). The mock backend does not announce `leases`, and pending.ts lists the lease routes as phase 2, so no target can run it yet.
+**Notes:** Not built in lane PRO-113-126. The `leases` profile is still a `later` entry with no scenarios (packages/tck/src/profiles/index.ts). The mock backend does not announce `leases`, and pending.ts lists the lease routes as phase 2, so no target can run it yet. Lane w5, 2026-11-18: nothing new ticked (blocked). Checked again: no lease routes or lease state exist in `packages/backend-mock` or `packages/authority`, and the profile has no scenarios. Building the leases behaviour depends on PRO-111, PRO-053 and PRO-109, which the lane did not take on; a profile over a server with no leases would test nothing.
 
 ### PRO-123 Ship the rules fixtures in the kit
 
