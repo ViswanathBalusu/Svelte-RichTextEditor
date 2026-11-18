@@ -157,7 +157,8 @@
 .de-action,
 .de-presence-more,
 .de-notice-dismiss,
-.de-panel-head button {
+.de-panel-head button,
+.de-panel-variants button {
   /* Never squeezed below their label: what does not fit goes to "More" instead (UX-006). */
   flex: 0 0 auto;
   font: inherit;
@@ -177,7 +178,8 @@
 .de-action:hover,
 .de-presence-more:hover,
 .de-notice-dismiss:hover,
-.de-panel-head button:hover {
+.de-panel-head button:hover,
+.de-panel-variants button:hover {
   background: var(--_de-control-hover);
 }
 
@@ -186,6 +188,7 @@
 .de-presence-more:focus-visible,
 .de-notice-dismiss:focus-visible,
 .de-panel-head button:focus-visible,
+.de-panel-variants button:focus-visible,
 .de-menu-item:focus-visible {
   outline: 2px solid var(--_de-focus);
   outline-offset: 1px;
@@ -512,6 +515,29 @@
   border: 1px solid var(--_de-border);
 }
 
+.de-panel-variants {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-1);
+  margin-block-end: var(--_de-space-2);
+}
+
+.de-panel-variants button[aria-pressed='true'] {
+  background: var(--_de-control-active);
+  border-color: var(--_de-control-active-border);
+  box-shadow: inset 0 -3px 0 var(--_de-control-active-border);
+}
+
+.de-panel-variants button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.de-panel-variants-gap {
+  flex: 0 0 var(--_de-space-3);
+}
+
 .de-panel-head {
   display: flex;
   justify-content: space-between;
@@ -602,7 +628,7 @@
   outline-offset: 1px;
 }
 
-:is(.de-list-button, .de-status-button)[aria-disabled='true'] {
+:is(.de-list-button, .de-status-button, .de-button)[aria-disabled='true'] {
   color: var(--_de-control-disabled-text);
   border-style: dashed;
   cursor: not-allowed;
@@ -703,6 +729,28 @@
   gap: var(--_de-space-2);
   inline-size: 100%;
   text-align: start;
+}
+
+.de-styles .de-list > li {
+  display: flex;
+  gap: var(--_de-space-1);
+}
+
+.de-styles .de-list-button {
+  flex: 1 1 auto;
+  inline-size: auto;
+}
+
+.de-style-actions {
+  display: flex;
+  gap: var(--_de-space-1);
+}
+
+.de-style-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--_de-space-1);
+  margin-block-start: var(--_de-space-2);
 }
 
 .de-actions,

@@ -7,15 +7,17 @@
  * `NoticeTracker` compares successive values of the core's `refusal` and `recovered` views and
  * reports what is new: a refusal whose `n` changed, and items added to the recovered list.
  */
-import type { RecoveredEdits, RefusalNotice, TrimNotice } from '../core-api.ts';
+import type { RecoveredEdits, RefusalNotice, ReplaceNotice, TrimNotice } from '../core-api.ts';
 import type { StringKey } from '../i18n/en-GB.ts';
 
 export interface Notice {
-  readonly kind: 'refusal' | 'rejection' | 'trimmed';
+  readonly kind: 'refusal' | 'rejection' | 'trimmed' | 'replaced';
   /** The message, in plain words. */
   readonly key: StringKey;
   /** For rejections: the number of items set aside in this change. */
   readonly count: number;
+  /** Further numbers the message names (for a replace report, `skipped`). */
+  readonly params?: Readonly<Record<string, number>>;
   /** Increases with every notice, so that the same message twice is shown and announced twice. */
   readonly serial: number;
   /** A named command of the core that the notice offers (a button next to the message), if any. */
@@ -37,6 +39,9 @@ const REFUSALS: Readonly<Record<string, StringKey>> = {
   'no-copy': 'notice.refused.noCopy',
   // A deletion a cross-reference still names (I4; FE-133 criterion 5): the notice offers to show them.
   referenced: 'notice.refused.referenced',
+  // A pasted picture that was not added (FE-053 criterion 3): the upload failed or was refused.
+  'upload-failed': 'notice.refused.uploadFailed',
+  'invalid-size': 'notice.refused.pictureSize',
 };
 
 const REJECTIONS: Readonly<Record<string, StringKey>> = {
@@ -69,17 +74,38 @@ export class NoticeTracker {
   #refusal: number | null;
   #recovered: number;
   #trimmed: number | null;
+  #replaced: number | null;
   #serial = 0;
 
   constructor(
     refusal: RefusalNotice | null | undefined,
     recovered: RecoveredEdits | undefined,
     trimmed?: TrimNotice | null,
+    replaced?: ReplaceNotice | null,
   ) {
     // What was there before the shell started is not news.
     this.#refusal = refusal?.n ?? null;
     this.#recovered = recovered?.count ?? 0;
     this.#trimmed = trimmed?.n ?? null;
+    this.#replaced = replaced?.n ?? null;
+  }
+
+  /**
+   * The report of a Replace or Replace all since the last call (FE-060 criterion 3), or null. The
+   * numbers are the core's, unchanged; the message about skipped matches is used only when at least
+   * one was skipped, so a complete replace says nothing about skipping.
+   */
+  replaced(next: ReplaceNotice | null | undefined): Notice | null {
+    if (!next || typeof next.n !== 'number' || next.n === this.#replaced) return null;
+    this.#replaced = next.n;
+    const skipped = next.skipped > 0;
+    return {
+      kind: 'replaced',
+      key: skipped ? 'notice.replaced.skipped' : 'notice.replaced.done',
+      count: next.replaced,
+      params: { skipped: next.skipped },
+      serial: ++this.#serial,
+    };
   }
 
   /**

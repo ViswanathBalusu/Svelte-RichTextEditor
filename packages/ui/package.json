@@ -23,6 +23,7 @@
   "scripts": {
     "generate": "node scripts/generate.ts",
     "parity:report": "node scripts/parity-report.ts",
+    "a11y:report": "node scripts/a11y-report.ts",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json && svelte-check --tsconfig ./tsconfig.test.json",
     "test:e2e": "playwright test -c playwright.config.ts"
   },

@@ -44,6 +44,7 @@ import { emptyDocument, regionNodeOf, regionsOfJson } from './content.ts';
 import { exportRoutes } from './export-routes.ts';
 import { fieldRoutes } from './field-routes.ts';
 import { workflowRoutes } from './workflow-routes.ts';
+import { historyListRoutes } from './history-list-route.ts';
 import { historyReadRoutes } from './history-reads.ts';
 import { historyRoutes } from './history-routes.ts';
 import { importRoutes } from './imports.ts';
@@ -760,6 +761,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...commitRoutes(k),
     ...historyRoutes(k),
     ...historyReadRoutes(k),
+    ...historyListRoutes(k),
     ...restoreRoutes(k),
     ...activityRoutes(k),
     ...threadRoutes(k),

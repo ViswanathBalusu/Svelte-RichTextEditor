@@ -2,11 +2,14 @@
  * The flow of a field with a `width` is a box of exactly that width, whatever the value is (FRW-080
  * criterion 1, box part; 12 §3.2 `width`). flow.ts (`form_field`) reads the box from `width` alone and
  * does not carry the value into the inline box, so the value cannot change what the layout measures.
- * This test is at the flow level: the layout tree does not expose the width of an inline box, so the
- * exact width of the drawn box on the page is not asserted here. Node.js only.
+ * This test is at the flow level; the width of the box on the laid-out line is asserted in
+ * frw-080.fill-breaks.test.ts (the line breaker sets a form field's box at its width). A field with
+ * no `width` is a box of the default width of its kind (`FIELD_DEFAULT_WIDTH`, criterion 3).
+ * Node.js only.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { FIELD_DEFAULT_WIDTH, FIELD_KINDS } from '@docedit/model/definition';
 import {
   toFlow,
   type CdmEnvelopeLike,
@@ -110,12 +113,33 @@ describe('a field with a width is a box of that width whatever its value (FRW-08
     );
   });
 
-  it('carries the value as text when there is no width (control)', () => {
-    // Without a width the value is laid out as text. If this stopped holding, the properties above
-    // would prove nothing about the value being left out.
-    const withValue = inlinesOf('p1', field({ value: 'Ada-Lovelace' }));
-    const texts = withValue.flatMap((i) => (i.kind === 'text' ? [i.text] : []));
-    expect(texts.join('')).toContain('Ada-Lovelace');
-    expect(withValue.some((i) => i.kind === 'box')).toBe(false);
+  it('draws a field with no width as a box of the default width of its kind (criterion 3)', () => {
+    for (const kind of FIELD_KINDS) {
+      const boxes = inlinesOf('p1', field({ kind, value: 'Ada-Lovelace' })).filter(
+        (i) => i.kind === 'box',
+      );
+      expect(boxes, kind).toHaveLength(1);
+      expect(boxes[0], kind).toMatchObject({
+        what: 'preserved',
+        width: FIELD_DEFAULT_WIDTH[kind] / 20,
+      });
+    }
+  });
+
+  it('carries the value nowhere: no text inline of a field holds it, with or without a width (control)', () => {
+    for (const width of [undefined, WIDTH_TWIPS]) {
+      const inlines = inlinesOf(
+        'p1',
+        field({ value: 'Ada-Lovelace', ...(width === undefined ? {} : { width }) }),
+      );
+      const texts = inlines.flatMap((i) => (i.kind === 'text' ? [i.text] : []));
+      expect(texts.join('')).not.toContain('Ada-Lovelace');
+    }
+  });
+
+  it('is sensitive to the width, so the properties above would catch a box that follows another size (control)', () => {
+    const at = (width: number) =>
+      inlinesOf('p1', field({ width })).filter((i) => i.kind === 'box')[0];
+    expect(at(WIDTH_TWIPS)).not.toEqual(at(WIDTH_TWIPS + 20));
   });
 });

@@ -21,7 +21,8 @@
  * control plane has no way to hand a steps commit to the room (decision in
  * docs/adr/0374-w5-PRO-056-region-restore.md, proposed). Steps 5 to 7 are the same.
  *
- * The response of an applied restore is `{ seq, toSeq, preRestoreSeq }` (with `region` for a region).
+ * The response of an applied restore is `{ seq, toSeq, preRestoreSeq }` (with `region` for a region,
+ * and `notes: { recreated, replaced }` when a definition had to be recreated or replaced, HIS-020).
  * The schema names `RestoreResult` as a placeholder, so the members are a decision of this lane
  * (docs/adr/0358-lane-V-HIS-017-032.md).
  */
@@ -96,6 +97,7 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
     envelope: JsonEnvelope,
     toSeq: number,
     region?: string,
+    notes?: { recreated: string[]; replaced: string[] },
   ): Promise<Reply> => {
     const store = d.versions;
     const apply = d.dataPlane?.replaceContent?.bind(d.dataPlane);
@@ -159,6 +161,10 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       toSeq,
       preRestoreSeq: headSeq,
       ...(region !== undefined ? { region } : {}),
+      // HIS-020 criterion 4: the person is told when a definition was recreated or replaced.
+      ...(notes !== undefined && (notes.recreated.length > 0 || notes.replaced.length > 0)
+        ? { notes }
+        : {}),
     });
   };
 
@@ -252,7 +258,10 @@ export function restoreRoutes(k: Kit): Record<string, Handler> {
       requires: v.full.requires,
       doc: plan.result.toJSON(),
     } as JsonEnvelope;
-    return commitRestore(ctx, doc, v.ref, v.head.seq, envelope, body.toSeq, body.region);
+    return commitRestore(ctx, doc, v.ref, v.head.seq, envelope, body.toSeq, body.region, {
+      recreated: plan.recreated,
+      replaced: plan.replaced,
+    });
   };
 
   const restoreDocument: Handler = async (ctx: Ctx) => {

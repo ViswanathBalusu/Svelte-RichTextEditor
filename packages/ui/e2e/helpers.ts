@@ -4,6 +4,7 @@
  * Every test fails if the page reported a policy violation or an uncaught error.
  */
 import AxeBuilder from '@axe-core/playwright';
+import { appendFileSync } from 'node:fs';
 import { type Page, expect, test as base } from '@playwright/test';
 import type { Harness, MountOptions } from './harness/main.ts';
 
@@ -101,6 +102,21 @@ export async function axe(page: Page): Promise<string[]> {
     .include('#host')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
+  // UX-069: the conformance report draws on the axe results of the release's browser run.
+  const record = process.env['DOCEDIT_AXE_RESULTS'];
+  if (record) {
+    const browser = page.context().browser();
+    appendFileSync(
+      record,
+      `${JSON.stringify({
+        browser: browser?.browserType().name() ?? 'unknown',
+        version: browser?.version() ?? 'unknown',
+        test: test.info().titlePath.slice(1).join(' > '),
+        violations: result.violations.length,
+        rules: [...new Set(result.violations.map((v) => v.id))],
+      })}\n`,
+    );
+  }
   return result.violations.map(
     (v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(' ')).join(', ')})`,
   );

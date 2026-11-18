@@ -19,16 +19,23 @@ import {
   type NodeView,
   type NodeViewConstructor,
 } from 'prosemirror-view';
+import { computeLabels } from '@docedit/model';
 import { bodyRange } from '../body.ts';
 
 export const footnoteNumbersKey = new PluginKey<DecorationSet>('docedit-footnote-numbers');
 
-const isFootnote = (n: PMNode): boolean => n.type.name === 'footnote';
+/**
+ * The nodes whose presence changes a footnote mark: a footnote itself, a section break (where
+ * `footnoteRestart: perPageSection` restarts the count) and the settings that hold the format and
+ * the restart rule.
+ */
+const NUMBERING_NODES: ReadonlySet<string> = new Set(['footnote', 'section_break', 'settings']);
+const changesNumbering = (n: PMNode): boolean => NUMBERING_NODES.has(n.type.name);
 
 function sliceHolds(slice: Slice): boolean {
   let found = false;
   slice.content.descendants((n) => {
-    if (isFootnote(n)) found = true;
+    if (changesNumbering(n)) found = true;
     return !found;
   });
   return found;
@@ -42,7 +49,7 @@ function rangeHolds(doc: PMNode, from: number, to: number): boolean {
   let found = false;
   doc.nodesBetween(from, to, (n, pos) => {
     if (found) return false;
-    if (!isFootnote(n)) return true;
+    if (!changesNumbering(n)) return true;
     if (!(from > pos && to < pos + n.nodeSize)) found = true;
     return false;
   });
@@ -62,6 +69,9 @@ export function mayRenumber(tr: Transaction): boolean {
       if (step.from < step.to && rangeHolds(tr.docs[i]!, step.from, step.to)) return true;
       continue;
     }
+    // A change to the settings (`footnoteFormat`, `footnoteRestart`) renumbers the marks.
+    if (step instanceof AttrStep && tr.docs[i]!.nodeAt(step.pos)?.type.name === 'settings')
+      return true;
     const keepsNodes =
       step instanceof AddMarkStep ||
       step instanceof RemoveMarkStep ||
@@ -76,14 +86,20 @@ export function mayRenumber(tr: Transaction): boolean {
 function numberDecorations(doc: PMNode): DecorationSet {
   const decorations: Decoration[] = [];
   const b = bodyRange(doc);
+  // The marks come from the shared numbering (`computeLabels`, CDM-042): `footnoteFormat` gives the
+  // form of each mark and `footnoteRestart` restarts the count at a section break (FE-058 criterion 3).
+  const marks = computeLabels(doc).footnotes;
   let n = 0;
   doc.nodesBetween(b.start, b.end, (node, pos) => {
     if (node.type.name !== 'footnote') return true;
     n++;
+    const id = node.attrs['id'];
+    // A footnote that has no identifier yet is shown by its place in the order.
+    const mark = (typeof id === 'string' ? marks.get(id) : undefined) ?? String(n);
     decorations.push(
       Decoration.node(pos, pos + node.nodeSize, {
-        'data-n': String(n),
-        'aria-label': `Footnote ${n}`,
+        'data-n': mark,
+        'aria-label': `Footnote ${mark}`,
       }),
     );
     return false;
@@ -93,7 +109,8 @@ function numberDecorations(doc: PMNode): DecorationSet {
 
 /**
  * Footnote numbers as node decorations, shown by CSS (`attr(data-n)`): no inline style and no
- * HTML string. Numbering formats and restarts come from the shared algorithm later (FE-058).
+ * HTML string. The marks come from the shared numbering algorithm with `footnoteFormat` and
+ * `footnoteRestart` (FE-058 criterion 3).
  */
 export function footnoteNumbers(): Plugin<DecorationSet> {
   return new Plugin<DecorationSet>({

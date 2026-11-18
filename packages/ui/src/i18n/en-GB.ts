@@ -197,6 +197,10 @@ export const EN_GB = {
     'That change was not made: it would break the structure of the document.',
   'notice.refused.noCopy':
     'Nothing was copied: your access does not allow copying from this document. Restrictions deter casual copying and are not a security boundary.',
+  'notice.refused.uploadFailed':
+    'The picture was not added: it could not be uploaded, or the asset service did not accept the file.',
+  'notice.refused.pictureSize':
+    'The picture was not added: its size could not be used in the document.',
   'notice.refused.other': 'That change was not made.',
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',
@@ -208,6 +212,17 @@ export const EN_GB = {
       'That change was not made: {count} cross-references still point to what you tried to delete.',
   },
   'notice.action.showReferences': 'Show references',
+  // The report of Replace and Replace all (FE-060 criterion 3). `count` is the number replaced;
+  // `skipped` is the number left alone. The second message is shown only when something was skipped.
+  'notice.replaced.done': {
+    one: 'Replaced {count} match.',
+    other: 'Replaced {count} matches.',
+  },
+  'notice.replaced.skipped': {
+    one: 'Replaced {count} match. Skipped {skipped}: you cannot change those parts of the document.',
+    other:
+      'Replaced {count} matches. Skipped {skipped}: you cannot change those parts of the document.',
+  },
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {
@@ -288,6 +303,12 @@ export const EN_GB = {
   // Panels and panes (13 §3; UX-019).
   'panel.footnote': 'Footnote',
   'panel.story': 'Header',
+  'panel.footer': 'Footer',
+  // The variants of a header or footer (FE-057): the pages each is used on.
+  'panel.variants': 'Header and footer variants',
+  'panel.variant.default': 'Every page',
+  'panel.variant.first': 'First page',
+  'panel.variant.even': 'Even pages',
   'panel.close': 'Close',
   'pane.outline': 'Navigation',
   'pane.comments': 'Comments',
@@ -350,6 +371,46 @@ export const EN_GB = {
   'styles.kind.table': 'Table style',
   'styles.current': 'In use at the cursor',
   'styles.empty': 'This document defines no styles.',
+  'styles.manage': 'Manage styles',
+  'styles.new': 'New style',
+  'styles.new.name': 'Name of the style',
+  'styles.new.kind': 'Kind of style',
+  'styles.new.basedOn': 'Based on',
+  'styles.new.noParent': 'No parent style',
+  'styles.new.save': 'Create',
+  'styles.new.cancel': 'Cancel',
+  'styles.new.done': 'Style created.',
+  'styles.change': 'Change style {name}',
+  'styles.change.action': 'Change',
+  'styles.delete.action': 'Delete',
+  'styles.change.label': 'Change the style {name}',
+  'styles.change.save': 'Save',
+  'styles.change.done': 'Style changed.',
+  'styles.delete': 'Delete style {name}',
+  'styles.delete.done': 'Style deleted.',
+  'styles.edit.failed': 'The style could not be saved.',
+  'styles.why.read-only': 'The document is locked, so its styles cannot be changed.',
+  'styles.why.suggestion':
+    'You are suggesting changes, and a change to a style cannot be a suggestion.',
+  'styles.why.no-access':
+    'Creating, changing and deleting styles needs permission to change the structure of the document, which you do not have. You can still apply a style.',
+  'styles.why.region': {
+    one: 'This style is used in the region {regions}, which you cannot edit, so you cannot change it.',
+    other:
+      'This style is used in the regions {regions}, which you cannot edit, so you cannot change it.',
+  },
+  'styles.why.approved': {
+    one: 'This style is used in the region {regions}, which is approved, so it cannot be changed.',
+    other:
+      'This style is used in the regions {regions}, which are approved, so it cannot be changed.',
+  },
+  'styles.why.built-in': 'A built-in style cannot be renamed or deleted.',
+  'styles.why.in-use': 'This style is in use, so it cannot be deleted.',
+  'styles.why.duplicate-name': 'Another style of this kind has that name.',
+  'styles.why.bad-name': 'Give the style a name.',
+  'styles.why.bad-based-on':
+    'A style can be based only on another style of its kind, and not on itself or on a style based on it.',
+  'styles.why.unknown-style': 'That style is no longer in the document.',
 
   // Sources (UX-103). Titles, names, identifiers and excerpts are content.
   'command.view.sources': 'Sources',
@@ -919,10 +980,37 @@ export const EN_GB = {
   },
   'history.compare.fields': 'Field changes',
   'history.compare.field.row': '{field} was changed by {name}',
+  // The catch-up pane (HIS-028; 08 §10).
+  'catchUp.label': 'Catch up',
+  'catchUp.unavailable': 'Catch up is not available for this document.',
+  'catchUp.loading': 'Looking for changes since your last visit.',
+  'catchUp.empty': 'Nothing has changed since your last visit.',
+  'catchUp.error': 'The changes since your last visit could not be loaded.',
+  'catchUp.forbidden': 'You cannot see the changes since your last visit.',
+  'catchUp.retry': 'Try again',
+  'catchUp.announce': {
+    one: '{count} change since your last visit.',
+    other: '{count} changes since your last visit.',
+  },
+  'catchUp.foryou': 'For you',
+  'catchUp.foryou.mention': '{name} mentioned you: {text}',
+  'catchUp.foryou.mention.nobody': 'Someone mentioned you: {text}',
+  'catchUp.foryou.task': 'A thread is assigned to you.',
+  'catchUp.summary': 'Changes by region',
+  'catchUp.changes': 'Changes',
+  'catchUp.change.row': '{kind}, by {name}',
+  'catchUp.change.row.nobody': '{kind}',
+  'catchUp.comments': {
+    one: '{count} comment by other people',
+    other: '{count} comments by other people',
+  },
+  'catchUp.dismiss': 'Mark as seen',
+  'catchUp.mark-failed': 'Your place could not be saved. Try again.',
   // Names of the core's own surfaces (CoreApi.setLabels).
   'surface.body': 'Document',
   'surface.footnote': 'Footnote text',
   'surface.story': 'Header',
+  'surface.footer': 'Footer',
 
   // Spelling and grammar findings (UX-041, UX-042; 13 §6.1). Shown only with a proofing port.
   'command.proofing.next': 'Next spelling or grammar issue',

@@ -494,6 +494,39 @@ describe('re-checking restores (HIS-020)', () => {
       code: 'permission_denied',
     });
   });
+
+  it('a dry run reports the same recreated and replaced definitions as the restore (PRM-050 criterion 3)', () => {
+    const b = new LogBuilder();
+    b.add(
+      (d) => new Transform(d).setNodeAttribute(posOf(d, 'pTerms000000002A'), 'style', 'LegalQuote'),
+      { user: 'bob' },
+    );
+    b.add((d) => new Transform(d).setNodeAttribute(posOf(d, 'pTerms000000002A'), 'style', null), {
+      user: 'bob',
+    });
+    b.add(
+      (d) => {
+        const at = posOf(d, 'LegalQuote');
+        return new Transform(d).delete(at, at + 1);
+      },
+      { user: 'alice', scopes: ['defs:style_def/LegalQuote'] },
+    );
+    for (const [who, expected] of [
+      [USERS.bob, ['style_def/LegalQuote']],
+      [USERS.gina, []],
+    ] as const) {
+      const dry = planRestore({ toSeq: 1, region: 'rTerms000000000A', dryRun: true }, ctx(b, who));
+      const real = planRestore({ toSeq: 1, region: 'rTerms000000000A' }, ctx(b, who));
+      if (!dry.ok) throw new Error(dry.reason);
+      if (!real.ok) throw new Error(real.reason);
+      expect(dry.plan.recreated, who.sub).toEqual(real.plan.recreated);
+      expect(dry.plan.replaced, who.sub).toEqual(real.plan.replaced);
+      expect(dry.plan.recreated, who.sub).toEqual(expected);
+      expect(dry.plan.replaced, who.sub).toEqual(
+        expected.length === 0 ? ['style_def/LegalQuote'] : [],
+      );
+    }
+  });
 });
 
 describe('previewing a restore with a dry run (HIS-021)', () => {

@@ -194,7 +194,12 @@ export class EditorCore extends DocumentCore {
    * shell's `setLabels`). Applied at once to mounted surfaces and to every later mount.
    */
   setLabels(labels: CoreLabels): void {
-    this.#labels = { body: labels.body, footnote: labels.footnote, story: labels.story };
+    this.#labels = {
+      body: labels.body,
+      footnote: labels.footnote,
+      story: labels.story,
+      ...(labels.footer === undefined ? {} : { footer: labels.footer }),
+    };
     this.#view?.setProps({ attributes: this.#bodyAttributes() });
     if (this.#sub && this.#subKind)
       this.#sub.view.setProps({ attributes: this.#subAttributes(this.#subKind) });
@@ -216,10 +221,16 @@ export class EditorCore extends DocumentCore {
   }
 
   #subAttributes(kind: SubEditorTarget['kind']): Record<string, string> {
+    const name =
+      kind === 'footnote'
+        ? this.#labels.footnote
+        : this.panel.get()?.part === 'footer'
+          ? (this.#labels.footer ?? this.#labels.story)
+          : this.#labels.story;
     return {
       class: `de-sub-editor de-sub-${kind}`,
       spellcheck: 'true',
-      'aria-label': kind === 'footnote' ? this.#labels.footnote : this.#labels.story,
+      'aria-label': name,
     };
   }
 

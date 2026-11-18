@@ -2,7 +2,7 @@
  * Sizes of the library build (FE-002; 13 §9), measured from the build output: every chunk raw,
  * gzip (level 9) and Brotli (quality 11), and the set the first interactive editor needs. That set
  * is the entry, the editor chunk it loads with the first document, and the chunks both import
- * statically. Budget: at most 300 KB compressed (13 §9, a target), counted as 300,000 bytes of
+ * statically. Budget: at most 320 KB compressed (13 §9, a target; owner decision 32, 2026-11-17), counted as 320,000 bytes of
  * gzip; the build fails above it. FND-008 owns the gate in CI; this is the package's own check.
  *
  * FND-008 also asks for every lazy file by feature (`lazy`, `lazyByFeature`) and for a build that
@@ -60,7 +60,7 @@ export interface LazyFile {
   size: Size;
 }
 
-export const BUDGET_GZIP_BYTES = 300_000;
+export const BUDGET_GZIP_BYTES = 320_000;
 
 const isWasm = (name: string) => /\.wasm(\?.*)?$/.test(name);
 

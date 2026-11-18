@@ -18,6 +18,7 @@ import {
   type EntryProblem,
   type FieldReport,
   type StepJson,
+  definitionUse,
   stepsToJson,
 } from '@docedit/authority';
 import type { RemoteCommit } from '@docedit/protocol';
@@ -89,6 +90,7 @@ import type {
   PresencePeerInfo,
   RecoveredEdits,
   RecoveredItem,
+  ReplaceNotice,
   ReplaceReport,
   RefusalNotice,
   SaveState,
@@ -97,6 +99,11 @@ import type {
   ShellCounts,
   StatusSummary,
   StyleInfo,
+  StyleSummary,
+  StyleEditCheck,
+  StyleEditOp,
+  StyleEditResult,
+  StyleKind,
   SuggestionModeInfo,
   SyncSnapshot,
   SyncSummary,
@@ -106,7 +113,15 @@ import { fragmentOfSteps, recoveredKind } from './recovered-fragment.ts';
 import { bodyGuard, initialSelection, selectAllInBody } from './body.ts';
 import { effectiveMode, modeLocks } from './mode.ts';
 import { insertFootnote } from './footnote.ts';
-import { createVariantStory } from './header-footer.ts';
+import {
+  type StoryPart,
+  type StoryVariant,
+  type StoryVariantInfo,
+  createVariantStory,
+  pageSetupIdOf,
+  roleOfStory,
+  storyVariantsOf,
+} from './header-footer.ts';
 import { type CitationItemInput, insertCitation } from './citation-insert.ts';
 import { addLink, followInternalLink, insertBookmark } from './links-bookmarks.ts';
 import { type PageSetupChanges, setPageSetup } from './page-setup-commands.ts';
@@ -262,8 +277,17 @@ import {
   paragraphStyles,
   sameOutline,
   setParagraphStyle,
+  styleSummaries,
   stylesOf,
 } from './styles.ts';
+import {
+  changeStyle,
+  createStyle,
+  deleteStyle,
+  styleChangeRefusal,
+  styleCreateRefusal,
+  styleDeleteRefusal,
+} from './style-edit.ts';
 import { type SyncEvent, type SyncHost, SyncSession } from './sync/session.ts';
 import {
   type Discarded,
@@ -721,6 +745,7 @@ export class DocumentCore implements DocumentApi {
   readonly selection: ReadValue<SelectionSummary>;
   readonly panel: ReadValue<PanelInfo | null>;
   readonly outline: ReadValue<readonly OutlineItem[]>;
+  readonly styles: ReadValue<readonly StyleSummary[]>;
   readonly permissions: ReadValue<Access | null>;
   readonly access: ReadValue<AccessSummary>;
   readonly saveState: ReadValue<SaveState>;
@@ -750,6 +775,8 @@ export class DocumentCore implements DocumentApi {
   readonly suggestion: ReadValue<SuggestionModeInfo>;
   /** The last deletion that kept protected content (FE-037): `n` counts them. */
   readonly trimmed: ReadValue<TrimReport | null>;
+  /** What the last Replace or Replace all did (FE-060 criterion 3): `n` counts them. */
+  readonly replaced: ReadValue<ReplaceNotice | null>;
   readonly recovered: ReadValue<RecoveredEdits>;
   readonly syncSummary: ReadValue<SyncSummary>;
   readonly presence: ReadValue<readonly PresencePeerInfo[]>;
@@ -823,6 +850,7 @@ export class DocumentCore implements DocumentApi {
   #referencedTargets: string[] = [];
   #referenceCursor = 0;
   #trims = 0;
+  #replacements = 0;
   #target: { kind: 'footnote' | 'story'; id: string } | null = null;
   readonly #bridges = new Set<ViewBridge>();
   readonly #deferRemote: boolean;
@@ -859,6 +887,7 @@ export class DocumentCore implements DocumentApi {
     this.selection = new ReadValue<SelectionSummary>(EMPTY_SUMMARY, sameJson, hub);
     this.panel = new ReadValue<PanelInfo | null>(null, sameJson, hub);
     this.outline = new ReadValue<readonly OutlineItem[]>([], sameOutline, hub);
+    this.styles = new ReadValue<readonly StyleSummary[]>([], sameJson, hub);
     this.permissions = new ReadValue<Access | null>(null, sameJson, hub);
     this.access = new ReadValue<AccessSummary>(
       { scope: 'body', caps: FULL_CAPS, limit: null },
@@ -898,6 +927,7 @@ export class DocumentCore implements DocumentApi {
       hub,
     );
     this.trimmed = new ReadValue<TrimReport | null>(null, sameJson, hub);
+    this.replaced = new ReadValue<ReplaceNotice | null>(null, sameJson, hub);
     this.recovered = new ReadValue<RecoveredEdits>({ count: 0, items: [] }, sameJson, hub);
     this.syncSummary = new ReadValue<SyncSummary>(
       { seq: 0, incarnation: '', inflight: null, queued: 0 },
@@ -1322,6 +1352,9 @@ export class DocumentCore implements DocumentApi {
       this.selection.set(this.#summary(state));
       if (!last || last.doc !== state.doc) {
         this.outline.set(outlineOf(state.doc));
+        // The styles change with `defs`, which is one node: a keystroke leaves it as it was.
+        if (!last || last.doc.firstChild !== state.doc.firstChild)
+          this.styles.set(styleSummaries(state.doc));
         this.direction.set(stylesOf(state.doc).settings.dir);
         this.language.set(stylesOf(state.doc).settings.lang ?? null);
         // The count is made later, off the typing path (UX-018 criterion 1).
@@ -1487,13 +1520,24 @@ export class DocumentCore implements DocumentApi {
       .map((m) => m.type.name)
       .sort();
     const lang = marksAt(state).find((m) => m.type.name === 'lang')?.attrs['value'];
+    const charStyle = marksAt(state).find((m) => m.type.name === 'charStyle')?.attrs['style'];
+    let tableStyle: string | null = null;
+    for (let d = $from.depth; d > 0 && tableStyle === null; d--) {
+      const node = $from.node(d);
+      if (node.type.name === 'table' && typeof node.attrs['style'] === 'string')
+        tableStyle = node.attrs['style'];
+    }
+    const style = currentStyle(state);
     return {
       empty,
       scope: r ? 'region' : 'body',
       region: title,
-      style: currentStyle(state),
+      style,
       marks: [...new Set(marks)],
       lang: typeof lang === 'string' ? lang : null,
+      styleId: style,
+      charStyleId: typeof charStyle === 'string' ? charStyle : null,
+      tableStyleId: tableStyle,
     };
   }
 
@@ -2163,20 +2207,26 @@ export class DocumentCore implements DocumentApi {
     state: EditorState,
     dispatch: ((tr: Transaction) => void) | undefined,
   ): boolean {
-    let setupId: string | null = null;
-    state.doc.forEach((node) => {
-      if (node.type.name !== 'defs') return;
-      node.forEach((child) => {
-        if (setupId === null && child.type.name === 'page_setup')
-          setupId = String(child.attrs['id']);
-      });
-    });
+    return this.#createStory(state, dispatch, 'header', 'default');
+  }
+
+  /**
+   * Creates the story a variant of the header or footer has none of, and opens it (FE-057
+   * criterion 2). One transaction through the guard: a refusal leaves no story behind.
+   */
+  #createStory(
+    state: EditorState,
+    dispatch: ((tr: Transaction) => void) | undefined,
+    part: StoryPart,
+    variant: StoryVariant,
+  ): boolean {
+    const setupId = pageSetupIdOf(state.doc);
     if (setupId === null) return false;
     // An availability check (no dispatch) must not draw from the id source: the toolbar asks on
     // every update, and each draw would shift the ids later suggestions and stories receive.
-    if (!dispatch) return createVariantStory(state, setupId, 'header', 'default', 'probe') !== null;
+    if (!dispatch) return createVariantStory(state, setupId, part, variant, 'probe') !== null;
     const storyId = this.#newId();
-    const tr = createVariantStory(state, setupId, 'header', 'default', storyId);
+    const tr = createVariantStory(state, setupId, part, variant, storyId);
     if (tr === null) return false;
     dispatch(tr);
     let present = false;
@@ -2717,6 +2767,112 @@ export class DocumentCore implements DocumentApi {
     return paragraphStyles(this.#state.doc);
   }
 
+  // --- Style definitions (UX-022 criteria 2 and 3) --------------------------------------------
+
+  /**
+   * Whether a style may be created, changed or deleted now. The user needs `structure` and `edit` in
+   * `defs`; changing or deleting a style also needs `edit` in every region that uses it, directly or
+   * through `basedOn`, or `manage` (07 §5.3; the authority decides it again on the commit, and also
+   * refuses it while such a region is approved, which the core cannot see). `regions` lists the
+   * regions that use the style.
+   */
+  checkStyleEdit(op: StyleEditOp, id?: string): StyleEditCheck {
+    const none: readonly string[] = [];
+    if (this.#locked()) return { ok: false, reason: 'read-only', regions: none };
+    const access = this.#accessValue;
+    // Adding or removing a definition also changes the order of `defs`, which is the `doc` scope (the
+    // authority's scope diff); renaming a style touches its own definition only.
+    if (
+      access &&
+      !(
+        access.caps.includes('structure') &&
+        this.canEdit('defs') &&
+        (op === 'change' || this.canEdit('doc'))
+      )
+    )
+      return { ok: false, reason: 'no-access', regions: none };
+    if (this.#suggestionIn('defs').on) return { ok: false, reason: 'suggestion', regions: none };
+    let regions: string[] = [];
+    if (op !== 'create' && id !== undefined) {
+      const key = `defs:style_def/${id}`;
+      regions = [...definitionUse(this.#state.doc)]
+        .filter(([, used]) => used.has(key))
+        .map(([region]) => region);
+      const blocked = regions.filter(
+        (r) => !(access?.caps.includes('manage') ?? false) && !this.canEdit(`region:${r}`),
+      );
+      if (blocked.length > 0) return { ok: false, reason: 'region', regions: blocked };
+      const refusal =
+        op === 'delete'
+          ? styleDeleteRefusal(this.#state.doc, id)
+          : styleChangeRefusal(this.#state.doc, id, {});
+      if (refusal) return { ok: false, reason: refusal, regions };
+    }
+    return { ok: true, regions };
+  }
+
+  /** Records a refused style edit as the guard records one, naming `defs` and the regions. */
+  #styleRefused(check: Extract<StyleEditCheck, { ok: false }>): void {
+    if (check.reason === 'read-only') this.#refused({ reason: 'read-only', scopes: [] });
+    else if (check.reason === 'suggestion')
+      this.#refused({ reason: 'suggestion', scopes: ['defs'] });
+    else if (check.reason === 'no-access' || check.reason === 'region')
+      this.#refused({
+        reason: 'scope',
+        scopes: ['defs', ...check.regions.map((r) => `region:${r}`)],
+      });
+  }
+
+  /** Runs a style command through the core's own dispatch; whether the document changed. */
+  #runStyleCommand(command: Command): boolean {
+    const before = this.#state.doc;
+    command(this.#state, (tr) => this.dispatchTransaction(tr));
+    return this.#state.doc !== before;
+  }
+
+  /** The result of a refused check, after recording the refusal for the shell. */
+  #styleFailed(check: Extract<StyleEditCheck, { ok: false }>): StyleEditResult {
+    this.#styleRefused(check);
+    return { ok: false, reason: check.reason, regions: check.regions };
+  }
+
+  createStyle(spec: {
+    readonly name: string;
+    readonly kind: StyleKind;
+    readonly basedOn?: string | null;
+  }): StyleEditResult {
+    const basedOn = spec.basedOn ?? null;
+    const check = this.checkStyleEdit('create');
+    if (!check.ok) return this.#styleFailed(check);
+    const refusal = styleCreateRefusal(this.#state.doc, spec.kind, spec.name, basedOn);
+    if (refusal) return { ok: false, reason: refusal, regions: [] };
+    const id = this.#newId();
+    return this.#runStyleCommand(createStyle(id, spec.kind, spec.name, basedOn))
+      ? { ok: true, id }
+      : { ok: false, reason: 'no-access', regions: [] };
+  }
+
+  changeStyle(
+    id: string,
+    changes: { readonly name?: string; readonly basedOn?: string | null },
+  ): StyleEditResult {
+    const check = this.checkStyleEdit('change', id);
+    if (!check.ok) return this.#styleFailed(check);
+    const refusal = styleChangeRefusal(this.#state.doc, id, changes);
+    if (refusal) return { ok: false, reason: refusal, regions: check.regions };
+    // Values the style already has change nothing, and that is a success.
+    this.#runStyleCommand(changeStyle(id, changes));
+    return { ok: true, id };
+  }
+
+  deleteStyle(id: string): StyleEditResult {
+    const check = this.checkStyleEdit('delete', id);
+    if (!check.ok) return this.#styleFailed(check);
+    return this.#runStyleCommand(deleteStyle(id))
+      ? { ok: true, id }
+      : { ok: false, reason: 'no-access', regions: check.regions };
+  }
+
   /** Whether `id` names a paragraph style of the document. */
   hasParagraphStyle(id: string): boolean {
     return isParagraphStyle(this.#state.doc, id);
@@ -2750,7 +2906,12 @@ export class DocumentCore implements DocumentApi {
 
   findText(query: string, options?: { readonly matchCase?: boolean }): FindState {
     const matchCase = options?.matchCase !== false;
-    this.#find = { query, matches: findMatches(this.#state.doc, query, { matchCase }), current: null, matchCase };
+    this.#find = {
+      query,
+      matches: findMatches(this.#state.doc, query, { matchCase }),
+      current: null,
+      matchCase,
+    };
     this.#publishFind();
     return this.findState.get();
   }
@@ -2819,6 +2980,18 @@ export class DocumentCore implements DocumentApi {
    * refusal is recorded as the guard records one (FE-036).
    */
   replaceCurrent(text: string): ReplaceReport {
+    return this.#reported(this.#replaceCurrent(text), false);
+  }
+
+  /** Publishes the counts of a replace for the shell's report (FE-060 criterion 3). */
+  #reported(report: ReplaceReport, all: boolean): ReplaceReport {
+    if (report.replaced > 0 || report.skipped > 0) {
+      this.replaced.set({ n: ++this.#replacements, all, ...report });
+    }
+    return report;
+  }
+
+  #replaceCurrent(text: string): ReplaceReport {
     const f = this.#find;
     const m = f.current === null ? undefined : f.matches[f.current];
     if (!m) return { replaced: 0, skipped: 0 };
@@ -2839,6 +3012,10 @@ export class DocumentCore implements DocumentApi {
    * refusal is recorded once with the scopes that blocked it.
    */
   replaceAll(text: string): ReplaceReport {
+    return this.#reported(this.#replaceAll(text), true);
+  }
+
+  #replaceAll(text: string): ReplaceReport {
     const f = this.#find;
     const tr = this.#state.tr;
     const blocked = new Set<string>();
@@ -3120,7 +3297,21 @@ export class DocumentCore implements DocumentApi {
       const out: ImagePasteResult[] = [];
       for (const [i, image] of images.entries()) {
         try {
-          out.push(await pasteImage(host, image, port, { writable }));
+          const result = await pasteImage(host, image, port, { writable });
+          out.push(result);
+          // The user is told why the picture was not added (FE-053 criterion 3), in the shell's
+          // own words: the refusal view carries the reason only, never the service's message.
+          if (!result.ok) {
+            this.#refused({
+              reason:
+                result.reason === 'read-only'
+                  ? this.#locked()
+                    ? 'read-only'
+                    : 'scope'
+                  : result.reason,
+              scopes: [],
+            });
+          }
         } finally {
           host.dispatch(removePlaceholder(this.#state.tr, ids[i] ?? 0));
         }
@@ -3266,13 +3457,45 @@ export class DocumentCore implements DocumentApi {
     // 07 §7 (FE-056 criterion 6): a person who may not change the story gets no panel, so the
     // command is disabled for them. A read-only panel would need the view, which is not built.
     if (!this.canEdit(`story:${id}`)) return false;
-    this.#open({ kind: 'story', id }, 'Header');
+    const role = roleOfStory(this.#state.doc, id);
+    this.#open({ kind: 'story', id }, role?.part === 'footer' ? 'Footer' : 'Header', role);
     return true;
   }
 
-  #open(target: { kind: 'footnote' | 'story'; id: string }, label: string): void {
+  /**
+   * The variants of the header and footer the page setup uses, each with the story it names or null
+   * and whether the person may edit it, or create it when there is none (FE-057 criterion 1).
+   */
+  storyVariants(): Array<StoryVariantInfo & { editable: boolean }> {
+    return storyVariantsOf(this.#state.doc).map((v) => ({
+      ...v,
+      editable: v.story === null ? this.canEdit('doc') : this.canEdit(`story:${v.story}`),
+    }));
+  }
+
+  /**
+   * Opens the header or footer of a variant in the panel. A variant with no story yet gets one first,
+   * through the guard (FE-057 criterion 2). False, and nothing changes, when the page setup does not
+   * use the variant, when the person may not change the story, or when the guard refuses the new story.
+   */
+  editStory(part: StoryPart, variant: StoryVariant): boolean {
+    const found = this.storyVariants().find((v) => v.part === part && v.variant === variant);
+    if (found === undefined) return false;
+    if (found.story !== null) return this.openStory(found.story);
+    return this.#createStory(this.#state, (tr) => this.dispatchTransaction(tr), part, variant);
+  }
+
+  #open(
+    target: { kind: 'footnote' | 'story'; id: string },
+    label: string,
+    role: { part: StoryPart; variant: StoryVariant | null } | null = null,
+  ): void {
     this.#target = target;
-    this.panel.set({ ...target, label });
+    this.panel.set({
+      ...target,
+      label,
+      ...(role === null ? {} : { part: role.part, variant: role.variant }),
+    });
     this.revision.set(this.revision.get() + 1);
   }
 

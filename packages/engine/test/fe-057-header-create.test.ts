@@ -47,7 +47,13 @@ describe('editing a header that does not exist yet (FE-057 criterion 2)', () => 
     expect(created).toHaveLength(1);
     expect(headerDefaultOf(c)).toBe(created[0]);
     const panel = c.panel.get();
-    expect(panel).toEqual({ kind: 'story', id: created[0], label: 'Header' });
+    expect(panel).toEqual({
+      kind: 'story',
+      id: created[0],
+      label: 'Header',
+      part: 'header',
+      variant: 'default',
+    });
     // The story holds one empty paragraph and the body is unchanged.
     const doc = internals(c).state.doc;
     let text = '';

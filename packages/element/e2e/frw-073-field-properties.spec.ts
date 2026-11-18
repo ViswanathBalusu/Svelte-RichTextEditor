@@ -194,6 +194,83 @@ test.describe('FRW-073 the field properties pane', () => {
     );
   });
 
+  test('the key, kind, options, default and format are edited in the pane, and each change is a commit of attributes (criteria 1 and 3)', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mountFields(page, { name: 'one', sub: 'bob', role: 'editor' });
+    await control(page, FIELD_IDS.name).click();
+    await page.locator(`${EDITOR} .de-editing-surface p`).first().click();
+    const pane = await openPane(page);
+    await expect(pane.locator('[data-fields="choose"]')).toHaveValue(FIELD_IDS.name);
+    const before = await confirmedSeq(page);
+
+    // The text field becomes a choice: a new key, the options (one per line), a default that is
+    // the identifier of an option, and a read-only flag.
+    await pane.getByLabel('Key', { exact: true }).fill('tenant.status');
+    await pane.getByLabel('Kind', { exact: true }).selectOption('choice');
+    await pane
+      .getByLabel('Options', { exact: true })
+      .fill('opt_single | Single\nopt_married | Married');
+    await pane.getByLabel('Default value').fill('opt_married');
+    await pane.getByLabel('Read-only', { exact: true }).check();
+    await pane.getByRole('button', { name: 'Apply' }).click();
+    await expect.poll(async () => (await attrs(page, FIELD_IDS.name))['kind']).toBe('choice');
+    expect(await attrs(page, FIELD_IDS.name)).toMatchObject({
+      key: 'tenant.status',
+      kind: 'choice',
+      options: [
+        { id: 'opt_single', label: 'Single' },
+        { id: 'opt_married', label: 'Married' },
+      ],
+      default: 'opt_married',
+      readOnly: true,
+    });
+    // One commit for all of it, and the log keeps what the field was before (the history of the
+    // document: the content at the earlier sequence number).
+    expect(await confirmedSeq(page)).toBe(before + 1);
+    const earlier = await page.evaluate(
+      async ({ seq }) => {
+        const e = (
+          window as unknown as {
+            __embed: {
+              service: {
+                backend(
+                  user: { sub: string },
+                  docs: Record<string, string>,
+                ): {
+                  connect(): Promise<void>;
+                  sync: { loadContent(id: string, seq: number): Promise<{ doc: unknown }> };
+                };
+              };
+              fieldsDocId: string;
+            };
+          }
+        ).__embed;
+        const reader = e.service.backend({ sub: 'olga' }, { [e.fieldsDocId]: 'owner' });
+        await reader.connect();
+        return JSON.stringify((await reader.sync.loadContent(e.fieldsDocId, seq)).doc);
+      },
+      { seq: before },
+    );
+    expect(earlier).toContain('"key":"tenant.name"');
+    expect(earlier).not.toContain('tenant.status');
+
+    // A number field gets a display format: decimals and a suffix.
+    await pane.locator('[data-fields="choose"]').selectOption(FIELD_IDS.amount);
+    await expect(pane.getByLabel('Key', { exact: true })).toHaveValue('tenant.amount');
+    await pane.getByLabel('Format (JSON object)').fill('{"decimals":2,"suffix":" EUR"}');
+    await pane.getByRole('button', { name: 'Apply' }).click();
+    await expect
+      .poll(async () => (await attrs(page, FIELD_IDS.amount))['format'])
+      .toEqual({ decimals: 2, suffix: ' EUR' });
+    // The control of the number field shows the format, and the stored value stays as typed.
+    await control(page, FIELD_IDS.amount).fill('7.5');
+    await control(page, FIELD_IDS.amount).press('Tab');
+    await expect(control(page, FIELD_IDS.amount)).toHaveValue('7.50 EUR');
+    await expect.poll(async () => (await attrs(page, FIELD_IDS.amount))['value']).toBe('7.5');
+  });
+
   test('a user without edit gets the pane read-only', async ({ page }) => {
     await openEmbed(page);
     await mountFields(page, { name: 'one', sub: 'vic', role: 'commenter' });

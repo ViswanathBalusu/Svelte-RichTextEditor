@@ -67,6 +67,7 @@ export type {
   InsertResult,
   ModeState,
   PageSetupArgs,
+  ReplaceNotice,
   ReplaceReport,
   StatusSummary,
   OutlineItem,
@@ -88,6 +89,7 @@ export type {
   SyncSnapshot,
   SyncSummary,
 } from './api.ts';
+export type { StoryPart, StoryVariant, StoryVariantInfo } from './header-footer.ts';
 export type {
   AssetsPort,
   ImagePasteResult,

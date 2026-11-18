@@ -68,7 +68,13 @@ describe('the variants a page setup uses (FE-057 criterion 1)', () => {
     const c = core();
     const id = storyOfVariant(internals(c).state.doc, 'ps1', 'header', 'default')!;
     c.openStory(id);
-    expect(c.panel.get()).toEqual({ kind: 'story', id: SPIKE_IDS.header, label: 'Header' });
+    expect(c.panel.get()).toEqual({
+      kind: 'story',
+      id: SPIKE_IDS.header,
+      label: 'Header',
+      part: 'header',
+      variant: 'default',
+    });
   });
 });
 

@@ -96,7 +96,7 @@ The CDM reserves `extension_block` and `extension_inline`. Each carries an exten
 
 | Budget | Target |
 |---|---|
-| Initial bundle | At most 300 KB compressed for the first interactive editor; the PDF viewer, math editor, panes, proofing and assistant load on demand |
+| Initial bundle | At most 320 KB compressed for the first interactive editor (owner decision 32, 2026-11-17; it was 300 KB); the PDF viewer, math editor, panes, proofing and assistant load on demand |
 | Time to interactive | Under 2 seconds for a 20-page document on the reference machine |
 | Typing latency | 00, section 9, measured with the Event Timing API on a named reference machine with CPU throttling |
 | Long documents | The web view usable to 300 pages; the page view to 1,000 pages with virtualisation |

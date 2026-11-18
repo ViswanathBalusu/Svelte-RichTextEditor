@@ -543,12 +543,66 @@ local function decorate(line, para, first, last)
   if list then setlist(line, insert_before(list, list, lit)) else setlist(line, lit) end
 end
 
+-- Inline equations are clipped to their box (EXP-052 criterion 5). \DEmath sets DE@attr@mclip on
+-- the math nodes of an equation. In each line, the material from the start of an equation to its
+-- end (or from the start of the line, or to its end, where the line breaker broke inside it) is
+-- measured with the line's glue, and a PDF clip path of that box is put round it: `q ... W n`
+-- before it and `Q` after it. Nothing here changes the line breaks or the offsets of EXP-055,
+-- since the clip is made after the breaking and only adds whatsits.
+local function clip_literal(mode, data)
+  PDF_LITERAL = PDF_LITERAL or node.subtype("pdf_literal")
+  local lit = new_node(node.id("whatsit"), PDF_LITERAL)
+  direct.setfield(lit, "mode", mode)
+  direct.setfield(lit, "data", data)
+  return lit
+end
+
+local function clip_math(line, open)
+  local list = getlist(line)
+  if not list then return open end
+  local gset, gorder, gsign = getglue(line)
+  local segments = {}
+  local from = open and list or nil -- first node of the segment; the opening math node for a new one
+  local opening = nil
+  local n = list
+  while n do
+    if getid(n) == MATH and has_attribute(n, A.mclip) then
+      if getsubtype(n) == MATH_BEGIN then
+        from, opening = getnext(n), n
+        open = true
+      elseif open then
+        segments[#segments + 1] = { first = from, stop = n, opening = opening, closing = n }
+        from, opening, open = nil, nil, false
+      end
+    end
+    n = getnext(n)
+  end
+  if open then segments[#segments + 1] = { first = from, stop = nil, opening = opening } end
+  for _, seg in ipairs(segments) do
+    if seg.first then
+      local w, h, d = direct.dimensions(gset, gsign, gorder, seg.first, seg.stop)
+      local head = getlist(line)
+      -- `q` is written where the stream's origin is the page's (mode 2, direct: no translation), so
+      -- that the matching `Q` restores the origin that the backend believes in. The rectangle is
+      -- written at the box's own origin (mode 0, origin).
+      local anchor = seg.opening or head
+      head = insert_before(head, anchor, clip_literal(2, "q"))
+      head = insert_before(head, anchor,
+        clip_literal(0, "0 " .. bp(-d) .. " " .. bp(w) .. " " .. bp(h + d) .. " re W n"))
+      head = direct.insert_after(head, seg.closing or direct.tail(head), clip_literal(2, "Q"))
+      setlist(line, head)
+    end
+  end
+  return open
+end
+
 -- post_linebreak_filter: tab stops, then line boxes, then shading and borders.
 local function lines(head)
   local h = todirect(head)
   local para = paragraph_of(h)
   if not para then return true end
   local first_line, last_line
+  local clipping = false
   local n = h
   while n do
     local id = getid(n)
@@ -571,6 +625,7 @@ local function lines(head)
       if descent > lh then descent = lh end
       setheight(n, sp(lh - descent))
       setdepth(n, sp(descent))
+      clipping = clip_math(n, clipping)
     elseif id == GLUE then
       local st = getsubtype(n)
       if st == GLUE_BASELINE or st == GLUE_LINESKIP then setglue(n, 0, 0, 0, 0, 0) end
