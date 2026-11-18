@@ -557,6 +557,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // fill pane, and the move of focus to a field's control.
     fill,
     focusField: (id) => core.focusField(id),
+    // Preview as a role (FRW-075): the core shows fill mode for one role and never commits it.
+    rolePreview: core.rolePreview,
+    startRolePreview: (role) => core.startRolePreview(role),
+    endRolePreview: () => core.endRolePreview(),
     status,
     pdf,
     ...(options.exports ? { exports: options.exports } : {}),

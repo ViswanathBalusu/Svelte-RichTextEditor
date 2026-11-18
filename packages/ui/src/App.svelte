@@ -42,6 +42,7 @@
   import MiniToolbar from './components/MiniToolbar.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
   import FillBar from './components/FillBar.svelte';
+  import RolePreviewBar from './components/RolePreviewBar.svelte';
   import WorkflowBanner from './components/WorkflowBanner.svelte';
   import FullToolbar from './components/FullToolbar.svelte';
   import Header from './components/Header.svelte';
@@ -1426,6 +1427,9 @@
   {/if}
   {#if core.workflowSend}
     <WorkflowBanner service={core.workflowSend} />
+  {/if}
+  {#if core.rolePreview}
+    <RolePreviewBar preview={core.rolePreview} onLeave={() => core.endRolePreview?.()} />
   {/if}
   {#if core.fill}
     <FillBar fill={core.fill} onFinish={finishFill} />
