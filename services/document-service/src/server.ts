@@ -1005,6 +1005,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     restPath: REST_PATH,
     now,
     ...(parts.versions ? { versions: parts.versions } : {}),
+    ...(parts.audit ? { audit: parts.audit } : {}),
     versionFailed: (job) =>
       logger.error({
         event: 'export.version',

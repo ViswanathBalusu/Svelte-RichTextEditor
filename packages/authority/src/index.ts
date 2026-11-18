@@ -554,3 +554,10 @@ export {
   type GatewayStats,
   type Visibility,
 } from './projection/gateway.ts';
+
+export {
+  finalExportRequest,
+  type FinalExportRequest,
+  type FinalExportVerdict,
+  type FinalisationOptions,
+} from './workflow/final-export.ts';

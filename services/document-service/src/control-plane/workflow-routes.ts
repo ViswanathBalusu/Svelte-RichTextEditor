@@ -27,7 +27,7 @@ import {
   type WorkflowParticipant,
 } from '@docedit/authority';
 import { createHash } from 'node:crypto';
-import { canonicalize } from '@docedit/model';
+import { canonicalize, uuid7 } from '@docedit/model';
 import { recordCorrection, recordResume } from '../workflow/correction.ts';
 import { recordDecline, recordVoid, type StopOutcome } from '../workflow/stop.ts';
 import { recordRemind } from '../workflow/schedule-sweep.ts';
@@ -40,6 +40,8 @@ import { acceptConsent, type ConsentProblem } from '../workflow/consent-service.
 import { recordOf } from '../workflow/record.ts';
 import { signField, type SignProblem } from '../workflow/sign-service.ts';
 import { completeMyPart, type CompleteProblem } from '../workflow/complete-service.ts';
+import { startFinalExport } from '../workflow/final-export-start.ts';
+import { EXPORT_POLICY_DEFAULTS } from './export-routes.ts';
 import type { ProgressOutcome } from '../workflow/progress.ts';
 import { recordTransition } from '../workflow/transitions.ts';
 import { checkIfMatch } from './http.ts';
@@ -880,6 +882,39 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
         control: out.control,
         raised: out.raised,
       });
+    // The workflow has reached `completed`: the final export starts (12 §8.2 step 1; FRW-049). A
+    // failure to start it does not undo the completion; it is audited and the workflow stays
+    // `completed`.
+    if (out.changed && out.raised.some((e) => e.name === 'completed')) {
+      await startFinalExport(
+        {
+          logs: d.logs,
+          grants: d.grants,
+          content: d.content,
+          views: d.views,
+          queue: d.queue,
+          policy: d.exportPolicy ?? EXPORT_POLICY_DEFAULTS,
+          targets: d.exportTargets,
+          versions: d.versions,
+          audit: d.audit,
+          now: d.now,
+          onQueued: d.onJobQueued,
+        },
+        { ref: k.refOf(ctx, doc), workflow: out.resource, fallbackActor: ctx.caller.actor },
+      ).catch((e: unknown) => {
+        void d.audit?.record([
+          {
+            id: uuid7(),
+            tenant: ctx.caller.tenant,
+            doc,
+            actor: 'system',
+            kind: 'workflow.finalisation_failed',
+            data: { workflow: out.resource.id, stage: 'start', reason: String(e) },
+            at: d.now(),
+          },
+        ]);
+      });
+    }
     return json(200, toWire(out.resource), {
       ETag: out.resource.etag,
       'Cache-Control': 'private, no-store',
