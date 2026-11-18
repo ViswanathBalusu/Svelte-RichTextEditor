@@ -440,8 +440,11 @@ export {
 export { fieldOwnersOf, snapshotOf } from './workflow/snapshot.ts';
 export {
   applicableItems,
+  signatureImageHash,
+  signingEvents,
   type EvidenceItem,
   type ParticipantKind,
+  type SigningFact,
 } from './workflow/participant-evidence.ts';
 export {
   DAY_MS,
