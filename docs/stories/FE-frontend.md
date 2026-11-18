@@ -2934,6 +2934,8 @@ As a maintainer, I want the iOS Safari input-method problems inside shadow roots
 
 **Notes:** Lane FE-105-117, round 3 (2026-11-13): not started; nothing ticked. Every criterion needs an iOS device and iOS version to reproduce the failures that S1 listed (SPK-014), and the lane has no device. The spike's input is S1's list, which is not in this package. The recommendation (criterion 3) follows the reproduction and so waits for it.
 
+**Notes (lane w1, 2026-11-18):** Blocked; nothing new could be ticked. Criterion 1 asks for each failure to be reproduced on a named device and iOS version. This machine runs Windows and has no iPhone or iPad. Playwright's WebKit build on Windows (and its `iPhone` device descriptors, which only set a viewport, touch and user agent) is not iOS Safari: it has no iOS software keyboard or input-method editor, so a result from it would not reproduce an iOS failure and would not belong in the spike. The input of the spike is thinner than the criterion assumes: S1 (docs/spikes/2026-11-06-s1-prosemirror-shadow-root.md) lists the iOS 17 and current-iOS Safari pass as an unticked checklist item, with no recorded failures, so there is no list of failures to reproduce until a person runs that pass. The matrix case is `ios-keyboard-ko` in `packages/element/test/input-method-matrix.ts` (manual in every browser); neither can be run here. Criteria 2 and 3 follow criterion 1. Needs from others: a person with an iOS device and the project's test page, to run the iOS cell of the FE-123 matrix and report the iOS version.
+
 ## Browser support and performance (02 §12, §13)
 
 ### FE-116 Support the declared browser versions
