@@ -43,7 +43,7 @@ import { uuid7 } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import type { StoredComment, StoredTarget, StoredThread } from '../storage/thread-store.ts';
 import type { DocRef } from '../storage/types.ts';
-import { accessOf, connectionOn, regionInfosOfJson } from './gate.ts';
+import { accessOf, connectionOn, refuseSeqBelowGate, regionInfosOfJson } from './gate.ts';
 import { checkIfMatch, pageLimit, seqParam } from './http.ts';
 import { json, type Kit } from './kit.ts';
 import { mentionsOf } from './mentions.ts';
@@ -389,7 +389,7 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
   const listThreads: Handler = async (ctx): Promise<Reply> => {
     const doc = ctx.params['id']!;
     const s = store();
-    await liveDocument(ctx, doc);
+    const record = await liveDocument(ctx, doc);
     if (ctx.caller.kind === 'user' && ctx.caller.identity!.docs[doc] === undefined)
       throw new ApiError('not_found', 'no such document');
     const ref = refOf(ctx, doc);
@@ -400,6 +400,8 @@ export function threadRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('validation_failed', `seq is beyond the head (${head.seq})`, {
         violations: [{ path: 'seq', rule: 'at most the head' }],
       });
+    // The threads at a state reveal where text was, so a `seq` below the gate is refused (PRM-042).
+    await refuseSeqBelowGate(d, ctx.caller, ref, record, head.seq, seq);
     const limit = pageLimit(ctx.url);
     const cursor = ctx.url.searchParams.get('cursor');
     const after = cursor !== null ? d.cursors.open(`threads/${doc}`, cursor) : undefined;

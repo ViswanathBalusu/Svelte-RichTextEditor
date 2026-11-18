@@ -11,7 +11,6 @@ import {
   type PermissionState,
   type RegionGrant,
   parsePrincipal,
-  roleCaps,
 } from '@docedit/authority';
 import {
   canonicalize,
@@ -54,7 +53,7 @@ import { threadRoutes } from './thread-routes.ts';
 import { versionRoutes } from './versions-routes.ts';
 import { leaseRoutes } from './lease-routes.ts';
 import { emptyCatalogue, fontsEtag } from './fonts.ts';
-import { minVisibleSeqOf, refuseBelowGate, regionInfosOfJson } from './gate.ts';
+import { refuseSeqBelowGate } from './gate.ts';
 import { checkIfMatch, ifMatchTags, pageLimit, seqParam } from './http.ts';
 import { createKit, json, notModified, type HandlerDeps, type Kit } from './kit.ts';
 import { guard, type Ctx, type Handler } from './pipeline.ts';
@@ -364,22 +363,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
    * sees full history under the default setting without reading regions.
    */
   async function gateFor(ctx: Ctx, record: DocumentRecord, head: number, seq: number) {
-    if (seq >= head || ctx.caller.kind === 'service') return;
-    const role = ctx.caller.identity!.docs[record.id];
-    if (record.historyVisibility === 'editors' && role && roleCaps(role).has('edit')) return;
-    const ref = refOf(ctx, record.id);
-    const full = await d.content.rebuild(ref, (await d.logs.head(ref)).incarnation, head);
-    const min = await minVisibleSeqOf({
-      caller: ctx.caller,
-      ref,
-      record,
-      head,
-      regions: regionInfosOfJson(full.doc),
-      perms: await d.grants.current(ref),
-      logs: d.logs,
-      now: d.now(),
-    });
-    refuseBelowGate(seq, min, head);
+    await refuseSeqBelowGate(d, ctx.caller, refOf(ctx, record.id), record, head, seq);
   }
 
   const getContent: Handler = async (ctx) => {
