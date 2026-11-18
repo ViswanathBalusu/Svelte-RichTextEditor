@@ -12,6 +12,7 @@ import type {
   CheckpointRow,
   DocRef,
   NewOutboxItem,
+  NodeInfo,
   NodeLeaseStore,
   OutboxItem,
   OutboxStore,
@@ -211,6 +212,7 @@ export class MemoryOutboxWriter implements OutboxWriter {
 /** Node leases judged by an injected database clock (default the system clock). */
 export class MemoryNodeLeases implements NodeLeaseStore {
   readonly #leases = new Map<string, number>();
+  readonly #addresses = new Map<string, string>();
   readonly #dbNow: () => number;
   /** Set by a test to make renewals fail, as an unreachable database would. */
   failing = false;
@@ -219,9 +221,20 @@ export class MemoryNodeLeases implements NodeLeaseStore {
     this.#dbNow = dbNow;
   }
 
-  async renew(node: string, leaseMs: number): Promise<void> {
+  async renew(node: string, leaseMs: number, address?: string): Promise<void> {
     if (this.failing) throw new Error('the database is unreachable');
     this.#leases.set(node, this.#dbNow() + leaseMs);
+    if (address === undefined) this.#addresses.delete(node);
+    else this.#addresses.set(node, address);
+  }
+
+  async live(): Promise<NodeInfo[]> {
+    if (this.failing) throw new Error('the database is unreachable');
+    const now = this.#dbNow();
+    return [...this.#leases.entries()]
+      .filter(([, until]) => until > now)
+      .map(([node]) => ({ node, address: this.#addresses.get(node) ?? null }))
+      .sort((a, b) => (a.node < b.node ? -1 : a.node > b.node ? 1 : 0));
   }
 
   async alive(node: string): Promise<boolean> {
@@ -232,6 +245,7 @@ export class MemoryNodeLeases implements NodeLeaseStore {
 
   async release(node: string): Promise<void> {
     this.#leases.delete(node);
+    this.#addresses.delete(node);
   }
 
   /** When the lease of `node` expires by the database clock, for tests. */

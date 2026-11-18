@@ -4,7 +4,7 @@
  * monotonic clock from the moment it sent the renewal (lease.ts).
  */
 import type { Pool } from '../../storage/db.ts';
-import type { NodeLeaseStore } from '../../storage/types.ts';
+import type { NodeInfo, NodeLeaseStore } from '../../storage/types.ts';
 
 export class PgNodeLeases implements NodeLeaseStore {
   readonly #pool: Pool;
@@ -13,14 +13,22 @@ export class PgNodeLeases implements NodeLeaseStore {
     this.#pool = pool;
   }
 
-  async renew(node: string, leaseMs: number): Promise<void> {
+  async renew(node: string, leaseMs: number, address?: string): Promise<void> {
     await this.#pool.query(
-      `INSERT INTO node_leases (node, expires_at, renewed_at, started_at)
-       VALUES ($1, now() + make_interval(secs => $2 / 1000.0), now(), now())
+      `INSERT INTO node_leases (node, expires_at, renewed_at, started_at, address)
+       VALUES ($1, now() + make_interval(secs => $2 / 1000.0), now(), now(), $3)
        ON CONFLICT (node) DO UPDATE
-         SET expires_at = excluded.expires_at, renewed_at = excluded.renewed_at`,
-      [node, Math.max(1, Math.round(leaseMs))],
+         SET expires_at = excluded.expires_at, renewed_at = excluded.renewed_at,
+             address = excluded.address`,
+      [node, Math.max(1, Math.round(leaseMs)), address ?? null],
     );
+  }
+
+  async live(): Promise<NodeInfo[]> {
+    const r = await this.#pool.query<{ node: string; address: string | null }>(
+      'SELECT node, address FROM node_leases WHERE expires_at > now() ORDER BY node',
+    );
+    return r.rows.map((row) => ({ node: row.node, address: row.address }));
   }
 
   async alive(node: string): Promise<boolean> {

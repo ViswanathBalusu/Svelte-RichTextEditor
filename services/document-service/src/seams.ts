@@ -115,6 +115,11 @@ export interface DataPlaneDeps {
   readonly verify: VerifyToken;
   /** This node's identifier for ownership claims (06 §2.1). */
   readonly node: string;
+  /**
+   * The WebSocket URL clients of other nodes are told to use for this node (BE-061; owner decision
+   * 200). It is written on the node's lease row at each renewal. Absent: the node announces none.
+   */
+  readonly address?: string | undefined;
   /** Server time, Unix milliseconds. */
   readonly now: () => number;
   /** The node's shared rate limits (BE-030); the data plane makes its own when absent. */
