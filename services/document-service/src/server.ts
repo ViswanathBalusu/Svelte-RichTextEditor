@@ -77,6 +77,7 @@ import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
 import { HoldService, MemoryHoldStore, type HoldStore } from './control-plane/holds.ts';
 import { ErasureRequests } from './control-plane/erasure-requests.ts';
+import { CommitTombstone, type TombstoneStore } from './control-plane/commit-tombstone.ts';
 import {
   DAY_MS,
   DocumentPurge,
@@ -213,6 +214,11 @@ export interface ServiceParts {
   purgeStore?: PurgeStore;
   /** The search entries the purge removes with a document (HIS-039). Optional. */
   searchPurge?: SearchPurge;
+  /**
+   * The rows of a commit tombstone (HIS-040). Like `purgeStore` it needs a pool that connects as a
+   * member of `docedit_purge`. Absent: the route is not offered.
+   */
+  tombstoneStore?: TombstoneStore;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
@@ -568,6 +574,18 @@ export async function startService(opts: StartOptions): Promise<Service> {
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
   const erasures = erasuresOver(parts, now);
+  const tombstones =
+    parts.tombstoneStore && parts.audit && parts.checkpointIndex
+      ? new CommitTombstone({
+          store: parts.tombstoneStore,
+          documents: parts.documents,
+          checkpoints: parts.checkpointIndex,
+          objects: parts.objects,
+          audit: parts.audit,
+          held: async (tenant, doc) => (parts.holds ? parts.holds.inForce(tenant, doc) : false),
+          now,
+        })
+      : undefined;
   if (parts.replica && opts.readSessions === undefined)
     throw new Error('a read replica needs readSessions, the sessions kept for read-your-writes');
   // The node labels every control-plane series too (06 §11; BE-086 criterion 2).
@@ -1122,6 +1140,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     tenantRegistry: parts.registry,
     ...(parts.holds ? { holds: parts.holds } : {}),
     ...(erasures ? { erasures } : {}),
+    ...(tombstones ? { tombstones } : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
     ...(parts.policyHook ? { policyHook: parts.policyHook } : {}),
     ...(parts.search ? { search: parts.search } : {}),

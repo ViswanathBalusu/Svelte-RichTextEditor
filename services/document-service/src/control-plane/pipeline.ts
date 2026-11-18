@@ -39,6 +39,7 @@ import {
   fingerprintOf,
   isIdempotencyKey,
 } from './idempotency.ts';
+import { PayloadAbsentError } from '../storage/payload-absent.ts';
 import { ApiError, isApiError, type RestCode } from './problems.ts';
 import { Router, type OperationDef } from './router.ts';
 import type { TenantRegistry } from './tenants.ts';
@@ -309,7 +310,8 @@ export class Pipeline {
     } catch (e) {
       const err = isApiError(e)
         ? e
-        : (registryRefusal(e) ??
+        : (payloadAbsentRefusal(e) ??
+          registryRefusal(e) ??
           infrastructureRefusal(e, this.#o.unavailableRetryAfterS ?? 1) ??
           new ApiError('internal', 'the request failed', { cause: e }));
       status = err.status;
@@ -513,6 +515,21 @@ const REST_CODES: ReadonlySet<string> = new Set(
  * An error of another part (the data plane's `readContent`, a store) that carries a registry code
  * of the REST surface becomes that problem; its message is not passed on, since it may quote input.
  */
+/**
+ * A read that needs the payload of a commit that is not in the log table (thinned, moved to a cold
+ * segment or replaced by a tombstone; HIS-040 criterion 2, HIS-032 criterion 4) is 
+ot_found with a
+ * message that the detail was removed. It never returns content built without the commit.
+ */
+function payloadAbsentRefusal(e: unknown): ApiError | null {
+  if (!(e instanceof PayloadAbsentError)) return null;
+  return new ApiError(
+    'not_found',
+    `the detail of commit ${e.seq} was removed and is no longer available (08 §11, §13)`,
+    { cause: e },
+  );
+}
+
 function registryRefusal(e: unknown): ApiError | null {
   const code = (e as { code?: unknown } | null)?.code;
   if (typeof code !== 'string' || !REST_CODES.has(code) || code === 'internal') return null;

@@ -66,6 +66,7 @@ import { registryRoutes } from './registry-routes.ts';
 import { retentionRoutes } from './retention-routes.ts';
 import { holdRoutes } from './hold-routes.ts';
 import { eraseRoutes } from './erase-routes.ts';
+import { tombstoneRoutes } from './tombstone-routes.ts';
 import { searchRoutes } from './search-routes.ts';
 import { webhookRoutes } from './webhook-routes.ts';
 
@@ -775,6 +776,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...registryRoutes(k),
     ...holdRoutes(k),
     ...eraseRoutes(k),
+    ...tombstoneRoutes(k),
     ...searchRoutes(k),
     ...workflowRoutes(k),
     getFonts,

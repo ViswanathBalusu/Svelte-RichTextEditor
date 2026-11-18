@@ -54,6 +54,7 @@ import {
   DocumentNotFoundError,
   OutcomeUnknownError,
   type AppendOptions,
+  type CommitMetaRow,
   type DocRef,
   type HeadState,
   type LogHead,
@@ -127,6 +128,19 @@ const COMMIT_ROWS = `
 
 const SELECT_COMMITS = `${COMMIT_ROWS}
    WHERE c.doc_id = $1 AND c.seq >= $2 AND ($3::bigint IS NULL OR c.seq <= $3)
+   ORDER BY c.seq`;
+
+/** The metadata of a range of commits, with no payload (`readMeta`). */
+const SELECT_COMMIT_META = `
+  SELECT c.seq, c.kind, c.user_id, c.session_id, c.server_ts, c.origin,
+         coalesce(s.scopes, '{}') AS scopes
+    FROM doc_commits c
+    LEFT JOIN LATERAL (
+      SELECT array_agg(cs.scope ORDER BY cs.scope COLLATE "C") AS scopes
+        FROM commit_scopes cs
+       WHERE cs.doc_id = c.doc_id AND cs.seq = c.seq
+    ) s ON true
+   WHERE c.doc_id = $1 AND c.seq >= $2 AND c.seq <= $3
    ORDER BY c.seq`;
 
 /** The stored commit with one of the identifiers, the earliest first. */
@@ -558,6 +572,29 @@ export class PgLogStore implements LogStore, OwnershipStore {
 
   async read(ref: DocRef, fromSeq = 1, toSeq?: number): Promise<LogCommit[]> {
     return this.#inTenant(ref, (c) => this.#select(c, ref.doc, fromSeq, toSeq ?? null), true);
+  }
+
+  /** The metadata of the commits in a range, with no payload read (HIS-040: a removed payload does not stop a list). */
+  async readMeta(ref: DocRef, fromSeq: number, toSeq: number): Promise<CommitMetaRow[]> {
+    return this.#inTenant(
+      ref,
+      async (c) => {
+        const r = await c.query<Omit<CommitRow, 'payload' | 'commit_id' | 'agent'>>(
+          SELECT_COMMIT_META,
+          [ref.doc, fromSeq, toSeq],
+        );
+        return r.rows.map((row) => ({
+          seq: int(row.seq),
+          kind: row.kind,
+          user: row.user_id,
+          session: row.session_id ?? SERVER_SESSION,
+          time: millis(row.server_ts)!,
+          origin: row.origin,
+          scopes: row.scopes,
+        }));
+      },
+      true,
+    );
   }
 
   /** The stored commit with this identifier (04 §5 step 2; BE-039), by the (doc_id, commit_id) key. */

@@ -3461,6 +3461,87 @@
         "outcome"
       ]
     },
+    "TombstoneRequest": {
+      "title": "TombstoneRequest",
+      "description": "The body of a tombstone of one commit payload (HIS-040; 08 section 13).",
+      "$comment": "08 §13; 13 §10",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Why the payload is removed. Trimmed; at most 500 characters. Recorded in the audit trail.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "TombstoneResult": {
+      "title": "TombstoneResult",
+      "description": "What a tombstone removed and which copies remain (HIS-040; 08 section 13).",
+      "$comment": "08 §13; 13 §10",
+      "type": "object",
+      "properties": {
+        "seq": {
+          "description": "The commit whose payload was removed.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "removedAt": {
+          "description": "When the payload was removed, ISO 8601 in UTC.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+        },
+        "copies": {
+          "description": "The copies that may still hold the removed text; they are not rewritten.",
+          "type": "object",
+          "properties": {
+            "checkpoints": {
+              "description": "Checkpoints at or after the commit, built by replaying it; they may still hold the removed text.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "coldSegments": {
+              "description": "Object keys of the cold segments whose range covers the commit.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "attributionMap": {
+              "description": "The attribution map may still name runs of the commit.",
+              "type": "string",
+              "enum": [
+                "may-hold-runs"
+              ]
+            },
+            "involves": {
+              "description": "What removing those copies involves, in fixed words.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "checkpoints",
+            "coldSegments",
+            "attributionMap",
+            "involves"
+          ]
+        }
+      },
+      "required": [
+        "seq",
+        "removedAt",
+        "copies"
+      ]
+    },
     "FieldInfo": {
       "title": "FieldInfo",
       "description": "A field in the derived list (12 §3.2; FRW-060).",

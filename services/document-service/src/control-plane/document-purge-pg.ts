@@ -9,6 +9,7 @@ import type { DeletedDocument, PurgeAssetRow, PurgeStore, SealedRow } from './do
 
 /** The tables whose rows are keyed by `doc_id`, in the order they are deleted (children first). */
 export const PURGE_TABLES: readonly string[] = [
+  'commit_tombstones',
   'commit_scopes',
   'doc_commit_payloads',
   'doc_snapshots',

@@ -19,6 +19,10 @@ It keeps the audit trail. The trail holds identifiers, never content, and record
 
 The job needs a database login that is a member of `docedit_purge` (migration 0073). That role may read and delete the document tables and nothing else. Give the job its own pool and pass it as `purgeStore` (`PgPurgeStore`); without it the job does not run.
 
+## Removing the payload of one commit
+
+`POST /documents/{id}/commits/{seq}/tombstone` (service credential only; HIS-040) deletes the payload of one commit and keeps its metadata, its payload hash and the hash chain. It is refused under a legal hold, and while no checkpoint covers the commit. It is audited (`commit.tombstoned`: the actor and the reason). The answer lists the checkpoints and cold segments that may still hold the text; the service does not rewrite them, so the operator rebuilds or removes them (and the backups, below). The route needs the same purge role and is offered only when `tombstoneStore` is given.
+
 ## Backups
 
 The service does not make backups and ships no backup schedule. A purge removes data from the live database and the object store. Copies in backups stay until the backup that holds them expires. So:

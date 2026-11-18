@@ -881,6 +881,31 @@ export interface ErasePersonResult {
   outcome: "erased" | "deferred";
 }
 
+/** The body of a tombstone of one commit payload (HIS-040; 08 section 13). */
+export interface TombstoneRequest {
+  /** Why the payload is removed. Trimmed; at most 500 characters. Recorded in the audit trail. */
+  reason: string;
+}
+
+/** What a tombstone removed and which copies remain (HIS-040; 08 section 13). */
+export interface TombstoneResult {
+  /** The commit whose payload was removed. */
+  seq: number;
+  /** When the payload was removed, ISO 8601 in UTC. */
+  removedAt: string;
+  /** The copies that may still hold the removed text; they are not rewritten. */
+  copies: {
+    /** Checkpoints at or after the commit, built by replaying it; they may still hold the removed text. */
+    checkpoints: number[];
+    /** Object keys of the cold segments whose range covers the commit. */
+    coldSegments: string[];
+    /** The attribution map may still name runs of the commit. */
+    attributionMap: "may-hold-runs";
+    /** What removing those copies involves, in fixed words. */
+    involves: string;
+  };
+}
+
 /** A field in the derived list (12 §3.2; FRW-060). */
 export interface FieldInfo {
   id: string;
@@ -2047,6 +2072,15 @@ export interface Operations {
     query: Record<string, never>;
     body: ErasePersonRequest;
     response: ErasePersonResult;
+  };
+  /** POST /documents/{id}/commits/{seq}/tombstone: Replaces the payload of one commit with a tombstone; the metadata, the payload hash and the chain stay; refused under a legal hold; audited with the actor and the reason; the answer lists the copies that may still hold the text (HIS-040). (08 §13; 13 §10) */
+  tombstoneCommit: {
+    method: "POST";
+    path: "/documents/{id}/commits/{seq}/tombstone";
+    params: { id: string; seq: number };
+    query: Record<string, never>;
+    body: TombstoneRequest;
+    response: TombstoneResult;
   };
   /** GET /documents/{id}/fields: The derived list of fields. (12 §10) */
   listFields: {
