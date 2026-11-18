@@ -176,6 +176,18 @@ export interface TrimNotice {
 }
 
 /**
+ * What a Replace or Replace all did (FE-060 criterion 3; the core's `replaced` view). `n` counts
+ * them, so the same counts twice are two reports. `replaced` and `skipped` are the real numbers of
+ * matches changed and left alone; the report names no scope and no text.
+ */
+export interface ReplaceNotice {
+  readonly n: number;
+  readonly all: boolean;
+  readonly replaced: number;
+  readonly skipped: number;
+}
+
+/**
  * One piece of work that was set aside (02 §2.2; 04 §8; 07 §9): a commit the server rejected, or
  * unsent work after a rebase failure, a reload or a reset. The shell lists it in the recovered
  * edits pane (UX-017) and announces its arrival.
@@ -666,6 +678,8 @@ export interface CoreApi {
   readonly refusal?: ReadView<RefusalNotice | null>;
   /** The last deletion the core trimmed to the editable parts (FE-037 criterion 2); the shell announces it. */
   readonly trimmed?: ReadView<TrimNotice | null>;
+  /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3); the shell reports it. */
+  readonly replaced?: ReadView<ReplaceNotice | null>;
   /** Work set aside (rejected or unsent); the shell lists it and announces new items (UX-017). */
   readonly recovered?: ReadView<RecoveredEdits>;
 

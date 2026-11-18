@@ -90,6 +90,7 @@ import type {
   PresencePeerInfo,
   RecoveredEdits,
   RecoveredItem,
+  ReplaceNotice,
   ReplaceReport,
   RefusalNotice,
   SaveState,
@@ -774,6 +775,8 @@ export class DocumentCore implements DocumentApi {
   readonly suggestion: ReadValue<SuggestionModeInfo>;
   /** The last deletion that kept protected content (FE-037): `n` counts them. */
   readonly trimmed: ReadValue<TrimReport | null>;
+  /** What the last Replace or Replace all did (FE-060 criterion 3): `n` counts them. */
+  readonly replaced: ReadValue<ReplaceNotice | null>;
   readonly recovered: ReadValue<RecoveredEdits>;
   readonly syncSummary: ReadValue<SyncSummary>;
   readonly presence: ReadValue<readonly PresencePeerInfo[]>;
@@ -847,6 +850,7 @@ export class DocumentCore implements DocumentApi {
   #referencedTargets: string[] = [];
   #referenceCursor = 0;
   #trims = 0;
+  #replacements = 0;
   #target: { kind: 'footnote' | 'story'; id: string } | null = null;
   readonly #bridges = new Set<ViewBridge>();
   readonly #deferRemote: boolean;
@@ -923,6 +927,7 @@ export class DocumentCore implements DocumentApi {
       hub,
     );
     this.trimmed = new ReadValue<TrimReport | null>(null, sameJson, hub);
+    this.replaced = new ReadValue<ReplaceNotice | null>(null, sameJson, hub);
     this.recovered = new ReadValue<RecoveredEdits>({ count: 0, items: [] }, sameJson, hub);
     this.syncSummary = new ReadValue<SyncSummary>(
       { seq: 0, incarnation: '', inflight: null, queued: 0 },
@@ -2975,6 +2980,18 @@ export class DocumentCore implements DocumentApi {
    * refusal is recorded as the guard records one (FE-036).
    */
   replaceCurrent(text: string): ReplaceReport {
+    return this.#reported(this.#replaceCurrent(text), false);
+  }
+
+  /** Publishes the counts of a replace for the shell's report (FE-060 criterion 3). */
+  #reported(report: ReplaceReport, all: boolean): ReplaceReport {
+    if (report.replaced > 0 || report.skipped > 0) {
+      this.replaced.set({ n: ++this.#replacements, all, ...report });
+    }
+    return report;
+  }
+
+  #replaceCurrent(text: string): ReplaceReport {
     const f = this.#find;
     const m = f.current === null ? undefined : f.matches[f.current];
     if (!m) return { replaced: 0, skipped: 0 };
@@ -2995,6 +3012,10 @@ export class DocumentCore implements DocumentApi {
    * refusal is recorded once with the scopes that blocked it.
    */
   replaceAll(text: string): ReplaceReport {
+    return this.#reported(this.#replaceAll(text), true);
+  }
+
+  #replaceAll(text: string): ReplaceReport {
     const f = this.#find;
     const tr = this.#state.tr;
     const blocked = new Set<string>();
