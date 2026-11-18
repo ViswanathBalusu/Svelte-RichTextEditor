@@ -849,7 +849,16 @@ export const EN_GB = {
   'history.group.origins': 'Origins: {origins}',
   'history.group.named': 'Named version',
   'history.version.by': 'Named by {name} at {time}',
-
+  'history.version.open': 'Open this version',
+  'history.version.open-at': 'Open this version, {when}',
+  'history.view.label': 'Read-only version, {when}',
+  'history.view.label.named': 'Read-only version {name}, {when}',
+  'history.view.note': 'This is a read-only copy. Changes to the live document do not appear here.',
+  'history.view.leave': 'Back to the live document',
+  'history.view.opening': 'Opening this version.',
+  'history.view.forbidden': 'You cannot open this version.',
+  'history.view.not-found': 'This version no longer exists.',
+  'history.view.failed': 'This version could not be opened.',
   // Names of the core's own surfaces (CoreApi.setLabels).
   'surface.body': 'Document',
   'surface.footnote': 'Footnote text',
