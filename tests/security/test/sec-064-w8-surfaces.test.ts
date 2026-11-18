@@ -27,7 +27,6 @@ import { FULL_VIEWS } from '../../../services/document-service/src/control-plane
 import { createExportHandler } from '../../../services/export-worker/src/job.ts';
 import { TEST_FONTS } from '../../../services/export-worker/test/fonts.ts';
 import { unsandboxed } from '../../../services/asset-worker/src/index.ts';
-import { objectKeys } from '../../../services/document-service/src/objects/store.ts';
 import { SearchIndex } from '../../../services/document-service/src/control-plane/search-index.ts';
 import {
   documentWithRegions,
@@ -355,17 +354,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           }
           const body = last.json as Record<string, unknown>;
           expect(['done', 'completed'], last.text).toContain(body['state']);
-          // The output is delivered by a signed URL of the object store; the test reads the object
-          // the URL names, from the store itself (the in-process store's URL is not fetchable).
+          // The output is delivered by a signed URL of the asset origin (SEC-036 criterion 6); the
+          // test reads the object the URL names, from the store itself (that origin is not running).
           const url = (body['result'] as { url: string }).url;
-          const path = decodeURIComponent(
-            url.replace(/^[a-z0-9+]+:\/\/[^/]*\//, '').split('?')[0]!,
-          );
-          // With an asset origin the URL is `e/{tenant}/{job}/{name}` (SEC-036); without one it names
-          // the object key itself.
-          const served = /^e\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(path);
-          const key = served ? objectKeys.exportFile(served[1]!, served[2]!, served[3]!) : path;
-          const bytes = await h.parts.objects.get(key.replace(/^objects\//, ''));
+          const named =
+            /^https:\/\/assets\.tests\.example\/e\/([0-9a-f-]{36})\/([0-9a-f-]{36})\/([^/?]+)\?/.exec(
+              url,
+            );
+          expect(named, `a result URL on the asset origin: ${url}`).not.toBeNull();
+          const key = `tenants/${named![1]}/exports/${named![2]}/${named![3]}`;
+          const bytes = await h.parts.objects.get(key);
           expect(bytes, `the output object ${key} exists`).not.toBeNull();
           return { status: last.status, text: `${last.text}\n${new TextDecoder().decode(bytes!)}` };
         };
