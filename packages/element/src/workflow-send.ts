@@ -9,17 +9,21 @@
  * back as the server's own failures, read from the violations of the problem, so the dialog can
  * show the server's verdict. No DOM: this runs in Node.js tests against a stand-in port.
  *
- * Not built: the push `wf.changed` (FRW-035 on the client), so a change made by another person
- * shows when the dialog is opened again.
+ * The workflow is read when the service is made and again on each `wf.changed` the port reports, so the
+ * lock banner (FRW-029 criterion 6) follows it. `dispose` stops following.
  */
 import { PortError, type WorkflowPort } from '@docedit/protocol';
 import type { EditorCore } from '@docedit/engine';
-import type { WorkflowSendOutcome, WorkflowSendService } from '@docedit/ui';
+import type {
+  WorkflowParticipantView,
+  WorkflowSendOutcome,
+  WorkflowSendService,
+} from '@docedit/ui';
 import { failuresFromViolations, type SendFailure } from '@docedit/ui/send-checklist';
 
 /** What the service needs of the session: the port and the document it is for. */
 export interface WorkflowSendSource {
-  readonly port: Pick<WorkflowPort, 'get' | 'act'>;
+  readonly port: Pick<WorkflowPort, 'get' | 'act'> & Partial<Pick<WorkflowPort, 'onChange'>>;
   readonly docId: string;
 }
 
@@ -65,7 +69,9 @@ export function workflowSendService(
 ): WorkflowSendService {
   let state: string | null = null;
   let participants: readonly { readonly roles: readonly string[] }[] = [];
+  let views: readonly WorkflowParticipantView[] = [];
   const stateListeners = new Set<() => void>();
+  const participantListeners = new Set<() => void>();
   const failureListeners = new Set<() => void>();
 
   let failures: readonly SendFailure[] = [];
@@ -85,9 +91,13 @@ export function workflowSendService(
     state = next;
     for (const listener of [...stateListeners]) listener();
   };
-  const setParticipants = (next: readonly { readonly roles: readonly string[] }[]): void => {
+  const setParticipants = (next: readonly WorkflowParticipantView[]): void => {
     participants = next;
     for (const listener of [...failureListeners]) listener();
+    // The list the banner reads is replaced only when it differs.
+    if (JSON.stringify(next) === JSON.stringify(views)) return;
+    views = next;
+    for (const listener of [...participantListeners]) listener();
   };
 
   async function refresh(): Promise<void> {
@@ -95,7 +105,14 @@ export function workflowSendService(
     if (!current) return;
     try {
       const { value } = await current.port.get(current.docId);
-      setParticipants(value.participants.map((p) => ({ roles: p.roles })));
+      setParticipants(
+        value.participants.map((p) => ({
+          id: p.id,
+          name: p.name ?? null,
+          roles: p.roles,
+          state: p.state ?? null,
+        })),
+      );
       setState(value.state);
     } catch (error) {
       // A document with no workflow resource yet is a draft with nobody bound.
@@ -106,7 +123,27 @@ export function workflowSendService(
     }
   }
 
+  // The workflow is read when the editor starts and again whenever the server says it changed
+  // (`wf.changed`), so the lock banner and the send dialog follow it without being opened.
+  let stop: (() => void) | undefined;
+  const first = source();
+  if (first) {
+    void refresh();
+    stop = first.port.onChange?.(first.docId, () => void refresh());
+  }
+
   return {
+    dispose() {
+      stop?.();
+      stop = undefined;
+    },
+    participants: {
+      get: () => views,
+      subscribe(listener) {
+        participantListeners.add(listener);
+        return () => participantListeners.delete(listener);
+      },
+    },
     state: {
       get: () => state,
       subscribe(listener) {

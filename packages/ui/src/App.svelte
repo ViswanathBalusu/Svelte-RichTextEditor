@@ -42,6 +42,7 @@
   import MiniToolbar from './components/MiniToolbar.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
   import FillBar from './components/FillBar.svelte';
+  import WorkflowBanner from './components/WorkflowBanner.svelte';
   import FullToolbar from './components/FullToolbar.svelte';
   import Header from './components/Header.svelte';
   import StatusBar from './components/StatusBar.svelte';
@@ -84,6 +85,7 @@
   import { focusTarget, landmarkKeys, landmarksIn, nextLandmark } from './shell/landmarks.ts';
   import { modeOptions } from './shell/modes.ts';
   import type { CheckTarget } from './shell/send-checklist.ts';
+  import { lockKind } from './shell/workflow-lock.ts';
   import { START_TRACK, stepMode, type ModeTrack } from './shell/suggest-mode.ts';
   import { NoticeTracker, type Notice } from './shell/notices.ts';
   import { PaneRegistry, type PaneComponent } from './shell/panes.ts';
@@ -445,14 +447,16 @@
       trimmed?.get(),
       replaced?.get(),
     );
+    // While a workflow holds the document, a refused or rejected change is explained in its words.
+    const locked = (): boolean => lockKind(core.workflowSend?.state.get() ?? null) !== null;
     const show = (next: Notice | null) => {
       if (!next) return;
       notice = next;
       announce(next.key, { count: next.count, ...next.params });
     };
     const stops: Array<() => void> = [];
-    if (refusal) stops.push(refusal.subscribe(() => show(tracker.refusal(refusal.get()))));
-    if (recovered) stops.push(recovered.subscribe(() => show(tracker.recovered(recovered.get()))));
+    if (refusal) stops.push(refusal.subscribe(() => show(tracker.refusal(refusal.get(), locked()))));
+    if (recovered) stops.push(recovered.subscribe(() => show(tracker.recovered(recovered.get(), locked()))));
     if (trimmed) stops.push(trimmed.subscribe(() => show(tracker.trimmed(trimmed.get()))));
     // After the refusal: a Replace all that skipped matches records a refusal first, and the report
     // with the counts is the notice that stays (FE-060 criterion 3).
@@ -1273,6 +1277,9 @@
     <FullToolbar onEscape={() => core.focus()} />
   {:else if mode.toolbar !== 'none'}
     <Toolbar onEscape={() => core.focus()} />
+  {/if}
+  {#if core.workflowSend}
+    <WorkflowBanner service={core.workflowSend} />
   {/if}
   {#if core.fill}
     <FillBar fill={core.fill} onFinish={finishFill} />

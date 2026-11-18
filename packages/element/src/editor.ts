@@ -274,6 +274,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
   });
 
   const fill = fillView(core);
+  // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
+  const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
   const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;
@@ -501,7 +503,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     pdf,
     ...(options.exports ? { exports: options.exports } : {}),
     // The send dialog (FRW-028): the pre-send checks and the send action.
-    ...(options.workflow ? { workflowSend: workflowSendService(core, options.workflow) } : {}),
+    ...(workflowSend ? { workflowSend } : {}),
     // How suggestions are shown (UX-035), and the words that name them for assistive technology.
     markupView: core.markupView,
     setMarkupView: (view) => core.setMarkupView(view),
@@ -659,6 +661,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       for (const viewer of viewers) viewer.destroy();
       viewers.clear();
       stopShortcuts();
+      workflowSend?.dispose?.();
       void unmount(app);
       registry.destroy();
       core.destroy();

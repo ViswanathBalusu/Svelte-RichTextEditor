@@ -1133,6 +1133,22 @@
   text-align: center;
 }
 
+/* The lock a workflow puts on the document (FRW-029). */
+.de-workflow-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--_de-space-2) var(--_de-space-3);
+  padding-block: var(--_de-space-2);
+  padding-inline: var(--_de-space-4);
+  background: var(--_de-surface-raised);
+  border-block-end: 1px solid var(--_de-border);
+}
+
+.de-workflow-icon {
+  flex: none;
+}
+
 /* The fill bar (FRW-076). */
 .de-fill-bar {
   display: flex;

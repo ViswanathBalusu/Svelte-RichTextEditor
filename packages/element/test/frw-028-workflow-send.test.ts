@@ -27,7 +27,13 @@ const workflow = (state: Workflow['state'], roles: string[][]): Workflow => ({
 function setup(initial: Workflow | PortError, onAct?: () => unknown) {
   let current: Workflow | PortError = initial;
   const acts: string[] = [];
-  const port: Pick<WorkflowPort, 'get' | 'act'> = {
+  const changed = new Set<() => void>();
+  const port: Pick<WorkflowPort, 'get' | 'act' | 'onChange'> = {
+    onChange: (_doc, cb) => {
+      const listener = () => cb({ state: 'in_progress' });
+      changed.add(listener);
+      return () => changed.delete(listener);
+    },
     get: async () => {
       if (current instanceof PortError) throw current;
       return { value: current, etag: '"1"' };
@@ -46,7 +52,13 @@ function setup(initial: Workflow | PortError, onAct?: () => unknown) {
     port,
     docId: 'd1',
   }));
-  return { core, service, acts };
+  return {
+    core,
+    service,
+    acts,
+    changed,
+    set: (next: Workflow) => void (current = next),
+  };
 }
 
 const BOTH = [['role_tenant'], ['role_landlord']];
@@ -161,5 +173,51 @@ describe('a send the server refuses (FRW-028 criterion 4)', () => {
     const { service } = setup(workflow('sent', BOTH), () => new PortError('conflict', 'sent'));
     expect(await service.send()).toEqual({ ok: false, reason: 'not_draft' });
     expect(service.state.get()).toBe('sent');
+  });
+});
+
+describe('the lock banner follows the workflow (FRW-029 criterion 6)', () => {
+  const running = (): Workflow => ({
+    ...workflow('in_progress', BOTH),
+    participants: [
+      { id: 'p1', roles: ['role_tenant'], kind: 'filler', order: 1, name: 'Ada', state: 'active' },
+      { id: 'p2', roles: ['role_landlord'], kind: 'signer', order: 2, state: 'pending' },
+    ],
+  });
+
+  it('reads the workflow when it is made, without the dialog being opened', async () => {
+    const { service } = setup(running());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(service.state.get()).toBe('in_progress');
+    expect(service.participants.get()).toEqual([
+      { id: 'p1', name: 'Ada', roles: ['role_tenant'], state: 'active' },
+      { id: 'p2', name: null, roles: ['role_landlord'], state: 'pending' },
+    ]);
+  });
+
+  it('reads it again when the port reports wf.changed, and tells its listeners once per real change', async () => {
+    const { service, changed, set } = setup(running());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    let heard = 0;
+    service.participants.subscribe(() => heard++);
+    // The same workflow again: the view is not replaced.
+    for (const listener of [...changed]) listener();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heard).toBe(0);
+    const moved = running();
+    moved.participants[0]!.state = 'completed';
+    moved.participants[1]!.state = 'active';
+    set(moved);
+    for (const listener of [...changed]) listener();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heard).toBe(1);
+    expect(service.participants.get().map((p) => p.state)).toEqual(['completed', 'active']);
+  });
+
+  it('stops following the port when it is disposed', async () => {
+    const { service, changed } = setup(running());
+    expect(changed.size).toBe(1);
+    service.dispose?.();
+    expect(changed.size).toBe(0);
   });
 });
