@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-18 v0.2.14 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-18 v0.2.15 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -160,10 +160,21 @@
 \ExplSyntaxOff
 
 % Links: the url emitter has applied the scheme allow-list; docedit.href passes catcode-12 text.
-% #2 is a link title as a PDF hex string, or empty: it becomes the annotation's /Contents.
+% #2 is a link title as \DEstr{hex} (the pdfString emitter), or empty: hyperref turns it into the
+% annotation's /Contents like any other text.
 \ExplSyntaxOn
 \tl_new:N \l__docedit_contents_tl
-\cs_new_protected:Npn \DE@linkcontents #1 { \tl_set:Nn \l__docedit_contents_tl {#1} }
+% The title is expanded here, to the characters of the text, so that the purifier of hyperref sees
+% plain characters and a backslash in it stays a backslash.
+\tl_new:N \g__docedit_contents_tl
+\cs_new_protected:Npn \DE@linkcontents #1
+  {
+    \group_begin:
+      \cs_set_eq:NN \DEstr \DE@strpur
+      \tl_gset:Ne \g__docedit_contents_tl {#1}
+    \group_end:
+    \tl_set_eq:NN \l__docedit_contents_tl \g__docedit_contents_tl
+  }
 \cs_new_protected:Npn \__docedit_link_plug:
   {
     \cs_if_exist:NT \socket_new_plug:nnn
@@ -176,9 +187,12 @@
                   {
                     \__hyp_text_pdfstring:eoN { ##1 } { \l__hyp_text_enc_info_print_tl }
                       \l__hyp_link_Contents_tl
-                    \pdfannot_dict_put:nne { link/URI } { Contents } { \l__hyp_link_Contents_tl }
                   }
-                  { \pdfannot_dict_put:nne { link/URI } { Contents } { \l__docedit_contents_tl } }
+                  {
+                    \__hyp_text_pdfstring:eoN { \l__docedit_contents_tl }
+                      { \l__hyp_text_enc_info_print_tl } \l__hyp_link_Contents_tl
+                  }
+                \pdfannot_dict_put:nne { link/URI } { Contents } { \l__hyp_link_Contents_tl }
               }
             \socket_assign_plug:nn { hyp/link/URI/Contents } { docedit }
           }

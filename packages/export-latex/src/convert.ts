@@ -54,7 +54,7 @@ import { preflight } from './preflight.ts';
 import { styleMacro } from './props.ts';
 
 /** The house class version (EXP-015): raised with every change to docedit.cls or docedit.lua. */
-export const CLASS_VERSION = '0.2.14';
+export const CLASS_VERSION = '0.2.15';
 
 /** A TeX Live image digest (EXP-073): `sha256:` and 64 lowercase hex digits. */
 export const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
