@@ -1536,7 +1536,6 @@ As an integrating developer, I want any spreadsheet-format output of field value
 **Acceptance criteria**
 
 - [ ] Given a field value whose first character is `=`, `+`, `-` or `@`, when it is written to a spreadsheet-format output, then the cell is not interpreted as a formula by the spreadsheet applications in the test matrix.
-- [ ] Given a field value whose first character is `=`, `+`, `-` or `@`, when it is written to a spreadsheet-format output, then the cell is not interpreted as a formula by the spreadsheet applications in the test matrix.
 - [x] Given a value with none of those characters, then it is written unchanged.
 - [x] Given a `number` field with a negative value, then the output is a number or is neutralised in a way the integrating developer can read back; the behaviour is documented.
 - [x] Given the same value read through `GET /documents/{id}/field-values`, then it is returned unchanged, because neutralisation applies only to the spreadsheet output.
