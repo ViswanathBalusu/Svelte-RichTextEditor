@@ -160,6 +160,16 @@ export function capabilitiesOn(caller: Caller, doc: string): ReadonlySet<Capabil
   return roleCaps(role);
 }
 
+/**
+ * True when a user token does not cover `doc`. A resource named by a bare identifier in such a
+ * document is answered as a missing one is, `not_found` (owner decision 57; SEC-016 criterion 4),
+ * so that a refusal does not tell the caller that the identifier exists. A service credential
+ * acts for the tenant and is never hidden from a document.
+ */
+export function hiddenFrom(caller: Caller, doc: string): boolean {
+  return caller.kind === 'user' && caller.identity!.docs[doc] === undefined;
+}
+
 /** Refuses unless the caller holds `cap` on `doc` (07 §12); `forbidden` otherwise. */
 export function requireCapability(caller: Caller, doc: string, cap: Capability): void {
   const caps = capabilitiesOn(caller, doc);

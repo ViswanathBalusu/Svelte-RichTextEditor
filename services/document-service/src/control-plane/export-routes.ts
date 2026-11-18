@@ -23,7 +23,7 @@ import type { JobRecord } from './jobs/queue.ts';
 import { withQueueProof } from './job-proof.ts';
 import { json, type Kit } from './kit.ts';
 import { admitExportConcurrency } from './live-quota-rest.ts';
-import { capabilitiesOn, guard, roleOn, type Ctx, type Handler } from './pipeline.ts';
+import { capabilitiesOn, guard, hiddenFrom, roleOn, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 import { exportView, projectContent, readerView } from './visibility.ts';
 
@@ -284,10 +284,14 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
     if (!job || (job.kind !== EXPORT_KIND && job.kind !== PREVIEW_KIND) || !job.doc)
       throw new ApiError('not_found', `no export job ${ctx.params['jid']}`);
     if (ctx.caller.kind === 'service') return { job, canSeeLog: true };
+    // A job of a document the token does not cover, or of another requester, is answered as a
+    // missing one is (owner decision 57; SEC-016 criterion 4).
+    if (hiddenFrom(ctx.caller, job.doc))
+      throw new ApiError('not_found', `no export job ${ctx.params['jid']}`);
     // Row 12 of 07 §12 for the job's document, then the requester rule of SR-C4 (D69).
     guard(ctx.caller, 'export', job.doc);
     if (job.createdBy !== ctx.caller.actor)
-      throw new ApiError('forbidden', 'an export job belongs to its requester (SR-C4; D69)');
+      throw new ApiError('not_found', `no export job ${ctx.params['jid']}`);
     const caps = capabilitiesOn(ctx.caller, job.doc);
     return { job, canSeeLog: caps === 'all' || caps.has('edit') };
   }

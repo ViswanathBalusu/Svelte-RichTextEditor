@@ -278,7 +278,7 @@ S  {"t":"event","ch":1,"d":{"type":"export.completed","resource":"/exports/0192f
 - **Idempotency.** `POST` requests that create something accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
 - **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200.
 - **Tracing.** Requests may carry `traceparent`; responses carry a request identifier.
-- **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document.
+- **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A caller whose token does not cover that document, and a user who may not see the resource (another user's export or import job), gets `not_found`, the answer for an identifier that names nothing, with the same body apart from the identifier (owner decision 57 of 2026-11-15; SEC-016). A caller who sees the resource but lacks the capability gets `forbidden`.
 
 Callers are end users (every request is checked against that user's permissions) and host backends (service credential). The authorisation matrix in 07, section 12, lists the capability each resource needs.
 

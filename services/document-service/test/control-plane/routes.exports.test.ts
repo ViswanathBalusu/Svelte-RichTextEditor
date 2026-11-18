@@ -214,14 +214,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
               token: h.userToken({ [doc]: 'owner' }, { sub: 'olga' }),
             })
           ).json.code,
-        ).toBe('forbidden');
+        ).toBe('not_found');
         expect(
           (
             await h.call('DELETE', `/v1/exports/${job}`, {
               token: h.userToken({ [doc]: 'owner' }, { sub: 'olga' }),
             })
           ).json.code,
-        ).toBe('forbidden');
+        ).toBe('not_found');
         // A token for another document is refused (PRO-045 criterion 2).
         expect(
           (
@@ -229,7 +229,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
               token: h.userToken({ [other]: 'owner' }, { sub: 'vera' }),
             })
           ).json.code,
-        ).toBe('forbidden');
+        ).toBe('not_found');
         // The requester, once restricted with no-export, cannot download it.
         expect(
           (

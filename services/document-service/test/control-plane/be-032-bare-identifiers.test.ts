@@ -1,6 +1,7 @@
 // BE-032 criterion 6 for the bare-identifier routes the control plane offers today: an export job
 // (`/exports/{jid}`) and an asset (`/assets/{aid}/complete`) are resolved to their document, and a
-// token that does not cover it, or a user other than the requester, is refused with `forbidden`.
+// token that does not cover it, or a user other than the requester, is answered `not_found`, as a
+// missing identifier is (owner decision 57 of 2026-11-15; SEC-016 criterion 4).
 // Runs over the HTTP surface of the harness, in memory and on PostgreSQL where it is available.
 import { describe, expect, it } from 'vitest';
 import {
@@ -41,11 +42,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
           const stranger = h.userToken({ [other]: 'editor' }, { sub: 'mallory' });
           const read = await h.call('GET', `/v1/exports/${id}`, { token: stranger });
-          expect(read.status).toBe(403);
-          expect(read.json.code).toBe('forbidden');
+          expect(read.status).toBe(404);
+          expect(read.json.code).toBe('not_found');
           const del = await h.call('DELETE', `/v1/exports/${id}`, { token: stranger });
-          expect(del.status).toBe(403);
-          expect(del.json.code).toBe('forbidden');
+          expect(del.status).toBe(404);
+          expect(del.json.code).toBe('not_found');
         } finally {
           await h.close();
         }
@@ -66,8 +67,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(job.status).toBe(202);
           const other = h.userToken({ [doc]: 'editor' }, { sub: 'eva' });
           const read = await h.call('GET', `/v1/exports/${job.json.id}`, { token: other });
-          expect(read.status).toBe(403);
-          expect(read.json.code).toBe('forbidden');
+          expect(read.status).toBe(404);
+          expect(read.json.code).toBe('not_found');
         } finally {
           await h.close();
         }
@@ -90,8 +91,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
           const stranger = h.userToken({ [other]: 'editor' }, { sub: 'mallory' });
           const done = await h.call('POST', `/v1/assets/${asset}/complete`, { token: stranger });
-          expect(done.status).toBe(403);
-          expect(done.json.code).toBe('forbidden');
+          expect(done.status).toBe(404);
+          expect(done.json.code).toBe('not_found');
         } finally {
           await h.close();
         }

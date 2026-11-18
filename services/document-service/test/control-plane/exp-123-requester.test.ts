@@ -151,8 +151,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         // Another user cannot read either job.
         const stolen = await h.call('GET', `/v1/exports/${e.json.id}`, { token: other });
-        expect(stolen.status).toBe(403);
-        expect(stolen.json.code).toBe('forbidden');
+        expect(stolen.status).toBe(404);
+        expect(stolen.json.code).toBe('not_found');
       },
     );
   });
