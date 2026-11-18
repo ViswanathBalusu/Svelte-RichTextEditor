@@ -2338,7 +2338,16 @@ export interface Operations {
     body: HoldRequest;
     response: Hold;
   };
-  /** GET /holds: The legal holds of the tenant, one page at a time (UX-080). (08 §11; 13 §10) */
+  /** DELETE /documents/{id}/holds/{holdId}: Releases one legal hold; audited with the actor and the time as the placement is. When no hold is left on the document, the normal schedule resumes and the erasures that waited for it run (owner decision 85; HIS-031). A hold that is not in force is `not_found`. (08 §11; 13 §10) */
+  releaseHold: {
+    method: "DELETE";
+    path: "/documents/{id}/holds/{holdId}";
+    params: { id: string; holdId: string };
+    query: Record<string, never>;
+    body: never;
+    response: Hold;
+  };
+  /** GET /holds: The legal holds in force for the tenant, one page at a time (UX-080). (08 §11; 13 §10) */
   listHolds: {
     method: "GET";
     path: "/holds";

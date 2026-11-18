@@ -795,6 +795,14 @@ export async function startService(opts: StartOptions): Promise<Service> {
     parts.documentKeys = keys;
   }
   const erasures = erasuresOver(parts, now);
+  // A release lets the erasures that waited for the hold run (HIS-031; owner decision 85).
+  if (parts.holds && erasures) {
+    const afterErasures = parts.holds.afterRelease;
+    parts.holds.afterRelease = async (tenant, doc) => {
+      await afterErasures?.(tenant, doc);
+      await erasures.afterRelease(tenant);
+    };
+  }
   const tombstones =
     parts.tombstoneStore && parts.audit && parts.checkpointIndex
       ? new CommitTombstone({

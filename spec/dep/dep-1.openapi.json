@@ -6000,11 +6000,90 @@
         "x-dep-requires": "Service credential"
       }
     },
+    "/documents/{id}/holds/{holdId}": {
+      "delete": {
+        "operationId": "releaseHold",
+        "summary": "Releases one legal hold; audited with the actor and the time as the placement is. When no hold is left on the document, the normal schedule resumes and the erasures that waited for it run (owner decision 85; HIS-031). A hold that is not in force is `not_found`.",
+        "description": "Releases one legal hold; audited with the actor and the time as the placement is. When no hold is left on the document, the normal schedule resumes and the erasures that waited for it run (owner decision 85; HIS-031). A hold that is not in force is `not_found`. Requires: Service credential (07 §12). Specified in 08 §11; 13 §10.",
+        "tags": [
+          "holds"
+        ],
+        "security": [
+          {
+            "serviceCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Document identifier.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "Document identifier."
+          },
+          {
+            "name": "holdId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "The hold identifier, as placeHold and listHolds answer it.",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "description": "The hold identifier, as placeHold and listHolds answer it."
+          },
+          {
+            "$ref": "#/components/parameters/DepActor"
+          },
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "headers": {
+              "DEP-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Deprecation": {
+                "$ref": "#/components/headers/Deprecation"
+              },
+              "Sunset": {
+                "$ref": "#/components/headers/Sunset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hold"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/Problem4XX"
+          },
+          "5XX": {
+            "$ref": "#/components/responses/Problem5XX"
+          }
+        },
+        "x-dep-spec": "08 §11; 13 §10",
+        "x-dep-owner": "HIS",
+        "x-dep-requires": "Service credential"
+      }
+    },
     "/holds": {
       "get": {
         "operationId": "listHolds",
-        "summary": "The legal holds of the tenant, one page at a time (UX-080).",
-        "description": "The legal holds of the tenant, one page at a time (UX-080). Requires: Service credential (07 §12). Specified in 08 §11; 13 §10.",
+        "summary": "The legal holds in force for the tenant, one page at a time (UX-080).",
+        "description": "The legal holds in force for the tenant, one page at a time (UX-080). Requires: Service credential (07 §12). Specified in 08 §11; 13 §10.",
         "tags": [
           "holds"
         ],

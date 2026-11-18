@@ -191,7 +191,7 @@ The component stores a read marker (`seq`) per user and document when the user h
 - The default is to keep everything. Commit payloads older than 30 days move from PostgreSQL to compressed segment files in object storage; their metadata rows stay for listing, filtering and the hash chain. History across the boundary reads both.
 - Checkpoints are thinned with age: all of them for 30 days, then one per UTC day until 90 days, then one per week (owner decision 55). Checkpoints that a stored version points at (the nearest at or before the version, and the one at sequence number 0), or that border a snapshot commit (its own and the one before it), are kept. A checkpoint that would replace older ones is compared with a replay of the log first; one that does not match is not used, an alert is raised and its period is kept whole.
 - A tenant can choose thinning of payloads too: after a period, keep only checkpoints. Named, export and workflow versions are never thinned. Thinning leaves the chain verifiable, because the chain holds payload hashes.
-- Legal hold suspends thinning and purge for a document.
+- Legal hold suspends thinning and purge for a document. A service credential places it and releases it (DELETE /documents/{id}/holds/{holdId}); both are audited with the actor and the time, and the document resource shows whether a hold is in force. A document deleted under a hold is soft-deleted and purged only after the last hold is released. An erasure that waited for the hold runs at the release (owner decisions 38 and 85).
 
 ## 12. Tamper evidence
 
