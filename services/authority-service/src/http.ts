@@ -13,6 +13,7 @@
  * | `restoreSteps` | `POST /v1/authority/states/{stateId}/restore-steps` (a refusal is `200` with `{ refused }`) |
  * | `diff` | `POST /v1/authority/states/{stateId}/diff` |
  * | `attribution` | `POST /v1/authority/states/{stateId}/attribution` |
+ * | `mapRanges` | `POST /v1/authority/states/{stateId}/map-ranges` |
  * | `migrate` | `POST /v1/authority/documents/{doc}/migrate` (a document of an older `cdm` is not a state) |
  * | `evaluateRules` | `POST /v1/authority/states/{stateId}/evaluate-rules` |
  * | what the service supports | `GET /v1/authority/capabilities` |
@@ -194,6 +195,15 @@ export async function route(routes: Routes, req: HttpRequest): Promise<HttpRespo
           : call === 'diff'
             ? await service.diff(stateId, parsed.value)
             : await service.attribution(stateId, parsed.value);
+      if (!r.ok) return problem(r.error);
+      const { ok: _ok, ...answer } = r;
+      return json(200, answer);
+    }
+    if (call === 'map-ranges') {
+      if (method !== 'POST') return methodNotAllowed('POST');
+      const parsed = parseBody(req.contentType, req.body);
+      if (!parsed.ok) return problem(parsed.error);
+      const r = await service.mapRanges(stateId, parsed.value);
       if (!r.ok) return problem(r.error);
       const { ok: _ok, ...answer } = r;
       return json(200, answer);

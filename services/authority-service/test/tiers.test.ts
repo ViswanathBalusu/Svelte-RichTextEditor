@@ -30,6 +30,7 @@ describe('capabilities', () => {
       'diff',
       'attribution',
       'evaluateRules',
+      'mapRanges',
     ]);
   });
 

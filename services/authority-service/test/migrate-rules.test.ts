@@ -397,6 +397,7 @@ describe('the HTTP routes of migrate and evaluateRules', () => {
       'attribution',
       'migrate',
       'evaluateRules',
+      'mapRanges',
     ]);
     expect(caps.features).toContain('rules');
   });

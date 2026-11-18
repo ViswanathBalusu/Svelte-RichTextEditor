@@ -55,6 +55,7 @@ import { type Evaluation, type ValueMap, evaluateDocument } from '@docedit/rules
 import type { AuthorityServiceCall } from '@docedit/protocol/client';
 import { IMPLEMENTED_CALLS } from './capabilities.ts';
 import { attribution, diff, restoreSteps } from './history-calls.ts';
+import { type MapRangesAnswer, mapRangesCall } from './range-calls.ts';
 import type { AttributionAnswer, DiffAnswer, RestoreStepsAnswer } from './history-calls.ts';
 import { readDocument } from '@docedit/model/validate';
 import type { Node } from 'prosemirror-model';
@@ -664,6 +665,12 @@ export class AuthorityService {
   async attribution(stateId: unknown, request: unknown): Promise<Answer<AttributionAnswer>> {
     const found = await this.#stateOf(stateId);
     return found.ok ? attribution(this.#schema, found.state, request) : found;
+  }
+
+  /** `mapRanges` (05 §10; ADR 0015): the ranges given at a seq, mapped to the head of the state. */
+  async mapRanges(stateId: unknown, request: unknown): Promise<Answer<MapRangesAnswer>> {
+    const found = await this.#stateOf(stateId);
+    return found.ok ? mapRangesCall(this.#schema, found.state, request) : found;
   }
 
   async #stateOf(stateId: unknown): Promise<Answer<{ state: HeldState }>> {

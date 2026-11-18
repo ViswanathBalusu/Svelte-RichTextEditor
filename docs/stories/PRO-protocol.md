@@ -2450,9 +2450,13 @@ As an integrating developer, I want comment ranges and presence mapped by the au
 
 **Acceptance criteria**
 
-- [ ] Given `mapRanges(stateId, ranges)`, when it is called, then it returns the ranges mapped to the head, equal to the in-process mapping on the same fixtures.
-- [ ] Given a range whose content was deleted, when it is mapped, then the result follows the behaviour defined for comment ranges in ADR 0015.
-- [ ] Given a `stateId` that is not known, when the call is made, then the service says so, so the caller can `open` again.
+- [x] Given `mapRanges(stateId, ranges)`, when it is called, then it returns the ranges mapped to the head, equal to the in-process mapping on the same fixtures.
+- [x] Given a range whose content was deleted, when it is mapped, then the result follows the behaviour defined for comment ranges in ADR 0015.
+- [x] Given a `stateId` that is not known, when the call is made, then the service says so, so the caller can `open` again.
+
+**Evidence:** services/authority-service/test/map-ranges.test.ts (Node.js, 5 tests, ephemeral port), code in services/authority-service/src/range-calls.ts (`mapRangesCall`, which calls `mapRangesThrough` of `@docedit/authority`), src/service.ts (`mapRanges`), src/http.ts (`POST /v1/authority/states/{stateId}/map-ranges`) and src/capabilities.ts. Criterion 1: from seq 0, 1, 2 and 3 to the head 4, the service's answer equals `mapRangesThrough` over the same four commits, for a range of inserted text, a range across two blocks, a caret (zero width) and a range at the start; the head itself answers the ranges unchanged. Criterion 2: a range over the text inserted at seq 1 and deleted at seq 3 collapses (`collapsed: true`, `from` equal to `to`). Criterion 3: an unknown `stateId` answers `unknown_state` with the message to open again; a seq past the head is `not_found`; a reversed or negative range is `invalid_request`. HTTP: the route answers 200 with the service's answer, 405 for GET, and the capabilities list `mapRanges`. Choices: docs/adr/0404-w5-PRO-105-map-ranges.md (proposed).
+
+**Notes:** Lane w5, 2026-11-18: criteria 1 to 3 ticked. The request shape `{ seq, ranges }` and the refusals are the proposed choices of docs/adr/0404-w5-PRO-105-map-ranges.md; 05 §10 gives no signature. Presence positions use the same call as zero-width ranges; no separate presence call is built. Not checked here: a browser or a container run; the engine's own mapping is tested by `packages/engine/test/fe-048-range-agreement.test.ts` and is unchanged.
 
 ### PRO-106 Compute restore steps, comparisons and attribution in the authority service
 
