@@ -49,7 +49,7 @@ profile whose requirement the server does not meet is reported as skipped, with 
 | `fields` | feature `fields` | Fillable fields (12 §4). |
 | `perm-fill` | feature `fields` | Fill permissions (12). |
 | `core-relay` | mode `relay` | Relays only (05 §9); not yet built (PRO-124). |
-| `perm-suggest` | feature `suggest-enforced` | Suggestion-only rule (07 §5.2); built (PRO-118), run against the mock backend. |
+| `perm-suggest` | feature `suggest-enforced` | Suggestion-only rule (07 §5.2); built (PRO-118), run against the mock backend. Scope: `ins`, `del` and `fmt` marks on text in a paragraph; block-level suggestions (paragraphs, whole table rows, whole tables) are tested in `packages/authority`, not in the profile (PRM-062). |
 | `history` | feature `history` | History, versions, comparison, attribution, restore; not yet built (PRO-119). |
 | `comments` | feature `comments` | Threads and comments; not yet built (PRO-120), except the rule that a thread or a comment is refused to a caller of another document (PRO-045). |
 | `webhooks` | feature `webhooks` | Signed webhooks; not yet built (PRO-121). |

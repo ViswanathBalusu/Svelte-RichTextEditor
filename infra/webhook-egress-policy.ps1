@@ -25,12 +25,18 @@
   pwsh -NoProfile -File infra/webhook-egress-policy.ps1
 #>
 [CmdletBinding()]
-param()
+param(
+  # Negative control (SEC-020 criterion 5): the dispatcher probe is put on the outside network
+  # instead of the internal one. The probe must then FAIL its direct-connection check, which shows
+  # that the probe can tell a leaking network from a closed one. Exit code 0 only when it does.
+  [switch]$NegativeControl
+)
 
 $ErrorActionPreference = 'Stop'
 $Cli = if ($env:DOCEDIT_CONTAINER_CLI) { $env:DOCEDIT_CONTAINER_CLI } else { 'podman' }
 $Image = 'docker.io/library/node:24.21.0-slim'
-$Prefix = 'docedit-v-be-043-056'
+# DOCEDIT_EGRESS_PREFIX renames the containers and networks (a lane gives its own, ending -w8).
+$Prefix = if ($env:DOCEDIT_EGRESS_PREFIX) { $env:DOCEDIT_EGRESS_PREFIX } else { 'docedit-v-be-043-056' }
 $IntNet = "$Prefix-int"
 $ExtNet = "$Prefix-ext"
 $Names = @("$Prefix-outside", "$Prefix-proxy", "$Prefix-dispatcher")
@@ -86,12 +92,24 @@ try {
   $proxyIp = Get-Ip "$Prefix-proxy" $IntNet
   Write-Host "outside $outsideIp on $ExtNet; proxy $proxyIp on $IntNet (and on $ExtNet); dispatcher on $IntNet only; cgroups $cg"
 
-  $probe = Invoke-Cli (@('run', '--rm', '--pull=never', '--name', "$Prefix-dispatcher", '--network', $IntNet) + $cgArg +
-    @('-e', "PROXY_HOST=$proxyIp", '-e', 'PROXY_PORT=3128', '-e', "OUTSIDE_IP=$outsideIp", '-e', 'OUTSIDE_PORT=8080',
-      '-v', "$Infra/probe.mjs:/srv/probe.mjs:ro", $Image, 'node', '/srv/probe.mjs')) -AllowFailure
-  Write-Host $probe.Output
-  $exit = $probe.Code
-  if ($exit -eq 0) { Write-Host 'webhook egress policy: every check holds' } else { Write-Host "webhook egress policy: a check failed (exit $exit)" }
+  if ($NegativeControl) {
+    $proxyExtIp = Get-Ip "$Prefix-proxy" $ExtNet
+    $probe = Invoke-Cli (@('run', '--rm', '--pull=never', '--name', "$Prefix-dispatcher", '--network', $ExtNet) + $cgArg +
+      @('-e', "PROXY_HOST=$proxyExtIp", '-e', 'PROXY_PORT=3128', '-e', "OUTSIDE_IP=$outsideIp", '-e', 'OUTSIDE_PORT=8080',
+        '-v', "$Infra/probe.mjs:/srv/probe.mjs:ro", $Image, 'node', '/srv/probe.mjs')) -AllowFailure
+    Write-Host $probe.Output
+    $leaked = $probe.Output -match 'FAIL no direct connection to the outside host'
+    if ($probe.Code -ne 0 -and $leaked) { $exit = 0; Write-Host 'negative control: the probe detects a dispatcher that can reach the outside host' }
+    else { $exit = 1; Write-Host 'negative control: the probe did NOT detect the leak' }
+  }
+  else {
+    $probe = Invoke-Cli (@('run', '--rm', '--pull=never', '--name', "$Prefix-dispatcher", '--network', $IntNet) + $cgArg +
+      @('-e', "PROXY_HOST=$proxyIp", '-e', 'PROXY_PORT=3128', '-e', "OUTSIDE_IP=$outsideIp", '-e', 'OUTSIDE_PORT=8080',
+        '-v', "$Infra/probe.mjs:/srv/probe.mjs:ro", $Image, 'node', '/srv/probe.mjs')) -AllowFailure
+    Write-Host $probe.Output
+    $exit = $probe.Code
+    if ($exit -eq 0) { Write-Host 'webhook egress policy: every check holds' } else { Write-Host "webhook egress policy: a check failed (exit $exit)" }
+  }
 }
 finally {
   Remove-Lab

@@ -45,6 +45,7 @@ await build({
         calibrate: join(pkg, 'pages/calibrate.html'),
         s5: join(pkg, 'pages/s5.html'),
         s10: join(pkg, 'pages/s10.html'),
+        s9: join(pkg, 'pages/s9.html'),
       },
     },
   },

@@ -131,6 +131,42 @@ describe('the prose of 05 and 12 §10 against the definition', () => {
     );
   });
 
+  it('carries the read-restriction members of ADR 0019 in the prose and the definition (PRO-130 criterion 5)', () => {
+    // The generated schema is built from the definition (`pnpm generate`); read its members.
+    const schema = JSON.parse(readText('spec/dep/dep-1.schema.json')) as {
+      $defs: Record<
+        string,
+        { properties: Record<string, { properties?: Record<string, unknown> }> }
+      >;
+    };
+    const props = (name: string) => schema.$defs[name]!.properties;
+    const members = (t: string) =>
+      Object.keys(props(t === 'ch.opened' ? 'ChannelOpened' : 'ChannelClosed'));
+    expect(Object.keys(props('Resume'))).toContain('view');
+    expect(readText('spec/cdm/cdm-1.projection.json')).toContain('hidden_region');
+    // The prose names each member that the definition has, and the definition has each the prose names.
+    const channels = section(p05, '### 5.2 Channels');
+    expect(members('ch.opened')).toContain('view');
+    expect(channels).toMatch(/`ch\.opened`[^\n]*optional `view`/);
+    expect(channels).toMatch(
+      /`ch\.open`[^\n]*`resume` \(`seq`, `incarnation`, `inflight`, optional `view`\)/,
+    );
+    expect(members('ch.closed')).toContain('cause');
+    expect(channels).toMatch(/`ch\.closed`[^\n]*optional `cause`[^\n]*`access_changed`/);
+    for (const known of ['access_changed', 'fenced', 'lost', 'stopped'])
+      expect(channels, known).toContain(`\`${known}\``);
+    expect(channels).toContain('`resume.view`');
+    expect(channels).toContain('answered with `catchUp: "reload"`');
+    const sync = section(p05, '### 5.3 Sync');
+    expect(sync).toMatch(/may be empty/);
+    expect(sync).toMatch(/`rebased: true`/);
+    expect(section(p05, '### 6.2 Resources')).toMatch(
+      /`GET \/documents\/\{id\}\/content`|`\/documents\/\{id\}\/content`[^\n]*view/,
+    );
+    expect(DEP1.features.map((f) => f.name)).toContain('read-restrictions');
+    expect(section(p05, '## 2. Discovery')).toContain('"read-restrictions"');
+  });
+
   it('has the features of 05 §2 and 12 §10', () => {
     const discovery = section(p05, '## 2. Discovery')
       .match(/"features": \[([^\]]*)\]/)![1]!

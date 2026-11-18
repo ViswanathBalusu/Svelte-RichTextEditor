@@ -69,7 +69,7 @@ What changes for the signing service (lane w3, 2026-11-17, proposed wording of t
 
 ## SEC-061: abuse handling for hosted mode
 
-This policy applies only if the owner chooses hosted mode (SEC-061 is `cond`). 11 §10 decision 8 has a default (both modes are designed for, neither is scheduled first) and does not choose between them.
+This policy applies to hosted mode. SEC-061 was `cond` on 11 §10 decision 8. The owner answered it on 2026-11-15 (answer 28 of docs/owner-decisions-2026-11-15.md): both hosted and self-hosted from the start, so the stories conditional on a hosted mode all apply. The answer does not accept the policy below, which stays proposed.
 
 **How reports arrive (proposed).** One intake channel run by the operator. Automated checks on uploaded assets (SEC-037, SEC-038) feed the same queue when they are built.
 

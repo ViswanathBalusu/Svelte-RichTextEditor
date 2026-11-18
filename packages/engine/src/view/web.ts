@@ -41,6 +41,8 @@ import { FormFieldViews, fieldView, formFieldView } from './form-field-view.ts';
 import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
+import type { ComparisonSpec } from '../comparison-markup.ts';
+import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
@@ -164,6 +166,8 @@ export class EditorCore extends DocumentCore {
   #shimResult: 'native' | 'instance' | 'none' | null = null;
   /** The blocks before which a page guide is drawn (FE-068); empty when guides are off. */
   #pageGuides: ReadonlySet<string> = new Set();
+  /** The comparison drawn in a version view (HIS-013); null in the live editor. */
+  #comparison: readonly ComparisonSpec[] | null = null;
   #view: EditorView | null = null;
   /** The live form field controls and mirrors of the body view (FRW-004, FRW-006). */
   readonly #fieldViews = new FormFieldViews();
@@ -303,6 +307,16 @@ export class EditorCore extends DocumentCore {
    */
   setPageGuides(blockIds: readonly string[]): void {
     this.#pageGuides = new Set(blockIds);
+    this.#view?.setProps({});
+  }
+
+  /**
+   * Draws a comparison in the document (HIS-013): the specs of comparisonSpecs, or null to remove
+   * them. Like the page guides, the view is redrawn without a transaction and the document is not
+   * changed. Used by the read-only version view; the live editor never sets one.
+   */
+  setComparison(specs: readonly ComparisonSpec[] | null): void {
+    this.#comparison = specs;
     this.#view?.setProps({});
   }
 
@@ -494,6 +508,7 @@ export class EditorCore extends DocumentCore {
             .add(state.doc, suggestionDecorations(state.doc, 'all').find())
             .add(state.doc, commentDecorations(state.doc, this.threadRanges.get()).find())
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
+            .add(state.doc, comparisonDecorations(state.doc, this.#comparison).find())
             .add(
               state.doc,
               proofingDecorations(

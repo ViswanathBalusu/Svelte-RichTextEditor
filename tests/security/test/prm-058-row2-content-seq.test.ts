@@ -90,9 +90,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const viewer = await h.mintToken(h.a, 'viewer-row2', { [doc]: 'viewer' });
         const editor = await h.mintToken(h.a, 'editor-row2', { [doc]: 'editor' });
 
-        // The served routes that read at an earlier seq: content and commits (row 2), and the field
-        // values, which are content read by key (FRW-060 criterion 4). `history`, `diff` and
-        // `attribution` are in the OpenAPI document but the control plane does not serve them yet.
+        // The served routes that read at an earlier seq: content and commits (row 2), the field
+        // values, which are content read by key (FRW-060 criterion 4), the comparison, the
+        // attribution and the threads at a state (lane w9). `history` is in the OpenAPI document but
+        // the control plane does not serve it yet (HIS-026). The thread list answers a caller with no
+        // role on the document as `not_found`, so as not to say that the document exists.
         // `detail`: whether the refusal keeps the gate's own detail. A user's commits page comes
         // from the data plane (`RoomHost.readCommits`), whose refusal the pipeline passes on as
         // its code only (`registryRefusal`); there the 200 at the head shows the gate was the cause.
@@ -112,6 +114,22 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
             detail: true,
             at: (s: number) => `/v1/documents/${doc}/field-values?seq=${s}`,
           },
+          {
+            name: 'diff',
+            detail: false,
+            at: (s: number) => `/v1/documents/${doc}/diff?fromSeq=${s}&toSeq=${head.seq}`,
+          },
+          {
+            name: 'attribution',
+            detail: false,
+            at: (s: number) => `/v1/documents/${doc}/attribution?atSeq=${s}`,
+          },
+          {
+            name: 'threads',
+            detail: true,
+            outsider: { status: 404, code: 'not_found' },
+            at: (s: number) => `/v1/documents/${doc}/threads?seq=${s}`,
+          },
         ];
         const problem = (r: { json?: unknown }) =>
           (r.json ?? {}) as { code?: string; detail?: string };
@@ -119,8 +137,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         for (const route of routes) {
           // `view` is required: a token without a role on this document is `forbidden` (07 §12).
           const byOutsider = await h.call('GET', route.at(earlier), { token: outsider });
-          expect(byOutsider.status, route.name).toBe(403);
-          expect(problem(byOutsider).code, route.name).toBe('forbidden');
+          const refused = route.outsider ?? { status: 403, code: 'forbidden' };
+          expect(byOutsider.status, route.name).toBe(refused.status);
+          expect(problem(byOutsider).code, route.name).toBe(refused.code);
           expect(problem(byOutsider).detail ?? '', route.name).not.toMatch(/history visibility/);
 
           // The viewer holds `view`: the same route at the head answers.

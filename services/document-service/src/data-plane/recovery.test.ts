@@ -16,10 +16,12 @@ import { ObjectCheckpointStore } from '../objects/checkpoints.ts';
 import { MemoryObjectStore } from '../objects/store.ts';
 import type { MemoryStore } from '../storage/memory.ts';
 import { MemoryAudit, MemoryCheckpointIndex } from './memory-ports.ts';
+import { Metrics } from './metrics.ts';
 import {
   affectedAmong,
   beyondHead,
   contentHash,
+  gateThinning,
   newIncarnation,
   rebuild,
   runIncarnation,
@@ -106,6 +108,50 @@ describe('rebuild and verify from a checkpoint and the log (BE-081)', () => {
     const right = await verifyCheckpoint(stores, ref, 3);
     expect(right.ok).toBe(true);
     expect(contentHash(correct)).toBe(right.stored);
+  });
+});
+
+describe('the gate before checkpoints are thinned (BE-020 criterion 5)', () => {
+  it('lets thinning proceed on a match and stops it, with an alert, on a mismatch', async () => {
+    const p = await plane();
+    const doc = await p.createDocument();
+    const ref = p.ref(doc);
+    await writeCommits(p, doc, 3);
+    const stores: RecoveryStores = { logs: p.stores.logs, checkpoints: p.checkpoints };
+    const metrics = new Metrics('test-node');
+    const alerts: Array<{ seq: number; doc: string }> = [];
+    const alert = (v: { seq: number }, r: { doc: string }) => {
+      alerts.push({ seq: v.seq, doc: r.doc });
+      metrics.checkpointMismatches.inc({ tenant: ref.tenant });
+    };
+
+    // A checkpoint at 3 built from the replay: thinning may proceed and nothing is raised.
+    const seq3 = await p.plane.readContent(
+      p.tokens.identity(p.tokens.issue({ user: 'alice', docs: { [doc]: 'owner' } })),
+      doc,
+      3,
+    );
+    await p.checkpoints.put(ref, 3, {
+      cdm: 1,
+      requires: REQUIRES,
+      doc: seq3.doc as JsonEnvelope['doc'],
+    });
+    const good = await gateThinning(stores, ref, 3, alert);
+    expect(good.proceed).toBe(true);
+    expect(alerts).toEqual([]);
+    expect(metrics.checkpointMismatches.get({ tenant: ref.tenant })).toBe(0);
+
+    // A checkpoint at 3 that holds the content of seq 0: thinning stops and an alert is raised.
+    await p.checkpoints.put(ref, 3, (await p.checkpoints.get(ref, 0)) as JsonEnvelope);
+    const bad = await gateThinning(stores, ref, 3, alert);
+    expect(bad.proceed).toBe(false);
+    expect(bad.verdict.stored).not.toBe(bad.verdict.replayed);
+    expect(alerts).toEqual([{ seq: 3, doc }]);
+    expect(metrics.checkpointMismatches.get({ tenant: ref.tenant })).toBe(1);
+    expect(metrics.text()).toContain('dep_checkpoint_mismatches_total');
+
+    // A checkpoint that is not there cannot be verified, so nothing is thinned for it.
+    await expect(gateThinning(stores, ref, 9, alert)).rejects.toThrow('no checkpoint at 9');
   });
 });
 

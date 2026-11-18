@@ -115,6 +115,13 @@ export const FEATURES: readonly FeatureDef[] = [
     owner: 'FRW',
   },
   {
+    name: 'read-restrictions',
+    doc: 'Content hidden from readers by projection: the view token, empty steps for a restricted reader and the `access_changed` close (ADR 0019, proposed; the name is the conformance kit proposal of ADR 0042 item 4, PRO-130). Whether a relay may announce it is open.',
+    spec: '05 §2, §5.2, §5.3',
+    relayForbidden: false,
+    owner: 'PRO',
+  },
+  {
     name: 'extensions',
     doc: 'Host-registered extension nodes; a CDM feature (03 §11, 13 §7.3).',
     spec: '03 §11',
