@@ -43,14 +43,8 @@ const pgUnavailable = await postgresUnavailable();
 const unavailable = pgUnavailable ?? s3Unavailable;
 if (unavailable) console.warn(`skipped: ${unavailable}`);
 
-/**
- * The same known difference as the core profile on PostgreSQL (ADR 0035, open question ADR 0315):
- * a silent peer is ended with a 1006 close, and the kit expects a 05 §5.7 code. Not decided here.
- */
-const CORE_KNOWN: Readonly<Record<string, string>> = {
-  'core.session.silence':
-    'a silent peer is ended without a close frame (1006), as ADR 0035 chooses; 05 §4 names no close code (open question, ADR 0315)',
-};
+/** No scenario of the core profile is a known difference: a silent peer is closed with 1001 (decision 194). */
+const CORE_KNOWN: Readonly<Record<string, string>> = {};
 
 const hex = randomBytes(4).toString('hex');
 const DB_NAME = `docedit_u_be_085_098_${hex}`;
