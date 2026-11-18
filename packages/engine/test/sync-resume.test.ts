@@ -131,6 +131,7 @@ function setup(plans: Array<Partial<ChannelOpened>>) {
   });
   const channels: ScriptedChannel[] = [first];
   const resumes: Array<Resume | undefined> = [];
+  const loads: Array<number | undefined> = [];
   let ids = 0;
   const port = {
     open: async (_doc: string, o: { resume?: Resume }) => {
@@ -146,11 +147,14 @@ function setup(plans: Array<Partial<ChannelOpened>>) {
       channels.push(ch);
       return ch;
     },
-    loadContent: async (_doc: string, seq?: number): Promise<Content> => ({
-      ...(spikeDocument() as Content),
-      seq: seq ?? 0,
-      incarnation: 'inc-1',
-    }),
+    loadContent: async (_doc: string, seq?: number): Promise<Content> => {
+      loads.push(seq);
+      return {
+        ...(spikeDocument() as Content),
+        seq: seq ?? 0,
+        incarnation: 'inc-1',
+      };
+    },
   };
   c.attach(first, {
     seq: 0,
@@ -162,7 +166,7 @@ function setup(plans: Array<Partial<ChannelOpened>>) {
     retry: { minMs: 10, maxMs: 40 },
     limits: { ackTimeoutMs: 15_000, maxStepsPerCommit: 500, maxCommitBytes: 1 << 20 },
   });
-  return { c, i: internals(c), clock, channels, resumes };
+  return { c, i: internals(c), clock, channels, resumes, loads };
 }
 
 /** A control commit (no steps) at `seq`, as a stream delivers it. */
@@ -322,5 +326,82 @@ describe('suspend and resume (FE-005 criteria 3 and 4; 02 §2.1)', () => {
     expect(h.channels[1]!.submits.map((s) => s.id)).toContain(sent.id);
     expect(textOfNode(h.i.state.doc, SPIKE_IDS.after).startsWith('ab')).toBe(true);
     expect(h.c.recovered.get().count).toBe(0);
+  });
+});
+
+describe('a page catch-up reads commits, not content (SYN-028 criterion 4)', () => {
+  // The channel reads the pages over `GET /documents/{id}/commits` (backend-dep, PRO-026) and
+  // delivers them like a stream: `catching_up`, the commits in order, then `live`. Here the channel
+  // is scripted to do the same, and the session must neither reload nor go live early.
+  it('applies the paged commits, resends an unknown in-flight commit after them, and takes head + 1', async () => {
+    const h = setup([{ catchUp: 'page', head: 2, inflight: { state: 'unknown' } }]);
+    await typeOneLetter(h);
+    const sent = h.channels[0]!.submits[0]!;
+    await drop(h, 0);
+    const second = h.channels[1]!;
+    second.state({ status: 'catching_up', head: 2 });
+    second.push([control(1), control(2)]);
+    await h.clock.advance(1);
+    await sleep(5);
+
+    expect(h.loads).toEqual([]); // no content was fetched
+    expect(h.c.recovered.get().items).toHaveLength(0); // nothing was set aside
+    expect(h.c.confirmedSeq.get()).toBe(2);
+    expect(second.submits.map((s) => s.id)).toEqual([sent.id]);
+
+    // The next commit is head + 1 and is applied in order.
+    second.push([control(3)]);
+    await h.clock.advance(1);
+    await sleep(5);
+    expect(h.c.confirmedSeq.get()).toBe(3);
+    expect(h.loads).toEqual([]);
+  });
+
+  it('nothing is sent while the pages are still being read', async () => {
+    const h = setup([{ catchUp: 'page', head: 3, inflight: { state: 'unknown' } }]);
+    await typeOneLetter(h);
+    await drop(h, 0);
+    const second = h.channels[1]!;
+    second.state({ status: 'catching_up', head: 3 });
+    second.push([control(1), control(2)]); // the first page: head is 3
+    await h.clock.advance(1);
+    await sleep(5);
+    expect(h.c.confirmedSeq.get()).toBe(2);
+    expect(second.submits).toHaveLength(0);
+    second.push([control(3)]);
+    second.state({ status: 'live', seq: 3 });
+    await h.clock.advance(1);
+    await sleep(5);
+    expect(h.c.confirmedSeq.get()).toBe(3);
+    expect(second.submits).toHaveLength(1);
+    expect(h.loads).toEqual([]);
+  });
+
+  it('accepted: the commit is found in the pages and is not resubmitted', async () => {
+    const h = setup([{ catchUp: 'page', head: 1, inflight: { state: 'accepted', seq: 1 } }]);
+    await typeOneLetter(h);
+    const sent = h.channels[0]!.submits[0]!;
+    await drop(h, 0);
+    const second = h.channels[1]!;
+    second.state({ status: 'catching_up', head: 1 });
+    second.push([
+      {
+        seq: 1,
+        kind: 'steps',
+        id: sent.id,
+        steps: sent.steps as RemoteCommit['steps'],
+        control: null,
+        author: { user: 'me', session: 's', agent: null },
+        serverTime: 't',
+        origin: 'input',
+      },
+    ]);
+    second.state({ status: 'live', seq: 1 });
+    await h.clock.advance(1);
+    await sleep(5);
+    expect(h.c.confirmedSeq.get()).toBe(1);
+    expect(second.submits).toHaveLength(0);
+    expect(h.c.saveState.get()).toBe('saved');
+    expect(h.loads).toEqual([]);
   });
 });
