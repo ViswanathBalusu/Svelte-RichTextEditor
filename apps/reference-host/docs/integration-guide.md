@@ -311,6 +311,16 @@ Each limit below comes from the story that sets it. The state given is as it sto
 - **Extension panels (UX-052).** A panel must meet the same accessibility bar as a built-in panel (13 section 7.2); the requirements are listed in the section "Extensions". The editor is responsible for the pane host and the status bar. The reference host ships no sample extension yet, so no axe check of a sample panel runs in CI; the editor's own tests run axe on a panel that a test harness contributes. Content that a panel loads is the host's own code: run axe and a keyboard pass on it before you ship.
 - **Parity (UX-001).** The parity profile (`spec/parity/parity-profile.md`, built from `packages/ui/src/parity/profile.ts`) puts every capability in one tier: built in, through ports and extensions, or non-goal. The non-goals are SmartArt, charts, shapes, text boxes and ink, mail merge, macros, table formulas, researcher-style lookup, transcription and offline-first editing. Read the profile before you promise a feature to your users. Its Gaps section lists what has no story yet, and it changes with each release. This guide matches [parity profile version 2 (2026-11-06)](../../../spec/parity/parity-profile.md). The link is relative, so in the checkout of a release it opens the profile of that release, and a test fails if the version stated here is not the version of that file.
 
+## Signing and identity (FRW-058; 12 section 8.3)
+
+The platform provides a simple electronic signature with an audit trail and a tamper-evident seal applied by the operator or by the tenant's own key. It does not provide signature levels above that on its own.
+
+Signature levels above a simple electronic signature, including the advanced and the qualified levels, are reached through a `SignatureProvider` adapter. At finalisation the adapter sends only the document hash to the provider, and the signature the provider returns is embedded in the PDF. The signature level and the signer identification that the provider reports are recorded in the evidence as asserted by the provider. Whether a use is valid in a jurisdiction is a legal question for the operator and its customers, not a property of the platform.
+
+The ceremony and the evidence record are designed to address intent, consent and retention under ESIGN and UETA: the ceremony asks the signer to act on the document, and the evidence record keeps what the ceremony recorded and how long the operator retains it. This guide does not claim that any signature is valid under either act.
+
+Every participant's authentication is as asserted by the host. The platform does not check who a participant is; the token your host signs names the participant, and the evidence records that assertion.
+
 ## Keeping this guide current
 
 A change to the embedding contract, the document service's protocol or the administration API must update this guide in the same change.
