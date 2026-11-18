@@ -7,7 +7,9 @@
  * `outline()` of 02 §5.1 is `outline.get()`: the outline is a read view, so that the interface can
  * subscribe to it.
  */
-import type { StepJson } from '@docedit/authority';
+import type { FieldReport, StepJson } from '@docedit/authority';
+
+export type { FieldReport };
 import type {
   Access,
   Limits,
@@ -535,6 +537,39 @@ export interface EquationRequest extends EquationTarget {
 export type EquationConfirmation =
   | { readonly ok: true; readonly confirmed: boolean }
   | { readonly ok: false; readonly reason: string; readonly message?: string };
+
+/**
+ * The outcome of setting the value of a form field through the embedding API (12 §10; FRW-069). It
+ * resolves once the document service has answered, or after the timeout with `confirmed` false.
+ * `code` is what refused the fill: `permission_denied` (the field is not this person's to fill, P7),
+ * `field_invalid` (the value does not fit the field, I15), `conflict` (someone else changed the
+ * field first, P9), `not_found` (the document has no field with that key) or another code of the
+ * protocol (04 §9).
+ */
+export type FieldFillOutcome =
+  | { readonly ok: true; readonly confirmed: boolean }
+  | { readonly ok: false; readonly code: string; readonly message: string };
+
+/**
+ * The field members of the embedding API over the core (12 §10; FRW-069). The two that move focus
+ * need a view, so a core without one does not offer them.
+ */
+export interface FieldsApi {
+  /** The values of the form fields by key, as the document holds them now (decimals are strings). */
+  fieldValues(): Record<string, unknown>;
+  /** Fills the field with `key` as the current user: a normal commit, checked by the guard and the authority. */
+  fillField(
+    key: string,
+    value: unknown,
+    options?: { readonly timeoutMs?: number },
+  ): Promise<FieldFillOutcome>;
+  /** The fields that are required and empty, or whose entry has a problem; it changes nothing. */
+  validateFields(): FieldReport[];
+  /** Moves focus to the control of the field with `key`; false when there is none. */
+  focusFieldByKey?(key: string): boolean;
+  /** Moves focus to the next field the person may fill; false when there is none. */
+  nextFillableField?(): boolean;
+}
 
 /** The sync client's state as plain data (FE-033 criterion 7). */
 export interface SyncSummary {

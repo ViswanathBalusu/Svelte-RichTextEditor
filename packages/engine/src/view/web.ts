@@ -319,6 +319,31 @@ export class EditorCore extends DocumentCore {
     return false;
   }
 
+  /** Moves focus to the control of the form field with `key`; false for a key no field has (FRW-069). */
+  focusFieldByKey(key: string): boolean {
+    let id: string | null = null;
+    this.editorState.doc.descendants((node) => {
+      if (id !== null || node.type.name !== 'form_field') return id === null;
+      if (node.attrs['key'] === key && typeof node.attrs['id'] === 'string') id = node.attrs['id'];
+      return false;
+    });
+    return id !== null && this.focusField(id);
+  }
+
+  /**
+   * Moves focus to the next form field the person may fill, in document order, after the one that
+   * last had focus (the first one when none had). It does not wrap: after the last one there is none
+   * (FRW-069; wrapping is an open question of the story). False when no control took focus.
+   */
+  nextFillableField(): boolean {
+    const active = this.selectedField();
+    const fields = this.fillFields();
+    const from = active === null ? -1 : fields.findIndex((f) => f.id === active);
+    for (const f of fields.slice(from + 1))
+      if (this.fieldFillable(f.id) && this.focusField(f.id)) return true;
+    return false;
+  }
+
   caretRect(): { x: number; y: number; width: number; height: number } | null {
     const view = this.#sub?.view.hasFocus() ? this.#sub.view : this.#view;
     if (!view) return null;

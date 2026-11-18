@@ -40,6 +40,8 @@ export type {
   DocumentApi,
   EditMode,
   EquationConfirmation,
+  FieldFillOutcome,
+  FieldsApi,
   EquationRequest,
   EquationTarget,
   FieldArgs,
