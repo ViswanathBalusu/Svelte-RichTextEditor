@@ -2406,10 +2406,11 @@ As an integrating developer, I want to hand the authority service a checkpoint a
 
 **Acceptance criteria**
 
-- [ ] Given `open(doc, checkpointRef, commits, stateId)`, when it is called, then the service loads the document and `stateId` is the hash-chain head, which identifies the state even after the log was rewound.
-- [ ] Given `materialise(stateId)` or `materialise(seq)`, when it is called, then it returns canonical CDM content equal, byte for byte, to the in-process authority package on the same input.
-- [ ] Given a log rewind that produces a different state at the same `seq`, when a call names the old `stateId`, then the service does not return the new state's content.
-- [ ] Given the service restarted or a document evicted from memory, when `open` is called again with the same inputs, then the same content results: the service holds no state that matters.
+- [x] Given `open(doc, checkpointRef, commits, stateId)`, when it is called, then the service loads the document and `stateId` is the hash-chain head, which identifies the state even after the log was rewound.
+- [x] Given `materialise(stateId)` or `materialise(seq)`, when it is called, then it returns canonical CDM content equal, byte for byte, to the in-process authority package on the same input.
+- [x] Given a log rewind that produces a different state at the same `seq`, when a call names the old `stateId`, then the service does not return the new state's content.
+- [x] Given the service restarted or a document evicted from memory, when `open` is called again with the same inputs, then the same content results: the service holds no state that matters.
+**Evidence:** services/authority-service/test/open-materialise.test.ts (Node.js, 19 of 19 pass, ephemeral ports): criterion 1 (`open` verifies the chain from the checkpoint and names the state by the head; refuses a wrong `stateId`, a changed payload, a missing commit, a broken link, a thinned payload, a checkpoint that does not hash, an unsupported `cdm`); criterion 2 (`materialise` at every seq equals, byte for byte, `contentAt` of `@docedit/authority` on the same input, also through HTTP; a fast-check property over random logs, checkpoints and seqs); criterion 3 (two logs that differ at seq 3 give different states; the old `stateId` returns the old content or `unknown_state`, never the new one); criterion 4 (after `clear`, an eviction and a second service object, `open` with the same inputs gives the same bytes). Code: services/authority-service/src/service.ts, src/http.ts. Choices: docs/adr/0389-w5-PRO-103-authority-service-open.md (proposed). Wire: ADR 0314 decision 3, accepted as the starting point by owner decision 193 (docs/owner-decisions-2026-11-15.md).
 
 ### PRO-104 Apply a commit in the authority service
 

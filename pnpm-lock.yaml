@@ -631,6 +631,27 @@ importers:
         specifier: 7.0.0
         version: 7.0.0
 
+  services/authority-service:
+    dependencies:
+      '@docedit/authority':
+        specifier: workspace:*
+        version: link:../../packages/authority
+      '@docedit/history':
+        specifier: workspace:*
+        version: link:../../packages/history
+      '@docedit/model':
+        specifier: workspace:*
+        version: link:../../packages/model
+      '@docedit/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      prosemirror-model:
+        specifier: 1.25.12
+        version: 1.25.12
+      prosemirror-transform:
+        specifier: 1.12.5
+        version: 1.12.5
+
   services/document-service:
     dependencies:
       '@docedit/asset-worker':
