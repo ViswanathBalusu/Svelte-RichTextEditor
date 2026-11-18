@@ -57,6 +57,7 @@ import {
   type WriteResult,
 } from '@docedit/authority';
 import { mathGateReason } from '@docedit/export-latex';
+import { AttributionMap } from '@docedit/history';
 import type { JsonEnvelope, JsonNode } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
 import type {
@@ -110,6 +111,7 @@ import type { Metrics } from './metrics.ts';
 import { PresenceRelay } from './presence.ts';
 import type { Settings } from './settings.ts';
 import { assetRefsIn, type AssetAttachments } from './asset-attachments.ts';
+import { AttributionTracker, contentSizeOf, openAttribution } from './attribution.ts';
 import { admissionFor } from './sec-028-admission.ts';
 import { BroadcastWindow } from './syn-041-coalescing.ts';
 import type { Base, Encoded } from './tasks.ts';
@@ -345,6 +347,12 @@ export class HostedRoom {
   #heads: Array<{ seq: number; at: number }> = [];
   /** When the last channel left, for the order in which idle rooms are closed (BE-021). */
   idleSince: number | null = null;
+  /**
+   * Who wrote each position of the document (08 §7; HIS-014): kept up to date as commits are
+   * stored and saved with each checkpoint. Null when the room has none (a transient room, or a
+   * store with no side objects), or when the commits it was given could not be applied.
+   */
+  attribution: AttributionTracker | null;
 
   constructor(init: {
     ref: DocRef;
@@ -371,11 +379,14 @@ export class HostedRoom {
     subs: ReadonlyMap<string, string>;
     /** The doc_assets rows of the document (BE-044), when the host checks asset references. */
     attached?: ReadonlyMap<string, number>;
+    /** The attribution map at the head the room opens at (HIS-014). */
+    attribution?: AttributionTracker | null;
     deps: HostDeps;
     onStop: (room: HostedRoom, reason: string) => void;
     transient?: boolean;
   }) {
     const { deps } = init;
+    this.attribution = init.attribution ?? null;
     this.ref = init.ref;
     this.record = init.record;
     this.epoch = init.epoch;
@@ -1314,7 +1325,15 @@ ecentHead, keeping one entry older than the window. */
       this.#tainted = req.snapshot.seq;
       let key: string;
       try {
-        key = (await this.#deps.checkpointer.save(this.ref, req.snapshot.seq, content, false)).key;
+        // The map of a snapshot commit is one run of its user and `seq` (08 §7).
+        const side = this.attribution
+          ? AttributionMap.create(contentSizeOf(schemaOf(), content.envelope.doc), {
+              user: req.snapshot.user,
+              seq: req.snapshot.seq,
+            }).toJSON()
+          : undefined;
+        key = (await this.#deps.checkpointer.save(this.ref, req.snapshot.seq, content, false, side))
+          .key;
       } catch (e) {
         this.#report(e, `checkpoint of snapshot ${req.snapshot.seq}`);
         this.#deps.metrics.checkpointFailures.inc({ tenant: this.ref.tenant });
@@ -1485,6 +1504,14 @@ ecentHead, keeping one entry older than the window. */
     if (!commits.length) return;
     this.#noteHead();
     for (const c of commits) {
+      const content = isSnapshot(c) ? this.#snapshots.get(c.id) : undefined;
+      this.attribution?.apply(c, () =>
+        contentSizeOf(schemaOf(), content ? content.envelope.doc : this.#room.document.toJSON()),
+      );
+      if (this.attribution?.broken) {
+        this.#report(new Error(this.attribution.broken), 'attribution map');
+        this.attribution = null;
+      }
       if (isSnapshot(c)) {
         // The snapshot's checkpoint was written before the commit and is now indexed.
         const content = this.#snapshots.get(c.id);
@@ -1569,13 +1596,15 @@ ecentHead, keeping one entry older than the window. */
     this.#checkpointing = (async () => {
       try {
         const e = await this.#deps.checkpointer.replay(input);
-        await this.#deps.checkpointer.save(this.ref, at, e);
+        const side = this.attribution?.jsonAt(at) ?? undefined;
+        await this.#deps.checkpointer.save(this.ref, at, e, true, side);
         this.stats.checkpoints++;
         this.#checkpointFailures = 0;
         this.#deps.metrics.checkpoints.inc({ tenant, reason });
         this.#deps.metrics.checkpointLatency.observe({ tenant }, performance.now() - started);
         if (gen === this.#baseGen && at === this.#base.seq + n) {
           this.#base = { seq: at, base: { encoded: e.encoded }, bytes: e.bytes };
+          this.attribution?.advance(at);
           this.#baseGen++;
           this.#since = this.#since.slice(n);
           this.#sinceBytes = this.#since.reduce(
@@ -1940,6 +1969,34 @@ export class RoomHost {
           const doc = schemaOf().nodeFromJSON(json.doc);
           snapshots.set(c.seq, { doc, json });
         }
+      // Who wrote what (HIS-014): the map saved with the checkpoint plus the commits after it. A
+      // failure leaves the room without one; it never stops the room from opening.
+      let attribution: AttributionTracker | null = null;
+      if (!transient && d.checkpointer.sides) {
+        try {
+          attribution = await openAttribution({
+            ref,
+            record,
+            schema: schemaOf(),
+            checkpointer: d.checkpointer,
+            logs: d.logs,
+            checkpoint: cp,
+            log,
+            snapshotSize: async (c) => {
+              const loaded = snapshots.get(c.seq);
+              if (loaded) return loaded.doc.content.size;
+              const json = d.logs.snapshotContent ? await d.logs.snapshotContent(ref, c.seq) : null;
+              if (!json) throw new Error(`the content of snapshot commit ${c.seq} is missing`);
+              return contentSizeOf(schemaOf(), json.doc);
+            },
+          });
+        } catch (e) {
+          d.settings.onError(e, `attribution map of ${ref.doc}`, {
+            tenant: ref.tenant,
+            doc: ref.doc,
+          });
+        }
+      }
       // The revision in force at the checkpoint: that of the commit stored at its `seq` (every
       // commit records the revision it was checked against); at 0 the one the document was created
       // with (D67), or, while the log is still empty, the newest one stored (D125): permission data
@@ -1975,6 +2032,7 @@ export class RoomHost {
           : {}),
         initialRevision,
         subs,
+        attribution,
         ...(attached ? { attached } : {}),
         deps: d,
         transient,
