@@ -21,12 +21,20 @@ export interface JournalEntry extends OutgoingCommit {
    * history (FE-009). Absent in entries written before FE-009.
    */
   readonly incarnation?: string;
+  /**
+   * The signed-in user the commit was made by (`welcome.user.id`). The next visit sends it again
+   * only for the same user (decision 47 of `docs/owner-decisions-2026-11-15.md`); an entry without
+   * one was written before this field and is sent for anyone.
+   */
+  readonly user?: string;
 }
 
 /** The confirmed document the queue of unsent steps was made on. */
 export interface QueueAt {
   readonly seq: number;
   readonly incarnation: string;
+  /** The signed-in user the queue was made by (see `JournalEntry.user`). */
+  readonly user?: string;
 }
 
 /** What the journal holds for one document. */
@@ -97,7 +105,12 @@ export function memoryJournal(): JournalPort & { readonly size: number } {
         queueAts.delete(docId);
       } else {
         queues.set(docId, structuredCloneSteps(steps));
-        if (at) queueAts.set(docId, { seq: at.seq, incarnation: at.incarnation });
+        if (at)
+          queueAts.set(docId, {
+            seq: at.seq,
+            incarnation: at.incarnation,
+            ...(at.user === undefined ? {} : { user: at.user }),
+          });
         else queueAts.delete(docId);
       }
     },

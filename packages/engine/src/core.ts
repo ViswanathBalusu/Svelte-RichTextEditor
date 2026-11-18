@@ -1745,11 +1745,13 @@ export class DocumentCore implements DocumentApi {
   }
 
   /**
-   * Moves the selection to a reference that blocked the last refused deletion, the next one at each
-   * call and the first again after the last (FE-133 criterion 5). References the reader may not
-   * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
-   * no reference is left to show.
+   * Tells the person that unsent work an earlier visit left behind belonged to someone else and
+   * was discarded (decision 47 of `docs/owner-decisions-2026-11-15.md`). The notice names nothing.
    */
+  noticeForeignWork(): void {
+    this.#refused({ reason: 'other-user', scopes: [] });
+  }
+
   /**
    * Gives the editor the character coverage of the fonts, as the host read it from the font files
    * (FE-136 criterion 4). A family the function does not know is never flagged. Null removes it.
@@ -1782,6 +1784,12 @@ export class DocumentCore implements DocumentApi {
     return referenceTargets(this.#state.doc);
   }
 
+  /**
+   * Moves the selection to a reference that blocked the last refused deletion, the next one at each
+   * call and the first again after the last (FE-133 criterion 5). References the reader may not
+   * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
+   * no reference is left to show.
+   */
   showReferences(): boolean {
     if (this.#referencedTargets.length === 0) return false;
     const doc = this.#state.doc;
@@ -4360,6 +4368,7 @@ one or original. It is a
       ...(opts.clock ? { clock: opts.clock } : {}),
       ...(opts.retry ? { retry: opts.retry } : {}),
       ...(opts.journal ? { journal: opts.journal } : {}),
+      ...(opts.user !== undefined ? { user: opts.user } : {}),
     };
     this.#journalFailed = false;
     this.#serviceUnavailable = false;

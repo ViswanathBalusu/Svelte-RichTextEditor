@@ -137,7 +137,12 @@ export { insertEquation, latexRefusal, setEquationLatex } from './equation-comma
 export { pasteImage, type AssetsPort, type PastedImage } from './image-paste.ts';
 export { rebuildTransaction } from './remote.ts';
 export * as sync from './sync/state.ts';
-export { type RestorePlan, readRestorePlan, restoreBase } from './sync/restore.ts';
+export {
+  type RestorePlan,
+  discardForeignWork,
+  readRestorePlan,
+  restoreBase,
+} from './sync/restore.ts';
 export {
   SyncSession,
   commitId,

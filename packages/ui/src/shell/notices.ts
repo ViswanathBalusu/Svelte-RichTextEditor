@@ -44,6 +44,8 @@ const REFUSALS: Readonly<Record<string, StringKey>> = {
   // A pasted picture that was not added (FE-053 criterion 3): the upload failed or was refused.
   'upload-failed': 'notice.refused.uploadFailed',
   'invalid-size': 'notice.refused.pictureSize',
+  // Unsent work of an earlier visit, made by someone else, was discarded (decision 47).
+  'other-user': 'notice.refused.otherUser',
 };
 
 const REJECTIONS: Readonly<Record<string, StringKey>> = {

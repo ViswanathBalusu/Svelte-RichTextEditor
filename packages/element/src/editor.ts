@@ -759,6 +759,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     setAccess(access: Access) {
       core.setAccess(access);
     },
+    noticeForeignWork() {
+      core.noticeForeignWork();
+    },
     // FE-136 criterion 4: the coverage of the fonts, read from the manifest's files.
     setGlyphCoverage(coverage) {
       core.setGlyphCoverage(coverage);

@@ -116,6 +116,7 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'referenceTargets'
       // FE-136 criterion 4: the font coverage the host read, the characters it shows missing, and the
       // notice for a symbol the font lacks.
+      | 'noticeForeignWork'
       | 'setGlyphCoverage'
       | 'missingGlyphs'
       | 'glyphNotice'
