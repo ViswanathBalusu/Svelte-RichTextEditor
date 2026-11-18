@@ -35,7 +35,9 @@ async function mount(page: Page, sub: string, hide: boolean): Promise<void> {
             return hide ? new Set([...real].filter((f) => f !== 'presence')) : real;
           }
           const value = Reflect.get(target, prop, target);
-          return typeof value === 'function' ? (value as Function).bind(target) : value;
+          return typeof value === 'function'
+            ? (value as (...args: unknown[]) => unknown).bind(target)
+            : value;
         },
       });
       const el = document.createElement('doc-editor') as HTMLElement & { backend: unknown };
