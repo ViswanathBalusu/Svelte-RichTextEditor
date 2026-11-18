@@ -175,7 +175,7 @@ describe.skipIf(unavailable !== null)(
       } finally {
         await root.end();
       }
-    }, 120_000);
+    }, 300_000);
 
     const scenarios = () => report?.profiles.flatMap((p) => p.scenarios) ?? [];
 

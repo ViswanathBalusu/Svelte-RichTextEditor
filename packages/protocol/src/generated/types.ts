@@ -2364,78 +2364,170 @@ export interface CommitRejectedData {
 export interface WorkflowSentData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.participant_activated.v1`: Workflow event `participant_activated` (12 §6.3, §10). */
 export interface WorkflowParticipantActivatedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.participant_viewed.v1`: Workflow event `participant_viewed` (12 §6.3, §10). */
 export interface WorkflowParticipantViewedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.field_completed.v1`: Workflow event `field_completed` (12 §6.3, §10). */
 export interface WorkflowFieldCompletedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.participant_completed.v1`: Workflow event `participant_completed` (12 §6.3, §10). */
 export interface WorkflowParticipantCompletedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.participant_declined.v1`: Workflow event `participant_declined` (12 §6.3, §10). */
 export interface WorkflowParticipantDeclinedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.auth_failed.v1`: Workflow event `auth_failed` (12 §6.3, §10). */
 export interface WorkflowAuthFailedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.reminder_due.v1`: Workflow event `reminder_due` (12 §6.3, §10). */
 export interface WorkflowReminderDueData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
+  /** The participant identifier (12 §6.1), so that the host can invite the person and mint their token. */
+  participant: string;
 }
 
 /** Data of `dep.workflow.corrected.v1`: Workflow event `corrected` (12 §6.3, §10). */
 export interface WorkflowCorrectedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.voided.v1`: Workflow event `voided` (12 §6.3, §10). */
 export interface WorkflowVoidedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.expired.v1`: Workflow event `expired` (12 §6.3, §10). */
 export interface WorkflowExpiredData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.completed.v1`: Workflow event `completed` (12 §6.3, §10). */
 export interface WorkflowCompletedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** Data of `dep.workflow.finalised.v1`: Workflow event `finalised` (12 §6.3, §10). */
 export interface WorkflowFinalisedData {
   /** The document head the event refers to. */
   seq: number;
+  /** The workflow identifier (12 §6.1). */
+  workflow: string;
+  /** The document identifier, as `subject`. */
+  document: string;
+  /** The hash-chain head after the control commit that records the transition (08 §12). Placeholder name. */
+  chainHead: string;
 }
 
 /** `data` by CloudEvents `type`. */
