@@ -161,6 +161,14 @@ import {
   insertTableCaption,
 } from './captions-refs.ts';
 import { type ReferenceTarget, referenceTargets } from './reference-targets.ts';
+import {
+  type GlyphCoverage,
+  type GlyphNotice,
+  type MissingGlyph,
+  familyAtCaret,
+  lacksGlyph,
+  missingGlyphs,
+} from './glyph-check.ts';
 import { referenceGuardPlugin, referencePositions } from './referenced-targets.ts';
 import {
   EQUATION_NODES,
@@ -839,6 +847,13 @@ export class DocumentCore implements DocumentApi {
   /** The last picture that was inserted without alternative text, for the shell to ask for it (FE-132). */
   readonly altRequest: ReadValue<AltRequest | null>;
   #altRequests = 0;
+  /**
+   * The last symbol inserted in a font that has no glyph for it, for the shell to flag before the
+   * export stops on it (FE-136 criterion 4; 09 §3.2).
+   */
+  readonly glyphNotice: ReadValue<GlyphNotice | null>;
+  #glyphNotices = 0;
+  #glyphCoverage: GlyphCoverage | null = null;
   readonly mode: ReadValue<ModeState>;
   /** Suggestion mode at the caret, and why (FE-041 criterion 5). */
   readonly suggestion: ReadValue<SuggestionModeInfo>;
@@ -1000,6 +1015,7 @@ export class DocumentCore implements DocumentApi {
     this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.altRequest = new ReadValue<AltRequest | null>(null, sameJson, hub);
+    this.glyphNotice = new ReadValue<GlyphNotice | null>(null, sameJson, hub);
     this.#requested = config.mode ?? 'edit';
     this.#accessValue = config.access ?? null;
     this.#effective = effectiveMode(this.#requested, this.#accessValue);
@@ -1735,6 +1751,29 @@ export class DocumentCore implements DocumentApi {
    * no reference is left to show.
    */
   /**
+   * Gives the editor the character coverage of the fonts, as the host read it from the font files
+   * (FE-136 criterion 4). A family the function does not know is never flagged. Null removes it.
+   */
+  setGlyphCoverage(coverage: GlyphCoverage | null): void {
+    this.#glyphCoverage = coverage;
+  }
+
+  /** Every character of the body that its font lacks, in document order (09 §3.2). */
+  missingGlyphs(): MissingGlyph[] {
+    return this.#glyphCoverage === null ? [] : missingGlyphs(this.#state.doc, this.#glyphCoverage);
+  }
+
+  /** Publishes a notice when the symbol just inserted has no glyph in the font it is set in. */
+  #flagSymbol(before: EditorState, symbol: string): void {
+    const coverage = this.#glyphCoverage;
+    if (coverage === null) return;
+    const family = familyAtCaret(before.doc, before.selection.from, before.storedMarks);
+    if (lacksGlyph(coverage, family, symbol)) {
+      this.glyphNotice.set({ n: ++this.#glyphNotices, char: symbol, family });
+    }
+  }
+
+  /**
    * What a cross-reference may point at, in this reader's document (FE-134 criterion 2): headings,
    * numbered paragraphs, captions, labelled equations and bookmarks, each with the text a reference
    * to it prints. Computed at each call; nothing is stored.
@@ -2325,10 +2364,12 @@ export class DocumentCore implements DocumentApi {
         return args.toc === undefined
           ? null
           : insertToc(state, this.#newId(), args.toc, { writable }, dispatch);
-      case 'insertSymbol':
-        return args.symbol === undefined
-          ? null
-          : insertSymbol(state, args.symbol, { writable }, dispatch);
+      case 'insertSymbol': {
+        if (args.symbol === undefined) return null;
+        const result = insertSymbol(state, args.symbol, { writable }, dispatch);
+        if (result.ok && dispatch) this.#flagSymbol(state, args.symbol);
+        return result;
+      }
       case 'insertCaption': {
         const caption = args.caption;
         if (caption === undefined) {

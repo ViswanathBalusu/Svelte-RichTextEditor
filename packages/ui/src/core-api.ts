@@ -764,6 +764,15 @@ export interface CoreApi {
   readonly refusal?: ReadView<RefusalNotice | null>;
   /** The last picture inserted without alternative text; the shell asks for it (FE-132 criterion 5). */
   readonly altRequest?: ReadView<{ readonly n: number; readonly asset: string } | null>;
+  /**
+   * The last symbol inserted in a font that has no glyph for it (FE-136 criterion 4; 09 §3.2); the
+   * shell flags it. `family` is null for the default face.
+   */
+  readonly glyphNotice?: ReadView<{
+    readonly n: number;
+    readonly char: string;
+    readonly family: string | null;
+  } | null>;
   /** The last deletion the core trimmed to the editable parts (FE-037 criterion 2); the shell announces it. */
   readonly trimmed?: ReadView<TrimNotice | null>;
   /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3); the shell reports it. */

@@ -145,3 +145,5 @@ export {
   type SyncEvent,
   type SyncHost,
 } from './sync/session.ts';
+export { covered, lacksGlyph, missingGlyphs } from './glyph-check.ts';
+export type { GlyphCoverage, GlyphNotice, GlyphRange, MissingGlyph } from './glyph-check.ts';

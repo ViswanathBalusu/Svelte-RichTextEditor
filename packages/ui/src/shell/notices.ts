@@ -11,7 +11,7 @@ import type { RecoveredEdits, RefusalNotice, ReplaceNotice, TrimNotice } from '.
 import type { StringKey } from '../i18n/en-GB.ts';
 
 export interface Notice {
-  readonly kind: 'refusal' | 'rejection' | 'trimmed' | 'replaced';
+  readonly kind: 'refusal' | 'rejection' | 'trimmed' | 'replaced' | 'glyph';
   /** The message, in plain words. */
   readonly key: StringKey;
   /** For rejections: the number of items set aside in this change. */
