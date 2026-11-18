@@ -101,6 +101,7 @@ import type {
   SyncSummary,
 } from './api.ts';
 import { buildFragment, fragmentOf, fragmentProblem, isFragmentProblem } from './content.ts';
+import { fragmentOfSteps, recoveredKind } from './recovered-fragment.ts';
 import { bodyGuard, initialSelection, selectAllInBody } from './body.ts';
 import { effectiveMode, modeLocks } from './mode.ts';
 import { insertFootnote } from './footnote.ts';
@@ -202,6 +203,7 @@ import { ReadValue, type Schedule, ViewHub, sameJson } from './read-value.ts';
 import {
   placeholderAt,
   regionAt,
+  scopeOfPosition,
   regionClamp,
   regionTitleKey,
   regionParagraphs,
@@ -1590,12 +1592,7 @@ export class DocumentCore implements DocumentApi {
    * The authoring commands ask the guard about this scope, so a page setup is checked as `defs`.
    */
   #scopeIn(doc: PMNode, pos: number): string {
-    const $pos = doc.resolve(pos);
-    const top = $pos.depth > 0 ? $pos.node(1) : null;
-    if (top?.type.name === 'defs') return 'defs';
-    if (top?.type.name === 'story') return `story:${String(top.attrs['id'])}`;
-    const r = regionAt($pos);
-    return r ? `region:${r.id ?? ''}` : 'body';
+    return scopeOfPosition(doc, pos);
   }
 
   /**
@@ -3481,15 +3478,27 @@ export class DocumentCore implements DocumentApi {
         const before = this.recovered.get().items;
         const items = [
           ...before,
-          ...e.items.map((i, n) => ({
-            reason: i.reason,
-            commit: i.commit,
-            id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
-            text: i.text,
-            seq: i.seq,
-            ...this.#rejectionWords(i),
-            ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
-          })),
+          ...e.items.map((i, n): RecoveredItem => {
+            const words = this.#rejectionWords(i);
+            return {
+              reason: i.reason,
+              kind: recoveredKind(i.reason),
+              commit: i.commit,
+              id: i.commit ?? `seq-${i.seq}-${before.length + n}`,
+              text: i.text,
+              fragment: fragmentOfSteps(
+                this.#state.doc,
+                i.steps,
+                this.#state.schema,
+                CDM_VERSION,
+                this.#requires,
+              ),
+              region: words.scope ?? i.region ?? null,
+              seq: i.seq,
+              ...words,
+              ...(i.fields && i.fields.length > 0 ? { fields: [...i.fields] } : {}),
+            };
+          }),
         ];
         this.recovered.set({ count: items.length, items });
         return;
