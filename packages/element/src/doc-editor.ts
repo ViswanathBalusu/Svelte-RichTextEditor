@@ -48,7 +48,7 @@ import {
   type HostApi,
 } from './host-api.ts';
 import type * as EditorChunk from './editor.ts';
-import type { MountedEditor, SettingsStore, StringOverrides } from './editor.ts';
+import type { IconOverrides, MountedEditor, SettingsStore, StringOverrides } from './editor.ts';
 
 type EditorModule = typeof EditorChunk;
 import { emit, type DocEditorEventMap, type DocEditorEventName } from './events.ts';
@@ -89,6 +89,7 @@ const CAPTURED = [
   'resolveUsers',
   'extensions',
   'strings',
+  'icons',
 ] as const;
 
 /**
@@ -153,6 +154,7 @@ export class DocEditorElement extends Base {
   #searchPrincipals: SearchPrincipals | null = null;
   #extensions: readonly unknown[] = [];
   #strings: StringOverrides | null = null;
+  #icons: IconOverrides | null = null;
 
   #session: Session | null = null;
   #sessionKey: Backend | string | null = null;
@@ -290,6 +292,23 @@ export class DocEditorElement extends Base {
     this.#strings = plain ? value : null;
     // A change while the shell is mounted takes effect without remounting it (UX-064).
     this.#mounted?.setStrings(this.#strings ?? {});
+  }
+
+  /**
+   * The host's replacement icons by the command's icon name (UX-063): SVG path data, or a drawing
+   * ({ paths, viewBox?, fill? }). An icon the host omits, or gives as anything but path data, keeps
+   * the built-in drawing. Icons are shown once the host gives a set (an empty object asks for the
+   * built-in drawings alone); without one, commands show labels only. Icons are drawn by the shell
+   * and never inserted as markup.
+   */
+  get icons(): IconOverrides | null {
+    return this.#icons;
+  }
+
+  set icons(value: IconOverrides | null) {
+    const plain = value !== null && typeof value === 'object' && !Array.isArray(value);
+    this.#icons = plain ? value : null;
+    this.#mounted?.setIcons(this.#icons);
   }
 
   /** Host-registered extensions (13 §7, 05 §8.1). A change while the shell is mounted is applied at once (UX-050). */
@@ -701,6 +720,7 @@ export class DocEditorElement extends Base {
         if (this.#session?.docId === docId) this.#emit('de-access-request', { docId, scope });
       },
       strings: () => this.#strings,
+      icons: () => this.#icons,
       // The host's extensions are read at mount and then applied on each change (UX-050).
       extensions: () => this.#extensions,
       // A problem with one extension is raised as a non-fatal `de-error`; the others still load.

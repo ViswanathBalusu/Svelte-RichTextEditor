@@ -144,6 +144,42 @@ test.describe('the accessibility checker pane (UX-066, UX-067)', () => {
     await expect(pane.locator('[role="status"][data-status="count"]')).toHaveCount(1);
   });
 
+  test('follows the document after it goes quiet, with one run for a burst of changes (UX-066 criterion 5, the update half)', async ({
+    page,
+  }) => {
+    const h = await open(page, {
+      extended: true,
+      checker: true,
+      permissions: PERMISSIONS,
+      regions: REGIONS,
+    });
+    await h.exec('view.checker');
+    const pane = page.locator('.de-pane[data-pane="checker"]');
+    await expect(pane.locator('li[data-block="fNoAlt"]')).toHaveCount(1);
+    const before = await h.checkerReads();
+    // Fifty changes in one task, the last of which fixes the figure: no run inside the burst.
+    const during = await page.evaluate(() => {
+      const hh = (
+        window as unknown as {
+          harness: {
+            editChecker(fixed: boolean): void;
+            burstChecker(n: number): void;
+            checkerReads(): number;
+          };
+        }
+      ).harness;
+      const start = hh.checkerReads();
+      hh.burstChecker(49);
+      hh.editChecker(true);
+      return hh.checkerReads() - start;
+    });
+    expect(during).toBe(0);
+    // The list follows once the document is quiet, and the burst cost one read.
+    await expect(pane.locator('li[data-block="fNoAlt"]')).toHaveCount(0);
+    await expect(pane.locator('[data-status="count"]')).toHaveText('5 accessibility issues found.');
+    await page.waitForTimeout(600);
+    expect((await h.checkerReads()) - before).toBe(1);
+  });
   test('has no axe violation with the issues listed (UX-068 criterion 1, the checker pane)', async ({
     page,
   }) => {

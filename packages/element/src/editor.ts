@@ -29,6 +29,8 @@ import {
   PeopleDirectory,
   SettingsStore,
   Strings,
+  Icons,
+  type IconOverrides,
   createCommandRegistry,
   headerMode,
   themeMode,
@@ -121,6 +123,8 @@ export interface MountOptions {
   onAccessRequest?: (detail: { scope: string }) => void;
   /** The host's replacement strings by key (UX-063), read when the shell mounts. */
   strings: () => StringOverrides | null;
+  /** The host's replacement icons by command icon name (UX-063), read when the shell mounts. */
+  icons?: () => IconOverrides | null;
   /** The host's extensions (05 §8.1 `extensions`), read when the shell mounts (UX-050). */
   extensions: () => readonly unknown[];
   /** Each problem with an extension, raised by the element as `de-error` (UX-050; never fatal). */
@@ -129,6 +133,9 @@ export interface MountOptions {
 
 /** Host replacement strings by key (UX-063); a value that is not a message is ignored. */
 export type StringOverrides = Readonly<Record<string, string>>;
+
+/** Host replacement icons by command icon name (UX-063): path data or a drawing; others are ignored. */
+export type { IconOverrides };
 
 /** The PDF viewer for the shell's PDF pane (FE-071; the pane is UX-019). Loaded when first used. */
 export interface PdfService {
@@ -162,6 +169,8 @@ export interface MountedEditor extends EditorHandle {
   openPane(id: string): Promise<boolean>;
   /** Replaces the host's string replacements while the shell is mounted (UX-063, UX-064). */
   setStrings(overrides: StringOverrides): void;
+  /** Replaces the host's icons while the shell is mounted (UX-063). */
+  setIcons(overrides: IconOverrides | null): void;
   /**
    * A message of the shell's catalogue in the locale in use, with the host's replacements applied
    * (UX-064); null for a key the catalogue does not have. The announcer reads its sentences here
@@ -532,6 +541,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
   });
   // The host's replacements by key (UX-063). A missing key falls back to the source table; an
   // unknown key is reported to the console, in every build. The shell reads this catalogue.
+  const icons = new Icons({
+    overrides: options.icons?.() ?? null,
+    onInvalid: (names) =>
+      console.warn(`doc-editor: icons that are not path data were ignored: ${names.join(', ')}`),
+  });
   const strings = new Strings({
     overrides: options.strings() ?? {},
     onUnknown: (keys) =>
@@ -547,6 +561,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     props: {
       core: shell,
       strings,
+      icons,
       registry,
       people,
       searchPrincipals,
@@ -627,6 +642,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     setStrings(overrides: StringOverrides) {
       strings.setOverrides(overrides);
+    },
+    setIcons(overrides: IconOverrides | null) {
+      icons.setOverrides(overrides);
     },
     text(key, params) {
       return strings.current.has(key) ? strings.current.text(key, params) : null;

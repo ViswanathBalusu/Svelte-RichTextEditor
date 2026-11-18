@@ -11,6 +11,7 @@
   import type { CommandView } from '../commands/types.ts';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
+  import Icon from './Icon.svelte';
 
   interface Props {
     /** Where the toolbar sits, in viewport coordinates (above the selection's start). */
@@ -54,7 +55,7 @@
         aria-label={tr.text(item.entry.label)}
         onclick={() => run(item)}
       >
-        {tr.text(item.entry.label)}
+        <Icon name={item.entry.icon} />{tr.text(item.entry.label)}
       </button>
     {/each}
   </div>

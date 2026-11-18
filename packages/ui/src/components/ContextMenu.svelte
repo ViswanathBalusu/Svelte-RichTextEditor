@@ -16,6 +16,7 @@
   import type { CommandView, ContextTarget } from '../commands/types.ts';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
+  import Icon from './Icon.svelte';
   import { boundKeys } from '../shortcuts/table.ts';
   import { contextMenuGroups, placeMenu } from '../shell/toolbar-groups.ts';
   import type { ProofingFindingView } from '../core-api.ts';
@@ -240,7 +241,7 @@
         aria-disabled={item.enabled ? undefined : 'true'}
         aria-describedby={item.enabled ? undefined : reasonId(item)}
         aria-keyshortcuts={ariaShortcuts(boundKeys(item.id, item.entry.keys), apple)}
-        onclick={() => run(item)}>{tr.text(item.entry.label)}</button
+        onclick={() => run(item)}><Icon name={item.entry.icon} />{tr.text(item.entry.label)}</button
       >
     {/each}
   {/each}

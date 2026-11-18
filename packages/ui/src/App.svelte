@@ -76,6 +76,7 @@
   import type { StringKey } from './i18n/en-GB.ts';
   import { findingSentence } from './proofing/present.ts';
   import { Strings } from './i18n/strings.ts';
+  import { Icons } from './icons/icons.ts';
   import type { MessageParams } from './i18n/types.ts';
   import { live } from './live.ts';
   import { PeopleDirectory } from './people/directory.ts';
@@ -109,6 +110,8 @@
     registry?: CommandRegistry;
     /** The string catalogue; the element sets its locale from the `locale` attribute. */
     strings?: Strings;
+    /** The icon catalogue: the host's replacement drawings over the built-in ones (UX-063). */
+    icons?: Icons;
     /** The people directory; or `resolveUsers`, from which the shell makes one (UX-025). */
     people?: PeopleDirectory;
     resolveUsers?: ResolveUsers;
@@ -158,6 +161,7 @@
     () => props.registry ?? createCommandRegistry(core, { hasString: (k) => strings.has(k) }),
   );
 
+  const icons = untrack(() => props.icons ?? new Icons());
   const translator = live(strings.view);
   const tr = $derived(translator.current);
   const settings = $derived(live(props.settings ?? { get: () => ({}), subscribe: () => () => {} }));
@@ -359,6 +363,7 @@
     registry,
     people,
     strings: translator,
+    icons: icons.view,
     announce,
     announceText: (text) => void say(text),
     idPrefix: `de${Math.random().toString(36).slice(2, 8)}`,
