@@ -414,6 +414,7 @@ export class EditorCore extends DocumentCore {
                 this.enterFieldValue(id, value);
               },
               fillable: (id) => this.fieldFillable(id),
+              rules: (id) => this.fieldRuleState(id),
               focused: (id) => this.selectField(id),
             },
             this.#fieldViews,

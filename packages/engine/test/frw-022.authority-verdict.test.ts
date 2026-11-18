@@ -1,9 +1,9 @@
 /**
- * FRW-022 criterion 6, in the editing core over backend-mock (which runs the real authority): the
- * editor has no rule evaluation of its own yet (FRW-023), so it offers a fill of a field that a rule
- * hides, as it would after any disagreement with the server. The authority refuses it with
- * `permission_denied`; the core sets the fill aside, the field shows the stored value, and the
- * service keeps what it had. When the controlling field is filled, the authority's verdict changes
+ * FRW-022 criterion 6, in the editing core over backend-mock (which runs the real authority): an
+ * entry is offered for a field that a rule hides, as it is when the editor's verdict and the
+ * authority's differ (the entry API takes no account of the editor's own rule state, as a stale
+ * view or another client would not). The authority refuses it with `permission_denied`; the core
+ * sets the fill aside, the field shows the stored value, and the service keeps what it had. When the controlling field is filled, the authority's verdict changes
  * and the same fill is accepted: its verdict is the one that counts.
  */
 import { MockService } from '@docedit/backend-mock';
@@ -59,10 +59,13 @@ describe('the authority’s verdict wins over the editor’s (FRW-022 criterion 
     const docId = service.createDocument(withHideRule());
     const { core, detach, backend } = await participant(service, docId);
     try {
-      // The editor itself sees nothing against the fill: it has no rule evaluation yet.
-      expect(core.fieldFillable(FIELD_IDS.name)).toBe(true);
-      const out = await core.fillField('tenant.name', 'Ada');
-      expect(out).toMatchObject({ ok: false, code: 'permission_denied' });
+      // The editor's own evaluation (FRW-023) already hides the field; the entry is made anyway.
+      expect(core.fieldFillable(FIELD_IDS.name)).toBe(false);
+      const kept = core.recovered.get().items.length;
+      core.enterFieldValue(FIELD_IDS.name, 'Ada');
+      await core.flush({ timeoutMs: 5000 });
+      const refused = core.recovered.get().items.slice(kept)[0];
+      expect(refused?.reason).toBe('permission_denied');
       // The editor shows the stored value again, and so does the service.
       expect(core.fieldValues()['tenant.name']).toBeNull();
       expect(JSON.stringify((await backend.sync.loadContent(docId)).doc)).not.toContain('"Ada"');
