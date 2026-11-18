@@ -52,6 +52,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // UX-017: the recovered edits pane puts a set-aside edit back or drops it, by its id.
       | 'insertRecovered'
       | 'discardRecovered'
+      // UX-018: the status bar's word count and the document language at the selection.
+      | 'words'
+      | 'language'
       // FRW-004: the entries of form fields, for the field controls of the web view. The fill
       // methods of the embedding API (12 §10) are FRW-069's and are not on the document API yet.
       | 'fieldEntry'
