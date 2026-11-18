@@ -258,6 +258,7 @@ import {
 } from './table-style-sort.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
+import { setParagraphFormat } from './paragraph-format.ts';
 import { PresenceClient } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
 import { skippedPreservedAtoms } from './preserved-find.ts';
@@ -509,6 +510,7 @@ const COMMANDS: readonly CommandName[] = [
   'setFigureLayout',
   'increaseIndent',
   'decreaseIndent',
+  'setParagraphFormat',
   'nextEditableRegion',
 ];
 
@@ -2032,6 +2034,10 @@ export class DocumentCore implements DocumentApi {
       return changeIndent(name === 'increaseIndent' ? 'increase' : 'decrease', (pos) =>
         this.canEdit(this.#scopeAt(pos)),
       );
+    if (name === 'setParagraphFormat')
+      return args.paragraphFormat === undefined
+        ? null
+        : setParagraphFormat(args.paragraphFormat, (pos) => this.canEdit(this.#scopeAt(pos)));
     if (name === 'nextEditableRegion') return nextEditableRegion((scope) => this.canEdit(scope));
     if (name === 'markRegion')
       return args.title === undefined

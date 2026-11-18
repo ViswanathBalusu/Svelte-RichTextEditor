@@ -19,6 +19,7 @@ import type {
   SyncPort,
   Unsubscribe,
 } from '@docedit/protocol';
+import type { ParagraphFormatPatch } from './paragraph-format.ts';
 import type { ReadView } from './read-value.ts';
 import type { TrimReport } from './trim.ts';
 import type { Clock } from './sync/session.ts';
@@ -72,6 +73,7 @@ export type CommandName =
   | 'setFigureLayout'
   | 'increaseIndent'
   | 'decreaseIndent'
+  | 'setParagraphFormat'
   | 'nextEditableRegion'
   | 'markRegion'
   | 'setRegionPolicy'
@@ -181,6 +183,11 @@ export interface CommandArgs {
   cells?: CellRectArgs;
   /** For `paragraphStyle`: the identifier of a paragraph style the document defines. */
   style?: string;
+  /**
+   * For `setParagraphFormat` (FE-129): the properties to set on the selected paragraphs. Each value
+   * is checked against the CDM's range, and `null` clears the property.
+   */
+  paragraphFormat?: ParagraphFormatPatch;
   /** For `setTableStyle` (FE-131): a table style the document defines, or `null` to clear it. */
   tableStyle?: string | null;
   /** For `sortTableRows` (FE-131): the direction; `sortColumn` is the column, default the caret's. */
