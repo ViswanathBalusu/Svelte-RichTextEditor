@@ -38,7 +38,9 @@ Stories UX-092, UX-093 and UX-094 are partly done. The evidence names `apps/refe
 
 ## Round 1 additions: UX-095, UX-096 and UX-097
 
-### Decision: semantics of `DEP-Actor` (UX-096, proposed; owner and security review pending)
+### Decision: semantics of `DEP-Actor` (UX-096, accepted with changes by owner decision 174 on 2026-11-15; security review pending)
+
+Owner decision 174 (docs/owner-decisions-2026-11-15.md) tightens points 2 and 3 below: a service credential acting for a user is bounded by that user's rights, and the audit trail records the credential as well as the user. The text of points 2 and 3 as first proposed follows, then the rule as it now stands in 05 section 3.2 and 07 section 14. A security review is still required before release. Lane w3, 2026-11-18: 05 section 3.2 and 07 section 14 are amended; the kit's `authz` profile has the scenarios `actor.user-token` and `actor.opaque` (packages/tck/src/profiles/authz.ts, `packages/tck/test/ux-096-actor.reference.test.ts`). The scenario for the bound itself, a service call naming a user who lacks the right is refused, is not in the kit, because the service cannot yet tell what the named user may do (a document role and groups are claims of the user's tokens); that is UX-097 criterion 4.
 
 The spec default, read from the code the document service already runs (BE-033), with the open points named:
 

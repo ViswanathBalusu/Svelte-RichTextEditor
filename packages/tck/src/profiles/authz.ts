@@ -644,6 +644,45 @@ export const AUTHZ: ProfileDef = {
         await succeeds(ctx, viewer, 'POST', path, 'resolving with view', { body });
       },
     }),
+    a({
+      id: 'actor.user-token',
+      title: 'DEP-Actor on a user token has no effect: the caller stays the token holder',
+      spec: '05 §3.2; 07 §12; UX-096',
+      needs: { features: ['regions'] },
+      covers: { operations: ['GET /documents/{id}/grants'], errors: ['forbidden'] },
+      async run(ctx) {
+        const doc = await ctx.document();
+        const { token: editor } = await ctx.token('editor', { [doc]: 'editor' });
+        await ctx.token('owner', { [doc]: 'owner' });
+        const path = `/documents/${doc}/grants`;
+        // An editor may not read the grants (row 10). Naming the owner changes nothing.
+        for (const actor of ['owner', 'tck-no-such-user']) {
+          const res = await ctx.service.as(editor, 'GET', path, {
+            headers: { 'dep-actor': actor },
+          });
+          const p = problemOf(res, `a user token naming ${actor} in DEP-Actor`);
+          equal(p.code, 'forbidden', 'a user token never becomes another person (UX-096)');
+          equal(res.status, 403, 'the HTTP status of forbidden (D61)');
+        }
+      },
+    }),
+    a({
+      id: 'actor.opaque',
+      title: 'a service credential names the actor by an opaque identifier, and no other value',
+      spec: '05 §3.2; UX-096',
+      covers: { operations: ['GET /documents'], errors: ['validation_failed'] },
+      async run(ctx) {
+        // 1 to 255 characters, no whitespace and no control characters (05 §3.2).
+        for (const actor of ['not an identifier', 'two\twords', 'x'.repeat(256)]) {
+          const res = await ctx.service.call('GET', '/documents', {
+            headers: { 'dep-actor': actor },
+          });
+          const p = problemOf(res, `DEP-Actor ${JSON.stringify(actor.slice(0, 20))}`);
+          equal(p.code, 'validation_failed', 'a malformed DEP-Actor is refused (UX-096)');
+          equal(res.status, 400, 'the HTTP status of validation_failed');
+        }
+      },
+    }),
     ...MATRIX.filter(
       (r) =>
         ![
