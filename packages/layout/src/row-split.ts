@@ -11,7 +11,12 @@
  * no paragraphs left for the tail; the tail keeps the bottom margin and has no top margin.
  */
 import type { FlowInsets } from './flow.ts';
-import type { ParagraphItem, TableCellItem, TableRowItem } from './page-items.ts';
+import {
+  rangeOf,
+  type ParagraphItem,
+  type TableCellItem,
+  type TableRowItem,
+} from './page-items.ts';
 
 const NO_MARGINS: FlowInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -50,6 +55,7 @@ function cut(row: TableRowItem, index: number): { head: TableRowItem; tail: Tabl
       width: cell.width,
       margins: headMargins,
       paragraphs: headParas,
+      ...rangeOf(cell),
     });
     tailCells.push({
       cellId: cell.cellId,
@@ -57,6 +63,7 @@ function cut(row: TableRowItem, index: number): { head: TableRowItem; tail: Tabl
       width: cell.width,
       margins: tailMargins,
       paragraphs: tailParas,
+      ...rangeOf(cell),
     });
   }
   const height = (cells: readonly TableCellItem[]): number =>
@@ -67,6 +74,7 @@ function cut(row: TableRowItem, index: number): { head: TableRowItem; tail: Tabl
     cantSplit: false,
     height: height(headCells),
     cells: headCells,
+    ...rangeOf(row),
   };
   const tail: TableRowItem = {
     rowId: row.rowId,
@@ -74,6 +82,7 @@ function cut(row: TableRowItem, index: number): { head: TableRowItem; tail: Tabl
     cantSplit: false,
     height: height(tailCells),
     cells: tailCells,
+    ...rangeOf(row),
   };
   return { head, tail };
 }
