@@ -156,6 +156,7 @@ import {
   EQUATION_NODES,
   LATEX_MAX_CODE_POINTS,
   MATH_NESTING_MAX,
+  insertEquation,
   latexRefusal,
   setEquationLatex,
 } from './equation-commands.ts';
@@ -529,6 +530,7 @@ const BLOCK_ONLY_COMMANDS: ReadonlySet<CommandName> = new Set<CommandName>([
   'insertSectionBreak',
   'insertToc',
   'insertCaption',
+  'insertEquation',
   'setEquationLatex',
   'resizeFigure',
   'setFigureLayout',
@@ -550,6 +552,7 @@ const AUTHORING: ReadonlySet<CommandName> = new Set<CommandName>([
   'insertSymbol',
   'insertCaption',
   'insertReference',
+  'insertEquation',
   'setEquationLatex',
 ]);
 
@@ -600,6 +603,8 @@ function hasAuthoringArgs(name: CommandName, args: CommandArgs): boolean {
       return args.figure !== undefined;
     case 'insertReference':
       return args.reference !== undefined;
+    case 'insertEquation':
+      return args.newEquation !== undefined;
     case 'setEquationLatex':
       return args.equation !== undefined;
     default:
@@ -1973,6 +1978,15 @@ export class DocumentCore implements DocumentApi {
         if (ref === undefined) return null;
         return insertReference(state, ref.target, ref.format ?? null, { writable }, dispatch);
       }
+      case 'insertEquation':
+        return args.newEquation === undefined
+          ? null
+          : insertEquation(
+              state,
+              args.newEquation.display,
+              { writable, id: this.#newId() },
+              dispatch,
+            );
       case 'setEquationLatex': {
         const eq = args.equation;
         if (eq === undefined) return null;
@@ -2073,9 +2087,16 @@ export class DocumentCore implements DocumentApi {
       case 'insertSymbol':
       case 'insertCaption':
       case 'insertReference':
+      case 'insertEquation':
       case 'setEquationLatex':
         if (!hasAuthoringArgs(name, args)) return null;
-        return (state, dispatch) => this.#authoring(name, args, state, dispatch)?.ok === true;
+        return (state, dispatch) => {
+          const outcome = this.#authoring(name, args, state, dispatch);
+          // FE-136 criterion 5: the new equation opens in the math editor (FE-070).
+          if (name === 'insertEquation' && dispatch && outcome?.ok === true && 'pos' in outcome)
+            this.requestEquationEdit(Number(outcome.pos));
+          return outcome?.ok === true;
+        };
       case 'bold':
         return toggleMark(s.marks['bold']!, { value: true }, WHOLE_SELECTION);
       case 'italic':

@@ -99,6 +99,7 @@ export type AuthoringCommandName =
   | 'insertSymbol'
   | 'insertCaption'
   | 'insertReference'
+  | 'insertEquation'
   | 'setEquationLatex';
 
 /**
@@ -246,6 +247,11 @@ export interface CommandArgs {
    * document, and the LaTeX source the user confirmed.
    */
   equation?: { pos: number; latex: string };
+  /**
+   * For `insertEquation` (FE-136 criterion 5): `display` true inserts a block equation after the
+   * caret's block, false an inline one at the caret. The math editor is then asked to open on it.
+   */
+  newEquation?: { display: boolean };
 }
 
 /**

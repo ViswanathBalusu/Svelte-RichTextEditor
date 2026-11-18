@@ -47,6 +47,7 @@ import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
 import { sectionWarningPlugin } from './section-warning-view.ts';
+import { tocPlugin, tocView } from './toc-view.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
 function viewPlugins(schema: Schema): Plugin[] {
@@ -65,6 +66,8 @@ function viewPlugins(schema: Schema): Plugin[] {
     tableStylePlugin(),
     // FE-140 criterion 2: the generated entries of each bibliography.
     bibliographyPlugin(),
+    // FE-136 criterion 3: the generated entries of each table of contents and list of captions.
+    tocPlugin(),
     // FE-053 criterion 3: draws the core's pending picture placeholders (the core keeps only state).
     picturePlaceholderView(),
   ];
@@ -427,6 +430,7 @@ export class EditorCore extends DocumentCore {
           ),
           field: fieldView(this.#fieldViews),
           bibliography: bibliographyView,
+          toc: tocView,
           image: imageView(this.#assetImage),
           // FE-132: the figure's stored size and its resize handle.
           figure: figureView,
