@@ -205,7 +205,7 @@ import {
   withParagraphsAfterRegions,
 } from './regions.ts';
 import { nextEditableRegion } from './region-navigation.ts';
-import { markRegion } from './prm-033-mark-region.ts';
+import { atRegionLimit, markRegion, selectionHoldsRegion } from './prm-033-mark-region.ts';
 import { setRegionPolicy } from './prm-036-region-policy.ts';
 import { renameRegion } from './prm-034-rename-region.ts';
 import {
@@ -1374,7 +1374,9 @@ export class DocumentCore implements DocumentApi {
     if (this.#locked()) return 'locked';
     const { from, to } = this.#state.selection;
     if (this.#scopeAt(from) !== 'body' || this.#scopeAt(to) !== 'body') return 'nested';
+    if (selectionHoldsRegion(this.#state)) return 'nested';
     if (!this.canEdit('body') || !this.canEdit('doc')) return 'structure';
+    if (atRegionLimit(this.#state)) return 'limit';
     return 'blocks';
   }
 
