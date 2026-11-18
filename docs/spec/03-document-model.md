@@ -186,8 +186,8 @@ Writers and the layout engine MUST resolve formatting in this order, later entri
 
 1. Defaults from `settings` and the default paragraph style.
 2. The table style, for content inside a table.
-3. The numbering level's paragraph properties, for numbered paragraphs.
-4. The paragraph style chain, from the root of the `basedOn` chain to the style itself.
+3. The paragraph style chain, from the root of the `basedOn` chain to the style itself.
+4. The numbering level's paragraph properties, for numbered paragraphs. As in Word, the level's indent overrides the paragraph style's (owner decision 9, 2026-11-15).
 5. Direct paragraph attributes.
 
 For runs, continue with:

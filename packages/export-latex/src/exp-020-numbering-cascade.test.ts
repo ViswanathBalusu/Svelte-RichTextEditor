@@ -1,7 +1,7 @@
 /**
  * Paragraph indents under the formatting cascade of 03 §6 (Node.js only): EXP-020 criterion 1,
- * the numbering-level leg. The order is style defaults, table style, numbering level (layer 3),
- * paragraph style chain (layer 4), direct attributes (layer 5). The model resolves it
+ * the numbering-level leg. The order is style defaults, table style, paragraph style chain (layer 3),
+ * numbering level (layer 4), direct attributes (layer 5), as in Word (owner decision 9, 2026-11-15). The model resolves it
  * (`resolveParagraph`, ADR 0032); the converter writes the resolved values, so these tests read
  * the setters of main.tex and styles.tex. Nothing compiles here.
  */
@@ -61,7 +61,7 @@ describe('EXP-020 criterion 1 (numbering-level leg): the level indents apply whe
     expect(effective(lines, styles, 'DEif')).toBe(`-${dimen(360)}`);
   });
 
-  it('gives the paragraph style indentLeft over the level indentLeft (style chain is layer 4, above the level)', async () => {
+  it('gives the level indentLeft over the paragraph style indentLeft (the level is layer 4, above the style chain)', async () => {
     const p = para('Item.', {
       style: 'Body',
       numbering: { numberingId: 'n', level: 0, listId: 'L1' },
@@ -70,7 +70,7 @@ describe('EXP-020 criterion 1 (numbering-level leg): the level indents apply whe
       doc([p], { styles: [style('Body', { indentLeft: 1440 })], numberings: withLevel(720, 360) }),
     );
     const lines = blockLines(bundle, idOf(p));
-    expect(effective(lines, bundle.files['styles.tex']!, 'DEil')).toBe(String(dimen(1440)));
+    expect(effective(lines, bundle.files['styles.tex']!, 'DEil')).toBe(String(dimen(720)));
   });
 
   it('gives a direct indentLeft over both the style and the level', async () => {
