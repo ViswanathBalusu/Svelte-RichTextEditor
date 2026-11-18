@@ -114,7 +114,7 @@ As a maintainer, I want the kernel to shape with exactly the font files the edit
 - [ ] Given a later font load, the font epoch advances and the kernel's caches for affected aliases are invalidated (02 §6).
 - [ ] A tenant's own fonts load the same way and only for that tenant's documents.
 
-**Notes:** C-WASM, phase 3.
+**Notes:** C-WASM, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-WASM does not hold yet (the page-view gate, SPK-013, is not held), and the story depends on WASM-004 (the layout worker that hosts the kernel), which is blocked for that reason. There is no kernel instance in the editor to load faces into, so the manifest loader, the hash check, the memory report and the epoch invalidation would have no caller. S5 and S10 did decide that measurement is from the font files with harfbuzzjs (ADR 0016, "Result of S10"), so the story is ready to be built once the gate says yes. Nothing here needs an owner decision beyond that gate.
 
 ### WASM-006 Shaping and measurement behind the measurement interface
 
