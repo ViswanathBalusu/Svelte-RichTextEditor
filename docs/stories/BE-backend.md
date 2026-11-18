@@ -2195,11 +2195,13 @@ As an operator who upgrades rarely, I want to skip at most one minor version, wi
 **Acceptance criteria**
 
 - [ ] Given release N, when a deployment at N-1 and a deployment at N-2 (one minor skipped) are upgraded with the documented steps, then both end working with their data intact in CI.
-- [ ] Given each release, when its notes are written, then they list the database steps, the CDM steps and how to roll back.
+- [x] Given each release, when its notes are written, then they list the database steps, the CDM steps and how to roll back.
 - [ ] Given the latest release is rolled back by the documented steps, when it is tested, then the previous version runs against the data.
-- [ ] Given the guide, when it describes skipping, then it says that more than one minor is not supported.
+- [x] Given the guide, when it describes skipping, then it says that more than one minor is not supported.
 
-**Notes:** `cond`: only if a self-hosted distribution ships (11 §10, decision 8).
+**Evidence (lane w5, 2026-11-18):** criteria 2 and 4: `services/document-service/src/storage/be-095-release-notes.test.ts` (7 tests, `pnpm exec vitest run --project node <file>`, passed, with `migrate.plan.test.ts`). Every release in `migrations/releases.json` must state its CDM steps and a rollback note for them (`releaseNoteProblems`, also run by `migrate check`, which exits 0), and `migrate notes <release>` prints the database steps with their rollback and then the CDM steps with theirs (`cdmNotes`). `services/document-service/docs/upgrade-guide.md` describes a skip of one minor and states that more than one skipped minor version is not supported; the test reads the guide for both sentences. Decision 28 of `docs/owner-decisions-2026-11-15.md` (self-hosted applies from the start) makes the story apply.
+
+**Notes:** `cond`: only if a self-hosted distribution ships (11 §10, decision 8; decision 28 of the owner's answers: both modes apply). Lane w5 (2026-11-18): criteria 1 and 3 stay open. The repository has one release (`0.1.0-phase1a`), so there is no N-1 and N-2 pair to upgrade between and no previous version to roll back to; they need two or three tagged releases built and a CI job that installs the old one, loads data, upgrades by the guide and checks the data (hosted CI is not edited by a lane). The guide says so. The one release states no CDM steps, because no CDM migration exists (BE-094 criteria 2 and 3, CDM-049); the `cdm` field of `releases.json` is the place for them. The word "minor" follows the release names once they are semantic versions; `0.1.0-phase1a` is not one yet.
 
 ### BE-096 Encrypt backups and audit access to them
 
