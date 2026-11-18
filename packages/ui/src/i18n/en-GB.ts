@@ -858,6 +858,8 @@ export const EN_GB = {
   'workflow.banner.voided': 'The workflow was voided. The document stays locked.',
   'workflow.banner.actors': 'May act now: {names}.',
   'workflow.banner.nobody': 'No one has to act now.',
+  'workflow.banner.reuse': 'Copy to a new document',
+  'workflow.banner.reuseRequested': 'Asked to copy the document as it was sent into a new document.',
   'notice.refused.workflow':
     'That change was not made: the document is out for completion and is locked.',
   'notice.rejected.workflow': {

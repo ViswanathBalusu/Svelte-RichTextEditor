@@ -86,7 +86,7 @@ export function opOf(item: OutboxItem): ServerOp | null {
     if (
       ev === null ||
       typeof ev !== 'object' ||
-      (ev.origin !== 'sign' && ev.origin !== 'rules') ||
+      (ev.origin !== 'sign' && ev.origin !== 'rules' && ev.origin !== 'decline') ||
       typeof ev.evidenceHash !== 'string'
     )
       return null;

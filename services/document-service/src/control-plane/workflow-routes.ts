@@ -25,6 +25,7 @@ import {
   sendWorkflow,
   snapshotOf,
   workflowEvent,
+  type ParticipantKind,
   type SendProblem,
   type WorkflowEventName,
   type WorkflowParticipant,
@@ -32,7 +33,13 @@ import {
 import { createHash } from 'node:crypto';
 import { canonicalize, uuid7 } from '@docedit/model';
 import { recordCorrection, recordResume } from '../workflow/correction.ts';
-import { recordDecline, recordVoid, type StopOutcome } from '../workflow/stop.ts';
+import {
+  DECLINE_REASON_BYTES,
+  recordDecline,
+  recordDeclineEvidence,
+  recordVoid,
+  type StopOutcome,
+} from '../workflow/stop.ts';
 import { recordRemind } from '../workflow/schedule-sweep.ts';
 import {
   registerParticipantCode,
@@ -492,13 +499,49 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
         throw new ApiError('forbidden', 'the token is not bound to this participant');
     }
     const body = (await ctx.body()) as { reason: string };
+    // The evidence of the decline holds the reason, and a row of evidence is bounded (ADR 0415).
+    if (
+      typeof body.reason === 'string' &&
+      Buffer.byteLength(body.reason.trim()) > DECLINE_REASON_BYTES
+    )
+      throw new ApiError('validation_failed', 'the reason is too long', {
+        violations: [{ path: '/reason', rule: `at most ${DECLINE_REASON_BYTES} bytes of text` }],
+      });
+    const ref = k.refOf(ctx, doc);
     const out = await recordDecline(transitionDeps(), {
-      ref: k.refOf(ctx, doc),
+      ref,
       actor: ctx.caller.actor,
       participant: pid,
       reason: body.reason,
     });
     if (!out.ok) throw problemOf(doc, out.problem);
+    // The reason is evidence of the participant: stored apart from the log, with its salted hash
+    // in a control commit that follows the decline (FRW-033 criterion 1; 12 §7). A server that
+    // keeps no evidence ledger or outbox records the audit entry only.
+    const decliner = current.participants.find((p) => p.id === pid);
+    if (d.evidence && d.outbox && decliner !== undefined) {
+      const agent = ctx.req.headers['user-agent'];
+      const own = ctx.caller.kind === 'user';
+      await recordDeclineEvidence(
+        {
+          evidence: d.evidence,
+          outbox: d.outbox,
+          now: d.now,
+          ...(d.outboxWaitMs !== undefined ? { waitMs: d.outboxWaitMs } : {}),
+        },
+        {
+          ref,
+          participant: pid,
+          kind: decliner.kind as ParticipantKind,
+          reason: body.reason.trim(),
+          facts: {
+            address: own ? (ctx.req.socket.remoteAddress ?? null) : null,
+            userAgent:
+              own && typeof agent === 'string' && agent.length > 0 ? agent.slice(0, 512) : null,
+          },
+        },
+      );
+    }
     await raiseAll(ctx, doc, out);
     return json(200, toWire(out.resource), {
       ETag: out.resource.etag,

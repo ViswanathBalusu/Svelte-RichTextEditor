@@ -1226,6 +1226,12 @@ export interface WorkflowSendService {
    * for the lock banner: who may still act (FRW-029 criterion 6). Empty until the resource is read.
    */
   readonly participants: ReadView<readonly WorkflowParticipantView[]>;
+  /**
+   * The sequence number of the commit the document was sent at (12 §6.1 `sentSeq`); null before the
+   * send or while the resource has not been read. The copy a stopped workflow offers starts from it
+   * (FRW-033 criterion 5). Absent: no copy is offered.
+   */
+  readonly sentSeq?: ReadView<number | null>;
   /** Reads the workflow resource again (the participants and the state). */
   refresh(): Promise<void>;
   /** Moves to the form field with this key; false when there is none. */

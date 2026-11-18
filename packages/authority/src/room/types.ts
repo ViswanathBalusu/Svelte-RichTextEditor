@@ -77,7 +77,7 @@ export interface StoredCommit {
 
 /** What a control commit carries of workflow evidence: the origin and the salted hash. */
 export interface EvidenceAnchor {
-  readonly origin: 'sign' | 'rules';
+  readonly origin: 'sign' | 'rules' | 'decline';
   /** SHA-256 over the salt and the canonical evidence, lower-case hex. */
   readonly evidenceHash: string;
 }
