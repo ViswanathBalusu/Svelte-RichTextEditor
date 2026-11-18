@@ -46,6 +46,7 @@ import type { ComparisonSpec } from '../comparison-markup.ts';
 import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
+import { sectionWarningPlugin } from './section-warning-view.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
 function viewPlugins(schema: Schema): Plugin[] {
@@ -56,6 +57,8 @@ function viewPlugins(schema: Schema): Plugin[] {
     dropCursor(),
     footnoteNumbers(),
     listSemanticsPlugin(),
+    // FE-135 criterion 6: a note after a continuous section break that changes the margins.
+    sectionWarningPlugin(),
     // FE-069 criterion 5: the numbers of numbered equation blocks, from the shared labels.
     equationNumbersPlugin(),
     // FE-131 criterion 1: the borders and shading a table takes from its table style.

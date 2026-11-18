@@ -422,3 +422,13 @@ img.ProseMirror-separator {
 .de-editing-surface .ProseMirror[contenteditable='false'] .de-resize-handle {
   display: none;
 }
+
+/* A continuous section break that changes the margins (FE-135 criterion 6): the note says so in text. */
+.de-section-warning {
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.5rem;
+  border-inline-start: 3px solid var(--de-focus, #0969da);
+  background: var(--de-field-background, #eaeef2);
+  font-family: var(--de-font-ui, system-ui, sans-serif);
+  font-size: 0.875em;
+}
