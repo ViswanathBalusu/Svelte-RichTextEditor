@@ -115,6 +115,11 @@ export interface SearchQuery {
   readonly readable: 'all' | ReadonlySet<string>;
   /** The most hits returned. Required, because the spec gives no default. */
   readonly limit: number;
+  /**
+   * Continues after a hit of an earlier page (UX-084): only hits that rank below it, by score and
+   * then by document identifier, are returned.
+   */
+  readonly after?: { readonly score: number; readonly doc: string };
 }
 
 export interface SearchHit {
@@ -204,7 +209,13 @@ export class SearchIndex {
         best.set(e.doc, { doc: e.doc, seq: e.seq, score });
     }
 
+    const after = query.after;
+    const beyond = (h: SearchHit): boolean =>
+      after === undefined ||
+      h.score < after.score ||
+      (h.score === after.score && h.doc > after.doc);
     return [...best.values()]
+      .filter(beyond)
       .sort((a, b) => b.score - a.score || (a.doc < b.doc ? -1 : a.doc > b.doc ? 1 : 0))
       .slice(0, query.limit);
   }

@@ -1255,7 +1255,7 @@ export const OPERATIONS: readonly OperationDef[] = [
     requires: 'view and the history-visibility gate (07 §8)',
     query: {
       region: opt(nodeId()),
-      seq: opt(seq(), 'The version asked about; the head when omitted.'),
+      atSeq: opt(seq(), 'The version asked about; the head when omitted.'),
       blocks: opt(text(), 'Block identifiers, separated by commas (a block range).'),
     },
     success: ok(ref('Attribution')),
@@ -1614,6 +1614,13 @@ export const OPERATIONS: readonly OperationDef[] = [
     spec: '05 §6.2; 13 §10',
     security: SERVICE,
     requires: 'Service credential',
+    query: {
+      document: opt(uuid7(), 'Only events of this document.'),
+      actor: opt(text(), 'Only events of this actor.'),
+      kind: opt(text(), 'Only events of this kind (for example `grants.changed`).'),
+      from: opt(text(), 'Only events at or after this time: ISO 8601 with a time zone (inclusive).'),
+      to: opt(text(), 'Only events before this time: ISO 8601 with a time zone (exclusive).'),
+    },
     success: list(ref('AuditEntry')),
     gaps: ['G77'],
     owner: 'UX',

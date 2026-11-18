@@ -59,7 +59,7 @@ function suggested(): CdmEnvelope {
     paragraph('pDelBlock00000001', [run('Struck paragraph.')], [mark('del', 'sDelBlk0000000001')]),
     paragraph('pInsBlock00000001', [run('Added paragraph.')], [mark('ins', 'sInsBlk0000000001')]),
   );
-  return env;
+  return env as CdmEnvelope;
 }
 
 describe('EXP-081 an export with accept reads as the editor reads after accept', () => {
@@ -69,7 +69,7 @@ describe('EXP-081 an export with accept reads as the editor reads after accept',
     const report = core.resolveSuggestions('accept', 'document');
     expect(report.handled).toBeGreaterThanOrEqual(4);
     expect(report.skipped).toBe(0);
-    const edited = core.getContent();
+    const edited = core.getContent() as CdmEnvelope;
     core.destroy();
 
     const exported = markdownText(env, { suggestions: 'accept' });
