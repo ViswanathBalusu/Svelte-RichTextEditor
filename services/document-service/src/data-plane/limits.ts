@@ -6,7 +6,7 @@
  * relay, which runs before anything reaches the room (SYN-035).
  *
  * Stage 1 keeps the counters in process memory; stage 2 moves them to Redis or Valkey (BE-063)
- * behind the same `RateLimits` interface. The figures are ADR 0053's; the spec names none.
+ * behind the same `RateStore` interface. The figures are ADR 0053's; the spec names none.
  */
 /*
  * The settings shapes mirror `BucketSettings` and `RateSettings` in `../seams.ts`. They are
@@ -69,26 +69,41 @@ export class TokenBucket {
   }
 }
 
-/** Buckets keyed by address, user or tenant; full buckets are forgotten now and then. */
-class BucketMap {
-  readonly #settings: BucketSettings;
-  readonly #map = new Map<string, TokenBucket>();
+/**
+ * Where counters live (BE-030 criterion 5). A store takes `n` tokens from the bucket named `key`
+ * with the given settings and answers 0, or the milliseconds until they would be there. Stage 1
+ * keeps them in this process (`MemoryRateStore`); stage 2 keeps them in Redis or Valkey
+ * (`ValkeyTokenBuckets`, BE-063). Both answer the same numbers for the same takes.
+ */
+export interface RateStore {
+  take(key: string, s: BucketSettings, now: number, n?: number): number | Promise<number>;
+}
+
+interface Held {
+  readonly settings: BucketSettings;
+  readonly bucket: TokenBucket;
+}
+
+/** Stage 1: buckets in process memory. Full buckets are forgotten now and then. */
+export class MemoryRateStore implements RateStore {
+  readonly #map = new Map<string, Held>();
   #swept = 0;
 
-  constructor(s: BucketSettings) {
-    this.#settings = s;
-  }
-
-  take(key: string, now: number, n = 1): number {
-    let b = this.#map.get(key);
-    if (!b) {
-      b = new TokenBucket(this.#settings, now);
-      this.#map.set(key, b);
+  take(key: string, s: BucketSettings, now: number, n = 1): number {
+    let h = this.#map.get(key);
+    // A changed setting (a tenant's limits edited) starts the bucket again at its new capacity.
+    if (
+      !h ||
+      h.settings.capacity !== s.capacity ||
+      h.settings.refillPerSecond !== s.refillPerSecond
+    ) {
+      h = { settings: s, bucket: new TokenBucket(s, now) };
+      this.#map.set(key, h);
     }
-    const wait = b.take(now, n);
+    const wait = h.bucket.take(now, n);
     if (now - this.#swept > 60_000) {
       this.#swept = now;
-      for (const [k, v] of this.#map) if (v.full(now)) this.#map.delete(k);
+      for (const [k, v] of this.#map) if (v.bucket.full(now)) this.#map.delete(k);
     }
     return wait;
   }
@@ -105,40 +120,103 @@ export function retryAfterSeconds(waitMs: number): number {
   return Math.max(1, Math.ceil(waitMs / 1000));
 }
 
-/** The node's shared rate limits (the connection's own bucket lives in its session). */
+/** The limits registered for one tenant (BE-030 criterion 3); a scope left out is the default. */
+export interface TenantLimitOverride {
+  readonly tenant?: BucketSettings;
+  readonly user?: BucketSettings;
+}
+
+/** Reads a tenant's registered limits (the registry of BE-012); null for the node's defaults. */
+export type TenantLimitsSource = (tenant: string) => Promise<TenantLimitOverride | null>;
+
+/**
+ * How long a tenant's registered limits are kept before the registry is read again. The spec
+ * names no figure; this is a setting of this story (docs/adr/0380-w5-BE-030-tenant-limits-and-store.md, proposed).
+ */
+export const DEFAULT_TENANT_LIMITS_TTL_MS = 5_000;
+
+export interface RateLimitOptions {
+  /** Where the tenant and user counters live; absent, this process's memory (stage 1). */
+  readonly store?: RateStore;
+  /** The registry of tenants, read for each tenant's own limits. Absent, every tenant has the defaults. */
+  readonly tenantLimits?: TenantLimitsSource;
+  readonly tenantLimitsTtlMs?: number;
+}
+
+/**
+ * The node's shared rate limits (the connection's own bucket lives in its session). Address
+ * counters, which run before a token is verified, stay in this node's memory in both stages: they
+ * protect the node that receives the traffic and cost no round trip. Tenant and user counters go
+ * through the `RateStore`, so a client that reaches two nodes shares one limit in stage 2.
+ */
 export class RateLimits {
   readonly settings: RateSettings;
-  readonly #connections: BucketMap;
-  readonly #frames: BucketMap;
-  readonly #users: BucketMap;
-  readonly #tenants: BucketMap;
+  /** Address buckets, before authentication: always this node's memory (see the file comment). */
+  readonly #addresses = new MemoryRateStore();
+  /** Tenant and user buckets: memory in stage 1, a shared store in stage 2. */
+  readonly #store: RateStore;
+  readonly #source: TenantLimitsSource | undefined;
+  readonly #ttlMs: number;
+  readonly #cache = new Map<string, { at: number; value: Promise<TenantLimitOverride | null> }>();
 
-  constructor(s: RateSettings) {
+  constructor(s: RateSettings, opts: RateLimitOptions = {}) {
     this.settings = s;
-    this.#connections = new BucketMap(s.addressConnections);
-    this.#frames = new BucketMap(s.addressFrames);
-    this.#users = new BucketMap(s.user);
-    this.#tenants = new BucketMap(s.tenant);
+    this.#store = opts.store ?? new MemoryRateStore();
+    this.#source = opts.tenantLimits;
+    this.#ttlMs = opts.tenantLimitsTtlMs ?? DEFAULT_TENANT_LIMITS_TTL_MS;
   }
 
   /** A WebSocket upgrade from `address`: 0, or how long the address must wait. */
   connection(address: string, now: number): number {
-    return this.#connections.take(address, now);
+    return this.#addresses.take(`c:${address}`, this.settings.addressConnections, now);
   }
 
   /** A frame from `address` before its session is open. */
   frame(address: string, now: number): number {
-    return this.#frames.take(address, now);
+    return this.#addresses.take(`f:${address}`, this.settings.addressFrames, now);
+  }
+
+  /**
+   * The limits registered for the tenant (BE-030 criterion 3), read from the registry at most once
+   * in `tenantLimitsTtlMs`, so a change applies within that time without a restart. A registry
+   * that fails leaves the last answer, or the node's defaults, in force: the limits never stop
+   * the messages of a tenant whose registration cannot be read.
+   */
+  async #limitsOf(tenant: string, now: number): Promise<TenantLimitOverride | null> {
+    if (!this.#source) return null;
+    const held = this.#cache.get(tenant);
+    if (held && now - held.at < this.#ttlMs) return held.value;
+    const previous = held?.value;
+    const value = this.#source(tenant).catch(async () => (previous ? await previous : null));
+    this.#cache.set(tenant, { at: now, value });
+    if (this.#cache.size > 10_000) {
+      for (const [k, v] of this.#cache) if (now - v.at >= this.#ttlMs) this.#cache.delete(k);
+    }
+    return value;
+  }
+
+  /** Forgets what was read for `tenant`, so that its next message reads the registry again. */
+  forget(tenant: string): void {
+    this.#cache.delete(tenant);
   }
 
   /**
    * A message of an open session: the longest wait any of the user's and the tenant's buckets
    * asks for, with the scope that asked, or null when it may pass.
    */
-  message(tenant: string, user: string, now: number): { scope: RateScope; waitMs: number } | null {
-    const t = this.#tenants.take(tenant, now);
+  async message(
+    tenant: string,
+    user: string,
+    now: number,
+  ): Promise<{ scope: RateScope; waitMs: number } | null> {
+    const own = await this.#limitsOf(tenant, now);
+    const t = await this.#store.take(`t:${tenant}`, own?.tenant ?? this.settings.tenant, now);
     if (t > 0) return { scope: 'tenant', waitMs: t };
-    const u = this.#users.take(`${tenant}\u0000${user}`, now);
+    const u = await this.#store.take(
+      `u:${tenant}\u0000${user}`,
+      own?.user ?? this.settings.user,
+      now,
+    );
     if (u > 0) return { scope: 'user', waitMs: u };
     return null;
   }
@@ -150,12 +228,12 @@ export class RateLimits {
    * asked and the seconds for a `Retry-After` header (RFC 9110 delta-seconds, at least 1).
    * The control plane's route pipeline calls this and answers 429 with `rate_limited`.
    */
-  rest(
+  async rest(
     tenant: string,
     user: string,
     now: number,
-  ): { scope: RateScope; waitMs: number; retryAfterSeconds: number } | null {
-    const hit = this.message(tenant, user, now);
+  ): Promise<{ scope: RateScope; waitMs: number; retryAfterSeconds: number } | null> {
+    const hit = await this.message(tenant, user, now);
     if (hit === null) return null;
     return { ...hit, retryAfterSeconds: retryAfterSeconds(hit.waitMs) };
   }

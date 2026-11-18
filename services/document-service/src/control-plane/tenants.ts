@@ -49,8 +49,52 @@ export class KeyRegistrationError extends Error {
   override name = 'KeyRegistrationError';
 }
 
+/** One token bucket of a tenant's limits: its size and its refill (the shape of BE-030). */
+export interface TenantBucket {
+  readonly capacity: number;
+  readonly refillPerSecond: number;
+}
+
+/**
+ * The message limits registered for one tenant (BE-030 criterion 3). A bucket left out is the
+ * node's default for that scope. `tenant` is the bucket of the whole tenant, `user` the bucket of
+ * each of its users.
+ */
+export interface TenantRateLimits {
+  readonly tenant?: TenantBucket;
+  readonly user?: TenantBucket;
+}
+
+/** Checks limits an operator supplies; returns them in canonical form or throws. */
+export function checkTenantRateLimits(v: unknown): TenantRateLimits {
+  if (typeof v !== 'object' || v === null || Array.isArray(v))
+    throw new KeyRegistrationError('rate limits are an object');
+  const out: { tenant?: TenantBucket; user?: TenantBucket } = {};
+  for (const [k, b] of Object.entries(v)) {
+    if (k !== 'tenant' && k !== 'user')
+      throw new KeyRegistrationError(`rate limits have no scope "${k}"`);
+    if (typeof b !== 'object' || b === null)
+      throw new KeyRegistrationError(`the ${k} limit is an object`);
+    const { capacity, refillPerSecond, ...rest } = b as Record<string, unknown>;
+    if (Object.keys(rest).length > 0)
+      throw new KeyRegistrationError(`the ${k} limit has capacity and refillPerSecond only`);
+    if (typeof capacity !== 'number' || !Number.isFinite(capacity) || capacity < 1)
+      throw new KeyRegistrationError(`the ${k} capacity is a number of at least 1`);
+    if (
+      typeof refillPerSecond !== 'number' ||
+      !Number.isFinite(refillPerSecond) ||
+      refillPerSecond < 0
+    )
+      throw new KeyRegistrationError(`the ${k} refill is a number of at least 0`);
+    out[k] = { capacity, refillPerSecond };
+  }
+  return out;
+}
+
 export interface TenantRegistry {
   exists(tenant: string): Promise<boolean>;
+  /** The message limits registered for the tenant, or null for the node's defaults (BE-030). */
+  rateLimits(tenant: string): Promise<TenantRateLimits | null>;
   keys(tenant: string, use: KeyUse): Promise<TenantKey[]>;
   apiKey(tenant: string, id: string): Promise<ApiKeyRecord | null>;
   origins(tenant: string): Promise<string[]>;
@@ -61,6 +105,8 @@ export interface TenantRegistry {
 
   // Operator writes (phase 1a: configuration and the command line; administration is UX-076).
   putTenant(tenant: string, name: string): Promise<void>;
+  /** Registers the tenant's message limits, or clears them (null) back to the node's defaults. */
+  setRateLimits(tenant: string, limits: TenantRateLimits | null): Promise<void>;
   addKey(tenant: string, key: NewKey): Promise<TenantKey>;
   removeKey(tenant: string, kid: string): Promise<boolean>;
   addApiKey(
@@ -135,6 +181,7 @@ interface MemoryTenant {
   keys: Map<string, TenantKey>;
   apiKeys: Map<string, ApiKeyRecord>;
   origins: Set<string>;
+  rateLimits: TenantRateLimits | null;
 }
 
 export class MemoryTenantRegistry implements TenantRegistry {
@@ -183,7 +230,22 @@ export class MemoryTenantRegistry implements TenantRegistry {
     const t = this.#tenants.get(tenant);
     if (t) t.name = name;
     else
-      this.#tenants.set(tenant, { name, keys: new Map(), apiKeys: new Map(), origins: new Set() });
+      this.#tenants.set(tenant, {
+        name,
+        keys: new Map(),
+        apiKeys: new Map(),
+        origins: new Set(),
+        rateLimits: null,
+      });
+  }
+
+  async rateLimits(tenant: string): Promise<TenantRateLimits | null> {
+    const l = this.#tenants.get(tenant)?.rateLimits;
+    return l ? structuredClone(l) : null;
+  }
+
+  async setRateLimits(tenant: string, limits: TenantRateLimits | null): Promise<void> {
+    this.#get(tenant).rateLimits = limits === null ? null : checkTenantRateLimits(limits);
   }
 
   async addKey(tenant: string, key: NewKey): Promise<TenantKey> {
@@ -269,6 +331,28 @@ export class PgTenantRegistry implements TenantRegistry {
     return this.#read(tenant, async (c) => {
       const r = await c.query('SELECT 1 FROM tenants WHERE id = $1', [tenant]);
       return r.rowCount === 1;
+    });
+  }
+
+  rateLimits(tenant: string): Promise<TenantRateLimits | null> {
+    return this.#read(tenant, async (c) => {
+      const r = await c.query<{ rate_limits: unknown }>(
+        'SELECT rate_limits FROM tenants WHERE id = $1',
+        [tenant],
+      );
+      const v = r.rows[0]?.rate_limits;
+      return v === null || v === undefined ? null : checkTenantRateLimits(v);
+    });
+  }
+
+  async setRateLimits(tenant: string, limits: TenantRateLimits | null): Promise<void> {
+    const checked = limits === null ? null : checkTenantRateLimits(limits);
+    return inTenant(this.#pool, tenant, async (c) => {
+      const r = await c.query('UPDATE tenants SET rate_limits = $2::jsonb WHERE id = $1', [
+        tenant,
+        checked === null ? null : JSON.stringify(checked),
+      ]);
+      if (r.rowCount !== 1) throw new KeyRegistrationError(`no tenant ${tenant}`);
     });
   }
 
