@@ -77,6 +77,12 @@ import { MemoryQuotaStore } from './control-plane/quotas.ts';
 import { PgQuotaStore } from './control-plane/quotas-pg.ts';
 import { HoldService, MemoryHoldStore, type HoldStore } from './control-plane/holds.ts';
 import { ErasureRequests } from './control-plane/erasure-requests.ts';
+import {
+  DAY_MS,
+  DocumentPurge,
+  type PurgeStore,
+  type SearchPurge,
+} from './control-plane/document-purge.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
 import {
   MemoryWorkflowResourceStore,
@@ -200,6 +206,13 @@ export interface ServiceParts {
   retention?: RetentionService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080). Absent: the routes are not offered. */
   holds?: HoldService;
+  /**
+   * The rows of the purge of deleted documents (HIS-039). Needs a pool that connects as a member of
+   * docedit_purge (migration 0073), so `pgParts` does not make it. Absent: no purge task runs.
+   */
+  purgeStore?: PurgeStore;
+  /** The search entries the purge removes with a document (HIS-039). Optional. */
+  searchPurge?: SearchPurge;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
@@ -901,7 +914,30 @@ export async function startService(opts: StartOptions): Promise<Service> {
     );
 
   // Scheduled maintenance (BE-052): one job per task and slot in the queue.
+  const purge =
+    parts.purgeStore && parts.audit
+      ? new DocumentPurge({
+          store: parts.purgeStore,
+          objects: parts.objects,
+          audit: parts.audit,
+          ...(parts.searchPurge ? { search: parts.searchPurge } : {}),
+          retentionMs: config.purgeAfterDays * DAY_MS,
+          now,
+        })
+      : null;
   const tasks: ScheduledTask[] = [
+    // The purge of deleted documents past their retention (HIS-039); held documents are left alone.
+    ...(purge
+      ? [
+          {
+            name: 'documents.purge',
+            everyMs: 60 * 60 * 1000,
+            deletes: true,
+            forTenant: async (tenant: string, at: number, scope: { held: ReadonlySet<string> }) =>
+              (await purge.run(tenant, scope.held, at)).purged.length,
+          } satisfies ScheduledTask,
+        ]
+      : []),
     {
       name: 'idempotency.purge',
       everyMs: 60 * 60 * 1000,
