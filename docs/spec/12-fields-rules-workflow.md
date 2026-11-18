@@ -330,4 +330,4 @@ Out of scope: native advanced or qualified signatures, identity verification, no
 6. Are packets of several documents needed?
 7. What is the default evidence retention period? Decided on 2026-11-17: as long as the signed document exists, deleted with it (FRW-084; owner decision 31). Whether a tenant may choose a shorter period is still open (ADR 0394).
 8. Should fields have a fixed width, or may the document reflow while it is filled? Decided on 2026-11-06: fixed width (SPK-012).
-9. Should comments be switched off while a workflow is active? They are technically harmless, because they do not change the document, but some signing processes want a quiet document.
+9. Should comments be switched off while a workflow is active? They are technically harmless, because they do not change the document, but some signing processes want a quiet document. Decided on 2026-11-15: no, comments are always on (FRW-085; owner decision 131; ADR 0404). There is no setting to switch them off.
