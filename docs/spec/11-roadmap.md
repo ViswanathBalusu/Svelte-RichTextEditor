@@ -66,7 +66,7 @@ Paragraphs with three styles, and regions. One Node.js process with PostgreSQL, 
 
 **Exit criteria:** property tests for the suggestion and fill rules pass; a restore preserves comment ranges and attribution in untouched blocks; history visibility is enforced at every endpoint; a complete workflow ends in a sealed PDF that validates, with an evidence bundle that a third party can verify; a Word file can be uploaded, completed and signed. Size: XL.
 
-**Gate at the end of phase 2:** decide on the page view from customer evidence. The alternatives are the web view plus the read view, the own read-only painter first, or the full editable page view. The gate also decides whether the page view must reproduce Word's pagination for imported documents or follow the house class (00, section 5; ADR 0017).
+**Gate at the end of phase 2:** decide on the page view from customer evidence. The alternatives are the web view plus the read view, the own read-only painter first, or the full editable page view. The gate also decides whether the page view must reproduce Word's pagination for imported documents or follow the house class (00, section 5; ADR 0017). **Decided on 2026-11-15:** the owner chose the full editable page view (decision 26) and our own layout, so the page view matches the exported PDF and Word's page breaks are not reproduced (decision 29). The Rust WebAssembly module is built (decision 27; ADR 0016).
 
 ## 6. Phase 3: pages
 
@@ -127,4 +127,4 @@ Browser text editing and input methods; typography and text layout; distributed 
 | 10 | Who invites and authenticates workflow participants: the host alone, or also the hosted service? | The host. **Decided 2026-11-06: the host alone** |
 | 11 | Which jurisdictions first, and who is the sealing party: the operator or each tenant? | Undecided; simple electronic signature plus seal at launch |
 | 12 | May a document reflow while fields are filled, or are fields fixed-width? | Fixed width. **Decided 2026-11-06: fixed width** |
-| 13 | Is the page view required for the first customers? | Decided at the gate after phase 2 |
+| 13 | Is the page view required for the first customers? | Decided by the owner on 2026-11-15 (decision 26 of [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)): the full editable page view is built, on our own layout (decision 29). The phase 2 evidence was not waited for |
