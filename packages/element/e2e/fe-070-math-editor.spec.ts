@@ -143,6 +143,18 @@ test('FE-070: edit an equation by keyboard, with limits and the math gate, under
   const added = (await custom(page)).filter((n) => !before.includes(n)).sort();
   expect(added).toEqual(['math-div', 'math-field', 'math-span']);
 
+  // FE-104 criterion 5: every pointer control of the math editor is at least 24 by 24 CSS pixels.
+  const sizes = await page
+    .locator(`${DIALOG} button, ${DIALOG} textarea, ${DIALOG} math-field`)
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { name: el.localName, width: r.width, height: r.height };
+      }),
+    );
+  expect(sizes.length).toBeGreaterThanOrEqual(5);
+  expect(sizes.filter((t) => t.width < 24 || t.height < 24)).toEqual([]);
+
   // Criterion 6: the source field has focus; Tab reaches the visual field's neighbours in order.
   await expect(sourceField(page)).toBeFocused();
   await expect(sourceField(page)).toHaveValue('x^2');

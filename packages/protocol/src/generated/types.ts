@@ -1888,7 +1888,7 @@ export interface Operations {
     method: "GET";
     path: "/audit";
     params: Record<string, never>;
-    query: { cursor?: string; limit?: number };
+    query: { document?: string; actor?: string; kind?: string; from?: string; to?: string; cursor?: string; limit?: number };
     body: never;
     response: List<AuditEntry>;
   };

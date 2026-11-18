@@ -661,8 +661,9 @@
 }
 
 .de-check input {
-  inline-size: 1.1em;
-  block-size: 1.1em;
+  /* At least 24 by 24 CSS pixels (WCAG 2.2, 2.5.8; FE-104). */
+  inline-size: max(1.1em, 24px);
+  block-size: max(1.1em, 24px);
   margin: 0;
 }
 
