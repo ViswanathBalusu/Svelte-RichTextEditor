@@ -1,0 +1,24 @@
+{
+  "name": "@docedit/backend-local",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The backend ports on a local IndexedDB store, with no server: the project's own authority runs in the page (05 §8.3; PRO-100).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@docedit/authority": "workspace:*",
+    "@docedit/backend-mock": "workspace:*",
+    "@docedit/model": "workspace:*",
+    "@docedit/protocol": "workspace:*"
+  }
+}

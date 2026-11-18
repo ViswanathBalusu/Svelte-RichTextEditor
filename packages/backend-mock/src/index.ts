@@ -19,3 +19,15 @@ export { MockBackend, type MockBackendOptions, type MockToken } from './backend.
 export { MockDocument, type GrantSpec } from './document.ts';
 export { MockChannel } from './channel.ts';
 export { MemoryLog } from './storage.ts';
+export { PersistedLog, type SegmentLog } from './storage.ts';
+export {
+  packPerms,
+  unpackPerms,
+  type DocumentPersistence,
+  type DocumentRecord,
+  type RestoredDocument,
+  type SegmentRecord,
+  type StoredEntry,
+  type StoredPerms,
+} from './persist.ts';
+export type { DocumentHooks } from './document.ts';
