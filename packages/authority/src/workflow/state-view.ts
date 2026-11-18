@@ -9,17 +9,17 @@
  *   of FRW-035 Notes, decided here as "no"; recorded in docs/adr/0249-lane-FRW-027-039.md, decision 16).
  * - The participant's status is one word: `copy` for a `cc` participant, `completed`, `active` for a
  *   must-act participant who may act now, `paused` while `correcting`, `closed` after a stop or expiry,
- *   and `waiting` otherwise.
+ *   `unverified` for one whose turn it is but who has still to submit an access code (FRW-039), and `waiting` otherwise.
  *
  * Not built here: the `access` recomputation and the `rev` increase that a lock or an activation
  * implies (FRW-035 criterion 3, the room's), and the editor's guided bar (criterion 6).
  */
 import { lockFor, type WorkflowLock } from './lock.ts';
 import type { WorkflowParticipant, WorkflowRecord, WorkflowStateName } from './lifecycle.ts';
-import { activeParticipantIds } from './order.ts';
+import { activeParticipantIds, awaitingCode } from './order.ts';
 
 export type ParticipantStatusWord =
-  'copy' | 'completed' | 'active' | 'paused' | 'closed' | 'waiting';
+  'copy' | 'completed' | 'active' | 'unverified' | 'paused' | 'closed' | 'waiting';
 
 /** The status of the connection's own participant. */
 export interface OwnParticipantStatus {
@@ -55,7 +55,7 @@ export function participantStatusWord(
   if (record.state === 'correcting') return 'paused';
   const running = record.state === 'sent' || record.state === 'in_progress';
   if (running && activeParticipantIds(record.participants).includes(participant.id))
-    return 'active';
+    return awaitingCode(participant) ? 'unverified' : 'active';
   return 'waiting';
 }
 

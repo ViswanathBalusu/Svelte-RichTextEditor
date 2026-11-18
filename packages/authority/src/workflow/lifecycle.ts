@@ -43,6 +43,10 @@ export interface WorkflowParticipant {
   readonly completed: boolean;
   /** The host's subject for the participant (`sub` of 12 §6.1), when the host has bound one (FRW-038). */
   readonly sub?: string;
+  /** Whether the participant must submit an access code before they may fill (`auth.require`, FRW-039). */
+  readonly codeRequired?: boolean;
+  /** Whether a correct access code has been submitted for them (FRW-039). */
+  readonly verified?: boolean;
 }
 
 /** The end of a workflow that was stopped: declined by a participant, or voided by an owner. */

@@ -7,7 +7,7 @@
 // a salted hash and nothing else; a verifier recomputes the hash from the stored row; a purge
 // removes the rows and leaves the chain as it was. Memory storage and, when the test environment
 // is up, PostgreSQL in Podman. docs/adr/0391-w4-FRW-041-evidence-ledger.md (proposed).
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { uuid7 } from '@docedit/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -50,25 +50,38 @@ const facts = (item: string) => ({
   ipAddress: IP,
   userAgent: UA,
 });
-/** Every `.ts` file under the service and packages source folders, as paths and text. */
-function sources(root: string): Array<{ path: string; text: string }> {
+/**
+ * Every `.ts` file under the `src` folder of each package and service, as paths and text, read
+ * without blocking the event loop (the harness's server shares it).
+ */
+async function sources(root: string): Promise<Array<{ path: string; text: string }>> {
   const out: Array<{ path: string; text: string }> = [];
-  const walk = (dir: string): void => {
-    for (const name of readdirSync(dir)) {
-      if (name === 'node_modules' || name === 'dist') continue;
-      const full = join(dir, name);
-      if (statSync(full).isDirectory()) walk(full);
-      else if (name.endsWith('.ts') && !/\.test\.ts$/.test(name))
+  const walk = async (dir: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.name.endsWith('.ts') && !/\.test\.ts$/.test(entry.name))
         out.push({
           path: relative(root, full).split(sep).join('/'),
-          text: readFileSync(full, 'utf8'),
+          text: await readFile(full, 'utf8'),
         });
     }
   };
-  for (const part of ['packages', 'services']) walk(join(root, part));
+  for (const part of ['packages', 'services'])
+    for (const entry of await readdir(join(root, part), { withFileTypes: true }))
+      if (entry.isDirectory()) {
+        const src = join(root, part, entry.name, 'src');
+        if (
+          await stat(src).then(
+            (s) => s.isDirectory(),
+            () => false,
+          )
+        )
+          await walk(src);
+      }
   return out;
 }
-
 for (const storage of ['memory', 'postgres'] as Storage[]) {
   describe(`evidence outside the commit log (${storage}; FRW-041)`, async () => {
     const skip = await skipReason(storage);
@@ -187,10 +200,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
     it.skipIf(skip)(
       'is read by no module that makes an export, a checkpoint, a webhook or a search entry (criterion 1, structure)',
-      () => {
+      async () => {
         // The root of the repository: this file is services/document-service/test/control-plane/.
         const root = join(import.meta.dirname, '..', '..', '..', '..');
-        const holders = sources(root)
+        const all = await sources(root);
+        const holders = all
           .filter((f) => f.text.includes('workflow_evidence'))
           .map((f) => f.path)
           .sort();
@@ -203,7 +217,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           'services/document-service/src/workflow/evidence-store.ts',
         ]);
         // And the ledger's own port is used by nothing that builds those outputs.
-        const users = sources(root)
+        const users = all
           .filter((f) => /evidence-ledger|parts\.evidence|\.evidence\./.test(f.text))
           .map((f) => f.path)
           .filter((p) => /export|checkpoint|webhook|search/.test(p));

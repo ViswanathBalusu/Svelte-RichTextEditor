@@ -1468,9 +1468,9 @@
       "owner": "FRW"
     },
     {
-      "operationId": "participantConsent",
+      "operationId": "participantVerify",
       "method": "POST",
-      "path": "/documents/{id}/workflow/participants/{pid}/consent",
+      "path": "/documents/{id}/workflow/participants/{pid}/verify",
       "security": [
         "user",
         "service"
@@ -1479,13 +1479,29 @@
       "ifMatch": "none",
       "idempotencyKey": false,
       "success": "2XX",
-      "spec": "12 §10",
+      "spec": "12 §6.1, §7, §10",
       "owner": "FRW"
     },
     {
-      "operationId": "participantVerify",
+      "operationId": "registerAccessCode",
       "method": "POST",
-      "path": "/documents/{id}/workflow/participants/{pid}/verify",
+      "path": "/documents/{id}/workflow/participants/{pid}/access-code",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "manage",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "204",
+      "spec": "12 §6.1, §7, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "participantConsent",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/participants/{pid}/consent",
       "security": [
         "user",
         "service"

@@ -156,6 +156,8 @@ function checkApplicable(event: EvidenceRecordEvent): void {
   const allowed = new Set(
     [...applies].map((i) => KEY_OF[i]).filter((k): k is string => k !== null),
   );
+  // The attempt at the access code (FRW-039) is evidence of a participant who has to act: not a `cc`.
+  if (event.kind !== 'cc') allowed.add('accessCode');
   for (const key of Object.keys(event.facts.items))
     if (!allowed.has(key))
       throw new RangeError(

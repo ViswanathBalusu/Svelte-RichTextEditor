@@ -570,8 +570,10 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
           obj({
             id: req(text({ minLength: 1 })),
             state: req(
-              str({ known: ['active', 'completed', 'waiting', 'paused', 'copy', 'closed'] }),
-              "The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's.",
+              str({
+                known: ['active', 'unverified', 'completed', 'waiting', 'paused', 'copy', 'closed'],
+              }),
+              "The participant's own status: `active` (may act now), `unverified` (their turn, but the access code is still to be submitted), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's.",
             ),
           }),
           "The receiving participant's status.",
@@ -672,6 +674,10 @@ export const COMMON_SHAPES: readonly NamedShape[] = [
           ),
           'For `validation_failed`: where the body breaks which rule. Never the offending value (BE-088).',
           { decisions: ['D71'] },
+        ),
+        retryAfterMs: opt(
+          ms(),
+          'For `rate_limited` of the access code (FRW-039): how long to wait before retrying; `Retry-After` carries the same wait in whole seconds.',
         ),
       },
       {
