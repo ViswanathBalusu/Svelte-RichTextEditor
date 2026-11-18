@@ -12,6 +12,7 @@
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extensions/document-api.ts';
 import type { FieldDraft } from './shell/field-properties.ts';
 import type { MarkupView } from './shell/markup-views.ts';
+import type { SendFailure } from './shell/send-checklist.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -814,6 +815,8 @@ export interface CoreApi {
   readonly fieldProperties?: FieldPropertiesService;
   /** The rules of the document and the builder's changes to them (FRW-024). Absent: no rules pane. */
   readonly rules?: RulesService;
+  /** The send dialog's checks and the send action (FRW-028). Absent: no "send for completion" command. */
+  readonly workflowSend?: WorkflowSendService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
   readonly mathEditor?: MathEditorService;
 }
@@ -1045,6 +1048,38 @@ export interface RulesService {
   remove(id: string): RuleChangeResult;
   /** Moves to the field with this key in the document; false when there is none. */
   showField(key: string): boolean;
+}
+
+/**
+ * What the send dialog got from the server (FRW-028; 12 §6.2 `send`). A refusal for the checklist
+ * carries the server's verdict, which replaces the editor's own.
+ */
+export type WorkflowSendOutcome =
+  | { readonly ok: true; readonly state: string }
+  | {
+      readonly ok: false;
+      readonly reason: 'checklist_failed';
+      readonly failures: readonly SendFailure[];
+    }
+  | { readonly ok: false; readonly reason: 'forbidden' | 'not_draft' | 'failed' };
+
+/**
+ * The send dialog's port over the core and the backend's workflow port (FRW-028; 12 §6.2). The
+ * checks run over the document the reader holds and the participants the workflow resource lists.
+ */
+export interface WorkflowSendService {
+  /** The workflow's state (`draft`, `sent`, ...); null while it has not been read. */
+  readonly state: ReadView<string | null>;
+  /** The failures of the editor's own checks; empty when every check passes. */
+  readonly failures: ReadView<readonly SendFailure[]>;
+  /** Reads the workflow resource again (the participants and the state). */
+  refresh(): Promise<void>;
+  /** Moves to the form field with this key; false when there is none. */
+  showField(key: string): boolean;
+  /** Selects the suggestion with this identifier; false when there is none. */
+  showSuggestion(id: string): boolean;
+  /** Asks the server to send; the state follows the answer. */
+  send(): Promise<WorkflowSendOutcome>;
 }
 
 /** A role of the document as the roles manager and the legend show it (FRW-074; 12 §3.1). */

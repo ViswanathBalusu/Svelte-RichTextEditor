@@ -39,6 +39,7 @@ import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
+import type { WorkflowSendSource } from './workflow-send.ts';
 import type { PrintOutcome } from './print.ts';
 import {
   elementMethods,
@@ -687,6 +688,8 @@ export class DocEditorElement extends Base {
       ...this.#assetImage(docId),
       // The export dialog's jobs go through the backend's exports port, when it has one (UX-101).
       ...this.#exportService(docId),
+      // The send dialog goes through the backend's workflow port, when it has one (FRW-028).
+      ...this.#workflowSource(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       mathFontsUrl: this.#config.katexFontsUrl,
@@ -904,6 +907,22 @@ export class DocEditorElement extends Base {
     // A completed export's `layout.json` says where pages start; guides are optional (FE-068).
     if (job.state === 'completed' && job.result?.layout)
       void this.#readLayout(session, job.result.layout);
+  }
+
+  /**
+   * The send dialog's source (FRW-028), when the session's backend has the workflow port and
+   * announced the feature; otherwise nothing, and the shell offers no "send for completion" command.
+   */
+  #workflowSource(docId: string): { workflow?: () => WorkflowSendSource | null } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.workflow || !hasPort(backend, 'workflow')) return {};
+    return {
+      workflow: () =>
+        this.#session === session && session?.backend?.workflow
+          ? { port: session.backend.workflow, docId: session.docId }
+          : null,
+    };
   }
 
   /**

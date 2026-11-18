@@ -8,4 +8,5 @@ export { default as ExportDialog } from './ExportDialog.svelte';
 export { default as LanguageDialog } from './LanguageDialog.svelte';
 export { default as MathEditorDialog } from './MathEditorDialog.svelte';
 export { default as RegionDialog } from './RegionDialog.svelte';
+export { default as SendDialog } from './SendDialog.svelte';
 export { default as VersionDialog } from './VersionDialog.svelte';

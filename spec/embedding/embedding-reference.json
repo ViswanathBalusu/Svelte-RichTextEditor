@@ -813,6 +813,13 @@
       "capability": "zoom",
       "keys": [],
       "aliases": []
+    },
+    {
+      "id": "workflow.send",
+      "group": "review",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
     }
   ],
   "config": [
