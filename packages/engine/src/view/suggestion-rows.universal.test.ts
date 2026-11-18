@@ -65,7 +65,9 @@ describe.skipIf(!isBrowser)('suggested rows in the body view (FE-045 criterion 1
   // Known defect, found by this test (lane U-FE-033-048): the `ins` mark on the inserted row is
   // rendered by the view as an `<ins>` element that wraps the `tr` inside `tbody`, so the row has a
   // wrapper and the table is not valid markup. The test is `it.fails` until the rendering is fixed;
-  // when it passes, change `it.fails` back to `it` and tick the criterion.
+  // when it passes, change `it.fails` back to `it` and tick the criterion. Lane w1: the element is
+  // still there (it cannot be removed, ADR 0385) but has `display: contents`, so the layout holds;
+  // that is tested in fe-045-block-suggestions.universal.test.ts.
   it.fails(
     'a row inserted in review mode is drawn as a decoration on its own row, with no wrapper',
     async () => {
