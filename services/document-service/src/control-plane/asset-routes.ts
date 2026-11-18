@@ -179,12 +179,17 @@ export function assetRoutes(k: Kit): Record<string, Handler> {
     const refs = assetReferences(projectContent(view, full.doc));
     const visible = new Set(refs.display);
     if (view.full) for (const f of refs.fragments) visible.add(f);
+    // BE-045 criterion 1: only an asset attached to this document is resolved, that is one with a
+    // `doc_assets` row, or one uploaded for this document (BE-044). An identifier of another
+    // document's asset that content names is not resolved, whatever the content says.
+    const attached = (await d.logs.attachedAssets?.(ref)) ?? new Map<string, number>();
     const now = d.now();
     const out: Array<{ asset: string; url: string; expiresAt: string; contentType: string }> = [];
     for (const row of await reg.many(ctx.caller.tenant, [...new Set(body.assets)])) {
       const a = await settled(row);
       const mine = a.doc === doc && a.createdBy === ctx.caller.actor;
       if (a.state !== 'ready' || !a.sha256 || !a.objectKey || !a.contentType) continue;
+      if (a.doc !== doc && !attached.has(a.id)) continue;
       if (!visible.has(a.id) && !mine) continue;
       const signed = d.uploads!.sign({
         tenant: a.tenant,

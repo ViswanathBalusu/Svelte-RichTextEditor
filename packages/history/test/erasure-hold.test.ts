@@ -55,7 +55,7 @@ describe('erasure against a legal hold (HIS-031 criterion 5)', () => {
   });
 
   it('never runs a request that a held document blocks, and runs every other (property)', () => {
-    const ids = fc.array(fc.constantFrom('a', 'b', 'c', 'd', 'e'), { maxLength: 5 });
+    const ids = fc.array(fc.constantFrom<string>('a', 'b', 'c', 'd', 'e'), { maxLength: 5 });
     fc.assert(
       fc.property(ids, ids, ids, (appears, held0, held1) => {
         const d = decideErasure(req, appears, new Set(held0));

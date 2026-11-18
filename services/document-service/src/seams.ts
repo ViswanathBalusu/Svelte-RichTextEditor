@@ -8,9 +8,17 @@
  */
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { Connection, DocRole, PermissionState, Visibility } from '@docedit/authority';
+import type {
+  Connection,
+  DocRole,
+  PermissionState,
+  Visibility,
+  WorkflowRecord,
+} from '@docedit/authority';
+import type { WorkflowResourceStore } from './workflow/workflow-resource.ts';
 import type { EventSink } from './control-plane/events.ts';
 import type { JsonEnvelope } from '@docedit/model';
+import type { AssetAttachments } from './data-plane/asset-attachments.ts';
 import type { RateLimits } from './data-plane/limits.ts';
 import type { LiveQuotaGate } from './data-plane/quota-gate.ts';
 import type { Content, Limits, Notification, RemoteCommit } from '@docedit/protocol';
@@ -90,6 +98,12 @@ export interface RoomNotifier {
   permissionsChanged(ref: DocRef, perms: PermissionState): void;
   /** The document was locked, archived, unlocked or deleted: the room re-reads it or closes. */
   documentChanged(ref: DocRef): void;
+  /**
+   * The workflow moved (FRW-035): `record` is its new state and `perms` the permission state stored
+   * with the transition, when the lock changed. The room sends `perm.changed` and `wf.changed`.
+   * Optional: a notifier that does not implement it leaves the room as it is.
+   */
+  workflowChanged?(ref: DocRef, record: WorkflowRecord, perms?: PermissionState): void;
 }
 
 /** What the data plane needs from the composition. */
@@ -107,6 +121,12 @@ export interface DataPlaneDeps {
   readonly limits?: RateLimits;
   /** The live-use quota gate of the node (BE-091); absent when the node composes no quotas. */
   readonly quotas?: LiveQuotaGate | undefined;
+  /**
+   * The assets a document may reference (BE-044). With it, a commit that references an asset the
+   * submitter did not upload for the document, and that is not attached, is refused invalid_op, and
+   * the first commit that references an asset attaches it. Absent: asset references are not checked.
+   */
+  readonly assets?: AssetAttachments | undefined;
   // --- Added by packet A2 (additive). ---------------------------------------------------------
   /**
    * Checkpoints in object storage (06 §4.2; BE-003). The content a document was created with is
@@ -129,6 +149,11 @@ export interface DataPlaneDeps {
    * presence all go through it, one visibility class at a time. Without it nothing is hidden.
    */
   readonly visibility?: Visibility;
+  /**
+   * The workflow resources (FRW-035): a room reads the workflow of its document when it starts, so
+   * that `ch.opened` carries it. Without it no room has a workflow.
+   */
+  readonly workflows?: WorkflowResourceStore;
   // --- Added by packet A2 (additive). ---------------------------------------------------------
   /**
    * The per-tenant user mapping (BE-013; S6 gap G11): storage and rooms hold surrogates, the wire

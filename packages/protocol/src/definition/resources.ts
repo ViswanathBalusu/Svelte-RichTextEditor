@@ -903,6 +903,91 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
     'UX',
   ),
+  // Erasing a person (HIS-038 criterion 6; 08 section 13). The `sub` travels in the body and never
+  // in a path, so that it stays out of access logs.
+  named(
+    'ErasePersonRequest',
+    obj(
+      {
+        sub: req(
+          text({ minLength: 1, maxLength: 255 }),
+          "The host's `sub` of the person to erase. Hosts SHOULD NOT use an e-mail address as `sub` (05 section 3.1).",
+        ),
+      },
+      {
+        doc: 'The body of an erasure of a person (HIS-038; 08 section 13).',
+        spec: '08 §13; 13 §10',
+      },
+    ),
+    'HIS',
+  ),
+  named(
+    'ErasePersonResult',
+    obj(
+      {
+        outcome: req(
+          enm(['erased', 'deferred']),
+          '`erased`: the mapping, the display name and the read markers are deleted. `deferred`: a document the person wrote in is under legal hold, so the erasure waits for the release (owner decision 38).',
+        ),
+      },
+      {
+        doc: 'What an erasure of a person did (HIS-038; 08 section 13).',
+        spec: '08 §13; 13 §10',
+      },
+    ),
+    'HIS',
+  ),
+  // Replacing one commit's payload with a tombstone (HIS-040; 08 section 13).
+  named(
+    'TombstoneRequest',
+    obj(
+      {
+        reason: req(
+          text({ minLength: 1, maxLength: 500 }),
+          'Why the payload is removed. Trimmed; at most 500 characters. Recorded in the audit trail.',
+        ),
+      },
+      {
+        doc: 'The body of a tombstone of one commit payload (HIS-040; 08 section 13).',
+        spec: '08 §13; 13 §10',
+      },
+    ),
+    'HIS',
+  ),
+  named(
+    'TombstoneResult',
+    obj(
+      {
+        seq: req(seq(), 'The commit whose payload was removed.'),
+        removedAt: req(timestamp(), 'When the payload was removed, ISO 8601 in UTC.'),
+        copies: req(
+          obj(
+            {
+              checkpoints: req(
+                arr(seq()),
+                'Checkpoints at or after the commit, built by replaying it; they may still hold the removed text.',
+              ),
+              coldSegments: req(
+                arr(text()),
+                'Object keys of the cold segments whose range covers the commit.',
+              ),
+              attributionMap: req(
+                enm(['may-hold-runs']),
+                'The attribution map may still name runs of the commit.',
+              ),
+              involves: req(text(), 'What removing those copies involves, in fixed words.'),
+            },
+            { doc: 'The copies that may still hold the removed text; they are not rewritten.' },
+          ),
+        ),
+      },
+      {
+        doc: 'What a tombstone removed and which copies remain (HIS-040; 08 section 13).',
+        spec: '08 §13; 13 §10',
+      },
+    ),
+    'HIS',
+  ),
 ];
 
 // Success statuses (decision D61): 200 with a body, 201 when a resource is created, 202 when a
@@ -1813,5 +1898,32 @@ export const OPERATIONS: readonly OperationDef[] = [
     requires: 'Service credential',
     success: list(ref('Hold')),
     owner: 'UX',
+  }),
+  op({
+    operationId: 'erasePerson',
+    method: 'POST',
+    path: '/users/erase',
+    summary:
+      'Erases a person: deletes their mapping row, display name and read markers; the log does not change; audited (HIS-038). A person in a document under legal hold is erased after the release (owner decision 38). An unknown `sub` is `not_found`.',
+    spec: '08 §13; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('ErasePersonRequest'),
+    success: ok(ref('ErasePersonResult')),
+    owner: 'HIS',
+  }),
+  op({
+    operationId: 'tombstoneCommit',
+    method: 'POST',
+    path: '/documents/{id}/commits/{seq}/tombstone',
+    params: { seq: req(seq(), 'The sequence number of the commit whose payload is removed.') },
+    summary:
+      'Replaces the payload of one commit with a tombstone; the metadata, the payload hash and the chain stay; refused under a legal hold; audited with the actor and the reason; the answer lists the copies that may still hold the text (HIS-040).',
+    spec: '08 §13; 13 §10',
+    security: SERVICE,
+    requires: 'Service credential',
+    body: ref('TombstoneRequest'),
+    success: ok(ref('TombstoneResult')),
+    owner: 'HIS',
   }),
 ];

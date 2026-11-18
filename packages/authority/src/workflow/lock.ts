@@ -11,7 +11,9 @@
  * - `declined` and `voided` lock the document and end the workflow (`workflowActive` false), so the
  *   document stays locked (FRW-029 criterion 5) and nobody may fill it any more;
  * - `draft` leaves the document active: no workflow runs yet;
- * - `correcting`, `completed`, `finalised` and `expired` are not decided here. 12 does not say whether
+ * - `completed` keeps the lock and ends fill, as `declined` and `voided` do (12 §6.2: terminal states
+ *   keep the lock; FRW-031 criterion 6; docs/adr/0384-w4-FRW-031-progression.md, proposed);
+ * - `correcting`, `finalised` and `expired` are not decided here. 12 does not say whether
  *   `correcting` lets the owner edit the body (FRW-032 criterion 3 implies it) and whether the terminal
  *   states are locked (FRW-029 Open questions). `lockFor` returns null for them, so no caller can
  *   take a default by accident.
@@ -34,9 +36,9 @@ export function lockFor(state: WorkflowStateName): WorkflowLock | null {
       return { documentState: 'locked', workflowActive: true };
     case 'declined':
     case 'voided':
+    case 'completed':
       return { documentState: 'locked', workflowActive: false };
     case 'correcting':
-    case 'completed':
     case 'finalised':
     case 'expired':
       return null;

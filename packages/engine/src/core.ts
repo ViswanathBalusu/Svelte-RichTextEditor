@@ -176,6 +176,7 @@ import {
   picturePlaceholderPlugin,
   removePlaceholder,
 } from './picture-placeholder.ts';
+import { FieldRules, type FieldRuleState } from './field-rules.ts';
 import {
   type EnterResult,
   type FieldChange,
@@ -200,7 +201,12 @@ import { scopeDiff } from './scope-diff.ts';
 import { ExtensionApi } from './extension-api.ts';
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
 import { recordAsSuggestion } from './suggestion-edit.ts';
-import { type MarkupView, type SuggestionSpec, suggestionSpecs } from './suggestion-markup.ts';
+import {
+  type MarkupView,
+  type SuggestionLabel,
+  type SuggestionSpec,
+  suggestionSpecs,
+} from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
 import {
@@ -799,6 +805,10 @@ export class DocumentCore implements DocumentApi {
   readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The markup view the body shows for suggestions (UX-035); ll until it is set. */
+  readonly markupView: ReadValue<MarkupView>;
+  /** Names a suggestion for assistive technology (UX-035 criterion 4); the shell sets it. */
+  #suggestionLabel: SuggestionLabel | null = null;
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
@@ -847,6 +857,11 @@ export class DocumentCore implements DocumentApi {
   readonly #fieldEntries = new FieldEntries({
     state: () => this.#state,
     dispatch: (tr) => this.dispatchTransaction(tr),
+  });
+  /** The rules as the editor applies them while a person fills (FRW-023). */
+  readonly #fieldRules = new FieldRules({
+    state: () => this.#state,
+    roles: () => this.#accessValue?.fill?.roles ?? [],
   });
   /** The form field whose control last took focus (FRW-073). */
   #activeField: string | null = null;
@@ -958,6 +973,7 @@ export class DocumentCore implements DocumentApi {
       sameJson,
       hub,
     );
+    this.markupView = new ReadValue<MarkupView>('all', Object.is, hub);
     this.#deferRemote = config.deferRemoteWhileComposing ?? true;
     this.#requires = [...config.doc.requires];
     const doc = readEnvelope(config.doc, this.#schema);
@@ -1719,6 +1735,10 @@ export class DocumentCore implements DocumentApi {
    */
   fieldFillable(id: string): boolean {
     if (this.#readOnly || this.#effective === 'view') return false;
+    // A field a rule hides or disables, or one that is computed, is not one to fill (FRW-023); the
+    // authority decides on its own evaluation, and its answer wins (FRW-022 criterion 6).
+    const rule = this.#fieldRules.of(id);
+    if (rule !== null && (!rule.visible || !rule.enabled || rule.computed)) return false;
     const tr = this.#fieldEntries.probe(id);
     if (!tr) return false;
     return (
@@ -1816,7 +1836,30 @@ export class DocumentCore implements DocumentApi {
    * what the guided bar and the summary of fill mode count (12 §11; FRW-076, FRW-078).
    */
   fillFields(): FieldStatus[] {
-    return this.#fieldEntries.status();
+    const status = this.#fieldEntries.status();
+    const rules = this.#fieldRules.states();
+    if (rules.size === 0) return status;
+    // The rules change what counts (FRW-023 criteria 1 and 2): a hidden field is not required and
+    // has no problem; a field a rule requires is required; a failing `validate` is a problem.
+    return status.map((f) => {
+      const rule = rules.get(f.id);
+      if (!rule) return f;
+      if (!rule.visible) return { ...f, required: false, invalid: null };
+      return {
+        ...f,
+        required: rule.required,
+        invalid: f.invalid ?? (rule.messages.length > 0 ? ('other' as const) : null),
+      };
+    });
+  }
+
+  /**
+   * What the rules say about the field `id` for the document as it stands (FRW-023): visible,
+   * enabled, required, the messages of the `validate` effects that fail, and a formula's computed
+   * value. Null when the document has no rule or none that compiles.
+   */
+  fieldRuleState(id: string): FieldRuleState | null {
+    return this.#fieldRules.of(id);
   }
 
   /**
@@ -2387,7 +2430,30 @@ export class DocumentCore implements DocumentApi {
    * plain specs; the web view builds the decoration set from them.
    */
   markupDecorations(view: MarkupView): SuggestionSpec[] {
-    return suggestionSpecs(this.#state.doc, view);
+    return suggestionSpecs(this.#state.doc, view, this.#suggestionLabel ?? undefined);
+  }
+
+  /**
+   * Chooses how suggestions are shown (UX-035; 13 §5): ll, simple, 
+one or original. It is a
+   * view setting of this reader: the document, its revision and the commit log are not touched.
+   */
+  setMarkupView(view: MarkupView): void {
+    this.markupView.set(view);
+  }
+
+  /**
+   * Sets the function that names a suggestion for assistive technology, or clears it (UX-035
+   * criterion 4). The body view draws the text it returns, and draws again when this is called, so
+   * a change of names is shown by setting the function again.
+   */
+  setSuggestionLabel(label: SuggestionLabel | null): void {
+    this.#suggestionLabel = label;
+  }
+
+  /** The function that names a suggestion for assistive technology, or null (UX-035). */
+  get suggestionLabel(): SuggestionLabel | null {
+    return this.#suggestionLabel;
   }
 
   /**

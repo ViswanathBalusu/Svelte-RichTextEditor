@@ -7,10 +7,11 @@
  * `DOCEDIT_UI_PORT=57580 DOCEDIT_BROWSERS=chromium pnpm exec playwright test -c packages/ui/playwright.config.ts his-028-catch-up`.
  */
 import type { Page } from '@playwright/test';
+import type { MountOptions } from './harness/main.ts';
 import { axe, expect, focused, open, test } from './helpers.ts';
 
 const PANE = '.de-pane[data-pane="catch-up"]';
-const OPTIONS = { headerPanes: true, features: ['history'], people: 'host' } as const;
+const OPTIONS = { headerPanes: true, features: ['history'], people: 'host' } satisfies MountOptions;
 
 const log = (page: Page) =>
   page.evaluate(

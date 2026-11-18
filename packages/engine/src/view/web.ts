@@ -43,6 +43,7 @@ import { listSemanticsPlugin } from './list-view.ts';
 import { foreignClipboard, pasteThroughPolicy } from './paste-policy.ts';
 import { picturePlaceholderView } from './picture-placeholder-view.ts';
 import type { ComparisonSpec } from '../comparison-markup.ts';
+import type { SuggestionLabel } from '../suggestion-markup.ts';
 import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
@@ -184,6 +185,12 @@ export class EditorCore extends DocumentCore {
   #labels: CoreLabels = DEFAULT_LABELS;
   /** Set by a find navigation; the next draw of the highlights scrolls the current match in (FE-059). */
   #scrollToMatch = false;
+
+  /** Draws the suggestions again with the new words for assistive technology (UX-035 criterion 4). */
+  override setSuggestionLabel(label: SuggestionLabel | null): void {
+    super.setSuggestionLabel(label);
+    this.#view?.setProps({});
+  }
 
   override findNext(): boolean {
     const moved = super.findNext();
@@ -424,6 +431,7 @@ export class EditorCore extends DocumentCore {
                 this.enterFieldValue(id, value);
               },
               fillable: (id) => this.fieldFillable(id),
+              rules: (id) => this.fieldRuleState(id),
               focused: (id) => this.selectField(id),
             },
             this.#fieldViews,
@@ -510,7 +518,8 @@ export class EditorCore extends DocumentCore {
             }),
         },
         // The find highlights (FE-059): drawn from the document and the find state, never stored.
-        // The suggestion marks in the `all` view are drawn too (FE-046 criterion 4; FE-045 criterion 1).
+        // The suggestion marks are drawn in the markup view the reader chose, `all` first (FE-046
+        // criterion 4; FE-045 criterion 1; UX-035).
         decorations: (state) => {
           const f = this.findState.get();
           return findDecorations(state.doc, {
@@ -518,7 +527,14 @@ export class EditorCore extends DocumentCore {
             current: f.current,
             ...(f.matchCase === false ? { matchCase: false } : {}),
           })
-            .add(state.doc, suggestionDecorations(state.doc, 'all').find())
+            .add(
+              state.doc,
+              suggestionDecorations(
+                state.doc,
+                this.markupView.get(),
+                this.suggestionLabel ?? undefined,
+              ).find(),
+            )
             .add(state.doc, commentDecorations(state.doc, this.threadRanges.get()).find())
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
             .add(state.doc, comparisonDecorations(state.doc, this.#comparison).find())
@@ -541,6 +557,8 @@ export class EditorCore extends DocumentCore {
     const unthread = this.threadRanges.subscribe(() => this.#view?.setProps({}));
     // A result of the proofing port, or a navigation, draws the findings again (UX-041).
     const unproof = this.proofing.subscribe(() => this.#view?.setProps({}));
+    // Choosing another markup view draws the suggestions again; the document is not touched (UX-035).
+    const unmarkup = this.markupView.subscribe(() => this.#view?.setProps({}));
     const unfind = this.findState.subscribe(() => {
       const v = this.#view;
       if (!v) return;
@@ -588,6 +606,7 @@ export class EditorCore extends DocumentCore {
       unfind();
       unthread();
       unproof();
+      unmarkup();
       undirection();
       uncarets();
       win?.removeEventListener('resize', redraw);

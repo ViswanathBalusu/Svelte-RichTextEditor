@@ -1269,6 +1269,34 @@
       "owner": "UX"
     },
     {
+      "operationId": "erasePerson",
+      "method": "POST",
+      "path": "/users/erase",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §13; 13 §10",
+      "owner": "HIS"
+    },
+    {
+      "operationId": "tombstoneCommit",
+      "method": "POST",
+      "path": "/documents/{id}/commits/{seq}/tombstone",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §13; 13 §10",
+      "owner": "HIS"
+    },
+    {
       "operationId": "listFields",
       "method": "GET",
       "path": "/documents/{id}/fields",
@@ -1342,6 +1370,22 @@
       "idempotencyKey": false,
       "success": "2XX",
       "spec": "12 §6.1, §10",
+      "owner": "FRW"
+    },
+    {
+      "operationId": "sendWorkflow",
+      "method": "POST",
+      "path": "/documents/{id}/workflow/send",
+      "security": [
+        "user",
+        "service"
+      ],
+      "feature": "workflow",
+      "requires": "manage",
+      "ifMatch": "none",
+      "idempotencyKey": true,
+      "success": "2XX",
+      "spec": "12 §6.2, §10",
       "owner": "FRW"
     },
     {
