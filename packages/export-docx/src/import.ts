@@ -114,6 +114,7 @@ import {
   toTree,
   treeDepth,
 } from './tree.ts';
+import { rFontsFamilies, themeFonts } from './theme-fonts.ts';
 import { Utf8Error } from './utf8.ts';
 import {
   type XmlElement,
@@ -252,6 +253,17 @@ const W_TC = w('tc');
 const W_PPR = w('pPr');
 const W_RPR = w('rPr');
 const W_SECTPR = w('sectPr');
+
+/** Whether the bytes hold the given byte sequence (a cheap test before a part is parsed again). */
+function hasBytes(bytes: Uint8Array, needle: readonly number[]): boolean {
+  for (let i = 0; i + needle.length <= bytes.length; i++) {
+    if (bytes[i] !== needle[0]) continue;
+    let k = 1;
+    while (k < needle.length && bytes[i + k] === needle[k]) k++;
+    if (k === needle.length) return true;
+  }
+  return false;
+}
 
 /** Whether the part's bytes hold the text `permStart` (an editable range may start in it). */
 function hasPermStart(bytes: Uint8Array): boolean {
@@ -840,10 +852,59 @@ class Importer {
       stats: this.stats,
       report: this.report(),
       warnings: this.warnings,
-      fonts: substituteFonts(familiesOf(envelope.doc), this.opts.fonts ?? {}),
+      fonts: substituteFonts(
+        [...familiesOf(envelope.doc), ...this.packageFamilies(mainPart, mainRels)],
+        this.opts.fonts ?? {},
+      ),
     };
   }
 
+  /**
+   * The families the package's `w:rFonts` elements name, theme references resolved (EXP-106). The
+   * model keeps only `w:ascii`, so a family named through the theme (Aptos, in recent Word files)
+   * is found here. It only reads; a part that does not parse is skipped, as the import itself
+   * reports such parts.
+   */
+  packageFamilies(mainPart: string, mainRels: Relationships): string[] {
+    const themeRel = mainRels.list.find((r) => r.type === REL.theme && !r.external);
+    const themeName = themeRel ? resolveTarget(mainPart, themeRel.target) : 'word/theme/theme1.xml';
+    const load = (name: string): ReturnType<typeof parseXml> | undefined => {
+      const bytes = this.read(name);
+      if (!bytes) return undefined;
+      try {
+        return parseXml(bytes);
+      } catch (e) {
+        if (e instanceof XmlError || e instanceof Utf8Error) return undefined;
+        throw e;
+      }
+    };
+    const theme = load(themeName);
+    const fonts = theme ? themeFonts(theme.root) : {};
+    const wanted = new Set<string>([
+      REL.styles,
+      REL.numbering,
+      REL.footnotes,
+      REL.endnotes,
+      REL.comments,
+      REL.header,
+      REL.footer,
+    ]);
+    const names: string[] = [mainPart];
+    for (const r of mainRels.list) {
+      if (r.external || !wanted.has(r.type)) continue;
+      const name = resolveTarget(mainPart, r.target);
+      if (!names.includes(name)) names.push(name);
+    }
+    const out: string[] = [];
+    const needle = [...'rFonts'].map((c) => c.charCodeAt(0));
+    for (const name of names) {
+      const bytes = this.read(name);
+      if (!bytes || !hasBytes(bytes, needle)) continue;
+      const part = load(name);
+      if (part) out.push(...rFontsFamilies(part.root, fonts));
+    }
+    return out;
+  }
   report(): ImportReportItem[] {
     const order = { preserved: 0, approximated: 1, dropped: 2 };
     return [...this.notes.values()]
