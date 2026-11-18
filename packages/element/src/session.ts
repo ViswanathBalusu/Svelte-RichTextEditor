@@ -49,6 +49,7 @@ import { ChangeReporter, StatusReporter, type Scheduler } from './status.ts';
 import { SelectionEvents, type SelectionWatch } from './selection-events.ts';
 import { HeaderEvents, type HeaderWatch } from './header-events.ts';
 import { FillEvents, type FillWatch } from './fill.ts';
+import { NotificationDispatcher } from './notifications.ts';
 
 export interface ReadView<T> {
   get(): T;
@@ -191,6 +192,11 @@ export class Session {
   /** The recovery journal in IndexedDB (FE-008), when the browser gives one; closed on teardown. */
   #idbJournal: IdbJournal | null = null;
   #channel: SyncChannel | null = null;
+  /**
+   * Where the `event` messages of the channel arrive (PRO-035). Parts of the element register for
+   * the types they act on; a type the definition does not list is ignored.
+   */
+  readonly notifications = new NotificationDispatcher();
   readonly #unsubscribe: Unsubscribe[] = [];
   readonly #status: StatusReporter;
   #change: ChangeReporter | null = null;
@@ -360,6 +366,7 @@ export class Session {
     // Every `perm.changed` of the channel the session opened, and whatever the core takes later
     // from a channel it reopened itself: both raise each revision once.
     this.#unsubscribe.push(channel.onAccess((access) => this.#onAccess(access)));
+    this.#unsubscribe.push(channel.onEvent((n) => void this.notifications.dispatch(n)));
     // When the page is hidden, every pending journal write is started and awaited (FE-011). This
     // does not wait for `pagehide`, which browsers do not reliably deliver.
     if (typeof document !== 'undefined' && editor.flushJournal) {
