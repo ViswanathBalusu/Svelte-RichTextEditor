@@ -83,17 +83,23 @@ function participantsOf(stored: unknown): WorkflowResourceView['participants'] {
   const own = (p: unknown): Record<string, unknown> =>
     typeof p === 'object' && p !== null ? (p as Record<string, unknown>) : {};
   const drafts = stored.map((p) => {
-    const { state: _state, completedSeq: _completedSeq, ...draft } = own(p);
+    const {
+      state: _state,
+      completedSeq: _completedSeq,
+      firstViewedAt: _firstViewedAt,
+      ...draft
+    } = own(p);
     return draft;
   });
   const checked = checkParticipants(drafts);
   if (!checked.ok) return [];
   return checked.participants.map((draft, i) => {
-    const { state, completedSeq } = own(stored[i]);
+    const { state, completedSeq, firstViewedAt } = own(stored[i]);
     return {
       ...draft,
       ...(typeof state === 'string' ? { state } : {}),
       ...(typeof completedSeq === 'number' ? { completedSeq } : {}),
+      ...(typeof firstViewedAt === 'string' ? { firstViewedAt } : {}),
     };
   });
 }

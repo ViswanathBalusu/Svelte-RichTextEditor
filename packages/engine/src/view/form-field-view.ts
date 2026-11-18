@@ -34,6 +34,7 @@ import { type StaleCache, fieldTexts } from '../captions-refs.ts';
 import { formatFieldValue, type FieldFormat } from '../field-display.ts';
 import { computedFieldView } from './computed-field-view.ts';
 import { rolesOf, type FieldEntryState } from '../field-entries.ts';
+import type { FieldRuleState } from '../field-rules.ts';
 
 /** What the views need from the core. */
 export interface FormFieldPort {
@@ -41,12 +42,14 @@ export interface FormFieldPort {
   check(id: string, value: JsonValue): ReadonlyArray<{ readonly message: string }>;
   enter(id: string, value: JsonValue): void;
   fillable(id: string): boolean;
+  /** What the rules say about the field now (FRW-023); null when none applies. */
+  rules?(id: string): FieldRuleState | null;
   /** The control of the field took focus: the field is the one the person selected (FRW-073). */
   focused?(id: string): void;
 }
 
 /** The kinds drawn as a native control. */
-const CONTROL_KINDS = new Set(['text', 'number', 'date', 'checkbox', 'choice']);
+const CONTROL_KINDS = new Set(['text', 'number', 'date', 'checkbox', 'choice', 'formula']);
 
 type Control = HTMLInputElement | HTMLSelectElement;
 
@@ -57,6 +60,7 @@ const KIND_NAMES: Readonly<Record<string, string>> = {
   date: 'Date field',
   checkbox: 'Checkbox field',
   choice: 'Choice field',
+  formula: 'Calculated field',
 };
 
 /** The number of code points in `text`. */
@@ -169,6 +173,8 @@ class FormFieldView implements NodeView, Refreshable {
   readonly #views: FormFieldViews;
   readonly #control: Control;
   readonly #message: HTMLElement;
+  /** The visible marker of a required field (FRW-023 criterion 2). */
+  readonly #marker: HTMLElement;
   /** Says that a paste was cut at the limit (a polite live region). */
   readonly #notice: HTMLElement;
   #node: PMNode;
@@ -205,8 +211,18 @@ class FormFieldView implements NodeView, Refreshable {
     notice.setAttribute('role', 'status');
     notice.hidden = true;
     this.#notice = notice;
-    dom.append(this.#control, message, notice);
+    const marker = document.createElement('span');
+    marker.className = 'de-form-field-required';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.textContent = '*';
+    marker.hidden = true;
+    this.#marker = marker;
+    dom.append(this.#control, marker, message, notice);
     this.#box(dom, message, notice);
+    marker.style.position = 'absolute';
+    marker.style.right = '0.1em';
+    marker.style.top = '0';
+    marker.style.pointerEvents = 'none';
 
     this.#control.addEventListener('paste', this.#pasted);
     this.#control.addEventListener('input', this.#typed);
@@ -430,8 +446,18 @@ class FormFieldView implements NodeView, Refreshable {
       'aria-label',
       typeof label === 'string' && label !== '' ? label : String(node.attrs['key']),
     );
-    if (node.attrs['required'] === true) c.setAttribute('aria-required', 'true');
+    // The rules decide what is required now, hidden or shown (FRW-023); without any, the field says.
+    const rule = this.#port.rules?.(this.#id) ?? null;
+    const required = rule === null ? node.attrs['required'] === true : rule.required;
+    if (required) c.setAttribute('aria-required', 'true');
     else c.removeAttribute('aria-required');
+    this.#marker.hidden = !required;
+    // A hidden field is neither drawn nor reachable by keyboard (FRW-023 criterion 1).
+    const hidden = rule !== null && !rule.visible;
+    this.dom.style.display = hidden ? 'none' : 'inline-block';
+    if (hidden) this.dom.setAttribute('data-hidden', 'true');
+    else this.dom.removeAttribute('data-hidden');
+    this.dom.toggleAttribute('data-required', required);
 
     const fillable = this.#port.fillable(this.#id);
     if (c instanceof HTMLSelectElement || c.type === 'checkbox') c.disabled = !fillable;
@@ -454,7 +480,20 @@ class FormFieldView implements NodeView, Refreshable {
     }
     if (this.#dirty) return;
     const value = state ? state.value : null;
-    const problems = state ? state.problems : [];
+    // The messages of the `validate` effects that fail are problems of the field too, and are
+    // announced like the entry's own (FRW-023 criterion 3).
+    const problems = [
+      ...(state ? state.problems : []),
+      ...(rule?.messages ?? []).map((message) => ({ message })),
+    ];
+    // A computed field shows what the rules compute, and nothing can be entered in it (criterion 4).
+    if (String(node.attrs['kind']) === 'formula' && c instanceof HTMLInputElement) {
+      c.readOnly = true;
+      c.tabIndex = -1;
+      c.value = rule?.value ?? (typeof value === 'string' ? value : '');
+      this.#showProblems(problems);
+      return;
+    }
     // The format changes the display only, and only while nobody edits a clean value (criterion 4).
     const shown =
       this.#editing || problems.length > 0

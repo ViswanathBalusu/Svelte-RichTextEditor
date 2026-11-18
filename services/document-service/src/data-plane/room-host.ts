@@ -48,6 +48,7 @@ import {
   type RegionInfo,
   type Resume as RoomResume,
   type RoomConnection,
+  type WorkflowRecord,
   type SnapshotCommit,
   type SnapshotReason,
   type StepJson,
@@ -98,6 +99,8 @@ import {
   type OwnershipStore,
 } from '../storage/types.ts';
 import type { EventSink } from '../control-plane/events.ts';
+import { recordOf } from '../workflow/record.ts';
+import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import type { Auditor } from './audit.ts';
 import type { Checkpointer, LoadedCheckpoint } from './checkpoints.ts';
 import { gateOf, historySetting, rangeAllowed, stateAllowed } from './gate.ts';
@@ -151,6 +154,8 @@ export interface HostDeps {
   readonly restricted: boolean;
   /** The assets a document may reference (BE-044); without it references are not checked. */
   readonly assets?: AssetAttachments;
+  /** The workflow resources: a room reads its document's workflow at start (FRW-035). */
+  readonly workflows?: WorkflowResourceStore | undefined;
 }
 
 /** How a room reaches one channel of a session. */
@@ -358,6 +363,8 @@ export class HostedRoom {
     /** The content of each snapshot commit in `log`. */
     snapshots: ReadonlyMap<number, { doc: Doc; json: JsonEnvelope }>;
     perms: PermissionState;
+    /** The document's workflow when it has one (FRW-035). */
+    workflow?: WorkflowRecord;
     /** The grants revision in force at `initialSeq`. */
     initialRevision: number;
     /** The host `sub` of each surrogate the log and the leases name (D42). */
@@ -407,6 +414,7 @@ export class HostedRoom {
       log: init.log,
       snapshotContent: snapshotDoc,
       perms: init.perms,
+      ...(init.workflow ? { workflow: init.workflow } : {}),
       initialRevision: init.initialRevision,
       epoch: init.epoch,
       incarnation: init.incarnation,
@@ -1018,6 +1026,18 @@ ecentHead, keeping one entry older than the window. */
     this.#apply(this.#gateway.permissionsChanged(perms));
     this.#scheduleExpiry();
     this.#verifyApprovals();
+  }
+
+  /**
+   * The workflow moved (FRW-035). With a permission state newer than the room's, `perm.changed`
+   * waits for its control commit as for any grants change; without one, access changed under the
+   * same revision, so nothing follows it and it goes out at once (as at an expiry).
+   */
+  workflowChanged(record: WorkflowRecord, perms?: PermissionState): void {
+    if (this.#stopped) return;
+    const newer = perms !== undefined && perms.revision > this.#room.permissions.revision;
+    this.#apply(this.#gateway.workflowChanged(record, perms), { expiry: !newer });
+    this.#scheduleExpiry();
   }
 
   /** `Room.expire()` at the room's next expiry, scheduled again after every change (PRM-007). */
@@ -1933,6 +1953,7 @@ export class RoomHost {
             : (history[0]?.revision ?? perms.revision);
       // What the wire shows for the authors and lease holders the room starts with (D42).
       const named = [...log.map((c) => c.user), ...perms.leases.map((l) => l.holder)];
+      const workflowRow = d.workflows ? await d.workflows.read(ref.tenant, ref.doc) : null;
       const unique = [...new Set(named)].filter((u) => u !== 'system');
       const subs: ReadonlyMap<string, string> =
         d.users && unique.length ? await d.users.subsOf(ref.tenant, unique) : new Map();
@@ -1949,6 +1970,9 @@ export class RoomHost {
         log,
         snapshots,
         perms,
+        ...(workflowRow && workflowRow.state !== 'draft'
+          ? { workflow: recordOf(workflowRow) }
+          : {}),
         initialRevision,
         subs,
         ...(attached ? { attached } : {}),
@@ -1994,6 +2018,10 @@ export class RoomHost {
       if (await r.closeIdle('memory')) closed++;
     }
     return closed;
+  }
+
+  workflowChanged(ref: DocRef, record: WorkflowRecord, perms?: PermissionState): void {
+    this.get(ref)?.workflowChanged(record, perms);
   }
 
   permissionsChanged(ref: DocRef, perms: PermissionState): void {

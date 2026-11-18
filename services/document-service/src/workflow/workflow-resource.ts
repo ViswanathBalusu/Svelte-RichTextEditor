@@ -22,6 +22,8 @@ export interface WorkflowResourceView {
     /** Set by the workflow once it runs (12 §7); absent in a draft. */
     readonly state?: string;
     readonly completedSeq?: number;
+    /** When the participant first opened the document, ISO 8601 UTC (FRW-031; set once). */
+    readonly firstViewedAt?: string;
   })[];
   readonly members: WorkflowMembers;
 }

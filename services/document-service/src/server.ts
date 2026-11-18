@@ -697,6 +697,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.assetRegistry
       ? { assets: new RegistryAssetAttachments(parts.logs, parts.assetRegistry) }
       : {}),
+    ...(parts.workflows ? { workflows: parts.workflows } : {}),
     now,
     checkpoints,
     settings: {

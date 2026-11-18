@@ -274,7 +274,8 @@ export interface WorkflowStatus {
   /** The receiving participant's status. */
   participant?: {
     id: string;
-    state: "active" | "completed" | (string & {});
+    /** The participant's own status: `active` (may act now), `waiting` (an earlier order first), `completed`, `paused` (while correcting), `closed` (the workflow ended), or `copy` (a `cc` participant). Never another participant's. */
+    state: "active" | "completed" | "waiting" | "paused" | "copy" | "closed" | (string & {});
   };
 }
 
@@ -919,6 +920,8 @@ export interface Workflow {
     };
     state?: string;
     completedSeq?: number;
+    /** When the participant first opened the document (12 §6.3; FRW-031). */
+    firstViewedAt?: string;
   }>;
   routing?: Array<{ [key: string]: unknown }>;
   deadline?: string;
