@@ -49,7 +49,7 @@ import { PeopleDirectory } from '../../src/people/directory.ts';
 import { SettingsStore, type ShellSettings } from '../../src/shell/settings.ts';
 import shellCss from '../../src/styles/shell.css?inline';
 import type { ThreadSummary } from '../../src/core-api.ts';
-import { FakeCore, type Notify } from '../../test/support/fake-core.ts';
+import { FakeCore, type FakeCoreOptions, type Notify } from '../../test/support/fake-core.ts';
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
 
 const violations: string[] = [];
@@ -120,6 +120,8 @@ export interface MountOptions {
   views?: ViewName[];
   permissions?: AccessObject | null;
   styles?: StyleSummary[];
+  /** Offers `styleEdit` (UX-022); see the fake core's option of the same name. */
+  styleEdit?: FakeCoreOptions['styleEdit'];
   regions?: RegionSummary[];
   stats?: DocumentStats;
   language?: string | null;
@@ -509,6 +511,7 @@ function mountShell(options: MountOptions = {}): void {
     ...(options.views ? { views: options.views } : {}),
     ...(options.permissions !== undefined ? { permissions: options.permissions } : {}),
     ...(options.styles ? { styles: options.styles } : {}),
+    ...(options.styleEdit ? { styleEdit: options.styleEdit } : {}),
     ...(options.regions ? { regions: options.regions } : {}),
     ...(options.stats ? { stats: options.stats } : {}),
     ...(options.language !== undefined ? { language: options.language } : {}),
