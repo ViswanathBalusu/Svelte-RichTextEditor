@@ -124,7 +124,15 @@ export {
 } from './page-setup-commands.ts';
 export { insertBreak, insertSectionBreak, sectionWarnings } from './breaks-sections.ts';
 export { insertField, insertSymbol, insertToc } from './fields-toc.ts';
-export { insertCaption, insertReference } from './captions-refs.ts';
+export {
+  insertCaption,
+  insertCaptionHere,
+  insertEquationCaption,
+  insertReference,
+  insertTableCaption,
+} from './captions-refs.ts';
+export { referenceTargets } from './reference-targets.ts';
+export type { ReferenceTarget, ReferenceTargetKind } from './reference-targets.ts';
 export { insertEquation, latexRefusal, setEquationLatex } from './equation-commands.ts';
 export { pasteImage, type AssetsPort, type PastedImage } from './image-paste.ts';
 export { rebuildTransaction } from './remote.ts';

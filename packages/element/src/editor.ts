@@ -377,6 +377,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
     focus: () => core.focus(),
     // The checker, the outline and the export diagnostics move to a block through this (UX-067 criterion 1).
     selectBlock: (id) => core.selectBlock(id),
+    // The document as this reader holds it: the accessibility checker reads it (UX-066), so a
+    // picture without alternative text is listed (FE-132 criterion 5).
+    getContent: () => core.getContent(),
+    // The cross-reference dialog's list (FE-134 criterion 2).
+    referenceTargets: () => core.referenceTargets(),
     // The navigation pane's search (UX-020 criterion 3): the core's find over the body this reader
     // holds, with the text around each match; choosing a result selects that match and scrolls to it.
     // The pane's "match case" is the find's option (the engine's own default stays case-sensitive).
@@ -438,6 +443,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
       'markRegion',
       'nextEditableRegion',
       'showReferences',
+      'setAltText',
+      'insertCaption',
+      'insertCrossReference',
       'copyFormat',
       'pasteFormat',
       'insertRecovered',
@@ -452,6 +460,21 @@ export function mountEditor(options: MountOptions): MountedEditor {
     ],
     runNamed: (name, args) => {
       if (name === 'showReferences') return core.showReferences();
+      // FE-134: `insertCaption` numbers the figure, table or selected equation the selection is on;
+      // `insertCrossReference` takes the dialog's `{ target, format }` and inserts a `ref` field.
+      if (name === 'insertCaption') return core.run('insertCaption', { caption: { kind: 'here' } });
+      if (name === 'insertCrossReference') {
+        const a = args as { target?: unknown; format?: unknown } | undefined;
+        if (typeof a?.target !== 'string') return false;
+        const format = typeof a.format === 'string' ? a.format : null;
+        return core.run('insertReference', { reference: { target: a.target, format } });
+      }
+      // The alternative text dialog (FE-132 criterion 5): `{ asset, alt }` for a picture just inserted.
+      if (name === 'setAltText') {
+        const a = args as { asset?: unknown; alt?: unknown } | undefined;
+        if (typeof a?.asset !== 'string' || typeof a.alt !== 'string') return false;
+        return core.setImageAlt(a.asset, a.alt);
+      }
       if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
       // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
       // puts it on the selection through the guards; neither takes an argument.
@@ -546,6 +569,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
     // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
     refusal: core.refusal,
+    altRequest: core.altRequest,
     recovered: core.recovered,
     trimmed: core.trimmed,
     // The report of Replace and Replace all: how many matches changed and how many were skipped (FE-060).

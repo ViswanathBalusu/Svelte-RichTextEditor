@@ -103,6 +103,8 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `format.language` | review | character-and-paragraph-formatting |  |  |
 | `format.painter` | format | format-painter | `Shift-Mod-c` |  |
 | `history.nameVersion` | review | version-history |  |  |
+| `insert.caption` | insert | editing |  |  |
+| `insert.crossReference` | insert | editing |  |  |
 | `insert.field.checkbox` | insert | fields-and-forms |  |  |
 | `insert.field.choice` | insert | fields-and-forms |  |  |
 | `insert.field.date` | insert | fields-and-forms |  |  |
