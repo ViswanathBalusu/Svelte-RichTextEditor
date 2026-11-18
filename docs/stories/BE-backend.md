@@ -2236,10 +2236,12 @@ As an operator of the hosted service, I want an on-call process written before l
 **Acceptance criteria**
 
 - [ ] Given the metrics of BE-086, when the process is written, then it names the alerts, thresholds and who is paged.
-- [ ] Given an incident, when the process is followed, then it covers escalation, communication to tenants, and a written review afterwards.
-- [ ] Given abuse reports, when the process meets them, then it refers to the policy of SEC-061 for what may be done to content.
+- [x] Given an incident, when the process is followed, then it covers escalation, communication to tenants, and a written review afterwards.
+- [x] Given abuse reports, when the process meets them, then it refers to the policy of SEC-061 for what may be done to content.
 
-**Notes:** `cond`: only if the owner chooses hosted mode (11 §10, decision 8).
+**Evidence:** Lane w5 (2026-11-18): `services/document-service/docs/on-call-process.md` (proposed, not accepted by the owner): roles, three severities, the alerts table, the response steps with escalation (section 4), communication to tenants (section 5), the written review (section 6) and abuse reports, which it hands to the policy of SEC-061 and does not widen (section 7). `services/document-service/test/data-plane/be-097-on-call-process.test.ts` (Node.js, `pnpm exec vitest run --project node` on that file, 7 of 7 pass): every `dep_` and `docedit_` metric the document names occurs in the service source, the alerts table has five filled cells per row, the sections for escalation, tenants, review and SEC-061 are present, and the repair procedure it points to exists. Criteria 2 and 3 are ticked on that document.
+
+**Notes:** `cond`: only if the owner chooses hosted mode (11 §10, decision 8). The owner answered it on 2026-11-15 (answer 28 of docs/owner-decisions-2026-11-15.md): both modes from the start, so the story applies. Lane w5 (2026-11-18): criterion 1 stays unticked. The document names the alerts, the metrics and who is paged, and it gives a threshold wherever the specification has a target (00 §9 and 06 §9: 300 ms at the 99th percentile for acknowledgement, 500 ms at the 95th for cold open, 99.9 percent availability, 15 minutes to recover) or a rule with no figure (any increase of the checkpoint mismatch count). For persist latency, open rooms, export queue depth, node health and the availability burn rate the specification has no target and nothing has been measured, so the rows say "to be set" and name the story whose measurement (BE-080, BE-084, BE-085) sets them. A figure written now would be invented. The owner also fills the roles and sets the acknowledgement and first-message times; those are listed in section 8 of the document. The process is a proposal: the owner has not reviewed it.
 
 ## Read restrictions (ADR 0019)
 
