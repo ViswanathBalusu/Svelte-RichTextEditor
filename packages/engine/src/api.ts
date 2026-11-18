@@ -72,7 +72,10 @@ export type CommandName =
   | 'nextEditableRegion'
   | 'markRegion'
   | 'setRegionPolicy'
-  | 'renameRegion';
+  | 'renameRegion'
+  // UX-009: the format painter takes the formatting at the selection, then puts it on another one.
+  | 'copyFormat'
+  | 'pasteFormat';
 
 /**
  * The authoring commands that take arguments (FE-053, FE-070, FE-133 to FE-137, FE-140). Each one
@@ -425,7 +428,10 @@ export type CoreQueryName =
   | 'hasHeader'
   | 'canInsertField'
   // PRM-033 and FE-044 criterion 5: the selection's whole body blocks may become a region.
-  | 'canMarkRegion';
+  | 'canMarkRegion'
+  // UX-009: the selection has formatting to take; formatting was taken and may be put here.
+  | 'canCopyFormat'
+  | 'canPasteFormat';
 
 /** `de-status.connection` (05 §8.1), plus `detached` before any channel is attached. */
 export type ConnectionState = 'detached' | 'online' | 'reconnecting' | 'offline';

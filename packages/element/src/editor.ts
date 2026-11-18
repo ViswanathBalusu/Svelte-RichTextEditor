@@ -305,10 +305,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // Named commands of phase 1b that the shell runs (ui CoreCommandName). `insertField` takes the
     // palette's `{ kind }` and inserts that form field kind at the caret (FRW-072).
     // `setRegionPolicy` takes `{ region, policy }` (PRM-036); the engine refuses it without `manage`.
+    // `copyFormat` and `pasteFormat` are the format painter's (UX-009).
     // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
     // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
-    commandNames: ['insertField', 'setRegionPolicy', 'markRegion'],
+    commandNames: ['insertField', 'setRegionPolicy', 'markRegion', 'copyFormat', 'pasteFormat'],
     runNamed: (name, args) => {
+      // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
+      // puts it on the selection through the guards; neither takes an argument.
+      if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
       if (name === 'markRegion') {
         const title = (args as { title?: unknown } | undefined)?.title;
         if (typeof title !== 'string') return false;

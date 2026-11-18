@@ -456,6 +456,8 @@
 
   // The format painter (UX-009): armed by its command, applied by the next pointer selection or by
   // Enter, cancelled by Escape; the armed state is the command's pressed state.
+  /** How long a pointer gesture waits for the core's view of its selection (UX-009). */
+  const PAINTER_SETTLE_MS = 120;
   let painterArmed = $state(false);
 
   function painter(): boolean {
@@ -1015,10 +1017,27 @@
       on(node, 'contextmenu', onContextMenu),
       on(node, 'pointerup', () => {
         if (!painterArmed) return;
-        // The selection the gesture made reaches the core's view in the next frame.
-        requestAnimationFrame(() => {
-          if (painterArmed && !core.selection.get().empty) paint();
+        // The browser tells the editing surface of the selection the gesture made a little after
+        // the pointer is released, so the view may still show the selection before the gesture (a
+        // click on the target would then paint the source again). Wait for the view to change; if
+        // it does not within a short time, the view is already current.
+        const before = core.selection.get();
+        let settled = false;
+        let stopWatching = (): void => {};
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          stopWatching();
+          clearTimeout(timer);
+          requestAnimationFrame(() => {
+            if (painterArmed && !core.selection.get().empty) paint();
+          });
+        };
+        stopWatching = core.selection.subscribe(() => {
+          if (core.selection.get() !== before) settle();
         });
+        timer = setTimeout(settle, PAINTER_SETTLE_MS);
       }),
     ];
     return () => {
