@@ -105,7 +105,15 @@ export interface TokenServiceOptions {
   now?: () => number;
   /** Lifetime of a minted token without `expiresIn`, seconds (default 900; test mode, BE-079). */
   defaultLifetimeS?: number;
+  /**
+   * The name of the claim that lists the role placeholders a user may fill outside a workflow,
+   * for a tenant (05 §3.1; 12 §13; owner decision 5a of 2026-11-15). Default `wfr` for every tenant.
+   */
+  fillRolesClaim?: (tenant: string) => string;
 }
+
+/** The default name of the fill roles claim (05 §3.1). */
+export const FILL_ROLES_CLAIM = 'wfr';
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -124,8 +132,10 @@ export class TokenService implements TokenVerifier {
   readonly #signing: SigningKey;
   readonly #now: () => number;
   readonly #defaultLifetimeS: number;
+  readonly #fillRolesClaim: (tenant: string) => string;
 
   constructor(opts: TokenServiceOptions) {
+    this.#fillRolesClaim = opts.fillRolesClaim ?? (() => FILL_ROLES_CLAIM);
     this.#registry = opts.registry;
     this.#users = opts.users;
     this.serviceId = opts.serviceId;
@@ -201,6 +211,10 @@ export class TokenService implements TokenVerifier {
     const restrict = restrictOf(payload['restrict']);
     const asserted = assertedOf(payload);
     const accessSince = accessSinceOf(payload['access_since']);
+    // Form mode without a workflow: the roles the user may fill come from the tenant's claim, and
+    // the participant is active while the document is not locked (12 §13). The host signs them.
+    const claimName = this.#fillRolesClaim(tid);
+    const fillRoles = fillRolesOf(payload[claimName], claimName);
 
     const user = await this.#users.resolve(tid, sub, name);
     // 05 §3.3: tokens issued before a watermark are refused; one for a single document drops it.
@@ -220,8 +234,8 @@ export class TokenService implements TokenVerifier {
         session: '',
         role,
         groups: (grp as string[] | undefined) ?? [],
-        participantRoles: [],
-        participantActive: false,
+        participantRoles: fillRoles,
+        participantActive: fillRoles.length > 0,
       },
       jti: claims.jti,
       expiresAt: claims.exp,
@@ -368,6 +382,18 @@ export class TokenService implements TokenVerifier {
  * the known restrictions, and any other value is ignored (05 §1 rule 3; PRO-005). Duplicates
  * are dropped, and the order of the token is kept.
  */
+/**
+ * The role placeholders of the fill roles claim (05 §3.1): an array of identifiers, each used once
+ * in token order. An absent claim is no roles; anything else than an array of identifiers refuses
+ * the token, as a malformed `grp` does.
+ */
+function fillRolesOf(v: unknown, claim: string): readonly string[] {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || !v.every(isOpaqueId))
+    throw refuse(`${claim} must be an array of role placeholder identifiers`);
+  return [...new Set<string>(v)];
+}
+
 function restrictOf(v: unknown): readonly string[] {
   if (v === undefined) return [];
   if (!Array.isArray(v)) throw refuse('restrict must be an array of restriction names');
