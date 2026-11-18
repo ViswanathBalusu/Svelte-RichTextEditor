@@ -141,7 +141,10 @@ function envelope(body: CdmNode[]): CdmEnvelopeLike {
   };
 }
 
-const { tree } = layoutFlow(toFlow(envelope([para('before', 'Text before the table'), table])), providers);
+const { tree } = layoutFlow(
+  toFlow(envelope([para('before', 'Text before the table'), table])),
+  providers,
+);
 const pieces: TableFragment[] = tree.pages
   .flatMap((p) => p.fragments)
   .filter((f: LayoutFragment): f is TableFragment => f.kind === 'table');
@@ -171,7 +174,8 @@ describe('a split table records the block and the offsets of every fragment (FE-
     expect(pieces[pieces.length - 1]!.to).toBe(size(table) - 2);
     const laid: LayoutRow[] = pieces.flatMap((p) => p.rows).filter((r) => !r.repeated);
     expect(laid).toHaveLength(21);
-    for (let i = 1; i < laid.length; i++) expect(laid[i]!.from, laid[i]!.rowId).toBe(laid[i - 1]!.to);
+    for (let i = 1; i < laid.length; i++)
+      expect(laid[i]!.from, laid[i]!.rowId).toBe(laid[i - 1]!.to);
   });
 
   it('records the offsets of each cell as the model counts them', () => {
@@ -207,12 +211,16 @@ describe('a split table records the block and the offsets of every fragment (FE-
     const plain = JSON.parse(JSON.stringify(table), (k, v: unknown) =>
       k === 'borders' || k === 'shading' ? undefined : v,
     ) as CdmNode;
-    const again = layoutFlow(toFlow(envelope([para('before', 'Text before the table'), plain])), providers)
-      .tree;
+    const again = layoutFlow(
+      toFlow(envelope([para('before', 'Text before the table'), plain])),
+      providers,
+    ).tree;
     const shape = (t: typeof tree): unknown =>
       t.pages.map((p) =>
         p.fragments.map((f) =>
-          f.kind === 'table' ? [f.blockId, f.from, f.to, f.rows.map((r) => [r.rowId, r.from, r.to])] : f.blockId,
+          f.kind === 'table'
+            ? [f.blockId, f.from, f.to, f.rows.map((r) => [r.rowId, r.from, r.to])]
+            : f.blockId,
         ),
       );
     expect(shape(again)).toEqual(shape(tree));

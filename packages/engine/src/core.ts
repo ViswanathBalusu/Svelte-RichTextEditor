@@ -209,6 +209,7 @@ import {
 import { type Refusal, canWrite, capsOf, checkChange, depScope, guardPlugin } from './guard.ts';
 import { idTypesOf, identifierPlugin } from './ids.ts';
 import { type Internals, register } from './internals.ts';
+import { layoutDirtyTracker } from './layout-dirty.ts';
 import { INTERNAL, REMOTE, SUGGESTED } from './meta.ts';
 import { scopeDiff } from './scope-diff.ts';
 import { ExtensionApi } from './extension-api.ts';
@@ -903,6 +904,8 @@ export class DocumentCore implements DocumentApi {
   #docId = '';
   #flushTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #listeners = new Set<(tr: Transaction, state: EditorState) => void>();
+  /** The blocks changed since the layout last asked (FE-088 criteria 1 and 6). */
+  readonly #layoutDirty = layoutDirtyTracker();
   /** The extensions' document APIs (UX-053), told of every change and of the service's thread ranges. */
   readonly #extApis = new Set<ExtensionApi>();
   /** Remote changes that waited for a composition, for the tests of FE-034. */
@@ -1028,6 +1031,7 @@ export class DocumentCore implements DocumentApi {
       ),
       referenceGuardPlugin((targets) => this.#referenceRefused(targets)),
       identifierPlugin(ids),
+      this.#layoutDirty.plugin,
       trimPlugin((scope) => canWrite(this.#accessValue, this.#locked(), scope)),
       regionParagraphs(),
       bodyGuard(),
@@ -1352,6 +1356,16 @@ export class DocumentCore implements DocumentApi {
     const wrapped = (tr: Transaction) => listener(tr);
     this.#listeners.add(wrapped);
     return () => this.#listeners.delete(wrapped);
+  }
+
+  /**
+   * The identifiers of the blocks that changes have touched since the last call, local or remote
+   * (FE-088 criteria 1 and 6), which the layout re-measures; the call forgets them. A change the
+   * identifiers cannot name, such as a replaced document, is not listed: the layout compares the
+   * input of every block it keeps, so it still re-measures what changed.
+   */
+  takeLayoutDirty(): ReadonlySet<string> {
+    return this.#layoutDirty.take();
   }
 
   protected get editorState(): EditorState {
