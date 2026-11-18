@@ -23,7 +23,8 @@ const flush = () => new Promise<void>((r) => setTimeout(r, 0));
 /** The styled document with `n` more plain paragraphs and a heading every 50th, after the others. */
 function bigCore(n: number): DocumentCore {
   const env = styledDocument();
-  const body = env.doc.content!.find((c) => c.type === 'body')!;
+  const doc = env.doc as { content: Array<{ type: string; content?: unknown[] }> };
+  const body = doc.content.find((c) => c.type === 'body')!;
   const extra = [];
   for (let i = 0; i < n; i++) {
     const heading = i % 50 === 0;

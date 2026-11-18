@@ -47,7 +47,10 @@ test.describe('UX-020 the navigation pane on the mounted element', () => {
     // The match is the selection in the surface, and it is in the viewport.
     await expect.poll(() => selected(page)).toBe('paragraph');
     const inView = await surface(page).evaluate((surfaceEl) => {
-      const sel = (surfaceEl.getRootNode() as ShadowRoot).getSelection?.() ?? window.getSelection();
+      const root = surfaceEl.getRootNode() as ShadowRoot & {
+        getSelection?: () => Selection | null;
+      };
+      const sel = root.getSelection?.() ?? window.getSelection();
       const rect = sel?.rangeCount ? sel.getRangeAt(0).getBoundingClientRect() : null;
       return !!rect && rect.top >= 0 && rect.bottom <= window.innerHeight;
     });

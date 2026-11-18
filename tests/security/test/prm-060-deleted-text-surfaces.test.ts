@@ -38,7 +38,7 @@ describe('PRM-060 criterion 7: deleted text and the history surfaces (memory)', 
     const head = await h.parts.logs.head(ref);
     const perms = await h.parts.grants.current(ref);
     const at = posInside(content['doc'], INTRO);
-    const base = {
+    const base: Omit<StoredCommit, 'seq' | 'id' | 'steps' | 'time'> = {
       kind: 'steps',
       user: 'u-alice',
       session: 'session-test',
@@ -49,7 +49,7 @@ describe('PRM-060 criterion 7: deleted text and the history surfaces (memory)', 
       engine: 'pm-steps/1',
       retired: [],
       claimed: [],
-    } as const;
+    };
     const steps: unknown[][] = [
       [
         {
