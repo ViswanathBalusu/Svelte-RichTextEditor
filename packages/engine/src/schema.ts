@@ -428,6 +428,25 @@ const dataMark = (name: string): Partial<MarkSpec> => ({
   toDOM: (mark) => ['span', { [`data-${name}`]: String(mark.attrs['value']) }, 0],
 });
 
+/**
+ * The attributes of the element a suggestion mark is drawn with. `prosemirror-view` wraps every child
+ * that carries a mark in the mark's element, a block (a paragraph, a row, a table) included, and a
+ * mark cannot draw no element. A block suggestion (`inline` false) gets the class `de-suggest-wrap`,
+ * which the stylesheet gives `display: contents`, so the element has no box of its own and the block
+ * keeps its place in its parent's layout (FE-045 criterion 6). The cue itself is a node decoration on
+ * the block. See docs/adr/0385-w1-FE-044-block-suggestion-rendering.md.
+ */
+function suggestionAttrs(
+  id: unknown,
+  inline: boolean,
+  inlineClass?: string,
+): Record<string, string> {
+  const attrs: Record<string, string> = { 'data-suggestion': String(id) };
+  if (!inline) attrs['class'] = 'de-suggest-wrap';
+  else if (inlineClass !== undefined) attrs['class'] = inlineClass;
+  return attrs;
+}
+
 const MARK_RENDERING: Record<string, Partial<MarkSpec>> = {
   link: {
     toDOM: (mark) => {
@@ -487,13 +506,13 @@ const MARK_RENDERING: Record<string, Partial<MarkSpec>> = {
   hidden: classToggle('de-hidden', 'de-not-hidden'),
   preserved: { toDOM: () => ['span', { class: 'de-preserved-run' }, 0] },
   ins: {
-    toDOM: (mark) => ['ins', { 'data-suggestion': String(mark.attrs['id']) }, 0],
+    toDOM: (mark, inline) => ['ins', suggestionAttrs(mark.attrs['id'], inline), 0],
   },
   del: {
-    toDOM: (mark) => ['del', { 'data-suggestion': String(mark.attrs['id']) }, 0],
+    toDOM: (mark, inline) => ['del', suggestionAttrs(mark.attrs['id'], inline), 0],
   },
   fmt: {
-    toDOM: (mark) => ['span', { class: 'de-fmt', 'data-suggestion': String(mark.attrs['id']) }, 0],
+    toDOM: (mark, inline) => ['span', suggestionAttrs(mark.attrs['id'], inline, 'de-fmt'), 0],
   },
 };
 

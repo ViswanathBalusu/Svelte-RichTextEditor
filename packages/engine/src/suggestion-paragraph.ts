@@ -84,11 +84,18 @@ export function paragraphSuggestion(
     if (slice.size === 0) return undefined;
     const nodes: PMNode[] = [];
     slice.content.forEach((n) => nodes.push(n));
-    if (inTable($from) || nodes.some((n) => n.type.name !== 'paragraph')) return null;
+    // A whole table is one block suggestion: its own `ins`, and none on its rows (FE-045 criterion 3).
+    if (inTable($from) || nodes.some((n) => n.type.name !== 'paragraph' && n.type.name !== 'table'))
+      return null;
     const marked = nodes.map((n) => n.mark([markOf(schema, 'ins', author)]));
     const tr = state.tr.insert(from, marked);
     const size = marked.reduce((sum, n) => sum + n.nodeSize, 0);
-    tr.setSelection(TextSelection.near(tr.doc.resolve(from + size - 1)));
+    // The caret goes to the end of pasted paragraphs, and into the first cell of an inserted table.
+    tr.setSelection(
+      nodes.some((n) => n.type.name === 'table')
+        ? TextSelection.near(tr.doc.resolve(from + 1))
+        : TextSelection.near(tr.doc.resolve(from + size - 1)),
+    );
     return { tr };
   }
 
