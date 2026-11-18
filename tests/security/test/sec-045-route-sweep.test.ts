@@ -135,7 +135,8 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   registerAccessCode: 'has no such participant',
   // FRW-044: the handler exists, but this scenario composes no consent texts.
   participantConsent: 'this server keeps no consent texts',
-  participantComplete: NOT_OFFERED,
+  // FRW-047: the handler exists; B's workflow has no participant in this scenario.
+  participantComplete: 'has no such participant',
   signField: 'this server does not offer signing',
   // HIS-040: the route needs a purge pool, which only an operator supplies.
   tombstoneCommit: 'this server does not remove payloads',
