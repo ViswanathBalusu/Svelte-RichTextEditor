@@ -5,8 +5,9 @@
  * identifiers) to a sink.
  *
  * The job is not scheduled and is wired into no service: the caller runs it. The store and the
- * audit sink are interfaces, so the job holds no storage of its own. The retention period and the
- * start of the retention clock are the caller's (FRW-084 is open), as they are for `planPurge`.
+ * audit sink are interfaces, so the job holds no storage of its own. The retention period is the
+ * caller's; `null` is the default of decision 31 (kept for the life of the document, FRW-084), under
+ * which the job removes nothing by age.
  *
  * Universal code: no Node.js or browser APIs (FND-004).
  */
@@ -28,8 +29,8 @@ export interface PurgeAuditSink {
 export interface PurgeJobInput {
   readonly documentId: string;
   readonly nowMs: number;
-  /** The retention period in milliseconds (no default is decided, FRW-084). */
-  readonly retentionMs: number;
+  /** The retention period in milliseconds; `null` keeps the rows for the life of the document. */
+  readonly retentionMs: number | null;
   /** Whether the document is under a legal hold at this run. */
   readonly legalHold: boolean;
 }

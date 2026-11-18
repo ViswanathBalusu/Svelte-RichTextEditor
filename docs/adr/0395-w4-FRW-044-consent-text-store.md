@@ -1,0 +1,13 @@
+# 0395. The consent step on the service: texts, route and record
+
+**Status:** proposed, 2026-11-18. Written while building FRW-044 (lane w4). The owner accepted the workflow design ADRs as a set (decision 184), including the proposal in the notes of FRW-044 (a changed text refuses an earlier acceptance, ADR 0148 item 1). 12 §6.1 and §8.1 leave open where consent texts live and how they are authored and localised. Each item below takes the smallest reading that works.
+
+1. **A port for the texts.** `ConsentTextStore.get(tenant, textId, version)` gives the text the service holds, or null (`services/document-service/src/workflow/consent-service.ts`). The version is a whole number, as in 12 §6.1 (`"consent": { "textId": "esign-consent", "version": 3 }`). Only a memory adapter exists. The route is offered when a store is composed (`ServiceParts.consentTexts`), and a workflow whose text the store lacks answers `conflict`. A table for the texts, a route for the host to put them, and localisation are not built and are the owner's to design.
+2. **The acceptance is evidence.** The acceptance is the `consent` item of the participant's evidence (FRW-040, FRW-041): text identifier, version, the hash and the time. No table of its own. It is therefore personal data under 12 §7 and goes with the document (ADR 0394). The text itself is never stored in the evidence.
+3. **Who calls.** `POST /documents/{id}/workflow/participants/{pid}/consent` is the participant's own act: a user token bound to `pid`. The host's service credential and another participant are `forbidden`. The body is `{}`; any member, a hash included, is `validation_failed`, so the client cannot supply the hash, the time or the text.
+4. **Who accepts.** A `filler` or a `signer`. An `approver` and a `cc` answer `conflict` (ADR 0250 item 1). A participant whose `auth.require` lists `access_code` accepts only after the code is verified. The workflow must be `sent` or `in_progress`.
+5. **A repeat.** The same text accepted again returns the acceptance on record and writes nothing. A different text or version writes a new row; the newest row is the one a sign request checks.
+6. **The sign check.** `consentVerdict` compares the newest acceptance with the text the service holds now (`checkConsentForSign`): none, another participant, another text or version, and a text whose hash has changed since are all refused. FRW-046 calls it before a signing.
+7. **Hash.** SHA-256 over the UTF-8 bytes of the text, as ADR 0148 item 2 proposes.
+
+Answers: the problems of the route are `not_found` (no such participant), `forbidden`, `validation_failed` and `conflict` (state, kind, access code, no consent text named, text not held). No new problem code is proposed.
