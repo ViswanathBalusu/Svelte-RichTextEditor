@@ -17,7 +17,7 @@ import { AttributionMap, applyCommit, attributionAt, type AttributionJson } from
 import type { LogCommit, SnapshotCommit } from '@docedit/authority';
 import type { cdmSchema } from '@docedit/model/prosemirror';
 import type { DocRef, DocumentRecord, LogStore } from '../storage/types.ts';
-import type { Checkpointer, LoadedCheckpoint } from './checkpoints.ts';
+import type { Checkpointer } from './checkpoints.ts';
 
 type Schema = ReturnType<typeof cdmSchema>;
 
@@ -126,8 +126,8 @@ export interface OpenAttribution {
   schema: Schema;
   checkpointer: Checkpointer;
   logs: Pick<LogStore, 'read'>;
-  /** The checkpoint the room opens from. */
-  checkpoint: Pick<LoadedCheckpoint, 'seq' | 'envelope'>;
+  /** The checkpoint the room opens from: its seq and the size of its content (BE-019 opens a large one without an envelope). */
+  checkpoint: { seq: number; size: number };
   /** The commits after the checkpoint, in order. */
   log: readonly LogCommit[];
   /** The size of the content of a snapshot commit, at any seq up to the head. */
@@ -149,10 +149,10 @@ export function contentSizeOf(schema: Schema, doc: unknown): number {
  */
 export async function openAttribution(o: OpenAttribution): Promise<AttributionTracker | null> {
   const { checkpoint: cp } = o;
-  const fits = (m: AttributionMap) => m.size === contentSizeOf(o.schema, cp.envelope.doc);
+  const fits = (m: AttributionMap) => m.size === cp.size;
   let base: AttributionMap | null = null;
   if (cp.seq === 0) {
-    base = AttributionMap.create(contentSizeOf(o.schema, cp.envelope.doc), {
+    base = AttributionMap.create(cp.size, {
       user: o.record.createdBy,
       seq: 0,
     });

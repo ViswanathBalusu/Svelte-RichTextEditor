@@ -112,7 +112,7 @@ import type { Metrics } from './metrics.ts';
 import { PresenceRelay } from './presence.ts';
 import type { Settings } from './settings.ts';
 import { assetRefsIn, type AssetAttachments } from './asset-attachments.ts';
-import { AttributionTracker, contentSizeOf, openAttribution } from './attribution.ts';
+import { type AttributionTracker, contentSizeOf, openAttribution } from './attribution.ts';
 import { admissionFor } from './sec-028-admission.ts';
 import { BroadcastWindow } from './syn-041-coalescing.ts';
 import type { Base, Encoded } from './tasks.ts';
@@ -1996,7 +1996,7 @@ export class RoomHost {
             schema: schemaOf(),
             checkpointer: d.checkpointer,
             logs: d.logs,
-            checkpoint: cp,
+            checkpoint: { seq: cp.seq, size: initial.content.size },
             log,
             snapshotSize: async (c) => {
               const loaded = snapshots.get(c.seq);
