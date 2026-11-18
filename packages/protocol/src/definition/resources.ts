@@ -851,6 +851,38 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
     'HIS',
   ),
+  // The audit segment of HIS-037 (08 section 12): metadata rows and hashes, no payloads. The shape is
+  // the one uditSegment of @docedit/history builds; its members are open so that the hashed
+  // metadata of a commit can grow with the chain format.
+  named(
+    'AuditSegment',
+    obj(
+      {
+        format: req(text(), 'The segment format, docedit-audit-segment/1.'),
+        doc: req(uuid7(), 'The document.'),
+        from: req(seq(), 'The first seq held, not below the caller gate.'),
+        to: req(seq(), 'The last seq held.'),
+        head: req(
+          obj({ seq: req(seq()), chainHead: req(nullable(text())) }),
+          'The head of the segment: the last seq and that record hash.',
+        ),
+        commits: req(
+          arr(obj({}, { openMembers: true })),
+          'The hashed metadata of each record, its payload hash, the link to the previous hash and its own hash.',
+        ),
+        anchors: req(
+          arr(obj({}, { openMembers: true })),
+          'The anchor records whose seq lies in the range.',
+        ),
+        instructions: req(text(), 'How to verify the segment offline.'),
+      },
+      {
+        doc: 'A log segment for third-party verification (08 section 12; HIS-037).',
+        spec: '08 §12; 13 §10',
+      },
+    ),
+    'HIS',
+  ),
   // The keys and origins a tenant registered (UX-077 criterion 4; 05 sections 3.2 and 4). Read only:
   // changes come from the registration (UX-091) until the administration API writes them (UX-076).
   named(
@@ -1240,6 +1272,26 @@ export const OPERATIONS: readonly OperationDef[] = [
     success: list(ref('RemoteCommit')),
     gaps: ['G55', 'G63'],
     owner: PRO,
+  }),
+  op({
+    operationId: 'getAuditSegment',
+    method: 'GET',
+    path: '/documents/{id}/audit-segment',
+    summary:
+      'A segment of the hash chain for third-party verification: metadata and hashes, no payloads (HIS-037).',
+    spec: '08 §12; 13 §10',
+    security: BOTH,
+    feature: 'history',
+    requires: 'view and the history-visibility gate (07 §8)',
+    query: {
+      fromSeq: opt(
+        seq(),
+        'The first seq asked for; default 1. A seq below the gate is raised to it.',
+      ),
+      toSeq: opt(seq(), 'The last seq asked for; default the head.'),
+    },
+    success: ok(ref('AuditSegment')),
+    owner: 'HIS',
   }),
   op({
     operationId: 'listRegions',

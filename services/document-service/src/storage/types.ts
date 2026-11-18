@@ -18,6 +18,7 @@ import type {
   WriteRequest,
   WriteResult,
 } from '@docedit/authority';
+import type { LogBundle } from '@docedit/history';
 import type { JsonEnvelope } from '@docedit/model';
 
 /** A document as storage addresses it: always together with its tenant (06 §4.1, §12). */
@@ -67,6 +68,12 @@ export interface LogStore {
    * A list of history needs no more. Optional: callers fall back to `read`.
    */
   readMeta?(ref: DocRef, fromSeq: number, toSeq: number): Promise<CommitMetaRow[]>;
+  /**
+   * The hashed metadata, payload hash and chain hashes of the records romSeq to 	oSeq, with the
+   * head, as the log bundle of @docedit/history holds them and without any payload (HIS-037). The
+   * audit segment is cut from it. Optional: a store without it offers no audit export.
+   */
+  chainRange?(ref: DocRef, fromSeq: number, toSeq: number): Promise<LogBundle>;
   /**
    * The stored commit with this identifier, or null (04 §5 step 2, "then in the log"). A room holds
    * only the commits after its checkpoint; this finds the older ones, so that a redelivered

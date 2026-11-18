@@ -5,6 +5,7 @@
  * without touching rooms.
  */
 import type { LogCommit, PermissionState, WriteRequest, WriteResult } from '@docedit/authority';
+import type { LogBundle } from '@docedit/history';
 import { uuid7, type JsonEnvelope } from '@docedit/model';
 import { chainHash, encodeCommit } from './codec.ts';
 import { isUuid } from './ids.ts';
@@ -402,6 +403,30 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     return null;
   }
 
+  /** The records `fromSeq` to `toSeq` with their hashes, as PgLogStore.chainRange answers it. */
+  async chainRange(ref: DocRef, fromSeq: number, toSeq: number): Promise<LogBundle> {
+    const commits: LogBundle['commits'] = [];
+    let prev: Buffer | null = null;
+    for (const c of this.#get(ref).log) {
+      const e = encodeCommit(ref.doc, c);
+      const hash = chainHash(prev, e.metaBytes, e.payloadHash);
+      if (c.seq >= fromSeq && c.seq <= toSeq)
+        commits.push({
+          meta: { ...e.meta },
+          payloadHash: e.payloadHash.toString('hex'),
+          prevHash: prev ? prev.toString('hex') : null,
+          hash: hash.toString('hex'),
+        });
+      prev = hash;
+    }
+    const head = this.#get(ref).log.length;
+    return {
+      format: 'docedit-log-bundle/1',
+      doc: ref.doc,
+      head: { seq: head, chainHead: prev ? prev.toString('hex') : null },
+      commits,
+    };
+  }
   async claim(ref: DocRef, node: string): Promise<number> {
     const d = this.#get(ref);
     d.epoch++;

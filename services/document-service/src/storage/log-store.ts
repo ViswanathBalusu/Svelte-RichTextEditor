@@ -27,6 +27,7 @@ import {
 } from '@docedit/authority';
 import { createHash } from 'node:crypto';
 import { zstdDecompressSync } from 'node:zlib';
+import type { LogBundle } from '@docedit/history';
 import type { JsonEnvelope } from '@docedit/model';
 import {
   DocumentKeyDestroyedError,
@@ -681,6 +682,86 @@ export class PgLogStore implements LogStore, OwnershipStore {
     );
   }
 
+  /**
+   * The records `fromSeq` to `toSeq` as the log bundle holds them, read from the stored rows (the
+   * same columns `verify` reads), with the head and no payloads (HIS-037).
+   */
+  async chainRange(ref: DocRef, fromSeq: number, toSeq: number): Promise<LogBundle> {
+    return this.#inTenant(
+      ref,
+      async (c) => {
+        const rows = await c.query<{
+          seq: string;
+          kind: string;
+          commit_id: string;
+          user_id: string;
+          session_id: string | null;
+          agent: string | null;
+          server_ts: Date;
+          origin: string;
+          base: string | null;
+          rebased: boolean | null;
+          access_rev: string;
+          token_jti: string | null;
+          cdm_version: number;
+          engine: string;
+          size: number;
+          payload_hash: Buffer;
+          prev_hash: Buffer | null;
+          hash: Buffer;
+          scopes: string[];
+        }>(
+          `SELECT c.*, coalesce(s.scopes, '{}') AS scopes
+             FROM doc_commits c
+             LEFT JOIN LATERAL (
+               SELECT array_agg(cs.scope ORDER BY cs.scope COLLATE "C") AS scopes
+                 FROM commit_scopes cs WHERE cs.doc_id = c.doc_id AND cs.seq = c.seq
+             ) s ON true
+            WHERE c.doc_id = $1 AND c.seq BETWEEN $2 AND $3 ORDER BY c.seq`,
+          [ref.doc, fromSeq, toSeq],
+        );
+        const head = await c.query<{ head_seq: string; chain_head: Buffer | null }>(
+          'SELECT head_seq, chain_head FROM doc_heads WHERE doc_id = $1',
+          [ref.doc],
+        );
+        const hr = head.rows[0];
+        if (!hr) throw new DocumentNotFoundError(`no document ${ref.doc}`);
+        return {
+          format: 'docedit-log-bundle/1',
+          doc: ref.doc,
+          head: {
+            seq: int(hr.head_seq),
+            chainHead: hr.chain_head ? hr.chain_head.toString('hex') : null,
+          },
+          commits: rows.rows.map((r) => ({
+            meta: {
+              doc: ref.doc,
+              seq: int(r.seq),
+              kind: r.kind,
+              id: r.commit_id,
+              user: r.user_id,
+              session: r.session_id,
+              agent: r.agent,
+              time: r.server_ts.toISOString(),
+              origin: r.origin,
+              scopes: r.scopes,
+              base: r.base === null ? null : int(r.base),
+              rebased: r.rebased,
+              revision: int(r.access_rev),
+              jti: r.token_jti,
+              cdm: r.cdm_version,
+              engine: r.engine,
+              size: r.size,
+            },
+            payloadHash: r.payload_hash.toString('hex'),
+            prevHash: r.prev_hash ? r.prev_hash.toString('hex') : null,
+            hash: r.hash.toString('hex'),
+          })),
+        };
+      },
+      true,
+    );
+  }
   /** Attaches assets outside a commit; a row that exists is kept (HIS-022). */
   async attachAssets(
     ref: DocRef,

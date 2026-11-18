@@ -296,6 +296,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/regions/{rid}/lease` | POST, PUT, DELETE | Optional exclusive-edit lease with heartbeat. Feature `leases` |
 | `/documents/{id}/grants` | GET, PATCH | Region grants. The response to PATCH carries the new grants revision, and once it has returned, no commit can be stored under the old revision (04, G7) |
 | `/sessions/revoke` | POST | Service credential only. Section 3.3 |
+| `/documents/{id}/audit-segment` | GET | `fromSeq`, `toSeq`. A segment of the hash chain for third-party verification: the metadata rows, the payload hashes, the anchor records of the range and the verification instructions, with no payloads (08, section 12). Subject to history visibility (07, section 8): records below the caller's gate are left out, and only the chain hash of the record just below it is given, as the first record's link. Refused with `forbidden` for a range that ends below the gate and for a caller whose view hides content |
 | `/documents/{id}/history` | GET | Grouped commits. Filters: `region`, `field`, `user`, `fromSeq`, `toSeq`, `namedOnly` |
 | `/documents/{id}/versions` | GET, POST | Named versions. POST body: `seq` (default head), `name`, `note` |
 | `/documents/{id}/diff` | GET | `fromSeq`, `toSeq`, optional `region`, `granularity` (`word`, `char`) |

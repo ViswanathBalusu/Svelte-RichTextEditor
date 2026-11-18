@@ -836,6 +836,29 @@ export interface HistoryVisibilityView {
   source: "document" | "tenant" | "default";
 }
 
+/** A log segment for third-party verification (08 section 12; HIS-037). */
+export interface AuditSegment {
+  /** The segment format, docedit-audit-segment/1. */
+  format: string;
+  /** The document. */
+  doc: string;
+  /** The first seq held, not below the caller gate. */
+  from: number;
+  /** The last seq held. */
+  to: number;
+  /** The head of the segment: the last seq and that record hash. */
+  head: {
+    seq: number;
+    chainHead: string | null;
+  };
+  /** The hashed metadata of each record, its payload hash, the link to the previous hash and its own hash. */
+  commits: Array<{ [key: string]: unknown }>;
+  /** The anchor records whose seq lies in the range. */
+  anchors: Array<{ [key: string]: unknown }>;
+  /** How to verify the segment offline. */
+  instructions: string;
+}
+
 /** A registered public key of a tenant (UX-077; 05 section 3.2). */
 export interface TenantKeyView {
   /** The key identifier. */
@@ -1725,6 +1748,15 @@ export interface Operations {
     query: { after: number; cursor?: string; limit?: number };
     body: never;
     response: List<RemoteCommit>;
+  };
+  /** GET /documents/{id}/audit-segment: A segment of the hash chain for third-party verification: metadata and hashes, no payloads (HIS-037). (08 §12; 13 §10) */
+  getAuditSegment: {
+    method: "GET";
+    path: "/documents/{id}/audit-segment";
+    params: { id: string };
+    query: { fromSeq?: number; toSeq?: number };
+    body: never;
+    response: AuditSegment;
   };
   /** GET /documents/{id}/regions: Derived list: identifier, title, policy, order, state, who can edit. (05 §6.2) */
   listRegions: {

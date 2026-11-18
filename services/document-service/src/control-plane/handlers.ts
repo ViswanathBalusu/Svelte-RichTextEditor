@@ -66,6 +66,7 @@ import { ApiError } from './problems.ts';
 import { projectRegionTitle, readerView } from './visibility.ts';
 import { quotaRoutes } from './quota-admin-routes.ts';
 import { registryRoutes } from './registry-routes.ts';
+import { auditSegmentRoutes } from './audit-segment-route.ts';
 import { historyVisibilityRoutes } from './history-visibility-routes.ts';
 import { retentionRoutes } from './retention-routes.ts';
 import { holdRoutes } from './hold-routes.ts';
@@ -831,6 +832,7 @@ export function createHandlers(d: HandlerDeps): Record<string, Handler> {
     ...webhookRoutes(k),
     ...retentionRoutes(k),
     ...historyVisibilityRoutes(k),
+    ...auditSegmentRoutes(k),
     ...quotaRoutes(k),
     ...registryRoutes(k),
     ...holdRoutes(k),
