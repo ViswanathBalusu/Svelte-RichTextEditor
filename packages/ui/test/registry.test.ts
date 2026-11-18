@@ -163,6 +163,8 @@ describe('one publication per frame (UX-003, criterion 4)', () => {
     const core = new FakeCore();
     const registry = createCommandRegistry(core, { scheduler: clock.scheduler });
     clock.runMicrotasks();
+    // The start-up publication was made in a task phase: the gate lifts two ticks after it (UX-072).
+    clock.nextFrame();
     clock.nextFrame();
     const published = vi.fn();
     const changes: string[][] = [];
@@ -184,6 +186,8 @@ describe('one publication per frame (UX-003, criterion 4)', () => {
     const core = new FakeCore();
     const registry = createCommandRegistry(core, { scheduler: clock.scheduler });
     clock.runMicrotasks();
+    // The start-up publication was made in a task phase: the gate lifts two ticks after it (UX-072).
+    clock.nextFrame();
     clock.nextFrame();
     const changes: string[][] = [];
     registry.onStateChange((ids) => changes.push([...ids]));
@@ -192,6 +196,9 @@ describe('one publication per frame (UX-003, criterion 4)', () => {
     clock.runMicrotasks();
     core.access!.set(VIEW);
     clock.runMicrotasks();
+    expect(changes).toHaveLength(1);
+    // The tick of the frame the first publication lands in is before its paint: still held back.
+    clock.nextFrame();
     expect(changes).toHaveLength(1);
     clock.nextFrame();
     expect(changes).toHaveLength(2);
