@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { computeAccess } from '../src/permissions/access.ts';
 import type { Connection, PermissionState, RegionGrant } from '../src/permissions/model.ts';
+import type { WorkflowStateName } from '../src/workflow/lifecycle.ts';
+import { lockFor } from '../src/workflow/lock.ts';
 
 const NOW = 1_000_000;
 const REGION = 'rPlaceholder000002';
@@ -63,5 +65,52 @@ describe('FRW-012 a grant to a role never conveys structure or manage (criterion
     expect(a.structureScopes.has('edit')).toBe(false);
     expect(a.regions.get(REGION)?.has('structure') ?? false).toBe(false);
     expect(a.regions.get(REGION)?.has('manage') ?? false).toBe(false);
+  });
+});
+
+describe('FRW-012 a grant to a role resolves to nobody without an active workflow (criterion 2)', () => {
+  const withWorkflow = (grants: RegionGrant[], workflowActive: boolean): PermissionState =>
+    ({ ...perms(grants), workflowActive }) as PermissionState;
+
+  it('gives nothing to a participant bound to the role while no workflow is active', () => {
+    const lena = person('lena', ['landlord']);
+    const a = computeAccess(lena, regions, withWorkflow([grant('editor')], false), NOW);
+    expect(a.granted.has(REGION)).toBe(false);
+    expect(a.regions.get(REGION)?.has('edit') ?? false).toBe(false);
+    // The same participant, the same grant, once a workflow is active (control).
+    const on = computeAccess(lena, regions, withWorkflow([grant('editor')], true), NOW);
+    expect(on.regions.get(REGION)?.has('edit')).toBe(true);
+  });
+
+  it('follows the workflow states: draft, declined and voided give nobody the grant; sent and in progress do', () => {
+    const lena = person('lena', ['landlord']);
+    const edits = (state: WorkflowStateName): boolean => {
+      const lock = lockFor(state);
+      if (lock === null) throw new Error(`the state ${state} implies no lock`);
+      const a = computeAccess(
+        lena,
+        regions,
+        { ...withWorkflow([grant('editor')], lock.workflowActive), documentState: 'active' },
+        NOW,
+      );
+      return a.regions.get(REGION)?.has('edit') ?? false;
+    };
+    expect(edits('draft')).toBe(false);
+    expect(edits('declined')).toBe(false);
+    expect(edits('voided')).toBe(false);
+    expect(edits('sent')).toBe(true);
+    expect(edits('in_progress')).toBe(true);
+  });
+
+  it('gives no one a right from the grant when nobody is bound to the role', () => {
+    for (const workflowActive of [false, true]) {
+      const a = computeAccess(
+        person('mika', []),
+        regions,
+        withWorkflow([grant('editor')], workflowActive),
+        NOW,
+      );
+      expect(a.granted.has(REGION)).toBe(false);
+    }
   });
 });
