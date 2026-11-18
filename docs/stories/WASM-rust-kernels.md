@@ -330,7 +330,7 @@ As an author who writes in Chinese, Japanese, Thai or a related script, I want l
 - [ ] Thai, Lao, Khmer and Burmese text breaks at word boundaries found with dictionary data, loaded only when a document uses the script.
 - [ ] The module's size budget (WASM-012) holds for documents that do not use these scripts.
 
-**Notes:** C-RUST, phase 4.
+**Notes:** C-RUST, phase 4. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold (see WASM-013). The story depends on WASM-007 (blocked, no Rust kernel) and FE-112 (which depends on SPK-013, not held). The 02 §11 plan that criterion 1 refers to is not selected here, and dictionary data for Thai, Lao, Khmer and Burmese would need a library choice that is still open (new third-party libraries, `docs/owner-decisions-2026-11-15.md`). The size budget of criterion 3 depends on WASM-012, which is blocked.
 
 ## Coverage
 
