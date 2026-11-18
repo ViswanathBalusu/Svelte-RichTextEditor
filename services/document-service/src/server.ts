@@ -152,6 +152,9 @@ import {
   encodeCheckpoint,
   ObjectCheckpointStore,
 } from './objects/checkpoints.ts';
+import { DocumentKeyedObjectStore, sealExistingObjects } from './objects/document-keyed-store.ts';
+import { DocumentKeys, type DocumentKeyStore } from './storage/document-keys.ts';
+import type { KeyService } from './storage/key-service.ts';
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
@@ -230,6 +233,16 @@ export interface ServiceParts {
    * connects as a member of `docedit_purge`. Absent: no thinning task runs.
    */
   thinningStore?: ThinningStore;
+  /**
+   * Per-document keys (HIS-041). With both `documentKeyStore` and `keyService`, the service seals
+   * the payloads and objects of documents that have a key and builds `documentKeys` to give and
+   * destroy keys (`PgDocumentKeyStore` is the store of the PostgreSQL composition). Absent: no
+   * document has a key and nothing is sealed.
+   */
+  documentKeyStore?: DocumentKeyStore;
+  keyService?: KeyService;
+  /** Built by `startService` from the two parts above. */
+  documentKeys?: DocumentKeys;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
@@ -584,6 +597,21 @@ export async function startService(opts: StartOptions): Promise<Service> {
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
+  if (parts.documentKeyStore && parts.keyService) {
+    const rawObjects = parts.objects;
+    const keys = new DocumentKeys({
+      store: parts.documentKeyStore,
+      keys: parts.keyService,
+      headSeq: async (ref) => (await parts.logs.head(ref)).seq,
+      sealExisting: async (ref, sealer) => {
+        await sealExistingObjects(rawObjects, ref, sealer);
+      },
+      now,
+    });
+    if (parts.logs instanceof PgLogStore) parts.logs.useDocumentKeys(keys);
+    parts.objects = new DocumentKeyedObjectStore(rawObjects, keys);
+    parts.documentKeys = keys;
+  }
   const erasures = erasuresOver(parts, now);
   const tombstones =
     parts.tombstoneStore && parts.audit && parts.checkpointIndex
