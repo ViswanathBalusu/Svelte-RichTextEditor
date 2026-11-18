@@ -14,7 +14,7 @@
     "cdm": 1,
     "status": "draft",
     "artifact": "spec/cdm/cdm-1.prosemirror.json",
-    "sha256": "114aaf8efd1fcdc419226436613a8613f2954bfec5f9e393a714e3a66b841ca5"
+    "sha256": "6dd13c18b42c5604ca4e8aaa5a5f7b61984e686878462fc6a4b18926bc1f718a"
   },
   "stepTypes": [
     "replace",

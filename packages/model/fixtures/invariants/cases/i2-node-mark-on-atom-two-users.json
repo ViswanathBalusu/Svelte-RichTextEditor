@@ -1,12 +1,12 @@
 {
-  "name": "i1-node-mark-on-region",
-  "doc": "addNodeMark: a suggestion as a node mark on a region, which ProseMirror allows and the CDM does not.",
-  "base": "example",
+  "name": "i2-node-mark-on-atom-two-users",
+  "doc": "addNodeMark: an `ins` mark on an inline atom that reuses the identifier of another user.",
+  "base": "kitchen-sink",
   "steps": [
     {
       "stepType": "addNodeMark",
-      "pos": 14,
-      "mark": { "type": "ins", "attrs": { "id": "sInsRegion000001", "user": "bob", "ext": {} } }
+      "pos": 29,
+      "mark": { "type": "ins", "attrs": { "id": "sAliceInsert0001", "user": "mallory", "ext": {} } }
     }
   ],
   "context": {
@@ -20,5 +20,5 @@
     "mathGateRefuses": "\\input",
     "identifierChanges": []
   },
-  "expected": ["I1"]
+  "expected": ["I2"]
 }

@@ -13,8 +13,7 @@
  * - a `url` place carries it inside a `\DEhref{<hex>}` target, percent-encoded.
  *
  * `KNOWN_OTHER_ROUTE` lists the places that are written, safely, by another emitter than the table
- * names. They are the reason criterion 4 is not ticked; the test fails when one of them changes, so
- * the list cannot go stale.
+ * names; the test fails when one of them changes, so the list cannot go stale. It is empty.
  */
 import { describe, expect, it } from 'vitest';
 import { ATTRIBUTE_EMITTERS } from './attributes.ts';
@@ -24,13 +23,6 @@ import { makePng, sha256Hex } from '../test/exp-034-png.ts';
 
 const probe = (marker: string): string => `\\write18{${marker}}%^^41`;
 const encoded = (marker: string): string => `%5Cwrite18%7B${marker}%7D%%5E%5E41`;
-
-function utf16Hex(s: string): string {
-  let out = 'FEFF';
-  for (let i = 0; i < s.length; i++)
-    out += s.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0');
-  return out;
-}
 
 interface Place {
   body: (p: string) => J[];
@@ -110,13 +102,11 @@ const PLACES: Record<string, Place> = {
 };
 
 /**
- * Places written by another emitter than the table names. `mark:link.title` goes through
- * `pdfHexString` (UTF-16BE, `inline.ts`), because the class writes it into the link's `/Contents`
- * entry (EXP-030). Which emitter the table should name is an open question for the owner.
+ * Places written, safely, by another emitter than the table names. None now: the link title went
+ * through `pdfHexString` until EXP-030 criterion 5 (owner decision 209), and goes through
+ * `pdfString` like every other title.
  */
-const KNOWN_OTHER_ROUTE: Record<string, (main: string, p: string) => boolean> = {
-  'mark:link.title': (main, p) => main.includes(`<${utf16Hex(p)}>`),
-};
+const KNOWN_OTHER_ROUTE: Record<string, (main: string, p: string) => boolean> = {};
 
 const STRING_EMITTERS = new Set(['pdfString', 'kvValue', 'url']);
 const TABLE = Object.entries(ATTRIBUTE_EMITTERS).filter(

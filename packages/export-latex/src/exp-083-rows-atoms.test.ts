@@ -96,9 +96,21 @@ describe('EXP-083 criterion 3: rows, tables and atoms', () => {
     const table = tableOf([{ cells: ['a'], marks: [delMark(9)] }]);
     const env = doc([table]);
     const before = JSON.stringify(env);
-    expect(settleSuggestions(env.doc as never, 'accept', [])).toBe(env.doc);
-    expect(settleSuggestions(env.doc as never, 'reject', [])).toBe(env.doc);
-    expect(settleSuggestions(env.doc as never, 'markup', [])).not.toBe(env.doc);
+    // The row's suggestion is an entry of `suggest`; the copy reads it as a mark of the row.
+    type Node = { type: string; marks?: unknown; content?: Node[] };
+    const firstOf = (n: Node | undefined, type: string): Node | undefined =>
+      n?.type === type
+        ? n
+        : (n?.content ?? []).map((c) => firstOf(c, type)).find((c) => c !== undefined);
+    const paragraph = (d: unknown): Node | undefined =>
+      firstOf(firstOf(d as Node, 'table_cell'), 'paragraph');
+    const accepted = settleSuggestions(env.doc as never, 'accept', []);
+    const rejected = settleSuggestions(env.doc as never, 'reject', []);
+    const markup = settleSuggestions(env.doc as never, 'markup', []);
+    expect(accepted).not.toBe(env.doc);
+    expect(paragraph(accepted)?.marks).toBeUndefined();
+    expect(paragraph(rejected)?.marks).toBeUndefined();
+    expect(paragraph(markup)?.marks).toBeDefined();
     expect(JSON.stringify(env)).toBe(before);
   });
 });

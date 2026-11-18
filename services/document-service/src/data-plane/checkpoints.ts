@@ -205,7 +205,8 @@ export class Checkpointer {
     if (!bytes) return null;
     try {
       const side = decodeContent<{ v?: number; attribution?: AttributionJson }>(bytes);
-      return side.v === 1 && side.attribution ? side.attribution : null;    } catch (e) {
+      return side.v === 1 && side.attribution ? side.attribution : null;
+    } catch (e) {
       // An unreadable side object is as good as none: the map is rebuilt by a replay.
       this.#onSavedError?.(e);
       return null;

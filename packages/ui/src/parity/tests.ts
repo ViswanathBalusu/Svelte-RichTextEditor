@@ -195,6 +195,22 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/test/fe-137-variant-wiring.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-100 closed (2026-11-18); entry added by the batch 4 integrator. The gallery of
+  // the reference host: its server logic in Node, and the page in a browser run with an axe scan.
+  [
+    'templates',
+    [
+      {
+        path: 'apps/reference-host/e2e-gallery/ux-100-template-gallery.spec.ts',
+        kind: 'playwright',
+      },
+      { path: 'apps/reference-host/test/ux-100-template-gallery.test.ts', kind: 'unit' },
+      {
+        path: 'services/document-service/test/control-plane/frw-062.templates.test.ts',
+        kind: 'unit',
+      },
+    ],
+  ],
   // Shipped when FE-137 and EXP-036 closed; the PDF run of the watermark is a compile test.
   [
     'watermark',

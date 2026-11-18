@@ -90,7 +90,7 @@ The converter MUST write output only through these emitters, and nothing else ma
 | Emitter | Use | Rule |
 |---|---|---|
 | `text` | Body text | Escapes `\ { } $ & # _ % ^ ~`; maps the no-break space and soft hyphen; removes control and bidirectional override characters; NFC; guards a `[` that follows a line break or an item |
-| `pdfString` | Bookmarks, metadata, alternative text | PDF string encoding; no TeX commands survive |
+| `pdfString` | Bookmarks, metadata, alternative text, link titles | PDF string encoding; no TeX commands survive |
 | `kvValue` | Any key-value option | Braced, with `,`, `=`, `]` and braces neutralised |
 | `url` | Link targets | Scheme allow-list of invariant I9 (so no `run:` or `file:` actions); percent-encoding of every character outside RFC 3986, and the whole target reaches TeX hex-encoded, so no character of it is read as TeX (owner decision 25, [owner-decisions-2026-11-15](../owner-decisions-2026-11-15.md)) |
 | `dimen` | Every length | Converted from the CDM's integers and clamped to a safe range |

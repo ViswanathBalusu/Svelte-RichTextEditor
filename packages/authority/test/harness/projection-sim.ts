@@ -23,7 +23,7 @@ import {
 import { BASE_JSON, REQUIRES, USERS, basePermissions, schema, type UserName } from '../fixtures.ts';
 import { SimClient, resetIds, simId, type ToServer } from './client.ts';
 import type { Op } from './sim.ts';
-import { oracleViolations } from './oracle.ts';
+import { oracleViolations, sugsOf } from './oracle.ts';
 import { type Fault, MemoryStorage } from './storage.ts';
 
 /** The control plane's pseudo channel for server-authored commits (04 §10). */
@@ -541,8 +541,8 @@ export class ProjectionSim {
         failures.push(`commit ${c.seq} by ${c.user}: ${v}`);
       // The oracle's own index of suggestion identifiers: the user each first named (03 §5).
       doc.descendants((n) => {
-        for (const m of n.marks)
-          if (['ins', 'del', 'fmt'].includes(m.type.name) && !owners.has(String(m.attrs['id'])))
+        for (const m of sugsOf(n))
+          if (!owners.has(String(m.attrs['id'])))
             owners.set(String(m.attrs['id']), String(m.attrs['user']));
         return true;
       });

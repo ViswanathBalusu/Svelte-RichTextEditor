@@ -1,5 +1,5 @@
 /**
- * The identity of suggestion marks (03 §5; 07 §16; PRM-014, PRM-060; ADR 0050 item 3). Whoever
+ * The identity of suggestion marks, on text and in the suggest attribute of blocks (03 §5; 07 §16; PRM-014, PRM-060; ADR 0050 item 3). Whoever
  * submits a commit, every suggestion mark it brings into the document names the submitting user
  * and uses an identifier that belongs to them: "The authority checks that `user` equals the
  * submitting user" and "A suggestion `id` belongs to the user who first used it. The authority
@@ -19,7 +19,7 @@
  * subtree is unchanged, so its marks were checked when they arrived.
  */
 import type { Node } from 'prosemirror-model';
-import { isImportLabel, isSuggestionMark } from './suggestions.ts';
+import { isImportLabel, suggestionsOn } from './suggestions.ts';
 
 export interface IdentityInput {
   before: Node;
@@ -59,8 +59,7 @@ export function suggestionIdentity(input: IdentityInput): IdentityVerdict {
   };
   const check = (n: Node, scope: string) => {
     visited++;
-    for (const m of n.marks) {
-      if (!isSuggestionMark(m)) continue;
+    for (const m of suggestionsOn(n)) {
       const id = String(m.attrs['id']);
       const who: unknown = m.attrs['user'];
       const owner = owners.get(id) ?? claimed.get(id);

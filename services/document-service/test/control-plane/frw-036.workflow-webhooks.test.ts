@@ -295,9 +295,12 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // The `seq` and the chain head are those of the control commit the transition wrote.
         const controls = (await h.parts.logs.read(ref)).filter((c) => c.kind === 'control');
         const seqs = rows.map((r) => (JSON.parse(r.body) as { data: { seq: number } }).data.seq);
+        // The send, the first view (which raises none), the correction and the resume each wrote
+        // one (FRW-030 criterion 1).
+        expect(controls).toHaveLength(4);
         expect(seqs[0]).toBe(controls[0]!.seq);
-        expect(seqs[2]).toBe(controls[1]!.seq);
-        expect(seqs[3]).toBe(controls[2]!.seq);
+        expect(seqs[2]).toBe(controls[2]!.seq);
+        expect(seqs[3]).toBe(controls[3]!.seq);
       },
     );
 

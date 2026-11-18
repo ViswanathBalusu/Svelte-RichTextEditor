@@ -8,7 +8,9 @@
   "include": [
     "e2e/**/*.ts",
     "e2e-admin/**/*.ts",
+    "e2e-gallery/**/*.ts",
     "playwright.config.ts",
-    "playwright.admin.config.ts"
+    "playwright.admin.config.ts",
+    "playwright.gallery.config.ts"
   ]
 }

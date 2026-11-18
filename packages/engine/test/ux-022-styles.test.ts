@@ -7,6 +7,7 @@ import type { Node as PMNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 import type { CdmEnvelope } from '../src/api.ts';
+import { blockEntries } from '../src/block-suggestion.ts';
 import { bodyRange } from '../src/body.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { resolveSuggestions } from '../src/suggestion-resolve.ts';
@@ -61,6 +62,7 @@ function suggester(doc: CdmEnvelope = styledDocument()): DocumentCore {
 }
 
 const marksOf = (node: PMNode) => node.marks.map((m) => m.type.name);
+const blockKinds = (node: PMNode) => blockEntries(node).map((e) => e.type);
 const nodeAt = (c: DocumentCore, id: string) => {
   const doc = internals(c).state.doc;
   return doc.nodeAt(posOf(doc, id))!;
@@ -74,9 +76,9 @@ describe('UX-022 criterion 4: a style applied by a user who may only suggest', (
     expect(c.run('paragraphStyle', { style: 'Quote' })).toBe(true);
     const node = nodeAt(c, STYLE_IDS.plain);
     expect(node.attrs['style']).toBe('Quote');
-    const fmt = node.marks.find((m) => m.type.name === 'fmt');
-    expect(fmt?.attrs['user']).toBe('sam');
-    expect(fmt?.attrs['before']).toEqual({ attrs: { style: null } });
+    const fmt = blockEntries(node).find((e) => e.type === 'fmt');
+    expect(fmt?.attrs.user).toBe('sam');
+    expect(fmt?.attrs.before).toEqual({ attrs: { style: null } });
     expect(node.textContent).toBe('Plain text');
   });
 
@@ -112,7 +114,7 @@ describe('UX-022 criterion 4: a style applied by a user who may only suggest', (
       return table === null;
     });
     expect(table!.attrs['style']).toBe('Grid');
-    expect(marksOf(table!)).toContain('fmt');
+    expect(blockKinds(table!)).toContain('fmt');
     // Rejecting takes the style back; accepting keeps it.
     const all = { from: 0, to: i.state.doc.content.size };
     const rejected = i.state.apply(resolveSuggestions(i.state, 'reject', all).tr);
@@ -126,8 +128,8 @@ describe('UX-022 criterion 4: a style applied by a user who may only suggest', (
       return found!;
     };
     expect(tableOf(rejected.doc).attrs['style']).toBeNull();
-    expect(marksOf(tableOf(rejected.doc))).not.toContain('fmt');
+    expect(blockKinds(tableOf(rejected.doc))).not.toContain('fmt');
     expect(tableOf(accepted.doc).attrs['style']).toBe('Grid');
-    expect(marksOf(tableOf(accepted.doc))).not.toContain('fmt');
+    expect(blockKinds(tableOf(accepted.doc))).not.toContain('fmt');
   });
 });

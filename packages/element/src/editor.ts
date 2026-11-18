@@ -328,7 +328,6 @@ export function mountEditor(options: MountOptions): MountedEditor {
     };
   });
 
-  const fill = fillView(core);
   // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
   const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
@@ -338,6 +337,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
         for (const listener of [...workflowCompleteListeners]) listener();
       })
     : null;
+  // The guided bar follows `wf.changed` through the same status (FRW-035 criterion 6).
+  const fill = fillView(core, fillActions?.status);
   const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;

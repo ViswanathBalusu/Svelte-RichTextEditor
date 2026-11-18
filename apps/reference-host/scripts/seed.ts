@@ -5,7 +5,7 @@
  * records its title and roles. Repeating it changes nothing: documents are found by `externalId`.
  */
 import { configFromEnv } from '../src/lib/server/config.ts';
-import { createFromTemplate } from '../src/lib/server/documents.ts';
+import { createFromTemplate, registerSeedTemplates } from '../src/lib/server/documents.ts';
 import { composeHost } from '../src/lib/server/host.ts';
 import { dataDir, endpoints, readSecrets, roleEnv, stackSettings } from './lib/stack.ts';
 
@@ -43,3 +43,6 @@ for (const d of host.seed.documents) {
   });
   console.log(`seed: ${d.externalId} is document ${entry.id} ("${entry.title}")`);
 }
+// The gallery's templates (UX-100): each is marked through `POST /templates`.
+for (const t of await registerSeedTemplates(host, host.seed))
+  console.log(`seed: template "${t.key}" is ${t.id} (document ${t.document})`);

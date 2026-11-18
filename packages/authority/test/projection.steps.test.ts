@@ -131,8 +131,10 @@ describe('the steps a class receives (SYN-051; ADR 0019 change 4; SR-M1)', () =>
     tr.insert(intro, schema.text('A'));
     tr.addMark(intro, intro + 4, bold);
     tr.removeMark(intro, intro + 2, bold);
-    tr.step(new AddNodeMarkStep(p, del));
-    tr.step(new RemoveNodeMarkStep(p, del));
+    // A block takes no node mark (its suggestions are in `suggest`); an inline node still does.
+    tr.insert(intro, schema.nodes['tab']!.create());
+    tr.step(new AddNodeMarkStep(intro, del));
+    tr.step(new RemoveNodeMarkStep(intro, del));
     tr.step(new AttrStep(p, 'style', 'Heading1'));
     tr.setNodeMarkup(p, null, { ...tr.doc.nodeAt(p)!.attrs, style: 'Normal' });
     const before = project(full, hidden, pschema);

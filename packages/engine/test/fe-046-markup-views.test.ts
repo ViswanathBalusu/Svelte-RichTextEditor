@@ -9,6 +9,7 @@
 import fc from 'fast-check';
 import type { Node as PMNode } from 'prosemirror-model';
 import { describe, expect, it } from 'vitest';
+import { addBlockEntry, entry } from '../src/block-suggestion.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { SPIKE_IDS, spikeDocument } from '../src/spike-document.ts';
 import type { SuggestionSpec } from '../src/suggestion-markup.ts';
@@ -40,14 +41,7 @@ function markedCore(): { c: DocumentCore; introStart: number } {
     schema.marks['ins']!.create({ id: 'ins-1', user: 'alice' }),
   );
   tr = tr.addMark(start + 1, start + 2, schema.marks['del']!.create({ id: 'del-1', user: 'bob' }));
-  tr = tr.addNodeMark(
-    intro,
-    schema.marks['fmt']!.create({
-      id: 'fmt-1',
-      user: 'carol',
-      before: { attrs: { style: 'Normal' } },
-    }),
-  );
+  tr = addBlockEntry(tr, intro, entry('fmt', 'fmt-1', 'carol', { attrs: { style: 'Normal' } }));
   i.dispatch(tr);
   return { c, introStart: start };
 }

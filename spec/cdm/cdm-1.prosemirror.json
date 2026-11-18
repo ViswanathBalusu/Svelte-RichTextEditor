@@ -586,7 +586,6 @@
       "story",
       {
         "content": "story_block+",
-        "marks": "ins del fmt",
         "selectable": false,
         "isolating": true,
         "allowGapCursor": false,
@@ -614,7 +613,6 @@
       "body",
       {
         "content": "(block | region | section_break)+",
-        "marks": "ins del fmt",
         "attrs": {
           "pageSetup": {
             "default": null,
@@ -631,7 +629,6 @@
       "region",
       {
         "content": "block+",
-        "marks": "ins del fmt",
         "isolating": true,
         "attrs": {
           "id": {
@@ -775,6 +772,10 @@
             "default": null,
             "validate": "object|null"
           },
+          "suggest": {
+            "default": null,
+            "validate": "object|null"
+          },
           "preserved": {
             "default": null,
             "validate": "object|null"
@@ -790,7 +791,6 @@
       "table",
       {
         "content": "table_row+",
-        "marks": "ins del fmt",
         "group": "block",
         "attrs": {
           "id": {
@@ -822,6 +822,10 @@
             "validate": "object|null"
           },
           "cellMargins": {
+            "default": null,
+            "validate": "object|null"
+          },
+          "suggest": {
             "default": null,
             "validate": "object|null"
           },
@@ -857,6 +861,10 @@
             "default": false,
             "validate": "boolean"
           },
+          "suggest": {
+            "default": null,
+            "validate": "object|null"
+          },
           "preserved": {
             "default": null,
             "validate": "object|null"
@@ -872,7 +880,6 @@
       "table_cell",
       {
         "content": "cell_block+",
-        "marks": "ins del fmt",
         "isolating": true,
         "attrs": {
           "id": {

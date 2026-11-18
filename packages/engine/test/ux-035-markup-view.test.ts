@@ -10,6 +10,7 @@
  */
 import type { Node as PMNode } from 'prosemirror-model';
 import { describe, expect, it } from 'vitest';
+import { addBlockEntry, entry } from '../src/block-suggestion.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { SPIKE_IDS, spikeDocument } from '../src/spike-document.ts';
 import { internals } from '../src/testing.ts';
@@ -27,8 +28,8 @@ function markedCore() {
   const last = posOf(i.state.doc, SPIKE_IDS.last);
   const tr = i.state.tr
     .addMark(start, start + 1, schema.marks['ins']!.create({ id: 'ins-1', user: 'alice' }))
-    .addMark(start + 1, start + 2, schema.marks['del']!.create({ id: 'del-1', user: 'bob' }))
-    .addNodeMark(last, schema.marks['del']!.create({ id: 'del-2', user: 'carol' }));
+    .addMark(start + 1, start + 2, schema.marks['del']!.create({ id: 'del-1', user: 'bob' }));
+  addBlockEntry(tr, last, entry('del', 'del-2', 'carol'));
   i.dispatch(tr);
   return { c, last };
 }
