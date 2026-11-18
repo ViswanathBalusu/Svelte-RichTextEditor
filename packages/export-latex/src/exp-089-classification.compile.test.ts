@@ -7,8 +7,8 @@
  * - Criterion 2 (sandbox): a document without a label prints no marking.
  * - Criterion 3 (no sandbox): a label change changes the bundle hash, and the label is in the
  *   manifest's options. A bundle without a label carries no `classification` option.
- * - Criterion 4 (other targets) is not tested here: the HTML, Markdown and DOCX writers do not
- *   take the label yet (see the story's Notes).
+ * - Criterion 4 (other targets) is not tested here: see `services/export-worker/src/exp-089-other-
+ *   targets.job.test.ts` (HTML, Markdown) and `packages/export-docx/test/exp-089-classification.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
 import { doc, para, type J } from '../test/docs.ts';

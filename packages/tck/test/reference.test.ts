@@ -9,8 +9,6 @@ import { judge, keep } from './targets/judge.ts';
 import { startReference, type StartedTarget } from './targets/reference.ts';
 
 export const REFERENCE_KNOWN: Readonly<Record<string, string>> = {
-  'semantics.steps':
-    'apply-020: the room refuses a step that removes one boundary of a region (P3) and the pure engine applies it (SYN-002 vs 04 §4); the same on the mock backend, reported to the authority',
   'exports.states':
     'the service runs no export job handler in process, so a job stays queued (PRO-063; 09 §9)',
   'perm-suggest.suggestion-accepted':
@@ -51,6 +49,14 @@ describe.skipIf(skip)('the kit against the reference service', () => {
     if (v.fixed.length)
       console.log('known defects that now pass (remove them from REFERENCE_KNOWN):', v.fixed);
     expect(v.unexpected).toEqual([]);
+  });
+
+  it('passes the step-semantics and conversation fixtures through the server (PRO-110 criterion 5)', () => {
+    const semantics = report.profiles.find((p) => p.id === 'semantics')!;
+    expect(semantics.scenarios.map((s) => [s.id, s.outcome])).toEqual([
+      ['semantics.conversation', 'passed'],
+      ['semantics.steps', 'passed'],
+    ]);
   });
 
   // PRM-005 criterion 4: a commit on a locked and on an archived document is refused with

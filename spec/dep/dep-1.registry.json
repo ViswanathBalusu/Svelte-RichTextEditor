@@ -1386,6 +1386,20 @@
       "owner": "UX"
     },
     {
+      "operationId": "releaseHold",
+      "method": "DELETE",
+      "path": "/documents/{id}/holds/{holdId}",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "08 §11; 13 §10",
+      "owner": "HIS"
+    },
+    {
       "operationId": "listHolds",
       "method": "GET",
       "path": "/holds",

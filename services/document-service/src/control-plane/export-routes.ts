@@ -185,6 +185,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       options,
       full: full || ctx.caller.kind === 'service',
       classVersion: policy.classVersion,
+      classification: record.label ?? null,
     });
     const now = d.now();
     const payload = {

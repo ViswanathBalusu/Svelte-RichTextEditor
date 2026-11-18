@@ -97,7 +97,7 @@ describe('exec and queryCommand (PRO-085)', () => {
   it('runs an applicable command through the core: the mark becomes active at the caret', () => {
     const core = new DocumentCore({ doc: spikeDocument(), access: editorAccess(), schedule });
     expect(core.activeMarks()).not.toContain('bold');
-    expect(hostApi(core).exec('bold')).toBe(true);
+    expect(hostApi(core).exec('bold')).toEqual({ ok: true, reason: null });
     expect(core.activeMarks()).toContain('bold');
     expect(hostApi(core).queryCommand('bold').active).toBe(true);
   });
@@ -105,7 +105,8 @@ describe('exec and queryCommand (PRO-085)', () => {
   it('refuses a command the access does not allow and changes nothing', () => {
     const core = new DocumentCore({ doc: spikeDocument(), access: readerAccess(), schedule });
     const before = JSON.stringify(core.getContent().doc);
-    expect(hostApi(core).exec('bold')).toBe(false);
+    // A reader may not change content: nothing ran, and the call says the command is not available.
+    expect(hostApi(core).exec('bold')).toEqual({ ok: false, reason: 'not-applicable' });
     expect(JSON.stringify(core.getContent().doc)).toBe(before);
   });
 
@@ -127,7 +128,8 @@ describe('exec and queryCommand over the command registry (UX-005)', () => {
       state: () => state(),
       exec: (id) => {
         calls.push(id);
-        return { ran: state().enabled && core.exec('bold') };
+        if (!state().enabled) return { ran: false, reason: 'no-access' };
+        return { ran: core.exec('bold'), reason: null };
       },
     };
   }
@@ -137,7 +139,7 @@ describe('exec and queryCommand over the command registry (UX-005)', () => {
     const calls: string[] = [];
     const api = hostApi(core, registryOver(core, calls));
     expect(api.queryCommand('format.bold')).toEqual({ enabled: true, active: false });
-    expect(api.exec('format.bold')).toBe(true);
+    expect(api.exec('format.bold')).toEqual({ ok: true, reason: null });
     expect(calls).toEqual(['format.bold']);
     expect(api.queryCommand('format.bold')).toEqual({ enabled: true, active: true });
   });
@@ -147,14 +149,14 @@ describe('exec and queryCommand over the command registry (UX-005)', () => {
     const before = JSON.stringify(core.getContent().doc);
     const api = hostApi(core, registryOver(core, []));
     expect(api.queryCommand('format.bold').enabled).toBe(false);
-    expect(api.exec('format.bold')).toBe(false);
+    expect(api.exec('format.bold')).toEqual({ ok: false, reason: 'no-access' });
     expect(JSON.stringify(core.getContent().doc)).toBe(before);
   });
 
   it('keeps the core names working beside the registry identifiers', () => {
     const core = new DocumentCore({ doc: spikeDocument(), access: editorAccess(), schedule });
     const api = hostApi(core, registryOver(core, []));
-    expect(api.exec('bold')).toBe(true);
+    expect(api.exec('bold')).toEqual({ ok: true, reason: null });
     expect(api.queryCommand('bold').active).toBe(true);
   });
 
@@ -163,7 +165,7 @@ describe('exec and queryCommand over the command registry (UX-005)', () => {
     const before = JSON.stringify(core.getContent().doc);
     for (const api of [hostApi(core), hostApi(core, registryOver(core, []))]) {
       expect(api.queryCommand('format.nonsense')).toEqual(UNKNOWN_COMMAND);
-      expect(api.exec('format.nonsense')).toBe(false);
+      expect(api.exec('format.nonsense')).toEqual({ ok: false, reason: 'unknown' });
     }
     expect(JSON.stringify(core.getContent().doc)).toBe(before);
   });
@@ -231,7 +233,7 @@ describe('the element methods over the session (PRO-083, PRO-084, PRO-085)', () 
 
     // The editor's access came from the channel: bold applies at the caret.
     expect(methods.queryCommand('bold')).toEqual({ enabled: true, active: false });
-    expect(methods.exec('bold')).toBe(true);
+    expect(methods.exec('bold')).toEqual({ ok: true, reason: null });
     expect(methods.queryCommand('bold').active).toBe(true);
 
     // A local edit is visible at once but not confirmed: getContent still gives the loaded doc.
@@ -274,7 +276,7 @@ describe('the element methods over the session (PRO-083, PRO-084, PRO-085)', () 
     let current: MountedSession | null = null;
     const methods = elementMethods(() => current);
     const notLoaded = async () => {
-      expect(methods.exec('bold')).toBe(false);
+      expect(methods.exec('bold')).toEqual({ ok: false, reason: 'not-loaded' });
       expect(methods.queryCommand('bold')).toEqual(NOT_LOADED_COMMAND);
       await expect(methods.flush()).resolves.toBeUndefined();
       await expect(methods.getContent()).rejects.toThrow('no document is loaded');

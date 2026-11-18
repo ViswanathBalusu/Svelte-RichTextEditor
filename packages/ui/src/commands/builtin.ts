@@ -198,6 +198,17 @@ export function coreCommands(): Entry[] {
       toolbar: false,
       run: ({ core, args }) => named(core, 'discardRecovered', args),
     },
+    // A numbered caption for the figure, the table or the equation the selection is on (FE-134).
+    {
+      id: 'insert.caption',
+      label: 'command.insert.caption',
+      group: 'insert',
+      changesContent: true,
+      capability: 'editing',
+      needs: 'insertCaption',
+      contextMenu: ['text', 'table'],
+      run: ({ core }) => named(core, 'insertCaption'),
+    },
     ...FIELD_KINDS.map(({ kind, label, feature }): Entry => ({
       id: `insert.field.${kind}`,
       label,
@@ -230,7 +241,9 @@ export interface ShellCommandHost1b {
   painter(): boolean;
   applyFormat(): boolean;
   /** Opens a dialog of the shell. */
-  openDialog(name: 'language' | 'region' | 'export' | 'comment' | 'version' | 'send'): boolean;
+  openDialog(
+    name: 'language' | 'region' | 'export' | 'comment' | 'version' | 'send' | 'crossReference',
+  ): boolean;
   zoom(step: 'in' | 'out' | 'reset'): boolean;
   setMode(mode: EditorMode): boolean;
   setView(view: ViewName): boolean;
@@ -561,6 +574,18 @@ export function shellCommands1b(host: ShellCommandHost1b): Record<string, Entry>
       needs: 'setLanguage',
       contextMenu: ['text', 'table'],
       run: () => host.openDialog('language'),
+    },
+    // A reference to a heading, a numbered paragraph, a caption, an equation or a bookmark (FE-134
+    // criterion 2): opens the dialog that lists the targets the core gives.
+    'insert.crossReference': {
+      id: 'insert.crossReference',
+      label: 'command.insert.crossReference',
+      group: 'insert',
+      changesContent: true,
+      capability: 'editing',
+      needs: 'insertCrossReference',
+      contextMenu: ['text'],
+      run: () => host.openDialog('crossReference'),
     },
     'insert.region': {
       id: 'insert.region',

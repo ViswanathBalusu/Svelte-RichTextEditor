@@ -19,6 +19,7 @@ import type {
   SyncPort,
   Unsubscribe,
 } from '@docedit/protocol';
+import type { AltRequest } from './alt-text.ts';
 import type { ReadView } from './read-value.ts';
 import type { TrimReport } from './trim.ts';
 import type { Clock } from './sync/session.ts';
@@ -240,6 +241,13 @@ export interface CommandArgs {
   symbol?: string;
   /** For `insertCaption`: the identifier of the figure that gets a numbered caption (FE-134). */
   figure?: string;
+  /**
+   * For `insertCaption`, in place of `figure` (FE-134 criterion 1): `table` numbers the table at the
+   * caret in the `Table` sequence, `equation` numbers the equation block with `id` (or the selected
+   * one) in the `Equation` sequence, `here` takes whichever of figure, table or selected equation
+   * the selection is in.
+   */
+  caption?: { kind: 'table' | 'equation' | 'here'; id?: string };
   /** For `insertReference`: the target (`node:`, `bookmark:` or `eq:`) and the field's format. */
   reference?: { target: string; format?: string | null };
   /**
@@ -888,6 +896,8 @@ export interface DocumentApi {
   /** The document's base direction (`settings.dir`). */
   readonly direction: ReadView<'ltr' | 'rtl'>;
   readonly refusal: ReadView<RefusalNotice | null>;
+  /** The last picture inserted without alternative text; the shell asks the author for it (FE-132 criterion 5). */
+  readonly altRequest: ReadView<AltRequest | null>;
   /** The requested and the effective editing mode (FE-029). */
   readonly mode: ReadView<ModeState>;
   /** Suggestion mode at the caret, and why (FE-041). */
@@ -963,6 +973,8 @@ export interface DocumentApi {
    * name the target, the next at each call (FE-133 criterion 5); false when there is none to show.
    */
   showReferences(): boolean;
+  /** Stores the alternative text of the first picture of the asset that has none; false when it cannot (FE-132). */
+  setImageAlt(asset: string, alt: string): boolean;
   focus(): void;
   destroy(): void;
 

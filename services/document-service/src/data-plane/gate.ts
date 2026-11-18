@@ -104,6 +104,18 @@ export const SEQ_INPUTS: readonly SeqInput[] = [
     note: 'phase 2 (HIS-026)',
   },
   {
+    where: 'GET /documents/{id}/audit-segment',
+    field: 'query.fromSeq',
+    rule: 'range',
+    note: 'HIS-037: a seq below the gate is raised to it, and only the chain hash just below the gate travels (owner decision 142)',
+  },
+  {
+    where: 'GET /documents/{id}/audit-segment',
+    field: 'query.toSeq',
+    rule: 'state',
+    note: 'HIS-037: a range that ends below the gate is refused with forbidden',
+  },
+  {
     where: 'GET /documents/{id}/history',
     field: 'query.fromSeq',
     rule: 'range',

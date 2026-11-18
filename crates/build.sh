@@ -64,7 +64,11 @@ case "${1:-}" in
     mkdir -p "$out"
     # `web` gives an ES module with `initSync` and `init`, which Node.js and every browser load.
     wasm-bindgen --target web --typescript --out-dir "$out" --out-name docedit_layout_kernel "$raw"
-    wasm-opt -Oz --all-features --strip-debug --strip-producers \
+    # The features rustc 1.89 emits for wasm32-unknown-unknown, and no more. `--all-features` also
+    # switches on newer encodings (compact imports) that Node.js 22 and the browsers do not read.
+    wasm-opt -Oz --enable-sign-ext --enable-mutable-globals --enable-nontrapping-float-to-int \
+      --enable-bulk-memory --enable-reference-types --enable-multivalue \
+      --strip-debug --strip-producers \
       -o "$out/docedit_layout_kernel_bg.wasm.opt" "$out/docedit_layout_kernel_bg.wasm"
     mv "$out/docedit_layout_kernel_bg.wasm.opt" "$out/docedit_layout_kernel_bg.wasm"
     # What was built, with no date and no path, so that the file is the same on every build.

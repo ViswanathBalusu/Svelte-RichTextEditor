@@ -12,7 +12,11 @@ const EDITOR = 'doc-editor[data-test="one"]';
 const run = (page: Page, command: string) =>
   page.evaluate(
     ([sel, name]) =>
-      (document.querySelector(sel!) as unknown as { exec(name: string): boolean }).exec(name!),
+      (
+        document.querySelector(sel!) as unknown as {
+          exec(name: string): { ok: boolean };
+        }
+      ).exec(name!).ok,
     [EDITOR, command],
   );
 

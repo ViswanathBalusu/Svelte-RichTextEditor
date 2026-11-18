@@ -98,6 +98,7 @@ export type {
   StoredImage,
   UploadOutcome,
 } from './image-paste.ts';
+export type { AltRequest } from './alt-text.ts';
 export type { ClipboardInput } from './clipboard.ts';
 export { ReadValue, ViewHub, type ReadView, type Schedule } from './read-value.ts';
 export { editingSchema, definitionFor, headingLevel, type FootnoteModel } from './schema.ts';

@@ -293,8 +293,14 @@ export type CoreQueryName1b =
  * - `insertRecovered`, `discardRecovered`: `{ id }`, the item's `id` or its index as a string
  *   (UX-017);
  * - `finishFill`: none (FRW-076);
+ * - `setAltText`: `{ asset, alt }`; stores the text on the first picture of that asset that has none
+ *   (FE-132 criterion 5);
  * - `showReferences`: none; moves the selection to a cross-reference that blocked the last refused
- *   deletion, the next at each call (FE-133 criterion 5).
+ *   deletion, the next at each call (FE-133 criterion 5);
+ * - `insertCaption`: none; numbers the figure, the table or the selected equation the selection is
+ *   on, in its caption sequence (FE-134 criterion 1);
+ * - `insertCrossReference`: `{ target, format? }`, a target of `referenceTargets` and `null` or
+ *   `page` as the format; inserts a `ref` field at the caret (FE-134 criterion 2).
  */
 export type CoreCommandName =
   | 'copyFormat'
@@ -314,7 +320,21 @@ export type CoreCommandName =
   | 'insertRecovered'
   | 'discardRecovered'
   | 'finishFill'
-  | 'showReferences';
+  | 'showReferences'
+  | 'setAltText'
+  | 'insertCaption'
+  | 'insertCrossReference';
+
+/** One target the cross-reference dialog offers (FE-134 criterion 2). */
+export interface ReferenceTargetItem {
+  readonly kind: 'bookmark' | 'heading' | 'numbered' | 'caption' | 'equation';
+  /** The `target` of the `ref` field: `node:`, `bookmark:` or `eq:`. */
+  readonly target: string;
+  /** What a reference to it prints. */
+  readonly label: string;
+  /** The text or name the person knows the target by. */
+  readonly text: string;
+}
 
 /** Modes of 05 §8.1 and 13 §3. */
 export type EditorMode = 'edit' | 'review' | 'view' | 'fill';
@@ -742,6 +762,8 @@ export interface CoreApi {
 
   /** The last local change the region guard refused; the shell shows and announces it. */
   readonly refusal?: ReadView<RefusalNotice | null>;
+  /** The last picture inserted without alternative text; the shell asks for it (FE-132 criterion 5). */
+  readonly altRequest?: ReadView<{ readonly n: number; readonly asset: string } | null>;
   /** The last deletion the core trimmed to the editable parts (FE-037 criterion 2); the shell announces it. */
   readonly trimmed?: ReadView<TrimNotice | null>;
   /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3); the shell reports it. */
@@ -871,6 +893,11 @@ export interface CoreApi {
    * client export filters of extensions (UX-055; 13 §7.1). Never hidden content (ADR 0019).
    */
   getContent?(): unknown;
+  /**
+   * What a cross-reference may point at in the document this reader holds (FE-134 criterion 2): each
+   * target with the text a reference to it prints. Absent when the core cannot insert references.
+   */
+  referenceTargets?(): readonly ReferenceTargetItem[];
   /** The range-based document API for one extension (UX-053; 13 section 7.1). Absent: extensions get none. */
   extensionApi?(options: ExtensionApiOptions): ExtensionDocumentApi;
   /** Region grants (PRM-035), when the backend announces `regions`. */

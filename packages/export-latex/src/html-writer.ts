@@ -50,6 +50,11 @@ export interface HtmlOptions {
   readonly suggestions?: 'accept' | 'reject' | 'markup' | null;
   /** The document's title, written in `title`. */
   readonly title?: string | null;
+  /**
+   * The document's classification label (EXP-089). HTML has no pages, so the marking is a block
+   * before and a block after the content, and a `classification` meta element.
+   */
+  readonly classification?: string | null;
 }
 
 export interface HtmlOutput {
@@ -753,6 +758,7 @@ export function htmlText(
     );
     blocks.push(`<section class="de-footnotes"><ol>${items.join('')}</ol></section>`);
   }
+  const mark = escapeHtml((options.classification ?? '').trim());
   const head = [
     '<!doctype html>',
     `<html lang="${lang !== null && LANG.test(lang) ? lang : 'en'}">`,
@@ -760,6 +766,7 @@ export function htmlText(
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${escapeHtml(options.title ?? '')}</title>`,
+    ...(mark === '' ? [] : [`<meta name="classification" content="${mark}">`]),
     '<style>',
     '.de-list{list-style:none;padding-left:1.5em}',
     '.de-align-center{text-align:center}',
@@ -769,9 +776,16 @@ export function htmlText(
     '</style>',
     '</head>',
     '<body>',
+    ...(mark === '' ? [] : [`<header class="de-classification">${mark}</header>`]),
     '<main>',
   ];
-  const text = `${[...head, ...blocks, '</main>', '</body>', '</html>'].join('\n')}\n`;
+  const tail = [
+    '</main>',
+    ...(mark === '' ? [] : [`<footer class="de-classification">${mark}</footer>`]),
+    '</body>',
+    '</html>',
+  ];
+  const text = `${[...head, ...blocks, ...tail].join('\n')}\n`;
   return {
     text,
     bytes: utf8(text),

@@ -19,6 +19,15 @@ export interface TestLink {
 }
 
 const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = [
+  // Shipped when CDM-019 and FE-130 closed (2026-11-18).
+  [
+    'lists',
+    [
+      { path: 'packages/engine/test/list-commands.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/list-view.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/fe-130-list-labels.compile.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-011 closed (2026-11-17).
   [
     'command-search',
@@ -51,6 +60,17 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/test/table-style-sort.test.ts', kind: 'unit' },
       { path: 'packages/engine/test/fe-131-sort-suggest.test.ts', kind: 'unit' },
       { path: 'packages/engine/src/view/fe-131-table-style.universal.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when FE-130 closed (2026-11-18): the list commands through the core, the list view and its
+  // semantics in a browser, and the list labels in the PDF.
+  [
+    'lists',
+    [
+      { path: 'packages/engine/test/list-commands.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/list-view.test.ts', kind: 'unit' },
+      { path: 'packages/element/e2e/list-semantics.spec.ts', kind: 'playwright' },
+      { path: 'packages/export-latex/src/fe-130-list-labels.compile.test.ts', kind: 'unit' },
     ],
   ],
   // Shipped when FE-137 closed (2026-11-18). The panel is run in the three browsers by the element's
