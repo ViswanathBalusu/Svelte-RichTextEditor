@@ -8,10 +8,13 @@ import type {
   CreateDocumentRequest,
   DocumentResource,
   ExportJob,
+  FieldInfo,
   Grants,
   ProblemDetails,
   RegionGrant,
   RegionInfo,
+  Template,
+  TemplateCreate,
   TokenRequest,
   TokenResponse,
 } from '@docedit/protocol';
@@ -194,6 +197,37 @@ export class ServiceClient {
         `/documents/${encodeURIComponent(id)}/regions?limit=${MAX_PAGE}`,
       )
     ).body.items;
+  }
+
+  /** `POST /templates`: marks a document as a template (12 §9; FRW-062; service credential only). */
+  async createTemplate(request: TemplateCreate, actor?: string): Promise<Template> {
+    return (
+      await this.#call<Template>('POST', '/templates', {
+        body: request,
+        ...(actor !== undefined ? { actor } : {}),
+      })
+    ).body;
+  }
+
+  /** `GET /templates`: the tenant's templates, oldest first (FRW-062). */
+  async listTemplates(): Promise<Template[]> {
+    return (await this.#call<Page<Template>>('GET', '/templates')).body.items;
+  }
+
+  /** `GET /documents/{id}/fields`: the fields of a document with their kinds (12 §10; FRW-060). */
+  async listFields(id: string): Promise<FieldInfo[]> {
+    const items: FieldInfo[] = [];
+    let cursor: string | null = null;
+    do {
+      const q = new URLSearchParams({ limit: String(MAX_PAGE) });
+      if (cursor !== null) q.set('cursor', cursor);
+      const page: Page<FieldInfo> = (
+        await this.#call<Page<FieldInfo>>('GET', `/documents/${encodeURIComponent(id)}/fields?${q}`)
+      ).body;
+      items.push(...page.items);
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    return items;
   }
 
   async getExport(jobId: string): Promise<ExportJob> {

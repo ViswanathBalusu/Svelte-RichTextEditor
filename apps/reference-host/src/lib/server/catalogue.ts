@@ -19,6 +19,11 @@ export interface CatalogueEntry {
   title: string;
   /** The template it was made from, if any. */
   template: string | null;
+  /**
+   * For a document started from a template of the gallery (UX-100): the `seq` of the template
+   * document it was forked at, as the service pinned and recorded it (12 §9).
+   */
+  templateSeq?: number;
   createdBy: string;
   createdAt: string;
   /** The host's sharing decisions: the role of each user, which goes into the token's `docs`. */
@@ -34,19 +39,42 @@ export interface CatalogueEntry {
   deletedAt: string | null;
 }
 
+/**
+ * A template the host offers in its gallery (UX-100; 12 §9). The document service holds the
+ * template (`POST /templates`: a document with role placeholders, fields and rules, and no
+ * participants); the host holds what its gallery shows: a name, a description, and the identifiers
+ * the service gave.
+ */
+export interface CatalogueTemplate {
+  /** The service's template identifier, which `POST /documents` takes as `template`. */
+  id: string;
+  /** The document that is the template. */
+  document: string;
+  /** The host's own key for it, unique among the host's templates (the seed's `key`). */
+  key: string;
+  name: string;
+  description: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 interface CatalogueFile {
   version: 1;
   documents: CatalogueEntry[];
+  /** Absent in catalogues written before the template gallery; read as none. */
+  templates?: CatalogueTemplate[];
 }
 
 export class Catalogue {
   readonly #file: string;
   #documents: CatalogueEntry[];
+  #templates: CatalogueTemplate[];
   #writing: Promise<void> = Promise.resolve();
 
-  private constructor(file: string, documents: CatalogueEntry[]) {
+  private constructor(file: string, documents: CatalogueEntry[], templates: CatalogueTemplate[]) {
     this.#file = file;
     this.#documents = documents;
+    this.#templates = templates;
   }
 
   /** Opens the catalogue at `file`, or an empty one when the file does not exist yet. */
@@ -55,11 +83,39 @@ export class Catalogue {
       const raw = JSON.parse(await readFile(file, 'utf8')) as CatalogueFile;
       if (raw.version !== 1 || !Array.isArray(raw.documents))
         throw new Error(`${file} is not a catalogue of version 1`);
-      return new Catalogue(file, raw.documents);
+      return new Catalogue(file, raw.documents, raw.templates ?? []);
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return new Catalogue(file, []);
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return new Catalogue(file, [], []);
       throw e;
     }
+  }
+
+  /** The templates of the gallery, oldest first. */
+  listTemplates(): CatalogueTemplate[] {
+    return this.#templates
+      .slice()
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+      .map((t) => structuredClone(t));
+  }
+
+  /** A template by the service's identifier, or null. */
+  template(id: string): CatalogueTemplate | null {
+    const t = this.#templates.find((x) => x.id === id);
+    return t ? structuredClone(t) : null;
+  }
+
+  templateByKey(key: string): CatalogueTemplate | null {
+    const t = this.#templates.find((x) => x.key === key);
+    return t ? structuredClone(t) : null;
+  }
+
+  /** Adds a template, replacing one with the same identifier or the same key. */
+  async putTemplate(template: CatalogueTemplate): Promise<void> {
+    this.#templates = [
+      ...this.#templates.filter((t) => t.id !== template.id && t.key !== template.key),
+      structuredClone(template),
+    ];
+    await this.#save();
   }
 
   /** The documents `sub` has a role on, newest first, without deleted ones. */
@@ -145,7 +201,11 @@ export class Catalogue {
 
   /** Writes the whole file; writes run one after another, each with the state of its time. */
   #save(): Promise<void> {
-    const body: CatalogueFile = { version: 1, documents: this.#documents };
+    const body: CatalogueFile = {
+      version: 1,
+      documents: this.#documents,
+      ...(this.#templates.length > 0 ? { templates: this.#templates } : {}),
+    };
     const text = `${JSON.stringify(body, null, 2)}\n`;
     const write = async () => {
       await mkdir(dirname(this.#file), { recursive: true });
