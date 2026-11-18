@@ -208,13 +208,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           .filter((f) => f.text.includes('workflow_evidence'))
           .map((f) => f.path)
           .sort();
-        // Only the evidence modules and the purge name the table.
+        // Only the evidence modules, the purge and the erasure of one participant's rows
+        // (FRW-043; it deletes and reads nothing) name the table.
         expect(holders).toEqual([
           'services/document-service/src/control-plane/document-purge-pg.ts',
           'services/document-service/src/workflow/capture-settings-pg.ts',
           'services/document-service/src/workflow/evidence-ledger-pg.ts',
           'services/document-service/src/workflow/evidence-ledger.ts',
           'services/document-service/src/workflow/evidence-store.ts',
+          'services/document-service/src/workflow/participant-erasure-pg.ts',
+          'services/document-service/src/workflow/participant-erasure.ts',
         ]);
         // And the ledger's own port is used by nothing that builds those outputs.
         const users = all
