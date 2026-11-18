@@ -8,7 +8,7 @@
  * 1. replaces the payload of each commit that person wrote form field values in with a tombstone
  *    (`CommitTombstone`, HIS-040), so the metadata, the payload hash and the hash chain stay and the
  *    log still verifies;
- * 2. deletes the participant's evidence rows from `workflow_evidence`; and
+ * 2. deletes the participant's evidence rows; and
  * 3. writes one audit entry, `evidence.erased`, which holds counts only: no participant identifier,
  *    no surrogate, no sequence number and no field value.
  *
