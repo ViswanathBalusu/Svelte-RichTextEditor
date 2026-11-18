@@ -53,7 +53,8 @@ async function fixture(): Promise<WorkflowEvidenceBundle> {
   };
 }
 
-const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+type Writable<T> = { -readonly [K in keyof T]: Writable<T[K]> };
+const clone = <T>(v: T): Writable<T> => JSON.parse(JSON.stringify(v)) as Writable<T>;
 
 describe('verifying a workflow evidence bundle (FRW-055 criterion 3)', () => {
   it('verifies an intact bundle with no findings', async () => {
