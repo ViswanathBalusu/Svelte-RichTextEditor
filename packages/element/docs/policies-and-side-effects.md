@@ -98,14 +98,17 @@ directive is S2's (section 6); the load itself is measured in `e2e/wasm-002-kern
 - File: `assets/docedit_layout_kernel_bg-<hash>.wasm`, next to the `chunks/` folder of the library
   build, found from the chunk's own URL (`new URL(…, import.meta.url)`). Never inlined as base64.
 - `connect-src`: the origin that serves the component's files (the fetch).
-- `script-src 'wasm-unsafe-eval'`: in the page's policy while the module is compiled on the page's
-  thread. With a layout worker (WASM-004) it moves to the worker script's own response policy.
+- Worker (WASM-004): one module worker for each editor instance, `assets/layout-worker-<hash>.js` next to
+  the chunks. `worker-src` for the origin that serves the component. Its address goes through the
+  `docedit-worker` Trusted Types policy. No `SharedArrayBuffer`: no cross-origin isolation is needed.
+- `script-src 'wasm-unsafe-eval'`: in the policy of the **worker script's response** (the module is compiled in
+  the worker; the page compiles nothing). A host that sends no policy on the worker script needs nothing.
 - Media type `application/wasm` lets the browser compile while the file downloads; any other type is
   read whole and compiled from the bytes.
 - Trusted Types names: none. Global side effects: none.
 - Events: `de-diagnostic` carries the load time or the failure code and, for a policy refusal, the
   directive to add.
-- Omit: the directive, if you accept a degraded page view. Editing, saving, collaboration and the read view
+- Omit: the directive from the worker script's policy, if you accept a degraded page view. Editing, saving, collaboration and the read view
   work without it (WASM-003; `e2e/wasm-003-blocked.spec.ts`). A refused compile is reported as
   `de-diagnostic` `load-failed` (`blocked_by_policy`, with the directive) and `degraded` (with the
   fallback: `canvas-measurement` in Chromium, Edge and WebKit, `web-view` in Firefox, where a message

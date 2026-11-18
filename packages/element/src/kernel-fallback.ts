@@ -25,6 +25,7 @@ export const PAGE_VIEW_NOTICE = {
   blocked:
     "This page's security policy does not allow WebAssembly, which the page view needs in this browser. The site's administrator can allow it with 'wasm-unsafe-eval' in script-src.",
   other: "The page view's WebAssembly file could not be loaded.",
+  trapped: "The page view's text kernel stopped unexpectedly.",
   choose: 'You can keep editing in the web view, or read the typeset result in the read view.',
   web: 'Web view',
   read: 'Read view',
@@ -32,7 +33,8 @@ export const PAGE_VIEW_NOTICE = {
 
 /** The sentence that says why the page view is not available, from the failure's code. */
 export function noticeReason(detail: Pick<DiagnosticDetail, 'code'>): string {
-  return detail.code === 'blocked_by_policy' ? PAGE_VIEW_NOTICE.blocked : PAGE_VIEW_NOTICE.other;
+  if (detail.code === 'blocked_by_policy') return PAGE_VIEW_NOTICE.blocked;
+  return detail.code === 'kernel_trap' ? PAGE_VIEW_NOTICE.trapped : PAGE_VIEW_NOTICE.other;
 }
 
 /**

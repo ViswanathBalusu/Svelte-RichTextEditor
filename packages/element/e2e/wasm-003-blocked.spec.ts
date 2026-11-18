@@ -49,6 +49,17 @@ const ALLOWED = policy(
 const surface = (name: string) => `doc-editor[data-test="${name}"] .de-editing-surface`;
 
 async function open(page: Page, csp: string): Promise<void> {
+  // The layout kernel runs in a worker (WASM-004), and a worker takes its policy from its own
+  // response, not from the page's. A host that sends one policy on all its responses sends it on
+  // the worker script too, so the same policy is put on the worker script here.
+  const workerPolicy = csp.replace('{report}', '/csp-report?run=wasm-003&source=worker');
+  await page.route(/\/layout-worker-[\w-]+\.js(\?|$)/, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      headers: { ...response.headers(), 'content-security-policy': workerPolicy },
+    });
+  });
   await openEmbed(page, `?csp=${encodePolicy(csp)}`);
 }
 

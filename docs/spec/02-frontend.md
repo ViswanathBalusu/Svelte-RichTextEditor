@@ -192,5 +192,5 @@ Budgets are in 13, section 9. Techniques: state outside reactive proxies; one in
 - The input bridge and the screen-reader plan for the page view (spike S9).
 - Native spellcheck is lost in the page view, and a Word-style context menu hides it in the web view too. The proofing port (13, section 6.1) is the answer in both.
 - Grammar and password-manager browser extensions behave inconsistently with editors inside shadow roots. This needs a compatibility list, not a design change.
-- Whether layout runs in a worker from the start or is moved there later.
+- Whether layout runs in a worker from the start or is moved there later. For the page view's text kernel this is settled: it runs in a worker of its own from the start, one for each editor instance (ADR 0016; WASM-004). The layout engine itself is not moved by that.
 - Touch selection handles and mobile editing in the page view.

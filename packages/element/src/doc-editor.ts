@@ -69,7 +69,7 @@ import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-g
 import { selectView, VIEW_STRINGS, type ViewName } from './view-select.ts';
 import { frameScheduler } from './status.ts';
 import { fallbackFor, noticeReason, showPageViewNotice } from './kernel-fallback.ts';
-import { requestLayoutKernel } from './layout-kernel-request.ts';
+import { ElementKernel } from './layout-kernel-request.ts';
 import { EMBEDDING_VERSION, RELEASE } from './version.ts';
 
 /** `getToken` (05 §8.1): returns a token for the document, held in memory only. */
@@ -196,6 +196,8 @@ export class DocEditorElement extends Base {
   #viewOverride: ViewName | null = null;
   /** The message that says the page view is not available because the kernel did not start (WASM-003). */
   #kernelNotice: HTMLElement | null = null;
+  /** The element's layout kernel: its worker runs while the page view is asked for (WASM-004). */
+  #kernel: ElementKernel | null = null;
   /** The block the editor moves to as soon as the web view is shown (FE-072 criterion 4). */
   #pendingBlock: string | null = null;
   #grace: ReturnType<typeof setTimeout> | null = null;
@@ -436,10 +438,12 @@ export class DocEditorElement extends Base {
     this.#kernelNotice = null;
     if (view !== 'print') return;
     if (typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches) return;
-    void requestLayoutKernel((detail) => {
+    // One kernel for each element: it owns the layout worker (WASM-004) and keeps its lifecycle.
+    this.#kernel ??= new ElementKernel((detail) => {
       this.#emit('de-diagnostic', detail);
       if (detail.kind === 'load-failed') this.#degradeKernel(detail);
     });
+    void this.#kernel.start();
   }
 
   /**
@@ -473,6 +477,8 @@ export class DocEditorElement extends Base {
   }
 
   #suspend(): void {
+    // The layout worker stops with the element; the first use after a resume creates it again (WASM-004).
+    this.#kernel?.stop();
     if (!this.#session || this.#suspended) return;
     this.#suspended = true;
     // Listeners on the page, observers and the channel go; the core and the journal stay (FE-005).
@@ -1092,6 +1098,9 @@ export class DocEditorElement extends Base {
     this.#closeReadView();
     this.#hideWebLabel();
     this.#clearFailure();
+    // The worker and its memory are released (WASM-004).
+    this.#kernel?.destroy();
+    this.#kernel = null;
     const session = this.#session;
     this.#session = null;
     this.#sessionKey = null;

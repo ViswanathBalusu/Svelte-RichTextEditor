@@ -115,7 +115,8 @@ export interface DiagnosticDetail {
   streaming: boolean | null;
   /**
    * Why it failed: `blocked_by_policy`, `fetch_failed`, `bad_module`, `abi_mismatch`,
-   * `chunk_failed` or `compile_failed`. `null` for `loaded`.
+   * `chunk_failed`, `compile_failed`, `worker_failed` (the layout worker did not start or died) or
+   * `kernel_trap` (the kernel trapped and its worker was ended; WASM-004). `null` for `loaded`.
    */
   code: string | null;
   /** The content security policy directive the host must allow, when the failure is its policy. */

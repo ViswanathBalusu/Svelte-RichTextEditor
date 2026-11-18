@@ -7,10 +7,12 @@
  * FND-008 fails the build otherwise). Its URL is resolved against this chunk's own URL, so it loads
  * from the origin that serves the component, as the PDF viewer's page and the measuring worker do.
  *
- * Starting: the response is compiled while it streams (`WebAssembly.instantiateStreaming`, through
- * the generated module's start) when the server calls the file `application/wasm`. For any other
- * media type the bytes are read whole and compiled with `WebAssembly.instantiate`, which does not
- * check the type.
+ * Starting: the response is compiled while it streams (`WebAssembly.compileStreaming`) when the
+ * server calls the file `application/wasm`. For any other media type the bytes are read whole and
+ * compiled with `WebAssembly.compile`, which does not check the type. The compiled module is then
+ * given to the generated module's start, which instantiates it. Compiling apart from instantiating
+ * is what lets the page hand one compiled module to every layout worker (WASM-004). This loader runs
+ * inside the layout worker (./layout-worker.ts), so the page thread compiles nothing.
  */
 import { startKernel, type KernelGlueModule, type LayoutKernel } from '@docedit/layout-kernel';
 import type { DiagnosticDetail } from '../events.ts';
@@ -24,18 +26,25 @@ export interface KernelSource {
 }
 
 export interface LoadKernelOptions {
-  /** The build's own files (./features/layout-kernel-source.ts), or a test's. */
+  /** The worker's own files (./features/layout-worker.ts), or a test's. */
   source: KernelSource;
   /** The fetch of the page. Replaceable for tests. */
   fetch?: typeof fetch;
   /** Milliseconds, monotonic. Replaceable for tests. */
   now?: () => number;
+  /**
+   * A module that was compiled already (by another worker of the page, WASM-004). Nothing is
+   * fetched or compiled then; the module only gets a new instance.
+   */
+  module?: unknown;
 }
 
 /** What a load tells the caller: the started kernel and the numbers the diagnostic event carries. */
 export interface KernelLoad {
   kernel: LayoutKernel;
   report: DiagnosticDetail;
+  /** The compiled module, which another realm of the page can start its own instance from. */
+  module: unknown;
 }
 
 /** A failed load, with the code of `DiagnosticDetail` and the directive when the policy is to blame. */
@@ -103,6 +112,9 @@ export async function loadLayoutKernel(options: LoadKernelOptions): Promise<Kern
     throw new KernelLoadError('chunk_failed', `the kernel's loader did not load: ${text(error)}`);
   }
 
+  if (options.module !== undefined)
+    return startFrom(glue, options.module, null, null, started, now);
+
   let response: Response;
   try {
     response = await doFetch(source.url(), { credentials: 'same-origin' });
@@ -114,42 +126,58 @@ export async function loadLayoutKernel(options: LoadKernelOptions): Promise<Kern
 
   const type = (response.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
   const streaming =
-    type === 'application/wasm' && typeof WebAssembly.instantiateStreaming === 'function';
+    type === 'application/wasm' && typeof WebAssembly.compileStreaming === 'function';
   let bytes: number | null;
-  let input: unknown = response;
   let magicOk = true;
+  let compiled: unknown;
   if (!streaming) {
     const buffer = new Uint8Array(await response.arrayBuffer());
     bytes = buffer.length;
     magicOk = hasMagic(buffer);
-    input = buffer;
+    if (!magicOk)
+      throw new KernelLoadError('bad_module', 'the file is not a WebAssembly module', {
+        bytes,
+        streaming,
+      });
+    try {
+      compiled = await WebAssembly.compile(buffer);
+    } catch (error) {
+      throw compileError(error, magicOk, bytes, streaming);
+    }
   } else {
     // The size of a streamed file is the header's, when the server says it.
     const length = Number(response.headers.get('content-length'));
     bytes = Number.isFinite(length) && length > 0 ? length : null;
+    try {
+      compiled = await WebAssembly.compileStreaming(response);
+    } catch (error) {
+      throw compileError(error, magicOk, bytes, streaming);
+    }
   }
-  if (!magicOk)
-    throw new KernelLoadError('bad_module', 'the file is not a WebAssembly module', {
-      bytes,
-      streaming,
-    });
+  return startFrom(glue, compiled, bytes, streaming, started, now);
+}
 
+/** Starts an instance from a compiled module and reports it. */
+async function startFrom(
+  glue: KernelGlueModule,
+  module: unknown,
+  bytes: number | null,
+  streaming: boolean | null,
+  started: number,
+  now: () => number,
+): Promise<KernelLoad> {
   let kernel: LayoutKernel;
   try {
-    kernel = await startKernel(glue, input);
+    kernel = await startKernel(glue, module);
   } catch (error) {
     const message = text(error);
     if (/interface version/.test(message))
       throw new KernelLoadError('abi_mismatch', message, { bytes, streaming });
-    const code = classifyStartError(error, magicOk);
-    throw new KernelLoadError(code, `the kernel did not start: ${message}`, {
-      directive: code === 'blocked_by_policy' ? WASM_DIRECTIVE : null,
-      bytes,
-      streaming,
-    });
+    throw compileError(error, true, bytes, streaming);
   }
   return {
     kernel,
+    module,
     report: {
       feature: 'layout-kernel',
       kind: 'loaded',
@@ -163,6 +191,19 @@ export async function loadLayoutKernel(options: LoadKernelOptions): Promise<Kern
   };
 }
 
+function compileError(
+  error: unknown,
+  magicOk: boolean,
+  bytes: number | null,
+  streaming: boolean | null,
+): KernelLoadError {
+  const code = classifyStartError(error, magicOk);
+  return new KernelLoadError(code, `the kernel did not start: ${text(error)}`, {
+    directive: code === 'blocked_by_policy' ? WASM_DIRECTIVE : null,
+    bytes,
+    streaming,
+  });
+}
 function text(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

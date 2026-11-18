@@ -85,3 +85,5 @@ export function finishKernel(glue: Omit<KernelGlue, 'initSync'>): LayoutKernel {
     checksum: (data) => glue.checksum(data),
   };
 }
+
+export * from './batch.ts';
