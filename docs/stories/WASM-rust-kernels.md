@@ -273,7 +273,7 @@ As a maintainer, I want Rust dependencies held to the same rules as npm dependen
 - [ ] The element's software bill of materials lists the crates compiled into the module.
 - [ ] Dependencies are pinned by lockfile, and updates are reviewed changes.
 
-**Notes:** C-RUST, phase 3.
+**Notes:** C-RUST, phase 3. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold, because C-WASM does not hold (SPK-013 is not held) and S10 recommended harfbuzzjs, not a Rust module (ADR 0016, "Result of S10"). The story depends on WASM-001, the Rust workspace, which is blocked for the same reason. There are no crates to list, no build to check and no bill of materials. The spike crate under `packages/perf/wasm/text-kernel/` is measurement code and is not the kernel this story documents.
 
 ### WASM-014 Contributor guide for the kernel
 
