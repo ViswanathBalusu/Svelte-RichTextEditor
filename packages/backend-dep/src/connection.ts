@@ -147,7 +147,7 @@ export class Connection {
           this.fail(refusal(input.error));
           return;
         case 'fatal':
-          this.close(input.close, input.reason, { code: 'bad_message', reconnect: 'backoff' });
+          this.close(input.close, input.reason, { code: 'bad_message', reconnect: 'no' });
           return;
         case 'message':
           if (this.phase === 'ready') this.hooks.message(this, input.message);

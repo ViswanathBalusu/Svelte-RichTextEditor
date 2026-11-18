@@ -550,6 +550,16 @@ export class SyncSession {
           // A revocation (05 §3.3): the old token is refused; the host reconnects with a new one.
           this.#unbind('never');
           this.#setStatus('offline', state.reason);
+        } else if (state.code === 'bad_message' || state.code === 'unknown_type') {
+          // 05 §5.8: not retryable; the client reports a bug (PRO-039 criterion 6). The element
+          // raises `de-error` from the report, and nothing is reopened.
+          this.#host.event({
+            type: 'report',
+            code: state.code,
+            message: `the channel closed: ${state.code} (${state.reason})`,
+          });
+          this.#unbind('never');
+          this.#setStatus('offline', state.reason);
         } else
           this.#reconnect(
             `the channel closed: ${state.code} (${state.reason})`,
