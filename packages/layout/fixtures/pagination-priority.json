@@ -1,0 +1,135 @@
+{
+  "format": "Pagination fixtures for the order of the rules in 02 section 9.4 (FE-082). Every page is 50 units tall with no margins and every line is 10 units, so a page holds five lines. An item is a paragraph with a line count and the flags it sets, or a page break. An expected page lists its pieces as block:firstLine-endLine (end exclusive). The expectations were worked out by hand from the rules, not copied from the output of the code. keepNext against widow control follows owner decision 178 (docs/owner-decisions-2026-11-15.md) and ADR 0120 item 4.",
+  "page": { "width": 80, "height": 50 },
+  "lineHeight": 10,
+  "cases": [
+    {
+      "id": "break-outranks-keepNext",
+      "rules": ["break", "keepNext"],
+      "why": "A keepNext chain does not cross an explicit page break.",
+      "items": [
+        { "block": "h", "lines": 1, "keepNext": true },
+        { "pageBreak": true },
+        { "block": "p", "lines": 3 }
+      ],
+      "pages": [["h:0-1"], ["p:0-3"]]
+    },
+    {
+      "id": "break-then-pageBreakBefore",
+      "rules": ["break", "pageBreakBefore"],
+      "why": "A pageBreakBefore right after an explicit break makes no blank page.",
+      "items": [
+        { "block": "a", "lines": 1 },
+        { "pageBreak": true },
+        { "block": "p", "lines": 2, "pageBreakBefore": true }
+      ],
+      "pages": [["a:0-1"], ["p:0-2"]]
+    },
+    {
+      "id": "pageBreakBefore-at-top",
+      "rules": ["pageBreakBefore"],
+      "why": "A pageBreakBefore at the top of a page makes no blank page.",
+      "items": [{ "block": "p", "lines": 2, "pageBreakBefore": true }],
+      "pages": [["p:0-2"]]
+    },
+    {
+      "id": "pageBreakBefore-outranks-keepNext",
+      "rules": ["pageBreakBefore", "keepNext"],
+      "why": "The heading cannot keep with a paragraph that starts a page.",
+      "items": [
+        { "block": "a", "lines": 2 },
+        { "block": "h", "lines": 1, "keepNext": true },
+        { "block": "p", "lines": 3, "pageBreakBefore": true }
+      ],
+      "pages": [["a:0-2", "h:0-1"], ["p:0-3"]]
+    },
+    {
+      "id": "keepNext-moves-the-heading",
+      "rules": ["keepNext"],
+      "why": "Room for the heading but not for its first line of text: the heading moves.",
+      "items": [
+        { "block": "a", "lines": 4 },
+        { "block": "h", "lines": 1, "keepNext": true },
+        { "block": "p", "lines": 3 }
+      ],
+      "pages": [["a:0-4"], ["h:0-1", "p:0-3"]]
+    },
+    {
+      "id": "keepNext-outranks-keepLines",
+      "rules": ["keepNext", "keepLines"],
+      "why": "A chain moves as one with a keepLines terminal: the heading and all three lines need 40, the page has 30 left.",
+      "items": [
+        { "block": "a", "lines": 2 },
+        { "block": "h", "lines": 1, "keepNext": true },
+        { "block": "p", "lines": 3, "keepLines": true }
+      ],
+      "pages": [["a:0-2"], ["h:0-1", "p:0-3"]]
+    },
+    {
+      "id": "keepNext-outranks-widow",
+      "rules": ["keepNext", "widow"],
+      "why": "Owner decision 178: the heading and the first line of the paragraph stay together even though widow control would move the whole paragraph.",
+      "items": [
+        { "block": "a", "lines": 3 },
+        { "block": "h", "lines": 1, "keepNext": true },
+        { "block": "p", "lines": 4, "widowControl": true }
+      ],
+      "pages": [["a:0-3", "h:0-1", "p:0-1"], ["p:1-4"]]
+    },
+    {
+      "id": "keepLines-outranks-widow",
+      "rules": ["keepLines", "widow"],
+      "why": "The paragraph that keeps its lines together moves whole, where widow control alone would split it.",
+      "items": [
+        { "block": "a", "lines": 3 },
+        { "block": "p", "lines": 3, "keepLines": true, "widowControl": true }
+      ],
+      "pages": [["a:0-3"], ["p:0-3"]]
+    },
+    {
+      "id": "widow-leaves-two-lines-below",
+      "rules": ["widow"],
+      "why": "Three lines fit; leaving one line for the next page is a widow, so two go on the first page.",
+      "items": [
+        { "block": "a", "lines": 2 },
+        { "block": "p", "lines": 4, "widowControl": true }
+      ],
+      "pages": [["a:0-2", "p:0-2"], ["p:2-4"]]
+    },
+    {
+      "id": "orphan-moves-the-paragraph",
+      "rules": ["widow"],
+      "why": "Only one line fits at the bottom, which is an orphan, so the paragraph moves whole.",
+      "items": [
+        { "block": "a", "lines": 4 },
+        { "block": "p", "lines": 4, "widowControl": true }
+      ],
+      "pages": [["a:0-4"], ["p:0-4"]]
+    },
+    {
+      "id": "split-without-rules",
+      "rules": [],
+      "why": "With no rule set the paragraph fills the page and continues.",
+      "items": [
+        { "block": "a", "lines": 4 },
+        { "block": "p", "lines": 4 }
+      ],
+      "pages": [["a:0-4", "p:0-1"], ["p:1-4"]]
+    },
+    {
+      "id": "keepNext-chain-longer-than-a-page",
+      "rules": ["keepNext"],
+      "why": "The first two headings and the text need 70 against a page of 50, so that chain is broken after the first heading. The second heading with its text needs 40 and 10 are left, so it moves.",
+      "items": [
+        { "block": "a", "lines": 1 },
+        { "block": "h1", "lines": 3, "keepNext": true },
+        { "block": "h2", "lines": 3, "keepNext": true },
+        { "block": "p", "lines": 2 }
+      ],
+      "pages": [
+        ["a:0-1", "h1:0-3"],
+        ["h2:0-3", "p:0-2"]
+      ]
+    }
+  ]
+}

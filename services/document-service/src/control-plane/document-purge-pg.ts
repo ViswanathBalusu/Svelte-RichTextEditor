@@ -9,6 +9,8 @@ import type { DeletedDocument, PurgeAssetRow, PurgeStore, SealedRow } from './do
 
 /** The tables whose rows are keyed by `doc_id`, in the order they are deleted (children first). */
 export const PURGE_TABLES: readonly string[] = [
+  // The outbox names the head row (`outbox_doc_id_fkey`), so it goes before it (BE-054 found it).
+  'outbox',
   'commit_tombstones',
   'commit_scopes',
   'doc_commit_payloads',
@@ -35,7 +37,6 @@ export const PURGE_TABLES: readonly string[] = [
   'document_revocations',
   'tenant_retention',
   'document_keys',
-  'outbox',
   'jobs',
 ];
 

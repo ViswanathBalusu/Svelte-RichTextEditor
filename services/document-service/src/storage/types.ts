@@ -465,12 +465,24 @@ export interface OutboxWriter {
   ): Promise<OutboxItem[]>;
 }
 
+/** A node that holds a live lease, with the WebSocket address it announced (null when none). */
+export interface NodeInfo {
+  readonly node: string;
+  readonly address: string | null;
+}
+
 /** Node-level liveness leases (06 §2.1; BE-018). Expiry is judged by the database clock only. */
 export interface NodeLeaseStore {
-  /** Takes or renews the lease of `node` until `leaseMs` from now by the database clock. */
-  renew(node: string, leaseMs: number): Promise<void>;
+  /**
+   * Takes or renews the lease of `node` until `leaseMs` from now by the database clock. `address`
+   * is the WebSocket URL the node announces for its own channels (BE-061; owner decision 200); a
+   * renewal without one leaves no address on the row.
+   */
+  renew(node: string, leaseMs: number, address?: string): Promise<void>;
   /** Whether `node` holds a lease that has not expired by the database clock. */
   alive(node: string): Promise<boolean>;
+  /** The nodes that hold a lease that has not expired by the database clock (BE-060), by name. */
+  live(): Promise<NodeInfo[]>;
   /** Ends the lease of `node`. */
   release(node: string): Promise<void>;
 }

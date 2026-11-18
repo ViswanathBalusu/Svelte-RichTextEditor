@@ -10,6 +10,7 @@ import { zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import { DEFAULT_LIMITS, applySteps, parseSteps, type StepJson } from '@docedit/authority';
 import { canonicalText, type JsonEnvelope, type JsonNode } from '@docedit/model';
 import { cdmSchema } from '@docedit/model/prosemirror';
+import { tokenCounts } from '../control-plane/search-index.ts';
 
 /** Where a replay starts: a stored checkpoint's bytes, or a document as JSON. */
 export type Base = { readonly encoded: Uint8Array } | { readonly doc: unknown };
@@ -36,6 +37,14 @@ export interface TaskTypes {
   checkpoint: { input: ReplayInput; output: Encoded };
   materialise: { input: ReplayInput; output: { doc: JsonNode } };
   decode: { input: { encoded: Uint8Array }; output: { envelope: JsonEnvelope } };
+  /**
+   * The words of a checkpoint's text and how often each occurs (BE-054 criterion 5): the indexer
+   * job counts here, in a worker thread, so that no room's event loop does it.
+   */
+  searchTokens: {
+    input: { doc: JsonNode };
+    output: { tokens: Array<[string, number]>; threadId: number };
+  };
   /** For tests: the thread a task runs in. */
   thread: { input: null; output: { threadId: number } };
 }
@@ -108,6 +117,11 @@ export function runTask<K extends TaskName>(
       return materialise(input as ReplayInput) as TaskTypes[K]['output'];
     case 'decode':
       return decode(input as TaskTypes['decode']['input']) as TaskTypes[K]['output'];
+    case 'searchTokens':
+      return {
+        tokens: [...tokenCounts((input as TaskTypes['searchTokens']['input']).doc)],
+        threadId,
+      } as TaskTypes[K]['output'];
     case 'thread':
       return { threadId } as TaskTypes[K]['output'];
     default:

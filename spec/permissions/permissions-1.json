@@ -350,6 +350,8 @@
         "GET /webhooks/{id}",
         "PATCH /webhooks/{id}",
         "DELETE /webhooks/{id}",
+        "POST /webhooks/{id}/ping",
+        "POST /webhooks/{id}/deliveries/{deliveryId}/replay",
         "POST /tokens",
         "POST /sessions/revoke"
       ],
@@ -381,6 +383,11 @@
     },
     { "route": "PUT /documents/{id}/read-marker", "class": "open", "note": "read markers: no row" },
     { "route": "GET /documents/{id}/activity", "class": "open", "note": "activity: no row" },
+    {
+      "route": "GET /documents/{id}/connect",
+      "class": "open",
+      "note": "the connect hint (06 section 2.1): no row; it needs `view`"
+    },
     { "route": "GET /documents/{id}/threads", "class": "open", "note": "reading threads: no row" },
     { "route": "GET /threads/{tid}", "class": "open", "note": "reading a thread: no row" },
     { "route": "PATCH /comments/{cid}", "class": "open", "note": "editing a comment: no row" },

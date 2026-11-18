@@ -712,6 +712,21 @@
       "owner": "PRO"
     },
     {
+      "operationId": "getConnect",
+      "method": "GET",
+      "path": "/documents/{id}/connect",
+      "security": [
+        "user",
+        "service"
+      ],
+      "requires": "view",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "200",
+      "spec": "05 §6.2; 06 §2.1",
+      "owner": "PRO"
+    },
+    {
       "operationId": "listThreads",
       "method": "GET",
       "path": "/documents/{id}/threads",
@@ -1042,6 +1057,34 @@
       "idempotencyKey": false,
       "success": "204",
       "spec": "05 §6.2, §7",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "pingWebhook",
+      "method": "POST",
+      "path": "/webhooks/{id}/ping",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "202",
+      "spec": "05 §6.2; 13 §10; ADR 0330 §2 (decision 177)",
+      "owner": "PRO"
+    },
+    {
+      "operationId": "replayWebhookDelivery",
+      "method": "POST",
+      "path": "/webhooks/{id}/deliveries/{deliveryId}/replay",
+      "security": [
+        "service"
+      ],
+      "requires": "Service credential",
+      "ifMatch": "none",
+      "idempotencyKey": false,
+      "success": "202",
+      "spec": "05 §6.2; 13 §10; ADR 0330 §2 (decision 177)",
       "owner": "PRO"
     },
     {

@@ -2344,6 +2344,36 @@
         "seq"
       ]
     },
+    "ConnectHint": {
+      "title": "ConnectHint",
+      "description": "Where a client should open its channel (06 §2.1). A hint only: it grants nothing.",
+      "$comment": "05 §6.2; 06 §2.1",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "The WebSocket URL to open the channel on.",
+          "type": "string"
+        },
+        "node": {
+          "description": "The node the URL belongs to; empty when the service names no node.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where the URL came from: the owner of the document, rendezvous routing over the live nodes, or the address of the service itself.",
+          "type": "string",
+          "enum": [
+            "owner",
+            "routing",
+            "entry"
+          ]
+        }
+      },
+      "required": [
+        "url",
+        "node",
+        "source"
+      ]
+    },
     "Activity": {
       "title": "Activity",
       "description": "Changes and comment activity by other people since the caller's read marker (08 §10). Placeholder: not defined by the prose.",

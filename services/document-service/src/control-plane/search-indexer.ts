@@ -11,9 +11,9 @@
  * - The tenant of every read and write is the tenant of the job row (BE-049 criterion 5), never a
  *   tenant from the payload.
  * - The text is indexed as `extractSearchText` takes it (plain strings; preserved content skipped).
- * - It is not the PostgreSQL search table of BE-011: the index is the in-memory `SearchIndex`, and
- *   the job runs in whatever process the composition gives the runner. Whether that process is off a
- *   room's event loop is the composition's decision and is not shown here (BE-054 criterion 5).
+ * - The index is the in-memory `SearchIndex` or the PostgreSQL `PgSearchIndex` (migration 0086).
+ *   The counting of words, the only CPU-bound step, is done by `tokenise`, which the composition
+ *   runs in a worker thread (BE-054 criterion 5); the rest is awaited input and output.
  */
 import type { JsonNode } from '@docedit/model';
 import type { JobHandler } from './jobs/runner.ts';
@@ -50,6 +50,12 @@ export interface CheckpointSource {
 export interface IndexerDeps {
   readonly checkpoints: CheckpointSource;
   readonly index: IndexTarget;
+  /**
+   * Counts the words of a checkpoint's content. The composition passes a function that runs the
+   * count in a worker thread (data-plane `searchTokens` task), so the job does not hold a room's
+   * event loop (BE-054 criterion 5). Absent: the index counts them itself, in this thread.
+   */
+  readonly tokenise?: (content: JsonNode) => Promise<ReadonlyMap<string, number>>;
 }
 
 /** The payload a job of the indexer carries. The tenant is the row's, not this. */
@@ -74,12 +80,14 @@ export function createSearchIndexHandler(deps: IndexerDeps): JobHandler {
     );
     if (content === null)
       throw new JobFailure('not_found', 'no checkpoint at that sequence', false);
+    const tokens = deps.tokenise ? await deps.tokenise(content) : undefined;
     const stored = await deps.index.indexCheckpoint({
       tenant: job.tenant,
       doc: payload.doc,
       seq: payload.seq,
       visibility: payload.visibility,
       content,
+      ...(tokens ? { tokens } : {}),
     });
     return { indexed: stored, seq: payload.seq };
   };

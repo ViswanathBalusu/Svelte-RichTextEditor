@@ -118,11 +118,18 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `page.header` | page | headers-and-footers |  | `editHeader` |
 | `proofing.next` | review | spelling-and-grammar | `Alt-F7` |  |
 | `proofing.previous` | review | spelling-and-grammar | `Alt-Shift-F7` |  |
+| `review.accept` | review | suggestions |  |  |
+| `review.acceptAll` | review | suggestions |  |  |
 | `review.comment` | review | comments |  |  |
 | `review.markup.all` | review | suggestions |  |  |
 | `review.markup.none` | review | suggestions |  |  |
 | `review.markup.original` | review | suggestions |  |  |
 | `review.markup.simple` | review | suggestions |  |  |
+| `review.next` | review | suggestions |  |  |
+| `review.previous` | review | suggestions |  |  |
+| `review.reject` | review | suggestions |  |  |
+| `review.rejectAll` | review | suggestions |  |  |
+| `view.assistant` | view | assistant |  |  |
 | `view.catchUp` | header | catch-up |  |  |
 | `view.checker` | review | accessibility-checker |  |  |
 | `view.commandSearch` | view | command-search | `Alt-Q` |  |
@@ -137,6 +144,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `view.outline` | view | navigation-pane |  | `outline` |
 | `view.permissions` | review | regions-and-permissions |  |  |
 | `view.recovered` | view | recovery-journal |  |  |
+| `view.review` | view | suggestions |  |  |
 | `view.roles` | view | fields-and-forms |  |  |
 | `view.rules` | view | fields-and-forms |  |  |
 | `view.shortcuts` | view | keyboard-shortcuts |  |  |

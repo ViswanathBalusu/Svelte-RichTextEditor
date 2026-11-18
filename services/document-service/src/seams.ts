@@ -19,6 +19,7 @@ import type { WorkflowResourceStore } from './workflow/workflow-resource.ts';
 import type { EventSink } from './control-plane/events.ts';
 import type { JsonEnvelope } from '@docedit/model';
 import type { AssetAttachments } from './data-plane/asset-attachments.ts';
+import type { Bus } from './data-plane/bus.ts';
 import type { RateLimits } from './data-plane/limits.ts';
 import type { LiveQuotaGate } from './data-plane/quota-gate.ts';
 import type { Content, Limits, Notification, RemoteCommit } from '@docedit/protocol';
@@ -139,6 +140,35 @@ export interface DataPlaneDeps {
   readonly verify: VerifyToken;
   /** This node's identifier for ownership claims (06 §2.1). */
   readonly node: string;
+  /**
+   * The WebSocket URL clients of other nodes are told to use for this node (BE-061; owner decision
+   * 200). It is written on the node's lease row at each renewal. Absent: the node announces none.
+   */
+  readonly address?: string | undefined;
+  /**
+   * The internal bus between nodes (BE-062, BE-063). With it, and with `leases`, a channel for a
+   * document that another live node owns is opened on that node and forwarded. Absent: a single
+   * node, which serves what it owns and refuses the rest with `unavailable`.
+   */
+  readonly bus?: Bus | undefined;
+  /** Settings of channel forwarding; every member has a default (data-plane/forwarding.ts). */
+  readonly forwarding?:
+    | Partial<
+        Readonly<
+          Record<
+            | 'retain'
+            | 'repairMs'
+            | 'maxNacks'
+            | 'retryInMs'
+            | 'heartbeatMs'
+            | 'silenceMs'
+            | 'openTimeoutMs'
+            | 'ownerWatchMs',
+            number
+          >
+        >
+      >
+    | undefined;
   /** Server time, Unix milliseconds. */
   readonly now: () => number;
   /** The node's shared rate limits (BE-030); the data plane makes its own when absent. */
@@ -193,6 +223,12 @@ export interface DataPlaneDeps {
   // --- Added by packet A, phase 1b (additive; each one is off without it). --------------------
   /** The index of checkpoints (`doc_checkpoints`; BE-020): rooms open only from indexed ones. */
   readonly checkpointIndex?: CheckpointIndex;
+  /**
+   * Called after a checkpoint is stored (BE-054 criterion 1: the indexer job is queued from it).
+   * It must not throw into the room: the data plane catches and reports a failure by name, and the
+   * checkpoint stays written. Absent: nothing is called.
+   */
+  readonly onCheckpoint?: (ref: DocRef, seq: number) => void | Promise<void>;
   /** The audit trail (BE-014): rejected commits are recorded (PRM-051). */
   readonly audit?: AuditStore;
   /**

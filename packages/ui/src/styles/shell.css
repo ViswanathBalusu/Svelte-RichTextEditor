@@ -520,6 +520,8 @@
 /* The body and the collaborators' layer share one origin (UX-027). */
 .de-body-frame {
   position: relative;
+  /* FE-114: the height the on-screen keyboard covers, set by the element on a touch device. */
+  padding-block-end: var(--de-keyboard-inset, 0px);
 }
 
 .de-panel,
@@ -1554,4 +1556,14 @@
 .de-history-filters select:focus-visible {
   outline: 2px solid var(--_de-focus);
   outline-offset: 1px;
+}
+
+/* The assistant pane (UX-045): the answer is content, shown as written. */
+.de-assistant-response {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-block: 0.5rem;
+  padding-inline: 0.5rem;
+  border: 1px solid var(--_de-border);
+  border-radius: 4px;
 }

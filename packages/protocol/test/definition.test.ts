@@ -168,6 +168,7 @@ const PROSE_ROUTES = [
   'POST /documents/{id}/fork',
   'PUT /documents/{id}/read-marker',
   'GET /documents/{id}/activity',
+  'GET /documents/{id}/connect',
   'GET /documents/{id}/threads',
   'POST /documents/{id}/threads',
   'GET /threads/{tid}',
@@ -190,6 +191,8 @@ const PROSE_ROUTES = [
   'GET /webhooks/{id}',
   'PATCH /webhooks/{id}',
   'DELETE /webhooks/{id}',
+  'POST /webhooks/{id}/ping',
+  'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
   'GET /audit',
   'GET /search',
   'GET /retention',
@@ -305,6 +308,8 @@ describe('the DEP definition', () => {
         'GET /webhooks/{id}',
         'PATCH /webhooks/{id}',
         'DELETE /webhooks/{id}',
+        'POST /webhooks/{id}/ping',
+        'POST /webhooks/{id}/deliveries/{deliveryId}/replay',
         'GET /audit',
         'GET /search',
         'GET /retention',
@@ -414,6 +419,7 @@ describe('the DEP definition', () => {
       'G64',
       'G65',
       'G73',
+      'G78',
       'G97',
     ]);
   });

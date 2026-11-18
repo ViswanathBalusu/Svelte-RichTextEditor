@@ -35,11 +35,13 @@ import {
   headerMode,
   themeMode,
   toolbarMode,
+  type Capability,
   type CoreApi,
   type DocumentStats,
   type EditorMode,
   type ExportService,
   type ResolveUsers,
+  type ReviewItem,
   type ShellSettings,
 } from '@docedit/ui';
 import { flushSync, mount, unmount } from 'svelte';
@@ -56,6 +58,8 @@ import type { PdfSource } from './pdf/messages.ts';
 import type { PdfViewerFrame } from './pdf/viewer-frame.ts';
 import { grantsService, regionsView } from './permissions-shell.ts';
 import type { AttachAt, EditorHandle, ReadView } from './session.ts';
+import { assistantBridge } from './assistant.ts';
+import { attachKeyboardInset } from './keyboard-inset-dom.ts';
 import { attachShortcuts } from './shortcuts.ts';
 import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
@@ -194,6 +198,31 @@ export { SettingsStore };
  * names, and the registry's commands by their identifiers (`format.bold`), which the host's
  * `exec` and `queryCommand` take. A command that is not offered is left out.
  */
+const CAPABILITIES: readonly Capability[] = [
+  'view',
+  'comment',
+  'suggest',
+  'edit',
+  'fill',
+  'structure',
+  'manage',
+];
+
+/** A suggestion of the core as the shell's review tools take it (UX-036): the capabilities typed. */
+function reviewItem(s: ReturnType<EditorCore['suggestionItems']>[number]): ReviewItem {
+  return {
+    id: s.id,
+    kind: s.kind,
+    block: s.block,
+    user: s.user,
+    from: s.from,
+    to: s.to,
+    text: s.text,
+    caps: s.caps.filter((c): c is Capability => (CAPABILITIES as readonly string[]).includes(c)),
+    canResolve: s.canResolve,
+  };
+}
+
 function commandStates(
   core: EditorCore,
   registry: ReturnType<typeof createCommandRegistry>,
@@ -267,6 +296,16 @@ export function mountEditor(options: MountOptions): MountedEditor {
     ...(options.assetImage ? { assetImage: options.assetImage } : {}),
     ...(options.drawEquation ? { drawEquation: options.drawEquation } : {}),
   });
+  // The backend's assistant port, as the pane reads it (UX-045). The request is built by the core from
+  // the selection and the scopes the reader may view (UX-047).
+  const assistant = assistantBridge(
+    (task, prompt) => {
+      const { omitted: _omitted, ...request } = core.assistantRequest(task, prompt);
+      return request;
+    },
+    // An approved result is put in as suggestions, never as a direct edit (UX-046).
+    (text) => core.insertAssistantResult(text),
+  );
   const stylePath = attachStyles(root, {
     nonce: config.styleNonce,
     forceFallback: config.forceStyleFallback,
@@ -482,6 +521,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     language: core.language,
     // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
     // port `proofing.get().available` is false and the shell shows no proofing control.
+    // The assistant pane, offered only while the backend's assistant port is attached (UX-045).
+    assistant: assistant.api,
     proofing: core.proofing,
     proofingStep: (direction) => core.proofingStep(direction),
     applyFinding: (id, suggestion) => core.applyFinding(id, suggestion),
@@ -517,6 +558,16 @@ export function mountEditor(options: MountOptions): MountedEditor {
     markupView: core.markupView,
     setMarkupView: (view) => core.setMarkupView(view),
     setSuggestionLabel: (label) => core.setSuggestionLabel(label),
+    // The review tools (UX-036): the list, next and previous, accept and reject.
+    suggestionItems: () => core.suggestionItems().map(reviewItem),
+    stepSuggestion: (direction) => {
+      const found = core.stepSuggestion(direction);
+      return found === null ? null : reviewItem(found);
+    },
+    revealSuggestion: (id) => core.revealSuggestion(id),
+    resolveAtSelection: (action) => core.resolveAtSelection(action),
+    resolveSuggestions: (action, target, author, suggestion) =>
+      core.resolveSuggestions(action, target, author, suggestion),
     // The permissions pane (PRO-080 criterion 2): the access in force, the backend's region list
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,
@@ -590,6 +641,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The host's extensions are activated once the shell exists; a later change comes through setExtensions.
   app.setExtensions(options.extensions());
   const stopShortcuts = attachShortcuts(root, (command) => core.run(command));
+  // FE-114: on a touch device the caret stays above the on-screen keyboard.
+  const stopKeyboardInset = attachKeyboardInset(root, core);
 
   const api = hostApi(core, registry);
 
@@ -626,7 +679,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
       commandStates: () => commandStates(core, registry),
     },
     attach(channel: SyncChannel, at: AttachAt) {
-      return core.attach(channel, at);
+      assistant.attach(at.assistant);
+      const detach = core.attach(channel, at);
+      return () => {
+        assistant.attach(undefined);
+        detach();
+      };
     },
     flushJournal() {
       return core.flushJournal();
@@ -679,6 +737,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       for (const viewer of viewers) viewer.destroy();
       viewers.clear();
       stopShortcuts();
+      stopKeyboardInset();
       workflowSend?.dispose?.();
       void unmount(app);
       registry.destroy();

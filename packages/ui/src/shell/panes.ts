@@ -68,7 +68,12 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     load: () => load(import('../panes/CatchUpPane.svelte')),
     available: (core) => core.catchUp !== undefined,
   },
-  { id: 'review', label: 'pane.review' },
+  {
+    id: 'review',
+    label: 'pane.review',
+    load: () => load(import('../panes/ReviewPane.svelte')),
+    available: (core) => core.suggestionItems !== undefined,
+  },
   {
     id: 'history',
     label: 'pane.history',
@@ -112,7 +117,12 @@ export const BUILT_IN_PANES: readonly PaneDescriptor[] = [
     load: () => load(import('../panes/RolesPane.svelte')),
     available: (core) => core.roles !== undefined,
   },
-  { id: 'assistant', label: 'pane.assistant' },
+  {
+    id: 'assistant',
+    label: 'pane.assistant',
+    load: () => load(import('../panes/AssistantPane.svelte')),
+    available: (core) => core.assistant?.available.get() === true,
+  },
   { id: 'pdf', label: 'pane.pdf', feature: 'exports' },
   {
     id: 'recovered',

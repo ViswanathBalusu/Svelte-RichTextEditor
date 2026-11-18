@@ -57,6 +57,7 @@ export type {
   DocumentApi,
   EditMode,
   EquationConfirmation,
+  AssistantInsertOutcome,
   FieldFillOutcome,
   FieldsApi,
   EquationRequest,

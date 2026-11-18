@@ -65,15 +65,16 @@ import {
   placeNotes,
   type NotePiece,
 } from './notes.ts';
-import type {
-  NoteItem,
-  NoteRef,
-  PageFrame,
-  PageMargins,
-  PaginatedPage,
-  ParagraphItem,
-  TableCellItem,
-  TableRowItem,
+import {
+  rangeOf,
+  type NoteItem,
+  type NoteRef,
+  type PageFrame,
+  type PageMargins,
+  type PaginatedPage,
+  type ParagraphItem,
+  type TableCellItem,
+  type TableRowItem,
 } from './page-items.ts';
 import { judgePins, type PagePin, type PinJudgement } from './reconcile.ts';
 import { splitRowAt } from './row-split.ts';
@@ -85,6 +86,7 @@ import {
   type LayoutLine,
   type LayoutRow,
   type TableFragment,
+  pageRange,
 } from './tree.ts';
 
 // The shared item and page types live in page-items.ts, so that notes.ts and row-split.ts do not
@@ -196,6 +198,9 @@ export interface BoxItem {
   readonly width: number;
   readonly height: number;
   readonly keepNext: boolean;
+  /** The block's CDM range (FE-078 criterion 2). */
+  readonly from?: number;
+  readonly to?: number;
 }
 
 export interface PageBreakItem {
@@ -221,6 +226,9 @@ export interface TableItem {
   readonly x: number;
   readonly width: number;
   readonly rows: readonly TableRowItem[];
+  /** The table's CDM range (FE-078 criterion 2). */
+  readonly from?: number;
+  readonly to?: number;
 }
 
 export type PageItem =
@@ -478,8 +486,45 @@ export function paginate(
   first: PageSetup,
   options: PaginateOptions = {},
 ): Pagination {
-  if (options.pins) return reconciled(items, first, options, options.pins);
-  const s = settle(items, first, options);
+  return drain(paginateSteps(items, first, options));
+}
+
+/**
+ * What a pass of `paginateSteps` reports after each item it has placed (FE-089). `pages` is the
+ * pass's own list of closed pages: it grows as the pass runs and is not frozen, so a caller reads
+ * it and does not keep it. A later pass (the page count changed, or pins were dropped) starts a
+ * new list.
+ */
+export interface PaginationProgress {
+  /** Items placed so far in this pass. */
+  readonly itemsDone: number;
+  readonly itemCount: number;
+  /** Which pass this is, from 1 (the pass repeats while the stories' page count changes). */
+  readonly pass: number;
+  /** The pages this pass has closed so far, in order. */
+  readonly pages: readonly PaginatedPage[];
+}
+
+/** Runs a generator of progress to its result. */
+function drain<R>(steps: Generator<unknown, R, void>): R {
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/**
+ * `paginate` as a generator: the same pass, which gives up control after each item it places, so a
+ * caller can run it in time slices (FE-089; `paginate-driver.ts`). Draining it gives the result of
+ * `paginate`, byte for byte. The generator holds no clock: the caller decides when to stop.
+ */
+export function* paginateSteps(
+  items: readonly PageItem[],
+  first: PageSetup,
+  options: PaginateOptions = {},
+): Generator<PaginationProgress, Pagination, void> {
+  if (options.pins) return yield* reconciledSteps(items, first, options, options.pins);
+  const s = yield* settleSteps(items, first, options);
   return freezeTree({ pages: s.pages, overflowed: s.overflowed, pageCountSettled: s.settled });
 }
 
@@ -514,16 +559,16 @@ function matchPins(
  * the document out with the kept pins only, and the pages that held a dropped pin's content are
  * marked as estimated. Explicit breaks inside a pinned range are still honoured.
  */
-function reconciled(
+function* reconciledSteps(
   items: readonly PageItem[],
   first: PageSetup,
   options: PaginateOptions,
   pins: PinOptions,
-): Pagination {
+): Generator<PaginationProgress, Pagination, void> {
   const { matched, unmatched } = matchPins(items, pins.pages);
   const passPins = (kept: (i: number) => boolean): PassPins =>
     new Map(matched.map((p, index) => [pinKey(p.blockId, p.offset), { index, kept: kept(index) }]));
-  const trial = settle(
+  const trial = yield* settleSteps(
     items,
     first,
     options,
@@ -536,7 +581,7 @@ function reconciled(
   const judgements = judgePins(matched, overflow, pins.tolerance);
   const dropped = (i: number): boolean => judgements[i]?.decision === 'dropped';
   const final = judgements.some((_, i) => dropped(i))
-    ? settle(
+    ? yield* settleSteps(
         items,
         first,
         options,
@@ -571,19 +616,24 @@ interface Settled {
 }
 
 /** The page-count iteration of `paginate` (see its comment), with the pins of a reconciliation. */
-function settle(
+function* settleSteps(
   items: readonly PageItem[],
   first: PageSetup,
   options: PaginateOptions,
   pins?: PassPins,
-): Settled {
+): Generator<PaginationProgress, Settled, void> {
   const notes = options.notes ?? new Map<string, NoteItem>();
   const refs = notes.size > 0 ? referencesOf(items) : new Map<string, NoteRef[]>();
   const passNotes: Pick<PassOptions, 'notes'> = notes.size > 0 ? { notes: { refs, notes } } : {};
   const passPins: Pick<PassOptions, 'pins'> = pins ? { pins } : {};
   let count = 0;
   for (let attempt = 1; ; attempt++) {
-    const pass = layoutPass(items, first, { count, balance: true, ...passNotes, ...passPins });
+    const pass = yield* layoutPassSteps(
+      items,
+      first,
+      { count, balance: true, ...passNotes, ...passPins },
+      attempt,
+    );
     const placed =
       notes.size > 0
         ? placeNotes(pass.pages, pass.frames, refs, notes)
@@ -605,8 +655,21 @@ function settle(
   }
 }
 
-/** One placement pass over the items, with the page count the stories are given. */
+/** One placement pass, run to its end: the balancing trial passes use it (no slices). */
 function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOptions): Pass {
+  return drain(layoutPassSteps(items, first, opts, 1));
+}
+
+/**
+ * One placement pass over the items, with the page count the stories are given. It reports
+ * progress after each item (`PaginationProgress`); `pass` numbers the pass for the report.
+ */
+function* layoutPassSteps(
+  items: readonly PageItem[],
+  first: PageSetup,
+  opts: PassOptions,
+  pass: number,
+): Generator<PaginationProgress, Pass, void> {
   const pages: PaginatedPage[] = [];
   const frames: PageFrame[] = [];
   const overflowed: string[] = [];
@@ -677,6 +740,7 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
     }
     pages.push({
       index: pages.length,
+      ...pageRange(cur.fragments),
       section: cur.section,
       width: setup.width,
       height: setup.height,
@@ -929,8 +993,12 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
       const remaining = stop - from;
       if (k < remaining) {
         if (item.widowControl) {
+          const fits = k;
           if (remaining - k < 2) k = remaining - 2;
           if (k < 2) k = 0;
+          // A keepNext chain outranks widow control for the one line it places (ADR 0120 item 4,
+          // owner decision 178): the heading is not left alone above a paragraph that moves whole.
+          if (k === 0 && from === 0 && chainTerminal === index && fits >= 1) k = 1;
         }
         if (k === 0) {
           // A column that is not empty, or an empty column below text whose footnote area the
@@ -989,6 +1057,7 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
     addFragment({
       kind: 'box',
       blockId: item.blockId,
+      ...rangeOf(item),
       x: colX(cur.column),
       y: cur.geo.top + used(),
       width: item.width,
@@ -1035,11 +1104,19 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
       const x = colX(cur.column) + item.x;
       const cells: LayoutCell[] = row.cells.map((c) => ({
         cellId: c.cellId,
+        ...rangeOf(c),
         x: x + c.x,
         width: c.width,
         fragments: cellFragments(c, x + c.x, top),
       }));
-      const laid: LayoutRow = { rowId: row.rowId, repeated, y: top, height: row.height, cells };
+      const laid: LayoutRow = {
+        rowId: row.rowId,
+        ...rangeOf(row),
+        repeated,
+        y: top,
+        height: row.height,
+        cells,
+      };
       if (!onPiece()) piece = { page: cur, column: cur.column, index: -1, rows: [] };
       const open = piece!;
       open.rows.push(laid);
@@ -1048,6 +1125,8 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
       const fragment: TableFragment = {
         kind: 'table',
         blockId: item.blockId,
+        ...(first.from !== undefined ? { from: first.from } : {}),
+        ...(last.to !== undefined ? { to: last.to } : {}),
         x,
         y: first.y,
         width: item.width,
@@ -1159,6 +1238,7 @@ function layoutPass(items: readonly PageItem[], first: PageSetup, opts: PassOpti
         placeTable(item, i);
         break;
     }
+    yield { itemsDone: i + 1, itemCount: items.length, pass, pages };
   }
   if (!pageEmpty() || pages.length === 0) finish();
   return {

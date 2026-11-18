@@ -238,6 +238,17 @@ export const SHORTCUT_TABLE: readonly ShortcutRow[] = [
     ],
   },
   {
+    // UX-010 (decision 168): Alt+F10 moves focus into the mini toolbar; Escape there returns it.
+    id: 'shell.miniToolbar',
+    kind: 'shell',
+    label: 'shortcuts.shell.miniToolbar',
+    when: 'shortcuts.when.surface',
+    conventional: [],
+    keys: ['Alt-F10'],
+    alternative: [],
+    conflicts: [],
+  },
+  {
     id: 'shell.applyFormat',
     kind: 'shell',
     label: 'shortcuts.shell.applyFormat',

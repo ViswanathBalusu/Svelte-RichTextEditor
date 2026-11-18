@@ -45,6 +45,8 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // FE-005: the element suspends and resumes the channel when a host moves it out and back.
       | 'suspendSync'
       | 'resumeSync'
+      // FE-088: the blocks changed since the layout last asked, which it re-measures.
+      | 'takeLayoutDirty'
       // SYN-036: the peers of `presence` with their positions in the visible document.
       | 'peerSelections'
       // PRM-034: the element re-reads the region list when a region is renamed, added or removed.
@@ -105,7 +107,9 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'markupView'
       | 'setMarkupView'
       | 'setSuggestionLabel'
-      | 'suggestionLabel';
+      | 'suggestionLabel'
+      // FE-088: the ids of the blocks that changes touched, for the layout's dirty set.
+      | 'takeLayoutDirty';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed

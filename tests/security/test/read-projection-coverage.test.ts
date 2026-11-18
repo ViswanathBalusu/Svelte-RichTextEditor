@@ -129,6 +129,8 @@ const ENDPOINT_REVIEW: Record<string, EndpointEntry> = {
   listVersions: { kind: 'exercised', test: SURFACES_FILE, path: '/versions' },
   getDiff: { kind: 'exercised', test: SURFACES_FILE, path: '/diff?fromSeq=' },
   getAttribution: { kind: 'exercised', test: SURFACES_FILE, path: '/attribution?region=' },
+  // The hint names a node and its address and carries no content of a document.
+  getConnect: { kind: 'exercised', test: SURFACES_FILE, path: '/connect' },
   getActivity: { kind: 'exercised', test: SURFACES_FILE, path: '/activity' },
   listThreads: { kind: 'exercised', test: SURFACES_FILE, path: '/threads?seq=' },
   getThread: { kind: 'exercised', test: SURFACES_FILE, path: '/threads/${thread}' },

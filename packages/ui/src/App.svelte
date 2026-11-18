@@ -87,6 +87,7 @@
   import { modeOptions } from './shell/modes.ts';
   import type { CheckTarget } from './shell/send-checklist.ts';
   import { lockKind } from './shell/workflow-lock.ts';
+  import { reviewOffers } from './shell/review-rules.ts';
   import { START_TRACK, stepMode, type ModeTrack } from './shell/suggest-mode.ts';
   import { NoticeTracker, type Notice } from './shell/notices.ts';
   import { PaneRegistry, type PaneComponent } from './shell/panes.ts';
@@ -639,7 +640,7 @@
   $effect(() => {
     const open = pane?.id ?? null;
     shellQueries.set('shell.outlineOpen', open === 'outline');
-    for (const id of ['styles', 'recovered', 'shortcuts', 'permissions', 'fill', 'checker', 'sources', 'roles', 'fields', 'rules'])
+    for (const id of ['styles', 'recovered', 'shortcuts', 'permissions', 'fill', 'checker', 'sources', 'review', 'roles', 'fields', 'rules', 'assistant'])
       shellQueries.set(`shell.pane.${id}`, open === id);
     shellQueries.set('shell.painterArmed', painterArmed);
     shellQueries.set('shell.zoomInPossible', canZoom(zoom, 'in'));
@@ -656,6 +657,31 @@
     void accessView?.current;
     const state = commentCommandState(core.threads.anchor());
     shellQueries.set('shell.commentAllowed', state.allowed, state.allowed ? null : state.reason);
+  });
+
+  // The review commands (UX-036): they work on the suggestions the core lists now.
+  const reviewItems = $derived.by(() => {
+    void revision?.current;
+    return core.suggestionItems?.() ?? [];
+  });
+  $effect(() => {
+    if (!core.suggestionItems) return;
+    const any = reviewItems.length > 0;
+    shellQueries.set('shell.reviewAny', any, any ? null : 'noSuggestions');
+    // The authors' names are asked for now, so that the first step already says them.
+    people.request(reviewItems.map((i) => i.user));
+  });
+  // Accept and reject are offered where the user may resolve a suggestion; a user with `suggest`
+  // and not `edit` is offered neither, for other people's suggestions and for their own (criterion 3).
+  const mayResolveAny = $derived(
+    reviewItems.length === 0 ||
+      reviewItems.some((i) => i.canResolve && reviewOffers(i.caps).accept),
+  );
+
+  let reviewSync: (() => void) | null = null;
+  $effect(() => {
+    void mayResolveAny;
+    reviewSync?.();
   });
 
   // The export command's state (UX-040 criterion 1): `no-export` in the access restrictions
@@ -848,6 +874,50 @@
           },
         }
       : {}),
+    // The review tools (UX-036): next and previous say what they moved to; accept and reject say
+    // how many were handled and how many were left pending where the user may not edit.
+    ...(core.suggestionItems && core.stepSuggestion
+      ? {
+          reviewStep: (direction: 1 | -1) => {
+            const item = core.stepSuggestion?.(direction) ?? null;
+            if (!item) {
+              announce('review.none');
+              return false;
+            }
+            const kind = tr.t(`review.kind.${item.kind}` as StringKey);
+            const name = nameOf(item.user);
+            void say(
+              item.text === ''
+                ? tr.t('review.step.noText', { kind, name })
+                : tr.t('review.step', { kind, name, text: item.text }),
+            );
+            return true;
+          },
+        }
+      : {}),
+    ...(core.resolveAtSelection && core.resolveSuggestions
+      ? {
+          reviewResolve: (action: 'accept' | 'reject', scope: 'caret' | 'all') => {
+            const report =
+              scope === 'caret'
+                ? core.resolveAtSelection!(action)
+                : core.resolveSuggestions!(action, selection.current.empty ? 'document' : 'selection');
+            if (report.handled === 0 && report.skipped === 0) {
+              announce(core.suggestionItems?.().length ? 'review.nothingHere' : 'review.none');
+              return false;
+            }
+            const done = tr.t(action === 'accept' ? 'review.accepted' : 'review.rejected', {
+              count: report.handled,
+            });
+            void say(
+              report.skipped > 0
+                ? `${done} ${tr.t('review.left', { count: report.skipped })}`
+                : done,
+            );
+            return report.handled > 0;
+          },
+        }
+      : {}),
     closeStory: () => {
       if (panel.current?.kind !== 'story') return false;
       core.closePanel();
@@ -891,6 +961,7 @@
     if (offered('recovered')) add(host1b['view.recovered']);
     if (offered('checker')) add(host1b['view.checker']);
     if (offered('sources')) add(host1b['view.sources']);
+    if (offered('review')) add(host1b['view.review']);
     if (offered('roles')) add(host1b['view.roles']);
     if (offered('fields')) add(host1b['view.fieldProperties']);
     if (offered('rules')) add(host1b['view.rules']);
@@ -928,6 +999,53 @@
       unregister.push(() => {
         stop();
         for (const off of held) off();
+      });
+    }
+    // The assistant command exists only while an assistant port is attached (UX-045 criterion 5).
+    const assistant = core.assistant;
+    if (assistant) {
+      let held: (() => void) | null = null;
+      const sync = () => {
+        const attached = assistant.available.get();
+        const entry = host1b['view.assistant'];
+        if (attached && !held && entry && registry.backs(entry)) held = registry.register(entry);
+        else if (!attached && held) {
+          held();
+          held = null;
+        }
+      };
+      sync();
+      const stop = assistant.available.subscribe(sync);
+      unregister.push(() => {
+        stop();
+        held?.();
+      });
+    }
+    // The review commands (UX-036). Stepping is always offered with the list; accept and reject
+    // follow what the user may resolve (`mayResolveAny`), so a suggester sees neither.
+    if (core.suggestionItems && core.stepSuggestion) {
+      add(host1b['review.next']);
+      add(host1b['review.previous']);
+    }
+    if (core.suggestionItems && core.resolveAtSelection && core.resolveSuggestions) {
+      let held: Array<() => void> = [];
+      const sync = (): void => {
+        if (mayResolveAny && held.length === 0) {
+          for (const id of ['review.accept', 'review.reject', 'review.acceptAll', 'review.rejectAll']) {
+            const entry = host1b[id];
+            if (entry && registry.backs(entry)) held.push(registry.register(entry));
+          }
+        } else if (!mayResolveAny && held.length > 0) {
+          for (const off of held) off();
+          held = [];
+        }
+      };
+      reviewSync = sync;
+      sync();
+      unregister.push(() => {
+        for (const off of held) off();
+        held = [];
+        reviewSync = null;
       });
     }
     if (core.exports || (props.filters && core.getContent)) add(host1b['document.export']);
@@ -1170,6 +1288,24 @@
         // A dialog is closed by Escape itself (the native cancel); the shell does not take the key (FE-070).
         if (key === 'Escape' && event.composedPath().some((n) => n instanceof HTMLDialogElement))
           return false;
+        // UX-010 (decision 168): Alt+F10 moves focus into the mini toolbar. Escape there returns
+        // focus to the selection and hides the toolbar, so no focus is left on a removed button.
+        if (key === 'Alt-F10' && miniShown) {
+          const first = shellEl?.querySelector<HTMLElement>('[data-mini-toolbar] button');
+          if (first) {
+            first.focus();
+            return true;
+          }
+        }
+        if (
+          key === 'Escape' &&
+          miniShown &&
+          shellEl?.querySelector('[data-mini-toolbar]')?.contains(activeElement()) === true
+        ) {
+          miniDismissed = true;
+          core.focus();
+          return true;
+        }
         if (key === 'Escape' && miniShown) {
           miniDismissed = true;
           return true;

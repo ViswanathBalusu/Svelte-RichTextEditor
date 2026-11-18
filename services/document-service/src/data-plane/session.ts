@@ -58,7 +58,8 @@ import type { RateLimits, TokenBucket } from './limits.ts';
 import type { LiveQuotaGate } from './quota-gate.ts';
 export type { LiveQuotaGate } from './quota-gate.ts';
 import type { Metrics } from './metrics.ts';
-import type { ChannelPort, HostedRoom, RoomHost } from './room-host.ts';
+import type { ChannelRoom, Forwarder } from './forwarding.ts';
+import type { ChannelPort, RoomHost } from './room-host.ts';
 import { connectionOf } from './room-host.ts';
 import type { Settings } from './settings.ts';
 import { parseTraceparent, type OpenSpan, type TraceContext, type Tracer } from './tracing.ts';
@@ -79,6 +80,8 @@ export interface SessionDeps {
   readonly verify: VerifyToken;
   readonly allowedOrigins: ((tenant: string) => Promise<readonly string[]>) | undefined;
   readonly host: RoomHost;
+  /** Forwards a channel to the node that owns its document (BE-062); absent on a single node. */
+  readonly forwarding?: Forwarder | undefined;
   readonly grants: GrantStore;
   /** Whether the wire shows the host's `sub` (D42); without a user lookup it shows surrogates. */
   readonly usersOnWire: boolean;
@@ -103,7 +106,7 @@ interface SessionChannel {
   /** The room's channel identifier: unique on this node. */
   readonly key: string;
   state: 'opening' | 'open';
-  room: HostedRoom | null;
+  room: ChannelRoom | null;
   /** The identity the channel was opened with: the session's, or that of its own token. */
   identity: VerifiedIdentity;
   /**
@@ -808,6 +811,36 @@ export class Session {
     this.#channels.set(m.ch, c);
     const ref = { tenant: identity.tenant, doc: d.doc };
     try {
+      // BE-062: a document owned by another live node (or routed to one) is opened there, over the
+      // bus. The token, the rate limits and the quotas were checked above, on this node; the room
+      // that owns the document runs the rest, exactly as for a local channel.
+      const route = (await this.#deps.forwarding?.route(ref)) ?? null;
+      if (route && this.#deps.forwarding) {
+        const conn: RoomConnection = {
+          ...connectionOf(identity, role),
+          session: this.id,
+          jti: identity.jti,
+        };
+        c.conn = conn;
+        const remote = await this.#deps.forwarding.open({
+          ref,
+          key: c.key,
+          owner: route.node,
+          port: this.#port(c, m.id),
+          conn,
+          resume: d.resume,
+          cdm: d.cdm,
+        });
+        if (this.#channels.get(m.ch) !== c || this.#state === 'closed') {
+          remote.close(c.key);
+          return;
+        }
+        c.room = remote;
+        c.state = 'open';
+        this.#deps.metrics.channelRoutes.inc({ tenant: identity.tenant, route: 'forwarded' });
+        if (own) this.#armChannelToken(c, identity.expiresAt);
+        return;
+      }
       const room = await this.#deps.host.acquire(ref);
       // 03 §11.1: a client that lacks a feature the document requires cannot open it.
       const decision = mayOpen(room.requires, d.features);
@@ -832,6 +865,7 @@ export class Session {
       c.room = room;
       room.open(c.key, this.#port(c, m.id), conn, d.resume, stored);
       c.state = 'open';
+      this.#deps.metrics.channelRoutes.inc({ tenant: identity.tenant, route: 'local' });
       if (own) this.#armChannelToken(c, identity.expiresAt);
       this.#participantOpened(identity, d.doc);
     } catch (e) {

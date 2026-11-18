@@ -1,0 +1,28 @@
+# Build context of the authority service image (Compose reads this file next to the Containerfile;
+# with Podman directly: podman build --ignorefile
+# services/authority-service/Containerfile.dockerignore): everything is left out except what the
+# Containerfile copies.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!services/authority-service/package.json
+!services/authority-service/src/**
+!packages/authority/package.json
+!packages/authority/src/**
+!packages/authority/fixtures/**
+!packages/history/package.json
+!packages/history/src/**
+!packages/model/package.json
+!packages/model/src/**
+!packages/model/fixtures/**
+!packages/protocol/package.json
+!packages/protocol/src/**
+!packages/rules/package.json
+!packages/rules/src/**
+!packages/corpus/package.json
+!packages/corpus/src/**
+!spec/**
+**/node_modules
+**/*.test.ts

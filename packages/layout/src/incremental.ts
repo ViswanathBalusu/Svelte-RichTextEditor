@@ -10,6 +10,10 @@
  * because an earlier block grew keeps its lines. A block whose input changed is re-measured even
  * when no edit marked it dirty, so a missed mark cannot leave a stale tree.
  *
+ * The tree each `update` returns shares the previous tree's objects wherever they are equal
+ * (`shareSubtrees`, `tree-share.ts`; FE-078 criterion 4), so a painter can tell by identity which
+ * pages, fragments, rows and lines did not change.
+ *
  * `coalescedLayout` coalesces the edits of one animation frame into one pass (criterion 3), with
  * the frame request injected by the host.
  *
@@ -25,7 +29,8 @@ import { layoutFlow, type LayoutResult } from './engine.ts';
 import type { ItemProviders } from './items.ts';
 import type { BreakOpportunities, LineBreaker, ParagraphInput } from './lines.ts';
 import type { TextMeasurer } from './measure.ts';
-import type { ParagraphFragment } from './tree.ts';
+import { shareSubtrees } from './tree-share.ts';
+import { freezeTree, type LayoutTree, type ParagraphFragment } from './tree.ts';
 
 /** What the last `update` did: the blocks whose line breaking ran, and how many were reused. */
 export interface IncrementalStats {
@@ -60,6 +65,7 @@ export function incrementalLayout(providers: ItemProviders): IncrementalLayout {
   let touched = new Set<string>();
   let measured: string[] = [];
   let reused = 0;
+  let previousTree: LayoutTree | null = null;
   let stats: IncrementalStats = Object.freeze({ measured: Object.freeze([]), reused: 0 });
 
   const breaker: LineBreaker = {
@@ -96,7 +102,10 @@ export function incrementalLayout(providers: ItemProviders): IncrementalLayout {
       // Entries of blocks that this document no longer has are dropped.
       for (const id of [...cache.keys()]) if (!touched.has(id)) cache.delete(id);
       stats = Object.freeze({ measured: Object.freeze([...measured]), reused });
-      return result;
+      // The tree shares what did not change with the one this call returned before (FE-078).
+      const tree = shareSubtrees(previousTree, result.tree);
+      previousTree = tree;
+      return tree === result.tree ? result : freezeTree({ ...result, tree });
     },
     get lastStats() {
       return stats;

@@ -85,6 +85,12 @@ export const EN_GB = {
   'command.mode.review': 'Reviewing',
   'command.mode.view': 'Viewing',
   // How suggestions are shown (UX-035). The first four name the views of 13 §5.
+  'command.review.next': 'Next suggestion',
+  'command.review.previous': 'Previous suggestion',
+  'command.review.accept': 'Accept suggestion',
+  'command.review.reject': 'Reject suggestion',
+  'command.review.acceptAll': 'Accept all suggestions',
+  'command.review.rejectAll': 'Reject all suggestions',
   'command.review.markup.all': 'Show all markup',
   'command.review.markup.simple': 'Show simple markup',
   'command.review.markup.none': 'Show no markup',
@@ -155,8 +161,10 @@ export const EN_GB = {
   'reason.query.none': 'There is no further part you can edit.',
   'reason.query.noFormat': 'Select the text whose formatting you want to copy.',
   'reason.query.noEdit': 'You do not have permission to edit this document.',
-  'reason.query.no-export': 'Your access does not allow export.',
-  'reason.query.no-print': 'Your access does not allow printing.',
+  'reason.query.no-export':
+    'Your access does not allow export. Restrictions deter casual copying and are not a security boundary.',
+  'reason.query.no-print':
+    'Your access does not allow printing. Restrictions deter casual copying and are not a security boundary.',
   'reason.query.noSuggest': 'You do not have permission to suggest changes in this document.',
   'reason.query.noFill': 'You have no fields to fill in this document.',
   'reason.query.suggestOnly':
@@ -165,6 +173,7 @@ export const EN_GB = {
   'reason.query.archived': 'The document is archived.',
   'reason.query.workflow': 'The document is out for completion and cannot be changed now.',
   'reason.query.noComment': 'You do not have permission to comment on this part of the document.',
+  'reason.query.noSuggestions': 'There are no suggestions in this document.',
   'reason.query.noCommentTarget':
     'Select some text, or a figure, table or equation, to comment on it.',
   'reason.query.suggestion':
@@ -215,6 +224,49 @@ export const EN_GB = {
   'notice.refused.pictureSize':
     'The picture was not added: its size could not be used in the document.',
   'notice.refused.other': 'That change was not made.',
+  // What the review commands announce (UX-036). Counts are the suggestions handled and left pending.
+  'review.step': '{kind} by {name}: {text}',
+  'review.step.noText': '{kind} by {name}.',
+  'review.kind.ins': 'Insertion',
+  'review.kind.del': 'Deletion',
+  'review.kind.fmt': 'Formatting change',
+  'review.none': 'There are no suggestions.',
+  'review.gone': 'That suggestion has already been resolved.',
+  // The review pane (UX-037).
+  'review.pane.kind.insertion': 'Insertion',
+  'review.pane.kind.deletion': 'Deletion',
+  'review.pane.kind.formatting': 'Formatting change',
+  'review.pane.kind.block': 'Block change',
+  'review.pane.filter.author': 'Author',
+  'review.pane.filter.everyone': 'Everyone',
+  'review.pane.list': 'Suggestions',
+  'review.pane.empty': 'There are no suggestions to show.',
+  'review.pane.noText': 'no text',
+  'review.pane.row.name': '{kind} by {author}: {excerpt}',
+  'review.pane.row.nameAt': '{kind} by {author}, {time}: {excerpt}',
+  'review.pane.show': 'Show',
+  'review.pane.show.label': 'Show the suggestion by {author} in the document',
+  'review.pane.accept': 'Accept',
+  'review.pane.accept.label': 'Accept the suggestion by {author}',
+  'review.pane.reject': 'Reject',
+  'review.pane.reject.label': 'Reject the suggestion by {author}',
+  'review.pane.acceptAll': 'Accept all',
+  'review.pane.rejectAll': 'Reject all',
+  'review.pane.acceptAllBy': 'Accept all by {author}',
+  'review.pane.rejectAllBy': 'Reject all by {author}',
+  'review.nothingHere': 'No suggestion at the cursor or in the selection.',
+  'review.accepted': {
+    one: '{count} suggestion accepted.',
+    other: '{count} suggestions accepted.',
+  },
+  'review.rejected': {
+    one: '{count} suggestion rejected.',
+    other: '{count} suggestions rejected.',
+  },
+  'review.left': {
+    one: '{count} suggestion left pending, because you cannot edit that part.',
+    other: '{count} suggestions left pending, because you cannot edit those parts.',
+  },
   'notice.suggestions.skipped':
     'Not handled: {count} suggestion(s) in parts of the document you cannot change were left as they are.',
   // A deletion refused because a cross-reference still names its target (I4; FE-133). The count is
@@ -356,6 +408,45 @@ export const EN_GB = {
   'checker.locked': 'You cannot fix this. Ask someone who can.',
   'checker.locked.who': 'You cannot fix this. {who}',
   'pane.assistant': 'Assistant',
+  // The assistant pane (UX-045). The answer and the prompt are content; the rest is interface.
+  'command.view.assistant': 'Assistant',
+  'synonyms.view.assistant': 'ai; draft; rewrite; summarise; ask a question',
+  'assistant.label': 'Assistant',
+  'assistant.prompt': 'What should the assistant do?',
+  'assistant.prompt.hint':
+    'Nothing in the document changes until you approve it. The answer is shown here first.',
+  'assistant.draft': 'Draft',
+  'assistant.rewrite': 'Rewrite selection',
+  'assistant.summary': 'Summarise',
+  'assistant.question': 'Ask a question',
+  'assistant.cancel': 'Cancel',
+  'assistant.retry': 'Try again',
+  'assistant.dismiss': 'Clear',
+  'assistant.insert': 'Insert as suggestion',
+  'assistant.notices': 'What the editor changed in the answer',
+  'assistant.notice.link-blocked':
+    'A link the assistant added is shown as text and is not a link: {target}',
+  'assistant.notice.image-blocked': 'A picture the assistant added was left out: {target}',
+  'assistant.notice.image-not-inserted':
+    'An attached picture named in the answer is not inserted by this pane: {target}',
+  'assistant.insert.refused':
+    'The result was not inserted: you cannot suggest changes here. Nothing was applied.',
+  'assistant.inserted':
+    'The result was inserted as suggestions. Review them in the review pane before they take effect.',
+  'assistant.response': 'Response',
+  'assistant.progress': 'The assistant is working.',
+  'assistant.done':
+    'The assistant has answered. The answer is in the pane and the document is unchanged.',
+  'assistant.cancelled': 'The request was cancelled. Nothing was applied.',
+  'assistant.error.rate_limited':
+    'The assistant is busy: too many requests. Nothing was applied. You can try again.',
+  'assistant.error.quota_exceeded':
+    'The assistant quota has been used up. Nothing was applied. You can try again later.',
+  'assistant.error.port_failure':
+    'The assistant did not answer. Nothing was applied. You can try again.',
+  'assistant.refused.no-view': 'You cannot view this part of the document.',
+  'assistant.refused.no-change':
+    'A draft or a rewrite would put text into the document, and your access here does not allow that.',
   'pane.pdf': 'PDF preview',
   'pane.failed': 'This pane could not be opened.',
   'pane.close': 'Close {pane}',
@@ -406,6 +497,13 @@ export const EN_GB = {
   'synonyms.mode.edit': 'write; change',
   'synonyms.mode.review': 'track changes; suggest',
   'synonyms.mode.view': 'read only; read',
+  'synonyms.view.review': 'suggestions; track changes; changes; list of changes; review',
+  'synonyms.review.next': 'track changes; review; go to change; find suggestion',
+  'synonyms.review.previous': 'track changes; review; go back; earlier suggestion',
+  'synonyms.review.accept': 'track changes; approve; keep change; take change',
+  'synonyms.review.reject': 'track changes; decline; undo change; discard change',
+  'synonyms.review.acceptAll': 'track changes; approve all; keep all changes',
+  'synonyms.review.rejectAll': 'track changes; decline all; discard all changes',
   'synonyms.review.markup.all': 'markup; track changes; suggestions; show changes',
   'synonyms.review.markup.simple': 'markup; track changes; suggestions; bars',
   'synonyms.review.markup.none': 'markup; final; accepted; clean',
@@ -463,6 +561,7 @@ export const EN_GB = {
 
   // Sources (UX-103). Titles, names, identifiers and excerpts are content.
   'command.view.sources': 'Sources',
+  'command.view.review': 'Review pane',
   'pane.sources': 'Sources',
   'sources.label': 'Sources of this document',
   'sources.empty': 'This document has no sources.',
@@ -604,6 +703,7 @@ export const EN_GB = {
   'shortcuts.shell.nextLandmark': 'Move to the next part of the editor',
   'shortcuts.shell.previousLandmark': 'Move to the previous part of the editor',
   'shortcuts.shell.contextMenu': 'Open the context menu',
+  'shortcuts.shell.miniToolbar': 'Move focus to the mini toolbar',
   'shortcuts.shell.applyFormat': 'Apply the copied formatting to the selection',
   'shortcuts.shell.cancel': 'Turn the format painter off',
 

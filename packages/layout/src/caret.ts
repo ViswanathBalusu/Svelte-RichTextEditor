@@ -162,7 +162,7 @@ function hitCandidates(
 }
 
 /** The index of the line that holds a position, or -1 when the block has no line. */
-function lineIndexFor(lines: readonly PaintedLine[], pos: DocPosition): number {
+export function lineIndexFor(lines: readonly PaintedLine[], pos: DocPosition): number {
   let end = -1;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]!;
@@ -178,7 +178,7 @@ function lineIndexFor(lines: readonly PaintedLine[], pos: DocPosition): number {
  * line of its block), otherwise `to - 1`, since `to` is the start of the next line. Never less than
  * the line's `from`.
  */
-function lastOffsetOf(lines: readonly PaintedLine[], i: number): number {
+export function lastOffsetOf(lines: readonly PaintedLine[], i: number): number {
   const line = lines[i]!;
   if (lineIndexFor(lines, { blockId: line.blockId, offset: line.to }) === i) return line.to;
   return Math.max(line.from, line.to - 1);
@@ -275,7 +275,9 @@ export function selectionRects(
   const ia = lineIndexFor(lines, anchor);
   const ih = lineIndexFor(lines, head);
   if (ia < 0 || ih < 0) return [];
-  const forward = ia <= ih;
+  // On one line the order is the offsets' order: a backward selection (Shift+Home) has the head
+  // before the anchor.
+  const forward = ia < ih || (ia === ih && anchor.offset <= head.offset);
   const startPos = forward ? anchor : head;
   const endPos = forward ? head : anchor;
   const first = Math.min(ia, ih);

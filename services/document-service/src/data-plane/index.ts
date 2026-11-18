@@ -31,6 +31,7 @@ import { Auditor } from './audit.ts';
 import { Checkpointer } from './checkpoints.ts';
 import { derivedCommitId } from './commit-id.ts';
 import { Faults, testHooks } from './hooks.ts';
+import { Forwarder } from './forwarding.ts';
 import { NodeLease } from './lease.ts';
 import { RateLimits } from './limits.ts';
 import type { LiveQuotaGate } from './session.ts';
@@ -135,6 +136,8 @@ class DepDataPlane implements DataPlane {
   readonly #lease: NodeLease | null;
   readonly #leaseReady: Promise<boolean>;
   readonly #outbox: OutboxDelivery | null;
+  /** Forwards channels to the owning node over the bus (BE-062), or null on a single node. */
+  readonly #forwarder: Forwarder | null;
   readonly #hooks: DataPlaneTestHooks | undefined;
   #closing: Promise<void> | null = null;
 
@@ -154,14 +157,16 @@ class DepDataPlane implements DataPlane {
           // The hook that makes the database unreachable (BE-079) cuts the renewals too, so a long
           // outage ends in the node's loss of proof and in the stop of BE-018 (BE-077 criterion 4).
           store: {
-            renew: (node, leaseMs) =>
+            renew: (node, leaseMs, address) =>
               this.#faults.databaseDown
                 ? Promise.reject(new Error('the database is unreachable'))
-                : deps.leases!.renew(node, leaseMs),
+                : deps.leases!.renew(node, leaseMs, address),
             alive: (node) => deps.leases!.alive(node),
+            live: () => deps.leases!.live(),
             release: (node) => deps.leases!.release(node),
           },
           node: deps.node,
+          address: deps.address,
           settings: s.lease,
           onLost: (why) => this.#host.fence(why),
           onError: s.onError,
@@ -184,6 +189,12 @@ class DepDataPlane implements DataPlane {
         store: deps.checkpoints,
         index: deps.checkpointIndex,
         workers: this.#workers,
+        ...(deps.onCheckpoint
+          ? {
+              onSaved: deps.onCheckpoint,
+              onSavedError: (e: unknown) => s.onError(e, 'checkpoint.onSaved'),
+            }
+          : {}),
       }),
       workers: this.#workers,
       audit: this.#audit,
@@ -197,6 +208,28 @@ class DepDataPlane implements DataPlane {
       ...(deps.assets ? { assets: deps.assets } : {}),
       ...(deps.workflows ? { workflows: deps.workflows } : {}),
     });
+    this.#forwarder =
+      deps.bus && deps.leases
+        ? new Forwarder({
+            node: deps.node,
+            bus: deps.bus,
+            host: this.#host,
+            logs: deps.logs,
+            grants: deps.grants,
+            leases: deps.leases,
+            ...(deps.forwarding ? { settings: deps.forwarding } : {}),
+            now: deps.now,
+            metrics: this.metricsRegistry,
+            onError: s.onError,
+          })
+        : null;
+    if (this.#forwarder) {
+      const f = this.#forwarder;
+      this.#leaseReady = this.#leaseReady.then(async (ok) => {
+        await f.start();
+        return ok;
+      });
+    }
     this.#outbox = deps.outbox
       ? new OutboxDelivery({
           store: deps.outbox,
@@ -241,6 +274,11 @@ class DepDataPlane implements DataPlane {
   /** Resolves once the node holds its lease (at once without leases); false when it could not. */
   ready(): Promise<boolean> {
     return this.#leaseReady;
+  }
+
+  /** The forwarding of channels to owners, for tests and operations. */
+  get forwarder(): Forwarder | null {
+    return this.#forwarder;
   }
 
   /** The rooms open on this node, for tests and operations. */
@@ -296,6 +334,7 @@ class DepDataPlane implements DataPlane {
         verify: this.#deps.verify,
         allowedOrigins: this.#deps.allowedOrigins,
         host: this.#host,
+        forwarding: this.#forwarder ?? undefined,
         grants: this.#deps.grants,
         usersOnWire: this.#deps.users !== undefined,
         now: this.#deps.now,
@@ -440,6 +479,7 @@ class DepDataPlane implements DataPlane {
       for (const s of this.#sessions) s.draining();
       await this.#host.drain(this.settings.drainTimeoutMs);
       for (const s of [...this.#sessions]) s.goaway(1000 + Math.floor(Math.random() * 4000));
+      await this.#forwarder?.close();
       await this.#host.close(reason);
       await this.#outbox?.stop();
       await this.#audit.flush();

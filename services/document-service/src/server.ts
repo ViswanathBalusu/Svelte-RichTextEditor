@@ -17,6 +17,9 @@ import { podmanSandbox, type AssetUrlKeys, type Sandbox } from '@docedit/asset-w
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
 import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
+import { AnnouncingNotifier, listenForAnnouncements } from './data-plane/announcements.ts';
+import type { Bus } from './data-plane/bus.ts';
+import { ValkeyBus } from './data-plane/valkey-bus.ts';
 import { ValkeyTokenBuckets } from './data-plane/valkey-buckets.ts';
 import { DEFAULT_FEATURES, DEFAULT_RATES } from './data-plane/settings.ts';
 import {
@@ -37,6 +40,7 @@ import {
   type AssetRegistry,
 } from './control-plane/assets.ts';
 import { ContentReader } from './control-plane/content.ts';
+import { Placement } from './control-plane/room-routing.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
 import { DebouncedEventSink } from './control-plane/event-throttle.ts';
 import { CompileBudget } from './control-plane/exp-009-compile-budget.ts';
@@ -101,6 +105,15 @@ import { sweepTenant } from './workflow/schedule-sweep.ts';
 import { recordParticipantOpened } from './workflow/participant-view.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
+import { SearchIndex } from './control-plane/search-index.ts';
+import { PgSearchIndex } from './control-plane/search-index-pg.ts';
+import {
+  createSearchIndexHandler,
+  enqueueIndexing,
+  SEARCH_INDEX_KIND,
+  type IndexTarget,
+} from './control-plane/search-indexer.ts';
+import { Workers } from './data-plane/workers.ts';
 import { Cursors } from './control-plane/http.ts';
 import {
   MemoryIdempotencyStore,
@@ -188,6 +201,7 @@ import type {
   AuditStore,
   CheckpointIndex,
   CheckpointStore,
+  DocRef,
   DocumentStore,
   GrantStore,
   LogStore,
@@ -293,6 +307,11 @@ export interface StartOptions {
    * draw from the same instance. Absent: the default settings (`DEFAULT_RATES`).
    */
   rateLimits?: RateLimits;
+  /**
+   * The bus between nodes (BE-062, BE-063). Absent: with `DOCEDIT_VALKEY_URL` and node leases the
+   * service opens its own Valkey streams bus; otherwise there is none and the node is alone.
+   */
+  bus?: Bus;
   logger?: Logger;
   /** The event sink of both planes. Not with `config.webhooks`, whose dispatcher is the sink. */
   events?: EventSink;
@@ -366,6 +385,8 @@ export interface Service {
   events: EventSink;
   /** The webhook dispatcher when `config.webhooks` is set (PRM-053), or null. It is `events`. */
   webhooks: WebhookDispatcher | null;
+  /** The worker threads that count the words of a checkpoint (BE-054), or null when search is off. */
+  searchWorkers: Workers | null;
   /** The runner of the in-process export handlers, or null. */
   runner: JobRunner | null;
   /** Every runner of the process: maintenance, assets, exports. */
@@ -604,6 +625,16 @@ function assetUrlKeys(text: string | null): AssetUrlKeys | null {
   return { current: { id: text.slice(0, i), secret: Buffer.from(text.slice(i + 1), 'base64') } };
 }
 
+/** The visibility class the search index holds: what a service credential reads (ADR 0019). */
+const SEARCH_FULL_CLASS = 'full';
+/**
+ * The threads that count the words of a checkpoint, and the time one count may take (BE-054
+ * criterion 5). Proposed defaults, not measurements: one thread keeps the indexer's use of the
+ * machine small, and a count that runs past the limit fails its job, which is retried.
+ */
+const SEARCH_WORKER_THREADS = 1;
+const SEARCH_TASK_TIMEOUT_MS = 30_000;
+
 export async function startService(opts: StartOptions): Promise<Service> {
   const config = opts.config;
   checkConfig(config);
@@ -754,6 +785,11 @@ export async function startService(opts: StartOptions): Promise<Service> {
     opts.rateLimits === undefined && config.valkeyUrl !== null
       ? new ValkeyTokenBuckets({ url: config.valkeyUrl })
       : undefined;
+  const ownBus =
+    opts.bus === undefined && config.valkeyUrl !== null && parts.leases
+      ? new ValkeyBus({ node: config.node, url: config.valkeyUrl })
+      : undefined;
+  const bus = opts.bus ?? ownBus;
   const rateLimits =
     opts.rateLimits ??
     new RateLimits(DEFAULT_RATES, {
@@ -774,7 +810,34 @@ export async function startService(opts: StartOptions): Promise<Service> {
         countRetryMs: LIVE_QUOTA_COUNT_RETRY_MS,
       })
     : undefined;
+  // The search index (BE-054; off unless config.searchIndex). Every stored checkpoint queues a job
+  // that indexes its words; the words are counted in a worker thread, so no room's event loop does
+  // it (criterion 5). The index is PostgreSQL's with a database, the in-memory one without.
+  let searchTarget: (IndexTarget & { purgeDocument(t: string, d: string): unknown }) | null = null;
+  let searchWorkers: Workers | null = null;
+  if (config.searchIndex) {
+    const index = parts.pool ? new PgSearchIndex(parts.pool) : new SearchIndex();
+    searchTarget = index;
+    searchWorkers = new Workers({
+      size: SEARCH_WORKER_THREADS,
+      timeoutMs: SEARCH_TASK_TIMEOUT_MS,
+    });
+    if (!parts.search)
+      parts.search = { search: async (tenant, q, query) => index.search(tenant, q, query) };
+    if (!parts.searchPurge) parts.searchPurge = index;
+  }
   const dataPlane = (opts.createDataPlane ?? defaultDataPlane)({
+    ...(searchTarget
+      ? {
+          onCheckpoint: async (ref: DocRef, seq: number) => {
+            await enqueueIndexing(parts.queue, ref.tenant, {
+              doc: ref.doc,
+              seq,
+              visibility: SEARCH_FULL_CLASS,
+            });
+          },
+        }
+      : {}),
     logs,
     ownership: parts.ownership,
     grants: parts.grants,
@@ -863,9 +926,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(parts.audit ? { audit: parts.audit } : {}),
     ...(parts.outbox ? { outbox: parts.outbox } : {}),
     ...(parts.leases ? { leases: parts.leases } : {}),
+    ...(bus ? { bus } : {}),
+    ...(config.nodeAddress !== null ? { address: config.nodeAddress } : {}),
     // The room raises refused commits here (PRM-053 criterion 3): the caller's sink or the dispatcher.
     ...(opts.events || webhooks ? { events } : {}),
   });
+  // BE-063 criterion 5: with a bus, a change is announced to the owning room on another node, and
+  // the announcements of other nodes are applied to this node's rooms.
+  const roomNotifier = bus ? new AnnouncingNotifier(dataPlane, bus) : dataPlane;
+  const announcements = bus
+    ? await listenForAnnouncements(bus, config.node, dataPlane, parts.grants, (e, where) =>
+        logger.warn({ event: 'bus.announcement', message: `${where}: ${String(e)}` }),
+      )
+    : undefined;
   const notify = () => (dataPlane.notify ? dataPlane.notify.bind(dataPlane) : undefined);
 
   // --- Jobs: maintenance, assets, exports (BE-049 to BE-052; PRO-061; EXP-004 to EXP-008). ------
@@ -1066,7 +1139,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
                   reminders: parts.reminders!,
                   grants: parts.grants,
                   logs: parts.logs,
-                  notifier: dataPlane,
+                  notifier: roomNotifier,
                   ...(parts.audit ? { audit: parts.audit } : {}),
                   now,
                   events,
@@ -1117,6 +1190,23 @@ export async function startService(opts: StartOptions): Promise<Service> {
       .catch((e: unknown) =>
         logger.error({ event: 'schedule.error', message: 'ensure', ...errorFields(e) }),
       );
+  }
+  if (searchTarget && searchWorkers) {
+    const workers = searchWorkers;
+    runnerFor({
+      [SEARCH_INDEX_KIND]: createSearchIndexHandler({
+        checkpoints: {
+          // Only the class `full` is indexed: it is what a service credential reads (ADR 0019).
+          readCheckpoint: async (tenant, doc, seq, visibility) =>
+            visibility === SEARCH_FULL_CLASS
+              ? ((await checkpoints.get({ tenant, doc }, seq))?.doc ?? null)
+              : null,
+        },
+        index: searchTarget,
+        tokenise: async (content) =>
+          new Map((await workers.run('searchTokens', { doc: content })).tokens),
+      }),
+    });
   }
   for (const r of runners) r.start();
 
@@ -1234,11 +1324,12 @@ export async function startService(opts: StartOptions): Promise<Service> {
     content,
     views,
     events,
-    notifier: dataPlane,
+    notifier: roomNotifier,
     dataPlane,
     publicUrl,
     restPath: REST_PATH,
     wsPath: WS_PATH,
+    ...(parts.leases ? { placement: new Placement(parts.leases) } : {}),
     features: announced,
     exportTargets: config.exportTargets,
     signedUrlMs: config.signedUrlSeconds * 1000,
@@ -1264,6 +1355,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     meter,
     ...(parts.audit ? { audit: parts.audit } : {}),
     ...(parts.webhooks ? { webhooks: parts.webhooks } : {}),
+    ...(webhooks ? { webhookDispatcher: webhooks.dispatcher } : {}),
     ...(parts.retention ? { retention: parts.retention } : {}),
     ...(parts.quotaAdmin ? { quotaAdmin: parts.quotaAdmin } : {}),
     tenantRegistry: parts.registry,
@@ -1365,6 +1457,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     webhooks: webhooks?.dispatcher ?? null,
     runner,
     runners,
+    searchWorkers,
     scheduler,
     metrics,
     meter,
@@ -1383,8 +1476,11 @@ export async function startService(opts: StartOptions): Promise<Service> {
         // Each export worker finishes the job it runs before it stops (BE-065 criterion 3).
         await exportWorkers?.stop();
         await Promise.all(runners.map((r) => r.stop()));
+        await searchWorkers?.close().catch(() => undefined);
+        announcements?.close();
         await dataPlane.close().catch(() => undefined);
         sharedRateStore?.close();
+        await ownBus?.close();
         // The last change of a burst that still waits for its window is raised before the sends drain.
         events.close();
         // Sends already started finish; each is bounded by the egress timeout (BE-056).

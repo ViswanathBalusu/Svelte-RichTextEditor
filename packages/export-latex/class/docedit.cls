@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-17 v0.2.11 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-18 v0.2.12 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -749,6 +749,13 @@
 \newcommand\DEdefwatermark[2]{\@namedef{DE@ps@#1@wm}{#2}}
 \def\DE@wm#1{\rlap{\lower\dimexpr\headheight+\headsep+.5\textheight\relax
   \hbox to\textwidth{\hss\SuspendTagging{docedit}{\color{black!25}\Huge\bfseries\csname DE@ps@#1@wm\endcsname}\ResumeTagging{docedit}\hss}}}
+% The classification label (EXP-089; owner decision 51): \DEdefclassification{text}, the text
+% already written through the text emitter (empty for none). \DE@classmark{d} prints it in the
+% header and the footer of every page, out of the text block and out of the tagged reading order.
+\newcommand\DEdefclassification[1]{\gdef\DE@classif{#1}}
+\gdef\DE@classif{}
+\def\DE@classmark#1{\ifx\DE@classif\empty\else
+  \rlap{\lower#1\hbox to\textwidth{\hss\SuspendTagging{docedit}\small\DE@classif\ResumeTagging{docedit}\hss}}\fi}
 \def\DE@ps#1#2{\csname DE@ps@#1@#2\endcsname}
 \def\DE@story#1{\ifnum#1>0 \csname DE@story@#1\endcsname\fi}
 % The story a page shows (ADR 0032 §6): the first page of a section shows the first-page story
@@ -759,8 +766,8 @@
 \newdimen\DE@hh \newdimen\DE@fh \newdimen\DE@tmpd \newbox\DE@mbox
 \newdimen\DE@frametop \newdimen\DE@framebottom
 \def\DE@pagestyle#1#2{%
-  \def\@oddhead{\DE@noattrs\DE@wm{#1}\vbox to\headheight{\hsize\textwidth\DE@story{\DE@pick{#1}{h}{#2}}\vss}\hss}%
-  \def\@oddfoot{\DE@noattrs\vbox to\DE@fh{\hsize\textwidth\DE@story{\DE@pick{#1}{f}{#2}}\vss}\hss}%
+  \def\@oddhead{\DE@noattrs\DE@wm{#1}\DE@classmark{\headheight}\vbox to\headheight{\hsize\textwidth\DE@story{\DE@pick{#1}{h}{#2}}\vss}\hss}%
+  \def\@oddfoot{\DE@noattrs\DE@classmark{\DE@fh}\vbox to\DE@fh{\hsize\textwidth\DE@story{\DE@pick{#1}{f}{#2}}\vss}\hss}%
   \let\@evenhead\@oddhead \let\@evenfoot\@oddfoot}
 % The height of a story at the text width (header and footer growth).
 \def\DE@measure#1{%

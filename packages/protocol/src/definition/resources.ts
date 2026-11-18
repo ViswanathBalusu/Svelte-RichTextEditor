@@ -463,6 +463,23 @@ export const REST_SHAPES: readonly NamedShape[] = [
     ),
   ),
   named(
+    'ConnectHint',
+    obj(
+      {
+        url: req(str(), 'The WebSocket URL to open the channel on.'),
+        node: req(str(), 'The node the URL belongs to; empty when the service names no node.'),
+        source: req(
+          enm(['owner', 'routing', 'entry']),
+          'Where the URL came from: the owner of the document, rendezvous routing over the live nodes, or the address of the service itself.',
+        ),
+      },
+      {
+        doc: 'Where a client should open its channel (06 §2.1). A hint only: it grants nothing.',
+        spec: '05 §6.2; 06 §2.1',
+      },
+    ),
+  ),
+  named(
     'Activity',
     placeholder(
       "Changes and comment activity by other people since the caller's read marker (08 §10).",
@@ -1403,6 +1420,17 @@ export const OPERATIONS: readonly OperationDef[] = [
     owner: PRO,
   }),
   op({
+    operationId: 'getConnect',
+    method: 'GET',
+    path: '/documents/{id}/connect',
+    summary: 'The WebSocket URL of the node that owns the document (a hint).',
+    spec: '05 §6.2; 06 §2.1',
+    security: BOTH,
+    requires: 'view',
+    success: ok(ref('ConnectHint')),
+    owner: PRO,
+  }),
+  op({
     operationId: 'listThreads',
     method: 'GET',
     path: '/documents/{id}/threads',
@@ -1691,6 +1719,39 @@ export const OPERATIONS: readonly OperationDef[] = [
       owner: PRO,
     }),
   ),
+  op({
+    operationId: 'pingWebhook',
+    method: 'POST',
+    path: '/webhooks/{id}/ping',
+    summary: 'Sends a test delivery to one subscription, marked as a test.',
+    spec: '05 §6.2; 13 §10; ADR 0330 §2 (decision 177)',
+    security: SERVICE,
+    requires: 'Service credential',
+    params: { id: req(text({ minLength: 1 }), 'Subscription identifier.', { gaps: ['G59'] }) },
+    success: accepted(
+      obj({ deliveryId: req(text({ minLength: 1 }), 'The identifier of the test delivery.') }),
+    ),
+    gaps: ['G76'],
+    owner: PRO,
+  }),
+  op({
+    operationId: 'replayWebhookDelivery',
+    method: 'POST',
+    path: '/webhooks/{id}/deliveries/{deliveryId}/replay',
+    summary: 'Sends a recent delivery of the subscription again, under its own webhook-id.',
+    spec: '05 §6.2; 13 §10; ADR 0330 §2 (decision 177)',
+    security: SERVICE,
+    requires: 'Service credential',
+    params: {
+      id: req(text({ minLength: 1 }), 'Subscription identifier.', { gaps: ['G59'] }),
+      deliveryId: req(text({ minLength: 1 }), 'The delivery to send again.', { gaps: ['G59'] }),
+    },
+    success: accepted(
+      obj({ deliveryId: req(text({ minLength: 1 }), 'The identifier of the delivery sent.') }),
+    ),
+    gaps: ['G76'],
+    owner: PRO,
+  }),
   op({
     operationId: 'getAudit',
     method: 'GET',

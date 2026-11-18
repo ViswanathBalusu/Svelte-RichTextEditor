@@ -79,6 +79,17 @@ Region grants are not in the token. They are stored by the document service and 
 
 Host backends call the control plane with a service credential: an API key, or a JWT with the type header `dep-svc+jwt`, signed with keys that are registered separately from user-token keys. A user token can never become a service credential through a claim. A service call that acts for a user names that user in the `DEP-Actor` header, and history attributes the change to them.
 
+### 3.2.1 Agent tokens
+
+An assistant acts for a user under an agent identity (13 section 6.2; ADR 0234 part A). The server learns that a connection is an agent's only from its verified credential, never from the client's `origin` hint (04 section 2).
+
+- The document service keeps an agent registry per tenant: an agent identifier (`agt`), a display name, the owning host and the documents it may act on. A service credential registers an agent with `POST /agents` (a route that joins the table in 6.2 when it is added to the protocol definition). A user token cannot register an agent or become one.
+- An **agent token** is a short-lived JWT with the type header `dep-agent+jwt`, signed with keys registered separately from user-token keys. Its claims are `sub` (the user the assistant acts for), `agt`, `act` (`{ "sub": "<agt>" }`, the actor claim in the manner of RFC 8693), `tid`, `doc`, `aud` and a short `exp`.
+- Only the service mints an agent token (`POST /tokens` with a service credential, or a host signing key registered as an agent issuer). A browser never signs one.
+- A host backend that calls the control plane for an agent sends `DEP-Agent: <agt>` with its service credential and `DEP-Actor`. The service honours `DEP-Agent` only when that agent is registered to the same credential and the document is in its list. A user token cannot set it.
+- `author.agent` on a stored commit is the `agt` of the verified token, and `origin` is `assistant`. A commit on a user connection that claims `origin: "assistant"` is stored as an ordinary commit with the hint recorded as a claim.
+- Disabling an agent changes `rev`, so it loses access at once.
+
 ### 3.3 Revocation
 
 Grant changes take effect immediately (section 5.5). To end a user's access before the token expires, the host backend calls `POST /sessions/revoke` with the `sub` and optionally a document. The service records a watermark: tokens for that user issued before it are refused on both planes, so a revoked client cannot simply reconnect. The room closes that user's channels.
@@ -291,6 +302,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/fork` | POST | Service credential only. `atSeq`, whether grants are copied. The component raises `de-fork-request` so the host can call it |
 | `/documents/{id}/read-marker` | PUT | Records the caller's last seen `seq`. It can only move forward |
 | `/documents/{id}/activity` | GET | Changes and comment activity by other people since the caller's read marker |
+| `/documents/{id}/connect` | GET | Stage 2 (06 section 2.1). The WebSocket URL of the node that owns the document, or of the node routing would choose when it has none: `{ url, node, source }`. `source` is `owner`, `routing` or `entry` (the service's own address, when the node announces none). A hint only: it grants nothing, and a channel that lands elsewhere is forwarded. Needs `view` |
 | `/documents/{id}/threads` | GET, POST | POST body: `target` (`{ range: { from, to, baseSeq } }` or `{ block: id }`) and the first comment. `baseSeq` must be within the rebase window. The room maps the range to the head and checks `comment` there. GET accepts `?seq` |
 | `/threads/{tid}` | GET, PATCH, DELETE | PATCH `state` (`open`, `resolved`), `assignee` |
 | `/threads/{tid}/comments` | POST | Body may contain mentions (13, section 5) |
@@ -303,7 +315,9 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/imports` | POST | Body: `asset`, `format` (`docx`). Returns a job with warnings on completion |
 | `/imports/{jid}` | GET | |
 | `/fonts` | GET | Font manifest: families, styles, file URLs, hashes, licences, manifest version |
-| `/webhooks`, `/webhooks/{id}` | GET, POST, PATCH, DELETE | Service credential only. Event filters, secret rotation, a test ping, and replay of recent deliveries |
+| `/webhooks`, `/webhooks/{id}` | GET, POST, PATCH, DELETE | Service credential only. Event filters and secret rotation |
+| `/webhooks/{id}/ping` | POST | Service credential only. A test delivery to one subscription, marked as a test; answers 202 with its `deliveryId` (UX-079; decision 177) |
+| `/webhooks/{id}/deliveries/{deliveryId}/replay` | POST | Service credential only. Sends a recent delivery of that subscription again under its own `webhook-id`; answers 202 (UX-079; decision 177) |
 | `/audit`, `/search` | GET | Service credential only. 13, section 10 |
 | `/retention` | GET, PUT | Service credential only. The tenant retention policy; `keep_all` when none is set. PUT is audited. 08, section 11; 13, section 10 |
 | `/documents/{id}/retention` | GET, PUT | Service credential only. The document's own policy, the effective policy and its source. PUT is audited. 08, section 11; 13, section 10 |

@@ -9,6 +9,10 @@
  * ADR 0052. "Core" here is whatever the element passes as `core`: the editing core's views, and
  * the backend's ports adapted by the element (exports, grants, regions).
  */
+import type {
+  DataInput as AssistantDataInput,
+  PromptStructure as AssistantPromptStructure,
+} from './assistant/prompt.ts';
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extensions/document-api.ts';
 import type { FieldDraft } from './shell/field-properties.ts';
 import type { MarkupView } from './shell/markup-views.ts';
@@ -346,6 +350,54 @@ export interface AccessObject {
 export interface ClassificationLabel {
   readonly name: string;
 }
+
+/** What an assistant request is for (13 §6.2): the port's own task names. */
+export type AssistantTaskName = 'draft' | 'rewrite' | 'summarise' | 'answer';
+
+/** One piece of an assistant's answer, as the pane reads it (UX-045). */
+export type AssistantStreamChunk =
+  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'done' }
+  | { readonly kind: 'error'; readonly code: string; readonly message: string };
+
+/**
+ * The assistant as the shell sees it (UX-045). `request` builds the request from the selection, the
+ * blocks around it and the outline the reader may view (UX-047), sends it to the port and streams the
+ * answer. It changes nothing in the document. Aborting `signal` stops the request at the port.
+ */
+export interface AssistantApi {
+  /** True while the host's assistant port is attached. */
+  readonly available: ReadView<boolean>;
+  request(
+    task: AssistantTaskName,
+    prompt: string,
+    signal: AbortSignal,
+    /**
+     * Builds the request's structure from the user's request and the document text as data parts
+     * (UX-048 criterion 1); the pane gives `buildPrompt`, which loads with the pane. The API sends the
+     * result to the port beside the plain request.
+     */
+    structure?: (request: string, data: readonly AssistantDataInput[]) => AssistantPromptStructure,
+  ): AsyncIterable<AssistantStreamChunk>;
+  /**
+   * What the last request was built from, for the output guard (UX-048): the text of the context, in
+   * which a link may be found, and the identifiers of the assets attached to the document. Without
+   * it no link and no image passes.
+   */
+  source?(): { readonly text: string; readonly assets: readonly string[] };
+  /**
+   * Puts an approved result at the selection as suggestions, never as a direct edit (UX-046). Absent
+   * where the core cannot; the pane then offers no insertion. Nothing is applied when it refuses.
+   */
+  insert?(text: string): AssistantInsertResult;
+}
+
+/** One piece of document text for the assistant's request, with its source and label (UX-048). */
+export type { AssistantDataInput };
+
+/** What `AssistantApi.insert` did; `reason` is the core's (UX-046 criterion 4). */
+export type AssistantInsertResult =
+  { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
 /** One proofing finding as the interface reads it (UX-041): text, kind and suggestions, no position. */
 export interface ProofingFindingView {
@@ -727,6 +779,33 @@ export interface CoreApi {
    * Inserted by Ada (UX-035 criterion 4); null removes them.
    */
   setSuggestionLabel?(label: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null): void;
+  /**
+   * The suggestions of the document in order, with what the user may do with each (UX-036,
+   * UX-037). Read again when `revision` moves. Absent: the review tools are not offered.
+   */
+  suggestionItems?(): readonly ReviewItem[];
+  /** Moves to the next (1) or previous (-1) suggestion after the selection and shows it; null when none (UX-036). */
+  stepSuggestion?(direction: 1 | -1): ReviewItem | null;
+  /** Selects a suggestion and shows it; false for an unknown identifier (UX-036, UX-037). */
+  revealSuggestion?(id: string): boolean;
+  /** Accepts or rejects the suggestions in the selection, or the one the caret is in: one commit (UX-036). */
+  resolveAtSelection?(action: 'accept' | 'reject'): ReviewReport;
+  /**
+   * Accepts or rejects every suggestion in the selection or the document, or only an author's, or
+   * only one suggestion: one commit; those in a scope without `edit` stay pending and are counted.
+   */
+  resolveSuggestions?(
+    action: 'accept' | 'reject',
+    target?: 'selection' | 'document',
+    author?: string,
+    suggestion?: string,
+  ): ReviewReport;
+
+  /**
+   * The assistant port as the pane uses it (UX-045; 13 §6.2). Absent, or `available` false, when the
+   * host gave no assistant port: no assistant pane or command is offered then.
+   */
+  readonly assistant?: AssistantApi;
 
   /**
    * Spelling and grammar (UX-041; 13 §6.1). Absent, or `available` false, when the host gave no
@@ -1469,6 +1548,38 @@ export interface ThreadDetail {
 export type ThreadWrite =
   | { readonly ok: true; readonly detail: ThreadDetail }
   | { readonly ok: false; readonly code: string; readonly latest?: ThreadDetail };
+
+/** One suggestion as the review tools see it (UX-036, UX-037; 03 §5). */
+export interface ReviewItem {
+  readonly id: string;
+  /** Insertion, deletion or formatting change; `block` says it is on a block, not on text. */
+  readonly kind: 'ins' | 'del' | 'fmt';
+  readonly block: boolean;
+  /** The author's identifier, `user` on the suggestion mark. */
+  readonly user: string;
+  /** Position in the document, for order and for stepping. */
+  readonly from: number;
+  readonly to: number;
+  /** The words the suggestion covers, cut when long; empty for a block with no text. */
+  readonly text: string;
+  /**
+   * The server time of the commit that introduced it, when the core knows it (08 §14). Absent for
+   * a suggestion that was already in the document when it was loaded: the core has no record of
+   * its commit (the suggestion-to-commit index of HIS-042 would give it).
+   */
+  readonly committedAt?: string | null;
+  /** The capabilities the user has in the suggestion's scope. */
+  readonly caps: readonly Capability[];
+  /** Whether the user may accept or reject it now (`edit` in its scope, document not locked). */
+  readonly canResolve: boolean;
+}
+
+/** What an accept or reject did: the suggestions handled, those left pending, and where. */
+export interface ReviewReport {
+  readonly handled: number;
+  readonly skipped: number;
+  readonly skippedScopes: readonly string[];
+}
 
 /** Comment threads (05 §6.2). Creating one is a control-plane request, never a commit (13 §5). */
 export interface ThreadsService {

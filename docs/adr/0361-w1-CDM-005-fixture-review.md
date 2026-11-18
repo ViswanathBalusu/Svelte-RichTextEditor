@@ -15,9 +15,9 @@ No measurement was taken for this record. "Run" means that a test file of the pa
 | `cascade.json` | Run since 2026-11-15 (CDM-041): `src/cdm-041-cascade-fixtures.test.ts`; `flow.ts` now calls `resolveParagraph`, `resolveRun` and `resolveLabelRun` | Run: `src/cdm-041-cascade-fixtures.test.ts` |
 | `numbering-lists.json` | Run: `src/numbering-labels.test.ts`. Labels come from `computeLabels` | Gap. Not run. `convert.ts` calls `computeLabels` and `counterEffects`, so the labels are the shared ones, but no test proves it against the fixture |
 | `numbering-footnotes.json` | Run: `src/footnote-labels.test.ts` | Gap. Not run. Marks come from `computeLabels` |
-| `numbering-sequences.json` | Gap. Not run. A `seq` field with no cached text shows the stand-in `1` (`fieldText` in `flow.ts`) | Gap. Not run. Uses `computeLabels` |
-| `numbering-references.json` | Gap. Not run. The layout does not call `referenceText`; it shows the cached text of a reference | Gap. Not run. `convert.ts` and `inline.ts` call `referenceText` |
-| `numbering-projections.json` | Gap. Not run | Gap. Not run. `counterEffects` is called in `convert.ts`, `bundle.ts` and `writer.ts` |
+| `numbering-sequences.json` | Run: `src/fe-077-fixtures.test.ts` (FE-077, 2026-11-18) | Gap. Not run. Uses `computeLabels` |
+| `numbering-references.json` | Run: `src/fe-077-fixtures.test.ts` (FE-077, 2026-11-18) | Gap. Not run. `convert.ts` and `inline.ts` call `referenceText` |
+| `numbering-projections.json` | Run: `src/fe-077-fixtures.test.ts` (FE-077, 2026-11-18) | Gap. Not run. `counterEffects` is called in `convert.ts`, `bundle.ts` and `writer.ts` |
 | `paragraph-spacing.json` | Run: `src/cdm-043-fixtures.test.ts` | Run: `src/cdm-043-fixtures.test.ts`, `src/cdm-043-gap-compile.test.ts` |
 | `line-spacing.json` | Run: `src/cdm-043-line-heights.test.ts` | Gap. Not run. The class applies `multiple` per line in a `post_linebreak_filter` callback (`class/docedit.lua`, 09 §3.1), and `src/exp-021-spacing.test.ts` checks that rule, but not against the fixture |
 | `tabs.json` | Run: `src/cdm-044-tabs.test.ts` | Run: `src/cdm-044-tabs.test.ts` |

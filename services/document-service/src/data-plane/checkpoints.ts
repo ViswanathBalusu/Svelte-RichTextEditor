@@ -47,15 +47,22 @@ export class Checkpointer {
   readonly #store: CheckpointStore | undefined;
   readonly #index: CheckpointIndex | undefined;
   readonly #workers: Workers;
+  readonly #onSaved: ((ref: DocRef, seq: number) => void | Promise<void>) | undefined;
+  readonly #onSavedError: ((e: unknown) => void) | undefined;
 
   constructor(deps: {
     store: CheckpointStore | undefined;
     index: CheckpointIndex | undefined;
     workers: Workers;
+    /** Called after each stored checkpoint (BE-054); a failure goes to `onSavedError`. */
+    onSaved?: (ref: DocRef, seq: number) => void | Promise<void>;
+    onSavedError?: (e: unknown) => void;
   }) {
     this.#store = deps.store;
     this.#index = deps.index;
     this.#workers = deps.workers;
+    this.#onSaved = deps.onSaved;
+    this.#onSavedError = deps.onSavedError;
   }
 
   /** Whether a checkpoint store is configured. */
@@ -131,6 +138,16 @@ export class Checkpointer {
     const key = keyOf(ref, seq);
     if (index && this.#index)
       await this.#index.record(ref, { seq, key, bytes: e.encoded.byteLength, hash: e.hash });
+    if (this.#onSaved) {
+      // A failure of the listener never fails the checkpoint: it is written (BE-054).
+      try {
+        void Promise.resolve(this.#onSaved(ref, seq)).catch((err: unknown) =>
+          this.#onSavedError?.(err),
+        );
+      } catch (err) {
+        this.#onSavedError?.(err);
+      }
+    }
     return { ...e, seq, key };
   }
 

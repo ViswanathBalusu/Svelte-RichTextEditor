@@ -46,6 +46,12 @@ export interface ServiceConfig {
   exportTargets: string[];
   /** This node's identifier for ownership claims (06 §2.1). */
   node: string;
+  /**
+   * The WebSocket URL that clients of other nodes are told to use for this node, written on its
+   * lease row (BE-061; owner decision 200). Default none: the node then announces no address and
+   * `GET /documents/{id}/connect` answers with the address of the service itself.
+   */
+  nodeAddress: string | null;
   workers: number;
   workerTimeoutMs: number;
   maxBodyBytes: number;
@@ -112,6 +118,13 @@ export interface ServiceConfig {
   /** Scheduled maintenance (BE-052). */
   scheduler: boolean;
   /**
+   * The search index (BE-054): every stored checkpoint queues a job that indexes its words, and
+   * `GET /search` is offered to a service credential. Off by default (proposed, ADR 0388).
+   * The index copies the words of every document into more tables, which erasure and purge
+   * must then reach (HIS-039; SEC-045).
+   */
+  searchIndex: boolean;
+  /**
    * Webhook delivery (05 §7; BE-055, BE-056; PRM-053). Null: no event is delivered to a webhook
    * and `/webhooks` is not offered. Every number here is a setting with no default, because the
    * spec gives none (ADR 0146): `DOCEDIT_WEBHOOKS=true` needs all four of them.
@@ -153,6 +166,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   maxRebaseSteps: null,
   viewKey: null,
   exportTargets: ['pdf'],
+  nodeAddress: null,
   workers: 2,
   workerTimeoutMs: 60_000,
   maxBodyBytes: 1024 * 1024,
@@ -187,6 +201,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   externalWorkers: false,
   outboxWaitMs: 10_000,
   scheduler: true,
+  searchIndex: false,
   webhooks: null,
 };
 
@@ -323,6 +338,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     viewKey: env['DOCEDIT_VIEW_KEY'] ? Buffer.from(env['DOCEDIT_VIEW_KEY'], 'base64') : null,
     exportTargets: list(env['DOCEDIT_EXPORT_TARGETS'], DEFAULTS.exportTargets),
     node: env['DOCEDIT_NODE_ID'] ?? `${hostname()}-${process.pid}`,
+    nodeAddress: env['DOCEDIT_NODE_ADDRESS'] ?? null,
     workers: Math.max(1, int(env, 'DOCEDIT_WORKERS', DEFAULTS.workers)),
     workerTimeoutMs: int(env, 'DOCEDIT_WORKER_TIMEOUT_MS', DEFAULTS.workerTimeoutMs),
     maxBodyBytes: int(env, 'DOCEDIT_MAX_BODY_BYTES', DEFAULTS.maxBodyBytes),
@@ -359,6 +375,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     externalWorkers: flag(env, 'DOCEDIT_EXTERNAL_WORKERS', databaseUrl !== null),
     outboxWaitMs: int(env, 'DOCEDIT_OUTBOX_WAIT_MS', DEFAULTS.outboxWaitMs),
     scheduler: flag(env, 'DOCEDIT_SCHEDULER', DEFAULTS.scheduler),
+    searchIndex: flag(env, 'DOCEDIT_SEARCH_INDEX', DEFAULTS.searchIndex),
     webhooks: webhookSettings(env),
   };
   checkConfig(config);

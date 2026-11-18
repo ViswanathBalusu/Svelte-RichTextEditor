@@ -6,6 +6,7 @@
  */
 import { parsePrincipal, type PermissionState } from '@docedit/authority';
 import type { JsonNode } from '@docedit/model';
+import type { Placement } from './room-routing.ts';
 import type { AuditStore, OutboxStore } from '../storage/types.ts';
 import type { ReadMarkerStore } from '../storage/read-markers.ts';
 import type { ThreadStore } from '../storage/thread-store.ts';
@@ -37,6 +38,7 @@ import {
 import type { ExportPolicy, NotifyFn } from './exports.ts';
 import type { FontCatalogue } from './fonts.ts';
 import type { Cursors } from './http.ts';
+import type { WebhookDispatcher } from './webhook-dispatcher.ts';
 import type { WebhookSubscriptions } from './webhook-subscriptions.ts';
 import type { RetentionService } from './retention.ts';
 import type { HoldService } from './holds.ts';
@@ -88,6 +90,11 @@ export interface HandlerDeps {
   publicUrl: string;
   restPath: string;
   wsPath: string;
+  /**
+   * Routing over the live nodes (BE-060), for `GET /documents/{id}/connect` (BE-061). Absent on a
+   * node without leases: the route then answers with the address of the service itself.
+   */
+  placement?: Placement;
   features: readonly string[];
   /** Export targets the worker supports (PRO-063 criterion 3). */
   exportTargets: readonly string[];
@@ -133,6 +140,8 @@ export interface HandlerDeps {
   versions?: VersionStorePort;
   /** The webhook subscriptions the `/webhooks` routes use (UX-079). Absent: the routes are not offered. */
   webhooks?: WebhookSubscriptions;
+  /** The dispatcher that sends the test ping and replays deliveries (ADR 0330 §2). Absent: not offered. */
+  webhookDispatcher?: Pick<WebhookDispatcher, 'ping' | 'replay'>;
   /** The retention policies of `/retention` and `/documents/{id}/retention` (UX-080). Absent: not offered. */
   retention?: RetentionService;
   /** The legal holds of `/holds` and `/documents/{id}/holds` (UX-080 criteria 2 and 3). Absent: not offered. */

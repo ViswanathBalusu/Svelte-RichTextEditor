@@ -476,6 +476,33 @@
       }
     },
     {
+      "id": "shell.miniToolbar",
+      "kind": "shell",
+      "conventional": [],
+      "keys": [
+        "Alt-F10"
+      ],
+      "alternative": [],
+      "browsers": {
+        "chrome": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "edge": {
+          "status": "none-listed",
+          "conflicts": []
+        },
+        "firefox": {
+          "status": "not-checked",
+          "conflicts": []
+        },
+        "safari": {
+          "status": "none-listed",
+          "conflicts": []
+        }
+      }
+    },
+    {
       "id": "shell.applyFormat",
       "kind": "shell",
       "conventional": [],
