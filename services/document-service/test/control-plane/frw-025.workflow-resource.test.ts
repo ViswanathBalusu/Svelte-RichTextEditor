@@ -156,7 +156,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
-      'refuses a PUT with workflow_active once the state is not draft (criterion 3)',
+      'refuses a PUT with workflow_active once the state is not draft (criterion 3) [neg:code workflow_active]',
       async () => {
         const doc = await h.createDocument();
         const owner = h.userToken({ [doc]: 'owner' });

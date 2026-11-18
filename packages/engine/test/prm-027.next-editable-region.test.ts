@@ -165,17 +165,39 @@ describe('nextEditableRegionStart', () => {
   });
 });
 
-describe('the named query behind the command (PRM-027 criterion 1, lane w4)', () => {
-  it('lists hasNextEditableRegion among the queries the core answers', () => {
+describe('the named query the toolbar asks (PRM-027 criteria 1 and 4)', () => {
+  it('is listed in queryNames and answers whether a later region may be edited', () => {
     const c = core();
     expect(c.queryNames).toContain('hasNextEditableRegion');
-  });
-
-  it('answers true while a later region may be edited, and false after the last one', () => {
-    const c = core();
     caretAt(c, textStart(c, IDS.before));
     expect(c.query('hasNextEditableRegion')).toBe(true);
     caretAt(c, textStart(c, IDS.inC));
     expect(c.query('hasNextEditableRegion')).toBe(false);
+  });
+
+  it('follows an access change: the answer turns off and on without moving the caret', () => {
+    const c = core();
+    caretAt(c, textStart(c, IDS.inA));
+    expect(c.query('hasNextEditableRegion')).toBe(true);
+
+    const base = access();
+    // Region C may no longer be edited: nothing is left after the caret.
+    c.setAccess({
+      ...base,
+      rev: 2,
+      scopes: { ...base.scopes, [`region:${IDS.regionC}`]: [...READ] },
+    });
+    expect(c.query('hasNextEditableRegion')).toBe(false);
+    expect(c.run('nextEditableRegion')).toBe(false);
+
+    // Region B becomes editable: it is the next one.
+    c.setAccess({
+      ...base,
+      rev: 3,
+      scopes: { ...base.scopes, [`region:${IDS.regionB}`]: [...EDIT] },
+    });
+    expect(c.query('hasNextEditableRegion')).toBe(true);
+    expect(c.run('nextEditableRegion')).toBe(true);
+    expect(caret(c)).toBe(textStart(c, IDS.inB));
   });
 });

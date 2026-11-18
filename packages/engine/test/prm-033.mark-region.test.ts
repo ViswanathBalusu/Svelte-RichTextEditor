@@ -7,6 +7,7 @@
 import type { Node as PMNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
+import type { CdmEnvelope } from '../src/api.ts';
 import { DocumentCore } from '../src/headless.ts';
 import { unconfirmed } from '../src/sync/state.ts';
 import { internals } from '../src/testing.ts';
@@ -79,5 +80,99 @@ describe('markRegion wraps the selected blocks in a new region (PRM-033 criterio
     const c = core();
     selectParagraph(c, SPIKE_IDS.intro);
     expect(c.run('markRegion', { title: '   ' })).toBe(false);
+  });
+});
+
+/** Selects from the start of paragraph `a` to the end of paragraph `b`. */
+function selectAcross(c: DocumentCore, a: string, b: string): void {
+  const i = internals(c);
+  const from = posOf(i.state.doc, a) + 1;
+  const toStart = posOf(i.state.doc, b) + 1;
+  const to = toStart + i.state.doc.nodeAt(toStart - 1)!.textContent.length;
+  i.dispatch(i.state.tr.setSelection(TextSelection.create(i.state.doc, from, to)));
+}
+
+describe('the command is disabled for a selection that touches a region (PRM-033 criterion 2)', () => {
+  it('gives `nested` for a selection that starts in the body and ends inside a region', () => {
+    const c = core();
+    const i = internals(c);
+    const from = posOf(i.state.doc, SPIKE_IDS.intro) + 2;
+    const to = posOf(i.state.doc, SPIKE_IDS.legal) + 3;
+    i.dispatch(i.state.tr.setSelection(TextSelection.create(i.state.doc, from, to)));
+    expect(c.query('canMarkRegion')).toBe(false);
+    expect(c.queryReason('canMarkRegion')).toBe('nested');
+    const before = internals(c).state.doc;
+    expect(c.run('markRegion', { title: 'Across' })).toBe(false);
+    expect(internals(c).state.doc.eq(before)).toBe(true);
+  });
+
+  it('gives `nested` for whole blocks that enclose a whole region, and changes nothing', () => {
+    const c = core();
+    selectAcross(c, SPIKE_IDS.intro, SPIKE_IDS.after);
+    expect(c.query('canMarkRegion')).toBe(false);
+    expect(c.queryReason('canMarkRegion')).toBe('nested');
+    const before = internals(c).state.doc;
+    const queued = unconfirmed(internals(c).sync).length;
+    expect(c.run('markRegion', { title: 'Around' })).toBe(false);
+    expect(internals(c).state.doc.eq(before)).toBe(true);
+    expect(unconfirmed(internals(c).sync).length).toBe(queued);
+  });
+
+  it('still allows whole blocks that hold no region', () => {
+    const c = core();
+    selectAcross(c, SPIKE_IDS.title, SPIKE_IDS.intro);
+    expect(c.query('canMarkRegion')).toBe(true);
+    expect(c.queryReason('canMarkRegion')).toBeNull();
+  });
+});
+
+/** The spike document with `total` regions in its body (the spike has one). */
+function documentWithRegions(total: number): CdmEnvelope {
+  const envelope = spikeDocument();
+  const body = (
+    envelope.doc as { content: Array<{ type: string; content: unknown[] }> }
+  ).content.find((n) => n.type === 'body')!;
+  const extra = Array.from({ length: total - 1 }, (_, n) => {
+    const pad = String(n + 1).padStart(12, '0');
+    return {
+      type: 'region',
+      attrs: { id: `rGen${pad}`, title: `Generated ${n + 1}`, policy: 'inherit' },
+      content: [
+        { type: 'paragraph', attrs: { id: `pGen${pad}` }, content: [{ type: 'text', text: 'x' }] },
+      ],
+    };
+  });
+  body.content.push(...extra);
+  return envelope;
+}
+
+describe('the region limit in the editor (PRM-033 criterion 3)', () => {
+  it('at 499 regions the command is enabled and the 500th is made', () => {
+    const c = new DocumentCore({
+      doc: documentWithRegions(499),
+      access: ownerAccess(),
+      schedule: microtask,
+    });
+    selectParagraph(c, SPIKE_IDS.intro);
+    expect(c.query('canMarkRegion')).toBe(true);
+    expect(c.run('markRegion', { title: 'Number 500' })).toBe(true);
+    expect(regions(internals(c).state.doc).length).toBe(500);
+  });
+
+  it('at 500 regions the command is disabled with the reason `limit`, and nothing changes', () => {
+    const c = new DocumentCore({
+      doc: documentWithRegions(500),
+      access: ownerAccess(),
+      schedule: microtask,
+    });
+    expect(regions(internals(c).state.doc).length).toBe(500);
+    selectParagraph(c, SPIKE_IDS.intro);
+    expect(c.query('canMarkRegion')).toBe(false);
+    expect(c.queryReason('canMarkRegion')).toBe('limit');
+    const before = internals(c).state.doc;
+    const queued = unconfirmed(internals(c).sync).length;
+    expect(c.run('markRegion', { title: 'Number 501' })).toBe(false);
+    expect(internals(c).state.doc.eq(before)).toBe(true);
+    expect(unconfirmed(internals(c).sync).length).toBe(queued);
   });
 });

@@ -216,7 +216,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     t()(
-      'row 6: a viewer or a commenter cannot upload an asset; a suggester or an editor can',
+      'row 6: a viewer or a commenter cannot upload an asset; a suggester or an editor can [neg:row asset.upload]',
       async () => {
         const body = { filename: 'a.png', mime: 'image/png', size: 10 };
         for (const role of ['viewer', 'commenter']) {

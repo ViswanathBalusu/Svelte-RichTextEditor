@@ -15,6 +15,7 @@
  *   of the source are not copied.
  */
 import { formatTimestamp, uuid7, type JsonEnvelope } from '@docedit/model';
+import { minVisibleSeqOf, refuseBelowGate, regionInfosOfJson } from './gate.ts';
 import { json, type Kit } from './kit.ts';
 import { guard, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
@@ -62,7 +63,7 @@ export function historyRoutes(k: Kit): Record<string, Handler> {
     if (ctx.caller.kind !== 'service')
       throw new ApiError('forbidden', 'fork is a service-credential operation (05 §6.2; 08 §8)');
     const source = ctx.params['id']!;
-    await liveDocument(ctx, source);
+    const sourceRecord = await liveDocument(ctx, source);
     const body = (await ctx.body()) as ForkBody;
     if (body.copyGrants !== undefined && typeof body.copyGrants !== 'boolean')
       throw new ApiError('validation_failed', 'copyGrants is a boolean', {
@@ -72,6 +73,24 @@ export function historyRoutes(k: Kit): Record<string, Handler> {
     const head = await d.logs.head(ref);
     if (body.atSeq > head.seq)
       throw new ApiError('not_found', `no content at seq ${body.atSeq}; the head is ${head.seq}`);
+    // A fork reveals the state at `atSeq`: the same gate as every other seq (HIS-024). A service
+    // credential passes it; a user credential is refused above, and would meet it here.
+    const atHead = await d.content.rebuild(ref, head.incarnation, head.seq);
+    refuseBelowGate(
+      body.atSeq,
+      await minVisibleSeqOf({
+        caller: ctx.caller,
+        ref,
+        record: sourceRecord,
+        head: head.seq,
+        regions: regionInfosOfJson(atHead.doc),
+        perms: await d.grants.current(ref),
+        logs: d.logs,
+        now: d.now(),
+      }),
+      head.seq,
+      'atSeq',
+    );
     // The content as it was at `atSeq`, read from the source's own log (the same read as a pinned
     // content read, without the caller's projection: a service credential sees full history).
     const full = await d.content.rebuild(ref, head.incarnation, body.atSeq);

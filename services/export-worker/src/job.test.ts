@@ -6,6 +6,7 @@
 import {
   JobRunner,
   MemoryJobQueue,
+  withQueueProof,
   type JobQueue,
   type JobRecord,
 } from '@docedit/document-service';
@@ -14,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { demoDocument } from '../test/documents.ts';
 import { TEST_FONTS } from '../test/fonts.ts';
 import type { ContentStores } from './content.ts';
+import { documentLang } from './content.ts';
 import { CODES } from './diagnostics.ts';
 import {
   createExportHandler,
@@ -126,30 +128,35 @@ function harness(
   });
   const tenant = uuid7();
   const doc = uuid7();
-  const start = async (payload: Record<string, unknown> = {}) => {
+  // `signWith` is a queue proof key: the payload is signed as the control plane signs it (EXP-067).
+  const start = async (payload: Record<string, unknown> = {}, signWith?: string) => {
+    const body = {
+      doc,
+      target: 'pdf',
+      seq: 0,
+      incarnation: INCARNATION,
+      options: {},
+      requester: 'user-1',
+      role: 'editor',
+      view: 'v',
+      hiddenRegions: [],
+      hiddenValues: [],
+      ...payload,
+    };
     const job = await queue.enqueue(tenant, {
       kind: 'export',
       doc,
       createdBy: 'user-1',
-      payload: {
-        doc,
-        target: 'pdf',
-        seq: 0,
-        incarnation: INCARNATION,
-        options: {},
-        requester: 'user-1',
-        role: 'editor',
-        view: 'v',
-        hiddenRegions: [],
-        hiddenValues: [],
-        ...payload,
-      },
+      payload: signWith
+        ? withQueueProof(signWith, { tenant, kind: 'export', doc, cacheKey: null }, body)
+        : body,
     });
     const done = runner.runOnce().then(async () => (await queue.get(tenant, job.id))!);
     return { id: job.id, done };
   };
-  const run = async (payload: Record<string, unknown> = {}) => (await start(payload)).done;
-  return { start, run, stored, metrics, reports, queue, tenant };
+  const run = async (payload: Record<string, unknown> = {}, signWith?: string) =>
+    (await start(payload, signWith)).done;
+  return { start, run, stored, metrics, reports, queue, tenant, runner };
 }
 
 const codes = (job: JobRecord) =>
@@ -360,6 +367,41 @@ describe('the export job handler (EXP-001)', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('refuses a job the control plane did not queue, when a proof key is set (EXP-067 criterion 4)', async () => {
+    const key = 'k'.repeat(40);
+    const { compile, calls } = fakeCompile();
+    const h = harness({ compile, queueProofKey: key });
+    // Written to the queue by something else: no proof, a proof under another key, a changed option.
+    const bare = await h.run();
+    expect(bare.state).toBe('failed');
+    expect(bare.error?.code).toBe('validation_failed');
+    expect(codes(bare)).toContain('bundle_refused');
+    const wrongKey = await h.run({}, 'j'.repeat(40));
+    expect(codes(wrongKey)).toContain('bundle_refused');
+    const signed = await h.start({ options: { profile: 'preview' } }, key);
+    const row = (await h.queue.get(h.tenant, signed.id))!;
+    await signed.done;
+    expect(calls).toHaveLength(1);
+    // A signed payload that was changed afterwards (another sequence number) fails.
+    const forged = await h.queue.enqueue(h.tenant, {
+      kind: 'export',
+      doc: row.doc,
+      createdBy: 'user-1',
+      payload: { ...row.payload, seq: 7 },
+    });
+    expect(forged.payload['queueProof']).toBe(row.payload['queueProof']);
+    await h.runner.runOnce();
+    const refused = (await h.queue.get(h.tenant, forged.id))!;
+    expect(refused.state).toBe('failed');
+    expect(codes(refused)).toContain('bundle_refused');
+    // Nothing compiled for any refused job; the one signed job compiled.
+    expect(calls).toHaveLength(1);
+    // Without a key on the worker the proof is not checked.
+    const open = harness({ compile });
+    expect((await open.run()).state).toBe('completed');
+    expect(calls).toHaveLength(2);
+  });
+
   it('projects a restricted view (EXP-123), and refuses options it cannot honour without compiling', async () => {
     const { compile, calls } = fakeCompile();
     const h = harness({ compile });
@@ -384,6 +426,34 @@ describe('the export job handler (EXP-001)', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]!.files['main.tex']).toBe(calls[1]!.files['main.tex']);
     expect(String(calls[0]!.files['main.tex'])).not.toContain('shellesc');
+  });
+
+  it('records the locale and time zone it used, the defaults when none are set (EXP-005 criterion 4)', async () => {
+    const { compile, calls } = fakeCompile();
+    const h = harness({ compile });
+    const manifestOf = (i: number) =>
+      JSON.parse(new TextDecoder().decode(h.stored[i * 4 + 3]!.bytes)) as {
+        locale: string;
+        timeZone: string;
+        bundle: { hash: string; options: { timeZone: string } };
+      };
+    expect((await h.run()).state).toBe('completed');
+    // No option: the document's language (else en-GB) and UTC, the defaults of ADR 0045 (proposed).
+    const lang = documentLang(demoDocument().envelope);
+    expect(manifestOf(0)).toMatchObject({ locale: lang ?? 'en-GB', timeZone: 'UTC' });
+    expect(manifestOf(0).bundle.options.timeZone).toBe('UTC');
+    expect((await h.run({ options: { locale: 'de-DE', timeZone: 'Europe/Berlin' } })).state).toBe(
+      'completed',
+    );
+    expect(manifestOf(1)).toMatchObject({ locale: 'de-DE', timeZone: 'Europe/Berlin' });
+    // The zone reaches the bundle's manifest, so the two jobs have different bundle hashes.
+    expect(manifestOf(1).bundle.options.timeZone).toBe('Europe/Berlin');
+    expect(manifestOf(1).bundle.hash).not.toBe(manifestOf(0).bundle.hash);
+    expect(calls).toHaveLength(2);
+    // A zone or a locale outside the rules is refused before anything compiles.
+    const bad = await h.run({ options: { timeZone: 'Mars/Olympus' } });
+    expect(bad.error?.code).toBe('validation_failed');
+    expect(calls).toHaveLength(2);
   });
 
   it('stops a cancelled job: the sandbox is signalled and no result is kept (EXP-070 criterion 3)', async () => {

@@ -32,6 +32,8 @@ import {
   utf8Length,
   type Commit,
   type Content,
+  type FieldInfo,
+  type FieldValues,
   type Grants,
   type GrantsPatch,
   type Inflight,
@@ -47,6 +49,7 @@ import { RoomBridge, type DepOutbound } from '@docedit/protocol/bridge';
 import type { Node } from 'prosemirror-model';
 import { Step } from 'prosemirror-transform';
 import { MockChannel, type ChannelHost, type ChannelForward } from './channel.ts';
+import { fieldsOf, prefillSteps, valuesByKey } from './fields.ts';
 import { MemoryLog } from './storage.ts';
 
 export interface DocumentHooks {
@@ -92,6 +95,8 @@ export class MockDocument implements ChannelHost {
   /** The room's output as DEP payloads (`@docedit/protocol/bridge`; S6 report, section 6). */
   private readonly bridge: RoomBridge;
   private nextChannel = 1;
+  /** Answers to server-authored commits: the requester is not a channel (04 §10). */
+  private readonly requesters = new Map<string, Outbound['msg'][]>();
   state: 'active' | 'locked' | 'archived' = 'active';
 
   constructor(
@@ -357,7 +362,13 @@ export class MockDocument implements ChannelHost {
    * coalesced, and `perm.changed` waits for the control commit of its revision (D12).
    */
   private deliver(send: readonly Outbound[]): void {
-    this.dispatch(this.bridge.translate(send));
+    const rest: Outbound[] = [];
+    for (const o of send) {
+      const answers = this.requesters.get(o.channel);
+      if (answers) answers.push(o.msg);
+      else rest.push(o);
+    }
+    this.dispatch(this.bridge.translate(rest));
   }
 
   private dispatch(out: readonly DepOutbound[]): void {
@@ -488,6 +499,74 @@ export class MockDocument implements ChannelHost {
     }));
     const out: RegionState = state === 'approved' ? { state, seq: this.head } : { state };
     return { value: out, etag: `"r${this.perms.revision}"` };
+  }
+
+  // --- Fields (12 §3, §9, §10) ---------------------------------------------------------------
+
+  /** `GET /documents/{id}/fields`: the derived list, in document order. */
+  fieldList(): FieldInfo[] {
+    return fieldsOf(this.room.document).map((f) => f.info);
+  }
+
+  /** `GET /documents/{id}/field-values`: by key, at the head or pinned with `seq`. */
+  fieldValues(seq?: number, keys: readonly string[] = []): Tagged<FieldValues & { seq: number }> {
+    const at = seq ?? this.head;
+    const doc = seq === undefined ? this.room.document : schema.nodeFromJSON(this.content(seq).doc);
+    return {
+      value: { values: valuesByKey(fieldsOf(doc), keys), seq: at },
+      etag: `"v.${this.incarnation}.${at}"`,
+    };
+  }
+
+  /**
+   * `PATCH /documents/{id}/field-values`: prefill by key (12 §9). One server-authored commit with
+   * origin `prefill`, all or nothing. The room applies it like a client commit (04 §5) and the
+   * answer is read back from its effects.
+   */
+  prefill(values: Readonly<Record<string, unknown>>, ifMatch: string): Tagged<FieldValues> {
+    if (ifMatch !== '*' && ifMatch !== this.fieldValues().etag)
+      throw new PortError('precondition_failed', 'the field values changed since they were read');
+    if (Object.keys(values).length === 0)
+      throw new PortError('validation_failed', 'a prefill names at least one key');
+    if (this.perms.workflowActive)
+      throw new PortError('workflow_active', 'a workflow is active; participants fill the fields');
+    if (this.held) throw new PortError('unavailable', 'writes are held');
+    this.performWrites(false);
+    const steps = prefillSteps(this.room.document, values);
+    const requester = `r${this.nextChannel++}`;
+    const answers: Outbound['msg'][] = [];
+    this.requesters.set(requester, answers);
+    try {
+      const fx = this.room.author(requester, {
+        id: uuid7(this.hooks.now()),
+        base: this.room.head,
+        steps,
+        origin: 'prefill',
+        as: 'system',
+        preconditions: {
+          revision: this.perms.revision,
+          head: this.room.head,
+          documentState: this.perms.documentState,
+          workflowActive: this.perms.workflowActive,
+        },
+      });
+      this.deliver(fx.send);
+      if (fx.write) {
+        this.pendingWrite = fx.write;
+        this.performWrites(false);
+      }
+    } finally {
+      this.requesters.delete(requester);
+    }
+    const reject = answers.find((m) => m.t === 'sync.reject');
+    if (reject?.t === 'sync.reject') {
+      const code = reject.code === 'field_invalid' ? 'field_invalid' : 'conflict';
+      throw new PortError(code, `the prefill was refused (${reject.code})`);
+    }
+    return {
+      value: { values: valuesByKey(fieldsOf(this.room.document), Object.keys(values)) },
+      etag: this.fieldValues().etag,
+    };
   }
 
   // --- Snapshot commits (04 §3.2; PUT /documents/{id}/content) ------------------------------

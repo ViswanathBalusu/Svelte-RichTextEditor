@@ -5,75 +5,43 @@
  * `src/exp-114-references.compile.test.ts` checks every file against its SHA-256 and validates it
  * with veraPDF.
  *
- * Run with: node packages/export-latex/scripts/exp-114-make-references.ts
+ * Run with: node packages/export-latex/scripts/exp-114-make-references.ts [file names]
+ * With file names only those references are made and the manifest is merged.
  * A change to a reference is a change to the converter's output: it must be reviewed with the
- * differences shown (EXP-114 criterion 4), which this script does not do.
+ * differences shown (EXP-114 criterion 4): this script prints them (text positions and pixels,
+ * old file against new) before it overwrites a file, and the reviewer reads them with the change.
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import type { CdmEnvelope } from '@docedit/model';
-import { doc, para } from '../test/docs.ts';
-import { convertAndCompile, sandboxReady } from '../test/harness.ts';
-
-const INSTANT = '2026-11-06T10:00:00.000Z';
-const refDir = fileURLToPath(new URL('../test/references/', import.meta.url));
-
-interface Reference {
-  file: string;
-  source: string;
-  title: string;
-  options: Record<string, unknown>;
-  flavours: string[];
-}
-
-const sample = (): CdmEnvelope =>
-  doc([
-    para('Accessible report', { style: 'Heading1' }),
-    para('First body paragraph with some text.'),
-    para('Second body paragraph.'),
-  ]);
-
-const s4Path = fileURLToPath(
-  new URL('../../../services/export-worker/fixtures/s4-corpus/s4-01p.cdm.json', import.meta.url),
-);
-
-const references: Array<Reference & { envelope: () => CdmEnvelope }> = [
-  {
-    file: 'exp-114-sample-ua2-a4f.pdf',
-    source: 'inline sample (test/docs.ts, as EXP-111 criterion 1)',
-    title: 'exp-114-sample',
-    options: { tagging: 'on', pdfStandard: 'ua-2+a-4f' },
-    flavours: ['ua2', '4f'],
-    envelope: sample,
-  },
-  {
-    file: 'exp-114-s4-01p-ua2-a4f.pdf',
-    source: 'services/export-worker/fixtures/s4-corpus/s4-01p.cdm.json',
-    title: 'exp-114-s4-01p',
-    options: { tagging: 'on', pdfStandard: 'ua-2+a-4f' },
-    flavours: ['ua2', '4f'],
-    envelope: () => JSON.parse(readFileSync(s4Path, 'utf8')) as CdmEnvelope,
-  },
-];
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { compareWithReference } from '../../../services/export-worker/src/exp-114-reference-compare.ts';
+import { sandboxReady } from '../test/harness.ts';
+import {
+  compileReference,
+  INSTANT,
+  refDir,
+  references,
+  type Reference,
+} from '../test/references.ts';
 
 async function main(): Promise<void> {
   const r = await sandboxReady();
   if (!r.ok) throw new Error(`sandboxed compiles cannot run here: ${r.reason}`);
   mkdirSync(refDir, { recursive: true });
-  const manifest: Array<Omit<Reference, 'envelope'> & { sha256: string }> = [];
+  const manifest: Array<Omit<Reference, 'input'> & { sha256: string }> = [];
+  const only = process.argv.slice(2);
   for (const ref of references) {
-    const c = await convertAndCompile(ref.envelope(), {
-      profile: 'final',
-      title: ref.title,
-      instant: INSTANT,
-      timeZone: 'Europe/London',
-      suggestions: 'accept',
-      layout: 'block',
-      ...ref.options,
-    } as never);
+    if (only.length && !only.includes(ref.file)) continue;
+    const c = await compileReference(ref);
     if (!c.compile.ok || !c.compile.pdf)
       throw new Error(`the compile of ${ref.file} failed:\n${c.compile.log.slice(-1500)}`);
+    // A changed reference is shown with its differences (criterion 4): the old file against the new.
+    if (existsSync(refDir + ref.file)) {
+      const old = new Uint8Array(readFileSync(refDir + ref.file));
+      const cmp = await compareWithReference(ref.file, c.compile.pdf, old);
+      console.log(
+        cmp.differs ? cmp.report : `${ref.file}: no difference from the stored reference`,
+      );
+    }
     writeFileSync(refDir + ref.file, c.compile.pdf);
     const sha256 = createHash('sha256').update(c.compile.pdf).digest('hex');
     manifest.push({
@@ -82,13 +50,26 @@ async function main(): Promise<void> {
       title: ref.title,
       options: ref.options,
       flavours: ref.flavours,
+      ...(ref.corpus ? { corpus: ref.corpus } : {}),
+      ...(ref.without ? { without: ref.without } : {}),
+      ...(ref.note ? { note: ref.note } : {}),
       sha256,
     });
     console.log(`${ref.file} ${c.compile.pdf.length} bytes ${sha256}`);
   }
+  // With names on the command line only those references are made, and the manifest is merged.
+  const old = only.length
+    ? (
+        JSON.parse(readFileSync(refDir + 'manifest.json', 'utf8')) as {
+          references: typeof manifest;
+        }
+      ).references
+    : [];
+  const merged = [...old.filter((o) => !manifest.some((m) => m.file === o.file)), ...manifest];
+  merged.sort((a, b) => a.file.localeCompare(b.file));
   writeFileSync(
     refDir + 'manifest.json',
-    JSON.stringify({ instant: INSTANT, references: manifest }, null, 2) + '\n',
+    JSON.stringify({ instant: INSTANT, references: merged }, null, 2) + '\n',
   );
 }
 

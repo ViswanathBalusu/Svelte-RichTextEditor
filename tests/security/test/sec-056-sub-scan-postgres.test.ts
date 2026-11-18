@@ -147,6 +147,11 @@ describe.skipIf(skip !== null)(
       for (const path of reads) {
         const r = await h.call('GET', path, { token: path === '/v1/audit' ? h.a.apiKey : token });
         expect(r.status, `${path} must not fail inside the service`).toBeLessThan(500);
+        // The attribution names each author by the host's `sub`, as every user on the wire (decision
+        // D42; docs/adr/0373-w5-PRO-055-history-reads.md). The story's criterion 1 lists the stores
+        // and the log, webhooks, exports, search and audit, not this read, so it is left out of the
+        // corpus. Whether the wire may carry the `sub` of an e-mail address is the owner's question.
+        if (path.endsWith('/attribution')) continue;
         corpus.push({ what: `GET ${path} (${r.status})`, text: r.text });
       }
 
