@@ -245,6 +245,7 @@ The document service sends no e-mail and no text messages. It raises webhooks (`
 3. A separate signing service applies a PAdES seal (baseline B-LT or B-LTA) and an RFC 3161 time-stamp. Its keys are in a hardware security module or a cloud key service. LaTeX workers never hold keys.
 4. The sealed bytes are stored immutably. The chain head is written to write-once storage. An evidence bundle (log segment, control commits, evidence record, verification instructions) can be exported for third-party verification.
 5. The sealed PDF is never rewritten. Long-term validation data is added only as incremental updates, and a scheduled job renews time-stamps before they expire.
+6. When values or regions are hidden from some participants (ADR 0019), the owner and anyone with `manage` receive the sealed PDF of the full document, and each participant receives a sealed PDF made from their own projection, sealed separately, so that nobody holds a file with what they could not read. The evidence record states which of the two each participant received and the hashes of the full document and of each view, and holds no hidden value. Decided on 2026-11-15 (owner decision 133; ADR 0403, section 3).
 
 ### 8.3 Legal stance
 
