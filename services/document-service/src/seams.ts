@@ -358,7 +358,14 @@ export interface DataPlane extends RoomNotifier {
     // Added by packet A, phase 1b: the request's `traceparent` (BE-087).
     // HIS-019: `restore` for a whole-document restore (default `import`).
     // SYN-030: `requestId` names the caller's request (an import job), so a retry is one commit.
-    opts?: { traceparent?: string; reason?: 'import' | 'restore'; requestId?: string },
+    // BE-039: head names what the caller authorised the change against (the ETag it matched, the head
+    // it restored at), so that a retry of the same replacement is one commit even without a `requestId`.
+    opts?: {
+      traceparent?: string;
+      reason?: 'import' | 'restore';
+      requestId?: string;
+      head?: string;
+    },
   ): Promise<{ seq: number }>;
   // --- Added by packet A1 (additive). ---------------------------------------------------------
   /**
