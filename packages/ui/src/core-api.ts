@@ -503,6 +503,12 @@ export interface ExportOptions {
   readonly profile?: 'preview' | 'final';
   readonly tagging?: 'on' | 'draft' | 'off';
   readonly fields?: 'flatten' | 'blank';
+  /** A standard of the published schema (09 §9.1); absent, the service uses its default. */
+  readonly pdfStandard?: 'ua-2' | 'a-4';
+  /** A language tag for dates and language-dependent text; absent, the schema's default applies. */
+  readonly locale?: string;
+  /** An IANA time zone name; absent, the schema's default applies. */
+  readonly timeZone?: string;
 }
 
 /** A diagnostic of an export (09 §9.2; EXP-065). */
