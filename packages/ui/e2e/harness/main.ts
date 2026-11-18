@@ -289,7 +289,10 @@ let duringInput = false;
 /** The checker's document (UX-066, UX-067): one issue of each kind, and one in region rLegal. */
 let checkerAltFixed = false;
 const checkerSelected: string[] = [];
+/** How many times the checker read the document (UX-066 criterion 5). */
+let checkerReads = 0;
 function checkerContent(): unknown {
+  checkerReads += 1;
   const text = (value: string, marks: unknown[] = []) =>
     marks.length ? { type: 'text', text: value, marks } : { type: 'text', text: value };
   const para = (id: string, style: string | null, content: unknown[]) => ({
@@ -722,6 +725,12 @@ const harness = {
   documentContent: () => JSON.stringify(DOCUMENT_CONTENT),
   /** The blocks the checker pane asked the core to select, in order (UX-067 criterion 1). */
   checkerSelected: () => checkerSelected.slice(),
+  /** How many times the checker has read the document since the page loaded (UX-066 criterion 5). */
+  checkerReads: () => checkerReads,
+  /** Changes the document count times in one task, as a burst of keystrokes would (UX-066 criterion 5). */
+  burstChecker: (count: number) => {
+    for (let i = 0; i < count; i++) need().core.revision.set(need().core.revision.get() + 1);
+  },
   /** Changes the checker's document: `altFixed` gives the figure its alternative text (UX-067). */
   editChecker: (altFixed: boolean) => {
     checkerAltFixed = altFixed;
