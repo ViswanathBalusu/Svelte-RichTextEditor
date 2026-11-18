@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "//": "The typed loader of the kernel: lib ES2023 and no ambient types, like the universal packages (FND-004). The WebAssembly module is reached through structural types. Tests and scripts are checked by tsconfig.test.json.",
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}
