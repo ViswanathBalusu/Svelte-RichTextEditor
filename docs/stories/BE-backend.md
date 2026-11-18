@@ -1665,13 +1665,13 @@ As a maintainer, I want the evidence for moving the log off PostgreSQL, so that 
 
 **Acceptance criteria**
 
-- [ ] Given measured log insert rates on one primary, when the spike ends, then it states the rate at which PostgreSQL stops being enough.
+- [x] Given measured log insert rates on one primary, when the spike ends, then it states the rate at which PostgreSQL stops being enough.
 - [ ] Given each candidate store, when it is tested, then it either passes the `LogStore` conditional-append suite of BE-002 or is rejected.
 - [x] Given the recommendation, when it is written, then it covers the hash chain, the cold segments and the recovery tool.
 
-**Evidence:** Lane control-plane-3, round 2 (2026-11-13): section "BE-071: moving the commit log off PostgreSQL" of `docs/adr/0152-control-plane-3-backlog-batch.md`. The recommendation (stay on PostgreSQL, ADR 0006) requires any candidate to keep the hash chain unbroken across the boundary, to keep the cold segments (BE-041 keys) verifiable, and to be read by the recovery tool (BE-081) that checks the chain. It is a written requirement, not a test; no candidate store was run.
+**Evidence:** Lane control-plane-3, round 2 (2026-11-13): section "BE-071: moving the commit log off PostgreSQL" of `docs/adr/0152-control-plane-3-backlog-batch.md`. The recommendation (stay on PostgreSQL, ADR 0006) requires any candidate to keep the hash chain unbroken across the boundary, to keep the cold segments (BE-041 keys) verifiable, and to be read by the recovery tool (BE-081) that checks the chain. It is a written requirement, not a test; no candidate store was run. Lane w5 (2026-11-18), criterion 1: docs/research/2026-11-18-be-071-log-insert-rate.md, from services/document-service/scripts/load/be-071.ts. On the development machine (i9-10900KF, PostgreSQL 17.11 in a Podman container with its data on tmpfs, one run per setting), appends of one commit each stopped gaining at about 1,000 transactions per second from 16 writers on, and appends of ten commits each at about 4,300 to 4,400 commits per second. The figures carry the machine and the settings listed there.
 
-**Notes:** `cond`: only if insert rate approaches the limit (ADR 0006). Criterion 1 stays open: it needs measured log insert rates on one primary, and none exist in this lane, so no rate is stated. Criterion 2 stays open: no candidate store was run against the BE-002 `LogStore` suite (a managed or log store is not available here). Time box: one pass; the spike owner should measure before the recommendation is relied on.
+**Notes:** `cond`: only if insert rate approaches the limit (ADR 0006). Criterion 1 was met by lane w5: the rate is stated for the development machine only, because the reference machine and a database on real disk were not available, so the figure for production hardware is still unknown and the spike owner should rerun the command there. Criterion 2 stays open: no candidate store was run against the BE-002 `LogStore` suite (a managed or log store is not available here). Time box: one pass; the spike owner should measure before the recommendation is relied on.
 
 ### BE-072 Use a managed queue
 
