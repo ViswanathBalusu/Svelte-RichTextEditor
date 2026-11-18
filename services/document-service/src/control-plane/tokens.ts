@@ -378,11 +378,6 @@ export class TokenService implements TokenVerifier {
 }
 
 /**
- * The `restrict` claim (05 §3.1; PRO-015 criterion 2). It must be an array; each value is one of
- * the known restrictions, and any other value is ignored (05 §1 rule 3; PRO-005). Duplicates
- * are dropped, and the order of the token is kept.
- */
-/**
  * The role placeholders of the fill roles claim (05 §3.1): an array of identifiers, each used once
  * in token order. An absent claim is no roles; anything else than an array of identifiers refuses
  * the token, as a malformed `grp` does.
@@ -394,6 +389,11 @@ function fillRolesOf(v: unknown, claim: string): readonly string[] {
   return [...new Set<string>(v)];
 }
 
+/**
+ * The `restrict` claim (05 §3.1; PRO-015 criterion 2). It must be an array; each value is one of
+ * the known restrictions, and any other value is ignored (05 §1 rule 3; PRO-005). Duplicates
+ * are dropped, and the order of the token is kept.
+ */
 function restrictOf(v: unknown): readonly string[] {
   if (v === undefined) return [];
   if (!Array.isArray(v)) throw refuse('restrict must be an array of restriction names');
