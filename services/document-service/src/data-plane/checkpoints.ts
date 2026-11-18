@@ -12,11 +12,11 @@
  * recorded one (or from the content at sequence number 0, D67): an object written for a snapshot
  * whose commit was never stored is not used.
  */
-import type { StepJson } from '@docedit/authority';
+import type { StepJson, ThreadAnchor } from '@docedit/authority';
 import type { AttributionJson } from '@docedit/history';
-import { canonicalize, type JsonEnvelope } from '@docedit/model';
+import type { JsonEnvelope } from '@docedit/model';
 import { objectKeys } from '../objects/store.ts';
-import { decodeContent, encodeContent } from '../storage/codec.ts';
+import { decodeContent, decodeSide, encodeSide } from '../storage/codec.ts';
 import type { CheckpointIndex, CheckpointStore, DocRef } from '../storage/types.ts';
 import type { Base, Encoded } from './tasks.ts';
 import type { Workers } from './workers.ts';
@@ -28,6 +28,8 @@ export interface LoadedCheckpoint {
   base: Base;
   /** The hash of the canonical text, when the index or the bytes give it. */
   hash: string | null;
+  /** The comment ranges saved with the checkpoint, each at `seq` (SYN-032); none when there is no side object. */
+  threads: ThreadAnchor[];
 }
 
 /** A checkpoint left as stored bytes, for a worker to parse (BE-019 criterion 5). */
@@ -35,6 +37,8 @@ export interface EncodedCheckpoint {
   seq: number;
   encoded: Uint8Array;
   hash: string | null;
+  /** The comment ranges saved with the checkpoint, each at `seq` (SYN-032). */
+  threads: ThreadAnchor[];
 }
 
 export interface Written extends Encoded {
@@ -93,10 +97,10 @@ export class Checkpointer {
       const rows = (await this.#index.list(ref)).filter((r) => r.seq <= head && r.seq > 0);
       for (const row of rows.reverse()) {
         const got = await this.#read(ref, row.seq);
-        if (got) return { ...got, hash: row.hash };
+        if (got) return { ...got, hash: row.hash, threads: await this.#readThreads(ref, row.seq) };
       }
       const zero = await this.#read(ref, 0);
-      return zero ? { ...zero, hash: null } : null;
+      return zero ? { ...zero, hash: null, threads: [] } : null;
     }
     const latest = await store.latest(ref, head);
     if (!latest) return null;
@@ -106,7 +110,25 @@ export class Checkpointer {
       envelope: latest.content,
       base: encoded ? { encoded } : { doc: latest.content.doc },
       hash: null,
+      threads: await this.#readThreads(ref, latest.seq),
     };
+  }
+
+  /** The comment ranges saved with the checkpoint at `seq` (none: no side object, or none readable). */
+  async #readThreads(ref: DocRef, seq: number): Promise<ThreadAnchor[]> {
+    const store = this.#store;
+    if (!store?.getSide) return [];
+    const bytes = await store.getSide(ref, seq);
+    if (!bytes) return [];
+    try {
+      const side = decodeSide(bytes);
+      // Anchors that refer to another `seq` than the checkpoint's would be mapped over the wrong steps.
+      return side.seq === seq ? side.threads : [];
+    } catch (e) {
+      // An unreadable side object is as good as none.
+      this.#onSavedError?.(e);
+      return [];
+    }
   }
 
   /**
@@ -122,24 +144,29 @@ export class Checkpointer {
     const store = this.#store;
     const index = this.#index;
     if (!store?.getEncoded || !index) return this.load(ref, head);
-    const pick = (
+    const pick = async (
       seq: number,
       encoded: Uint8Array,
       hash: string | null,
-    ): LoadedCheckpoint | EncodedCheckpoint =>
-      encoded.byteLength >= rawAtOrAbove
-        ? { seq, encoded, hash }
-        : { seq, envelope: decodeContent<JsonEnvelope>(encoded), base: { encoded }, hash };
+    ): Promise<LoadedCheckpoint | EncodedCheckpoint> => {
+      const threads = await this.#readThreads(ref, seq);
+      return encoded.byteLength >= rawAtOrAbove
+        ? { seq, encoded, hash, threads }
+        : { seq, envelope: decodeContent<JsonEnvelope>(encoded), base: { encoded }, hash, threads };
+    };
     const rows = (await index.list(ref)).filter((r) => r.seq <= head && r.seq > 0);
     for (const row of rows.reverse()) {
       const encoded = await store.getEncoded(ref, row.seq);
-      if (encoded) return pick(row.seq, encoded, row.hash);
+      if (encoded) return await pick(row.seq, encoded, row.hash);
     }
     const zero = await store.getEncoded(ref, 0);
-    return zero ? pick(0, zero, null) : null;
+    return zero ? await pick(0, zero, null) : null;
   }
 
-  async #read(ref: DocRef, seq: number): Promise<Omit<LoadedCheckpoint, 'hash'> | null> {
+  async #read(
+    ref: DocRef,
+    seq: number,
+  ): Promise<Omit<LoadedCheckpoint, 'hash' | 'threads'> | null> {
     const store = this.#store!;
     if (store.getEncoded) {
       const encoded = await store.getEncoded(ref, seq);
@@ -187,10 +214,11 @@ export class Checkpointer {
   }
 
   /**
-   * Stores an encoded checkpoint at `seq`; with `index`, records it too. A side object, when
-   * given, is written first: a side object without its checkpoint is never read, a checkpoint
-   * without one only costs a replay. A failure to write it is reported and does not fail the
-   * checkpoint.
+   * Stores an encoded checkpoint at `seq`; with `index`, records it too. One side object holds
+   * what is saved with the checkpoint: the attribution map (`side`; ADR 0377) and the comment
+   * ranges at `seq` (`threads`; SYN-032 criterion 6). It is written first: a side object without
+   * its checkpoint is never read, a checkpoint without one only costs a replay. A failure to
+   * write it is reported and does not fail the checkpoint.
    */
   async save(
     ref: DocRef,
@@ -198,12 +226,22 @@ export class Checkpointer {
     e: Encoded,
     index = true,
     side?: AttributionJson,
+    threads?: readonly ThreadAnchor[],
   ): Promise<Written> {
     const store = this.#store;
     if (!store) throw new Error('no checkpoint store is configured');
-    if (side && store.putSide) {
+    if ((side || threads?.length) && store.putSide) {
       try {
-        await store.putSide(ref, seq, encodeContent(canonicalize({ v: 1, attribution: side })));
+        await store.putSide(
+          ref,
+          seq,
+          encodeSide({
+            v: 1,
+            seq,
+            threads: threads ? [...threads] : [],
+            ...(side ? { attribution: side } : {}),
+          }),
+        );
       } catch (err) {
         this.#onSavedError?.(err);
       }

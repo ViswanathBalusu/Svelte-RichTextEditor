@@ -128,6 +128,11 @@ export interface MountOptions {
    */
   onPrintRequest?: () => void;
   /**
+   * Called when the user chooses to copy a version into a new document (HIS-022); the element raises
+   * `de-fork-request` from it. The history pane offers the command only when this is given.
+   */
+  onForkRequest?: (detail: { atSeq: number }) => void;
+  /**
    * Called when a reader asks for access to a placeholder (UX-104, ADR 0019); the element raises
    * `de-access-request` from it. The shell shows the request control only when this is given.
    */
@@ -323,7 +328,6 @@ export function mountEditor(options: MountOptions): MountedEditor {
     };
   });
 
-  const fill = fillView(core);
   // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
   const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
@@ -333,6 +337,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
         for (const listener of [...workflowCompleteListeners]) listener();
       })
     : null;
+  // The guided bar follows `wf.changed` through the same status (FRW-035 criterion 6).
+  const fill = fillView(core, fillActions?.status);
   const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;
@@ -644,6 +650,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       loadPane: async () => (await import('@docedit/ui/panes/OutlinePane.svelte')).default,
       onShareRequest: options.onShareRequest,
       ...(options.onPrintRequest ? { onPrintRequest: options.onPrintRequest } : {}),
+      ...(options.onForkRequest ? { onForkRequest: options.onForkRequest } : {}),
       ...(options.onAccessRequest ? { onAccessRequest: options.onAccessRequest } : {}),
       onExtensionError: options.onExtensionError,
     },

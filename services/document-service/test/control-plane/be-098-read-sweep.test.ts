@@ -33,7 +33,9 @@ const visibility: Visibility = (conn) =>
 
 /**
  * GET routes a user credential may call (05 §6.2). Service-only routes are not reads by a user.
- * `/fonts` is the tenant-wide font manifest, not a read of a document, so it is outside the sweep.
+ * `/fonts` is the tenant-wide font manifest, not a read of a document: decision 95 of
+ * `docs/owner-decisions-2026-11-15.md` makes it readable by every user of the tenant, so it is
+ * outside the sweep of document reads and has its own test below.
  */
 const readRoutes = DEP1.operations.filter(
   (op) =>
@@ -135,6 +137,24 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           if (r.status < 300) {
             expect(r.text, `${op.method} ${op.path} leaks hidden text`).not.toContain(HIDDEN_TEXT);
           }
+        }
+      },
+    );
+
+    it.skipIf(skip)(
+      'serves GET /fonts to every user of the tenant and to no one without a credential (decision 95)',
+      async () => {
+        const none = await h.call('GET', '/v1/fonts');
+        expect(none.status).toBeGreaterThanOrEqual(400);
+        expect(none.status).toBeLessThan(500);
+        // A user with no access to any document, and a restricted reader, both read the manifest.
+        for (const token of [
+          h.userToken({ [other]: 'editor' }),
+          h.userToken({ [doc]: 'editor' }),
+        ]) {
+          const r = await h.call('GET', '/v1/fonts', { token });
+          expect(r.status, r.text).toBe(200);
+          expect(r.text).not.toContain(HIDDEN_TEXT);
         }
       },
     );

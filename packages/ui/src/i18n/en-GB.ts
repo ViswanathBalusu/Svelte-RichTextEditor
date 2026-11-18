@@ -324,6 +324,14 @@ export const EN_GB = {
     other:
       '{count} fields were changed by someone else, so your entries were not saved. The fields now show the current values. Your entries are kept in recovered edits.',
   },
+  // A fill the service refused because a rule of the document stopped it (12 §5.3; FRW-023): {rule}
+  // is the rule's own message, or its identifier when it has none. The field shows the confirmed
+  // document again, and the entry is kept in recovered edits.
+  'notice.rejected.rule': {
+    one: 'Your entry was not saved because a rule of this document stopped it: {rule} The field follows the document as it stands. Your entry is kept in recovered edits.',
+    other:
+      '{count} entries were not saved because a rule of this document stopped them, the first one: {rule} The fields follow the document as it stands. Your entries are kept in recovered edits.',
+  },
   'notice.rejected.field': {
     one: 'A field value could not be saved because it is not valid. It is kept in recovered edits.',
     other:
@@ -1276,6 +1284,9 @@ export const EN_GB = {
   'history.view.label.named': 'Read-only version {name}, {when}',
   'history.view.note': 'This is a read-only copy. Changes to the live document do not appear here.',
   'history.view.leave': 'Back to the live document',
+  // Copy a version into a new document (HIS-022): the editor asks, the host makes the copy.
+  'history.fork.request': 'Copy this version to a new document',
+  'history.fork.requested': 'Asked to copy this version into a new document.',
   'history.view.opening': 'Opening this version.',
   'history.view.forbidden': 'You cannot open this version.',
   'history.view.not-found': 'This version no longer exists.',

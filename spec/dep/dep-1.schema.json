@@ -3250,6 +3250,73 @@
         "source"
       ]
     },
+    "HistoryVisibilitySetting": {
+      "title": "HistoryVisibilitySetting",
+      "description": "A history visibility setting (08 section 9; HIS-025).",
+      "$comment": "08 §9; 13 §10",
+      "type": "object",
+      "properties": {
+        "setting": {
+          "description": "editors: people with edit somewhere see full history and the rest named versions only (the default). all: everyone with view sees full history. since_access: history from the state current when the person was given access.",
+          "type": "string",
+          "enum": [
+            "editors",
+            "all",
+            "since_access"
+          ]
+        }
+      },
+      "required": [
+        "setting"
+      ]
+    },
+    "HistoryVisibilityView": {
+      "title": "HistoryVisibilityView",
+      "description": "A document history visibility setting with the effective one (HIS-025).",
+      "$comment": "08 §9; 13 §10",
+      "type": "object",
+      "properties": {
+        "setting": {
+          "description": "The setting the document carries, or null when it carries none.",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "editors",
+                "all",
+                "since_access"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effective": {
+          "description": "The setting that applies: the document setting, else the tenant setting, else editors.",
+          "type": "string",
+          "enum": [
+            "editors",
+            "all",
+            "since_access"
+          ]
+        },
+        "source": {
+          "description": "Where the effective setting comes from.",
+          "type": "string",
+          "enum": [
+            "document",
+            "tenant",
+            "default"
+          ]
+        }
+      },
+      "required": [
+        "setting",
+        "effective",
+        "source"
+      ]
+    },
     "TenantKeyView": {
       "title": "TenantKeyView",
       "description": "A registered public key of a tenant (UX-077; 05 section 3.2).",

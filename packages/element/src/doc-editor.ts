@@ -756,6 +756,10 @@ export class DocEditorElement extends Base {
       onShareRequest: () => {
         if (this.#session?.docId === docId) this.#emit('de-share-request', { docId });
       },
+      // The user chose to copy a version into a new document; fork is the host's call (HIS-022).
+      onForkRequest: ({ atSeq }) => {
+        if (this.#session?.docId === docId) this.#emit('de-fork-request', { docId, atSeq });
+      },
       // A reader's request for hidden content goes to the host (UX-104, ADR 0019); identifiers only.
       onAccessRequest: ({ scope }) => {
         if (this.#session?.docId === docId) this.#emit('de-access-request', { docId, scope });

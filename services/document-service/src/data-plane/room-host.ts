@@ -52,6 +52,7 @@ import {
   type SnapshotCommit,
   type SnapshotReason,
   type StepJson,
+  type ThreadAnchor,
   type ToClient,
   type WriteRequest,
   type WriteResult,
@@ -112,7 +113,7 @@ import type { Metrics } from './metrics.ts';
 import { PresenceRelay } from './presence.ts';
 import type { Settings } from './settings.ts';
 import { assetRefsIn, type AssetAttachments } from './asset-attachments.ts';
-import { AttributionTracker, contentSizeOf, openAttribution } from './attribution.ts';
+import { type AttributionTracker, contentSizeOf, openAttribution } from './attribution.ts';
 import { admissionFor } from './sec-028-admission.ts';
 import { BroadcastWindow } from './syn-041-coalescing.ts';
 import type { Base, Encoded } from './tasks.ts';
@@ -367,6 +368,8 @@ export class HostedRoom {
     base: Base;
     /** Its canonical size, an estimate where the bytes are unknown. */
     baseBytes: number;
+    /** The comment ranges saved with the checkpoint, each at `initialSeq` (SYN-032). */
+    threads?: readonly ThreadAnchor[];
     /** Stored commits after `initialSeq`, in order. */
     log: readonly LogCommit[];
     /** The content of each snapshot commit in `log`. */
@@ -423,6 +426,7 @@ export class HostedRoom {
       initial: init.initial,
       initialSeq: init.initialSeq,
       requires: init.record.requires,
+      ...(init.threads?.length ? { threads: init.threads } : {}),
       log: init.log,
       snapshotContent: snapshotDoc,
       perms: init.perms,
@@ -1029,6 +1033,11 @@ ecentHead, keeping one entry older than the window. */
     }
   }
 
+  /** The effective history visibility setting, read again for this request (HIS-025). */
+  setHistoryVisibility(setting: string | null | undefined): void {
+    if (!this.#stopped) this.#room.setHistoryVisibility(historySetting(setting));
+  }
+
   // --- Permissions (07 §9; 05 §5.5) ------------------------------------------------------------
 
   /** The control plane changed permission data and read the new state back (BE-026; PRM-019). */
@@ -1586,6 +1595,11 @@ ecentHead, keeping one entry older than the window. */
       requires: [...this.#room.requiresList],
       commits: this.#since.slice(0, n),
     };
+    // The comment ranges at `at` (SYN-032 criterion 6; owner decision 81): the room holds them at
+    // its durable head, so they are taken now, with the steps, and only when that head is `at`. A
+    // checkpoint below the head (a repair) gets none: anchors of a later `seq` would be mapped over
+    // the wrong steps when a room opened from it.
+    const threads = this.#room.head === at ? this.#room.threadAnchors() : [];
     const tenant = this.ref.tenant;
     const span = this.#deps.tracer.start('dep.checkpoint', this.#lastTrace, {
       tenant,
@@ -1598,7 +1612,7 @@ ecentHead, keeping one entry older than the window. */
       try {
         const e = await this.#deps.checkpointer.replay(input);
         const side = this.attribution?.jsonAt(at) ?? undefined;
-        await this.#deps.checkpointer.save(this.ref, at, e, true, side);
+        await this.#deps.checkpointer.save(this.ref, at, e, true, side, threads);
         this.stats.checkpoints++;
         this.#checkpointFailures = 0;
         this.#deps.metrics.checkpoints.inc({ tenant, reason });
@@ -1901,7 +1915,7 @@ export class RoomHost {
     if (this.#deps.faults.databaseDown)
       return Promise.reject(new Refusal('unavailable', 'the database is unreachable'));
     const known = this.get(ref);
-    if (known) return Promise.resolve(known);
+    if (known) return this.#withFreshSetting(ref, known);
     const k = refKey(ref);
     let p = this.#loading.get(k);
     if (!p) {
@@ -1914,6 +1928,21 @@ export class RoomHost {
       this.#loading.set(k, p);
     }
     return p;
+  }
+
+  /**
+   * A room that is already open takes the history visibility setting stored now, so a change made
+   * on any node applies to the next channel (HIS-025 criterion 5). A failed read keeps the setting
+   * the room has; the gate then still holds what it held.
+   */
+  async #withFreshSetting(ref: DocRef, room: HostedRoom): Promise<HostedRoom> {
+    try {
+      const record = await this.#deps.documents.get(ref);
+      if (record) room.setHistoryVisibility(record.historyVisibility);
+    } catch {
+      // The room keeps its setting.
+    }
+    return room;
   }
 
   #acquireAfter(ref: DocRef): Promise<HostedRoom> {
@@ -1996,7 +2025,7 @@ export class RoomHost {
             schema: schemaOf(),
             checkpointer: d.checkpointer,
             logs: d.logs,
-            checkpoint: cp,
+            checkpoint: { seq: cp.seq, size: initial.content.size },
             log,
             snapshotSize: async (c) => {
               const loaded = snapshots.get(c.seq);
@@ -2040,6 +2069,7 @@ export class RoomHost {
         initialSeq: cp.seq,
         base,
         baseBytes,
+        ...(found.threads.length ? { threads: found.threads } : {}),
         log,
         snapshots,
         perms,
@@ -2118,6 +2148,7 @@ export class RoomHost {
         await room.shutdown('the document was deleted', true);
         return;
       }
+      room.setHistoryVisibility(record.historyVisibility);
       const perms = await this.#deps.grants.current(ref);
       if (perms.revision > room.permissions.revision) room.permissionsChanged(perms);
       // The document resource changed (metadata or state): open channels may re-read it (05 §5.6).
@@ -2265,6 +2296,8 @@ export class RoomHost {
       const room = this.get(ref);
       if (room) {
         const head = room.head;
+        if (seq !== undefined && seq !== head)
+          room.setHistoryVisibility((await d.documents.get(ref))?.historyVisibility);
         if (
           seq !== undefined &&
           seq !== head &&
@@ -2362,6 +2395,7 @@ export class RoomHost {
       let hides: boolean;
       if (room && room.head === head.seq) {
         if (stored.revision > room.permissions.revision) room.permissionsChanged(stored);
+        room.setHistoryVisibility(record.historyVisibility);
         gate = room.minVisibleSeq(conn);
         hides = d.restricted && room.hidesFor(conn);
       } else {

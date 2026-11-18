@@ -1,13 +1,14 @@
 /**
  * Paragraphs added and removed as suggestions (FE-044 criteria 1 and 2; 02 §5.2; 03 §5). A pure
  * transaction builder over an editor state, like the text builders of `suggestion-edit.ts`: it
- * returns the transaction that records the whole-paragraph step as node marks, and the caller
+ * returns the transaction that records the whole-paragraph step as block suggestions (entries of the
+ * suggest attribute, owner decision 92), and the caller
  * decides when to dispatch it.
  *
- * - A paragraph the user adds carries one `ins` node mark naming the user, with one identifier. It
+ * - A paragraph the user adds carries one `ins` entry naming the user, with one identifier. It
  *   is added in three shapes: a closed slice of paragraphs at a block boundary (a paste of whole
  *   paragraphs), and the Enter key at the end of a paragraph, whose new paragraph is empty.
- * - A whole paragraph the user deletes stays in the document and carries one `del` node mark naming
+ * - A whole paragraph the user deletes stays in the document and carries one `del` entry naming
  *   the user (03 §5), as a deleted table row does (FE-045).
  *
  * Decisions taken here, not in the spec (see the story Notes and docs/adr/0302-lane-V-FE-033-048.md):
@@ -24,16 +25,21 @@
  *
  * Universal logic over ProseMirror state only: no Node.js or browser API.
  */
-import type { Mark, Node as PMNode, ResolvedPos, Schema } from 'prosemirror-model';
+import type { Node as PMNode, ResolvedPos } from 'prosemirror-model';
 import { type EditorState, TextSelection, type Transaction } from 'prosemirror-state';
 import type { ReplaceStep } from 'prosemirror-transform';
+import {
+  addBlockEntry,
+  entry,
+  hasKind,
+  hasOwn,
+  withEntry,
+  type SuggestionEntry,
+} from './block-suggestion.ts';
 import type { SuggestionAuthor } from './suggestion-author.ts';
 
-const markOf = (schema: Schema, type: 'ins' | 'del', author: SuggestionAuthor): Mark =>
-  schema.marks[type]!.create({ id: author.nextId(), user: author.user });
-
-const hasOwnMark = (node: PMNode, type: 'ins' | 'del', user: string): boolean =>
-  node.marks.some((m) => m.type.name === type && m.attrs['user'] === user);
+const entryOf = (type: 'ins' | 'del', author: SuggestionAuthor): SuggestionEntry =>
+  entry(type, author.nextId(), author.user);
 
 /** Whether the position lies in a table, where paragraph suggestions are not defined (FE-045). */
 function inTable($pos: ResolvedPos): boolean {
@@ -54,7 +60,6 @@ export function paragraphSuggestion(
   author: SuggestionAuthor,
 ): { tr: Transaction } | null | undefined {
   const { from, to, slice } = step;
-  const schema = state.schema;
   const $from = state.doc.resolve(from);
   const $to = state.doc.resolve(to);
 
@@ -74,7 +79,7 @@ export function paragraphSuggestion(
     if (inTable($from)) return null;
     if ($from.parentOffset !== $from.parent.content.size) return null; // a split inside text
     const at = $from.after();
-    const tr = state.tr.insert(at, second.mark([markOf(schema, 'ins', author)]));
+    const tr = state.tr.insert(at, withEntry(second, entryOf('ins', author)));
     tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1)));
     return { tr };
   }
@@ -87,7 +92,7 @@ export function paragraphSuggestion(
     // A whole table is one block suggestion: its own `ins`, and none on its rows (FE-045 criterion 3).
     if (inTable($from) || nodes.some((n) => n.type.name !== 'paragraph' && n.type.name !== 'table'))
       return null;
-    const marked = nodes.map((n) => n.mark([markOf(schema, 'ins', author)]));
+    const marked = nodes.map((n) => withEntry(n, entryOf('ins', author)));
     const tr = state.tr.insert(from, marked);
     const size = marked.reduce((sum, n) => sum + n.nodeSize, 0);
     // The caret goes to the end of pasted paragraphs, and into the first cell of an inserted table.
@@ -111,12 +116,12 @@ export function paragraphSuggestion(
     });
     if (hits.length === 0) return null;
     if (hits.some((h) => h.node.type.name !== 'paragraph')) return null;
-    if (hits.some((h) => h.node.marks.some((m) => m.type.name === 'del'))) return null;
-    const own = hits.map((h) => hasOwnMark(h.node, 'ins', author.user));
+    if (hits.some((h) => hasKind(h.node, 'del'))) return null;
+    const own = hits.map((h) => hasOwn(h.node, 'ins', author.user));
     if (own.every(Boolean)) return { tr: state.tr.delete(from, to) };
     if (own.some(Boolean)) return null;
     const tr = state.tr;
-    for (const h of hits) tr.addNodeMark(h.pos, markOf(schema, 'del', author));
+    for (const h of hits) addBlockEntry(tr, h.pos, entryOf('del', author));
     return { tr };
   }
 

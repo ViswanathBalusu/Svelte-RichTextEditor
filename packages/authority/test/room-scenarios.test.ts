@@ -650,7 +650,6 @@ describe('apply and invariants (SYN-011, SYN-012)', () => {
     const doc = baseDoc();
     const p = posOf(doc, 'pIntro0000000001');
     const t0 = posInside(doc, 'pIntro0000000001');
-    const region = posOf(doc, 'rTerms000000000A');
     const del = schema.marks['del']!.create({ id: 'sSuggestion00001', user: 'alice' });
     const wrapped = (() => {
       // A replaceAround that rewraps the paragraph with a style that does not exist (I4).
@@ -689,7 +688,14 @@ describe('apply and invariants (SYN-011, SYN-012)', () => {
       ],
       ['replaceAround', [wrapped]],
       ['addMark', [new AddMarkStep(t0, t0 + 3, link)]],
-      ['addNodeMark', [new AddNodeMarkStep(region, del)]], // node marks only on paragraphs, rows and tables
+      // A block takes no node mark, so the mark goes on an inline node: a tab with a bad link (I9).
+      [
+        'addNodeMark',
+        [
+          new ReplaceStep(t0, t0, new Slice(Fragment.from(schema.nodes['tab']!.create()), 0, 0)),
+          new AddNodeMarkStep(t0, schema.marks['link']!.create({ href: 'data:text/html,x' })),
+        ],
+      ],
       ['attr', [new AttrStep(p, 'style', 'Missing')]],
       // Removing a mark cannot break a valid document; a commit that ends with a removal is still
       // validated in full, so a violation made earlier in the same commit is caught.
@@ -704,8 +710,9 @@ describe('apply and invariants (SYN-011, SYN-012)', () => {
         'removeNodeMark',
         [
           new AttrStep(p, 'style', 'Missing'),
-          new AddNodeMarkStep(p, del),
-          new RemoveNodeMarkStep(p, del),
+          new ReplaceStep(t0, t0, new Slice(Fragment.from(schema.nodes['tab']!.create()), 0, 0)),
+          new AddNodeMarkStep(t0, del),
+          new RemoveNodeMarkStep(t0, del),
         ],
       ],
     ];

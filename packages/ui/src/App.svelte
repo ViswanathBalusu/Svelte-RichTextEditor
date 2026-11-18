@@ -139,6 +139,8 @@
     paneRegistry?: PaneRegistry;
     /** The share command exists only when the host can handle `de-share-request` (13 §5). */
     onShareRequest?: () => void;
+    /** The host handles `de-fork-request` (HIS-022): the history pane offers to copy an open version. */
+    onForkRequest?: (detail: { atSeq: number }) => void;
     /** The print command exists only when the host can print (UX-040 criterion 3); the element prints the typeset PDF. */
     onPrintRequest?: () => void;
     /** The host handles requests for access to hidden content (UX-104; ADR 0019). */
@@ -385,6 +387,9 @@
       isOpen: (id) => pane?.id === id,
     },
     linkedThread,
+    ...(props.onForkRequest
+      ? { requestFork: (atSeq: number) => untrack(() => props.onForkRequest)?.({ atSeq }) }
+      : {}),
     searchPrincipals: untrack(() => props.searchPrincipals),
     docId: untrack(() => props.docId),
   });

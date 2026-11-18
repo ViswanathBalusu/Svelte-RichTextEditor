@@ -53,6 +53,7 @@ import {
   type TokenSource,
   type Unsubscribe,
   type Welcome,
+  type WorkflowPort,
 } from '@docedit/protocol';
 import {
   ClientChannel,
@@ -70,6 +71,10 @@ import { createFilePorts, type FilePorts } from './files.ts';
 import { createReviewPorts, type ReviewPorts } from './review.ts';
 import { Timers, platform, type Platform } from './platform.ts';
 import { RestClient } from './rest.ts';
+import { createWorkflowRest } from './workflow.ts';
+
+/** The workflow object of `ch.opened` and `wf.changed` (FRW-035). */
+type WorkflowStatus = Parameters<Parameters<WorkflowPort['onChange']>[1]>[0];
 
 /** What `de-status` shows for the connection (05 §8.1; PRO-087). */
 export type ConnectionStatus = 'online' | 'reconnecting' | 'offline';
@@ -198,6 +203,8 @@ export class DepBackend implements Backend {
   declare history?: HistoryPort;
   declare comments?: CommentsPort;
   declare leases?: LeasesPort;
+  /** The workflow port, present while `workflow` is negotiated (12 §10; FRW-035). */
+  declare workflow?: WorkflowPort;
   /** Present only when the host proxies imports (`proxyImports`, PRO-097). */
   declare imports?: ImportsPort;
   readonly fonts: FontsPort;
@@ -245,6 +252,13 @@ export class DepBackend implements Backend {
   private readonly statusListeners = new Listeners<ConnectionStatus>();
   /** Every `event` message of the session: asset outcomes reach uploads through it (PRO-096). */
   private readonly notices = new Listeners<Notification>();
+  /** The listeners of `onChange` of the workflow port, by document, and the latest status of each. */
+  private readonly workflowListeners = new Map<
+    string,
+    { readonly set: Set<(status: WorkflowStatus) => void>; readonly off: Unsubscribe }
+  >();
+  private readonly workflowLatest = new Map<string, WorkflowStatus>();
+  private readonly workflowPort: WorkflowPort;
   private readonly files: FilePorts;
   private readonly review: ReviewPorts;
 
@@ -322,6 +336,7 @@ export class DepBackend implements Backend {
       scheduleReopen: (ch, e) => this.scheduleReopen(ch, e),
       accessChanged: (ch, a) => this.accessChanged(ch, a),
       peers: (ch, p) => this.peersArrived(ch, p),
+      workflow: (ch, status) => this.workflowArrived(ch, status),
       ended: (ch) => this.ended(ch),
     };
     this.files = createFilePorts({
@@ -331,6 +346,10 @@ export class DepBackend implements Backend {
       clock: { set: (fn, ms) => this.timers.set(fn, ms), clear: (key) => this.timers.clear(key) },
     });
     this.fonts = this.files.fonts;
+    this.workflowPort = {
+      ...createWorkflowRest({ rest: () => this.rest() }),
+      onChange: (docId, cb) => this.onWorkflowChange(docId, cb),
+    };
     this.review = createReviewPorts({
       rest: () => this.rest(),
       clock: {
@@ -368,6 +387,8 @@ export class DepBackend implements Backend {
     else delete this.comments;
     if (this.negotiated.has('leases')) this.leases = this.review.leases;
     else delete this.leases;
+    if (this.negotiated.has('workflow')) this.workflow = this.workflowPort;
+    else delete this.workflow;
     if (this.opts.proxyImports === true) this.imports = this.review.imports;
     else delete this.imports;
   }
@@ -853,6 +874,44 @@ export class DepBackend implements Backend {
       this.noteView(ch.docId, m.incarnation, m.view, m.seq);
   }
 
+  private workflowArrived(ch: DepChannel, status: WorkflowStatus): void {
+    if (this.channels.get(ch.docId) !== ch) return;
+    this.workflowLatest.set(ch.docId, status);
+    this.portDelivery.push(`workflow:${ch.docId}`, status);
+  }
+
+  /**
+   * `onChange` of the workflow port: the status `ch.opened` carried and each `wf.changed` after it,
+   * in order with the access of the channel. A listener added later is told the latest status at once.
+   */
+  private onWorkflowChange(docId: string, cb: (status: WorkflowStatus) => void): Unsubscribe {
+    let entry = this.workflowListeners.get(docId);
+    const first = entry === undefined;
+    if (entry === undefined) {
+      const set = new Set<(status: WorkflowStatus) => void>();
+      const off = this.portDelivery.subscribe<WorkflowStatus>(`workflow:${docId}`, (status) => {
+        for (const listener of [...set]) listener(status);
+      });
+      entry = { set, off };
+      this.workflowListeners.set(docId, entry);
+    }
+    const held = entry;
+    held.set.add(cb);
+    // The first listener receives what was kept for it; a later one is told the latest status.
+    const latest = this.workflowLatest.get(docId);
+    if (!first && latest !== undefined)
+      void Promise.resolve().then(() => {
+        if (held.set.has(cb)) cb(latest);
+      });
+    return () => {
+      held.set.delete(cb);
+      if (held.set.size === 0 && this.workflowListeners.get(docId) === held) {
+        held.off();
+        this.workflowListeners.delete(docId);
+      }
+    };
+  }
+
   private peersArrived(ch: DepChannel, peers: PresencePeers): void {
     if (this.channels.get(ch.docId) === ch) this.portDelivery.push(`presence:${ch.docId}`, peers);
   }
@@ -870,6 +929,7 @@ export class DepBackend implements Backend {
     if (this.channels.get(ch.docId) === ch) {
       this.channels.delete(ch.docId);
       this.accesses.delete(ch.docId);
+      this.workflowLatest.delete(ch.docId);
       const out = this.presenceOut.get(ch.docId);
       if (out) this.timers.clear(out.timer);
       this.presenceOut.delete(ch.docId);

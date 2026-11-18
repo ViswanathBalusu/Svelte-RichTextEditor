@@ -73,3 +73,22 @@ describe('lint rules of the element package', () => {
     expect(messages.filter((m) => m.startsWith('no-restricted-properties'))).toHaveLength(3);
   });
 });
+
+describe('de-fork-request (HIS-022)', () => {
+  it('is raised with the document and the seq only, bubbling and composed, and is in the catalogue', () => {
+    const host = new EventTarget();
+    const seen: CustomEvent[] = [];
+    host.addEventListener('de-fork-request', (e) => seen.push(e as CustomEvent));
+    emit(host, 'de-fork-request', { docId: 'doc-7', atSeq: 12 });
+    expect(seen).toHaveLength(1);
+    const e = seen[0]!;
+    expect([e.bubbles, e.composed]).toEqual([true, true]);
+    expect(e.detail).toEqual({ docId: 'doc-7', atSeq: 12 });
+    expect(Object.isFrozen(e.detail)).toBe(true);
+    expect(EVENT_NAMES).toContain('de-fork-request');
+    // Nothing breaks when the host has no listener.
+    expect(() =>
+      emit(new EventTarget(), 'de-fork-request', { docId: 'd', atSeq: 0 }),
+    ).not.toThrow();
+  });
+});

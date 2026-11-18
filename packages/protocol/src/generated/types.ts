@@ -822,6 +822,22 @@ export interface RetentionView {
   source: "document" | "tenant" | "default";
 }
 
+/** A history visibility setting (08 section 9; HIS-025). */
+export interface HistoryVisibilitySetting {
+  /** editors: people with edit somewhere see full history and the rest named versions only (the default). all: everyone with view sees full history. since_access: history from the state current when the person was given access. */
+  setting: "editors" | "all" | "since_access";
+}
+
+/** A document history visibility setting with the effective one (HIS-025). */
+export interface HistoryVisibilityView {
+  /** The setting the document carries, or null when it carries none. */
+  setting: ("editors" | "all" | "since_access") | null;
+  /** The setting that applies: the document setting, else the tenant setting, else editors. */
+  effective: "editors" | "all" | "since_access";
+  /** Where the effective setting comes from. */
+  source: "document" | "tenant" | "default";
+}
+
 /** A registered public key of a tenant (UX-077; 05 section 3.2). */
 export interface TenantKeyView {
   /** The key identifier. */
@@ -2149,6 +2165,42 @@ export interface Operations {
     query: Record<string, never>;
     body: RetentionPolicy;
     response: RetentionView;
+  };
+  /** GET /history-visibility: The tenant history visibility setting; editors when none is set (HIS-025). (08 §9; 13 §10) */
+  getTenantHistoryVisibility: {
+    method: "GET";
+    path: "/history-visibility";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: never;
+    response: HistoryVisibilitySetting;
+  };
+  /** PUT /history-visibility: Sets the tenant history visibility setting; audited (HIS-025). (08 §9; 13 §10) */
+  setTenantHistoryVisibility: {
+    method: "PUT";
+    path: "/history-visibility";
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: HistoryVisibilitySetting;
+    response: HistoryVisibilitySetting;
+  };
+  /** GET /documents/{id}/history-visibility: A document history visibility setting and the effective setting that applies (HIS-025). (08 §9; 13 §10) */
+  getDocumentHistoryVisibility: {
+    method: "GET";
+    path: "/documents/{id}/history-visibility";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: HistoryVisibilityView;
+  };
+  /** PUT /documents/{id}/history-visibility: Sets the history visibility of one document; audited (HIS-025). (08 §9; 13 §10) */
+  setDocumentHistoryVisibility: {
+    method: "PUT";
+    path: "/documents/{id}/history-visibility";
+    params: { id: string };
+    query: Record<string, never>;
+    body: HistoryVisibilitySetting;
+    response: HistoryVisibilityView;
   };
   /** GET /origins: The origins the tenant allows (UX-077). (05 §4; 13 §10) */
   getTenantOrigins: {

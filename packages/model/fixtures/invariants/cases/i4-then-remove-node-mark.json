@@ -1,13 +1,18 @@
 {
   "name": "i4-then-remove-node-mark",
-  "doc": "attr then removeNodeMark: the result is checked whatever the last step was.",
+  "doc": "attr, addNodeMark and removeNodeMark on an inline atom: the result is checked whatever the last step was.",
   "base": "kitchen-sink",
   "steps": [
     { "stepType": "attr", "pos": 46, "attr": "style", "value": "Missing" },
     {
+      "stepType": "addNodeMark",
+      "pos": 29,
+      "mark": { "type": "del", "attrs": { "id": "sBobDelete000009", "user": "bob", "ext": {} } }
+    },
+    {
       "stepType": "removeNodeMark",
-      "pos": 86,
-      "mark": { "type": "del", "attrs": { "id": "sBobDelete000002", "user": "bob", "ext": {} } }
+      "pos": 29,
+      "mark": { "type": "del", "attrs": { "id": "sBobDelete000009", "user": "bob", "ext": {} } }
     }
   ],
   "context": {

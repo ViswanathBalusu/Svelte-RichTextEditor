@@ -807,7 +807,10 @@
       "status": "control-not-built",
       "tests": [],
       "boundaries": ["host-page-to-element"],
-      "specRows": ["Sandboxed third-party extensions"]
+      "specRows": [
+        "Sandboxed third-party extensions",
+        "The terms of the exception, and the first review of the sandbox"
+      ]
     },
     {
       "id": "T-5-fuzzing",

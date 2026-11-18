@@ -17,7 +17,7 @@ export interface Notice {
   /** For rejections: the number of items set aside in this change. */
   readonly count: number;
   /** Further numbers the message names (for a replace report, `skipped`). */
-  readonly params?: Readonly<Record<string, number>>;
+  readonly params?: Readonly<Record<string, number | string>>;
   /** Increases with every notice, so that the same message twice is shown and announced twice. */
   readonly serial: number;
   /** A named command of the core that the notice offers (a button next to the message), if any. */
@@ -174,14 +174,21 @@ export class NoticeTracker {
     // A fill that lost to another change of the same field is told in the field's own words
     // (FRW-010 criterion 5); the notice names no field and no value (ADR 0019).
     const fieldConflict = reason === 'conflict' && (first?.fields?.length ?? 0) > 0;
+    // A fill a rule of the document stopped is told in the rule's own words, or by its identifier
+    // when it has none (FRW-023 criterion 5); a document's rule text is its author's, not a value.
+    const rule = reason === 'permission_denied' ? first?.rule : undefined;
+    const words = rule === undefined ? undefined : (rule.message ?? rule.id);
     return {
       kind: 'rejection',
       key: fieldConflict
         ? 'notice.rejected.fieldConflict'
-        : workflowLocked && reason === 'read_only'
-          ? 'notice.rejected.workflow'
-          : rejectionKey(String(reason)),
+        : rule !== undefined
+          ? 'notice.rejected.rule'
+          : workflowLocked && reason === 'read_only'
+            ? 'notice.rejected.workflow'
+            : rejectionKey(String(reason)),
       count: count - before,
+      ...(words === undefined ? {} : { params: { rule: words } }),
       serial: ++this.#serial,
     };
   }

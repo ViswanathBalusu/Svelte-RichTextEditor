@@ -58,6 +58,12 @@ export interface BodyFrame {
   readonly height: number;
   readonly headerPushes: boolean;
   readonly footerPushes: boolean;
+  /**
+   * The page on which the first body line stands, counted from 1: 2 when the header and footer
+   * leave no room for the body, because the first page is then shipped empty and the body starts
+   * on the next page, as the LaTeX class does (owner decision 77).
+   */
+  readonly startsOnPage: 1 | 2;
 }
 
 /** Where the body of a page goes, given the measured heights of its header and footer in twips. */
@@ -76,6 +82,7 @@ export function bodyFrame(
     height: Math.max(0, bottom - top),
     headerPushes: headerBottom > g.marginTop,
     footerPushes: footerTop < g.height - g.marginBottom,
+    startsOnPage: bottom - top > 0 ? 1 : 2,
   };
 }
 

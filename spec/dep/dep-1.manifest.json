@@ -3,17 +3,17 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "c12438aed703bc55fbb75be70c136466c5f60022d45ed9548261c77cd0c7b505",
+  "definitionHash": "5f97785e33548846f3649ed4930237b2f2d6cc1a8ac80b3fc23d9071ebe5b099",
   "cdm": {
     "min": 1,
     "max": 1,
     "schema": "spec/cdm/cdm-1.schema.json",
     "id": "urn:docedit:cdm:1:draft",
-    "sha256": "b6199182f27e8eee2076c83458d3cc4c24ea51a9266f4ff7700fada9c9d3fef7"
+    "sha256": "0345bc5ee75752eb9e032db3bb3edea70f90b038fce55c8a4c2c47a8dbfb15ad"
   },
   "counts": {
     "messages": 28,
-    "operations": 93,
+    "operations": 97,
     "webhooks": 35,
     "notifications": 19,
     "errors": 32,
@@ -22,8 +22,8 @@
   },
   "files": {
     "spec/dep/dep-1.asyncapi.json": "7824ed66e63c28d0afb86b13b4ed0e3ee664bfac2219a62eafd1fdf50585d56e",
-    "spec/dep/dep-1.openapi.json": "a11feb6b6d4cf144d5d64ae0ab7c7a31e404a8b53821c7b926df0ba36e5f097b",
-    "spec/dep/dep-1.schema.json": "ffb91bbde78cfe8e404e5700f4f3b4eeb17cd87d609702383357b3125f935f93",
+    "spec/dep/dep-1.openapi.json": "d095661d0b17a132e67362fbc009b326460e9029689ba853a601bdfe9132a89c",
+    "spec/dep/dep-1.schema.json": "9f7f82285261f40fd015051dba41abb1f293b57341baaa4b5d23c955f83571cb",
     "spec/dep/webhooks/dep.document.created.v1.schema.json": "1e16a104e436cdf8f6213fc1f051a4d9a1ec58a4c2c5eeb25829ed86ae672c54",
     "spec/dep/webhooks/dep.document.deleted.v1.schema.json": "890c2efa8c1731ef2208fbf3c86629fa2eabf2b1eef70dd74e6e8eb52a53e404",
     "spec/dep/webhooks/dep.document.state_changed.v1.schema.json": "9cc6359f41bf28afce274afe4a664fbdd0cb18ac1bc118a80341fb83f32954fb",
@@ -59,8 +59,8 @@
     "spec/dep/webhooks/dep.workflow.expired.v1.schema.json": "6e3ce533646bb1a9ba1f37ed5e221382d0921c1b1f1308f46f20ffc311fa0b8a",
     "spec/dep/webhooks/dep.workflow.completed.v1.schema.json": "ed324ab76a9225e8f652b3f1cfc201a31929cdf80777f1bdc4e44b60d34c4dca",
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "9152416acc7809df32797943418c7a08be2f0169dd5f581a6c712d938774b333",
-    "spec/dep/dep-1.registry.json": "801c9f5540b6269276d76d6bbb62fa03e0752463b443373d6995a2a5893123be",
-    "spec/dep/dep-1.gaps.json": "50f64c79e1c56b3b666b9e55e28867668e1a42da5a9881160f824a396f94fc64",
-    "packages/protocol/src/generated/types.ts": "bf56764bc63964b18616ed0609d5605092afadc1b2deeb7f38e4d5dfe5154b9f"
+    "spec/dep/dep-1.registry.json": "8a63ae246aef21f9c04b4593ac2aec3482cbf94e4eb014bd94864668f868da77",
+    "spec/dep/dep-1.gaps.json": "9f39f72f4a6e61ac2a30bf96e95cda034772f01351a6f23e8d5da99ab4c13533",
+    "packages/protocol/src/generated/types.ts": "25018e9e38a065d71441a035b4b9886266d56ceaf877afa42a46610d12f4de6e"
   }
 }

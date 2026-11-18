@@ -4,7 +4,7 @@
   "decision": "docs/adr/0032-layout-semantics.md",
   "implementation": "bodyFrame, headerFor and footerFor in packages/model/src/spacing/page.ts",
   "description": "Where the body goes when a header or footer is taller than the space the page setup gives it, and which header and footer story a page shows.",
-  "format": "`frames`: `pageSetup` holds page_setup attributes (absent ones take their defaults: A4, margins 1440, header and footer distance 708); `headerHeight` and `footerHeight` are the measured heights of the stories in twips. `expected` gives `top` and `bottom` of the body in twips from the top edge, its `height`, and whether the header or footer pushes it. `slots`: for each page (first of its section or not, even or not), the header and footer story ids it shows, or null.",
+  "format": "`frames`: `pageSetup` holds page_setup attributes (absent ones take their defaults: A4, margins 1440, header and footer distance 708); `headerHeight` and `footerHeight` are the measured heights of the stories in twips. `expected` gives `top` and `bottom` of the body in twips from the top edge, its `height`, and whether the header or footer pushes it, and `startsOnPage` (1-based, 1 when absent): the page on which the first body line stands, which is 2 when no room is left (owner decision 77). `slots`: for each page (first of its section or not, even or not), the header and footer story ids it shows, or null.",
   "frames": [
     {
       "id": "header-fits",
@@ -83,11 +83,11 @@
     },
     {
       "id": "nothing-left-for-the-body",
-      "description": "When header and footer leave no room, the body height is 0.",
+      "description": "When header and footer leave no room, the body height is 0: page 1 is shipped with an empty body, and the body starts on page 2 at the same top (owner decision 77).",
       "pageSetup": {},
       "headerHeight": 9000,
       "footerHeight": 9000,
-      "expected": { "top": 9708, "bottom": 7130, "height": 0 }
+      "expected": { "top": 9708, "bottom": 7130, "height": 0, "startsOnPage": 2 }
     }
   ],
   "slots": [

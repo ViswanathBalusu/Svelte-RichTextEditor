@@ -383,20 +383,35 @@ export function changedAttrs(a: Node, b: Node, except: readonly string[] = ['id'
   const names = new Set([...Object.keys(a.attrs), ...Object.keys(b.attrs)]);
   const out: string[] = [];
   for (const k of names) {
-    if (except.includes(k)) continue;
+    // Block suggestions (`suggest`) are read as marks by changedNodeMarks, as they were node marks.
+    if (except.includes(k) || k === 'suggest') continue;
     if (stableJson(a.attrs[k]) !== stableJson(b.attrs[k])) out.push(k);
   }
   return out.sort();
 }
 
-/** Mark type names present on one node and not the other (node marks of blocks). */
+/** The suggestions a node carries itself: its marks and the entries of its `suggest` attribute. */
+function suggestionKeys(n: Node): Array<{ name: string; key: string }> {
+  const out = n.marks.map((m) => ({
+    name: m.type.name,
+    key: `${m.type.name}${stableJson(m.attrs)}`,
+  }));
+  const s: unknown = n.attrs['suggest'];
+  if (Array.isArray(s))
+    for (const e of s as Array<{ type?: unknown; attrs?: unknown }>)
+      if (typeof e?.type === 'string')
+        out.push({ name: e.type, key: `${e.type}${stableJson(e.attrs)}` });
+  return out;
+}
+
+/** Mark type names present on one node and not the other (marks, and block suggestions). */
 export function changedNodeMarks(a: Node, b: Node): string[] {
-  const sa = new Set(a.marks.map((m) => `${m.type.name}${stableJson(m.attrs)}`));
-  const sb = new Set(b.marks.map((m) => `${m.type.name}${stableJson(m.attrs)}`));
+  const ka = suggestionKeys(a);
+  const kb = suggestionKeys(b);
+  const sa = new Set(ka.map((m) => m.key));
+  const sb = new Set(kb.map((m) => m.key));
   const names = new Set<string>();
-  for (const m of a.marks)
-    if (!sb.has(`${m.type.name}${stableJson(m.attrs)}`)) names.add(m.type.name);
-  for (const m of b.marks)
-    if (!sa.has(`${m.type.name}${stableJson(m.attrs)}`)) names.add(m.type.name);
+  for (const m of ka) if (!sb.has(m.key)) names.add(m.name);
+  for (const m of kb) if (!sa.has(m.key)) names.add(m.name);
   return [...names].sort();
 }

@@ -17,7 +17,7 @@ const expected: Readonly<Record<string, { readonly layout: State; readonly latex
   'cascade.json': { layout: 'run', latex: 'run' },
   'date-fields.json': { layout: 'gap', latex: 'gap' },
   'header-growth.json': { layout: 'run', latex: 'run' },
-  'line-spacing.json': { layout: 'run', latex: 'gap' },
+  'line-spacing.json': { layout: 'run', latex: 'run' },
   'numbering-footnotes.json': { layout: 'run', latex: 'gap' },
   'numbering-lists.json': { layout: 'run', latex: 'gap' },
   'numbering-projections.json': { layout: 'run', latex: 'gap' },

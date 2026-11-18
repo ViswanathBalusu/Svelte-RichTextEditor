@@ -279,8 +279,12 @@ describe('the painter for a user who may only suggest (UX-009 criterion 2)', () 
     const marks = (mid.content ?? []).flatMap((t) => t.marks ?? []);
     const fmt = marks.find((m) => m.type === 'fmt');
     expect(fmt?.attrs?.['user']).toBe('sam');
-    // The paragraph's alignment is a block suggestion: a fmt mark on the paragraph, naming sam.
-    const block = (mid.marks ?? []).find((m) => m.type === 'fmt');
+    // The paragraph's alignment is a block suggestion: a fmt entry in its `suggest` attribute, naming sam.
+    const suggest = (mid.attrs?.['suggest'] ?? []) as {
+      type: string;
+      attrs?: Record<string, unknown>;
+    }[];
+    const block = suggest.find((m) => m.type === 'fmt');
     expect(block?.attrs?.['user']).toBe('sam');
 
     sam.detach();

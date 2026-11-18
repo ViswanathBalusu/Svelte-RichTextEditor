@@ -16,6 +16,7 @@ import { FAULT_INJECTION } from './fault-injection.ts';
 import { FIELDS, PERM_FILL } from './fields.ts';
 import { FUZZ } from './fuzz.ts';
 import { HISTORY } from './history.ts';
+import { LEASES } from './leases.ts';
 import { ASSETS, EXPORTS } from './jobs.ts';
 import { PERM_READ } from './perm-read.ts';
 import { PERM_SUGGEST } from './perm-suggest.ts';
@@ -76,14 +77,7 @@ export const PROFILES: readonly ProfileDef[] = [
     ['PRO-121'],
     'PRO-121: phase 2',
   ),
-  later(
-    'leases',
-    'Exclusive-edit leases',
-    '07 §10',
-    { kind: 'features', features: ['leases'] },
-    ['PRO-122'],
-    'PRO-122: phase 2',
-  ),
+  LEASES,
   AUTHORITY_SERVICE,
   FAULT_INJECTION,
 ];

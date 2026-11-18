@@ -123,6 +123,8 @@ export interface MountOptions {
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
   catchUp?: CatchUpHarnessMode;
   share?: boolean;
+  /** The host handles `de-fork-request` (HIS-022): the requests are recorded in `forkRequests`. */
+  fork?: boolean;
   /** The host can print (UX-040 criterion 3): the print command is offered and records its runs. */
   print?: boolean;
   headerPanes?: boolean;
@@ -227,6 +229,7 @@ interface Mounted {
 let current: Mounted | null = null;
 const resolveCalls: string[][] = [];
 const shareRequests: number[] = [];
+const forkRequests: number[] = [];
 const printRequests: number[] = [];
 const accessRequests: string[] = [];
 const commandEvents: string[][] = [];
@@ -727,6 +730,8 @@ function mountShell(options: MountOptions = {}): void {
       rules: async () => (await import('./StubPane.svelte')).default,
     };
   if (options.share) props['onShareRequest'] = hostShareDialog;
+  if (options.fork)
+    props['onForkRequest'] = ({ atSeq }: { atSeq: number }) => forkRequests.push(atSeq);
   if (options.print) props['onPrintRequest'] = () => printRequests.push(Date.now());
   if (options.principals !== 'none' && options.extended)
     props['searchPrincipals'] = searchPrincipals;
@@ -909,6 +914,7 @@ const harness = {
   errors,
   resolveCalls,
   shareRequests,
+  forkRequests,
   printRequests,
   accessRequests,
   commandEvents,

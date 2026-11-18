@@ -1,6 +1,6 @@
 # ADR 0005: Own layout engine with a DOM painter, reached in two stages
 
-**Status:** proposed, 2026-09-18.
+**Status:** proposed, 2026-09-18. **Update, 2026-11-18 (SPK-013):** the owner chose the full editable page view on 2026-11-15 (decision 26 of [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)), so the gate described below is passed without the phase 2 customer evidence. The house class sets the page breaks and Word's are not reproduced for imported files (decision 29), which is the assumption of this record. The text engine is the Rust WebAssembly module of ADR 0016 (decision 27). No phase 3 story of FE or WASM is dropped.
 
 ## Context
 
@@ -53,6 +53,10 @@ Bad:
 - Spike S7 evaluates driving an existing permissively licensed layout core (Eigenpal's Apache-2.0 core, canvas-editor, Docen) before any layout engine is written. The first draft of this record did not consider that.
 - The hidden input element was given three conflicting jobs: whole-document accessibility tree, input-method anchor at the caret, and keyboard handling. `prosemirror-view` also has no EditContext support, so that would be a second input pipeline. The design of the bridge is now the subject of spike S9.
 - Canvas gives no control over ligatures anywhere and none over kerning in Safari, so the painter follows canvas defaults, and spike S5 also evaluates measuring from font files with HarfBuzz.
+
+## Where layout and measurement run (FE-075, 2026-11-18)
+
+The layout engine and the text-measurement kernel run in one worker from the start, and the tree crosses to the main thread as plain data, in slices; the main thread runs the same engine as a fallback. This answers the open question of 02 §15. The grounds, the measurement of the crossing and the way back are in [ADR 0390](0390-w1-FE-075-layout-placement.md), which is proposed: the owner has not answered the question in so many words.
 
 ## Revisit when
 

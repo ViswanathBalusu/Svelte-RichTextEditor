@@ -1,6 +1,7 @@
 /**
  * Suggestions as the document records them (03 §5; CDM-039, CDM-040): `ins`, `del` and `fmt` marks
- * on text, and the same marks as node marks on paragraphs, table rows and tables. One suggestion
+ * on text, and the same entries in the `suggest` attribute of paragraphs, table rows and tables
+ * (owner decision 92; before it they were node marks). One suggestion
  * identifier can span many runs; this reader groups them. It reads the data only: accepting,
  * rejecting and the time of a suggestion (the server time of the commit that introduced its
  * identifier) are FE's and HIS's.
@@ -67,6 +68,11 @@ export function suggestionsOf(root: JsonNode): Suggestion[] {
       return;
     }
     for (const m of node.marks ?? []) note(m, { on: node.type, blockId: own, text: null });
+    const block = node.attrs?.['suggest'];
+    if (Array.isArray(block))
+      for (const m of block as unknown[])
+        if (m && typeof m === 'object' && typeof (m as JsonMark).type === 'string')
+          note(m as JsonMark, { on: node.type, blockId: own, text: null });
     for (const c of node.content ?? []) visit(c, own);
   };
   visit(root, null);

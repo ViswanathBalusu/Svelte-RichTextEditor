@@ -1,20 +1,22 @@
 {
   "name": "i11-fmt-before-on-block",
-  "doc": "addNodeMark: a block format suggestion that records an indent.",
+  "doc": "attr: a block format suggestion in `suggest` that records an indent.",
   "base": "example",
   "steps": [
     {
-      "stepType": "addNodeMark",
+      "stepType": "attr",
       "pos": 57,
-      "mark": {
-        "type": "fmt",
-        "attrs": {
-          "id": "sFmtBlock0000001",
-          "user": "carol",
-          "before": { "attrs": { "indentLeft": 720 } },
-          "ext": {}
+      "attr": "suggest",
+      "value": [
+        {
+          "type": "fmt",
+          "attrs": {
+            "id": "sFmtBlock0000001",
+            "user": "carol",
+            "before": { "attrs": { "indentLeft": 720 } }
+          }
         }
-      }
+      ]
     }
   ],
   "context": {

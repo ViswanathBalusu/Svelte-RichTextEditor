@@ -16,7 +16,7 @@ import {
   Selection,
   type Transaction,
 } from 'prosemirror-state';
-import { Mapping } from 'prosemirror-transform';
+import { AttrStep, Mapping } from 'prosemirror-transform';
 import { EditorView } from 'prosemirror-view';
 import type { CoreLabels, PeerCaretInfo } from '../api.ts';
 import { type ClipboardPayload, fragmentFromHtml } from '../clipboard.ts';
@@ -97,6 +97,24 @@ const DEFAULT_LABELS: CoreLabels = { body: 'Document', footnote: 'Footnote text'
  * Writes a copy or cut to the browser's clipboard: the two standard types the core chose, and nothing
  * else (FE-050). The browser's own copy is always prevented, so a refused copy (FE-055) writes nothing.
  */
+/**
+ * Whether the transactions changed the value of form fields and nothing else: every step sets the
+ * `value` of a `form_field`. Then the access, the mode, the definitions and the structure are as they
+ * were, and only the fields whose own state moved need drawing (FRW-023 criterion 6). No transaction
+ * (a reload or a reset of the state) is not such a change.
+ */
+function onlyFieldValues(transactions: readonly Transaction[]): boolean {
+  if (transactions.length === 0) return false;
+  return transactions.every((t) =>
+    t.steps.every(
+      (step, i) =>
+        step instanceof AttrStep &&
+        step.attr === 'value' &&
+        t.docs[i]?.nodeAt(step.pos)?.type.name === 'form_field',
+    ),
+  );
+}
+
 function writeClipboard(event: ClipboardEvent, payload: ClipboardPayload | null): void {
   event.preventDefault();
   const data = event.clipboardData;
@@ -660,7 +678,8 @@ export class EditorCore extends DocumentCore {
     const before = this.#view?.state.doc;
     this.#view?.updateState(state);
     // Mirrors follow their target fields, and a control follows its entry (FRW-004, FRW-006).
-    if (before !== state.doc) this.#fieldViews.refresh(state.doc);
+    // A change of nothing but field values draws only the fields whose state moved (FRW-023 c. 6).
+    if (before !== state.doc) this.#fieldViews.refresh(state.doc, onlyFieldValues(transactions));
     // The layout may have moved: the peers' carets are measured in the new state.
     this.#drawCarets();
     const sub = this.#sub;

@@ -3,7 +3,6 @@
 import { Fragment, type Node, Slice } from 'prosemirror-model';
 import {
   AddMarkStep,
-  AddNodeMarkStep,
   AttrStep,
   ReplaceAroundStep,
   ReplaceStep,
@@ -14,6 +13,7 @@ import type { Connection, PermissionState } from '../src/permissions/model.ts';
 import { Room } from '../src/room/room.ts';
 import type { Effects } from '../src/room/types.ts';
 import { stepsToJson } from '../src/steps.ts';
+import { addSuggestion } from './block-suggest.ts';
 import { REQUIRES, USERS, baseDoc, basePermissions, posInside, posOf, schema } from './fixtures.ts';
 import { MemoryStorage } from './harness/storage.ts';
 import { commitId, rejection, roomWith } from './permission-fixtures.ts';
@@ -42,7 +42,7 @@ describe('threat cases against commits (07 §16; PRM-059)', () => {
     expect(fx.write).toBeNull();
   });
 
-  it('row 2: attribute, mark, node-mark and crafted replaceAround steps are judged by what changed', () => {
+  it('row 2: attribute, mark, block-suggestion and crafted replaceAround steps are judged by what changed', () => {
     const doc = baseDoc();
     const p = posOf(doc, 'pLegal000000001B');
     const start = posInside(doc, 'pLegal000000001B');
@@ -51,9 +51,10 @@ describe('threat cases against commits (07 §16; PRM-059)', () => {
       ['attr', [new AttrStep(p, 'style', 'Heading1')]],
       ['addMark', [new AddMarkStep(start, start + 9, schema.marks['strike']!.create())]],
       [
-        'addNodeMark',
+        'block suggestion (attr)',
         [
-          new AddNodeMarkStep(
+          addSuggestion(
+            doc,
             p,
             schema.marks['del']!.create({ id: 'sCarol0000000009', user: 'carol' }),
           ),
