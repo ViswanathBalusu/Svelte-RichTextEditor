@@ -20,6 +20,7 @@
  */
 import { canonicalize, uuid7 } from '@docedit/model';
 import {
+  applicableItems,
   captureEvidence,
   commitEvidence,
   controlCommitEvidence,
@@ -29,26 +30,39 @@ import {
   type CaptureSettings,
   type EvidenceCommitPayload,
   type EvidenceFacts,
+  type EvidenceItem,
+  type ParticipantKind,
 } from '@docedit/authority';
 
 /** One event's evidence to record. */
 export interface EvidenceRecordEvent {
   readonly doc: string;
-  /** The participant's surrogate (never a host identifier). */
+  /** The participant's identifier in the workflow. */
   readonly participant: string;
+  /**
+   * The participant's kind. Only the items that apply to it may be recorded (pplicableItems,
+   * 12 §6.1, §8.1); another is refused, so that no item is invented for an approver or a cc.
+   */
+  readonly kind: ParticipantKind;
   /** The evidence item, for example `viewed`, `consented`, `signed` or `completed`. */
   readonly item: string;
   readonly facts: EvidenceFacts;
-  /** The origin of the control commit that will carry the hash: a signing or a completion. */
-  readonly origin: EvidenceCommitPayload['origin'];
+  /**
+   * The origin of the control commit that will carry the hash: sign for a signing, 
+ules for a
+   * completion. Absent for an event whose hash no commit carries (a view).
+   */
+  readonly origin?: EvidenceCommitPayload['origin'];
 }
 
 export interface RecordedEvidence {
   readonly id: string;
   /** What is stored, after the capture setting. */
   readonly evidence: CapturedEvidence;
-  /** What the control commit carries: the origin and the salted hash, nothing else. */
-  readonly commit: EvidenceCommitPayload;
+  /** The salted hash that is stored with the evidence. */
+  readonly hash: string;
+  /** What the control commit carries: the origin and the salted hash, nothing else; null without an origin. */
+  readonly commit: EvidenceCommitPayload | null;
 }
 
 /** A stored row, as a verifier reads it. */
@@ -121,6 +135,38 @@ export interface StoredCommit {
 export const toHex = (b: Uint8Array): string => Buffer.from(b).toString('hex');
 export const fromHex = (h: string): Uint8Array => new Uint8Array(Buffer.from(h, 'hex'));
 
+/** The member of the evidence that holds each item (the network items are the facts' own fields). */
+const KEY_OF: Readonly<Record<EvidenceItem, string | null>> = {
+  session: 'session',
+  ipAddress: null,
+  userAgent: null,
+  amr: 'amr',
+  viewedAt: 'viewedAtMs',
+  consent: 'consent',
+  signedAt: 'signings',
+  completedAt: 'completedAtMs',
+};
+
+/**
+ * Refuses an item that does not apply to the participant's kind, and any member that is no item of
+ * the record (FRW-040 criterion 4): the single write path invents nothing and keeps nothing extra.
+ */
+function checkApplicable(event: EvidenceRecordEvent): void {
+  const applies = new Set(applicableItems(event.kind));
+  const allowed = new Set(
+    [...applies].map((i) => KEY_OF[i]).filter((k): k is string => k !== null),
+  );
+  for (const key of Object.keys(event.facts.items))
+    if (!allowed.has(key))
+      throw new RangeError(
+        `evidence item ${key} does not apply to a participant of kind ${event.kind}`,
+      );
+  if (event.facts.ipAddress !== null && !applies.has('ipAddress'))
+    throw new RangeError(`no IP address is recorded for a participant of kind ${event.kind}`);
+  if (event.facts.userAgent !== null && !applies.has('userAgent'))
+    throw new RangeError(`no user agent is recorded for a participant of kind ${event.kind}`);
+}
+
 /** Builds the evidence, the salt and the commitment of one event; the stores write the row. */
 export async function prepareEvidence(
   event: EvidenceRecordEvent,
@@ -129,22 +175,23 @@ export async function prepareEvidence(
   id: string;
   evidence: CapturedEvidence;
   salt: Uint8Array;
-  commit: EvidenceCommitPayload;
+  hash: string;
+  commit: EvidenceCommitPayload | null;
 }> {
+  checkApplicable(event);
   const evidence = captureEvidence(event.facts, settings);
   const salt = newEvidenceSalt();
-  const commit = await controlCommitEvidence(
-    event.origin,
-    evidenceCanonical(event.participant, event.item, evidence),
-    salt,
-  );
+  const canonical = evidenceCanonical(event.participant, event.item, evidence);
+  const hash = await commitEvidence(canonical, salt);
+  const commit =
+    event.origin === undefined ? null : await controlCommitEvidence(event.origin, canonical, salt);
   const data = JSON.stringify({
     ...evidence,
-    commit: { salt: toHex(salt), hash: commit.evidenceHash },
+    commit: { salt: toHex(salt), hash },
   });
   if (Buffer.byteLength(data) > EVIDENCE_DATA_LIMIT)
     throw new RangeError(`the evidence of one event is at most ${EVIDENCE_DATA_LIMIT} bytes`);
-  return { id: uuid7(), evidence, salt, commit };
+  return { id: uuid7(), evidence, salt, hash, commit };
 }
 
 /** The in-memory ledger: the same rules as the PostgreSQL one (tests and the memory build). */
@@ -172,9 +219,9 @@ export class MemoryEvidenceLedger implements EvidenceLedger {
       collectedAtMs: this.#now(),
       evidence: structuredClone(made.evidence),
       salt: made.salt,
-      hash: made.commit.evidenceHash,
+      hash: made.hash,
     });
-    return { id: made.id, evidence: made.evidence, commit: made.commit };
+    return { id: made.id, evidence: made.evidence, hash: made.hash, commit: made.commit };
   }
 
   list(tenant: string, doc: string): Promise<readonly StoredEvidence[]> {

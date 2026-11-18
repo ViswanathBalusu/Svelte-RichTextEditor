@@ -228,7 +228,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         // The reason (trimmed) is in the audit entry of the transition, with who stopped it.
         const audits = await reasonOf(doc, 'workflow.transition');
         expect(audits.at(-1)).toMatchObject({
-          from: 'sent',
+          // The participant who filled opened the document, which moved the workflow on (FRW-040).
+          from: 'in_progress',
           to: 'voided',
           reason: 'Wrong tenant',
           by: null,
