@@ -32,6 +32,11 @@ import type { DocumentWriter, WriterInput } from './writer.ts';
 export interface MarkdownOptions {
   /** How suggestions are shown (09 §10). A missing value with suggestions present is an error. */
   readonly suggestions?: 'accept' | 'reject' | 'markup' | null;
+  /**
+   * The document's classification label (EXP-089). Markdown has no pages, so the marking is a line
+   * of its own before and a line after the content.
+   */
+  readonly classification?: string | null;
 }
 
 export interface MarkdownOutput {
@@ -697,6 +702,12 @@ export function markdownText(
   const body = (doc.content ?? []).find((c) => c.type === 'body');
   const blocks = blocksOf(ctx, body?.content);
   for (const fn of ctx.footnotes) blocks.push(fn);
+  const label = (options.classification ?? '').trim();
+  if (label !== '') {
+    const mark = `**${escapeMarkdown(label)}**`;
+    blocks.unshift(mark);
+    blocks.push(mark);
+  }
   const text = blocks.length === 0 ? '' : `${blocks.join('\n\n')}\n`;
   const bytes = utf8(text);
   return {
