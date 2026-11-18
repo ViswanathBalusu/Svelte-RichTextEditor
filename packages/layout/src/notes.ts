@@ -19,9 +19,11 @@
  *   has no body and no header or footer (a limit: its stories would need their factories).
  *
  * Not decided here, and recorded in docs/adr/0120-layout-backlog-batch.md (proposed): the separator
- * above the area (none is drawn), the spacing between the footnotes, and how the numbering restarts
- * (`footnoteRestart` is read by the shared numbering algorithm, which `flow.ts` uses for the marks,
- * FE-084 criterion 4). The numbers are the labels that `flow.ts` gives each footnote.
+ * above the area (none is drawn) and how the numbering restarts (`footnoteRestart` is read by the
+ * shared numbering algorithm, which `flow.ts` uses for the marks, FE-084 criterion 4). The numbers
+ * are the labels that `flow.ts` gives each footnote. The gap between two footnotes is the larger of
+ * the first one's space after and the second one's space before, as between body paragraphs
+ * (CDM-043; contextual spacing across footnotes is not applied).
  *
  * Universal: no DOM and no Node.js API (FND-004).
  */
@@ -72,7 +74,10 @@ function fill(queue: readonly NotePiece[], cap: number): Filled {
   while (i < queue.length) {
     const piece = queue[i]!;
     const lines = piece.para.fragment.lines;
-    const spaceBefore = piece.from === 0 ? piece.para.spaceBefore : 0;
+    // The gap between two paragraphs is the larger of the first one's space after and the second
+    // one's space before (CDM-043, ADR 0032), so the second keeps only what exceeds the first's.
+    const above = taken[taken.length - 1]?.spaceAfter ?? 0;
+    const spaceBefore = piece.from === 0 ? Math.max(0, piece.para.spaceBefore - above) : 0;
     let n = piece.from;
     let h = 0;
     while (n < lines.length && used + spaceBefore + h + lines[n]!.height <= cap + EPS) {
