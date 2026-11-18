@@ -226,6 +226,74 @@ function fieldsDocument(): CdmEnvelope {
 const fieldsDocId = service.createDocument(fieldsDocument());
 
 /**
+ * The identifiers of the document with a field of every kind (FRW-079): a required text field with
+ * a length limit, a number with a format, a date with a pattern, a checkbox and a choice.
+ */
+const KIND_IDS = {
+  text: 'fKText0000000001',
+  number: 'fKNumber00000001',
+  date: 'fKDate0000000001',
+  checkbox: 'fKCheck000000001',
+  choice: 'fKChoice00000001',
+} as const;
+
+function kindsDocument(): CdmEnvelope {
+  type J = Record<string, unknown>;
+  const envelope = spikeDocument() as unknown as {
+    requires: string[];
+    doc: { content: Array<{ type: string; content: J[] }> };
+  };
+  envelope.requires = [...new Set([...envelope.requires, 'fields'])];
+  const defs = envelope.doc.content.find((n) => n.type === 'defs');
+  const body = envelope.doc.content.find((n) => n.type === 'body');
+  if (!defs || !body) throw new Error('the spike document has no definitions or no body');
+  const after = defs.content.findLastIndex((n) => n['type'] === 'page_setup') + 1;
+  defs.content.splice(after, 0, {
+    type: 'role_def',
+    attrs: { id: FIELD_IDS.tenant, name: 'Tenant', color: '#1F77B4' },
+  });
+  const field = (id: string, key: string, kind: string, extra: J): J => ({
+    type: 'form_field',
+    attrs: { id, key, kind, assignee: FIELD_IDS.tenant, value: null, ...extra },
+  });
+  body.content.push({
+    type: 'paragraph',
+    attrs: { id: 'pKinds0000000001', style: 'Normal' },
+    content: [
+      { type: 'text', text: 'Kinds: ' },
+      field(KIND_IDS.text, 'tenant.name', 'text', {
+        label: 'Full name',
+        required: true,
+        validation: { maxLength: 8 },
+      }),
+      { type: 'text', text: ' ' },
+      field(KIND_IDS.number, 'tenant.rent', 'number', {
+        label: 'Rent',
+        format: { decimals: 2, prefix: '€', suffix: ' a month' },
+        validation: { min: '0' },
+      }),
+      { type: 'text', text: ' ' },
+      field(KIND_IDS.date, 'tenant.start', 'date', {
+        label: 'Start date',
+        format: { datePattern: 'dd.MM.yyyy' },
+      }),
+      { type: 'text', text: ' ' },
+      field(KIND_IDS.checkbox, 'tenant.pets', 'checkbox', { label: 'Has pets' }),
+      { type: 'text', text: ' ' },
+      field(KIND_IDS.choice, 'tenant.status', 'choice', {
+        label: 'Status',
+        options: [
+          { id: 'opt_single', label: 'Single' },
+          { id: 'opt_married', label: 'Married' },
+        ],
+      }),
+    ],
+  });
+  return envelope as unknown as CdmEnvelope;
+}
+const kindsDocId = service.createDocument(kindsDocument());
+
+/**
  * A document one field short of the limit of form fields (I15; FRW-072 criterion 4): the spike
  * document with 1,999 text fields in one more paragraph. Made when first asked for, because no
  * other suite needs it.
@@ -260,8 +328,8 @@ function fieldLimitDocId(): string {
 }
 
 /** A backend for a participant who may only fill the fields of `roles` (12 §4.1; `MockUser.fill`). */
-function fillBackend(sub: string, roles: string[] = [FIELD_IDS.tenant]) {
-  return service.backend({ ...userOf(sub), fill: { roles } }, { [fieldsDocId]: 'filler' });
+function fillBackend(sub: string, roles: string[] = [FIELD_IDS.tenant], active = true) {
+  return service.backend({ ...userOf(sub), fill: { roles, active } }, { [fieldsDocId]: 'filler' });
 }
 
 /**
@@ -345,6 +413,8 @@ Object.assign(globalThis, {
     regionsDocId,
     rtlDocId,
     fieldsDocId,
+    kindsDocId,
+    KIND_IDS,
     FIELD_IDS,
     fillBackend,
     fieldLimitDocId,

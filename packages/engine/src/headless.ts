@@ -15,6 +15,17 @@ export {
 } from './core.ts';
 export type * from './api.ts';
 export {
+  VersionDocument,
+  openVersion,
+  refusalOf,
+  versionCoreConfig,
+  type VersionCoreOptions,
+  type VersionInput,
+  type VersionOpen,
+  type VersionOpener,
+  type VersionRefusal,
+} from './version-view.ts';
+export {
   ReadValue,
   ViewHub,
   nextFrame,
@@ -113,6 +124,7 @@ export { latexRefusal, setEquationLatex } from './equation-commands.ts';
 export { pasteImage, type AssetsPort, type PastedImage } from './image-paste.ts';
 export { rebuildTransaction } from './remote.ts';
 export * as sync from './sync/state.ts';
+export { type RestorePlan, readRestorePlan, restoreBase } from './sync/restore.ts';
 export {
   SyncSession,
   commitId,

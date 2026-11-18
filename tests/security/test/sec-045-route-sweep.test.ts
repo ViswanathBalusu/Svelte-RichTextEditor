@@ -185,7 +185,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
               : param;
       const value = ids[key];
       if (!value) throw new Error(`no identifier of tenant B for {${param}} of ${op.operationId}`);
-      return param === 'origin' ? encodeURIComponent(value) : value;
+      return value;
     };
     const pathOf = (op: Operation): string =>
       '/v1' +

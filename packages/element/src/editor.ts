@@ -34,6 +34,7 @@ import {
   themeMode,
   toolbarMode,
   type CoreApi,
+  type DocumentStats,
   type EditorMode,
   type ResolveUsers,
   type ShellSettings,
@@ -311,6 +312,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // Named commands of phase 1b that the shell runs (ui CoreCommandName). `insertField` takes the
     // palette's `{ kind }` and inserts that form field kind at the caret (FRW-072).
     // `setRegionPolicy` takes `{ region, policy }` (PRM-036); the engine refuses it without `manage`.
+    // `copyFormat` and `pasteFormat` are the format painter's (UX-009); `insertRecovered` and
+    // `discardRecovered` take `{ id }` and are the recovered edits pane's (UX-017); `setLanguage`
+    // takes `{ lang }` (UX-018).
+    // `renameRegion` takes the permissions pane's `{ region, title }` (PRM-034); the engine refuses it
+    // without `structure` and `edit` in the region.
     // `markRegion` takes the region dialog's `{ title }` (PRM-033); in suggestion mode the engine
     // refuses it and `canMarkRegion` says why (FE-044 criterion 5).
     // `nextEditableRegion` takes no arguments and moves the caret (PRM-027).
@@ -319,19 +325,45 @@ export function mountEditor(options: MountOptions): MountedEditor {
     commandNames: [
       'insertField',
       'setRegionPolicy',
+      'renameRegion',
       'markRegion',
       'nextEditableRegion',
       'showReferences',
+      'copyFormat',
+      'pasteFormat',
+      'insertRecovered',
+      'discardRecovered',
+      'setLanguage',
     ],
     runNamed: (name, args) => {
       if (name === 'showReferences') return core.showReferences();
       if (name === 'nextEditableRegion') return core.run('nextEditableRegion', undefined);
+      // The format painter (UX-009): `copyFormat` takes the formatting at the selection, `pasteFormat`
+      // puts it on the selection through the guards; neither takes an argument.
+      if (name === 'copyFormat' || name === 'pasteFormat') return core.run(name);
+      // The language dialog (UX-018): the `lang` mark of a BCP 47 tag on the selection, or none (the
+      // document's default) for null; the core checks the tag and the user's right to change it.
+      if (name === 'setLanguage') {
+        const lang = (args as { lang?: unknown } | undefined)?.lang;
+        if (lang !== null && typeof lang !== 'string') return false;
+        return core.run('lang', { lang });
+      }
+      // The recovered edits pane (UX-017): `{ id }` names an item of the core's recovered view.
+      if (name === 'insertRecovered' || name === 'discardRecovered') {
+        const id = (args as { id?: unknown } | undefined)?.id;
+        if (typeof id !== 'string') return false;
+        return name === 'insertRecovered' ? core.insertRecovered(id) : core.discardRecovered(id);
+      }
       if (name === 'markRegion') {
         const title = (args as { title?: unknown } | undefined)?.title;
         if (typeof title !== 'string') return false;
         return core.run('markRegion', { title });
       }
-      if (name === 'nextEditableRegion') return core.run('nextEditableRegion');
+      if (name === 'renameRegion') {
+        const a = args as { region?: unknown; title?: unknown } | undefined;
+        if (typeof a?.region !== 'string' || typeof a.title !== 'string') return false;
+        return core.run('renameRegion', { region: a.region, title: a.title });
+      }
       if (name === 'setRegionPolicy') {
         const a = args as { region?: unknown; policy?: unknown } | undefined;
         if (typeof a?.region !== 'string') return false;
@@ -353,6 +385,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
     carets: core.carets,
     features: core.features,
     counts: core.counts,
+    // The status bar's word count, made off the typing path, and the document's default language
+    // (UX-018). There is no typeset result here, so no page count: the web view shows none (02 §7).
+    stats: derived<DocumentStats>([core.words], () => ({ words: core.words.get(), pages: null })),
+    language: core.language,
     // Spelling and grammar through the backend's proofing port (UX-041, UX-042; 13 §6.1). Without a
     // port `proofing.get().available` is false and the shell shows no proofing control.
     proofing: core.proofing,
@@ -383,7 +419,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
     // and its grants. Without the backend's reads the pane, or its grant controls, are not offered.
     permissions: core.permissions,
     ...(port?.regions
-      ? { regions: regionsView(port.regions.bind(port), options.docId, [core.permissions]) }
+      ? {
+          regions: regionsView(port.regions.bind(port), options.docId, [
+            core.permissions,
+            core.regionTitles,
+          ]),
+        }
       : {}),
     ...(port?.grants && port.updateGrants
       ? {

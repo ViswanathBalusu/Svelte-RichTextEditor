@@ -18,6 +18,18 @@ export {
   type TransactionInfo,
 } from './core.ts';
 export { REMOTE } from './meta.ts';
+export {
+  VersionDocument,
+  openVersion,
+  refusalOf,
+  versionCoreConfig,
+  type VersionCoreOptions,
+  type VersionInput,
+  type VersionOpen,
+  type VersionOpener,
+  type VersionRefusal,
+} from './version-view.ts';
+export { VersionView, makeWebVersion } from './view/version-web.ts';
 export type {
   AccessLimit,
   AccessSummary,
@@ -89,8 +101,10 @@ export {
   type JournalContents,
   type JournalEntry,
   type JournalPort,
+  type QueueAt,
   memoryJournal,
 } from './sync/journal.ts';
+export { type RestorePlan, readRestorePlan, restoreBase } from './sync/restore.ts';
 export type {
   LocatedFinding,
   ProofingClock,

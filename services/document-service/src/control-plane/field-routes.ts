@@ -1,7 +1,7 @@
 /**
  * The field routes of 12 §10 (FRW-060, FRW-061; D145). See fields.ts for the rules.
  */
-import { uuid7 } from '@docedit/model';
+import { derivedCommitId, stableJson } from '../data-plane/commit-id.ts';
 import { prefillSteps, projectedFields, valuesByKey } from './fields.ts';
 import { checkIfMatch, pageLimit, seqParam } from './http.ts';
 import { json, notModified, type Kit, type ReadAs } from './kit.ts';
@@ -122,7 +122,16 @@ export function fieldRoutes(k: Kit): Record<string, Handler> {
     const item = await outbox.enqueue({
       tenant: ref.tenant,
       doc: ref.doc,
-      commitId: uuid7(d.now()),
+      // Deterministic (SYN-030 criterion 3): the same prefill by the same caller against the same
+      // head is the same request, so a retry stores one item and one commit (ADR 0377, proposed).
+      commitId: derivedCommitId(
+        'prefill',
+        ref.tenant,
+        ref.doc,
+        ctx.caller.actor,
+        String(head.seq),
+        stableJson(steps),
+      ),
       kind: 'author',
       // The preconditions the authorisation relied on (SYN-030 criterion 3): the room re-checks
       // them when it applies the commit and answers `conflict` if any has moved.

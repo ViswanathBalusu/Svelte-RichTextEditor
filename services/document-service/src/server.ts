@@ -997,6 +997,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
     ...(reads ? { reads } : {}),
     ...(readSessions ? { readSessions } : {}),
     ...(pinnedCache ? { pinnedCache } : {}),
+    comparePool: pool,
     documents: parts.documents,
     grants: parts.grants,
     logs,

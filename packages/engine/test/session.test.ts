@@ -336,6 +336,19 @@ describe('gaps, timeouts and closes (SYN-019; 04 §9)', () => {
     expect(h.c.connection.get()).toBe('online');
   });
 
+  it.each(['bad_message', 'unknown_type'] as const)(
+    '%s is reported as a problem, takes the core offline and is not retried (PRO-039 criterion 6)',
+    async (code) => {
+      const h = harness();
+      await sleep(0);
+      h.first.state({ status: 'closed', code, reason: 'the server could not read a frame' });
+      await h.clock.advance(60_000);
+      expect(h.c.connection.get()).toBe('offline');
+      expect(h.opens).toHaveLength(0);
+      expect(h.c.problem.get()).toMatchObject({ code, fatal: false });
+    },
+  );
+
   it('catch-up reload loads the content at the head and replaces the confirmed document', async () => {
     const h = harness({ catchUp: 'reload', head: 7 });
     await h.clock.advance(1);
