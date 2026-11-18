@@ -112,6 +112,7 @@ function sourceMap(ctx: Ctx): SourceMap {
     else lines.push({ from: i + 1, to: i + 1, block: owner });
   });
   const fields = ctx.fieldIds.length > 1 ? { fields: ctx.fieldIds } : {};
+  const tables = ctx.tableRows.size ? { tables: Object.fromEntries(ctx.tableRows) } : {};
   return {
     version: 1,
     blocks: ctx.blocks,
@@ -120,6 +121,7 @@ function sourceMap(ctx: Ctx): SourceMap {
     lines,
     setups: ctx.setups,
     ...fields,
+    ...tables,
   };
 }
 
@@ -180,6 +182,7 @@ export async function convert(envelope: CdmEnvelope, options: ConvertOptions): P
     blocks: [null],
     kinds: [''],
     owners: [null],
+    tableRows: new Map(),
     out: { lines: [], owners: [], current: null },
     anchors: new Map(),
     refTargets: new Set(),
