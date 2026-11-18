@@ -398,5 +398,56 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(spanSeqs.every((x) => x !== undefined && x > 3)).toBe(true);
       },
     );
+
+    // Owner decision 37 (docs/owner-decisions-2026-11-15.md): content written below the gate is
+    // shown as an unknown person, with the author and the time withheld.
+    for (const s of SCENARIOS.filter((x) => x.gate > 0)) {
+      it.skipIf(skip !== null)(
+        `attribution at the head shows content below the gate as an unknown person (${s.name}; gate ${s.gate})`,
+        async () => {
+          const doc = await makeDoc(s.setting);
+          const token = tokenOf(doc, s);
+          const r = await h.call('GET', `/v1/documents/${doc}/attribution?atSeq=${HEAD}`, {
+            token,
+          });
+          expect(r.status).toBe(200);
+          const spans = r.json.spans as Array<{
+            user: string;
+            seq: number;
+            unknown?: true;
+            agent?: string;
+          }>;
+          expect(spans.length).toBeGreaterThan(0);
+          // The document was created at seq 0 and commits 1 to 4 typed into one paragraph.
+          expect(spans.some((x) => x.unknown)).toBe(true);
+          for (const x of spans) {
+            if (x.unknown) {
+              expect(x.user).toBe('');
+              expect(x.seq).toBe(-1);
+              expect(x).not.toHaveProperty('agent');
+            } else expect(x.seq).toBeGreaterThanOrEqual(s.gate);
+          }
+          // Nothing below the gate: no seq of an earlier commit, and no author of one.
+          expect(spans.filter((x) => !x.unknown && x.seq < s.gate)).toEqual([]);
+          if (s.gate === HEAD) {
+            // Only the head commit is shown by name.
+            expect(spans.filter((x) => !x.unknown).every((x) => x.seq === HEAD)).toBe(true);
+          }
+        },
+      );
+    }
+
+    it.skipIf(skip !== null)(
+      'attribution for a reader with no gate names the authors of every commit',
+      async () => {
+        const doc = await makeDoc('all');
+        const token = tokenOf(doc, SCENARIOS.find((x) => x.setting === 'all' && x.role === 'viewer')!);
+        const r = await h.call('GET', `/v1/documents/${doc}/attribution?atSeq=${HEAD}`, { token });
+        expect(r.status).toBe(200);
+        const spans = r.json.spans as Array<{ unknown?: true; seq: number }>;
+        expect(spans.some((x) => x.unknown)).toBe(false);
+        expect(new Set(spans.map((x) => x.seq)).size).toBeGreaterThan(1);
+      },
+    );
   });
 }

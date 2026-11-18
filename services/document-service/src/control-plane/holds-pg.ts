@@ -42,7 +42,7 @@ export class PgHoldStore implements HoldStore {
       async (c) => {
         const r = await c.query(
           `select 1 from ${DOCUMENT_HOLDS_TABLE}
-            where tenant_id = $1 and doc_id = $2::uuid
+            where tenant_id = $1 and doc_id = $2::uuid and released_at is null
             limit 1`,
           [tenant, document],
         );
@@ -50,6 +50,36 @@ export class PgHoldStore implements HoldStore {
       },
       { readOnly: true },
     );
+  }
+
+  release(
+    tenant: string,
+    document: string,
+    id: string,
+    actor: string,
+    at: number,
+  ): Promise<HoldRow | null> {
+    return inTenant(this.#pool, tenant, async (c) => {
+      const r = await c.query<Row>(
+        `update ${DOCUMENT_HOLDS_TABLE}
+            set released_at = to_timestamp($5::double precision / 1000), released_by = $4
+          where tenant_id = $1 and doc_id = $2::uuid and id = $3::uuid and released_at is null
+      returning id::text as id, doc_id::text as doc_id, reason, placed_by,
+                (extract(epoch from placed_at) * 1000)::text as placed_at_ms`,
+        [tenant, document, id, actor, at],
+      );
+      const row = r.rows[0];
+      return row
+        ? {
+            id: row.id,
+            tenant,
+            document: row.doc_id,
+            reason: row.reason,
+            placedBy: row.placed_by,
+            placedAt: Math.round(Number(row.placed_at_ms)),
+          }
+        : null;
+    });
   }
 
   list(tenant: string, after: string | null, limit: number): Promise<HoldRow[]> {
@@ -61,7 +91,8 @@ export class PgHoldStore implements HoldStore {
           `select id::text as id, doc_id::text as doc_id, reason, placed_by,
                   (extract(epoch from placed_at) * 1000)::text as placed_at_ms
              from ${DOCUMENT_HOLDS_TABLE}
-            where tenant_id = $1 and ($2::uuid is null or id > $2::uuid)
+            where tenant_id = $1 and released_at is null
+              and ($2::uuid is null or id > $2::uuid)
             order by id
             limit $3`,
           [tenant, after, limit],

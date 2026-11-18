@@ -1,6 +1,7 @@
 /**
- * The routes `POST /documents/{id}/holds` and `GET /holds` (operations placeHold and listHolds;
- * 08 section 11; 13 section 10; UX-080 criteria 2 and 3). The operations are in `HoldService`
+ * The routes `POST /documents/{id}/holds`, `DELETE /documents/{id}/holds/{holdId}` and `GET /holds`
+ * (operations placeHold, releaseHold and listHolds; 08 section 11; 13 section 10; UX-080 criteria 2
+ * and 3; HIS-031). The operations are in `HoldService`
  * (holds.ts). This module reads the query, maps the answers to replies and passes the caller's
  * actor to the placement.
  *
@@ -11,6 +12,7 @@
  * page: `limit` 1 to 200 (50 when absent), and `nextCursor` when more holds follow (the signed
  * cursors of the kit, as the other lists use).
  */
+import { isUuid } from '../storage/db.ts';
 import { json, type Kit } from './kit.ts';
 import { pageLimit } from './http.ts';
 import type { Handler } from './pipeline.ts';
@@ -37,6 +39,15 @@ export function holdRoutes(k: Kit): Record<string, Handler> {
     return json(201, view, { 'Cache-Control': 'no-store' });
   };
 
+  const releaseHold: Handler = async (ctx) => {
+    const doc = ctx.params['id'] ?? '';
+    const hold = ctx.params['holdId'] ?? '';
+    // An identifier that is not a UUID names nothing; the answer is the same as for an unknown hold.
+    if (!isUuid(doc) || !isUuid(hold)) throw new ApiError('not_found', 'no such hold in force');
+    const view = await service().release(ctx.caller.tenant, doc, hold, ctx.caller.actor);
+    return json(200, view, { 'Cache-Control': 'no-store' });
+  };
+
   const listHolds: Handler = async (ctx) => {
     const svc = service();
     const limit = pageLimit(ctx.url);
@@ -48,5 +59,5 @@ export function holdRoutes(k: Kit): Record<string, Handler> {
     return json(200, body, { 'Cache-Control': 'no-store' });
   };
 
-  return { placeHold, listHolds };
+  return { placeHold, releaseHold, listHolds };
 }

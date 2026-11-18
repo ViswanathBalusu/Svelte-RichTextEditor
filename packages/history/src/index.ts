@@ -153,6 +153,7 @@ export * from './workflow-evidence-bundle.ts';
 export {
   activitySince,
   attributionFor,
+  UNKNOWN_SEQ,
   fieldHistory,
   forkContent,
   hiddenAcross,
