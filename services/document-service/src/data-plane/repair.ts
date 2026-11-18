@@ -27,6 +27,7 @@ import type {
   NewOutboxItem,
   OutboxItem,
   OutboxStore,
+  OutboxWriter,
 } from '../storage/types.ts';
 import { rebuild, verifyCheckpoint, type RecoveryStores } from './recovery.ts';
 import { checkpoint as replay, type Encoded } from './tasks.ts';
@@ -112,11 +113,16 @@ export async function planRepair(
 /**
  * Writes the repair as a snapshot item for the outbox (origin `repair`, BE-039) and records the audit
  * event. Refuses a plan that changes nothing. Returns the item the outbox holds.
+ *
+ * With a writer the item and the event are stored as one unit (BE-039 criterion 1): both or
+ * neither, so the audit trail names the operator exactly when the repair is in the outbox. Without
+ * one, the two writes are separate and a failure between them can leave the item without its event.
  */
 export async function enqueueRepair(opts: {
   plan: RepairPlan;
   outbox: OutboxStore;
   audit: AuditStore;
+  writer?: OutboxWriter;
   now?: () => number;
 }): Promise<OutboxItem> {
   const { plan } = opts;
@@ -137,7 +143,6 @@ export async function enqueueRepair(opts: {
     request: { reason: 'repair', actor: 'system', preconditions: { head: plan.head } },
     payload: plan.payload,
   };
-  const stored = await opts.outbox.enqueue(item);
   const event: AuditEvent = {
     id: uuid7(),
     tenant: plan.ref.tenant,
@@ -153,6 +158,11 @@ export async function enqueueRepair(opts: {
     },
     at: (opts.now ?? Date.now)(),
   };
+  if (opts.writer) {
+    const [stored] = await opts.writer.write(plan.ref.tenant, { items: [item], events: [event] });
+    return stored!;
+  }
+  const stored = await opts.outbox.enqueue(item);
   await opts.audit.record([event]);
   return stored;
 }
