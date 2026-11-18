@@ -139,8 +139,10 @@ describe('a revocation closes the session and refuses old tokens through the ser
         },
       });
       const rejected = await c.take((m) => m.re === 'open-old', 3000, 'an answer to ch.open');
-      expect(rejected.t).toBe('ch.rejected');
-      expect(rejected.d?.['code']).toBe('forbidden');
+      // SEC-014 criterion 2 (ADR 0379, proposed): a revoked channel token is told apart from other
+      // refusals, by a non-fatal `error` of code `revoked` (the codes of `ch.rejected` lack it).
+      expect(rejected.t).toBe('error');
+      expect(rejected.d?.['code']).toBe('revoked');
 
       // Criterion 3, auth.refresh: the old token is refused.
       c.send({ t: 'auth.refresh', id: 'refresh-old', d: { token: old } });

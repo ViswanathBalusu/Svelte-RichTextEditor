@@ -130,7 +130,7 @@ There is no session resumption: a new connection is a new session.
 
 | Type | Dir | Payload | Notes |
 |---|---|---|---|
-| `ch.open` | C to S | `kind: "doc"`, `doc`, `engine`, `cdm` (the version the client will use), `features`, optional `resume` (`seq`, `incarnation`, `inflight`, optional `view`), optional `token` | Without `resume` the server answers with `catchUp: "reload"`. `resume.view` is the view token of the `ch.opened` or content read that the confirmed document came from |
+| `ch.open` | C to S | `kind: "doc"`, `doc`, `engine`, `cdm` (the version the client will use), `features`, optional `resume` (`seq`, `incarnation`, `inflight`, optional `view`), optional `token` | Without `resume` the server answers with `catchUp: "reload"`. `resume.view` is the view token of the `ch.opened` or content read that the confirmed document came from. A channel `token` whose user has been revoked is answered with a non-fatal `error` of code `revoked`, not a `ch.rejected` (ADR 0379, proposed) |
 | `ch.opened` | S to C | `head`, `incarnation`, `catchUp` (`stream`, `page` or `reload`), `inflight` (`accepted` with `seq`, or `unknown`), `access` (section 5.5), optional `workflow` (12), optional `view` | `view` is the view token (below). `head` is the durable head at the moment the channel is attached. The first live commit the client receives is `head + 1` |
 | `ch.rejected` | S to C | `code`, `message` | Codes: `not_found`, `forbidden`, `unsupported_engine`, `unsupported_cdm`, `unsupported_feature`, `channel_limit`, `already_open`, `unavailable` |
 | `ch.close` | C to S | none | |
