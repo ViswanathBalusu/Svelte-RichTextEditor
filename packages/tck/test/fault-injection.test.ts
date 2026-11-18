@@ -33,7 +33,7 @@ describe('the optional fault-injection profile (PRO-126 criterion 5)', () => {
     expect(notApplicable(FAULT_INJECTION, target([], 'relay'))).toMatch(/`test-hooks`/);
   });
 
-  it('applies to a server that announces the hooks, and has a scenario for each of the four faults', () => {
+  it('applies to a server that announces the hooks, and has a scenario for each of the five faults and for the idempotency retention', () => {
     expect(notApplicable(FAULT_INJECTION, target([TEST_HOOKS_FEATURE]))).toBeNull();
     expect(FAULT_INJECTION.pending).toBeUndefined();
     expect(FAULT_INJECTION.scenarios.map((x) => x.id)).toEqual([
@@ -41,6 +41,8 @@ describe('the optional fault-injection profile (PRO-126 criterion 5)', () => {
       'fault-injection.fencing',
       'fault-injection.rewind',
       'fault-injection.grants-revision',
+      'fault-injection.rolling-restart',
+      'fault-injection.idempotency-retention',
     ]);
   });
 

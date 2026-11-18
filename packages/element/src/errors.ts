@@ -18,6 +18,18 @@ export function codeOf(e: unknown): ErrorCode {
 }
 
 /**
+ * The wait a refusal asks for, in milliseconds (`retryAfterMs` of a port error, from `Retry-After`
+ * or the `error` message of the wire), or null when it gave none.
+ */
+export function retryAfterMsOf(e: unknown): number | null {
+  if (e !== null && typeof e === 'object') {
+    const ms = (e as { retryAfterMs?: unknown }).retryAfterMs;
+    if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) return Math.round(ms);
+  }
+  return null;
+}
+
+/**
  * A short description for logs: the error's own message, at most 300 characters. Backends write
  * these messages; they must not put content or tokens in them (10 §3.1).
  */

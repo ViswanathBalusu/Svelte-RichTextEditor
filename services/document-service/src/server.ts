@@ -20,6 +20,7 @@ import {
   type Sandbox,
 } from '@docedit/asset-worker';
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
+import { planeOf } from './data-plane/restartable.ts';
 import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
 import { AnnouncingNotifier, listenForAnnouncements } from './data-plane/announcements.ts';
@@ -103,6 +104,7 @@ import {
   type PurgeStore,
   type SearchPurge,
 } from './control-plane/document-purge.ts';
+import { PgPurgeStore } from './control-plane/document-purge-pg.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
 import {
   MemoryWorkflowResourceStore,
@@ -752,6 +754,12 @@ export async function startService(opts: StartOptions): Promise<Service> {
       versions: new PgVersionStore(replicaDb),
     };
   }
+  // The purge of deleted documents (HIS-039) connects as a member of docedit_purge, a pool of its own.
+  const purgeDb =
+    db && config.purgeDatabaseUrl
+      ? createPool({ connectionString: config.purgeDatabaseUrl, connectionTimeoutMillis: 5000 })
+      : null;
+  if (purgeDb) base.purgeStore = new PgPurgeStore(purgeDb);
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
@@ -934,7 +942,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
       parts.search = { search: async (tenant, q, query) => index.search(tenant, q, query) };
     if (!parts.searchPurge) parts.searchPurge = index;
   }
-  const dataPlane = (opts.createDataPlane ?? defaultDataPlane)({
+  // In test mode the node can be restarted in place by a hook (PRO-024 criterion 6; PRO-126).
+  const dataPlane = planeOf(config.testMode, opts.createDataPlane ?? defaultDataPlane, {
     ...(searchTarget
       ? {
           onCheckpoint: async (ref: DocRef, seq: number) => {
@@ -1650,6 +1659,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
         await pool.close();
         if (db) await db.end().catch(() => undefined);
         if (replicaDb) await replicaDb.end().catch(() => undefined);
+        if (purgeDb) await purgeDb.end().catch(() => undefined);
       })()),
   };
 }
