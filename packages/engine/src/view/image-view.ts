@@ -11,6 +11,12 @@
 import type { Node as PmNode } from 'prosemirror-model';
 import type { NodeView, NodeViewConstructor } from 'prosemirror-view';
 import { type AssetImageLookup, imageSource } from '../image-source.ts';
+import { drawSize, resizeHandle } from './resize-handle.ts';
+
+const sizeOf = (node: PmNode, name: string): number => {
+  const value = node.attrs[name];
+  return typeof value === 'number' ? value : 0;
+};
 
 function assetOf(node: PmNode): string | undefined {
   const asset = node.attrs['asset'];
@@ -18,7 +24,7 @@ function assetOf(node: PmNode): string | undefined {
 }
 
 export function imageView(lookup: AssetImageLookup | undefined): NodeViewConstructor {
-  return (node): NodeView => {
+  return (node, view, getPos): NodeView => {
     const dom = document.createElement('span');
     dom.className = 'de-image';
     dom.setAttribute('role', 'img');
@@ -44,20 +50,36 @@ export function imageView(lookup: AssetImageLookup | undefined): NodeViewConstru
         .catch(() => {});
     }
 
+    // FE-132 criterion 2: the stored size, and a handle to change it.
+    const handle = resizeHandle(view, {
+      node: () => current,
+      pos: () => {
+        const pos = getPos();
+        return typeof pos === 'number' ? pos : undefined;
+      },
+      preview: (width, height) => drawSize(dom, width, height),
+    });
+    dom.append(handle.dom);
+    drawSize(dom, sizeOf(node, 'width'), sizeOf(node, 'height'));
+
     return {
       dom,
-      // A change of the asset or the alt text builds the view again.
+      // A change of the asset or the alt text builds the view again; a change of size does not.
       update: (next) => {
         if (next.type !== current.type) return false;
         if (assetOf(next) !== assetOf(current) || next.attrs['alt'] !== current.attrs['alt'])
           return false;
         current = next;
+        drawSize(dom, sizeOf(next, 'width'), sizeOf(next, 'height'));
+        handle.sync(next);
         return true;
       },
+      stopEvent: (event) => handle.owns(event.target),
       // The picture is added after the view is made; ProseMirror must not read it as an edit.
       ignoreMutation: () => true,
       destroy: () => {
         destroyed = true;
+        handle.destroy();
       },
     };
   };

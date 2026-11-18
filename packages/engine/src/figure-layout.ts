@@ -37,9 +37,14 @@ export interface FigureLayout {
 }
 
 /** The figure node at `pos`, and whether it stands inside a table cell. */
-function figureAt(state: EditorState, pos: number): { node: PMNode; inCell: boolean } | null {
+function figureAt(
+  state: EditorState,
+  pos: number,
+  orImage = false,
+): { node: PMNode; inCell: boolean } | null {
   const node = state.doc.nodeAt(pos);
-  if (!node || node.type.name !== 'figure') return null;
+  if (!node) return null;
+  if (node.type.name !== 'figure' && !(orImage && node.type.name === 'image')) return null;
   const $pos = state.doc.resolve(pos);
   let inCell = false;
   for (let d = $pos.depth; d >= 1; d--) {
@@ -100,10 +105,11 @@ export function figureRefusal(
   pos: number,
   change: { size?: FigureSize; layout?: FigureLayout },
 ): FigureRefusal | null {
-  const fig = figureAt(state, pos);
+  const { size, layout } = change;
+  // A size change also applies to an inline image (FE-132 criterion 2); a layout change does not.
+  const fig = figureAt(state, pos, layout === undefined);
   if (!fig) return 'not-a-figure';
   if (!editable(state, pos)) return 'no-access';
-  const { size, layout } = change;
   if (size) {
     const current = {
       width: fig.node.attrs['width'] as number,
@@ -119,7 +125,7 @@ export function figureRefusal(
   return null;
 }
 
-/** Stores a new size on the figure at `pos` (FE-132 criterion 2). */
+/** Stores a new size on the figure or inline image at `pos` (FE-132 criterion 2). */
 export function resizeFigure(pos: number, size: FigureSize): Command {
   return (state, dispatch) => {
     if (figureRefusal(state, pos, { size }) !== null) return false;
