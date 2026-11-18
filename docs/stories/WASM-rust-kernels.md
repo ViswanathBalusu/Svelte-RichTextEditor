@@ -32,7 +32,7 @@ As a maintainer, I want a reproducible Rust build that produces the kernel as an
 - [ ] The kernel depends on no system library and no browser font stack: fonts arrive only from the manifest (WASM-005).
 - [ ] The repository layout of 01 §6 is updated with the folder that holds the crates.
 
-**Notes:** C-RUST, phase 3. Not needed if S10 recommends harfbuzzjs alone, which ships as a package.
+**Notes:** C-RUST, phase 3. Not needed if S10 recommends harfbuzzjs alone, which ships as a package. Lane w6 (2026-11-17), blocked, nothing ticked: C-RUST does not hold. S10 (SPK-023, done) recommends harfbuzzjs with line breaking in TypeScript, because the Rust module gave no material gain and cost 2.1 times the download, a second toolchain and 21 crates (ADR 0016, "Result of S10"). C-WASM itself waits on the page-view gate (SPK-013), which the owner has not held. The spike crate `packages/perf/wasm/text-kernel/` is measurement code, not the kernel package of this story, and no production Rust workspace was created. The story reopens if the gate says yes and a later measurement changes S10's answer.
 
 ### WASM-002 Load WebAssembly modules on demand inside the element
 
