@@ -132,6 +132,15 @@ export {
   nodeHash,
 } from './canonical/canonical-form.ts';
 export type { JsonEnvelope, JsonMark, JsonNode } from './canonical/canonical-form.ts';
+// Schema migrations (03 §11.3; CDM-049), for the authority service's migrate (PRO-107).
+export {
+  chainProblem,
+  migrate,
+  moveExtKey,
+  type Migration,
+  type MigrationCode,
+  type MigrationResult,
+} from './migrate/migrations.ts';
 
 // Fields (12 §3; FRW-003): the type of a value for its kind (I15), without ProseMirror. The entry
 // checks and presets of FRW-004 are the rules package's (`checkEntry` in @docedit/rules).

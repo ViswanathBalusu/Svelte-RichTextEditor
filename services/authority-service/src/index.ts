@@ -18,6 +18,12 @@ export {
   type WirePayload,
 } from './service.ts';
 export {
+  IMPLEMENTED_CALLS,
+  capabilities,
+  sidecarProblems,
+  type Capabilities,
+} from './capabilities.ts';
+export {
   API,
   DEFAULT_MAX_BODY,
   STATUS,
