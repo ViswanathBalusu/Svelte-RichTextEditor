@@ -183,6 +183,82 @@ export const COMMENTS: ProfileDef = {
       },
     }),
     c({
+      id: 'permissions.thread-actions',
+      title:
+        'rows 4 and 5: a reader without comment cannot reply, resolve, reopen, assign or delete; only the author or a manager deletes',
+      spec: '07 §6, §12 rows 4 and 5; PRM-037; PRM-039; PRM-058',
+      covers: {
+        operations: [
+          'GET /threads/{tid}',
+          'PATCH /threads/{tid}',
+          'DELETE /threads/{tid}',
+          'POST /threads/{tid}/comments',
+          'DELETE /comments/{cid}',
+        ],
+        errors: ['forbidden'],
+      },
+      async run(ctx) {
+        const { doc, token: author, tid, cid } = await threadOf(ctx);
+        const { token: viewer } = await ctx.token('viewer', { [doc]: 'viewer' });
+        const { token: other } = await ctx.token('other', { [doc]: 'commenter' });
+        const { token: owner } = await ctx.token('owner', { [doc]: 'owner' });
+        const refused = (res: HttpResponse, what: string) => {
+          equal(problemOf(res, what).code, 'forbidden', `${what} is refused`);
+          equal(res.status, 403, `${what}: the status`);
+        };
+        const tag = async (): Promise<string> => {
+          const got = await ctx.service.as(author, 'GET', `/threads/${tid}`);
+          expectStatus(got, 200, 'the thread');
+          return got.headers.get('etag') ?? '';
+        };
+        const patch = async (token: string, body: Record<string, unknown>) =>
+          ctx.service.as(token, 'PATCH', `/threads/${tid}`, {
+            body,
+            headers: { 'if-match': await tag() },
+          });
+
+        // Row 4: a viewer has no `comment`, so it may not reply to a thread or change its state.
+        refused(
+          await ctx.service.as(viewer, 'POST', `/threads/${tid}/comments`, {
+            body: { body: 'from a viewer' },
+          }),
+          'a reply by a viewer',
+        );
+        refused(await patch(viewer, { state: 'resolved' }), 'a resolve by a viewer');
+        refused(await patch(viewer, { assignee: ctx.sub('someone') }), 'an assignment by a viewer');
+        // The refusals changed nothing: the thread is open and has its two comments.
+        const after = await ctx.service.as(author, 'GET', `/threads/${tid}`);
+        expectStatus(after, 200, 'the thread after the refusals');
+        equal((after.json as { state?: unknown }).state, 'open', 'the thread is still open');
+
+        // Controls: a commenter resolves, reopens and replies.
+        expectStatus(await patch(author, { state: 'resolved' }), 200, 'a resolve by a commenter');
+        expectStatus(await patch(author, { state: 'open' }), 200, 'a reopen by a commenter');
+        expectStatus(
+          await ctx.service.as(other, 'POST', `/threads/${tid}/comments`, {
+            body: { body: 'from another commenter' },
+          }),
+          201,
+          'a reply by a commenter',
+        );
+
+        // Row 5: a comment is deleted by its author or by a holder of `manage`, nobody else.
+        refused(await ctx.service.as(viewer, 'DELETE', `/comments/${cid}`), 'a delete by a viewer');
+        refused(
+          await ctx.service.as(other, 'DELETE', `/comments/${cid}`),
+          'a delete of another user comment',
+        );
+        refused(
+          await ctx.service.as(other, 'DELETE', `/threads/${tid}`),
+          'a delete of another user thread',
+        );
+        const gone = await ctx.service.as(owner, 'DELETE', `/comments/${cid}`);
+        check(gone.status < 300, 'a manager deletes a comment', '2xx', gone.status);
+        const removed = await ctx.service.as(author, 'DELETE', `/threads/${tid}`);
+        check(removed.status < 300, 'the author deletes the thread', '2xx', removed.status);
+      },
+    }),
+    c({
       id: 'range.base-seq-window',
       title: 'a thread whose baseSeq lies outside the rebase window is refused',
       spec: '05 §6.2; 04 §12; ADR 0015',
