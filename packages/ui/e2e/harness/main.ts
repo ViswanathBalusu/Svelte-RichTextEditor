@@ -50,7 +50,12 @@ import { PeopleDirectory } from '../../src/people/directory.ts';
 import { SettingsStore, type ShellSettings } from '../../src/shell/settings.ts';
 import shellCss from '../../src/styles/shell.css?inline';
 import type { ReviewItem, ThreadDetail, ThreadSummary } from '../../src/core-api.ts';
-import { FakeCore, type FakeCoreOptions, type Notify } from '../../test/support/fake-core.ts';
+import {
+  FakeCore,
+  Value,
+  type FakeCoreOptions,
+  type Notify,
+} from '../../test/support/fake-core.ts';
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
 import { sendService, type SendHarnessLog, type SendHarnessMode } from './frw-028-send-port.ts';
 import { catchUpPort, type CatchUpHarnessMode } from './his-028-catch-up-port.ts';
@@ -165,6 +170,11 @@ export interface MountOptions {
    * the pane asks it to select.
    */
   checker?: boolean;
+  /**
+   * An assistant port is attached (UX-045): the core gives `assistant`, whose answers `setAssistantMode`
+   * scripts, and records each request with whether it was aborted.
+   */
+  assistant?: boolean;
   /**
    * Extension hooks (UX-054): one that throws, one that never resolves and one that records.
    * Each input in the editing surface counts as a transaction (the revision goes up).
@@ -297,6 +307,11 @@ let duringInput = false;
 /** The checker's document (UX-066, UX-067): one issue of each kind, and one in region rLegal. */
 let checkerAltFixed = false;
 const checkerSelected: string[] = [];
+/** The assistant's scripted behaviour and what it was asked (UX-045). */
+type AssistantMode = 'ok' | 'rate_limited' | 'quota_exceeded' | 'fail' | 'hang';
+let assistantMode: AssistantMode = 'ok';
+const assistantCalls: Array<{ task: string; prompt: string; aborted: boolean }> = [];
+const assistantAvailable = new Value(true);
 /** How many times the checker read the document (UX-066 criterion 5). */
 let checkerReads = 0;
 function checkerContent(): unknown {
@@ -650,6 +665,29 @@ function mountShell(options: MountOptions = {}): void {
       },
     });
   }
+  if (options.assistant) {
+    assistantMode = 'ok';
+    assistantCalls.length = 0;
+    assistantAvailable.set(true);
+    Object.assign(core, {
+      assistant: {
+        available: assistantAvailable,
+        async *request(task: string, prompt: string, signal: AbortSignal) {
+          const call = { task, prompt, aborted: false };
+          assistantCalls.push(call);
+          signal.addEventListener('abort', () => (call.aborted = true));
+          if (assistantMode === 'hang') await new Promise(() => {});
+          if (assistantMode === 'fail') throw new Error('port down');
+          if (assistantMode === 'rate_limited' || assistantMode === 'quota_exceeded') {
+            yield { kind: 'error', code: assistantMode, message: 'refused' } as const;
+            return;
+          }
+          yield { kind: 'text', text: `Answer to: ${prompt}` } as const;
+          yield { kind: 'done' } as const;
+        },
+      },
+    });
+  }
   if (options.exportFilters) {
     Object.assign(core, { getContent: () => DOCUMENT_CONTENT });
     props['filters'] = exportFilterRegistry();
@@ -749,6 +787,12 @@ const harness = {
   documentContent: () => JSON.stringify(DOCUMENT_CONTENT),
   /** The blocks the checker pane asked the core to select, in order (UX-067 criterion 1). */
   checkerSelected: () => checkerSelected.slice(),
+  /** Scripts what the assistant port answers to the next requests (UX-045). */
+  setAssistantMode: (mode: AssistantMode) => void (assistantMode = mode),
+  /** The assistant requests made so far, with whether each was aborted (UX-045). */
+  assistantCalls: () => assistantCalls.map((c) => ({ ...c })),
+  /** The assistant port is attached or taken away (UX-045 criterion 5). */
+  setAssistantAvailable: (available: boolean) => assistantAvailable.set(available),
   /** How many times the checker has read the document since the page loaded (UX-066 criterion 5). */
   checkerReads: () => checkerReads,
   /** Changes the document count times in one task, as a burst of keystrokes would (UX-066 criterion 5). */

@@ -31,11 +31,18 @@ import { type ChainMetadata, chainHash, payloadDigest } from '@docedit/history';
 import {
   type JsonEnvelope,
   type JsonNode,
+  type JsonValue,
+  type Migration,
   canonicalEnvelope,
   canonicalText,
   documentHash,
+  migrate,
 } from '@docedit/model';
+import { CDM1, type CdmDefinition } from '@docedit/model/definition';
 import { cdmSchema } from '@docedit/model/prosemirror';
+import { type Evaluation, type ValueMap, evaluateDocument } from '@docedit/rules';
+import type { AuthorityServiceCall } from '@docedit/protocol/client';
+import { IMPLEMENTED_CALLS } from './capabilities.ts';
 import { readDocument } from '@docedit/model/validate';
 import type { Node } from 'prosemirror-model';
 
@@ -58,7 +65,9 @@ export type ServiceErrorCode =
   | 'migration_not_enabled'
   | 'migration_failed'
   | 'invalid_rules'
-  | 'budget_exceeded';
+  | 'budget_exceeded'
+  | 'storage_unavailable'
+  | 'unauthorized';
 
 export interface ServiceError {
   code: ServiceErrorCode;
@@ -121,11 +130,62 @@ export interface CheckpointResolver {
   ref(doc: string, ref: CheckpointRef): Promise<JsonEnvelope | undefined>;
 }
 
+/**
+ * The caller's storage, seen from the service: the inputs of `open` for a state it names, or
+ * undefined when the caller has no such state (any more). It throws when storage cannot be reached.
+ */
+export interface StateLoader {
+  load(stateId: string): Promise<OpenRequest | undefined>;
+}
+
 export interface ServiceOptions {
   /** How many loaded documents the service keeps; the least recently used one goes first. */
   capacity?: number;
   resolver?: CheckpointResolver;
+  /**
+   * Where a state the service does not hold is rebuilt from (05 §10: the service "can rebuild any
+   * of them from storage"). Without it a call for such a state answers `unknown_state`.
+   */
+  loader?: StateLoader;
+  /**
+   * Whether `migrate` runs. The operator turns it on (03 §11.3: a migration is gated by an operator
+   * and never triggered by opening a document). Off by default.
+   */
+  allowMigrations?: boolean;
+  /** The migrations, one from each version to the next (CDM-049). None exist for CDM 1 yet. */
+  migrations?: readonly Migration[];
+  /** The definitions of the versions this service can read and write; CDM 1 by default. */
+  definitions?: readonly CdmDefinition[];
 }
+
+/** The request of `migrate`: the document to migrate and the version to migrate it to. */
+export interface MigrateRequest {
+  content: JsonEnvelope;
+  target: number;
+}
+
+export interface MigrateAnswer {
+  /** The canonical content under the target version's definition. */
+  content: JsonEnvelope;
+  text: string;
+  contentHash: string;
+  cdm: number;
+  /** The names of the migrations that ran, in order. */
+  steps: string[];
+}
+
+/** The request of `evaluateRules` (05 §10; 12 §5): who is filling, and optionally what they enter. */
+export interface EvaluateRulesRequest {
+  roles?: string[];
+  /** Values that replace the stored ones, by field key. */
+  values?: Record<string, JsonValue>;
+  /** Only these fields are returned. */
+  keys?: string[];
+  now?: { instant: string; timeZone: string } | null;
+  budget?: number;
+}
+
+export type EvaluateRulesAnswer = Extract<Evaluation, { ok: true }>;
 
 /** A loaded document: immutable, named by its `stateId`. */
 interface HeldState {
@@ -171,12 +231,25 @@ export class AuthorityService {
   readonly #held = new Map<string, HeldState>();
   readonly #capacity: number;
   readonly #resolver: CheckpointResolver | undefined;
+  readonly #loader: StateLoader | undefined;
   readonly #schema = cdmSchema();
+  readonly #allowMigrations: boolean;
+  readonly #migrations: readonly Migration[];
+  readonly #definitions: ReadonlyMap<number, CdmDefinition>;
 
   constructor(options: ServiceOptions = {}) {
     this.#capacity = options.capacity ?? DEFAULT_CAPACITY;
     if (!(this.#capacity >= 1)) throw new RangeError('the service must hold at least one state');
     this.#resolver = options.resolver;
+    this.#loader = options.loader;
+    this.#allowMigrations = options.allowMigrations ?? false;
+    this.#migrations = options.migrations ?? [];
+    this.#definitions = new Map((options.definitions ?? [CDM1]).map((d) => [d.cdm, d]));
+  }
+
+  /** The calls this service answers now: `migrate` only when the operator enabled it. */
+  get calls(): readonly AuthorityServiceCall[] {
+    return IMPLEMENTED_CALLS.filter((c) => c !== 'migrate' || this.#allowMigrations);
   }
 
   /** The number of documents in memory now. */
@@ -295,12 +368,9 @@ export class AuthorityService {
       return fail('invalid_request', 'stateId must be 64 lower-case hexadecimal digits');
     if (seq !== undefined && (typeof seq !== 'number' || !Number.isSafeInteger(seq)))
       return fail('invalid_request', 'seq must be an integer');
-    const state = this.#held.get(stateId);
-    if (!state)
-      return fail('unknown_state', 'the service does not hold this state; call open again', {
-        stateId,
-      });
-    this.#touch(state);
+    const found = await this.#state(stateId);
+    if (!found.ok) return found;
+    const state = found.state;
     const at = seq ?? state.head;
     if (at > state.head)
       return fail('not_found', `the state ends at ${state.head}, not ${at}`, { seq: at });
@@ -330,6 +400,110 @@ export class AuthorityService {
       text: canonicalText(envelope),
       contentHash: await documentHash(envelope),
     };
+  }
+
+  /**
+   * `migrate` (05 §10; 03 §11.3): the content of a document of an older `cdm`, moved to `target`
+   * by the registered migrations and checked against the target's definition. The service keeps
+   * nothing: the result is not a state, and a failure leaves everything as it was. The caller
+   * stores the content as a snapshot commit with origin `migration` and opens it.
+   */
+  async migrate(request: unknown): Promise<Answer<MigrateAnswer>> {
+    if (!this.#allowMigrations)
+      return fail(
+        'migration_not_enabled',
+        'migrations are run only when the operator enables them (03 §11.3)',
+      );
+    if (!isObject(request) || !isObject(request['content']))
+      return fail('invalid_request', 'content must be a CDM envelope');
+    const target = request['target'];
+    if (typeof target !== 'number' || !Number.isSafeInteger(target))
+      return fail('invalid_request', 'target must be an integer CDM version');
+    const def = this.#definitions.get(target);
+    if (!def)
+      return fail('unsupported_cdm', `this service has no definition of CDM version ${target}`, {
+        supported: [...this.#definitions.keys()].sort((a, b) => a - b),
+      });
+    const migrated = migrate(request['content'], this.#migrations, target);
+    if (!migrated.ok) return fail('migration_failed', migrated.message, { code: migrated.code });
+    const read = readDocument(migrated.envelope, { def });
+    if (!read.ok)
+      return fail('migration_failed', `the migrated document is not valid: ${read.message}`, {
+        code: 'result_invalid',
+        reason: read.code,
+      });
+    const content = canonicalEnvelope(migrated.envelope as unknown as JsonEnvelope, def);
+    return {
+      ok: true,
+      content,
+      text: canonicalText(content, def),
+      contentHash: await documentHash(content, def),
+      cdm: migrated.cdm,
+      steps: migrated.steps,
+    };
+  }
+
+  /**
+   * `evaluateRules` (05 §10; 12 §5): the visibility, requirement, enablement and computed values of
+   * the fields of a state's head, for the roles given and, optionally, values that replace the
+   * stored ones. It is the shared rules package on the head's content, nothing more.
+   */
+  async evaluateRules(
+    stateId: unknown,
+    request: unknown = {},
+  ): Promise<Answer<{ evaluation: EvaluateRulesAnswer }>> {
+    if (typeof stateId !== 'string' || !HEX64.test(stateId))
+      return fail('invalid_request', 'stateId must be 64 lower-case hexadecimal digits');
+    if (!isObject(request)) return fail('invalid_request', 'the request must be a JSON object');
+    const roles = request['roles'] ?? [];
+    if (!Array.isArray(roles) || roles.some((r) => typeof r !== 'string'))
+      return fail('invalid_request', 'roles must be an array of strings');
+    const values = request['values'];
+    if (values !== undefined && !isObject(values))
+      return fail('invalid_request', 'values must be an object keyed by field key');
+    const keys = request['keys'];
+    if (keys !== undefined && (!Array.isArray(keys) || keys.some((k) => typeof k !== 'string')))
+      return fail('invalid_request', 'keys must be an array of strings');
+    const now = request['now'];
+    if (
+      now !== undefined &&
+      now !== null &&
+      !(isObject(now) && typeof now['instant'] === 'string' && typeof now['timeZone'] === 'string')
+    )
+      return fail('invalid_request', 'now must be null or { instant, timeZone }');
+    const budget = request['budget'];
+    if (budget !== undefined && !(typeof budget === 'number' && Number.isSafeInteger(budget)))
+      return fail('invalid_request', 'budget must be an integer');
+    const found = await this.#state(stateId);
+    if (!found.ok) return found;
+    const state = found.state;
+    const envelope: JsonEnvelope = {
+      cdm: state.cdm,
+      requires: state.requires.get(state.head) ?? [],
+      doc: state.headDoc.toJSON() as JsonNode,
+    };
+    const result = evaluateDocument(
+      envelope,
+      {
+        roles: roles as string[],
+        ...(now !== undefined ? { now: now as { instant: string; timeZone: string } | null } : {}),
+        ...(budget !== undefined ? { budget: budget as number } : {}),
+      },
+      {
+        ...(values ? { values: values as ValueMap } : {}),
+        ...(keys ? { keys: keys as string[] } : {}),
+      },
+    );
+    if (!result.ok) {
+      if (result.code === 'budget_exceeded')
+        return fail('budget_exceeded', 'the rules did not finish within the budget', {
+          steps: result.steps,
+        });
+      return fail('invalid_rules', 'the document holds rules that do not compile', {
+        problems: result.problems,
+      });
+    }
+    return { ok: true, evaluation: result };
   }
 
   /** The checkpoint's content, checked against its reference, and its parsed document. */
@@ -421,6 +595,40 @@ export class AuthorityService {
       return fail('invalid_request', `commit ${meta.seq} has an unknown kind`, { seq: meta.seq });
     const commit: StoredCommit = { ...common, kind: meta.kind, steps: payload.steps };
     return { ok: true, value: { commit } };
+  }
+
+  /**
+   * A state by its identifier: from memory, or rebuilt from the caller's storage when the service
+   * does not hold it (an evicted state, a restart, another replica). Without a loader the answer
+   * is `unknown_state` and the caller calls `open`.
+   */
+  async #state(stateId: string): Promise<Answer<{ state: HeldState }>> {
+    const held = this.#held.get(stateId);
+    if (held) {
+      this.#touch(held);
+      return { ok: true, state: held };
+    }
+    const miss = () =>
+      fail('unknown_state', 'the service does not hold this state; call open again', { stateId });
+    if (!this.#loader) return miss();
+    let request: OpenRequest | undefined;
+    try {
+      request = await this.#loader.load(stateId);
+    } catch (e) {
+      return fail('storage_unavailable', `the state could not be read from storage: ${String(e)}`, {
+        stateId,
+      });
+    }
+    if (!request) return miss();
+    if (request.stateId !== stateId)
+      return fail('state_mismatch', 'storage returned another state than the one asked for', {
+        asked: stateId,
+        got: request.stateId,
+      });
+    const opened = await this.open(request);
+    if (!opened.ok) return opened;
+    const state = this.#held.get(stateId);
+    return state ? { ok: true, state } : miss();
   }
 
   #hold(state: HeldState): void {

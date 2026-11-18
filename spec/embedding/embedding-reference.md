@@ -129,6 +129,7 @@ The identifiers `exec` and `queryCommand` accept, with their other accepted name
 | `review.previous` | review | suggestions |  |  |
 | `review.reject` | review | suggestions |  |  |
 | `review.rejectAll` | review | suggestions |  |  |
+| `view.assistant` | view | assistant |  |  |
 | `view.catchUp` | header | catch-up |  |  |
 | `view.checker` | review | accessibility-checker |  |  |
 | `view.commandSearch` | view | command-search | `Alt-Q` |  |

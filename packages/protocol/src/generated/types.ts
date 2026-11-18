@@ -947,6 +947,8 @@ export interface Workflow {
     completedSeq?: number;
     /** When the participant first opened the document (12 §6.3; FRW-031). */
     firstViewedAt?: string;
+    /** When the participant last became active: the anchor of the reminders (FRW-034). */
+    activatedAt?: string;
   }>;
   routing?: Array<{ [key: string]: unknown }>;
   deadline?: string;
@@ -2158,6 +2160,15 @@ export interface Operations {
   resumeWorkflow: {
     method: "POST";
     path: "/documents/{id}/workflow/resume";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: Workflow;
+  };
+  /** POST /documents/{id}/workflow/remind: Raises `reminder_due` now for each active participant who has not completed, without waiting for the schedule (12 §6.2). The method and path are assumed. (12 §6.2, §10) */
+  remindWorkflow: {
+    method: "POST";
+    path: "/documents/{id}/workflow/remind";
     params: { id: string };
     query: Record<string, never>;
     body: never;

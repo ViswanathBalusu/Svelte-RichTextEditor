@@ -47,6 +47,7 @@ describe('the published schema holds no contact detail (FRW-026 criterion 4)', (
   it('names exactly the identifying members of a participant: id, roles, kind, order, sub, name and the rest of the resource', () => {
     expect(Object.keys(participant.properties!).sort()).toEqual(
       [
+        'activatedAt',
         'auth',
         'completedSeq',
         'firstViewedAt',
@@ -78,6 +79,7 @@ describe('the published schema holds no contact detail (FRW-026 criterion 4)', (
       'timeZone',
       'completedSeq',
       'firstViewedAt',
+      'activatedAt',
     ])
       expect(isContact(fine), fine).toBe(false);
   });

@@ -45,3 +45,16 @@ export {
   type CloseVerdict,
   type Reconnect,
 } from './backoff.ts';
+export {
+  AUTHORITY_SERVICE_CALLS,
+  AUTHORITY_SERVICE_NEEDS,
+  PROJECTION_CALL,
+  featuresSupportedBy,
+  tierProblems,
+  type AuthorityServiceCall,
+  type BackendTier,
+  type NeededCall,
+  type TierInput,
+  type TierProblem,
+  type TierProblemCode,
+} from './tiers.ts';

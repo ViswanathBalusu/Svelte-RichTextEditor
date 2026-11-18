@@ -14,9 +14,16 @@ export {
   type ServiceError,
   type ServiceErrorCode,
   type ServiceOptions,
+  type StateLoader,
   type WireCommit,
   type WirePayload,
 } from './service.ts';
+export {
+  IMPLEMENTED_CALLS,
+  capabilities,
+  sidecarProblems,
+  type Capabilities,
+} from './capabilities.ts';
 export {
   API,
   DEFAULT_MAX_BODY,
@@ -31,3 +38,5 @@ export {
   type Routes,
   type ServerOptions,
 } from './http.ts';
+export { configFromEnv, type AuthorityConfig } from './config.ts';
+export { httpStateLoader, type HttpLoaderOptions } from './storage.ts';

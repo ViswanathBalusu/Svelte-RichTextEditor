@@ -1508,6 +1508,10 @@
       "capability": "suggestions"
     },
     {
+      "id": "view.assistant",
+      "capability": "assistant"
+    },
+    {
       "id": "view.sources",
       "capability": "citations"
     },

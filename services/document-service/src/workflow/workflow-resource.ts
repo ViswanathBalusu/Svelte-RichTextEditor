@@ -24,6 +24,12 @@ export interface WorkflowResourceView {
     readonly completedSeq?: number;
     /** When the participant first opened the document, ISO 8601 UTC (FRW-031; set once). */
     readonly firstViewedAt?: string;
+    /**
+     * When the participant became active, ISO 8601 UTC: the anchor of the reminders (FRW-034).
+     * Stamped by `recordTransition` each time a participant who was not active becomes so.
+ecordTransition each time a participant who was not active becomes so.
+     */
+    readonly activatedAt?: string;
   })[];
   readonly members: WorkflowMembers;
 }
@@ -81,6 +87,11 @@ export interface WorkflowResourceStore {
     from: { readonly state: string; readonly rev: number },
     write: WorkflowTransitionWrite,
   ): Promise<WorkflowTransitionResult>;
+  /**
+   * The workflows of a tenant that are `sent` or `in_progress`, ordered by document: the ones
+   * whose deadline and reminders the scheduled sweep looks at (FRW-034). Reads only.
+   */
+  listRunning(tenant: string): Promise<readonly WorkflowResourceView[]>;
 }
 
 export const etagOfRevision = (rev: number): string => `"${rev}"`;
@@ -110,6 +121,14 @@ export class MemoryWorkflowResourceStore implements WorkflowResourceStore {
   read(tenant: string, doc: string): Promise<WorkflowResourceView | null> {
     const row = this.#rows.get(`${tenant}/${doc}`);
     return Promise.resolve(row === undefined ? null : structuredClone(row));
+  }
+
+  listRunning(tenant: string): Promise<readonly WorkflowResourceView[]> {
+    const out: WorkflowResourceView[] = [];
+    for (const [key, row] of this.#rows)
+      if (key.startsWith(`${tenant}/`) && (row.state === 'sent' || row.state === 'in_progress'))
+        out.push(structuredClone(row));
+    return Promise.resolve(out.sort((a, b) => (a.doc < b.doc ? -1 : a.doc > b.doc ? 1 : 0)));
   }
 
   /** A seam for tests: the `send` action (FRW-027) is what changes the state in a real service. */
