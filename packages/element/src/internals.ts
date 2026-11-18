@@ -19,6 +19,11 @@ export interface InternalsView {
   readonly liveRegion: HTMLElement;
   /** The current session's announcer, if a session started (FE-107). */
   readonly announcer: Announcer | null;
+  /**
+   * The shell's settings store, for the tests that set what has no attribute yet (UX-061: the
+   * `pageTheme` option of ADR 0052, which a dark theme uses to darken the page canvas too).
+   */
+  readonly settings: { set(patch: Record<string, unknown>): void } | null;
 }
 
 export const INTERNALS = new WeakMap<object, () => InternalsView>();

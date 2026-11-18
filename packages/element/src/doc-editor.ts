@@ -205,6 +205,7 @@ export class DocEditorElement extends Base {
       graceScheduled: this.#grace !== null,
       liveRegion: this.#live.element,
       announcer: this.#announcer,
+      settings: this.#settings,
     }));
   }
 
