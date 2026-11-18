@@ -1417,7 +1417,7 @@ As an integrating developer, I want a `SignatureProvider` adapter that signs doc
 
 **Notes:** `SignatureProvider` is not in the port list of 05 §8.3; adding it is a PRO change. Native advanced or qualified signatures, identity verification and notary roles stay out of scope (12 §13). Authority-4 (2026-11-13): the adapter and its contract are `packages/authority/src/workflow/provider.ts`, proposed in ADR 0148 round 4 as a PRO-level port, not yet in 05 §8.3. Not met: (1) the PDF embedding of the returned signature and the hash-only check on the wire (the request type carries the hash alone, and the test shows it); (2) the native seal is the signing service's, and `sealWorkflow` only chooses it without a provider; (3) the asserted facts are returned by `sealWithProvider` as `assertedBy: 'provider'`, but the evidence tables that record them are the workflow service's. (4) and (5) are ticked above.
 
-## Templates, prefill and bulk send (12 §9)
+**Notes (lane w4, 2026-11-18, blocked):** No criterion is newly ticked; criteria 4 and 5 stay ticked as before. Owner decision 15 (docs/owner-decisions-2026-11-15.md) sets the native seal level and decision 99 allows the word \## Templates, prefill and bulk send (12 §9)
 
 ### FRW-060 Read fields and field values
 
