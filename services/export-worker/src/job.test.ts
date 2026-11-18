@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { demoDocument } from '../test/documents.ts';
 import { TEST_FONTS } from '../test/fonts.ts';
 import type { ContentStores } from './content.ts';
+import { documentLang } from './content.ts';
 import { CODES } from './diagnostics.ts';
 import {
   createExportHandler,
@@ -384,6 +385,34 @@ describe('the export job handler (EXP-001)', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]!.files['main.tex']).toBe(calls[1]!.files['main.tex']);
     expect(String(calls[0]!.files['main.tex'])).not.toContain('shellesc');
+  });
+
+  it('records the locale and time zone it used, the defaults when none are set (EXP-005 criterion 4)', async () => {
+    const { compile, calls } = fakeCompile();
+    const h = harness({ compile });
+    const manifestOf = (i: number) =>
+      JSON.parse(new TextDecoder().decode(h.stored[i * 4 + 3]!.bytes)) as {
+        locale: string;
+        timeZone: string;
+        bundle: { hash: string; options: { timeZone: string } };
+      };
+    expect((await h.run()).state).toBe('completed');
+    // No option: the document's language (else en-GB) and UTC, the defaults of ADR 0045 (proposed).
+    const lang = documentLang(demoDocument().envelope);
+    expect(manifestOf(0)).toMatchObject({ locale: lang ?? 'en-GB', timeZone: 'UTC' });
+    expect(manifestOf(0).bundle.options.timeZone).toBe('UTC');
+    expect((await h.run({ options: { locale: 'de-DE', timeZone: 'Europe/Berlin' } })).state).toBe(
+      'completed',
+    );
+    expect(manifestOf(1)).toMatchObject({ locale: 'de-DE', timeZone: 'Europe/Berlin' });
+    // The zone reaches the bundle's manifest, so the two jobs have different bundle hashes.
+    expect(manifestOf(1).bundle.options.timeZone).toBe('Europe/Berlin');
+    expect(manifestOf(1).bundle.hash).not.toBe(manifestOf(0).bundle.hash);
+    expect(calls).toHaveLength(2);
+    // A zone or a locale outside the rules is refused before anything compiles.
+    const bad = await h.run({ options: { timeZone: 'Mars/Olympus' } });
+    expect(bad.error?.code).toBe('validation_failed');
+    expect(calls).toHaveLength(2);
   });
 
   it('stops a cancelled job: the sandbox is signalled and no result is kept (EXP-070 criterion 3)', async () => {
