@@ -45,6 +45,23 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/engine/src/view/fe-131-table-style.universal.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-009 closed (2026-11-17): the engine's painter, and the element's browser run of it.
+  [
+    'format-painter',
+    [
+      { path: 'packages/element/e2e/ux-009-format-painter.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/ux-009-format-painter.test.ts', kind: 'unit' },
+    ],
+  ],
+  // Shipped when UX-018 closed (2026-11-17): the element's browser runs of the counts and the language.
+  [
+    'status-bar',
+    [
+      { path: 'packages/element/e2e/ux-018-status-counts.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/shell.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/ux-018-status-counts.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when EXP-085 closed (2026-11-17). No browser spec presses the download yet: the links
   // are the tests of the archive the download hands out, which run the converter and read it back.
   [

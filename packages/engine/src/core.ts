@@ -144,6 +144,7 @@ import {
 } from './equation-commands.ts';
 import { isValueFormat, valueFormatCommand } from './formatting-values.ts';
 import { LIST_COMMANDS, listCommand } from './list-commands.ts';
+import { countBodyWords, WordCounter } from './word-count.ts';
 import { type FormatSnapshot, paintMarks, paintParagraphs, takeFormat } from './format-painter.ts';
 import {
   type AssetsPort,
@@ -706,6 +707,14 @@ export class DocumentCore implements DocumentApi {
   readonly commands: ReadValue<Readonly<Record<CommandName, CommandState>>>;
   readonly revision: ReadValue<number>;
   readonly direction: ReadValue<'ltr' | 'rtl'>;
+  /** The document's default language, a BCP 47 tag, or null when it sets none (UX-018). */
+  readonly language: ReadValue<string | null>;
+  /** The words in the body; null until the first count, which is made off the typing path (UX-018). */
+  readonly words: ReadValue<number | null>;
+  readonly #words = new WordCounter(
+    () => countBodyWords(this.#state.doc),
+    (n) => this.words.set(n),
+  );
   readonly refusal: ReadValue<RefusalNotice | null>;
   readonly mode: ReadValue<ModeState>;
   /** Suggestion mode at the caret, and why (FE-041 criterion 5). */
@@ -831,6 +840,8 @@ export class DocumentCore implements DocumentApi {
     );
     this.revision = new ReadValue<number>(0, Object.is, hub);
     this.direction = new ReadValue<'ltr' | 'rtl'>('ltr', Object.is, hub);
+    this.language = new ReadValue<string | null>(null, Object.is, hub);
+    this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.#requested = config.mode ?? 'edit';
     this.#accessValue = config.access ?? null;
@@ -1271,6 +1282,9 @@ export class DocumentCore implements DocumentApi {
       if (!last || last.doc !== state.doc) {
         this.outline.set(outlineOf(state.doc));
         this.direction.set(stylesOf(state.doc).settings.dir);
+        this.language.set(stylesOf(state.doc).settings.lang ?? null);
+        // The count is made later, off the typing path (UX-018 criterion 1).
+        this.#words.changed();
       }
       const commands = {} as Record<CommandName, CommandState>;
       for (const name of COMMANDS) commands[name] = this.queryCommand(name);
@@ -1423,12 +1437,14 @@ export class DocumentCore implements DocumentApi {
       .filter((m) => m.attrs['value'] !== false)
       .map((m) => m.type.name)
       .sort();
+    const lang = marksAt(state).find((m) => m.type.name === 'lang')?.attrs['value'];
     return {
       empty,
       scope: r ? 'region' : 'body',
       region: title,
       style: currentStyle(state),
       marks: [...new Set(marks)],
+      lang: typeof lang === 'string' ? lang : null,
     };
   }
 
@@ -3538,6 +3554,7 @@ export class DocumentCore implements DocumentApi {
     this.#session = null;
     if (this.#flushTimer !== null) clearTimeout(this.#flushTimer);
     this.#flushTimer = null;
+    this.#words.stop();
     this.#listeners.clear();
     this.#bridges.clear();
   }
