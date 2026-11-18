@@ -43,11 +43,13 @@ const BODY = (doc: string) => ({
 });
 
 const facts = (item: string) => ({
-  items: { consentText: CONSENT, item },
+  items: {
+    session: `session-${item}`,
+    consent: { textId: CONSENT, version: 1, hash: 'a'.repeat(64), atMs: 1 },
+  },
   ipAddress: IP,
   userAgent: UA,
 });
-
 /** Every `.ts` file under the service and packages source folders, as paths and text. */
 function sources(root: string): Array<{ path: string; text: string }> {
   const out: Array<{ path: string; text: string }> = [];
@@ -114,6 +116,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         await ledger().record(h.tenant, {
           doc,
           participant: 'p1',
+          kind: 'signer' as const,
           item: 'consented',
           origin: 'sign',
           facts: facts('consented'),
@@ -121,6 +124,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         await ledger().record(h.tenant, {
           doc,
           participant: 'p1',
+          kind: 'signer' as const,
           item: 'completed',
           origin: 'rules',
           facts: facts('completed'),
@@ -214,6 +218,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const a = await ledger().record(h.tenant, {
           doc,
           participant: 'p1',
+          kind: 'signer' as const,
           item: 'consented',
           origin: 'sign',
           facts: facts('same'),
@@ -221,15 +226,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const b = await ledger().record(h.tenant, {
           doc,
           participant: 'p1',
+          kind: 'signer' as const,
           item: 'consented',
           origin: 'sign',
           facts: facts('same'),
         });
-        expect(Object.keys(a.commit).sort()).toEqual(['evidenceHash', 'origin']);
-        expect(a.commit.origin).toBe('sign');
-        expect(a.commit.evidenceHash).toMatch(/^[0-9a-f]{64}$/);
+        expect(Object.keys(a.commit!).sort()).toEqual(['evidenceHash', 'origin']);
+        expect(a.commit!.origin).toBe('sign');
+        expect(a.commit!.evidenceHash).toMatch(/^[0-9a-f]{64}$/);
         // The same evidence under a fresh salt gives another hash: the hash reveals nothing of it.
-        expect(a.commit.evidenceHash).not.toBe(b.commit.evidenceHash);
+        expect(a.commit!.evidenceHash).not.toBe(b.commit!.evidenceHash);
         const text = JSON.stringify(a.commit);
         for (const m of MARKERS) expect(text).not.toContain(m);
         const stored = (await ledger().list(h.tenant, doc)).find((r) => r.id === a.id)!;
@@ -245,6 +251,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           await ledger().record(h.tenant, {
             doc,
             participant: 'p1',
+            kind: 'signer' as const,
             item: 'consented',
             origin: 'sign',
             facts: facts('one'),
@@ -252,13 +259,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           await ledger().record(h.tenant, {
             doc,
             participant: 'p1',
+            kind: 'signer' as const,
             item: 'completed',
             origin: 'rules',
             facts: facts('two'),
           }),
         ];
         // What a control commit would hold for these two events.
-        const chain = new Set(made.map((m) => m.commit.evidenceHash));
+        const chain = new Set(made.map((m) => m.commit!.evidenceHash));
         const rows = await ledger().list(h.tenant, doc);
         expect(rows).toHaveLength(2);
         for (const row of rows) {

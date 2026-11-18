@@ -305,6 +305,9 @@ class DepDataPlane implements DataPlane {
         metrics: this.metricsRegistry,
         tracer: this.#tracer,
         address,
+        ...(this.#deps.participantOpened
+          ? { participantOpened: this.#deps.participantOpened }
+          : {}),
       });
       this.#sessions.add(session);
       if (this.#closing) session.goaway(0);

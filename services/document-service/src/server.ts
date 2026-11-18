@@ -96,6 +96,7 @@ import { PgReminderStore } from './workflow/reminder-store-pg.ts';
 import { MemoryEvidenceLedger, type EvidenceLedger } from './workflow/evidence-ledger.ts';
 import { PgEvidenceLedger } from './workflow/evidence-ledger-pg.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
+import { recordParticipantOpened } from './workflow/participant-view.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
 import type { SearchService } from './control-plane/search-routes.ts';
 import { Cursors } from './control-plane/http.ts';
@@ -164,7 +165,7 @@ import type { KeyService } from './storage/key-service.ts';
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
-import type { CreateDataPlane, DataPlane, ErrorContext, Span } from './seams.ts';
+import type { CreateDataPlane, DataPlane, ErrorContext, ParticipantOpened, Span } from './seams.ts';
 import { createPool, inTenant, isUuid, sqlState, type Pool } from './storage/db.ts';
 import { PgDocumentStore } from './storage/document-store.ts';
 import { PgGrantStore } from './storage/grant-store.ts';
@@ -781,6 +782,25 @@ export async function startService(opts: StartOptions): Promise<Service> {
       ? { assets: new RegistryAssetAttachments(parts.logs, parts.assetRegistry) }
       : {}),
     ...(parts.workflows ? { workflows: parts.workflows } : {}),
+    // FRW-040: the first view of a participant, from the connection, with its evidence.
+    ...(parts.workflows && parts.evidence
+      ? {
+          participantOpened: (open: ParticipantOpened) =>
+            recordParticipantOpened(
+              {
+                workflows: parts.workflows!,
+                grants: parts.grants,
+                logs: parts.logs,
+                notifier: dataPlane,
+                ...(parts.audit ? { audit: parts.audit } : {}),
+                now,
+                evidence: parts.evidence!,
+                events,
+              },
+              open,
+            ).then(() => undefined),
+        }
+      : {}),
     now,
     checkpoints,
     settings: {

@@ -20,6 +20,8 @@ import {
 
 const TENANT_FIELD = 'ffTenant00000001';
 const DAY = 86_400_000;
+/** The room the clock is given at each boundary: real time passes between the calls of a test. */
+const MARGIN = 60_000;
 
 function document(): Record<string, unknown> {
   const d = structuredClone(documentWithRegions()) as {
@@ -142,9 +144,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(typeof at[0]![2]).toBe('string');
         expect(at[1]![2]).toBeUndefined();
 
-        h.advance(3 * DAY - 1000);
+        h.advance(3 * DAY - MARGIN);
         expect(mine(await sweep(), doc)).toEqual([]);
-        h.advance(1000);
+        h.advance(MARGIN + 1000);
         expect(mine(await sweep(), doc)).toEqual(['p1']);
         // A second run at the same instant, or after a restart (new deps, same stores), adds none.
         expect(mine(await sweep(), doc)).toEqual([]);
@@ -152,9 +154,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         h.advance(2 * DAY);
         const both = await Promise.all([sweep(), sweep()]);
         expect(both.flatMap((r) => mine(r, doc))).toEqual(['p1']);
-        h.advance(2 * DAY - 1000);
+        h.advance(2 * DAY - MARGIN);
         expect(mine(await sweep(), doc)).toEqual([]);
-        h.advance(1000);
+        h.advance(MARGIN + 1000);
         expect(mine(await sweep(), doc)).toEqual(['p1']);
 
         const events = reminded(doc);
@@ -241,9 +243,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           participant: 'p1',
         });
         expect(done).toMatchObject({ ok: true });
-        h.advance(3 * DAY - 1000);
+        h.advance(3 * DAY - MARGIN);
         expect(mine(await sweep(), doc)).toEqual([]);
-        h.advance(1000);
+        h.advance(MARGIN + 1000);
         // Three days after p2 became active, not after the send; p1 has completed.
         expect(mine(await sweep(), doc)).toEqual(['p2']);
 
@@ -279,10 +281,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(filled.t, JSON.stringify(filled)).toBe('sync.ack');
 
         const before = await controls(ref);
-        h.advance(DAY - 1000);
+        h.advance(DAY - MARGIN);
         expect((await sweep()).expired).not.toContain(doc);
-        expect((await state(ref)).state).toBe('sent');
-        h.advance(1000);
+        // The participant who filled opened the document, which moved the workflow on (FRW-040).
+        expect((await state(ref)).state).toBe('in_progress');
+        h.advance(MARGIN + 1000);
         // Two instances at once: one expires it.
         const both = await Promise.all([sweep(), sweep()]);
         expect(both.flatMap((r) => r.expired).filter((d) => d === doc)).toEqual([doc]);
@@ -313,7 +316,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const audit = (
           await h.parts.audit!.query(h.tenant, { doc, kind: 'workflow.transition', limit: 100 })
         ).map((e) => e.data);
-        expect(audit.at(-1)).toMatchObject({ from: 'sent', to: 'expired', cause: 'deadline' });
+        expect(audit.at(-1)).toMatchObject({
+          from: 'in_progress',
+          to: 'expired',
+          cause: 'deadline',
+        });
 
         // A later run changes nothing, and the participant can no longer fill.
         h.advance(DAY);
@@ -351,9 +358,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(
           (await h.call('POST', `/v1/documents/${second}/workflow/send`, { token: owner })).status,
         ).toBe(200);
-        h.advance(hour - 1000);
+        h.advance(hour - MARGIN);
         expect((await sweep()).expired).not.toContain(second);
-        h.advance(1000);
+        h.advance(MARGIN + 1000);
         expect((await sweep()).expired).toContain(second);
       },
     );

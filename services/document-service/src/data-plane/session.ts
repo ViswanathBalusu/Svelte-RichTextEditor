@@ -49,7 +49,7 @@ import {
 import type { RoomConnection } from '@docedit/authority';
 import type { WebSocket, RawData } from 'ws';
 import type { GrantStore } from '../storage/types.ts';
-import type { VerifiedIdentity, VerifyToken } from '../seams.ts';
+import type { ParticipantOpened, VerifiedIdentity, VerifyToken } from '../seams.ts';
 import { recordAsserted, type AssertedRecord } from './asserted-claims.ts';
 import { SessionEngines, engineRegistry } from './engines.ts';
 import type { RateLimits, TokenBucket } from './limits.ts';
@@ -93,6 +93,8 @@ export interface SessionDeps {
   readonly tracer: Tracer;
   /** The remote address, for the limits before authentication (BE-030). */
   readonly address: string;
+  /** The first view of a participant (FRW-040); see DataPlaneDeps.participantOpened. */
+  readonly participantOpened?: ((open: ParticipantOpened) => Promise<void> | void) | undefined;
 }
 
 interface SessionChannel {
@@ -146,6 +148,8 @@ export class Session {
   readonly id: string = uuid7();
   readonly #ws: WebSocket;
   readonly #origin: string | undefined;
+  /** The User-Agent of the upgrade request, cut to 512 characters (FRW-040). */
+  readonly #userAgent: string | null;
   readonly #deps: SessionDeps;
   #state: 'hello' | 'open' | 'closed' = 'hello';
   /** The tenant whose connection quota this session holds (BE-091), released when it ends. */
@@ -185,6 +189,8 @@ export class Session {
     this.#connectedAt = deps.now();
     const origin = req.headers.origin;
     this.#origin = typeof origin === 'string' ? origin : undefined;
+    const agent = req.headers['user-agent'];
+    this.#userAgent = typeof agent === 'string' && agent.length > 0 ? agent.slice(0, 512) : null;
     this.#reassembler = new Reassembler({ timeoutMs: deps.settings.chunkTimeoutMs });
     ws.on('message', (data, isBinary) => this.#frame(data, isBinary));
     ws.on('close', () => this.#ended());
@@ -827,6 +833,7 @@ export class Session {
       room.open(c.key, this.#port(c, m.id), conn, d.resume, stored);
       c.state = 'open';
       if (own) this.#armChannelToken(c, identity.expiresAt);
+      this.#participantOpened(identity, d.doc);
     } catch (e) {
       if (this.#channels.get(m.ch) === c) this.#channels.delete(m.ch);
       this.#releaseDocument(c);
@@ -837,6 +844,35 @@ export class Session {
       c.span = null;
       if (this.#state !== 'closed') reject(r.code, r.message);
     }
+  }
+
+  /**
+   * A channel opened by a token with `wfp` (FRW-040): the service is told, with the facts of the
+   * connection (the socket's address, the `User-Agent` of the upgrade request, this session) and the
+   * server's clock. The client sends none of them. The call does not delay the channel; a failure is
+   * reported and the channel stays open.
+   */
+  #participantOpened(identity: VerifiedIdentity, doc: string): void {
+    const hook = this.#deps.participantOpened;
+    const wfp = identity.asserted?.wfp;
+    if (hook === undefined || wfp === undefined) return;
+    void Promise.resolve()
+      .then(() =>
+        hook({
+          tenant: identity.tenant,
+          doc,
+          sub: identity.sub,
+          wfp,
+          actor: identity.connection.sub,
+          session: this.id,
+          address: this.#deps.address,
+          userAgent: this.#userAgent,
+          amr: identity.asserted?.amr ?? null,
+          authTime: identity.asserted?.auth_time ?? null,
+          at: this.#deps.now(),
+        }),
+      )
+      .catch((e: unknown) => this.#report(e, 'participant.opened', doc));
   }
 
   #port(c: SessionChannel, openId: string): ChannelPort {

@@ -53,11 +53,11 @@ export class PgEvidenceLedger implements EvidenceLedger {
           new Date(this.#now()).toISOString(),
           JSON.stringify({
             ...made.evidence,
-            commit: { salt: toHex(made.salt), hash: made.commit.evidenceHash },
+            commit: { salt: toHex(made.salt), hash: made.hash },
           }),
         ],
       );
-      return { id: made.id, evidence: made.evidence, commit: made.commit };
+      return { id: made.id, evidence: made.evidence, hash: made.hash, commit: made.commit };
     });
   }
 
