@@ -16,29 +16,33 @@
  */
 /** A block of text that may be proofed. */
 export interface ProofingBlock {
-    readonly id: string;
-    /** The scope (for example a section or region) the block belongs to. */
-    readonly scope: string;
-    readonly text: string;
-    /** The `lang` mark over the block's text, when it has one. */
-    readonly lang?: string | null;
+  readonly id: string;
+  /** The scope (for example a section or region) the block belongs to. */
+  readonly scope: string;
+  readonly text: string;
+  /** The `lang` mark over the block's text, when it has one. */
+  readonly lang?: string | null;
 }
 export interface ProofingItem {
-    readonly id: string;
-    /** The language tag sent with the text, or null when neither the mark nor the document gives one. */
-    readonly lang: string | null;
-    readonly text: string;
+  readonly id: string;
+  /** The language tag sent with the text, or null when neither the mark nor the document gives one. */
+  readonly lang: string | null;
+  readonly text: string;
 }
 export interface ProofingRequest {
-    readonly items: readonly ProofingItem[];
-    /** How many blocks were left out because the requester cannot view their scope. */
-    readonly omitted: number;
+  readonly items: readonly ProofingItem[];
+  /** How many blocks were left out because the requester cannot view their scope. */
+  readonly omitted: number;
 }
 /**
  * Builds the proofing request. `viewable` is the requester's projection (the core supplies it), and
  * `documentLang` is the document's default language tag.
  */
-export declare function proofingRequest(blocks: readonly ProofingBlock[], viewable: (scope: string) => boolean, documentLang: string | null | undefined): ProofingRequest;
+export declare function proofingRequest(
+  blocks: readonly ProofingBlock[],
+  viewable: (scope: string) => boolean,
+  documentLang: string | null | undefined,
+): ProofingRequest;
 /** The proofing control is offered only when a proofing port was given (UX-041 criterion 5). */
 export declare function proofingControlShown(port: unknown): boolean;
 /** A finding is current only for the text revision it was computed from (UX-041 criterion 3). */

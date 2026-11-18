@@ -58,7 +58,7 @@ export interface ActivityItem {
 }
 
 export function activityRoutes(k: Kit): Record<string, Handler> {
-  const { d, refOf } = k;
+  const { d } = k;
 
   /** The comparison without the caller's own changes (08 §10: the user's own commits are not listed). */
   const withoutOwn = (c: Comparison, mine: string): Comparison => ({
@@ -72,7 +72,7 @@ export function activityRoutes(k: Kit): Record<string, Handler> {
   });
 
   /** The threads of the document the reader may see, up to a cap. */
-  const threadsOf = async (ref: ReturnType<typeof refOf>, reader: ReaderView) => {
+  const threadsOf = async (ref: ReturnType<Kit['refOf']>, reader: ReaderView) => {
     const store = d.threads;
     const out: StoredThread[] = [];
     if (!store) return out;
