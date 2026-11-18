@@ -253,6 +253,28 @@ export function killContainer(name: string): Promise<RunResult> {
 }
 
 const imageIds = new Map<string, string>();
+const imageDigests = new Map<string, string>();
+
+/**
+ * The manifest digest (`sha256:...`) of a local image: the value a registry pins and an
+ * orchestrator pulls by. It is not the image identifier above (that is the digest of the
+ * configuration). Recorded in `manifest.json` of every bundle and in every result manifest
+ * (EXP-073 criterion 2; EXP-076 criterion 4). Null when the image has none (an image that was never
+ * given a manifest) or when it cannot be read; only a value that was read is kept.
+ */
+export async function imageDigest(image: string): Promise<string | null> {
+  const known = imageDigests.get(image);
+  if (known !== undefined) return known;
+  const r = await podman(
+    ['image', 'inspect', '--format', '{{.Digest}}', image],
+    { timeoutMs: 120_000, maxStdoutBytes: 4096 },
+    true,
+  );
+  const value = new TextDecoder().decode(r.stdout).trim();
+  if (r.code !== 0 || !/^sha256:[0-9a-f]{64}$/.test(value)) return null;
+  imageDigests.set(image, value);
+  return value;
+}
 
 /**
  * The identifier (`sha256:...` of the configuration) of a local image, recorded in every result

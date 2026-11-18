@@ -5,10 +5,11 @@
  * stubbed but the content store and the output store). Skips without Podman and the worker image
  * (`sandboxReady`).
  *
- * What "image digest" means is the owner's decision (ADR 0116 decision 4). This test proves only
- * that `image.id` is the Podman image ID that `podman image inspect` reports for the image the job
- * ran in. It does not prove that a registry digest is recorded: none is. The criterion stays
- * unticked until the owner decides.
+ * What "image digest" means was open (ADR 0116 decision 4), so the manifest records both values
+ * Podman reports for the image the job ran in: `image.id` (the identifier, the digest of the image
+ * configuration) and `image.digest` (the digest of the image manifest, which a registry pins and an
+ * orchestrator pulls by). The same manifest digest is written to `manifest.json` of the bundle that
+ * went into the sandbox (EXP-073 criterion 2). No registry digest is recorded: a local image has none.
  */
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -67,9 +68,10 @@ function inspect(image: string, format: string): string {
 }
 
 describe.skipIf(!ready.ok)(`EXP-076 result manifest of a real job (${ready.reason})`, () => {
-  it('records the Podman image ID of the image the job compiled in, and the class version', async () => {
+  it('records the image ID and the manifest digest of the image the job compiled in, and the class version', async () => {
     const stored = new Map<string, Uint8Array>();
     const containers: string[] = [];
+    const bundleManifests: string[] = [];
     const fonts = await imageFontManifest(IMAGE);
     const handler = createExportHandler({
       stores: stores(),
@@ -82,6 +84,7 @@ describe.skipIf(!ready.ok)(`EXP-076 result manifest of a real job (${ready.reaso
       compile: (files, opts) => {
         const name = `docedit-u-fe-065-080-manifest-${randomBytes(4).toString('hex')}`;
         containers.push(name);
+        bundleManifests.push(String(files['manifest.json']));
         return compileInSandbox(files, { ...opts, name });
       },
     });
@@ -117,7 +120,7 @@ describe.skipIf(!ready.ok)(`EXP-076 result manifest of a real job (${ready.reaso
     const bytes = stored.get(OUTPUT_FILES.manifest);
     expect(bytes, 'the job stored manifest.json').toBeDefined();
     const manifest = JSON.parse(new TextDecoder().decode(bytes)) as {
-      image: { name: string; id: string | null };
+      image: { name: string; id: string | null; digest: string | null };
       bundle: { classVersion: string };
     };
 
@@ -128,9 +131,12 @@ describe.skipIf(!ready.ok)(`EXP-076 result manifest of a real job (${ready.reaso
     expect(manifest.image.id).toBe(id.startsWith('sha256:') ? id : `sha256:${id}`);
     // The class version the bundle was written for.
     expect(manifest.bundle.classVersion).toBe(CLASS_VERSION);
-    // The image's manifest digest is a different value and is not what the manifest records; which
-    // of the two (or a registry digest) the criterion means is open (ADR 0116 decision 4).
+    // The image's manifest digest is a different value, and it is recorded as well, in the result
+    // manifest and in the manifest of the bundle that was compiled.
     const digest = inspect(IMAGE, '{{.Digest}}');
-    if (/^sha256:[0-9a-f]{64}$/.test(digest)) expect(manifest.image.id).not.toBe(digest);
+    expect(digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(manifest.image.digest).toBe(digest);
+    expect(manifest.image.id).not.toBe(digest);
+    expect(JSON.parse(bundleManifests[0]!)).toMatchObject({ imageDigest: digest });
   });
 });
