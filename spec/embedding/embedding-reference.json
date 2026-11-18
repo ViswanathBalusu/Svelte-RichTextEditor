@@ -1,0 +1,831 @@
+{
+  "tag": "doc-editor",
+  "embeddingVersion": "0.1",
+  "release": "0.0.0",
+  "attributes": [
+    "doc-id",
+    "endpoint",
+    "mode",
+    "view",
+    "locale",
+    "theme",
+    "toolbar",
+    "header",
+    "keep-alive"
+  ],
+  "members": [
+    {
+      "name": "version",
+      "kind": "property",
+      "static": true,
+      "access": "read",
+      "signature": "string",
+      "summary": "The embedding API version (05 §8), separate from the protocol version."
+    },
+    {
+      "name": "release",
+      "kind": "property",
+      "static": true,
+      "access": "read",
+      "signature": "string",
+      "summary": "The release of this package (FE-001; ADR 0039)."
+    },
+    {
+      "name": "observedAttributes",
+      "kind": "property",
+      "static": true,
+      "access": "read",
+      "signature": "string[]",
+      "summary": ""
+    },
+    {
+      "name": "getToken",
+      "kind": "property",
+      "static": false,
+      "access": "read/write",
+      "signature": "GetToken | null",
+      "summary": "Called with `{ docId }` at start and when the token must be renewed."
+    },
+    {
+      "name": "backend",
+      "kind": "property",
+      "static": false,
+      "access": "read/write",
+      "signature": "Backend | null",
+      "summary": "Any implementation of the backend ports (05 §8.3); `endpoint` is then ignored."
+    },
+    {
+      "name": "config",
+      "kind": "property",
+      "static": false,
+      "access": "read/write",
+      "signature": "DocEditorConfig",
+      "summary": "The configuration as the host set it; unknown keys are ignored (PRO-081)."
+    },
+    {
+      "name": "resolveUsers",
+      "kind": "property",
+      "static": false,
+      "access": "read/write",
+      "signature": "ResolveUsers | null",
+      "summary": "Names and avatars from the host's directory (PRO-080); read whenever the shell asks."
+    },
+    {
+      "name": "searchPrincipals",
+      "kind": "property",
+      "static": false,
+      "access": "read/write",
+      "signature": "SearchPrincipals | null",
+      "summary": "Users and groups for the grants dialog and mentions (PRO-080), which arrive in phase 1b."
+    },
+    {
+      "name": "strings",
+      "kind": "property",
+      "static": false,
+      "access": "read/write",
+      "signature": "StringOverrides | null",
+      "summary": "The host's replacement strings by key (UX-063). A key the host omits falls back to the source table; a key no table knows is reported to the console."
+    },
+    {
+      "name": "extensions",
+      "kind": "property",
+      "static": false,
+      "access": "read/write",
+      "signature": "readonly unknown[]",
+      "summary": "Host-registered extensions (13 §7, 05 §8.1). A change while the shell is mounted is applied at once (UX-050)."
+    },
+    {
+      "name": "headerState",
+      "kind": "property",
+      "static": false,
+      "access": "read",
+      "signature": "HeaderState | null",
+      "summary": "What a host-drawn header shows, as it is now (UX-014 criterion 5; proposed, ADR 0361): the connection and save state of `de-status`, and the details of `de-mode-change`, `de-presence` and `de-counts`. Null until the editor is live. Read-only: identifiers, states and counts, no content and no token."
+    },
+    {
+      "name": "load",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "load(docId?: string): void",
+      "summary": "Loads `docId` as if `doc-id` had changed; without an argument, or with the current one, reloads the current document (PRO-076)."
+    },
+    {
+      "name": "focus",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "focus(options?: FocusOptions): void",
+      "summary": "Moves keyboard focus into the editing surface, with its last selection (FE-013; PRO-076)."
+    },
+    {
+      "name": "flush",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "flush(opts?: { timeoutMs?: number }): Promise<void>",
+      "summary": "Resolves when nothing is in flight or queued; rejects at `timeoutMs` with the number of unconfirmed commits (PRO-083). With no document loaded nothing can be unconfirmed."
+    },
+    {
+      "name": "getContent",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "getContent(): Promise<ConfirmedContent>",
+      "summary": "The confirmed document with its `seq` (PRO-084). Rejects when no document is loaded."
+    },
+    {
+      "name": "exec",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "exec(command: CommandName | (string & {}), args?: CommandArgs): boolean",
+      "summary": "Runs a command through the path the toolbar uses; false when it does not apply, is unknown or no document is loaded (PRO-085). `command` is an identifier of the command registry such as `format.bold` (UX-005), or a name of the editing core such as `bold`."
+    },
+    {
+      "name": "queryCommand",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "queryCommand(command: CommandName | (string & {}), args?: CommandArgs): CommandState",
+      "summary": "Whether a command is enabled and active for the user's access now (PRO-085)."
+    },
+    {
+      "name": "nextField",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "nextField(): boolean",
+      "summary": "Moves focus to the next field the user may fill, after the one that last had focus (the first when none had). False when no field took focus, and with no document loaded (FRW-069)."
+    },
+    {
+      "name": "focusField",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "focusField(key: string): boolean",
+      "summary": "Moves focus to the field with `key`. For a key no field has it throws nothing and answers false, as it does with no document loaded (FRW-069)."
+    },
+    {
+      "name": "getFieldValues",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "getFieldValues(): Record<string, unknown>",
+      "summary": "The values of the form fields by key, as the document holds them now (FRW-069)."
+    },
+    {
+      "name": "setFieldValue",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "setFieldValue(key: string, value: unknown): Promise<FieldFillOutcome>",
+      "summary": "Fills the field with `key` as the current user, as typing into its control does; the server's permissions apply. Resolves with `{ ok: true, confirmed }`, or `{ ok: false, code, message }` with `permission_denied`, `field_invalid`, `conflict` or `not_found`; it does not reject (FRW-069)."
+    },
+    {
+      "name": "validateFields",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "validateFields(): FieldReport[]",
+      "summary": "The fields that are required and empty, or whose entry has a problem, in document order, with keys and reasons. It changes nothing (FRW-069)."
+    },
+    {
+      "name": "getSelectionContent",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "getSelectionContent(): CdmFragment | null",
+      "summary": "The selection as a CDM fragment (PRO-084); null when no document is loaded."
+    },
+    {
+      "name": "insertContent",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "insertContent(fragment: CdmFragment): InsertResult",
+      "summary": "Inserts a CDM fragment at the selection through the same guards as typing (PRO-084). Nothing changes unless the result is `ok`; the result says why when it is not."
+    },
+    {
+      "name": "print",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "print(): Promise<PrintOutcome>",
+      "summary": "Prints the typeset PDF of the loaded document (02 §9.8; FE-073). When the access lists `no-print`, nothing is requested and nothing is printed, and the outcome says why (FE-055; UX-040 criterion 3). Otherwise the export job runs and its PDF is printed through a hidden frame. Both print modules load on first use, so neither is on the connect-time path (FE-119)."
+    },
+    {
+      "name": "requestExport",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "requestExport(options: ExportRequest): Promise<{ jobId: string }>",
+      "summary": "Starts an export job of the loaded document and resolves `{ jobId }` (PRO-086). Refused when no document is loaded or the backend has no exports port (src/export.ts). The job's reports raise `de-export-progress`, `de-export-completed` or `de-export-failed` while the session that started it is still the current one (PRO-086)."
+    },
+    {
+      "name": "destroy",
+      "kind": "method",
+      "static": false,
+      "access": "call",
+      "signature": "destroy(): void",
+      "summary": "Unmounts the shell, destroys the editing core, closes the channel and the backend and stops every timer of the element; nothing more is raised (02 §2.1; PRO-076). Connecting the element again, or calling `load()`, starts afresh (ADR 0039)."
+    }
+  ],
+  "reactions": [
+    "connectedCallback",
+    "connectedMoveCallback",
+    "disconnectedCallback",
+    "attributeChangedCallback"
+  ],
+  "events": [
+    {
+      "name": "de-ready",
+      "detail": "{ docId: string; seq: number }",
+      "summary": "The document is loaded and the editor is live (PRO-074)."
+    },
+    {
+      "name": "de-status",
+      "detail": "StatusDetail",
+      "summary": "Connection or save state changed; at most once per animation frame (FE-007)."
+    },
+    {
+      "name": "de-change",
+      "detail": "{ seq: number }",
+      "summary": "Changes were confirmed up to `seq`; at most once per interval (PRO-087)."
+    },
+    {
+      "name": "de-permission-change",
+      "detail": "Access",
+      "summary": "The access of the open channel, first from `ch.opened`, then from every `perm.changed` (PRO-088)."
+    },
+    {
+      "name": "de-auth-required",
+      "detail": "{ docId: string; code: ErrorCode }",
+      "summary": "`getToken` failed or the server refused the token (PRO-075). Carries no token."
+    },
+    {
+      "name": "de-recovered-edits",
+      "detail": "{ count: number }",
+      "summary": "Rejected or unsent content was set aside; `count` is the number of pieces (05 §8.1)."
+    },
+    {
+      "name": "de-share-request",
+      "detail": "{ docId: string }",
+      "summary": "The owner asked for sharing, which the host owns (PRO-089; 13 §5). Identifiers only: the host opens its own dialog, and the editor shows none of its own. Nothing listens and nothing breaks when the host has no listener."
+    },
+    {
+      "name": "de-access-request",
+      "detail": "{ docId: string; scope: string }",
+      "summary": "A reader asked for access to hidden content (UX-104, ADR 0019). `scope` is the DEP scope identifier of the placeholder. The host decides who answers; the editor sends nothing itself."
+    },
+    {
+      "name": "de-export-progress",
+      "detail": "{ jobId: string; state: string; progress: number | null }",
+      "summary": "An export job reports its state (PRO-086): identifiers and job state only, no content."
+    },
+    {
+      "name": "de-export-completed",
+      "detail": "{ jobId: string; state: string; progress: number | null }",
+      "summary": "The export job completed (PRO-086). Same detail as `de-export-progress`."
+    },
+    {
+      "name": "de-export-failed",
+      "detail": "{ jobId: string; state: string; progress: number | null }",
+      "summary": "The export job failed or was cancelled (PRO-086). Same detail as `de-export-progress`."
+    },
+    {
+      "name": "de-selection",
+      "detail": "SelectionDetail",
+      "summary": "The selection moved to another scope or block (05 §8.1; FE-028). Identifiers only, no content."
+    },
+    {
+      "name": "de-command-state",
+      "detail": "{ commands: CommandStateChange[] }",
+      "summary": "The commands whose `enabled` or `active` state changed, and only those (FE-028)."
+    },
+    {
+      "name": "de-mode-change",
+      "detail": "ModeChangeDetail",
+      "summary": "The mode in effect, or the mode asked for, changed; also raised once when the editor is live (UX-014 criterion 5; proposed, ADR 0361)."
+    },
+    {
+      "name": "de-presence",
+      "detail": "PresenceDetail",
+      "summary": "The other sessions this reader may see changed; also raised once when the editor is live (UX-014; ADR 0361)."
+    },
+    {
+      "name": "de-counts",
+      "detail": "CountsDetail",
+      "summary": "The counts of the header's buttons changed; also raised once when the editor is live (UX-014; ADR 0361)."
+    },
+    {
+      "name": "de-field-change",
+      "detail": "FieldChangeDetail",
+      "summary": "This person changed the entry of a form field (12 §10; FRW-070). It carries no value."
+    },
+    {
+      "name": "de-fill-progress",
+      "detail": "FillProgressDetail",
+      "summary": "The progress the guided bar of fill mode shows changed (12 §10; FRW-070)."
+    },
+    {
+      "name": "de-error",
+      "detail": "ErrorDetail",
+      "summary": ""
+    }
+  ],
+  "commands": [
+    {
+      "id": "document.export",
+      "group": "page",
+      "capability": "export-pdf",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "document.print",
+      "group": "page",
+      "capability": "export-pdf",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "document.share",
+      "group": "header",
+      "capability": "sharing",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "edit.discardRecovered",
+      "group": "edit",
+      "capability": "recovery-journal",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "edit.insertRecovered",
+      "group": "edit",
+      "capability": "recovery-journal",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "edit.redo",
+      "group": "edit",
+      "capability": "editing",
+      "keys": [
+        "Mod-y",
+        "Shift-Mod-z"
+      ],
+      "aliases": [
+        "redo"
+      ]
+    },
+    {
+      "id": "edit.selectAll",
+      "group": "edit",
+      "capability": "editing",
+      "keys": [
+        "Mod-a"
+      ],
+      "aliases": [
+        "selectAll"
+      ]
+    },
+    {
+      "id": "edit.undo",
+      "group": "edit",
+      "capability": "editing",
+      "keys": [
+        "Mod-z"
+      ],
+      "aliases": [
+        "undo"
+      ]
+    },
+    {
+      "id": "format.applyFormat",
+      "group": "format",
+      "capability": "format-painter",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.applyStyle",
+      "group": "format",
+      "capability": "styles",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.bold",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [
+        "Mod-b"
+      ],
+      "aliases": [
+        "bold"
+      ]
+    },
+    {
+      "id": "format.italic",
+      "group": "format",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [
+        "Mod-i"
+      ],
+      "aliases": [
+        "italic"
+      ]
+    },
+    {
+      "id": "format.language",
+      "group": "review",
+      "capability": "character-and-paragraph-formatting",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "format.painter",
+      "group": "format",
+      "capability": "format-painter",
+      "keys": [
+        "Shift-Mod-c"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "history.nameVersion",
+      "group": "review",
+      "capability": "version-history",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.checkbox",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.choice",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.date",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.dateSigned",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.formula",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.initials",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.number",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.signature",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.field.text",
+      "group": "insert",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "insert.footnote",
+      "group": "insert",
+      "capability": "footnotes",
+      "keys": [],
+      "aliases": [
+        "insertFootnote"
+      ]
+    },
+    {
+      "id": "insert.region",
+      "group": "insert",
+      "capability": "regions-and-permissions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "mode.edit",
+      "group": "mode",
+      "capability": "modes",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "mode.fill",
+      "group": "mode",
+      "capability": "modes",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "mode.review",
+      "group": "mode",
+      "capability": "modes",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "mode.view",
+      "group": "mode",
+      "capability": "modes",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "navigate.nextEditableRegion",
+      "group": "review",
+      "capability": "regions-and-permissions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "page.closeStory",
+      "group": "story",
+      "capability": "headers-and-footers",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "page.header",
+      "group": "page",
+      "capability": "headers-and-footers",
+      "keys": [],
+      "aliases": [
+        "editHeader"
+      ]
+    },
+    {
+      "id": "proofing.next",
+      "group": "review",
+      "capability": "spelling-and-grammar",
+      "keys": [
+        "Alt-F7"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "proofing.previous",
+      "group": "review",
+      "capability": "spelling-and-grammar",
+      "keys": [
+        "Alt-Shift-F7"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "review.comment",
+      "group": "review",
+      "capability": "comments",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.catchUp",
+      "group": "header",
+      "capability": "catch-up",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.checker",
+      "group": "review",
+      "capability": "accessibility-checker",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.commandSearch",
+      "group": "view",
+      "capability": "command-search",
+      "keys": [
+        "Alt-Q"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "view.comments",
+      "group": "header",
+      "capability": "comments",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.fieldProperties",
+      "group": "view",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.fillSummary",
+      "group": "view",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.find",
+      "group": "view",
+      "capability": "navigation-pane",
+      "keys": [
+        "Mod-f"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "view.history",
+      "group": "header",
+      "capability": "version-history",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.layout.print",
+      "group": "view",
+      "capability": "views",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.layout.read",
+      "group": "view",
+      "capability": "views",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.layout.web",
+      "group": "view",
+      "capability": "views",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.outline",
+      "group": "view",
+      "capability": "navigation-pane",
+      "keys": [],
+      "aliases": [
+        "outline"
+      ]
+    },
+    {
+      "id": "view.permissions",
+      "group": "review",
+      "capability": "regions-and-permissions",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.recovered",
+      "group": "view",
+      "capability": "recovery-journal",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.roles",
+      "group": "view",
+      "capability": "fields-and-forms",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.shortcuts",
+      "group": "view",
+      "capability": "keyboard-shortcuts",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.sources",
+      "group": "view",
+      "capability": "citations",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.styles",
+      "group": "view",
+      "capability": "styles",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.zoomIn",
+      "group": "view",
+      "capability": "zoom",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.zoomOut",
+      "group": "view",
+      "capability": "zoom",
+      "keys": [],
+      "aliases": []
+    },
+    {
+      "id": "view.zoomReset",
+      "group": "view",
+      "capability": "zoom",
+      "keys": [],
+      "aliases": []
+    }
+  ],
+  "config": [
+    {
+      "name": "styleNonce",
+      "type": "string",
+      "default": null,
+      "summary": "Nonce for the <style> element the component creates when constructable stylesheets fail (02 section 3). Absent by default; an empty string counts as absent."
+    },
+    {
+      "name": "graceMs",
+      "type": "number",
+      "default": "30000",
+      "summary": "Grace period before a disconnected editor destroys itself, in milliseconds (02 section 2.1). Default 30,000. A negative or non-finite value is ignored."
+    },
+    {
+      "name": "pdfViewerUrl",
+      "type": "string",
+      "default": null,
+      "summary": "URL of the PDF viewer's page (FE-071). Default: viewer/pdf-viewer.html next to the module. Absent by default; an empty string counts as absent."
+    },
+    {
+      "name": "katexFontsUrl",
+      "type": "string",
+      "default": null,
+      "summary": "The directory, ending in a slash, that the host serves KaTeX's .woff2 files from (FE-069). The editor registers them under hash aliases. Absent by default: no KaTeX font is registered; an empty string counts as absent."
+    },
+    {
+      "name": "selectionShim",
+      "type": "\"instance\" | \"library\"",
+      "default": "\"instance\"",
+      "summary": "Where the shadow root's getSelection comes from (02 section 8; spike S1 section 4.7). instance defines it on the editor's own root; library lets ProseMirror patch ShadowRoot.prototype."
+    },
+    {
+      "name": "footnoteModel",
+      "type": "\"inline\" | \"paragraph\"",
+      "default": "\"paragraph\"",
+      "summary": "Experimental, for spike evidence only: the footnote content model (03 section 13; CDM-001). paragraph is the CDM's footnote content; inline is the spike's option A."
+    },
+    {
+      "name": "deferRemoteWhileComposing",
+      "type": "boolean",
+      "default": "true",
+      "summary": "Experimental, for spike evidence only: defer remote commits while the user composes text (input method)."
+    },
+    {
+      "name": "forceStyleFallback",
+      "type": "boolean",
+      "default": "false",
+      "summary": "Experimental, for spike evidence only: use the nonce <style> element even where constructable stylesheets work."
+    },
+    {
+      "name": "pageGuides",
+      "type": "boolean",
+      "default": "false",
+      "summary": "Draws page guides in the web view where the last completed export's layout.json started a page (02 section 7; FE-068). Off by default; a guide is exact only at block starts and drifts between compiles."
+    }
+  ]
+}

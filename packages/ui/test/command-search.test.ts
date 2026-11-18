@@ -15,8 +15,16 @@ import {
   normaliseQuery,
   runSearchHit,
   searchCommands,
+  synonymsFromStrings,
   type CommandEntry,
 } from '../src/commands/index.ts';
+import {
+  builtinCommands,
+  coreCommands,
+  shellCommands1b,
+  type ShellCommandHost1b,
+} from '../src/commands/builtin.ts';
+import { EN_GB } from '../src/i18n/en-GB.ts';
 import { sourceTranslator } from '../src/i18n/strings.ts';
 import { EDIT, FakeCore, VIEW } from './support/fake-core.ts';
 
@@ -132,6 +140,62 @@ describe('synonyms (UX-011, criterion 2: the mechanism; the locale data is not b
     const hits = searchCommands(registry, 'slant', { translate, synonyms }).hits;
     expect(hits.map((h) => h.id)).toEqual(['format.italic']);
     expect(hits[0]!.rank).toBe(3);
+  });
+});
+
+describe('synonyms from the locale table (UX-011, criterion 2)', () => {
+  const synonyms = synonymsFromStrings(translate);
+
+  it('lists a command when one of its synonyms in the table is typed', () => {
+    const { registry } = setup({ access: EDIT });
+    const hits = searchCommands(registry, 'strong', { translate, synonyms }).hits;
+    expect(hits.map((h) => h.id)).toContain('format.bold');
+    expect(hits.find((h) => h.id === 'format.bold')!.rank).toBe(3);
+    // Without the table's synonyms the same word finds nothing.
+    expect(searchCommands(registry, 'strong', { translate }).hits).toEqual([]);
+  });
+
+  it('matches a part of a synonym and several words of one synonym', () => {
+    const { registry } = setup({ access: EDIT });
+    expect(
+      searchCommands(registry, 'step ba', { translate, synonyms }).hits.map((h) => h.id),
+    ).toEqual(['edit.undo']);
+    expect(searchCommands(registry, 'slan', { translate, synonyms }).hits.map((h) => h.id)).toEqual(
+      ['format.italic'],
+    );
+  });
+
+  it('reads the key of a host replacement, and a command with no key has no synonyms', () => {
+    const view = (id: string) => ({ id }) as Parameters<typeof synonyms>[0];
+    expect(synonyms(view('format.bold'))).toEqual(['strong', 'heavy', 'thick']);
+    expect(synonyms(view('no.such.command'))).toEqual([]);
+    const replaced = synonymsFromStrings({
+      has: (key) => key === 'synonyms.format.bold',
+      text: () => ' fett ;; kräftig ',
+    });
+    expect(replaced(view('format.bold'))).toEqual(['fett', 'kräftig']);
+  });
+
+  it('keeps the permissions: a synonym hit of a command the access forbids is not runnable', () => {
+    const { registry } = setup({ access: VIEW });
+    const hit = searchCommands(registry, 'strong', { translate, synonyms }).hits.find(
+      (h) => h.id === 'format.bold',
+    );
+    expect(hit?.runnable).toBe(false);
+    expect(hit?.reasonKey).not.toBeNull();
+  });
+
+  it('has a table entry only for commands the registry knows', () => {
+    const known = new Set([
+      ...coreCommands().map((entry) => entry.id),
+      ...builtinCommands().map((entry) => entry.id),
+      ...Object.keys(shellCommands1b({} as ShellCommandHost1b)),
+    ]);
+    const keys = Object.keys(EN_GB)
+      .filter((key) => key.startsWith('synonyms.'))
+      .map((key) => key.slice('synonyms.'.length));
+    expect(keys.length).toBeGreaterThan(10);
+    expect(keys.filter((id) => !known.has(id))).toEqual([]);
   });
 });
 

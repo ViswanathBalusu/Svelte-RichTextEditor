@@ -48,7 +48,13 @@ function inside(doc: unknown, id: string): number {
 }
 
 /** Stores a commit that inserts an inline image of `asset` at the start of block `block`. */
-async function insertImage(h: Harness, doc: string, block: string, asset: string): Promise<void> {
+async function insertImage(
+  h: Harness,
+  doc: string,
+  block: string,
+  asset: string,
+  attach = false,
+): Promise<void> {
   const ref: DocRef = { tenant: h.tenant, doc };
   const epoch = await h.parts.ownership.claim(ref, 'test-node');
   const head = await h.parts.logs.head(ref);
@@ -78,12 +84,12 @@ async function insertImage(h: Harness, doc: string, block: string, asset: string
     retired: [],
     claimed: [],
   };
-  const r = await h.parts.logs.append(ref, {
-    epoch,
-    revision: perms.revision,
-    fromSeq: head.seq + 1,
-    commits: [commit],
-  });
+  // With ttach, the doc_assets row is written with the commit, as the data plane does (BE-044).
+  const r = await h.parts.logs.append(
+    ref,
+    { epoch, revision: perms.revision, fromSeq: head.seq + 1, commits: [commit] },
+    attach ? { attachments: [{ asset, seq: head.seq + 1 }] } : {},
+  );
   expect(r.status).toBe('ok');
 }
 
@@ -327,6 +333,29 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           body: { assets: [visible] },
         });
         expect(elsewhere.json.assets).toEqual([]);
+      },
+    );
+
+    it.skipIf(skip)(
+      'resolves an asset only for a document it is attached to, even when the content of another document names it (BE-045 criterion 1)',
+      async () => {
+        const first = await h.createDocument({ content: documentWithRegions() });
+        const second = await h.createDocument({ content: documentWithRegions() });
+        const asset = await readyAsset(first, h.userToken({ [first]: 'owner' }, { sub: 'olga' }));
+        // The second document's content names the first document's asset; no row attaches it there.
+        await insertImage(h, second, 'pIntro0000000001', asset);
+        const owner = h.userToken({ [second]: 'owner' }, { sub: 'olga' });
+        const resolve = async () =>
+          (
+            await h.call('POST', `/v1/documents/${second}/assets/resolve`, {
+              token: owner,
+              body: { assets: [asset] },
+            })
+          ).json.assets.map((a: { asset: string }) => a.asset);
+        expect(await resolve()).toEqual([]);
+        // Once a commit attaches it to the second document, it resolves there to a signed URL.
+        await insertImage(h, second, 'pIntro0000000001', asset, true);
+        expect(await resolve()).toEqual([asset]);
       },
     );
   });

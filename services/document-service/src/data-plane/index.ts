@@ -194,6 +194,7 @@ class DepDataPlane implements DataPlane {
       lease: this.#lease,
       leases: deps.leases,
       restricted: deps.visibility !== undefined,
+      ...(deps.assets ? { assets: deps.assets } : {}),
     });
     this.#outbox = deps.outbox
       ? new OutboxDelivery({

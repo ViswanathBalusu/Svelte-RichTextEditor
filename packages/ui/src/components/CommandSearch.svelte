@@ -10,7 +10,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { on } from 'svelte/events';
-  import { searchCommands } from '../commands/search.ts';
+  import { searchCommands, synonymsFromStrings } from '../commands/search.ts';
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
 
@@ -35,6 +35,8 @@
     void snapshot.current;
     return searchCommands(shell.registry, query, {
       translate: { text: (key: string) => tr.text(key) },
+      // Other words for a command, from the locale table (13 §2: labels and synonyms).
+      synonyms: synonymsFromStrings(tr),
     });
   });
   const hits = $derived(results.hits);

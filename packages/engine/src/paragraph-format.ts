@@ -5,10 +5,9 @@
  * user may edit. Each value is checked against the CDM's own range before anything changes: an
  * unknown property, an out-of-range integer or an unknown enumeration makes the command unavailable
  * and changes nothing. The properties are the ones `paragraphProps` in `packages/model`
- * (cdm1.ts) defines, except `tabs` and `borders`/`shading`, which have their own criteria (2 and 5).
- *
- * This module stores the values. The web view does not show them yet, so FE-129 criterion 1 stays
- * unticked; see the story's Notes.
+ * (cdm1.ts) defines, except `tabs` (criterion 2, not built here). `borders` and `shading` are
+ * stored whole, as the CDM defines them (criterion 5). The web view draws the stored values
+ * (`view/paragraph-format-view.ts`).
  */
 import type { Node as PMNode } from 'prosemirror-model';
 import type { Command } from 'prosemirror-state';
@@ -22,6 +21,9 @@ const ULENGTH_MAX = 31680;
 
 const ALIGN = ['start', 'center', 'end', 'justify', 'distribute'] as const;
 const LINE_RULE = ['multiple', 'exact', 'atLeast'] as const;
+const BORDER_STYLES = ['none', 'single', 'double', 'dotted', 'dashed', 'thick'] as const;
+const BORDER_SIDES = ['top', 'bottom', 'left', 'right', 'between'] as const;
+const COLOUR = /^#[0-9A-F]{6}$/;
 
 /** The paragraph properties this command may set, with the check each value must pass. */
 const CHECKS = {
@@ -37,6 +39,9 @@ const CHECKS = {
   keepLines: isNullOrBool,
   pageBreakBefore: isNullOrBool,
   widowControl: isNullOrBool,
+  contextualSpacing: isNullOrBool,
+  borders: (v: unknown) => v === null || validBorders(v),
+  shading: (v: unknown) => v === null || validShading(v),
 } as const;
 
 export type ParagraphFormatKey = keyof typeof CHECKS;
@@ -46,6 +51,44 @@ export type ParagraphFormatPatch = Partial<Record<ParagraphFormatKey, unknown>>;
 
 function isNullOrInt(v: unknown, min: number, max: number): boolean {
   return v === null || (typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max);
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** One border of the CDM (03 §4.5): a style, and an optional width (eighths of a point), colour and space. */
+function validBorder(v: unknown): boolean {
+  if (v === null) return true;
+  if (!isRecord(v)) return false;
+  const allowed = ['style', 'width', 'color', 'space'];
+  if (!Object.keys(v).every((k) => allowed.includes(k))) return false;
+  if (!(BORDER_STYLES as readonly unknown[]).includes(v['style'])) return false;
+  if ('width' in v && !isNullOrInt(v['width'], 0, 240)) return false;
+  if ('space' in v && !isNullOrInt(v['space'], 0, 620)) return false;
+  return (
+    !('color' in v) ||
+    v['color'] === null ||
+    (typeof v['color'] === 'string' && COLOUR.test(v['color']))
+  );
+}
+
+function validBorders(v: unknown): boolean {
+  if (!isRecord(v)) return false;
+  return Object.entries(v).every(
+    ([side, border]) => (BORDER_SIDES as readonly string[]).includes(side) && validBorder(border),
+  );
+}
+
+function validShading(v: unknown): boolean {
+  if (!isRecord(v)) return false;
+  const keys = Object.keys(v);
+  return (
+    keys.length === 1 &&
+    keys[0] === 'fill' &&
+    typeof v['fill'] === 'string' &&
+    COLOUR.test(v['fill'])
+  );
 }
 
 function isNullOrBool(v: unknown): boolean {
@@ -80,14 +123,25 @@ export function setParagraphFormat(
     for (const { node, pos } of targets as Array<{ node: PMNode; pos: number }>) {
       for (const key of keys) {
         const value = patch[key];
-        if (node.attrs[key] !== value) changes.push({ pos, key, value });
+        if (!sameValue(node.attrs[key], value)) changes.push({ pos, key, value });
       }
     }
     if (dispatch && changes.length) {
       const tr = state.tr;
-      for (const { pos, key, value } of changes) tr.setNodeAttribute(pos, key, value);
+      // An object value is copied, so that the document never shares the caller's object.
+      for (const { pos, key, value } of changes)
+        tr.setNodeAttribute(
+          pos,
+          key,
+          typeof value === 'object' && value !== null ? structuredClone(value) : value,
+        );
       dispatch(tr.scrollIntoView());
     }
     return true;
   };
+}
+
+/** Equal as JSON values: the object properties (`borders`, `shading`) are compared by content. */
+function sameValue(a: unknown, b: unknown): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b);
 }

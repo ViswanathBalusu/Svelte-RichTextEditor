@@ -2127,6 +2127,15 @@ export interface Operations {
     body: Workflow;
     response: Workflow;
   };
+  /** POST /documents/{id}/workflow/send: Sends the document for completion: checks the send list, locks the document, activates the first participants (12 §6.2). The method and path are assumed. (12 §6.2, §10) */
+  sendWorkflow: {
+    method: "POST";
+    path: "/documents/{id}/workflow/send";
+    params: { id: string };
+    query: Record<string, never>;
+    body: never;
+    response: Workflow;
+  };
   /** POST /documents/{id}/workflow/participants/{pid}/consent: Participant action `consent` (12 §7, §8.1). The method and the document prefix are assumed. (12 §10) */
   participantConsent: {
     method: "POST";

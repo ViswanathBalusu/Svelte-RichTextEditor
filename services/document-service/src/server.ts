@@ -15,6 +15,7 @@ import type { AddressInfo } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { podmanSandbox, type AssetUrlKeys, type Sandbox } from '@docedit/asset-worker';
 import { createDataPlane as defaultDataPlane } from './data-plane/index.ts';
+import { RegistryAssetAttachments } from './data-plane/asset-attachments.ts';
 import { RateLimits } from './data-plane/limits.ts';
 import { ValkeyTokenBuckets } from './data-plane/valkey-buckets.ts';
 import { DEFAULT_FEATURES, DEFAULT_RATES } from './data-plane/settings.ts';
@@ -723,6 +724,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
     node: config.node,
     limits: rateLimits,
     ...(liveQuotas ? { quotas: liveQuotas } : {}),
+    // BE-044: a document references only the assets attached to it or uploaded for it by the submitter.
+    ...(parts.assetRegistry
+      ? { assets: new RegistryAssetAttachments(parts.logs, parts.assetRegistry) }
+      : {}),
     now,
     checkpoints,
     settings: {

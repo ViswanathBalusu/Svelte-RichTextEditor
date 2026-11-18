@@ -2,9 +2,8 @@
  * FE-105 criterion 3 (lane V-FE-097-112): when numbered paragraphs are exposed as list items, axe
  * reports no `aria-required-parent` or `aria-required-children` violation. The paragraphs are
  * numbered through the body view's transactions on the S1 page, as an edit would number them, and
- * axe pierces the shadow root. The list items have no `role="list"` parent yet (FE-105 Notes), so
- * the expectation below is the violation that is still there; `test.fail` keeps the suite green
- * while the gap is open and turns red when the gap is closed, so the criterion can then be ticked.
+ * axe pierces the shadow root. Each run of items has an empty `role="list"` owner before it whose
+ * `aria-owns` names the items (decision 91 of 2026-11-15; `ownerDecorations` in list-view.ts).
  * Run from the repository root with
  * `DOCEDIT_DEMO_PORT=57065 pnpm exec playwright test -c packages/element/playwright.config.ts e2e/fe-105-axe-list-parent.spec.ts --project=chromium --project=firefox --project=webkit --output <scratch dir>`.
  */
@@ -66,9 +65,6 @@ test.describe('list items have a list parent under axe (FE-105, criterion 3)', (
   test('axe reports no aria-required-parent or aria-required-children on numbered paragraphs', async ({
     page,
   }) => {
-    // Open: the list items have no list parent (FE-105 Notes; ADR 0306). The test is expected to fail
-    // until a design gives them one; when it passes, the expectation is met and the mark must go.
-    test.fail(true, 'FE-105 criterion 3 is open: the listitems have no role="list" parent');
     await openS1(page);
     await numberParagraphs(page);
     const items = await page.evaluate(
@@ -78,6 +74,17 @@ test.describe('list items have a list parent under axe (FE-105, criterion 3)', (
           .shadowRoot!.querySelectorAll('.de-editing-surface [role="listitem"]').length,
     );
     expect(items).toBe(3);
+    // Each owner names real items, and every item is owned by exactly one owner.
+    const owned = await page.evaluate(() => {
+      const root = document.querySelector('doc-editor')!.shadowRoot!;
+      const owners = [...root.querySelectorAll('.de-editing-surface [role="list"][aria-owns]')];
+      const ids = owners.flatMap((o) => (o.getAttribute('aria-owns') ?? '').split(' '));
+      const found = ids.filter((id) => root.querySelector(`[id="${id}"][role="listitem"]`));
+      return { owners: owners.length, ids: ids.length, found: found.length };
+    });
+    expect(owned.ids).toBe(3);
+    expect(owned.found).toBe(3);
+    expect(owned.owners).toBeGreaterThan(0);
     const results = await new AxeBuilder({ page }).include('doc-editor').withRules(RULES).analyze();
     const violations = results.violations.map((v) => ({
       id: v.id,
