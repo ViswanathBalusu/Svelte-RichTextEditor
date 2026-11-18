@@ -16,8 +16,11 @@
 import {
   activeParticipantIds,
   bindParticipant,
+  checkRoutingOfDocument,
   checkWorkflowBody,
   fieldOwnersOf,
+  rolesAddedByRouting,
+  routeParticipants,
   sendProblem,
   sendWorkflow,
   snapshotOf,
@@ -98,6 +101,26 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
       throw new ApiError('validation_failed', 'the workflow is not valid', {
         violations: checked.problems,
       });
+    // FRW-037 criterion 3: the routes are checked against the document's fields and roles at the
+    // save, so a route that names a key or a role that does not exist is refused before the send
+    // (ADR 0340; owner decision 185 of 2026-11-15: every rule problem is refused at save).
+    if (checked.input.members.routing !== undefined) {
+      const ref = k.refOf(ctx, doc);
+      const head = await d.logs.head(ref);
+      const full = await d.content.rebuild(ref, head.incarnation, head.seq);
+      const routing = checkRoutingOfDocument(checked.input.members.routing, {
+        cdm: full.cdm,
+        requires: full.requires,
+        doc: full.doc,
+      });
+      if (!routing.ok)
+        throw new ApiError('validation_failed', 'the routing of the workflow is not valid', {
+          violations: routing.problems.map((p) => ({
+            path: p.path,
+            rule: `the routing validates (${p.code})`,
+          })),
+        });
+    }
     const result = await workflows.put(tenant, doc, current?.rev ?? 0, checked.input);
     if (!result.ok) {
       if (result.problem.code === 'workflow_active')
@@ -189,6 +212,7 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
       { manage: true },
       { cdm: full.cdm, requires: full.requires, doc: full.doc },
       { seq: head.seq, hash: `sha256:${chain}` },
+      rolesAddedByRouting(current.members.routing),
     );
     if (!sent.ok) {
       const problem = sendProblem(sent);
@@ -197,7 +221,32 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
       });
     }
 
-    const active = new Set(activeParticipantIds(sent.record.participants));
+    // FRW-037: the routes are evaluated over the document as sent; the participants they add or skip
+    // are part of this transition (one control commit, one `wf.changed`).
+    const routed = routeParticipants(current.participants, {
+      routing: current.members.routing,
+      document: { cdm: full.cdm, requires: full.requires, doc: full.doc },
+      instant: new Date(d.now()).toISOString(),
+      timeZone: current.timeZone,
+    });
+    if (!routed.ok)
+      throw new ApiError(
+        'validation_failed',
+        'the routing of the workflow could not be evaluated',
+        {
+          violations:
+            routed.code === 'rules_invalid'
+              ? routed.problems.map((p) => ({
+                  path: p.path,
+                  rule: `the routing validates (${p.code})`,
+                }))
+              : [{ path: '/routing', rule: 'the routing is evaluated within its budget' }],
+        },
+      );
+    const routedList = routed.participants;
+    const active = new Set(
+      activeParticipantIds(recordOf({ ...current, participants: routedList }).participants),
+    );
     const out = await recordTransition(
       {
         workflows,
@@ -216,11 +265,14 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
           to: 'sent',
           sentSeq: sent.record.sentSeq!,
           sentHash: sent.record.sentHash!,
-          participants: current.participants.map((p) => ({
+          participants: routedList.map((p) => ({
             ...p,
-            state: active.has(p.id) ? 'active' : 'pending',
+            state: p.skippedBy !== undefined ? 'skipped' : active.has(p.id) ? 'active' : 'pending',
           })),
         },
+        // A routing change is a transition of its own kind: it is recorded in the chain even
+        // though the lock of `sent` is the same (12 §6.2, last paragraph; FRW-037 criterion 4).
+        ...(routed.changed ? { anchor: true } : {}),
       },
     );
     if (!out.ok) {
@@ -254,8 +306,7 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
       k.emit(ctx, event.type, doc, { ...event.data });
     };
     raise('sent');
-    for (const p of current.participants)
-      if (active.has(p.id)) raise('participant_activated', p.id);
+    for (const p of routedList) if (active.has(p.id)) raise('participant_activated', p.id);
 
     return json(200, toWire(out.resource), {
       ETag: out.resource.etag,

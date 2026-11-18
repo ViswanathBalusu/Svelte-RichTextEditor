@@ -51,6 +51,8 @@ export function participantStatusWord(
 ): ParticipantStatusWord {
   if (participant.kind === 'cc') return 'copy';
   if (participant.completed) return 'completed';
+  // Routing has skipped them: nothing is left for them to do (FRW-037 criterion 2).
+  if (participant.skipped === true) return 'closed';
   if (CLOSED_STATES.has(record.state)) return 'closed';
   if (record.state === 'correcting') return 'paused';
   const running = record.state === 'sent' || record.state === 'in_progress';

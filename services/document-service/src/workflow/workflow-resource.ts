@@ -32,6 +32,10 @@ ecordTransition each time a participant who was not active becomes so.
     readonly activatedAt?: string;
     /** When a correct access code was submitted for the participant (FRW-039; set once). */
     readonly verifiedAt?: string;
+    /** The route (its index in `routing`) that skipped the participant (FRW-037). */
+    readonly skippedBy?: number;
+    /** The route (its index in `routing`) that added the participant (FRW-037). */
+    readonly addedBy?: number;
   })[];
   readonly members: WorkflowMembers;
 }

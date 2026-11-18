@@ -7,8 +7,9 @@
  *   participant's `state` and `completedSeq`) may be echoed from a read; they are ignored. `doc`,
  *   when given, must be the document of the path.
  * - Every other member is checked and stored. An unknown member is refused.
- * - The routing conditions are checked against the document's fields and roles when the workflow
- *   is sent (FRW-037), not here; this check holds the shape of a route.
+ * - This check holds the shape of a route. The route's keys and roles are checked against the
+ *   document's fields and roles by the save (`checkRoutingOfDocument`, FRW-037 criterion 3), which
+ *   needs the document; the routes are evaluated at the send and at each completion.
  */
 import { isTimeZone } from '@docedit/rules';
 import { checkParticipants, type ParticipantDraft } from './resource.ts';

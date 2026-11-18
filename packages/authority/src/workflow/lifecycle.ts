@@ -47,6 +47,8 @@ export interface WorkflowParticipant {
   readonly codeRequired?: boolean;
   /** Whether a correct access code has been submitted for them (FRW-039). */
   readonly verified?: boolean;
+  /** Whether a routing rule has skipped them: they do not act and do not hold the workflow back (FRW-037). */
+  readonly skipped?: boolean;
 }
 
 /** The end of a workflow that was stopped: declined by a participant, or voided by an owner. */

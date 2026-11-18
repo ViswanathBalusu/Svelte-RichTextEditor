@@ -78,6 +78,7 @@ function scan(node: unknown, out: Scan): void {
 export function sendChecklist(
   input: unknown,
   participants: readonly WorkflowParticipant[],
+  routedRoles: readonly string[] = [],
 ): SendProblem[] {
   const root = isObj(input) && 'doc' in input ? input['doc'] : input;
   const found: Scan = { unassigned: [], roles: [], suggestions: [] };
@@ -87,7 +88,8 @@ export function sendChecklist(
   const unassigned = [...new Set(found.unassigned)];
   if (unassigned.length > 0) problems.push({ code: 'required_field_unassigned', keys: unassigned });
 
-  const held = new Set(participants.flatMap((p) => p.roles));
+  // A role that a routing rule may add needs no holder yet (FRW-037; docs/adr/0405-w4-FRW-037-routing.md).
+  const held = new Set([...participants.flatMap((p) => p.roles), ...routedRoles]);
   const roles = [...new Set(found.roles)].filter((r) => !held.has(r));
   if (roles.length > 0) problems.push({ code: 'role_without_participant', roles });
 
@@ -114,10 +116,11 @@ export function sendWorkflow(
   caller: Caller,
   input: unknown,
   head: SentHead,
+  routedRoles: readonly string[] = [],
 ): SendResult {
   if (!caller.manage) return { ok: false, refusal: 'forbidden', problems: [] };
   if (record.state !== 'draft') return { ok: false, refusal: 'invalid_state', problems: [] };
-  const problems = sendChecklist(input, record.participants);
+  const problems = sendChecklist(input, record.participants, routedRoles);
   if (problems.length > 0) return { ok: false, refusal: 'checklist_failed', problems };
   return {
     ok: true,

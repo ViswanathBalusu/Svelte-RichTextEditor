@@ -16,9 +16,12 @@
  */
 import type { WorkflowParticipant, WorkflowRecord } from './lifecycle.ts';
 
-/** Whether the participant must act: every kind except `cc` (see the module note). */
+/**
+ * Whether the participant must act: every kind except `cc` (see the module note), and nobody whom
+ * routing has skipped (FRW-037 criterion 2).
+ */
 export function mustAct(participant: WorkflowParticipant): boolean {
-  return participant.kind !== 'cc';
+  return participant.kind !== 'cc' && participant.skipped !== true;
 }
 
 /** The identifiers of the participants who are active now, in the order of the list. */
