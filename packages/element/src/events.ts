@@ -89,7 +89,39 @@ export interface DocEditorEventMap {
   'de-fill-progress': FillProgressDetail;
   /** The workflow was reported `completed` to this session (12 §10; FRW-071). */
   'de-workflow-complete': WorkflowCompleteDetail;
+  /**
+   * A feature that loads on demand reported how it went, or that it is not available (WASM-002,
+   * WASM-003; proposed, ADR 0410). The detail has codes, counts and a directive name, never
+   * content.
+   */
+  'de-diagnostic': DiagnosticDetail;
   'de-error': ErrorDetail;
+}
+
+/**
+ * `de-diagnostic`. `kind` `loaded`: a module finished loading in `ms` milliseconds (request to
+ * ready, including its fetch and compile). `load-failed`: it did not load, and `code` says why.
+ * `degraded`: the feature is not available and `fallback` says what the editor uses instead.
+ */
+export interface DiagnosticDetail {
+  /** The feature: `layout-kernel` (the WebAssembly text kernel of the page view). */
+  feature: 'layout-kernel';
+  kind: 'loaded' | 'load-failed' | 'degraded';
+  /** Milliseconds from the request to the module being ready; `null` for a failure. */
+  ms: number | null;
+  /** Size of the WebAssembly file as fetched, in bytes; `null` when it was not read. */
+  bytes: number | null;
+  /** True when the file was compiled while it streamed in; false when it was read whole first. */
+  streaming: boolean | null;
+  /**
+   * Why it failed: `blocked_by_policy`, `fetch_failed`, `bad_module`, `abi_mismatch`,
+   * `chunk_failed` or `compile_failed`. `null` for `loaded`.
+   */
+  code: string | null;
+  /** The content security policy directive the host must allow, when the failure is its policy. */
+  directive: string | null;
+  /** What the editor does instead, for `degraded`: `web-view` or `canvas-measurement`. */
+  fallback: string | null;
 }
 
 /** `de-field-change`: the field and the state of its entry, and never the value (12 §10). */
@@ -175,6 +207,7 @@ export const EVENT_NAMES: readonly DocEditorEventName[] = [
   'de-field-change',
   'de-fill-progress',
   'de-workflow-complete',
+  'de-diagnostic',
   'de-error',
 ];
 

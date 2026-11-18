@@ -358,12 +358,31 @@ describe('SEC-032: every place a sequence number is supplied honours the gate', 
     expect(head.text).not.toContain(MARKER);
   });
 
-  it('each gated input of SEQ_INPUTS has a case or is named open (a new input fails here)', () => {
-    const gated = SEQ_INPUTS.filter((i) => i.rule !== 'exempt').map((i) => `${i.where}|${i.field}`);
+  /** The gated inputs with no case, and the cases that no gated input names. */
+  function coverage(inputs: ReadonlyArray<{ where: string; field: string; rule: string }>) {
+    const gated = inputs.filter((i) => i.rule !== 'exempt').map((i) => `${i.where}|${i.field}`);
     const covered = new Set([...Object.keys(CASES), WIRE, ...Object.keys(OPEN)]);
-    expect(gated.filter((k) => !covered.has(k))).toEqual([]);
-    const stale = [...covered].filter((k) => !gated.includes(k));
-    expect(stale).toEqual([]);
+    return {
+      uncovered: gated.filter((k) => !covered.has(k)),
+      stale: [...covered].filter((k) => !gated.includes(k)),
+    };
+  }
+
+  it('each gated input of SEQ_INPUTS has a case or is named open (a new input fails here)', () => {
+    expect(coverage(SEQ_INPUTS)).toEqual({ uncovered: [], stale: [] });
+  });
+
+  it('the check fails on a new route with a sequence field, until it has a case (shown on a mutated list; SEC-032 criterion 3)', () => {
+    // The walk of the protocol definition (HIS-024, his-024-seq-walk.test.ts) forces a new route's
+    // field into SEQ_INPUTS; this check then forces a case for it.
+    const added = { where: 'GET /documents/{id}/new-route', field: 'query.atSeq', rule: 'state' };
+    expect(coverage([...SEQ_INPUTS, added]).uncovered).toEqual([
+      'GET /documents/{id}/new-route|query.atSeq',
+    ]);
+    // An exempt field needs no case, and a case for a field that is gone is stale.
+    expect(coverage([...SEQ_INPUTS, { ...added, rule: 'exempt' }]).uncovered).toEqual([]);
+    const without = SEQ_INPUTS.filter((i) => !i.where.startsWith('GET /documents/{id}/history'));
+    expect(coverage(without).stale.length).toBeGreaterThan(0);
   });
 
   it('no route is named open: every gated input has a case', () => {

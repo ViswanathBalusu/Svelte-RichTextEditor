@@ -1,0 +1,14 @@
+{
+  "$comment": "Explicit reviews of the data that crates of the Rust kernel carry into the WebAssembly module (WASM-013; ADR 0016, decision 5). A crate that carries Unicode data (its licence names a Unicode licence, or it is one of the unicode-*, icu* crates) or hyphenation patterns (hypher, hyphenation, hyphenopoly) needs an entry for its exact version, with an expiry date; the licence gate (scripts/licence-gate.ts) fails without one. A hyphenation crate also lists the licence of every pattern file compiled in, and the option taken when a file offers a choice (docs/research/2026-11-06-borrow-list.md, section 11). An entry is a review, not an adoption: a crate the owner has not chosen (unicode-linebreak, unicode-segmentation, hypher) has no entry until it is.",
+  "reviews": [
+    {
+      "crate": "unicode-ident",
+      "version": "1.0.27",
+      "data": "The ID_Start and ID_Continue property tables of the Unicode Character Database (UAX #31), as compact lookup tables. A dependency of wasm-bindgen-shared, listed by `cargo tree --edges normal,no-proc-macro` for wasm32-unknown-unknown, so it is in the module's dependency tree; whether the linker keeps its tables after link-time optimisation is not checked.",
+      "dataLicence": "Unicode-3.0",
+      "finding": "The crate is `(MIT OR Apache-2.0) AND Unicode-3.0`: its code is under MIT or Apache-2.0 and the tables under the Unicode licence. The Unicode licence (version 3, 2023) is permissive: it asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data. Unicode-3.0 is on the allow-list of licences/policy.json. The crate's LICENSE-UNICODE file is part of the element's third-party notices (scripts/release/release.ts writes the notices of the crates compiled into the module) and of its bill of materials.",
+      "decision": "WASM-013, lane w6, 2026-11-18 (proposed; a maintainer confirms)",
+      "expires": "2027-05-18"
+    }
+  ]
+}

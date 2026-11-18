@@ -40,7 +40,7 @@ export default defineConfig({
   projects: [
     {
       name: 'reference',
-      testMatch: /(harness|calibrate|s10)\.spec\.ts$/,
+      testMatch: /(harness|calibrate|s10|wasm-012-kernel-start)\.spec\.ts$/,
       use: {
         ...devices['Desktop Chrome'],
         ...reference,

@@ -18,6 +18,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { doc, para, type J } from '../test/docs.ts';
+import { CORPUS_DIR, storeFixture } from '../test/emitter-corpus.ts';
 import { convertAndCompile, pdfText, sandboxReady } from '../test/harness.ts';
 
 const ready = (await sandboxReady()).ok;
@@ -142,6 +143,8 @@ describe.skipIf(!ready)(
       if (text === null) throw new Error('pdftotext is not installed or failed');
       const out = new Set(lines(text));
       const missing = strings.filter((s) => !out.has(s));
+      // A string the compile lost is stored as a fixture of the emitter corpus (criterion 5).
+      for (const input of missing) storeFixture(CORPUS_DIR, { emitter: 'text', input });
       expect(missing).toEqual([]);
     }, 600_000);
   },

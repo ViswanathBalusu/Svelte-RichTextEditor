@@ -20,8 +20,34 @@ export interface PdfViewerStrings {
   pageFailed: string;
 }
 
+/**
+ * The message the element shows in the editor area when a document cannot be opened (PRO-039;
+ * decision 45): a title, a message and one action. `{seconds}` is replaced with a number.
+ */
+export interface FailureStrings {
+  noAccessTitle: string;
+  noAccessMessage: string;
+  updateTitle: string;
+  updateMessage: string;
+  waitTitle: string;
+  /** With the wait the server asked for. */
+  waitMessage: string;
+  /** Without one. */
+  waitMessageUnknown: string;
+  quotaTitle: string;
+  quotaMessage: string;
+  quotaMessageUnknown: string;
+  otherTitle: string;
+  otherMessage: string;
+  /** The action that asks for the document again. */
+  retry: string;
+  /** The action of an update: the page is loaded again, with the new component. */
+  reloadPage: string;
+}
+
 export interface Strings {
   pdf: PdfViewerStrings;
+  failure: FailureStrings;
 }
 
 export const EN: Strings = {
@@ -37,6 +63,25 @@ export const EN: Strings = {
     loading: 'Loading the PDF',
     failed: 'The PDF could not be opened.',
     pageFailed: 'This page could not be drawn.',
+  },
+  failure: {
+    noAccessTitle: 'You do not have access to this document',
+    noAccessMessage: 'Ask the owner of the document to share it with you.',
+    updateTitle: 'The editor needs to be updated',
+    updateMessage:
+      'This document needs a newer version of the editor than the one on this page. Update the component, then load the page again.',
+    waitTitle: 'The service is busy',
+    waitMessage: 'Too many requests were sent. You can try again in {seconds} seconds.',
+    waitMessageUnknown: 'Too many requests were sent. Wait a little, then try again.',
+    quotaTitle: 'The quota is used up',
+    quotaMessage:
+      'The quota of this workspace is used up. You can try again in {seconds} seconds, or ask the administrator to raise it.',
+    quotaMessageUnknown:
+      'The quota of this workspace is used up. Ask the administrator to raise it.',
+    otherTitle: 'The document could not be opened',
+    otherMessage: 'Something went wrong while opening the document.',
+    retry: 'Try again',
+    reloadPage: 'Load the page again',
   },
 };
 

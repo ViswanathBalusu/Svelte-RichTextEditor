@@ -461,11 +461,11 @@ export async function writerDocs(): Promise<WriterDoc[]> {
   {
     const env = newDocument();
     const assets = new AssetStore();
-    const ins = (id: string): JsonMark => ({
+    const ins = (id: string) => ({
       type: 'ins',
       attrs: { id, user: 'word:Ada Lovelace' },
     });
-    const del = (id: string): JsonMark => ({ type: 'del', attrs: { id, user: 'user-0001' } });
+    const del = (id: string) => ({ type: 'del', attrs: { id, user: 'user-0001' } });
     const fmt: JsonMark = {
       type: 'fmt',
       attrs: {

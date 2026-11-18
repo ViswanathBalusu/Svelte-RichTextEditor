@@ -1,0 +1,27 @@
+{
+  "name": "@docedit/signing-service",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The signing service (12 §8.2): seals final PDFs with a key held in a key service and adds RFC 3161 time-stamps. Phase 0: spike S8 (SPK-021).",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "keyservice:image": "node scripts/build-keyservice-image.ts",
+    "sample": "node scripts/make-sample.ts"
+  },
+  "dependencies": {
+    "@docedit/authority": "workspace:*",
+    "asn1js": "3.0.10",
+    "pkijs": "3.4.3"
+  }
+}

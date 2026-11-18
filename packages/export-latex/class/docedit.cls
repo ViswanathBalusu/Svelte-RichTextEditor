@@ -13,7 +13,7 @@
 %%
 %% Licence: Apache-2.0, the project's licence (SPK-007).
 \NeedsTeXFormat{LaTeX2e}[2025-06-01]
-\ProvidesClass{docedit}[2026-11-18 v0.2.15 DocEdit house class]
+\ProvidesClass{docedit}[2026-11-18 v0.2.16 DocEdit house class]
 \def\DEclassversion{0.2.2}
 \ifdefined\directlua\else
   \ClassError{docedit}{This class needs LuaLaTeX}{}%
@@ -560,7 +560,14 @@
 % A cell that spans rows: \DErowspan{rows}{content}. Its content hangs from the first row over the
 % rows below (no multirow). With tagging, the cell carries /RowSpan rows in the structure tree
 % (EXP-041 criterion 4; the key is tagpdf's table/multirow from latex-lab's table test phase).
-\newcommand\DErowspan[2]{\par\ifdefined\tagpdfsetup\tagpdfsetup{table/multirow=#1}\fi\vbox to\z@{#2\vss}}
+% The content is set in a \vtop, and the box of no height that carries it is raised by the height of
+% its first line, so that line stands on the baseline of the row's other cells.
+\newcommand\DErowspan[2]{\par\ifdefined\tagpdfsetup\tagpdfsetup{table/multirow=#1}\fi
+  \setbox\@tempboxa\vtop{#2}\vbox to\z@{\kern-\ht\@tempboxa\box\@tempboxa\vss}}
+% \DErowfill{rows}{RRGGBB}: the colour of the cell that follows, over every row it spans. The first
+% row is coloured by \cellcolor; docedit.lua paints the others when the page is shipped out, under
+% the content (EXP-041 criterion 3). It comes before \DErowspan, in the same cell.
+\newcommand*\DErowfill[2]{\par\directlua{docedit.rowfill(#1,"#2")}}
 % A cell that spans columns: \DEcolspan{columns}{column spec}{content}. It is the class's own
 % cell macro around \multicolumn, so the converter never writes \multicolumn for a span itself.
 \newcommand\DEcolspan[3]{\multicolumn{#1}{#2}{#3}}

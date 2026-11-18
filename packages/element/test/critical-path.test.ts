@@ -15,6 +15,8 @@ const ENTRY = resolve(SRC, 'index.ts');
 const OFF_CRITICAL_PATH = [
   'features/pdf.ts',
   'features/math.ts',
+  'features/layout-kernel.ts',
+  'features/layout-kernel-source.ts',
   'pdf/viewer-frame.ts',
   'pdf/messages.ts',
   'print.ts',

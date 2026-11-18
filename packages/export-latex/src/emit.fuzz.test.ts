@@ -1,8 +1,9 @@
 /**
  * EXP-046 criteria 3 and 4 (Node.js only): property tests of every string-taking emitter in every
  * context, over strings in several languages and scripts, with seeds from known attacks that every
- * run starts with. Criteria 1, 2 and 5 need the sandbox (a compile of the output, a token trace of
- * the compile) and a stored corpus of failing inputs; they are not run here (see the story's Notes).
+ * run starts with. Criteria 1 and 2 need the sandbox (a compile of the output, a token trace of the
+ * compile); they are in the `compile` test files. A failing property of a string emitter stores its
+ * shrunk counterexample as a fixture of the emitter corpus (criterion 5, `test/emitter-corpus.ts`).
  *
  * What is checked is the grammar of each emitter's output, not a compile:
  * - `text`: after the escapes the emitter writes are read back, the output is the cleaned input,
@@ -28,6 +29,7 @@ import {
   type Tex,
   type TextContext,
 } from './emit.ts';
+import { assertStoring } from '../test/emitter-corpus.ts';
 
 /** Known attacks (EXP-046 criterion 4). Every property runs these first, through `examples`. */
 const SEEDS: readonly string[] = [
@@ -164,7 +166,8 @@ for (const [language, chars] of Object.entries(LANGUAGES)) {
   describe(`EXP-046 emitters over ${language} (criteria 3 and 4)`, () => {
     for (const [context, contextOf] of TEXT_CONTEXTS) {
       it(`text in ${context}: the output reads back to the cleaned input and carries no control sequence`, () => {
-        fc.assert(
+        assertStoring(
+          'text',
           fc.property(stringsOf(chars), (value) => {
             const out = text(value, contextOf(value));
             const back = unescapeText(out);
@@ -172,12 +175,14 @@ for (const [language, chars] of Object.entries(LANGUAGES)) {
             expect(back).toBe(clean(value));
           }),
           { numRuns: RUNS, examples: examples() },
+          ([value]) => value,
         );
       });
     }
 
     it('pdfString and kvValue: hexadecimal digits that decode to the cleaned input', () => {
-      fc.assert(
+      assertStoring(
+        'pdfString',
         fc.property(stringsOf(chars), (value) => {
           const p = pdfString(value);
           expect(p).toMatch(/^\\DEstr\{(?:[0-9A-F]{2})*\}$/);
@@ -185,6 +190,7 @@ for (const [language, chars] of Object.entries(LANGUAGES)) {
           expect(kvValue(value)).toBe(`{${p}}`);
         }),
         { numRuns: RUNS, examples: examples() },
+        ([value]) => value,
       );
     });
 
@@ -202,7 +208,8 @@ for (const [language, chars] of Object.entries(LANGUAGES)) {
       const urlExamples: [string, string][] = SEEDS.flatMap((s) =>
         ['https://', 'run:', '#', ''].map((p): [string, string] => [p, s]),
       );
-      fc.assert(
+      assertStoring(
+        'url',
         fc.property(prefix, stringsOf(chars), (p, value) => {
           const href = p + value;
           const r = url(href);
@@ -216,6 +223,7 @@ for (const [language, chars] of Object.entries(LANGUAGES)) {
           }
         }),
         { numRuns: RUNS, examples: urlExamples },
+        ([p, value]) => p + value,
       );
     });
 

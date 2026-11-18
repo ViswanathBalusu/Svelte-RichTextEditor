@@ -57,6 +57,14 @@ describe.skipIf(skip)('fault-injection profile against the reference service (PR
       'fault-injection.grants-revision',
       'a lost grants announcement never lets a commit through under the old grants (criterion 4)',
     ],
+    [
+      'fault-injection.rolling-restart',
+      'a restarted node sends goaway and 4503, and a client that follows the hint loses no acknowledged commit (PRO-024 criterion 6)',
+    ],
+    [
+      'fault-injection.idempotency-retention',
+      'a key is repeated within the retention time and used again after it, with the retention read from the test-mode timers (PRO-043 criterion 4)',
+    ],
   ])('%s passes: %s', (id) => {
     const r = outcome(id);
     expect(r?.outcome, JSON.stringify(r?.failure ?? r?.reason)).toBe('passed');

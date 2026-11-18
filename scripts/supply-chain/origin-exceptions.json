@@ -1,12 +1,12 @@
 {
-  "$comment": "Reviewed exceptions to the origin check (SEC-054; scripts/supply-chain/origin-check.ts). Each entry names the package whose code is excused (found through the source maps), the rule, optionally a path prefix in the bundle, the reason, the decision record and an expiry date (YYYY-MM-DD) after which the check fails again. Sandboxed third-party extensions, if they are built (SEC-055), are the exception 10 §3.8 foresees; the entries below are proposed in ADR 0044 and wait for the owner.",
+  "$comment": "Reviewed exceptions to the origin check (SEC-054; scripts/supply-chain/origin-check.ts). Each entry names the package whose code is excused (found through the source maps), the rule, optionally a path prefix in the bundle and a text the finding must contain, the reason, the decision record and an expiry date (YYYY-MM-DD) after which the check fails again. The two PDF.js entries are accepted by owner decision 67 (docs/owner-decisions-2026-11-15.md). The sandboxed extension entry is the one exception 10 section 3.8 foresees, accepted by owner decision 120. The MathLive entry is a text, proposed in ADR 0410 and waiting for the owner.",
   "exceptions": [
     {
       "package": "pdfjs-dist",
       "rule": "computed-import",
       "file": "viewer/assets/pdf-viewer-",
       "reason": "PDF.js's fallback for a frame without workers imports GlobalWorkerOptions.workerSrc on the main thread (build/pdf.mjs, _setupFakeWorkerGlobal). The viewer sets workerSrc to the URL of its own bundled worker, resolved against its own location (packages/element/src/pdf/viewer/main.ts, startWorker), so the address is a file of the viewer on the viewer's origin. The viewer runs in a sandboxed frame of its own (10 §3.1). Valid only while the viewer sets workerSrc that way.",
-      "decision": "ADR 0044 §6 (proposed, 2026-11-06)",
+      "decision": "Owner decision 67 (docs/owner-decisions-2026-11-15.md); ADR 0044 §6",
       "expires": "2027-05-06"
     },
     {
@@ -14,8 +14,24 @@
       "rule": "computed-import",
       "file": "viewer/assets/pdf.worker.min-",
       "reason": "Without WebAssembly, PDF.js's worker imports a JavaScript decoder from the wasmUrl the document was opened with (build/pdf.worker.mjs, WasmImage #getJsInstance: jbig2_nowasm_fallback.js, openjpeg_nowasm_fallback.js). The viewer passes wasmUrl as ./pdfjs/wasm/ resolved against its own location (packages/element/src/pdf/viewer/main.ts, open), where the build copies those files from pdfjs-dist. Valid only while the viewer sets wasmUrl that way.",
-      "decision": "ADR 0044 §6 (proposed, 2026-11-06)",
+      "decision": "Owner decision 67 (docs/owner-decisions-2026-11-15.md); ADR 0044 §6",
       "expires": "2027-05-06"
+    },
+    {
+      "package": "@docedit/ui",
+      "rule": "computed-script",
+      "reason": "The runtime inside the sandboxed frame of a tier 2 extension (packages/ui/src/extensions/sandbox-runtime.ts) loads the extension's entry as a classic script from the address the host configured. It is the one place in the editor's code that creates a script element, and it runs only in a frame with an opaque origin, no network and no handle on the host page (docs/review/2026-11-18-ux-060-sandbox-review.md). The frame page's own policy (script-src) is the host's, and the extension's code is not part of the editor bundle or its bill of materials.",
+      "decision": "Owner decision 120 (docs/owner-decisions-2026-11-15.md); ADR 0393; SEC-055",
+      "expires": "2027-05-18"
+    },
+    {
+      "package": "mathlive",
+      "rule": "remote-address",
+      "file": "chunks/mathlive.min-",
+      "detail": "https://esm.run/@cortex-js/compute-engine",
+      "reason": "The address is inside the text of a console.error message that MathLive prints when the CortexJS Compute Engine is not loaded (it tells the developer how to load it). MathLive reads the engine from globalThis[Symbol.for('io.cortexjs.compute-engine')] and never imports the address; the editor does not load the engine. Valid only while that stays the one use of the address in MathLive.",
+      "decision": "ADR 0410 (proposed, lane w8, 2026-11-18)",
+      "expires": "2027-05-18"
     }
   ]
 }

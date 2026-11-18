@@ -99,6 +99,12 @@ export interface ServiceConfig {
    */
   replicaDatabaseUrl: string | null;
   /**
+   * A login that is a member of `docedit_purge` (migration 0073), for the scheduled purge of deleted
+   * documents (HIS-039; PRO-047 criterion 4). Null: no purge task runs. The service role cannot delete
+   * the log, so the purge connects as a role of its own.
+   */
+  purgeDatabaseUrl: string | null;
+  /**
    * Read-your-writes sessions kept, with a replica (BE-064 criterion 3). A setting with no default:
    * a replica without it is refused at start.
    */
@@ -211,6 +217,7 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   metricsToken: null,
   valkeyUrl: null,
   replicaDatabaseUrl: null,
+  purgeDatabaseUrl: null,
   readSessions: null,
   readLagDocuments: null,
   fontsDir: null,
@@ -313,6 +320,8 @@ export function checkConfig(c: ServiceConfig): void {
     throw new Error('choose one object store: DOCEDIT_S3_* or DOCEDIT_AZURE_ACCOUNT, not both');
   if (c.assetOrigin && !c.assetUrlKey)
     throw new Error('DOCEDIT_ASSET_ORIGIN needs DOCEDIT_ASSET_URL_KEY');
+  if (c.purgeDatabaseUrl && !c.databaseUrl)
+    throw new Error('DOCEDIT_PURGE_DATABASE_URL needs DOCEDIT_DATABASE_URL');
   if (c.replicaDatabaseUrl && !c.databaseUrl)
     throw new Error('DOCEDIT_REPLICA_DATABASE_URL needs DOCEDIT_DATABASE_URL');
   if (c.replicaDatabaseUrl && c.readSessions === null)
@@ -391,6 +400,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     metricsToken: env['DOCEDIT_METRICS_TOKEN'] || null,
     valkeyUrl: env['DOCEDIT_VALKEY_URL'] || null,
     replicaDatabaseUrl: env['DOCEDIT_REPLICA_DATABASE_URL'] || null,
+    purgeDatabaseUrl: env['DOCEDIT_PURGE_DATABASE_URL'] || null,
     readSessions: env['DOCEDIT_READ_SESSIONS'] ? int(env, 'DOCEDIT_READ_SESSIONS', 1) : null,
     readLagDocuments: env['DOCEDIT_READ_LAG_DOCUMENTS']
       ? int(env, 'DOCEDIT_READ_LAG_DOCUMENTS', 1)
