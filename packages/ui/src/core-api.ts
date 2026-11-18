@@ -35,6 +35,10 @@ export interface SelectionSummary {
   lang?: string | null;
   /** The identifier of the paragraph style at the selection, when `style` names one (UX-022). */
   styleId?: string | null;
+  /** The character style at the selection, or null when there is none or the runs differ (UX-022). */
+  charStyleId?: string | null;
+  /** The style of the table the selection is in, or null (UX-022). */
+  tableStyleId?: string | null;
 }
 
 export interface PanelInfo {
@@ -289,6 +293,10 @@ export type CoreCommandName =
   | 'pasteFormat'
   | 'paragraphStyle'
   | 'characterStyle'
+  | 'tableStyle'
+  | 'createStyle'
+  | 'changeStyle'
+  | 'deleteStyle'
   | 'setLanguage'
   | 'markRegion'
   | 'setRegionPolicy'
@@ -385,7 +393,39 @@ export interface StyleSummary {
   readonly id: string;
   readonly name: string;
   readonly kind: 'paragraph' | 'character' | 'table';
+  /** The parent style of the same kind, when the core says (UX-022). */
+  readonly basedOn?: string | null;
 }
+
+/** What a user may do with the definitions of styles (UX-022 criteria 2 and 3). */
+export type StyleEditOp = 'create' | 'change' | 'delete';
+
+/**
+ * Why a style cannot be created, changed or deleted now: the user's right (`read-only`,
+ * `suggestion`, `no-access`, or `region`: a region the user may not edit uses the style, 07 §5.3),
+ * or the document (`unknown-style`, `built-in`, `in-use`, `duplicate-name`, `bad-name`,
+ * `bad-based-on`).
+ */
+export type StyleEditReason =
+  | 'read-only'
+  | 'suggestion'
+  | 'no-access'
+  | 'region'
+  | 'unknown-style'
+  | 'built-in'
+  | 'in-use'
+  | 'duplicate-name'
+  | 'bad-name'
+  | 'bad-based-on';
+
+/**
+ * Whether an edit may be tried. `regions` are the regions that use the style; with `region` as the
+ * reason, those the user may not edit. The server decides the rule again, and refuses a change while
+ * a region that uses the style is approved (PRM-047), which the core cannot see.
+ */
+export type StyleEditCheck =
+  | { readonly ok: true; readonly regions: readonly string[] }
+  | { readonly ok: false; readonly reason: StyleEditReason; readonly regions: readonly string[] };
 
 /** Who can edit a region (05 §6.2 `RegionEditors`; PRM-032). */
 export interface RegionEditors {
@@ -694,6 +734,8 @@ export interface CoreApi {
   readonly classification?: ReadView<ClassificationLabel | null>;
   /** The document's styles, in the document's order (UX-022). */
   readonly styles?: ReadView<readonly StyleSummary[]>;
+  /** Whether a style may be created, changed or deleted now (UX-022 criteria 2 and 3). */
+  styleEdit?(op: StyleEditOp, id?: string): StyleEditCheck;
   /** The derived region list, as this reader may see it (PRM-032; ADR 0019). */
   readonly regions?: ReadView<readonly RegionSummary[]>;
   /** The words for the lock indicators of regions the user cannot edit, by region id (PRM-026). */

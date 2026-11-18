@@ -11,9 +11,6 @@
  * `editors` setting, and reads the marker at seq 1 (the control: the data is there to leak).
  *
  * Not covered, with the reason (see the story's Notes):
- * - `GET /documents/{id}/history` (`fromSeq`, `toSeq`) is in the definition but the service does not
- *   serve it yet (PRO-054 criterion 1, HIS-026). A test below checks that it still answers
- *   "not found", so the day it is served this file fails until it has a case.
  * - Named-version creation and restore take a seq, but both need `edit`, and a caller with `edit`
  *   sees full history under `editors`, which is the only setting a document can have until HIS-025.
  *   Their cases show the refusal of a reader and the acceptance for an editor; the gate itself is
@@ -126,6 +123,36 @@ const CASES: Record<string, Case> = {
         rig,
         'GET',
         `/v1/documents/${rig.doc}/diff?fromSeq=${rig.head}&toSeq=${rig.head}`,
+        rig.viewer,
+      );
+      expect(r.status, r.text).toBe(200);
+      expect(r.text).not.toContain(MARKER);
+    },
+  },
+  'GET /documents/{id}/history|query.fromSeq': {
+    async below(rig, as) {
+      refused(await call(rig, 'GET', `/v1/documents/${rig.doc}/history?fromSeq=1`, as));
+    },
+    async at(rig) {
+      const r = await call(
+        rig,
+        'GET',
+        `/v1/documents/${rig.doc}/history?fromSeq=${rig.head + 1}`,
+        rig.viewer,
+      );
+      expect(r.status, r.text).toBe(200);
+      expect(r.text).not.toContain(MARKER);
+    },
+  },
+  'GET /documents/{id}/history|query.toSeq': {
+    async below(rig, as) {
+      refused(await call(rig, 'GET', `/v1/documents/${rig.doc}/history?toSeq=1`, as));
+    },
+    async at(rig) {
+      const r = await call(
+        rig,
+        'GET',
+        `/v1/documents/${rig.doc}/history?toSeq=${rig.head}`,
         rig.viewer,
       );
       expect(r.status, r.text).toBe(200);
@@ -250,11 +277,7 @@ const CASES: Record<string, Case> = {
  * Gated inputs of `SEQ_INPUTS` that have no case, each with its reason. A listed input that gains a
  * case, or a route that is served, must leave this list (the test below fails otherwise).
  */
-const OPEN: Record<string, string> = {
-  'GET /documents/{id}/history|query.fromSeq':
-    'route not served yet (PRO-054 criterion 1, HIS-026)',
-  'GET /documents/{id}/history|query.toSeq': 'route not served yet (PRO-054 criterion 1, HIS-026)',
-};
+const OPEN: Record<string, string> = {};
 
 /** `ch.open|resume.seq` is a wire case, not an HTTP one. */
 const WIRE = 'ch.open|resume.seq';
@@ -343,9 +366,8 @@ describe('SEC-032: every place a sequence number is supplied honours the gate', 
     expect(stale).toEqual([]);
   });
 
-  it('the routes named open are still not served, so serving one fails this file until it has a case', async () => {
-    const r = await call(rig, 'GET', `/v1/documents/${rig.doc}/history?fromSeq=0`, rig.owner);
-    expect(r.status, r.text).toBe(404);
+  it('no route is named open: every gated input has a case', () => {
+    expect(Object.keys(OPEN)).toEqual([]);
   });
 
   for (const [key, c] of Object.entries(CASES)) {

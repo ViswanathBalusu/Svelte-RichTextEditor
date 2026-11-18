@@ -371,6 +371,46 @@ export const EN_GB = {
   'styles.kind.table': 'Table style',
   'styles.current': 'In use at the cursor',
   'styles.empty': 'This document defines no styles.',
+  'styles.manage': 'Manage styles',
+  'styles.new': 'New style',
+  'styles.new.name': 'Name of the style',
+  'styles.new.kind': 'Kind of style',
+  'styles.new.basedOn': 'Based on',
+  'styles.new.noParent': 'No parent style',
+  'styles.new.save': 'Create',
+  'styles.new.cancel': 'Cancel',
+  'styles.new.done': 'Style created.',
+  'styles.change': 'Change style {name}',
+  'styles.change.action': 'Change',
+  'styles.delete.action': 'Delete',
+  'styles.change.label': 'Change the style {name}',
+  'styles.change.save': 'Save',
+  'styles.change.done': 'Style changed.',
+  'styles.delete': 'Delete style {name}',
+  'styles.delete.done': 'Style deleted.',
+  'styles.edit.failed': 'The style could not be saved.',
+  'styles.why.read-only': 'The document is locked, so its styles cannot be changed.',
+  'styles.why.suggestion':
+    'You are suggesting changes, and a change to a style cannot be a suggestion.',
+  'styles.why.no-access':
+    'Creating, changing and deleting styles needs permission to change the structure of the document, which you do not have. You can still apply a style.',
+  'styles.why.region': {
+    one: 'This style is used in the region {regions}, which you cannot edit, so you cannot change it.',
+    other:
+      'This style is used in the regions {regions}, which you cannot edit, so you cannot change it.',
+  },
+  'styles.why.approved': {
+    one: 'This style is used in the region {regions}, which is approved, so it cannot be changed.',
+    other:
+      'This style is used in the regions {regions}, which are approved, so it cannot be changed.',
+  },
+  'styles.why.built-in': 'A built-in style cannot be renamed or deleted.',
+  'styles.why.in-use': 'This style is in use, so it cannot be deleted.',
+  'styles.why.duplicate-name': 'Another style of this kind has that name.',
+  'styles.why.bad-name': 'Give the style a name.',
+  'styles.why.bad-based-on':
+    'A style can be based only on another style of its kind, and not on itself or on a style based on it.',
+  'styles.why.unknown-style': 'That style is no longer in the document.',
 
   // Sources (UX-103). Titles, names, identifiers and excerpts are content.
   'command.view.sources': 'Sources',

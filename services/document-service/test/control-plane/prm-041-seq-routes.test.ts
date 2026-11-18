@@ -24,6 +24,11 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
   // and `minVisibleSeqOf`, and refuse with `checkSeq` or `planRestore`.
   'GET /documents/{id}/diff': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
   'GET /documents/{id}/attribution': { file: 'control-plane/history-reads.ts', gate: CONTROL_GATE },
+  'GET /documents/{id}/history': {
+    // HIS-026: `historyViewOf` reads the gate; `checkSeq` and `rangeVisible` refuse below it.
+    file: 'control-plane/history-list-route.ts',
+    gate: /historyViewOf\(/,
+  },
   'POST /documents/{id}/versions': { file: 'control-plane/versions-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/restore': { file: 'control-plane/restore-route.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/fork': { file: 'control-plane/history-routes.ts', gate: CONTROL_GATE },
@@ -32,9 +37,7 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
 };
 
 /** Gated inputs that are not gated yet, or whose route is not built; each with its reason. */
-const OPEN: Record<string, { file: string; reason: string }> = {
-  'GET /documents/{id}/history': { file: '', reason: 'route not built (HIS-026, phase 2)' },
-};
+const OPEN: Record<string, { file: string; reason: string }> = {};
 
 const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
 

@@ -1,0 +1,4 @@
+{
+  "//": "Inputs on which a fuzz property of the math gate once failed (EXP-053 criterion 5). Written by test/gate-regressions.ts when a run fails; replayed by src/math/gate.regressions.test.ts. Do not remove a fixture when the gate is fixed.",
+  "fixtures": []
+}
