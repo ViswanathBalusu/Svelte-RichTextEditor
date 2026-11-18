@@ -1,0 +1,11 @@
+# 0391. The evidence ledger: what is stored, what the chain holds
+
+**Status:** proposed, 2026-11-18. Written while building FRW-041 (lane w4). 12 §7 and ADR 0013 say that evidence lives outside the commit log and that only salted hashes enter the chain; they leave the form of both open. Each item takes the smallest reading that works; the owner may change any of them.
+
+1. **One row for each event.** `EvidenceLedger.record` stores one row of `workflow_evidence` (migration 0060) for one event of one participant: the evidence as captured under the tenant's setting (FRW-042) and, in the same `data` object, `commit: { salt, hash }`. The row is not rewritten (the service role has no UPDATE).
+2. **What the hash covers.** The canonical text (RFC 8785, `canonicalize`) of `{ participant, item, evidence }`, with the salt in front (`commitEvidence`). Binding the participant and the item means the same evidence for another person or another event gives another hash. The salt is 16 random bytes, new for each row, stored with the evidence and so deleted with it: after a purge the chain keeps a hash that nobody can test a guess against.
+3. **The payload for the chain.** `record` returns `{ origin, evidenceHash }`, `origin` being `sign` or `rules`, and nothing else. A control commit has no member for it today: the room writes control commits with a grants revision only. The commit that carries the hash is written by the signing and completion routes (FRW-047, FRW-048), which are not built, so what a verifier compares with is the payload the ledger returns, not yet a stored commit.
+4. **Time.** The collection time of a row is the service clock (`now`), never a value from the caller.
+5. **Size.** A row's `data` is at most 4096 bytes (the table's check); a larger event is refused before the write with a `RangeError`.
+6. **Where the table is named.** Only the evidence modules and the document purge name `workflow_evidence`. A test scans the source for it, so that a module which builds an export, a checkpoint, a webhook or a search entry cannot start to read it unseen.
+7. **Retention.** The retention period is a tenant setting (FRW-043 criterion 5) whose default and starting point are the owner's (FRW-084). 08 §2 says so; no setting is invented here.

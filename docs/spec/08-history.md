@@ -34,6 +34,8 @@ For every accepted commit, of every kind (steps, control, snapshot), the documen
 
 Because the hash covers the hash of the payload and not the payload itself, a payload can later be thinned or erased without breaking the chain.
 
+The one deliberate exception to this list is the evidence of a workflow participant (12, section 7): the IP address, the user agent, the consent record and the like are personal data and are not commit metadata. They are kept in the table `workflow_evidence` (migration 0060) of the document service's database, scoped by tenant with row-level security, and never in the commit log, a checkpoint, an export, a webhook or a search entry. The chain holds only a salted hash of each item (SHA-256 over a 16-byte random salt and the canonical text of the evidence), carried by the control commit of a signing or a completion; the salt stays with the evidence, so the hash alone reveals nothing. Evidence has its own retention period, a tenant setting whose default and starting point are still to be decided (FRW-084); the purge (FRW-043) deletes the rows at its end, and the chain still verifies because it never held them.
+
 ### 2.1 The commit hash: byte layout
 
 This layout is the one of ADR 0020 (proposed; the owner has not reviewed it). An implementation that verifies a log MUST reproduce it byte for byte.
