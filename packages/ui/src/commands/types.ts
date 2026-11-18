@@ -18,7 +18,7 @@ export interface CommandEntry {
   readonly id: string;
   /** String key of the label; resolved from the string tables, never shown as written. */
   readonly label: string;
-  /** Icon name in the icon set (UX-063); the phase 1a toolbar shows labels only. */
+  /** Icon name in the icon set (UX-063); the toolbars and menus draw it beside the label. */
   readonly icon?: string;
   /** Task group, for the full toolbar (UX-007) and for ordering the compact one. */
   readonly group: string;

@@ -4,9 +4,10 @@
  */
 import { getContext, setContext } from 'svelte';
 import type { CommandRegistry } from './commands/registry.ts';
-import type { CoreApi, SearchPrincipals } from './core-api.ts';
+import type { CoreApi, ReadView, SearchPrincipals } from './core-api.ts';
 import type { StringKey } from './i18n/en-GB.ts';
 import type { Translator } from './i18n/strings.ts';
+import type { IconSet } from './icons/icons.ts';
 import type { MessageParams } from './i18n/types.ts';
 import type { PeopleDirectory } from './people/directory.ts';
 import type { Writable } from 'svelte/store';
@@ -19,6 +20,8 @@ export interface ShellContext {
   readonly people: PeopleDirectory;
   /** The translator in use; reading `current` inside a component tracks locale changes. */
   readonly strings: { readonly current: Translator };
+  /** The icon set in use: the host's drawings over the built-in ones (UX-063). */
+  readonly icons?: ReadView<IconSet> | undefined;
   /** Puts a message in the shell's polite live region (FE-107). */
   readonly announce: (key: StringKey, params?: MessageParams) => void;
   /** Puts a text already built from the string tables in the live region. */

@@ -366,6 +366,7 @@ The embedding API has its own version, exposed as the static property `DocEditor
 | `config` | object | Feature switches, fonts, shortcuts, limits, a style nonce |
 | `searchPrincipals`, `resolveUsers` | callbacks | The host's directory, for grants, mentions, presence and history |
 | `extensions` | array | Host-registered extensions (13, section 7) |
+| `icons` | object | Replacement icons by the command's icon name (13, section 8; UX-063). A value is SVG path data, or `{ paths, viewBox?, fill? }`. Never markup. A name the host omits, or gives as anything else, keeps the built-in drawing |
 
 | Method | Notes |
 |---|---|

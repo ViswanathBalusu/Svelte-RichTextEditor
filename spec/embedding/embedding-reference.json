@@ -87,6 +87,14 @@
       "summary": "The host's replacement strings by key (UX-063). A key the host omits falls back to the source table; a key no table knows is reported to the console."
     },
     {
+      "name": "icons",
+      "kind": "property",
+      "static": false,
+      "access": "read/write",
+      "signature": "IconOverrides | null",
+      "summary": "The host's replacement icons by the command's icon name (UX-063): SVG path data, or a drawing ({ paths, viewBox?, fill? }). An icon the host omits, or gives as anything but path data, keeps the built-in drawing. Icons are shown once the host gives a set (an empty object asks for the built-in drawings alone); without one, commands show labels only. Icons are drawn by the shell and never inserted as markup."
+    },
+    {
       "name": "extensions",
       "kind": "property",
       "static": false,

@@ -45,6 +45,7 @@ import { PaneRegistry, type PaneComponent } from '../../src/shell/panes.ts';
 /** The identifier of the extension panel the harness contributes (UX-052). */
 export const EXTENSION_PANE = 'ext-notes';
 import { Strings } from '../../src/i18n/strings.ts';
+import { Icons } from '../../src/icons/icons.ts';
 import { PeopleDirectory } from '../../src/people/directory.ts';
 import { SettingsStore, type ShellSettings } from '../../src/shell/settings.ts';
 import shellCss from '../../src/styles/shell.css?inline';
@@ -170,6 +171,8 @@ export interface MountOptions {
   extensionContributions?: boolean;
   /** Host string replacements by key (UX-063, criterion 2), passed to the string catalogue. */
   overrides?: Record<string, string>;
+  /** Host icon replacements by command icon name (UX-063, criteria 1 and 3). */
+  icons?: Record<string, unknown>;
   /** The comment threads port (UX-028), with the `comments` feature announced. */
   comments?: boolean;
   /** The comments pane itself (UX-030): the real pane is the `comments` loader; threads come from `setThreads`. */
@@ -182,6 +185,7 @@ interface Mounted {
   core: FakeCore;
   settings: SettingsStore;
   strings: Strings;
+  icons: Icons;
   registry: ReturnType<typeof createCommandRegistry>;
   app: Record<string, unknown>;
   host: HTMLElement;
@@ -260,6 +264,8 @@ function extensionsFor(kind: 'none' | 'valid' | 'mixed'): unknown[] {
 }
 /** Host override keys that no table knows (UX-063, criterion 2). */
 const unknownKeys: string[] = [];
+/** Host icon names whose drawing was not usable (UX-063, criterion 1). */
+const iconsInvalid: string[] = [];
 /** What the export filters received (UX-055). */
 const filterContents: string[] = [];
 /** Hook calls (UX-054): the revision, and whether an input event was being dispatched then. */
@@ -552,6 +558,11 @@ function mountShell(options: MountOptions = {}): void {
         resolver(options.people ?? 'host') ?? (async (ids) => ids.map(() => null)),
       ),
     });
+  iconsInvalid.length = 0;
+  const icons = new Icons({
+    overrides: options.icons ?? null,
+    onInvalid: (names) => iconsInvalid.push(...names),
+  });
   const strings = new Strings({
     overrides: options.overrides ?? {},
     onMissing: (tag, keys) => missing.push([tag, keys]),
@@ -573,7 +584,15 @@ function mountShell(options: MountOptions = {}): void {
   principalDelays = options.principalDelays ?? {};
   const resolveUsers = resolver(options.people ?? 'host');
   const people = new PeopleDirectory(resolveUsers ? { resolveUsers, retryDelaysMs: [200] } : {});
-  const props: Record<string, unknown> = { core, registry, strings, people, settings, docId: 'd1' };
+  const props: Record<string, unknown> = {
+    core,
+    registry,
+    strings,
+    icons,
+    people,
+    settings,
+    docId: 'd1',
+  };
   if (options.title !== undefined) props['title'] = options.title;
   if (options.outline !== false)
     props['loadPane'] = async () => (await import('../../src/panes/OutlinePane.svelte')).default;
@@ -668,7 +687,7 @@ function mountShell(options: MountOptions = {}): void {
   const app = mount(App, { target: root, props: props as never }) as Record<string, unknown>;
   flushSync();
   if (options.hostToolbar) stops.push(hostToolbar(registry));
-  current = { core, settings, strings, registry, app, host, root, stops };
+  current = { core, settings, strings, icons, registry, app, host, root, stops };
 }
 
 function unmountShell(): void {
@@ -695,6 +714,7 @@ const harness = {
   hostEvents,
   missing,
   unknownKeys,
+  iconsInvalid,
   filterContents,
   hookCalls,
   hookErrors,
@@ -730,6 +750,8 @@ const harness = {
   /** Sets a public `--de-` property on the element that holds the shadow root, as a host page does. */
   setHostProperty: (name: string, value: string) => host.style.setProperty(name, value),
   setLocale: (locale: string) => need().strings.setLocale(locale),
+  /** Replaces the host's icons while the shell is mounted (UX-063). */
+  setIcons: (overrides: Record<string, unknown> | null) => need().icons.setOverrides(overrides),
   refuse: (reason: string, scopes: string[] = [], count?: number) =>
     need().core.refuse(reason, scopes, count),
   setAside: (items: RecoveredItem[]) => need().core.setAside(items),
