@@ -180,3 +180,119 @@ export function addRule(
 export function builderAccess(caller: { readonly structure: boolean }): 'edit' | 'read_only' {
   return caller.structure ? 'edit' : 'read_only';
 }
+
+/** The comparison operators of the sentence form, in the order the interface offers them. */
+export const BUILDER_OPERATORS = ['==', '!=', '<', '<=', '>', '>='] as const;
+export type ComparisonOperator = (typeof BUILDER_OPERATORS)[number];
+
+/** The field effects of the sentence form, in the order the interface offers them. */
+export const BUILDER_EFFECTS = EFFECT_WORDS;
+export type BuilderEffect = (typeof BUILDER_EFFECTS)[number];
+
+/** One side of a comparison: a field's key, or a literal as the person typed it. */
+export type RuleOperand = { readonly field: string } | { readonly literal: string };
+
+/** The keys one effect applies to. */
+export interface RuleEffectPart {
+  readonly effect: BuilderEffect;
+  readonly keys: readonly string[];
+}
+
+/**
+ * A rule of the sentence form as parts, so that the interface builds the words from its own
+ * strings (FRW-024 criterion 6: every fragment of the sentence is an external string). `otherwise`
+ * is null when the rule has no `else`.
+ */
+export interface RuleParts {
+  readonly left: RuleOperand;
+  readonly operator: ComparisonOperator;
+  readonly right: RuleOperand;
+  readonly then: readonly RuleEffectPart[];
+  readonly otherwise: readonly RuleEffectPart[] | null;
+}
+
+function operandPart(v: JsonValue): RuleOperand | null {
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+    return { literal: String(v) };
+  if (isObject(v) && typeof v['field'] === 'string' && Object.keys(v).length === 1)
+    return { field: v['field'] };
+  return null;
+}
+
+function effectParts(effects: JsonValue | undefined): RuleEffectPart[] | null {
+  if (!Array.isArray(effects) || effects.length === 0) return null;
+  const out: RuleEffectPart[] = [];
+  for (const effect of effects) {
+    if (!isObject(effect)) return null;
+    const names = Object.keys(effect);
+    if (names.length !== 1) return null;
+    const name = names[0] as string;
+    const keys = effect[name];
+    if (!(EFFECT_WORDS as readonly string[]).includes(name)) return null;
+    if (!Array.isArray(keys) || keys.length === 0 || !keys.every((k) => typeof k === 'string'))
+      return null;
+    out.push({ effect: name as BuilderEffect, keys: keys as string[] });
+  }
+  return out;
+}
+
+/**
+ * The parts of a rule of the sentence form, or null when the rule has another shape (the builder
+ * then shows its JSON tree and does not edit it). The same shapes have a sentence in `ruleSentence`.
+ */
+export function ruleParts(rule: BuilderRule): RuleParts | null {
+  const when = rule.raw['when'];
+  if (!isObject(when)) return null;
+  const ops = Object.keys(when);
+  if (ops.length !== 1) return null;
+  const operator = ops[0] as string;
+  const operands = when[operator];
+  if (
+    !(BUILDER_OPERATORS as readonly string[]).includes(operator) ||
+    !Array.isArray(operands) ||
+    operands.length !== 2
+  )
+    return null;
+  const left = operandPart(operands[0] as JsonValue);
+  const right = operandPart(operands[1] as JsonValue);
+  const then = effectParts(rule.raw['then']);
+  if (left === null || right === null || then === null) return null;
+  const rawElse = rule.raw['else'];
+  const otherwise = rawElse === undefined || rawElse === null ? null : effectParts(rawElse);
+  if (rawElse !== undefined && rawElse !== null && otherwise === null) return null;
+  return { left, operator: operator as ComparisonOperator, right, then, otherwise };
+}
+
+const operandJson = (o: RuleOperand): JsonValue => {
+  if ('field' in o) return { field: o.field };
+  if (o.literal === 'true') return true;
+  if (o.literal === 'false') return false;
+  return o.literal;
+};
+
+const effectsJson = (parts: readonly RuleEffectPart[]): JsonValue[] =>
+  parts.map((p) => ({ [p.effect]: [...p.keys] }));
+
+/**
+ * The rule with its sentence parts replaced: `when`, `then` and `else` are written from `parts`, and
+ * the identifier and every other member of the opened rule are kept. A rule whose parts are those it
+ * was opened with is returned as it was, so a save without change is identical (criterion 2) even
+ * where the parts read a literal back as text (a number written as a number).
+ */
+export function saveRuleParts(rule: BuilderRule, parts: RuleParts): JsonObject {
+  const before = ruleParts(rule);
+  if (before !== null && JSON.stringify(before) === JSON.stringify(parts)) return saveRule(rule);
+  const next: JsonObject = {
+    ...clone(rule.raw),
+    when: { [parts.operator]: [operandJson(parts.left), operandJson(parts.right)] },
+    then: effectsJson(parts.then),
+  };
+  if (parts.otherwise === null) delete next['else'];
+  else next['else'] = effectsJson(parts.otherwise);
+  return next;
+}
+
+/** A rule of the sentence form for a new identifier, from its parts. */
+export function newRuleFromParts(id: string, parts: RuleParts): JsonObject {
+  return saveRuleParts({ raw: { id } }, parts);
+}

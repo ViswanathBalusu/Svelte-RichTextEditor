@@ -138,6 +138,9 @@ function roleIn(identity: VerifiedIdentity, doc: string): RoomConnection['role']
 /** Messages that are never rate limited: keep-alive, and what a client says when it leaves. */
 const UNLIMITED = new Set(['ping', 'pong', 'ch.close', 'error']);
 
+/** How long a silent peer has to finish the closing handshake before its socket is ended (ADR 0035). */
+const CLOSE_GRACE_MS = 1000;
+
 export class Session {
   /** A new identifier for every connection; there is no session resumption (05 §5.1). */
   readonly id: string = uuid7();
@@ -618,8 +621,17 @@ export class Session {
       () => {
         const now = Date.now();
         if (now - this.#lastHeard > 2 * every) {
-          // The peer is gone; a close frame would not reach it (ADR 0035).
-          this.#ws.terminate();
+          // The peer may be gone, so a close frame may not reach it. The server still sends one,
+          // code 1001 (going away), so a peer that is only slow sees why (owner decision 194; 05 §4),
+          // and ends the socket if the closing handshake does not finish (ADR 0035).
+          const ws = this.#ws;
+          try {
+            ws.close(1001, 'no message for two heartbeat intervals');
+          } catch {
+            ws.terminate();
+          }
+          const force = setTimeout(() => ws.terminate(), CLOSE_GRACE_MS);
+          force.unref?.();
           this.#ended();
           return;
         }

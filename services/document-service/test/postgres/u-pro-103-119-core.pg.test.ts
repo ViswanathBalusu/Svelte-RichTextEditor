@@ -23,15 +23,10 @@ const unavailable = await postgresUnavailable();
 if (unavailable) console.warn(`skipped: ${unavailable}`);
 
 /**
- * Known differences of the core profile on PostgreSQL. A silent peer is ended with `terminate()`
- * (session.ts, ADR 0035), so the close is code 1006 and no 05 §5.7 code is sent. 05 §4 says only
- * "closes the connection" and names no code: an open question, proposed in
- * docs/adr/0315-lane-U-PRO-103-119.md. The kit expects a code of 05 §5.7 and fails until it is decided.
+ * No scenario of the core profile is a known difference. A silent peer is closed with 1001, as the
+ * owner decided on 2026-11-15 (decision 194; 05 §4).
  */
-const CORE_KNOWN: Readonly<Record<string, string>> = {
-  'core.session.silence':
-    'a silent peer is ended without a close frame (1006), as ADR 0035 chooses; 05 §4 names no close code (open question, ADR 0315)',
-};
+const CORE_KNOWN: Readonly<Record<string, string>> = {};
 
 describe.skipIf(unavailable !== null)(
   'the core profile on the reference service over PostgreSQL (PRO-111 criterion 6)',
@@ -117,13 +112,8 @@ describe.skipIf(unavailable !== null)(
         .filter((l) => /"level":"(error|warn)"|status":5/.test(l))
         .slice(-20)
         .join('\n');
-      // One skip is allowed, and only this one: a page needs more than catchUpCommits (5000) commits,
-      // more than a scenario makes (PRO-111 criterion 4).
-      const PAGE_SKIP = 'core.channel.page: skipped (catchUpCommits is 5000';
-      expect(
-        notPassed.filter((x) => !x.startsWith(PAGE_SKIP)),
-        errors,
-      ).toEqual([]);
+      // Every scenario passes, core.channel.page included: it makes catchUpCommits + 1 commits.
+      expect(notPassed, errors).toEqual([]);
     }, 900_000);
   },
 );

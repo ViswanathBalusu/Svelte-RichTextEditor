@@ -340,6 +340,10 @@ export class LoadClient {
   readonly ws: WebSocket;
   closed = false;
   commitsSeen = 0;
+  /** The codes of the `ch.closed` messages the service sent (for example `slow_consumer`). */
+  readonly channelCloses: string[] = [];
+  /** The WebSocket close code and reason, once the socket has closed. */
+  socketClose: { code: number; reason: string } | null = null;
   #pending = new Map<string, (m: Message) => void>();
   #ids = 0;
   readonly #reassembler = new Reassembler();
@@ -355,14 +359,20 @@ export class LoadClient {
       }
       this.#receive(m);
     });
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
       this.closed = true;
+      this.#stopHeartbeat();
+      this.socketClose = { code, reason: reason.toString('utf8') };
     });
     ws.on('error', () => {});
   }
 
   #receive(m: Message): void {
+    // 05 §4: the service pings a connection it has not written to for a heartbeat interval, and
+    // ends one it has not heard from for two. A client answers, as the kit's clients do.
+    if (m.t === 'ping') this.#send({ t: 'pong', ...(m.id !== undefined ? { re: m.id } : {}) });
     if (m.t === 'sync.commit') this.commitsSeen++;
+    if (m.t === 'ch.closed') this.channelCloses.push(String(m.d?.['code']));
     if (m.re) {
       const f = this.#pending.get(m.re);
       if (f) {
@@ -401,7 +411,39 @@ export class LoadClient {
     });
     if (r.msg?.t !== 'welcome')
       throw new Error(`hello answered ${r.msg ? r.msg.t : 'nothing'}: ${JSON.stringify(r.msg?.d)}`);
+    const limits = r.msg.d?.['limits'] as { heartbeatMs?: number } | undefined;
+    c.#startHeartbeat(limits?.heartbeatMs ?? 25_000);
     return c;
+  }
+
+  #lastSent = Date.now();
+  #heartbeat: ReturnType<typeof setInterval> | null = null;
+
+  #send(m: Record<string, unknown>): void {
+    if (this.ws.readyState !== WebSocket.OPEN) return;
+    this.#lastSent = Date.now();
+    this.ws.send(JSON.stringify(m));
+  }
+
+  /**
+   * 05 §4: either side sends `ping` when it has sent nothing for `heartbeatMs`, and a side that
+   * hears nothing for two intervals closes the connection. A watcher that never writes would
+   * otherwise be ended by the service after two intervals, whatever the service sends it.
+   */
+  #startHeartbeat(heartbeatMs: number): void {
+    this.#heartbeat = setInterval(
+      () => {
+        if (this.closed) return this.#stopHeartbeat();
+        if (Date.now() - this.#lastSent >= heartbeatMs) this.#send({ t: 'ping' });
+      },
+      Math.max(100, Math.floor(heartbeatMs / 2)),
+    );
+    this.#heartbeat.unref?.();
+  }
+
+  #stopHeartbeat(): void {
+    if (this.#heartbeat) clearInterval(this.#heartbeat);
+    this.#heartbeat = null;
   }
 
   async request(t: string, ch: number | undefined, d: unknown, timeoutMs = 10_000): Promise<Timed> {
@@ -417,7 +459,7 @@ export class LoadClient {
         clearTimeout(timer);
         resolve({ ms: performance.now() - start, msg: m });
       });
-      this.ws.send(JSON.stringify({ t, id, ...(ch !== undefined ? { ch } : {}), d }));
+      this.#send({ t, id, ...(ch !== undefined ? { ch } : {}), d });
     });
   }
 

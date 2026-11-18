@@ -125,7 +125,7 @@ export {
 export { insertBreak, insertSectionBreak, sectionWarnings } from './breaks-sections.ts';
 export { insertField, insertSymbol, insertToc } from './fields-toc.ts';
 export { insertCaption, insertReference } from './captions-refs.ts';
-export { latexRefusal, setEquationLatex } from './equation-commands.ts';
+export { insertEquation, latexRefusal, setEquationLatex } from './equation-commands.ts';
 export { pasteImage, type AssetsPort, type PastedImage } from './image-paste.ts';
 export { rebuildTransaction } from './remote.ts';
 export * as sync from './sync/state.ts';

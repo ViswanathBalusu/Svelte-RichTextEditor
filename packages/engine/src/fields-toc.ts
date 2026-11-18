@@ -10,10 +10,11 @@
  * - A `title` field has no data source in the CDM (recorded in the epic's notes), so this module
  *   stores the title only when the caller supplies it, and otherwise leaves `cached` null.
  * - A `toc` atom goes after the block the caret is in, in the body or in a region. Its entries are
- *   the view's to draw and update, which is not built (FE-136 criterion 3 stays open).
+ *   generated (toc-entries.ts) and drawn by the web view (view/toc-view.ts); nothing is stored.
  * - A symbol is inserted as text, with the marks at the caret. Flagging a character that the current
  *   font lacks needs font coverage data, which is not built (FE-136 criterion 4 stays open).
- * - The equation command opens the math editor (FE-070), which is not built (criterion 5 stays open).
+ * - The equation command is `insertEquation` (equation-commands.ts): it inserts an empty equation and
+ *   asks the shell to open the math editor on it (FE-070; criterion 5).
  *
  * The core runs `insertField` and `insertToc` through its authoring commands (core.ts).
  */

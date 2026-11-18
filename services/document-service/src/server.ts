@@ -111,6 +111,11 @@ import {
 } from './control-plane/metrics.ts';
 import { Pipeline, type PlainHandler, type Reply } from './control-plane/pipeline.ts';
 import { auditPartitionsTask } from './control-plane/audit-partitions-task.ts';
+import {
+  PayloadThinning,
+  payloadThinningTask,
+  type ThinningStore,
+} from './control-plane/payload-thinning.ts';
 import { SCHEDULE_KIND, Scheduler, type ScheduledTask } from './control-plane/scheduler.ts';
 import { applySeed, parseSeed } from './control-plane/seed.ts';
 import {
@@ -118,6 +123,7 @@ import {
   PgTenantRegistry,
   type TenantRegistry,
 } from './control-plane/tenants.ts';
+import { registerProcessMetrics } from './control-plane/process-metrics.ts';
 import { TEST_TIMERS, testHooks, type TestTimers } from './control-plane/test-hooks.ts';
 import { signingKey, TokenService, type SigningKey } from './control-plane/tokens.ts';
 import { MemoryUserDirectory, PgUserDirectory, type UserDirectory } from './control-plane/users.ts';
@@ -147,6 +153,9 @@ import {
   encodeCheckpoint,
   ObjectCheckpointStore,
 } from './objects/checkpoints.ts';
+import { DocumentKeyedObjectStore, sealExistingObjects } from './objects/document-keyed-store.ts';
+import { DocumentKeys, type DocumentKeyStore } from './storage/document-keys.ts';
+import type { KeyService } from './storage/key-service.ts';
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
@@ -220,6 +229,21 @@ export interface ServiceParts {
    * member of `docedit_purge`. Absent: the route is not offered.
    */
   tombstoneStore?: TombstoneStore;
+  /**
+   * The rows of the thinning of old payloads (HIS-032). Like `purgeStore` it needs a pool that
+   * connects as a member of `docedit_purge`. Absent: no thinning task runs.
+   */
+  thinningStore?: ThinningStore;
+  /**
+   * Per-document keys (HIS-041). With both `documentKeyStore` and `keyService`, the service seals
+   * the payloads and objects of documents that have a key and builds `documentKeys` to give and
+   * destroy keys (`PgDocumentKeyStore` is the store of the PostgreSQL composition). Absent: no
+   * document has a key and nothing is sealed.
+   */
+  documentKeyStore?: DocumentKeyStore;
+  keyService?: KeyService;
+  /** Built by `startService` from the two parts above. */
+  documentKeys?: DocumentKeys;
   /** The workflow resource of `/documents/{id}/workflow` (FRW-025). Absent: the routes and the feature `workflow` are not offered. */
   workflows?: WorkflowResourceStore;
   /** The tenant quota values of `/quotas` (UX-078 criterion 1). Absent: the routes are not offered. */
@@ -574,6 +598,21 @@ export async function startService(opts: StartOptions): Promise<Service> {
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
+  if (parts.documentKeyStore && parts.keyService) {
+    const rawObjects = parts.objects;
+    const keys = new DocumentKeys({
+      store: parts.documentKeyStore,
+      keys: parts.keyService,
+      headSeq: async (ref) => (await parts.logs.head(ref)).seq,
+      sealExisting: async (ref, sealer) => {
+        await sealExistingObjects(rawObjects, ref, sealer);
+      },
+      now,
+    });
+    if (parts.logs instanceof PgLogStore) parts.logs.useDocumentKeys(keys);
+    parts.objects = new DocumentKeyedObjectStore(rawObjects, keys);
+    parts.documentKeys = keys;
+  }
   const erasures = erasuresOver(parts, now);
   const tombstones =
     parts.tombstoneStore && parts.audit && parts.checkpointIndex
@@ -949,7 +988,19 @@ export async function startService(opts: StartOptions): Promise<Service> {
           now,
         })
       : null;
+  const thinning =
+    parts.thinningStore && parts.retention && parts.audit
+      ? new PayloadThinning({
+          store: parts.thinningStore,
+          retention: parts.retention,
+          audit: parts.audit,
+          now,
+        })
+      : null;
   const tasks: ScheduledTask[] = [
+    // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
+    // scheduler hands the task the documents under a legal hold, and the task leaves them alone.
+    ...(thinning ? [payloadThinningTask(thinning)] : []),
     // The purge of deleted documents past their retention (HIS-039); held documents are left alone.
     ...(purge
       ? [
@@ -1030,6 +1081,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
   scaleTimer?.unref();
   rescale();
 
+  const processMetrics = registerProcessMetrics(metrics);
   metrics.gauge(
     'docedit_jobs',
     'Queued and running jobs by kind, priority and state (BE-050 criterion 5).',
@@ -1253,6 +1305,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       (closed ??= (async () => {
         stopping = true;
         if (scaleTimer) clearInterval(scaleTimer);
+        processMetrics.stop();
         await scaling;
         // Each export worker finishes the job it runs before it stops (BE-065 criterion 3).
         await exportWorkers?.stop();

@@ -10,6 +10,7 @@ import { IDS, contractDocument, insertText, longDocument, posIn } from '../docum
 import { scenario, type ScenarioDef } from '../scenario.ts';
 import {
   acked,
+  ackedWithRetry,
   commitsOn,
   join,
   newId,
@@ -21,6 +22,13 @@ import {
 } from './support.ts';
 
 const s = (def: Omit<ScenarioDef, 'id'> & { id: string }) => scenario('core', def);
+
+/**
+ * The largest catchUpCommits the page scenario provokes: it makes one more commit than the limit,
+ * one acknowledged commit at a time. The default of the reference service is 5,000 (05 §5.9). A
+ * provisional bound, not a measurement: a server that announces more is skipped with the reason.
+ */
+const MAX_PAGE_LIMIT = 6000;
 
 /** A document with three commits by its owner after the content it was created with. */
 async function withHistory(ctx: ScenarioContext) {
@@ -209,20 +217,20 @@ export const CORE_CHANNELS: ScenarioDef[] = [
     id: 'channel.page',
     title: 'a resume beyond the catch-up limits is paged or reloaded, never streamed past them',
     spec: '05 §5.2; 04 §9 step 4',
-    timeoutMs: 120_000,
+    timeoutMs: 300_000,
     covers: { fields: ['ch.open.resume'] },
     async run(ctx) {
       const limit = ctx.limits.catchUpCommits;
-      if (limit > 200)
+      if (limit > MAX_PAGE_LIMIT)
         ctx.skip(
-          `catchUpCommits is ${limit}: provoking a page needs more commits than one scenario makes`,
+          `catchUpCommits is ${limit}: provoking a page needs more than the ${MAX_PAGE_LIMIT} commits this scenario is bounded to`,
         );
       const doc = await ctx.document(longDocument(4));
       const owner = await join(ctx, 'owner', doc, 'owner');
       let base = owner.content.seq;
       const pos = posIn(owner.content.doc, 'pLong00000000000');
       for (let i = 0; i <= limit + 1; i++)
-        base = (await acked(owner.wire, 1, { base, steps: [insertText(pos, 'p')] })).seq;
+        base = (await ackedWithRetry(owner.wire, 1, { base, steps: [insertText(pos, 'p')] })).seq;
       const e = await ctx.session('late', { [doc]: 'editor' });
       const o = await opened(ctx, e.wire, 1, doc, {
         resume: { seq: owner.content.seq, incarnation: owner.content.incarnation },

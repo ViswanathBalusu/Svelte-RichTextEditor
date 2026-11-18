@@ -353,24 +353,75 @@ table.de-suggest-gone {
   white-space: nowrap;
 }
 
+/* The element that `prosemirror-view` draws around a block that carries a suggestion mark (a paragraph,
+   a row, a table) has no box of its own, so the block keeps its place in its parent's layout and a
+   suggested row stays in line with the others (FE-045 criterion 6; docs/adr/0385-w1-...). */
+.de-suggest-wrap {
+  display: contents;
+}
+
+/* Each author has a colour and a second cue, a line style; both are custom properties so that the
+   cells of a suggested row and a table take them too. */
 [data-suggestion-tone='0'] {
-  text-decoration-color: #1a7f37;
-  text-decoration-style: solid;
+  --de-tone: #1a7f37;
+  --de-tone-style: solid;
 }
 
 [data-suggestion-tone='1'] {
-  text-decoration-color: #8250df;
-  text-decoration-style: dashed;
+  --de-tone: #8250df;
+  --de-tone-style: dashed;
 }
 
 [data-suggestion-tone='2'] {
-  text-decoration-color: #bc4c00;
-  text-decoration-style: dotted;
+  --de-tone: #bc4c00;
+  --de-tone-style: dotted;
 }
 
 [data-suggestion-tone='3'] {
-  text-decoration-color: #0969da;
-  text-decoration-style: wavy;
+  --de-tone: #0969da;
+  --de-tone-style: wavy;
+}
+
+[data-suggestion-tone] {
+  text-decoration-color: var(--de-tone);
+  text-decoration-style: var(--de-tone-style);
+}
+
+/* A block suggestion (FE-046 criterion 1): the kind is a bar in the margin as well as the line, and the
+   bar's style is the kind, so the three kinds differ without colour: an insertion is solid, a deletion
+   dashed and a formatting change dotted; its colour is the author's. The cells of a suggested row, and
+   of a suggested table, take the line, because a row or a table has no text of its own. */
+:is(p, h1, h2, h3, h4, h5, h6, blockquote, li, pre).de-suggest-ins,
+:is(p, h1, h2, h3, h4, h5, h6, blockquote, li, pre).de-suggest-del,
+:is(p, h1, h2, h3, h4, h5, h6, blockquote, li, pre).de-suggest-fmt {
+  border-inline-start: 3px solid var(--de-tone, currentColor);
+  padding-inline-start: 0.25em;
+}
+
+:is(p, h1, h2, h3, h4, h5, h6, blockquote, li, pre).de-suggest-del {
+  border-inline-start-style: dashed;
+}
+
+:is(p, h1, h2, h3, h4, h5, h6, blockquote, li, pre).de-suggest-fmt {
+  border-inline-start-style: dotted;
+}
+
+:is(tr, table).de-suggest-ins :is(td, th) {
+  text-decoration-line: underline;
+}
+
+:is(tr, table).de-suggest-del :is(td, th) {
+  text-decoration-line: line-through;
+}
+
+:is(tr, table).de-suggest-fmt :is(td, th) {
+  text-decoration-line: overline;
+}
+
+:is(tr, table)[data-suggestion-tone] :is(td, th) {
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--de-tone);
+  text-decoration-style: var(--de-tone-style);
 }
 
 /* A comparison drawn over a version (HIS-013): a bar in the margin of every changed block, a border

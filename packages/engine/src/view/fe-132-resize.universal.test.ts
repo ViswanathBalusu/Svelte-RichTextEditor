@@ -32,6 +32,9 @@ function rig(readOnly = false): Rig {
     doc: spikeDocument(),
     access: ownerAccess(),
     schedule: (run) => queueMicrotask(run),
+    // A picture is shown for the inline image, which is when it takes its size and its handle.
+    assetImage: () =>
+      Promise.resolve({ url: 'https://assets.example/x.png', contentType: 'image/png' }),
   });
   const unmount = core.mountBody(host);
   const view = viewsOf(core).view!;

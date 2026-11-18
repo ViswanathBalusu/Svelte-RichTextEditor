@@ -28,6 +28,13 @@ import {
 import { createHash } from 'node:crypto';
 import { zstdDecompressSync } from 'node:zlib';
 import type { JsonEnvelope } from '@docedit/model';
+import {
+  DocumentKeyDestroyedError,
+  DocumentKeyUnavailableError,
+  isSealed,
+  type DocumentKeys,
+  type DocumentSealer,
+} from './document-keys.ts';
 import { PayloadAbsentError } from './payload-absent.ts';
 import {
   chainHash,
@@ -91,6 +98,11 @@ export interface PgLogStoreOptions {
   lockTimeoutMs?: number;
   /** Attempts at reading the log back after an unknown outcome (default 5). */
   unknownAttempts?: number;
+  /**
+   * Per-document keys (HIS-041). With it, the payloads of a document that has a key are sealed in
+   * the table and opened on read. Without it the store never looks for a key.
+   */
+  documentKeys?: DocumentKeys;
 }
 
 export type ChainVerdict = { ok: true; head: number } | { ok: false; seq: number; reason: string };
@@ -349,12 +361,44 @@ export class PgLogStore implements LogStore, OwnershipStore {
   readonly #permissions: (ref: DocRef) => Promise<PermissionState>;
   readonly #lockTimeoutMs: number;
   readonly #unknownAttempts: number;
+  #keys: DocumentKeys | undefined;
 
   constructor(pool: Pool, options: PgLogStoreOptions) {
     this.#pool = pool;
     this.#permissions = options.permissions;
     this.#lockTimeoutMs = options.lockTimeoutMs ?? 5000;
     this.#unknownAttempts = options.unknownAttempts ?? 5;
+    this.#keys = options.documentKeys;
+  }
+
+  /** Turns on per-document keys after construction (HIS-041), for a store made before the keys were. */
+  useDocumentKeys(keys: DocumentKeys): void {
+    this.#keys = keys;
+  }
+
+  /** The sealer of the document, or null when it has no key (or the store has no key support). */
+  async #sealerOf(ref: DocRef): Promise<DocumentSealer | null> {
+    return this.#keys ? this.#keys.sealerFor(ref) : null;
+  }
+
+  /**
+   * The rows with their payloads opened (HIS-041). A sealed payload with no key to open it is
+   * never returned as it is: it is an error, so no one reads sealed bytes as content.
+   */
+  async #opened(ref: DocRef, rows: readonly CommitRow[], sealer: DocumentSealer | null) {
+    const out: CommitRow[] = [];
+    for (const row of rows) {
+      if (!row.payload || !isSealed(row.payload)) {
+        out.push(row);
+        continue;
+      }
+      if (!sealer) throw new DocumentKeyDestroyedError(ref.doc);
+      out.push({
+        ...row,
+        payload: Buffer.from(await sealer.open(`${ref.doc}/${int(row.seq)}`, row.payload)),
+      });
+    }
+    return out;
   }
 
   async append(
@@ -373,11 +417,12 @@ export class PgLogStore implements LogStore, OwnershipStore {
   }
 
   async #storedOf(ref: DocRef, ids: readonly string[]): Promise<LogCommit | null> {
+    const sealer = await this.#sealerOf(ref);
     return this.#inTenant(
       ref,
       async (c) => {
         const r = await c.query<CommitRow>(SELECT_BY_ID, [ref.doc, ids]);
-        const row = r.rows[0];
+        const [row] = await this.#opened(ref, r.rows.slice(0, 1), sealer);
         return row ? toStoredCommit(row) : null;
       },
       true,
@@ -391,6 +436,23 @@ export class PgLogStore implements LogStore, OwnershipStore {
   ): Promise<WriteResult | typeof DUPLICATE> {
     const commits = checkRequest(ref, req, hooks);
     const encoded = commits.map((c) => encodeCommit(ref.doc, c));
+    // A document with its own key has its payloads sealed before they reach the table (HIS-041). A
+    // key that cannot be had stops the write, with nothing sent, rather than writing in the clear.
+    let sealer: DocumentSealer | null;
+    try {
+      sealer = await this.#sealerOf(ref);
+    } catch (e) {
+      if (e instanceof DocumentKeyDestroyedError || e instanceof DocumentKeyUnavailableError)
+        return { status: 'failed' };
+      throw e;
+    }
+    const payloads: Buffer[] = [];
+    for (const e of encoded)
+      payloads.push(
+        sealer
+          ? Buffer.from(await sealer.seal(`${ref.doc}/${e.meta.seq}`, e.payload))
+          : Buffer.from(e.payload),
+      );
     let client: PoolClient;
     try {
       client = await this.#pool.connect();
@@ -476,7 +538,7 @@ export class PgLogStore implements LogStore, OwnershipStore {
         encoded.map((e) => e.payloadHash),
         prevHashes,
         hashes,
-        encoded.map((e) => e.payload),
+        payloads,
         scopes.map(([s]) => s),
         scopes.map(([, seq]) => seq),
         retired.map(([r]) => r),
@@ -498,7 +560,11 @@ export class PgLogStore implements LogStore, OwnershipStore {
           ref.doc,
           req.snapshot.seq,
           ref.tenant,
-          Buffer.from(snap.encoded),
+          sealer
+            ? Buffer.from(
+                await sealer.seal(`snapshot/${ref.doc}/${req.snapshot.seq}`, snap.encoded),
+              )
+            : Buffer.from(snap.encoded),
           hash,
         ]);
         if (snap.checkpointKey !== undefined)
@@ -555,6 +621,7 @@ export class PgLogStore implements LogStore, OwnershipStore {
    */
   async resolveUnknown(ref: DocRef, fromSeq: number): Promise<WriteResult> {
     let last: unknown;
+    const sealer = await this.#sealerOf(ref);
     for (let attempt = 0; attempt < this.#unknownAttempts; attempt++) {
       if (attempt > 0) await delay(Math.min(2000, 50 * 2 ** attempt));
       const client = await this.#pool.connect().catch((e: unknown) => {
@@ -570,7 +637,7 @@ export class PgLogStore implements LogStore, OwnershipStore {
           ref.doc,
         ]);
         if (r.rowCount !== 1) throw new DocumentNotFoundError(`no document ${ref.doc}`);
-        const tail = await this.#select(client, ref.doc, fromSeq, null);
+        const tail = await this.#select(client, ref, fromSeq, null, sealer);
         await client.query('COMMIT');
         return { status: 'unknown', tail };
       } catch (e) {
@@ -587,7 +654,8 @@ export class PgLogStore implements LogStore, OwnershipStore {
   }
 
   async read(ref: DocRef, fromSeq = 1, toSeq?: number): Promise<LogCommit[]> {
-    return this.#inTenant(ref, (c) => this.#select(c, ref.doc, fromSeq, toSeq ?? null), true);
+    const sealer = await this.#sealerOf(ref);
+    return this.#inTenant(ref, (c) => this.#select(c, ref, fromSeq, toSeq ?? null, sealer), true);
   }
 
   /** The metadata of the commits in a range, with no payload read (HIS-040: a removed payload does not stop a list). */
@@ -741,6 +809,7 @@ export class PgLogStore implements LogStore, OwnershipStore {
 
   /** The content a stored snapshot commit brought (BE-037), or null when `seq` is not one. */
   async snapshotContent(ref: DocRef, seq: number): Promise<JsonEnvelope | null> {
+    const sealer = await this.#sealerOf(ref);
     return this.#inTenant(
       ref,
       async (c) => {
@@ -749,7 +818,13 @@ export class PgLogStore implements LogStore, OwnershipStore {
           [ref.doc, seq],
         );
         const row = r.rows[0];
-        return row ? decodeContent<JsonEnvelope>(row.content) : null;
+        if (!row) return null;
+        const stored = new Uint8Array(row.content);
+        if (!isSealed(stored)) return decodeContent<JsonEnvelope>(row.content);
+        if (!sealer) throw new DocumentKeyDestroyedError(ref.doc);
+        return decodeContent<JsonEnvelope>(
+          Buffer.from(await sealer.open(`snapshot/${ref.doc}/${seq}`, stored)),
+        );
       },
       true,
     );
@@ -829,6 +904,28 @@ export class PgLogStore implements LogStore, OwnershipStore {
    * the stored hashes and the chain head (HIS-002; the tool of BE-081 and HIS-033 does the same).
    */
   async verify(ref: DocRef, opts: { payloads?: boolean } = {}): Promise<ChainVerdict> {
+    // Checking the payloads needs the document's key if it has one (HIS-041). The chain itself does
+    // not: it covers the stored hashes, so it verifies after the key is destroyed.
+    let sealer: DocumentSealer | null = null;
+    if (opts.payloads) {
+      try {
+        sealer = await this.#sealerOf(ref);
+      } catch (e) {
+        if (e instanceof DocumentKeyDestroyedError)
+          return {
+            ok: false,
+            seq: 0,
+            reason: 'the key of the document was destroyed, so its payloads cannot be checked',
+          };
+        throw e;
+      }
+    }
+    const open = async (stored: Buffer, aad: string): Promise<Buffer> => {
+      const bytes = new Uint8Array(stored);
+      if (!isSealed(bytes)) return stored;
+      if (!sealer) throw new DocumentKeyDestroyedError(ref.doc);
+      return Buffer.from(await sealer.open(aad, bytes));
+    };
     return this.#inTenant(
       ref,
       async (c) => {
@@ -842,7 +939,7 @@ export class PgLogStore implements LogStore, OwnershipStore {
             [ref.doc],
           );
           for (const r of p.rows) {
-            const text = zstdDecompressSync(r.payload);
+            const text = zstdDecompressSync(await open(r.payload, `${ref.doc}/${int(r.seq)}`));
             if (!createHash('sha256').update(text).digest().equals(r.payload_hash))
               return { ok: false, seq: int(r.seq), reason: 'the payload does not match its hash' };
           }
@@ -851,7 +948,9 @@ export class PgLogStore implements LogStore, OwnershipStore {
             [ref.doc],
           );
           for (const r of s.rows) {
-            const text = zstdDecompressSync(r.content);
+            const text = zstdDecompressSync(
+              await open(r.content, `snapshot/${ref.doc}/${int(r.seq)}`),
+            );
             if (!createHash('sha256').update(text).digest().equals(r.content_hash))
               return {
                 ok: false,
@@ -945,12 +1044,13 @@ export class PgLogStore implements LogStore, OwnershipStore {
 
   async #select(
     client: Queryable,
-    doc: string,
+    ref: DocRef,
     fromSeq: number,
     toSeq: number | null,
+    sealer: DocumentSealer | null,
   ): Promise<LogCommit[]> {
-    const r = await client.query<CommitRow>(SELECT_COMMITS, [doc, fromSeq, toSeq]);
-    return r.rows.map(toStoredCommit);
+    const r = await client.query<CommitRow>(SELECT_COMMITS, [ref.doc, fromSeq, toSeq]);
+    return (await this.#opened(ref, r.rows, sealer)).map(toStoredCommit);
   }
 
   async #inTenant<T>(ref: DocRef, fn: (c: PoolClient) => Promise<T>, readOnly = false): Promise<T> {

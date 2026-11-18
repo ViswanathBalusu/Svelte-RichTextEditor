@@ -93,6 +93,7 @@ import {
   readContainer,
   styleSpec,
 } from './props.ts';
+import { type RegionPlan, planRegions } from './regions.ts';
 import { shareTrees, treeHolders } from './share.ts';
 import type {
   ContainerSource,
@@ -113,6 +114,7 @@ import {
   toTree,
   treeDepth,
 } from './tree.ts';
+import { rFontsFamilies, themeFonts } from './theme-fonts.ts';
 import { Utf8Error } from './utf8.ts';
 import {
   type XmlElement,
@@ -251,6 +253,29 @@ const W_TC = w('tc');
 const W_PPR = w('pPr');
 const W_RPR = w('rPr');
 const W_SECTPR = w('sectPr');
+
+/** Whether the bytes hold the given byte sequence (a cheap test before a part is parsed again). */
+function hasBytes(bytes: Uint8Array, needle: readonly number[]): boolean {
+  for (let i = 0; i + needle.length <= bytes.length; i++) {
+    if (bytes[i] !== needle[0]) continue;
+    let k = 1;
+    while (k < needle.length && bytes[i + k] === needle[k]) k++;
+    if (k === needle.length) return true;
+  }
+  return false;
+}
+
+/** Whether the part's bytes hold the text `permStart` (an editable range may start in it). */
+function hasPermStart(bytes: Uint8Array): boolean {
+  const needle = [112, 101, 114, 109, 83, 116, 97, 114, 116];
+  for (let i = 0; i + needle.length <= bytes.length; i++) {
+    if (bytes[i] !== 112) continue;
+    let k = 1;
+    while (k < needle.length && bytes[i + k] === needle[k]) k++;
+    if (k === needle.length) return true;
+  }
+  return false;
+}
 const W_INS = w('ins');
 const W_DEL = w('del');
 const W_TAB = w('tab');
@@ -827,10 +852,59 @@ class Importer {
       stats: this.stats,
       report: this.report(),
       warnings: this.warnings,
-      fonts: substituteFonts(familiesOf(envelope.doc), this.opts.fonts ?? {}),
+      fonts: substituteFonts(
+        [...familiesOf(envelope.doc), ...this.packageFamilies(mainPart, mainRels)],
+        this.opts.fonts ?? {},
+      ),
     };
   }
 
+  /**
+   * The families the package's `w:rFonts` elements name, theme references resolved (EXP-106). The
+   * model keeps only `w:ascii`, so a family named through the theme (Aptos, in recent Word files)
+   * is found here. It only reads; a part that does not parse is skipped, as the import itself
+   * reports such parts.
+   */
+  packageFamilies(mainPart: string, mainRels: Relationships): string[] {
+    const themeRel = mainRels.list.find((r) => r.type === REL.theme && !r.external);
+    const themeName = themeRel ? resolveTarget(mainPart, themeRel.target) : 'word/theme/theme1.xml';
+    const load = (name: string): ReturnType<typeof parseXml> | undefined => {
+      const bytes = this.read(name);
+      if (!bytes) return undefined;
+      try {
+        return parseXml(bytes);
+      } catch (e) {
+        if (e instanceof XmlError || e instanceof Utf8Error) return undefined;
+        throw e;
+      }
+    };
+    const theme = load(themeName);
+    const fonts = theme ? themeFonts(theme.root) : {};
+    const wanted = new Set<string>([
+      REL.styles,
+      REL.numbering,
+      REL.footnotes,
+      REL.endnotes,
+      REL.comments,
+      REL.header,
+      REL.footer,
+    ]);
+    const names: string[] = [mainPart];
+    for (const r of mainRels.list) {
+      if (r.external || !wanted.has(r.type)) continue;
+      const name = resolveTarget(mainPart, r.target);
+      if (!names.includes(name)) names.push(name);
+    }
+    const out: string[] = [];
+    const needle = [...'rFonts'].map((c) => c.charCodeAt(0));
+    for (const name of names) {
+      const bytes = this.read(name);
+      if (!bytes || !hasBytes(bytes, needle)) continue;
+      const part = load(name);
+      if (part) out.push(...rFontsFamilies(part.root, fonts));
+    }
+    return out;
+  }
   report(): ImportReportItem[] {
     const order = { preserved: 0, approximated: 1, dropped: 2 };
     return [...this.notes.values()]
@@ -1107,6 +1181,19 @@ class Importer {
     let gapStart = contentStart;
     let finalSectPr: XmlElement | null = null;
     let started = !after;
+    // Editable ranges of the body become regions (EXP-104): a run of blocks is mapped into the
+    // region's own lists, and the region is one child of the body, with its own container.
+    const regions =
+      pc.kind === 'body' && key === 'body' && !after
+        ? this.regionPlans(container, pc.part, pc.bytes)
+        : new Map<XmlElement, RegionPlan>();
+    let open: {
+      plan: RegionPlan;
+      nodes: JsonNode[];
+      order: string[];
+      gaps: Array<[number, number]>;
+      gapStart: number;
+    } | null = null;
     for (const c of container.children) {
       if (!started) {
         if (c === after) started = true;
@@ -1124,6 +1211,39 @@ class Importer {
       const mapped = await this.block(c, pc);
       this.block_ = outer;
       const id = String(mapped.node.attrs!['id']);
+      const planned = regions.get(c);
+      if (planned) open = { plan: planned, nodes: [], order: [], gaps: [], gapStart: c.start };
+      if (open) {
+        open.order.push(id);
+        open.gaps.push([open.gapStart, c.start]);
+        open.gapStart = c.end;
+        open.nodes.push(mapped.node);
+        if (c === open.plan.last) {
+          const rid = nodeId();
+          const node: JsonNode = {
+            type: 'region',
+            attrs: { id: rid, policy: open.plan.locked ? 'restricted' : 'inherit' },
+            content: open.nodes,
+          };
+          order.push(rid);
+          gaps.push([gapStart, open.plan.first.start]);
+          gapStart = c.end;
+          out.push(node);
+          this.source(node, { part: pc.part, start: open.plan.first.start, end: c.end, hash: '' });
+          this.sm.containers[`region:${rid}`] = {
+            part: pc.part,
+            order: open.order,
+            gaps: open.gaps,
+            trailing: [c.end, c.end],
+            contentStart: open.plan.first.start,
+            contentEnd: c.end,
+          };
+          this.count(this.stats.nodes, 'region');
+          this.reportRegion(open.plan, open.order[0]!, pc.part);
+          open = null;
+        }
+        continue;
+      }
       order.push(id);
       gaps.push([gapStart, c.start]);
       gapStart = c.end;
@@ -1165,7 +1285,72 @@ class Importer {
       this.synthetic(p);
       out.push(p);
     }
+    // A body paragraph follows every region, as Word keeps one after a table (03 section 4.2).
+    // The added paragraphs are not written unless edited.
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (out[i]!.type !== 'region' || out[i + 1]?.type === 'paragraph') continue;
+      const p: JsonNode = { type: 'paragraph', attrs: { id: nodeId() } };
+      this.synthetic(p);
+      out.splice(i + 1, 0, p);
+    }
     return out;
+  }
+
+  /** The regions of the body, by their first block (EXP-104); what cannot be one is reported. */
+  regionPlans(container: XmlElement, part: string, bytes: Uint8Array): Map<XmlElement, RegionPlan> {
+    // Most files hold no editable range: the raw bytes say so without a walk of the tree.
+    if (!hasPermStart(bytes)) return new Map();
+    const kids = elements(container);
+    const blocks = kids.filter((k) => !MARKERS.has(nameOf(k)) && nameOf(k) !== W_SECTPR);
+    const plans = new Map<XmlElement, RegionPlan>();
+    const found = planRegions(kids, blocks, (el) => MARKERS.has(nameOf(el)));
+    for (const p of found.plans) plans.set(p.first, p);
+    for (const r of found.refused) {
+      this.note(
+        'editable range',
+        'preserved',
+        'an editable range that cannot be a region is kept as preserved content',
+        null,
+      );
+      this.warnings.push(
+        `${part}: editable range ${r.ids.join(', ')} was not imported as a region: ${r.reason}`,
+      );
+    }
+    return plans;
+  }
+
+  /** Reports a region built from editable ranges, with its location (EXP-104). */
+  reportRegion(plan: RegionPlan, firstBlock: string, part: string): void {
+    const where = `body block ${plan.from + 1}${plan.to > plan.from ? ` to ${plan.to + 1}` : ''}`;
+    const who = plan.editors.length ? ` (editors: ${plan.editors.join(', ')})` : '';
+    if (plan.locked) {
+      this.note(
+        'editable range',
+        'approximated',
+        'an editable range that does not cover whole blocks was imported as a locked region',
+        firstBlock,
+      );
+      this.warnings.push(
+        `${part}: editable range ${plan.ids.join(', ')} at ${where}${who} is imported as a locked region: ${plan.reason || 'it does not cover whole blocks'}; the owner can unlock it`,
+      );
+    } else if (plan.ids.length > 1) {
+      this.note(
+        'editable range',
+        'approximated',
+        'overlapping or nested editable ranges were flattened into one region',
+        firstBlock,
+      );
+      this.warnings.push(
+        `${part}: editable ranges ${plan.ids.join(', ')} at ${where}${who} overlap or nest and were flattened into one region`,
+      );
+    } else {
+      this.note(
+        'editable range',
+        'approximated',
+        'an editable range became a region without grants',
+        firstBlock,
+      );
+    }
   }
 
   async block(el: XmlElement, pc: PartCtx): Promise<{ node: JsonNode; sectPr: XmlElement | null }> {
