@@ -3,6 +3,7 @@
  */
 import { uuid7 } from '@docedit/model';
 import { derivedCommitId, stableJson } from '../data-plane/commit-id.ts';
+import { fieldValuesCsv, valueText } from './field-csv.ts';
 import { prefillSteps, projectedFields, valuesByKey } from './fields.ts';
 import { checkIfMatch, pageLimit, seqParam } from './http.ts';
 import { json, notModified, type Kit, type ReadAs } from './kit.ts';
@@ -78,7 +79,15 @@ export function fieldRoutes(k: Kit): Record<string, Handler> {
     const keys = ctx.url.searchParams.getAll('key');
     // Values the caller may not read are the projection's redaction marker (ADR 0019).
     const values = valuesByKey(projectedFields(c.doc), keys);
-    const etag = valuesEtag(c);
+    // `?format=csv` is the spreadsheet output (FRW-064; ADR 0410, proposed): the same values and the
+    // same projection, one row each, with a leading formula character neutralised. The JSON a
+    // client reads is unchanged.
+    const format = ctx.url.searchParams.get('format') ?? 'json';
+    if (format !== 'json' && format !== 'csv')
+      throw new ApiError('validation_failed', 'format is json or csv', {
+        violations: [{ path: 'format', rule: 'json or csv' }],
+      });
+    const etag = format === 'csv' ? valuesEtag(c).replace(/"$/, ':csv"') : valuesEtag(c);
     const headers = {
       ETag: etag,
       // As for content (D70): pinned reads are immutable, and every read is private.
@@ -86,6 +95,19 @@ export function fieldRoutes(k: Kit): Record<string, Handler> {
         seq !== undefined ? 'private, max-age=31536000, immutable' : 'private, no-cache',
     };
     if (notModified(ctx, etag)) return { status: 304, headers };
+    if (format === 'csv')
+      return {
+        status: 200,
+        bytes: Buffer.from(
+          fieldValuesCsv(Object.entries(values).map(([key, v]) => ({ key, value: valueText(v) }))),
+          'utf8',
+        ),
+        headers: {
+          ...headers,
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="field-values.csv"',
+        },
+      };
     return json(200, { values, seq: c.seq, view: c.view }, headers);
   };
 

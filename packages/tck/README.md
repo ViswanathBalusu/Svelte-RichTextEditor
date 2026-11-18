@@ -55,7 +55,7 @@ profile whose requirement the server does not meet is reported as skipped, with 
 | `registry` | mode `authority` | Every rejection code of the error registry (05 §5.8). |
 | `fuzz` | mode `authority` | Fuzzing of the envelope parser and of step validation. |
 | `fields` | feature `fields` | Fillable fields (12 §4). |
-| `perm-fill` | feature `fields` | Fill permissions (12). |
+| `perm-fill` | feature `fields` | Fill permissions (12): a property test of a participant minted with the `wfr` roles claim (FRW-066). |
 | `core-relay` | mode `relay` | Relays only (05 §9). One scenario: discovery says `relay` and announces none of `regions`, `suggest-enforced`, `fields` (PRO-124). The scenarios that submit commits to a relay (`stale_base` on a base that is not the head; commits at the head stored and relayed unchanged) wait for a relay server that speaks DEP. |
 | `perm-suggest` | feature `suggest-enforced` | Suggestion-only rule (07 §5.2); built (PRO-118), run against the mock backend. Scope: `ins`, `del` and `fmt` marks on text in a paragraph; block-level suggestions (paragraphs, whole table rows, whole tables) are tested in `packages/authority`, not in the profile (PRM-062). |
 | `history` | feature `history` | History, versions, comparison, attribution, restore; not yet built (PRO-119). |

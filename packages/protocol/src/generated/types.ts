@@ -395,6 +395,8 @@ export interface TokenRequest {
   grp?: string[];
   /** Workflow participant (12 §7). */
   wfp?: string;
+  /** Role placeholders the user may fill outside a workflow, in the documents named by `docs` (12 §3.1, §13). The service writes them under the claim name the tenant configures, `wfr` by default (05 §3.1). */
+  wfr?: string[];
   /** Authentication methods (12 §7). */
   amr?: string[];
   /** When the host authenticated the participant (12 §7). */
@@ -2419,12 +2421,12 @@ export interface Operations {
     body: never;
     response: Template;
   };
-  /** GET /documents/{id}/field-values: Field values by key; `?seq` reads them at a pinned seq. (12 §10) */
+  /** GET /documents/{id}/field-values: Field values by key; `?seq` reads them at a pinned seq. `?format=csv` answers `text/csv` instead of the JSON body: one row of key and value for each field, with a leading `=`, `+`, `-` or `@` neutralised by an apostrophe (12 §9; FRW-064; proposed, ADR 0410). (12 §10) */
   getFieldValues: {
     method: "GET";
     path: "/documents/{id}/field-values";
     params: { id: string };
-    query: { seq?: number };
+    query: { seq?: number; format?: "json" | "csv" };
     body: never;
     response: FieldValues;
   };

@@ -400,6 +400,29 @@ test.describe('fields (FRW-072, FRW-076, FRW-077, FRW-078)', () => {
     await expect(page.locator('.de-shell > [role="status"]')).toHaveText('You have finished.');
   });
 
+  test('an invalid optional field is listed but not counted, and the bar says it counts required fields (FRW-078 criterion 4)', async ({
+    page,
+  }) => {
+    const fields = [
+      ...FILL.fields,
+      { id: 'f5', label: 'Phone', required: false, filled: true, invalid: 'format' },
+    ];
+    await open(page, { extended: true, fill: { active: true, fields } });
+    const bar = page.getByRole('region', { name: 'Filling in' });
+    await bar.getByRole('button', { name: 'What is left' }).click();
+    const pane = page.locator('.de-pane[data-pane="fill"]');
+    // The list holds every problem: two required fields and the optional one.
+    await expect(pane.locator('[data-field]')).toHaveCount(3);
+    await expect(pane.locator('[data-field]').nth(2)).toContainText('Phone');
+    // The counter counts required fields only, and its text says so, in the bar and in the pane.
+    await expect(bar.locator('[data-status="fill-progress"]')).toHaveText(
+      '1 of 3 required fields filled',
+    );
+    await expect(pane.locator('[data-status="fill-progress"]')).toHaveText(
+      '1 of 3 required fields filled',
+    );
+  });
+
   test('finishing with a required field empty opens the summary and does not finish (FRW-078)', async ({
     page,
   }) => {

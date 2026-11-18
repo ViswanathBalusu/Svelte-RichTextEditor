@@ -3,7 +3,7 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "6273c732d4bbd40a7e2c9e921cfd37ee6f470ef2e8679edf7dd6b060d21f6391",
+  "definitionHash": "794bf52901e0348265674aaace46e8f011b5ca717de643f05d54b00ddbb29376",
   "cdm": {
     "min": 1,
     "max": 1,
@@ -22,8 +22,8 @@
   },
   "files": {
     "spec/dep/dep-1.asyncapi.json": "7824ed66e63c28d0afb86b13b4ed0e3ee664bfac2219a62eafd1fdf50585d56e",
-    "spec/dep/dep-1.openapi.json": "403a12999119744e7f647b4b8ec6ff2d5eef5ed154c5873c98002e5a33ced1aa",
-    "spec/dep/dep-1.schema.json": "34e105353878cd5f1cb91ab45c11d1e50ec71bddf0c47245fb4d24cac8ec23b1",
+    "spec/dep/dep-1.openapi.json": "a921dd1e9f5d4e206f4f2ca7a571b49ab3ee87d09d8aca24fd4b469e5f05f3c8",
+    "spec/dep/dep-1.schema.json": "7913ab0d2d7165cdacd46f5e5dee72b85aae044779f340d77f5f2f71f1e9243d",
     "spec/dep/webhooks/dep.document.created.v1.schema.json": "1e16a104e436cdf8f6213fc1f051a4d9a1ec58a4c2c5eeb25829ed86ae672c54",
     "spec/dep/webhooks/dep.document.deleted.v1.schema.json": "890c2efa8c1731ef2208fbf3c86629fa2eabf2b1eef70dd74e6e8eb52a53e404",
     "spec/dep/webhooks/dep.document.state_changed.v1.schema.json": "9cc6359f41bf28afce274afe4a664fbdd0cb18ac1bc118a80341fb83f32954fb",
@@ -59,8 +59,8 @@
     "spec/dep/webhooks/dep.workflow.expired.v1.schema.json": "6e3ce533646bb1a9ba1f37ed5e221382d0921c1b1f1308f46f20ffc311fa0b8a",
     "spec/dep/webhooks/dep.workflow.completed.v1.schema.json": "ed324ab76a9225e8f652b3f1cfc201a31929cdf80777f1bdc4e44b60d34c4dca",
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "9152416acc7809df32797943418c7a08be2f0169dd5f581a6c712d938774b333",
-    "spec/dep/dep-1.registry.json": "d6ef37f834749dc070f0e45cb5699c591c14d5f80a3b93b3e77733151d4a47c4",
+    "spec/dep/dep-1.registry.json": "52949c1ab2c40362be751a5276f831ce60910aa1732239701eff1caf7c372854",
     "spec/dep/dep-1.gaps.json": "9f39f72f4a6e61ac2a30bf96e95cda034772f01351a6f23e8d5da99ab4c13533",
-    "packages/protocol/src/generated/types.ts": "a7945fca2dc9e01f9ac8bdce34f854dcdc47fd84dea365c782db17d9b3a04937"
+    "packages/protocol/src/generated/types.ts": "f29520f284cc09ed14585760f8c734a7d8054e5bba5471bdba4dc2618478652c"
   }
 }

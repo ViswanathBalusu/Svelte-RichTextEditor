@@ -1,8 +1,7 @@
 /**
  * The `fields` and `perm-fill` profiles (FRW-065 to FRW-067; 12 §3, §4, §9, §10). `fields` checks the
  * invariants I13 and I15, the outcomes of P8 and P9 with their codes, prefill, and the field
- * resources. `perm-fill` runs the fill property black-box; it needs a workflow participant, and the
- * workflow actions that activate one are not defined yet (G95), so it is skipped with that reason.
+ * resources. `perm-fill` (perm-fill.ts) runs the fill property black-box.
  */
 import { KitFailure, check, equal, oneOf } from '../assert.ts';
 import type { ScenarioContext } from '../context.ts';
@@ -362,31 +361,6 @@ export const FIELDS: ProfileDef = {
           problemOf(missing, 'prefill without If-Match').code,
           'precondition_failed',
           'If-Match is required',
-        );
-      },
-    }),
-  ],
-};
-
-export const PERM_FILL: ProfileDef = {
-  id: 'perm-fill',
-  title: 'Fill permission (P7) as a black-box property',
-  spec: '12 §4 P7, §10; 07 §5.1',
-  stories: ['FRW-066'],
-  requires: { kind: 'features', features: ['fields'] },
-  scenarios: [
-    scenario('perm-fill', {
-      id: 'property',
-      title: 'a fill-only participant changes nothing but the values of the fields of its roles',
-      spec: '12 §4 P7; FRW-066',
-      covers: {},
-      async run(ctx) {
-        if (!ctx.has('workflow'))
-          ctx.skip(
-            'a fill-only participant needs a workflow participant: the target does not announce `workflow`',
-          );
-        ctx.skip(
-          'the workflow actions that activate a participant are not defined yet (G95); the in-process property of FRW-066 runs against the authority',
         );
       },
     }),

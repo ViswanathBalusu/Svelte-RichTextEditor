@@ -1537,7 +1537,7 @@
       ],
       "feature": "fields",
       "ifMatch": "required",
-      "idempotencyKey": false,
+      "idempotencyKey": true,
       "success": "2XX",
       "spec": "12 §9, §10",
       "owner": "FRW"

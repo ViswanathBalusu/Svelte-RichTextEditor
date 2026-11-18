@@ -66,7 +66,7 @@ A client presents a JSON Web Token. Two issuers are supported:
 | `grp` | Optional array of group identifiers the user belongs to |
 | `docs` | Object mapping document identifiers (at most 20) to the user's role in each: `viewer`, `commenter`, `suggester`, `editor`, `owner`, `filler` |
 | `wfp`, `amr`, `auth_time` | For workflow participants (12, section 7) |
-| `wfr` | Optional array of role placeholder identifiers (12, section 3.1) that the user may fill outside a workflow, in the documents named by `docs` (12, section 13, "Form mode without a workflow"). The claim name is configurable per tenant; `wfr` is the default (owner decision 5a of 2026-11-15) |
+| `wfr` | Optional array of role placeholder identifiers (12, section 3.1) that the user may fill outside a workflow, in the documents named by `docs` (12, section 13, "Form mode without a workflow"). The claim name is configurable per tenant; `wfr` is the default (owner decision 5a of 2026-11-15). `POST /tokens` takes the roles as the member `wfr` and writes them under the claim name of the tenant |
 | `access_since` | Optional. The time the host first gave this user access, for the history visibility setting `since_access` |
 | `restrict` | Optional array of `no-export`, `no-copy`, `no-print` |
 
@@ -281,7 +281,7 @@ S  {"t":"event","ch":1,"d":{"type":"export.completed","resource":"/exports/0192f
 - JSON bodies. Errors use RFC 9457 problem details with a `code` from section 5.8.
 - **Browsers.** The service answers CORS preflights for the tenant's allowed origins, allows the headers `Authorization`, `Content-Type`, `If-Match`, `Idempotency-Key`, `DEP-Actor` and `traceparent`, and exposes `ETag`, `Retry-After`, `Deprecation` and `Sunset`. The conformance kit asserts these headers.
 - **Concurrency.** Every mutable resource has an `ETag`, and updates require `If-Match`.
-- **Idempotency.** `POST` requests that create something, and `PUT /documents/{id}/content`, accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
+- **Idempotency.** `POST` requests that create something, `PUT /documents/{id}/content` and `PATCH /documents/{id}/field-values` (the prefill of 12 §9; owner decision 184, ADR 0342), accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
 - **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200.
 - **Tracing.** Requests may carry `traceparent`; responses carry a request identifier.
 - **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A caller whose token does not cover that document, and a user who may not see the resource (another user's export or import job), gets `not_found`, the answer for an identifier that names nothing, with the same body apart from the identifier (owner decision 57 of 2026-11-15; SEC-016). A caller who sees the resource but lacks the capability gets `forbidden`.

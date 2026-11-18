@@ -114,6 +114,33 @@ describe('the fill roles claim without a workflow (FRW-007 criterion 6)', () => 
       });
   });
 
+  it('mints the roles of the wfr member under the claim the tenant names (FRW-066 criterion 5)', async () => {
+    const asked = {
+      sub: 'u-mint',
+      docs: { [doc]: 'filler' as const },
+      wfr: ['role_tenant', 'role_witness'],
+    };
+    const claims = (token: string) =>
+      JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString('utf8')) as Record<
+        string,
+        unknown
+      >;
+    const plain = await service().mint(tenant, asked);
+    expect(claims(plain.token)['wfr']).toEqual(['role_tenant', 'role_witness']);
+    // Another claim name for the tenant: the roles are written there, and the default is not.
+    const named = service((t) => (t === tenant ? 'fill_roles' : 'wfr'));
+    const other = claims((await named.mint(tenant, asked)).token);
+    expect(other['fill_roles']).toEqual(['role_tenant', 'role_witness']);
+    expect(other['wfr']).toBeUndefined();
+    // Without the member there is no claim.
+    const none = await service().mint(tenant, { sub: 'u-mint', docs: { [doc]: 'filler' } });
+    expect(claims(none.token)['wfr']).toBeUndefined();
+    // A role that is not an opaque identifier is refused.
+    await expect(service().mint(tenant, { ...asked, wfr: [' bad role'] })).rejects.toMatchObject({
+      code: 'validation_failed',
+    });
+  });
+
   it('leaves the fill right to the document state: on a locked document the fill object is null', async () => {
     const out = await opened(service(), sign({ wfr: ['role_tenant'] }), perms('locked'));
     expect(out.fill).toBeNull();
