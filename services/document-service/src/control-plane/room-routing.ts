@@ -46,6 +46,30 @@ export function routeDocument(doc: string, hosts: readonly string[]): string {
   return best!;
 }
 
+/**
+ * The live hosts that may own `doc` (BE-073, BE-074; 06 §6, §7):
+ *
+ * - A host dedicated to this document, when one is live, is the only candidate. The document is
+ *   hot: it has a process of its own, and rendezvous hashing is not asked.
+ * - Otherwise a host dedicated to another document is not a candidate: it serves that one only.
+ * - With a home region, only the hosts that announced that region are candidates. A host that
+ *   announced none is not in the region. With no home region the region of a host does not matter.
+ *
+ * Like all routing this is a hint; the epoch check of BE-017 still decides ownership. The answer
+ * is empty when nothing may own the document, which a caller must read as `unavailable` and not
+ * as permission to serve it anywhere.
+ */
+export function eligibleHosts(
+  doc: string,
+  live: readonly NodeInfo[],
+  region?: string | null,
+): NodeInfo[] {
+  const inRegion = (h: NodeInfo) => region === undefined || region === null || h.region === region;
+  const dedicated = live.filter((h) => h.dedicated === doc && inRegion(h));
+  if (dedicated.length > 0) return dedicated;
+  return live.filter((h) => (h.dedicated ?? null) === null && inRegion(h));
+}
+
 /** The candidate hosts whose node lease the store reports alive, in the order given. */
 export async function liveRoomHosts(
   candidates: readonly string[],
@@ -73,9 +97,13 @@ export class Placement {
     return this.#leases.live();
   }
 
-  /** The live host that should try to own `doc`, or null when no host is live. */
-  async route(doc: string): Promise<NodeInfo | null> {
-    const hosts = await this.#leases.live();
+  /**
+   * The live host that should try to own `doc`, or null when none may. With the document's home
+   * region (BE-074), only the hosts of that region are considered; a host dedicated to the document
+   * (BE-073) takes it, and a host dedicated to another document never does (`eligibleHosts`).
+   */
+  async route(doc: string, region?: string | null): Promise<NodeInfo | null> {
+    const hosts = eligibleHosts(doc, await this.#leases.live(), region);
     if (hosts.length === 0) return null;
     const name = routeDocument(
       doc,

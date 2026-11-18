@@ -128,8 +128,9 @@ const NOT_FOUND_FOR_OWNER: Record<string, string> = {
   // ADR 0330 §2 (decision 177): this composition has no webhook dispatcher to send with.
   pingWebhook: 'this server does not send webhook deliveries',
   replayWebhookDelivery: 'this server does not send webhook deliveries',
-  getWorkflowEvidence: NOT_OFFERED,
-  getWorkflowFinal: NOT_OFFERED,
+  // FRW-054, FRW-055: the handlers exist; B's workflow is not sealed in this scenario.
+  getWorkflowEvidence: 'has no evidence bundle yet',
+  getWorkflowFinal: 'no sealed PDF', // memory: "has no sealed PDF yet"; PostgreSQL: "keeps no sealed PDFs"
   // B's workflow has no participant in this scenario (FRW-039).
   participantVerify: 'has no such participant',
   registerAccessCode: 'has no such participant',

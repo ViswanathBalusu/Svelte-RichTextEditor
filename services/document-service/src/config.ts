@@ -52,6 +52,16 @@ export interface ServiceConfig {
    * `GET /documents/{id}/connect` answers with the address of the service itself.
    */
   nodeAddress: string | null;
+  /**
+   * The region this node runs in, written on its lease row (BE-074). A tenant with a home region
+   * is served by the nodes of that region only. Default none: the node is in no region.
+   */
+  nodeRegion: string | null;
+  /**
+   * The one document this node is dedicated to, written on its lease row (BE-073). The node then
+   * serves that document only, and other nodes route it here. Default none: a general node.
+   */
+  dedicatedDocument: string | null;
   workers: number;
   workerTimeoutMs: number;
   maxBodyBytes: number;
@@ -179,6 +189,8 @@ export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
   viewKey: null,
   exportTargets: ['pdf'],
   nodeAddress: null,
+  nodeRegion: null,
+  dedicatedDocument: null,
   workers: 2,
   workerTimeoutMs: 60_000,
   maxBodyBytes: 1024 * 1024,
@@ -358,6 +370,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): ServiceConf
     exportTargets: list(env['DOCEDIT_EXPORT_TARGETS'], DEFAULTS.exportTargets),
     node: env['DOCEDIT_NODE_ID'] ?? `${hostname()}-${process.pid}`,
     nodeAddress: env['DOCEDIT_NODE_ADDRESS'] ?? null,
+    nodeRegion: env['DOCEDIT_NODE_REGION'] || null,
+    dedicatedDocument: env['DOCEDIT_DEDICATED_DOCUMENT'] || null,
     workers: Math.max(1, int(env, 'DOCEDIT_WORKERS', DEFAULTS.workers)),
     workerTimeoutMs: int(env, 'DOCEDIT_WORKER_TIMEOUT_MS', DEFAULTS.workerTimeoutMs),
     maxBodyBytes: int(env, 'DOCEDIT_MAX_BODY_BYTES', DEFAULTS.maxBodyBytes),

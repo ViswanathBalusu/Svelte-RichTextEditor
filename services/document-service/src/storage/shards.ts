@@ -28,7 +28,14 @@ import {
   MIGRATIONS_DIR,
   type Compatibility,
 } from './migrate.ts';
-import type { NewOutboxItem, NodeInfo, NodeLeaseStore, OutboxItem, OutboxStore } from './types.ts';
+import type {
+  NewOutboxItem,
+  NodeInfo,
+  NodeLeaseStore,
+  NodeTraits,
+  OutboxItem,
+  OutboxStore,
+} from './types.ts';
 
 /** Joins the answers of one operation that ran on every shard, in the order of `map.shards`. */
 export type Fold = (answers: readonly unknown[]) => unknown;
@@ -303,8 +310,8 @@ export class FanOutNodeLeases implements NodeLeaseStore {
     return this.#map.shards.map((s) => this.#byShard[s]!);
   }
 
-  async renew(node: string, leaseMs: number, address?: string): Promise<void> {
-    await Promise.all(this.#all().map((s) => s.renew(node, leaseMs, address)));
+  async renew(node: string, leaseMs: number, address?: string, traits?: NodeTraits): Promise<void> {
+    await Promise.all(this.#all().map((s) => s.renew(node, leaseMs, address, traits)));
   }
 
   async alive(node: string): Promise<boolean> {

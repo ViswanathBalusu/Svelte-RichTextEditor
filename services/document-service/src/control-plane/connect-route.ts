@@ -20,6 +20,7 @@
  */
 import { json, type Kit } from './kit.ts';
 import { guard, type Handler } from './pipeline.ts';
+import { ApiError } from './problems.ts';
 import type { Placement } from './room-routing.ts';
 
 /** The reply of the route. */
@@ -34,11 +35,12 @@ export async function chooseNode(
   placement: Placement,
   owner: string | null,
   doc: string,
+  region?: string | null,
 ): Promise<{ node: string; address: string | null; source: 'owner' | 'routing' } | null> {
   const live = await placement.hosts();
   const own = owner === null ? undefined : live.find((h) => h.node === owner);
   if (own) return { node: own.node, address: own.address, source: 'owner' };
-  const routed = await placement.route(doc);
+  const routed = await placement.route(doc, region);
   return routed ? { node: routed.node, address: routed.address, source: 'routing' } : null;
 }
 
@@ -60,7 +62,11 @@ export function connectRoutes(k: Kit): Record<string, Handler> {
     const hint = (h: ConnectHint) => json(200, h, { 'Cache-Control': 'private, no-store' });
     if (!d.placement) return hint({ url: entry(), node: '', source: 'entry' });
     const head = await d.logs.head(ref);
-    const chosen = await chooseNode(d.placement, head.owner, doc);
+    const region = d.homeRegions ? await d.homeRegions.resolve(ref) : null;
+    const chosen = await chooseNode(d.placement, head.owner, doc, region);
+    // A document with a home region is never offered an address outside it (BE-074 criterion 4).
+    if (region !== null && !chosen)
+      throw new ApiError('unavailable', `no live node in the home region ${region}`);
     if (!chosen || chosen.address === null)
       return hint({ url: entry(), node: chosen?.node ?? '', source: 'entry' });
     return hint({ url: chosen.address, node: chosen.node, source: chosen.source });

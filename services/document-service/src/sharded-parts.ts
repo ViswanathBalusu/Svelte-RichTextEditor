@@ -46,6 +46,7 @@ const ROUTED = [
   'accessCodes',
   'quotaAdmin',
   'readMarkers',
+  'homeRegions',
   'threads',
   'versions',
 ] as const satisfies readonly (keyof ServiceParts)[];
