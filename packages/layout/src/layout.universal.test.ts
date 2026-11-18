@@ -70,12 +70,14 @@ const EXPECTED: Record<string, [number, number, string | null]> = {
   'eigenpal/pages-1/fixed': [1, 33, '6e80d21b'],
   'docen/pages-1/table': [1, 32, 'd26d4fa5'],
   'eigenpal/pages-1/table': [1, 32, '280408ef'],
-  'docen/form-fields/fixed': [1, 29, '835e2914'],
+  // Re-recorded on 2026-11-17 (Node.js 22.18) when a form field without a width became a box of the
+  // default width of its kind (FRW-080 criterion 3), where it had been laid out as its value.
+  'docen/form-fields/fixed': [1, 29, '121e5bdf'],
   // Re-recorded on 2026-11-13 (Node.js 22.18, Chromium, Firefox and WebKit gave the same digests)
   // when the flow took the larger-of gap and per-side contextual spacing (CDM-043, ADR 0032).
-  'eigenpal/form-fields/fixed': [1, 29, '0d7c9238'],
-  'docen/form-fields/table': [1, 27, '07a893e8'],
-  'eigenpal/form-fields/table': [1, 27, '0ca761af'],
+  'eigenpal/form-fields/fixed': [1, 29, '92d2dc1d'],
+  'docen/form-fields/table': [1, 26, 'b50aa8f3'],
+  'eigenpal/form-fields/table': [1, 26, 'bf37668f'],
   'docen/pages-20/fixed': [18, 966, '318703cc'],
   'eigenpal/pages-20/fixed': [17, 1026, 'e5f435dd'],
   'docen/pages-20/table': [19, 919, null],

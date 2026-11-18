@@ -10,6 +10,7 @@ import {
   type ResolvedParagraph,
   type RunProperties,
 } from '@docedit/model';
+import { fieldWidth } from '@docedit/model/definition';
 import { assetRef } from './assets.ts';
 import { heightForWidth, imagePixelSize } from './signature-picture.ts';
 import {
@@ -707,7 +708,9 @@ function signaturePicture(
 function formFieldTex(ctx: Ctx, n: J, st: InlineState): Tex {
   const id = idOf(n);
   const label = str(attr(n, 'label')) ?? '';
-  const width = num(attr(n, 'width'));
+  // The box is the field's `width`, or the default width of its kind (12 §3.2; FRW-080): a field
+  // is never as wide as its value, so filling it moves no line or page.
+  const width = fieldWidth(str(attr(n, 'kind')), attr(n, 'width'));
   const v = attr(n, 'value');
   let value = '';
   let picture: Tex | null = null;
@@ -718,17 +721,15 @@ function formFieldTex(ctx: Ctx, n: J, st: InlineState): Tex {
   } else if (ctx.o.fields === 'flatten') {
     // A signature or initials value is drawn as its picture (EXP-034 criterion 1) when the job has its bytes.
     const kind = str(attr(n, 'kind'));
-    if ((kind === 'signature' || kind === 'initials') && width !== null)
+    if (kind === 'signature' || kind === 'initials')
       picture = signaturePicture(ctx, v, width, label, st.blockId);
     if (picture === null) value = formFieldValue(ctx, n);
   }
   const fam = familyOf(ctx, st.para.run.fontFamily, st.blockId);
   checkGlyphs(ctx, value, fam, st.para.run.bold, st.para.run.italic, id ?? st.blockId);
-  const box = width !== null ? dimen(width, { min: 0, max: 31680 }) : t('0pt');
+  const box = dimen(width, { min: 0, max: 31680 });
   const body = picture ?? text(value);
-  if (width !== null && value.length > 0)
-    // The class reports a value wider than its field in the log; the converter cannot measure it.
-    void 0;
+  // The class reports a value wider than its field in the log; the converter cannot measure it.
   const tagged = st.place === 'story' ? t('0') : t('1');
   const field = tex`\DEff{${tagged}}{${box}}{${kvValue(label)}}{${body}}`;
   // The class reports this box's page and rectangle under the field's number (EXP-058).

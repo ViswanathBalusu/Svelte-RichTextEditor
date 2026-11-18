@@ -21,7 +21,7 @@ import {
   type RunProperties,
   type StyleTable,
 } from '@docedit/model';
-import { indexDefinition } from '@docedit/model/definition';
+import { fieldWidth, indexDefinition } from '@docedit/model/definition';
 import type { FontKey } from './measure.ts';
 
 // ---------------------------------------------------------------------------------------------
@@ -77,6 +77,11 @@ export interface FlowInlineBox {
   readonly font: FlowFont;
   readonly offset: number;
   readonly size: number;
+  /**
+   * True when the line breaker must set the box at exactly `width` (a form field, FRW-080). Other
+   * boxes are measured as one character until the stories that own them are built (items.ts).
+   */
+  readonly exactWidth?: true;
 }
 
 export type FlowInline = FlowText | FlowTab | FlowLineBreak | FlowInlineBox;
@@ -739,27 +744,19 @@ function paragraphBlocks(
         });
         break;
       case 'form_field': {
-        const width = num(node.attrs?.['width']);
-        const text = str(node.attrs?.['value']) ?? str(node.attrs?.['label']) ?? '';
-        if (width)
-          inlines.push({
-            kind: 'box',
-            what: 'preserved',
-            width: pt(width),
-            height: o.shape.markFont.sizePt,
-            font: o.shape.markFont,
-            offset: at,
-            size,
-          });
-        else
-          inlines.push({
-            kind: 'text',
-            role: 'form',
-            text: atomText(text || '    '),
-            font: fontOf(ctx, o.scope, marks),
-            offset: at,
-            size,
-          });
+        // The box is the field's `width`, or the default of its kind (12 §3.2; FRW-080): the value
+        // never enters it, so filling a field moves no break.
+        const width = fieldWidth(str(node.attrs?.['kind']), node.attrs?.['width']);
+        inlines.push({
+          kind: 'box',
+          what: 'preserved',
+          width: pt(width),
+          height: o.shape.markFont.sizePt,
+          font: o.shape.markFont,
+          offset: at,
+          size,
+          exactWidth: true,
+        });
         break;
       }
       case 'extension_inline':

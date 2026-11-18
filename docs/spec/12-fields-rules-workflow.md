@@ -54,7 +54,7 @@ An inline atom. It may appear wherever inline content is allowed in the body, in
 | `options` | For `choice`: a list of `{ id, label }` |
 | `format` | Display format: decimals, prefix, suffix, date pattern |
 | `validation` | `min`, `max`, `minLength`, `maxLength`, `pattern` (a restricted regular expression; section 5.2), `preset` (`email`, `phone`, `postcode`) |
-| `width` | Fixed width in the document's length unit. Fields have a fixed width by default so that filling them does not move line and page breaks |
+| `width` | Fixed width in the document's length unit. Fields have a fixed width by default so that filling them does not move line and page breaks. A field with no `width` takes the default width of its kind (`FIELD_DEFAULT_WIDTH`; proposed in ADR 0380, not chosen by the owner). A value never changes the width, and a value wider than the box does not grow it |
 | `sensitive` | Reserved. It becomes the read restriction for values under ADR 0019 (proposed, 2026-11-06); until that is accepted every value is readable by everyone who can open the document |
 
 ```json
