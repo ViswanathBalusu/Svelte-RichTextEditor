@@ -229,7 +229,10 @@ const CAPABILITIES: readonly Capability[] = [
 ];
 
 /** A suggestion of the core as the shell's review tools take it (UX-036): the capabilities typed. */
-function reviewItem(s: ReturnType<EditorCore['suggestionItems']>[number]): ReviewItem {
+function reviewItem(
+  s: ReturnType<EditorCore['suggestionItems']>[number],
+  committedAt: string | null,
+): ReviewItem {
   return {
     id: s.id,
     kind: s.kind,
@@ -241,6 +244,7 @@ function reviewItem(s: ReturnType<EditorCore['suggestionItems']>[number]): Revie
     caps: s.caps.filter((c): c is Capability => (CAPABILITIES as readonly string[]).includes(c)),
     canResolve: s.canResolve,
     region: s.region,
+    committedAt,
   };
 }
 
@@ -281,6 +285,47 @@ export function settingsFrom(attrs: {
   if (attrs.locale) out.locale = attrs.locale;
   if (attrs.theme !== null) out.theme = themeMode(attrs.theme);
   return out;
+}
+
+/**
+ * The server times of the commits that introduced suggestions (UX-037 criterion 1), asked of the
+ * history port once for each suggestion. `moved` counts the answers, so that the review pane reads
+ * its list again when one arrives. A suggestion the port cannot answer for has no time.
+ */
+function suggestionTimeCache(ask: (id: string) => Promise<string | null>): {
+  get(id: string): string | null;
+  ask(ids: readonly string[]): void;
+  readonly moved: ReadView<number>;
+} {
+  const times = new Map<string, string>();
+  const asking = new Set<string>();
+  const listeners = new Set<() => void>();
+  let moves = 0;
+  return {
+    get: (id) => times.get(id) ?? null,
+    ask(ids) {
+      for (const id of ids) {
+        if (times.has(id) || asking.has(id)) continue;
+        asking.add(id);
+        void ask(id).then((time) => {
+          asking.delete(id);
+          if (time === null) return;
+          times.set(id, time);
+          moves++;
+          for (const listener of [...listeners]) listener();
+        });
+      }
+    },
+    moved: {
+      get: () => moves,
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    },
+  };
 }
 
 /** A read view derived from others, notifying when any of them does. */
@@ -355,6 +400,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     : null;
   // The guided bar follows `wf.changed` through the same status (FRW-035 criterion 6).
   const fill = fillView(core, fillActions?.status);
+  const suggestionTimes = suggestionTimeCache((id) => core.suggestionTime(id));
   // The thread service (UX-028 to UX-032): the comments port, with the core's placement of each thread.
   const threads = options.threads ? threadsService(core, options.threads) : null;
   const port = options.permissions ?? null;
@@ -426,7 +472,10 @@ export function mountEditor(options: MountOptions): MountedEditor {
       mountBody: (target) => timeBodyAttach(() => core.mountBody(target)),
       mountPanel: (target) => core.mountPanel(target),
       access: core.access,
-      revision: core.revision,
+      revision: derived(
+        [core.revision, suggestionTimes.moved],
+        () => core.revision.get() + suggestionTimes.moved.get(),
+      ),
       direction: core.direction,
       // The mode the switcher shows: the effective one, which the core enforces (the most restrictive
       // the access allows). The modes the switcher offers are the three this element supports (UX-015;
@@ -631,10 +680,16 @@ export function mountEditor(options: MountOptions): MountedEditor {
       setSuggestionLabel: (label) => core.setSuggestionLabel(label),
       setSuggestionCard: (format) => core.setSuggestionCard(format),
       // The review tools (UX-036): the list, next and previous, accept and reject.
-      suggestionItems: () => core.suggestionItems().map(reviewItem),
+      // Each item carries the server time of the commit that introduced it, once the history port
+      // has answered (UX-037 criterion 1; the pane reads the list again when a time arrives).
+      suggestionItems: () => {
+        const items = core.suggestionItems();
+        suggestionTimes.ask(items.map((i) => i.id));
+        return items.map((i) => reviewItem(i, suggestionTimes.get(i.id)));
+      },
       stepSuggestion: (direction) => {
         const found = core.stepSuggestion(direction);
-        return found === null ? null : reviewItem(found);
+        return found === null ? null : reviewItem(found, suggestionTimes.get(found.id));
       },
       revealSuggestion: (id) => core.revealSuggestion(id),
       resolveAtSelection: (action) => core.resolveAtSelection(action),
