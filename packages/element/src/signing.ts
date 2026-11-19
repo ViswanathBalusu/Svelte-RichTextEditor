@@ -48,6 +48,27 @@ export function signRefusal(error: unknown): Extract<SignOutcome, { ok: false }>
   return { ok: false, reason: 'failed' };
 }
 
+/**
+ * What `de-sign-request` watches (FRW-071): each new request of the core to open the signing step,
+ * as the identifier and key of the field. A request that is closed raises nothing, and the request
+ * already open when the listener is added is not raised again. No value is read.
+ */
+export function signRequestWatch(core: Pick<EditorCore, 'signRequest'>): {
+  subscribe(listener: (field: { fieldId: string; key: string }) => void): () => void;
+} {
+  return {
+    subscribe(listener) {
+      let seen = core.signRequest.get()?.n ?? 0;
+      return core.signRequest.subscribe(() => {
+        const request = core.signRequest.get();
+        if (!request || request.n === seen) return;
+        seen = request.n;
+        listener({ fieldId: request.id, key: request.key });
+      });
+    },
+  };
+}
+
 export function signingService(
   core: EditorCore,
   source: () => SigningSource | null,

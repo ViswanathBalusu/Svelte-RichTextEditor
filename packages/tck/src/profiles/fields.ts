@@ -1,11 +1,11 @@
 /**
  * The `fields` and `perm-fill` profiles (FRW-065 to FRW-067; 12 §3, §4, §9, §10). `fields` checks the
- * invariants I13 and I15, the outcomes of P8 and P9 with their codes, prefill, and the field
+ * invariants I13 to I15, the outcomes of P7 to P9 with their codes, prefill, and the field
  * resources. `perm-fill` (perm-fill.ts) runs the fill property black-box.
  */
 import { KitFailure, check, equal, oneOf } from '../assert.ts';
 import type { ScenarioContext } from '../context.ts';
-import { paragraph, posBefore, type JsonNode } from '../documents.ts';
+import { nodeById, paragraph, posBefore, type JsonNode } from '../documents.ts';
 import { scenario, type ProfileDef, type ScenarioDef } from '../scenario.ts';
 import { acked, join, problemOf, submit } from './support.ts';
 import type { CdmEnvelope } from '@docedit/model';
@@ -314,6 +314,128 @@ export const FIELDS: ProfileDef = {
           ['conflict'],
           'a concurrent fill of the same field (P9)',
         );
+      },
+    }),
+    fd({
+      id: 'i14.rules',
+      title: 'I14: a rule that reads a key no field has, or a cycle of formulas, is refused',
+      spec: '12 §3 I14, §5.4',
+      covers: { messages: ['sync.reject'] },
+      async run(ctx) {
+        // Two formula fields for the cycle below.
+        const env = fieldsDocument();
+        const para = nodeById(env.doc, FIELD_IDS.para)!;
+        for (const [id, key] of [
+          ['fFormulaA0000001', 'calc.a'],
+          ['fFormulaB0000001', 'calc.b'],
+        ] as const)
+          para.content!.push({
+            type: 'form_field',
+            attrs: { id, key, kind: 'formula', label: key },
+          });
+        const doc = await ctx.document(env);
+        // Rules live in the definitions, which need structure (12 §5.4): the owner has it.
+        const editor = await join(ctx, 'owner', doc, 'owner');
+        const at = posBefore(editor.content.doc, 'role_landlord') + 1;
+        const add = (...rules: Array<Record<string, unknown>>) => ({
+          stepType: 'replace',
+          from: at,
+          to: at,
+          slice: { content: rules.map((attrs) => ({ type: 'rule_def', attrs })) },
+        });
+        await refusedWith(
+          ctx,
+          await submit(editor.wire, 1, {
+            base: editor.content.seq,
+            steps: [
+              add({ id: 'rNope', when: { '==': [{ field: 'nope' }, '1'] }, then: [] }) as never,
+            ],
+          }),
+          ['invalid_op', 'field_invalid'],
+          'a rule that reads a key no field has',
+        );
+        // Two formulas set from each other: the graph of `set` effects has a cycle.
+        const cycle = await submit(editor.wire, 1, {
+          base: editor.content.seq,
+          steps: [
+            add(
+              {
+                id: 'rA',
+                when: true,
+                then: [{ set: { field: 'calc.a', value: { field: 'calc.b' } } }],
+              },
+              {
+                id: 'rB',
+                when: true,
+                then: [{ set: { field: 'calc.b', value: { field: 'calc.a' } } }],
+              },
+            ) as never,
+          ],
+        });
+        await refusedWith(ctx, cycle, ['invalid_op', 'field_invalid'], 'a cycle of set effects');
+        // A rule that reads keys the document has is accepted: the refusal above is the key.
+        const ok = await acked(editor.wire, 1, {
+          base: editor.content.seq,
+          steps: [
+            add({
+              id: 'rOk',
+              when: { '==': [{ field: 'name' }, 'x'] },
+              then: [{ hide: ['rent'] }],
+            }) as never,
+          ],
+        });
+        check(
+          ok.seq > editor.content.seq,
+          'a rule that reads an existing key is accepted',
+          `> ${editor.content.seq}`,
+          ok.seq,
+        );
+      },
+    }),
+    fd({
+      id: 'p7.fill',
+      title:
+        'P7: a participant who may fill fills a field of its role, and another role’s field is permission_denied',
+      spec: '12 §4 P7, §13; 05 §3.1',
+      covers: { errors: ['permission_denied'], messages: ['sync.reject'] },
+      async run(ctx) {
+        const doc = await ctx.document(fieldsDocument());
+        // The participant has the fill role from the `wfr` claim of its token (05 §3.1; 12 §13).
+        const mine = await join(ctx, 'filler', doc, 'filler', { token: { wfr: ['role_tenant'] } });
+        const probe = await submit(mine.wire, 1, {
+          base: mine.content.seq,
+          steps: [fill(mine.content.doc, FIELD_IDS.name, 'Ada')],
+        });
+        if (probe.t === 'sync.reject' && probe.d.code === 'permission_denied')
+          ctx.skip(
+            'the target gives no fill roles from the `wfr` claim of a minted token (05 §3.1)',
+          );
+        if (probe.t !== 'sync.ack')
+          throw new KitFailure(
+            'a fill of a field of the participant’s role is accepted',
+            'sync.ack',
+            probe,
+          );
+        const head = probe.d.seq;
+        await refusedWith(
+          ctx,
+          await submit(mine.wire, 1, {
+            base: head,
+            steps: [fill(mine.content.doc, FIELD_IDS.rent, '12')],
+          }),
+          ['permission_denied'],
+          'a fill of a field of another role (P7)',
+        );
+        await refusedWith(
+          ctx,
+          await submit(mine.wire, 1, {
+            base: head,
+            steps: [fill(mine.content.doc, FIELD_IDS.name, 5)],
+          }),
+          ['field_invalid', 'invalid_op'],
+          'a wrongly typed fill of the participant’s own field (I15)',
+        );
+        await mine.wire.close();
       },
     }),
     fd({

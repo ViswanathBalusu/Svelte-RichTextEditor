@@ -39,7 +39,7 @@ describe.skipIf(skip)('FRW-067: the fields profile against the reference service
     const p = report.profiles.find((x) => x.id === 'fields');
     const failed = (p?.scenarios ?? [])
       .filter((s) => s.outcome === 'failed')
-      .map((s) => `${s.id}: ${s.failure?.message ?? ''}`);
+      .map((s) => `${s.id}: ${s.failure?.message ?? ''} ${JSON.stringify(s.failure ?? {})}`);
     console.log(
       'fields profile outcomes:',
       (p?.scenarios ?? []).map((s) => `${s.id}=${s.outcome}`),
