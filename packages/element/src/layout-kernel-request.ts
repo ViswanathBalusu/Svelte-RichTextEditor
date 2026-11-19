@@ -14,7 +14,13 @@
  * through `de-diagnostic`, and rejects the batch that met it. The document lives in the editing
  * core on this thread, so nothing is lost.
  */
-import type { BatchOperation, BlockBatch, FaceRequest, FaceStatus } from '@docedit/layout-kernel';
+import type {
+  BatchOperation,
+  BlockBatch,
+  FaceRequest,
+  FaceStatus,
+  MeasureRun,
+} from '@docedit/layout-kernel';
 import type { DiagnosticDetail } from './events.ts';
 import type {
   BatchStat,
@@ -108,6 +114,18 @@ export class ElementKernel {
         code: 'kernel_unavailable',
       });
     return worker.batch(op, blocks);
+  }
+
+  /**
+   * Shapes each block as one run and returns the advance of every code unit, in advance units
+   * (1/1280 pt), in the blocks' order (WASM-006). Starts the worker if it was stopped. Rejects with
+   * `unknown_face` and the like when a run cannot be shaped, and with `kernel_trap` after a trap.
+   */
+  async measure(
+    runs: readonly MeasureRun[],
+    blocks: readonly string[] | BlockBatch,
+  ): Promise<Int32Array> {
+    return (await this.#running()).measure(runs, blocks);
   }
 
   /**

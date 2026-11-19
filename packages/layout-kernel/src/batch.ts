@@ -16,7 +16,15 @@
  */
 
 /** The operations a batch can ask for. */
-export type BatchOperation = 'checksum';
+export type BatchOperation = 'checksum' | 'advances';
+
+/** What one block of a `measure` request is shaped with (the same as `RunStyle` of the kernel). */
+export interface MeasureRun {
+  readonly alias: string;
+  readonly sizeTwips: number;
+  readonly language: string;
+  readonly features: string;
+}
 
 /** Whole blocks, packed. `offsets[i]..offsets[i + 1]` are the code units of block `i`. */
 export interface BlockBatch {
@@ -85,6 +93,17 @@ export interface FaceStatus {
 /** Messages from the page to the worker. `id` pairs a request with its answer. */
 export type ToWorker =
   | {
+      /**
+       * Shapes each block of the batch as one run, `runs[i]` for block `i`, and answers with the
+       * advance of every code unit (`advances`), in advance units, in the order of `text`.
+       */
+      readonly type: 'measure';
+      readonly id: number;
+      readonly runs: readonly MeasureRun[];
+      readonly text: Uint16Array;
+      readonly offsets: Uint32Array;
+    }
+  | {
       /** Loads the faces of `faces` that are not held yet, for `owner`: `''` is the platform's fonts. */
       readonly type: 'faces';
       readonly id: number;
@@ -123,6 +142,14 @@ export interface FaceFailure {
 
 /** Messages from the worker to the page. */
 export type FromWorker =
+  | {
+      readonly type: 'advances';
+      readonly id: number;
+      /** One value for each code unit of the request's text, in its order; the buffer is transferred. */
+      readonly values: Int32Array;
+      /** Milliseconds the worker spent shaping (its own clock). */
+      readonly ms: number;
+    }
   | {
       readonly type: 'faces';
       readonly id: number;
