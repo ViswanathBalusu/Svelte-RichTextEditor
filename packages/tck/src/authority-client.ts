@@ -13,9 +13,8 @@
  * | `attribution` | `POST /v1/authority/states/{stateId}/attribution` |
  * | `migrate` | `POST /v1/authority/documents/{doc}/migrate` |
  * | `evaluateRules` | `POST /v1/authority/states/{stateId}/evaluate-rules` |
+ * | `mapRanges` | `POST /v1/authority/states/{stateId}/map-ranges` |
  * | what it supports | `GET /v1/authority/capabilities` |
- *
- * `mapRanges` has no route yet (PRO-105), so the kit has no call for it.
  */
 import type { CdmEnvelope } from '@docedit/model';
 import { documentHash } from '@docedit/model';
@@ -90,10 +89,10 @@ export class AuthorityClient {
     );
   }
 
-  /** A call on a state: `commits`, `restore-steps`, `diff`, `attribution` or `evaluate-rules`. */
+  /** A call on a state: `commits`, `restore-steps`, `diff`, `attribution`, `evaluate-rules` or `map-ranges`. */
   onState(
     stateId: string,
-    call: 'commits' | 'restore-steps' | 'diff' | 'attribution' | 'evaluate-rules',
+    call: 'commits' | 'restore-steps' | 'diff' | 'attribution' | 'evaluate-rules' | 'map-ranges',
     body: unknown,
   ) {
     return this.call('POST', `${AUTHORITY_API}/states/${stateId}/${call}`, body);
