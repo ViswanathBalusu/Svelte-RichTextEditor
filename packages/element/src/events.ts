@@ -89,6 +89,8 @@ export interface DocEditorEventMap {
   'de-fill-progress': FillProgressDetail;
   /** The workflow was reported `completed` to this session (12 §10; FRW-071). */
   'de-workflow-complete': WorkflowCompleteDetail;
+  /** This person started to sign a signature or initials field (12 §10; FRW-071). It carries no value. */
+  'de-sign-request': SignRequestDetail;
   /**
    * A feature that loads on demand reported how it went, or that it is not available (WASM-002,
    * WASM-003; proposed, ADR 0410). The detail has codes, counts and a directive name, never
@@ -132,6 +134,16 @@ export interface FieldChangeDetail {
   /** False when the entry has a problem, or the field is required and the entry is empty. */
   valid: boolean;
   empty: boolean;
+}
+
+/**
+ * `de-sign-request`: the signature or initials field the participant started to sign, by its
+ * identifier and key. 12 §10 names the event and not its detail; these members are proposed
+ * (FRW-071 Notes) and are those of `de-field-change` that name a field. The host cannot veto it.
+ */
+export interface SignRequestDetail {
+  fieldId: string;
+  key: string;
 }
 
 /**
@@ -208,6 +220,7 @@ export const EVENT_NAMES: readonly DocEditorEventName[] = [
   'de-field-change',
   'de-fill-progress',
   'de-workflow-complete',
+  'de-sign-request',
   'de-diagnostic',
   'de-error',
 ];

@@ -67,7 +67,7 @@ import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
 import { rulesService } from './rules.ts';
-import { signingService, type SigningSource } from './signing.ts';
+import { signRequestWatch, signingService, type SigningSource } from './signing.ts';
 import { workflowSendService, type WorkflowSendSource } from './workflow-send.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
@@ -735,6 +735,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
         return () => workflowCompleteListeners.delete(listener);
       },
     },
+    // What `de-sign-request` watches (FRW-071): a new request of the core, by field and key.
+    signRequested: signRequestWatch(core),
     // What `de-selection` and `de-command-state` watch (FE-028); read-only, no content.
     watch: {
       // A change of the registry's states is a reason to look again, as a new revision is (UX-005).

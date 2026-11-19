@@ -79,6 +79,7 @@ Raised on the element as `CustomEvent`s that bubble and are composed; `detail` i
 | `de-field-change` | `FieldChangeDetail` | This person changed the entry of a form field (12 §10; FRW-070). It carries no value. |
 | `de-fill-progress` | `FillProgressDetail` | The progress the guided bar of fill mode shows changed (12 §10; FRW-070). |
 | `de-workflow-complete` | `WorkflowCompleteDetail` | The workflow was reported `completed` to this session (12 §10; FRW-071). |
+| `de-sign-request` | `SignRequestDetail` | This person started to sign a signature or initials field (12 §10; FRW-071). It carries no value. |
 | `de-diagnostic` | `DiagnosticDetail` | A feature that loads on demand reported how it went, or that it is not available (WASM-002, WASM-003; proposed, ADR 0410). The detail has codes, counts and a directive name, never content. |
 | `de-error` | `ErrorDetail` |  |
 

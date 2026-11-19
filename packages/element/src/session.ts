@@ -141,6 +141,10 @@ export interface EditorHandle {
   readonly fill?: FillWatch;
   /** `de-workflow-complete` (FRW-071): the workflow was reported `completed`; absent in stand-in editors. */
   readonly workflowComplete?: { subscribe(listener: () => void): () => void };
+  /** `de-sign-request` (FRW-071): the participant started to sign a field; absent in stand-in editors. */
+  readonly signRequested?: {
+    subscribe(listener: (field: { fieldId: string; key: string }) => void): () => void;
+  };
 }
 
 export interface SessionHost {
@@ -499,6 +503,11 @@ export class Session {
         editor.workflowComplete.subscribe(() =>
           this.#emit('de-workflow-complete', { state: 'completed' }),
         ),
+      );
+    // `de-sign-request` (12 §10; FRW-071): the participant activated a signature or initials field.
+    if (editor.signRequested)
+      this.#unsubscribe.push(
+        editor.signRequested.subscribe((field) => this.#emit('de-sign-request', field)),
       );
     const confirmed = editor.confirmedSeq;
     if (confirmed) {
