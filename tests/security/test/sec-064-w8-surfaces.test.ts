@@ -349,17 +349,18 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           });
           expect(created.status, created.text).toBe(202);
           const id = created.json.id as string;
-          let last = created;
-          // The wait ends when the job does, so the limit only bounds a job that hangs. An export
-          // takes about a second alone; with 60 busy processes on 20 cores the first of a process
-          // took 31 s (measured here), which a count of 200 polls (10 s of sleeping) did not cover.
+          // The wait ends when the job does, so the limit only bounds a job that hangs. The three
+          // targets take under a second together when alone; with 60 busy processes on 20 cores
+          // the first export of a process took 31 s (measured here), which a count of 200 polls
+          // (10 s of sleeping) did not cover.
           const giveUp = Date.now() + 60_000;
+          let last = await h.call('GET', `/v1/exports/${id}`, { token });
           for (;;) {
-            last = await h.call('GET', `/v1/exports/${id}`, { token });
             const state = (last.json as Record<string, unknown>)['state'];
             if (state === 'done' || state === 'failed' || state === 'completed') break;
             if (Date.now() > giveUp) break;
             await sleep(50);
+            last = await h.call('GET', `/v1/exports/${id}`, { token });
           }
           const body = last.json as Record<string, unknown>;
           expect(['done', 'completed'], last.text).toContain(body['state']);
