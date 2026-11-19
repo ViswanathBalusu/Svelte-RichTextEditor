@@ -101,6 +101,8 @@ export const EN_GB = {
   'review.suggestion.ins': 'Inserted by {name}',
   'review.suggestion.del': 'Deleted by {name}',
   'review.suggestion.fmt': 'Formatting changed by {name}',
+  'review.suggestion.card': '{name}',
+  'review.suggestion.cardAt': '{name}, {time}',
   'command.mode.fill': 'Filling in',
 
   // Task groups of the full toolbar (UX-007). The grouping is this product's own (13 §3).

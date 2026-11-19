@@ -903,6 +903,23 @@
     return () => core.setSuggestionLabel?.(null);
   });
 
+  // The card that names a suggestion's author and the time of the commit that introduced it (FE-046
+  // criterion 2): the name is the host's (`resolveUsers`), the time the server's, in the reader's
+  // locale. Without a time the card shows the name alone.
+  $effect(() => {
+    if (!core.setSuggestionCard) return;
+    void directory.current;
+    const words = tr;
+    core.setSuggestionCard((user, time) => {
+      const name = nameOf(user);
+      const at = time === null ? Number.NaN : Date.parse(time);
+      if (Number.isNaN(at)) return words.t('review.suggestion.card', { name });
+      const when = words.date(new Date(at), { dateStyle: 'medium', timeStyle: 'short' });
+      return words.t('review.suggestion.cardAt', { name, time: when });
+    });
+    return () => core.setSuggestionCard?.(null);
+  });
+
   // Suggestion mode where the user may only suggest (PRM-031; 07 §7): the core is asked for `review`
   // in such a scope and for the chosen `edit` again in an editable one. The rules are in suggest-mode.ts.
   let modeTrack: ModeTrack = START_TRACK;

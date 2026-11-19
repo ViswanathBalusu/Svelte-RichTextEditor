@@ -619,6 +619,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       markupView: core.markupView,
       setMarkupView: (view) => core.setMarkupView(view),
       setSuggestionLabel: (label) => core.setSuggestionLabel(label),
+      setSuggestionCard: (format) => core.setSuggestionCard(format),
       // The review tools (UX-036): the list, next and previous, accept and reject.
       suggestionItems: () => core.suggestionItems().map(reviewItem),
       stepSuggestion: (direction) => {

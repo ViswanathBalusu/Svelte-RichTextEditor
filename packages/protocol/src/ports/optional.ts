@@ -40,6 +40,14 @@ export interface HistoryPort {
   ): Promise<Tagged<W.ReadMarker>>;
   /** `GET /documents/{id}/activity`. */
   activity(docId: string): Promise<Response<'getActivity'>>;
+  /**
+   * `GET /documents/{id}/suggestions/{sid}/introduction`: the commit that introduced a suggestion,
+   * with its server time (HIS-042; decision 109 of `docs/owner-decisions-2026-11-15.md`).
+   */
+  suggestionIntroduction(
+    docId: string,
+    suggestionId: string,
+  ): Promise<Response<'getSuggestionIntroduction'>>;
 }
 
 /** Comment threads (05 §6.2; 07 §6; ADR 0015). Feature `comments`. Thread events arrive through `SyncChannel.onEvent`. */
