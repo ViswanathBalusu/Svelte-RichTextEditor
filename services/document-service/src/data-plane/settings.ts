@@ -117,6 +117,9 @@ export const PROTOCOL_FEATURES: readonly string[] = [
   'regions',
   'suggest-enforced',
   'read-restrictions',
+  // The room refuses a fill the rules hide or disable and a commit with rules that do not compile
+  // (12 §5; FRW-019, FRW-020).
+  'rules',
 ];
 
 /**

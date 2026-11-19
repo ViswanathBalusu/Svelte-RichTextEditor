@@ -63,6 +63,8 @@ const SERVICE_ROUTES = (MATRIX.find((r) => r.id === 'service')?.routes ?? []).ma
 
 export interface MockTargetOptions {
   presence?: boolean;
+  /** Test of the failure report of a profile: a minted token's wfr claim gives no fill roles. */
+  ignoreFillRoles?: boolean;
   testMode?: boolean;
   /**
    * Test of the fuzzer's failure path (PRO-116 criterion 4): after this many pings have been
@@ -191,7 +193,8 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
       ...(typeof body['name'] === 'string' ? { name: body['name'] } : {}),
       groups: Array.isArray(body['grp']) ? (body['grp'] as string[]) : [],
       // The fill roles claim (wfr, 05 §3.1): the mock's stand-in is MockUser.fill.
-      ...(Array.isArray(body['wfr']) &&
+      ...(!opts.ignoreFillRoles &&
+      Array.isArray(body['wfr']) &&
       (body['wfr'] as unknown[]).every((r) => typeof r === 'string')
         ? { fill: { roles: body['wfr'] as string[], active: true } }
         : {}),
