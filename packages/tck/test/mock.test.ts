@@ -86,10 +86,9 @@ describe.skipIf(skip)('the kit against the mock backend over DEP', () => {
       expect(byId[id]!.outcome, id).toBe('skipped');
       expect(byId[id]!.reason, id).toBeTruthy();
     }
-    // `perm-fill` needs a fill participant, which a server gets from the workflow (G95): the profile
-    // runs on a server announcing `fields`, and its one scenario is skipped with the reason.
-    expect(byId['perm-fill']!.outcome).toBe('skipped');
-    expect(byId['perm-fill']!.scenarios.map((x) => x.reason)).toEqual([expect.any(String)]);
+    // `perm-fill` runs on the mock: the test target turns the `wfr` claim of a minted token into the
+    // mock's fill roles (FRW-067).
+    expect(byId['perm-fill']!.outcome).toBe('passed');
   });
 
   it('passes every scenario of the fields profile (FRW-067 criterion 2, mock half)', () => {
@@ -98,8 +97,10 @@ describe.skipIf(skip)('the kit against the mock backend over DEP', () => {
     expect(outcomes).toEqual({
       'fields.announce': 'passed',
       'fields.i13.keys': 'passed',
+      'fields.i14.rules': 'passed',
       'fields.i14.targets': 'passed',
       'fields.i15.values': 'passed',
+      'fields.p7.fill': 'passed',
       'fields.p8.server-only': 'passed',
       'fields.p9.conflict': 'passed',
       'fields.prefill': 'passed',

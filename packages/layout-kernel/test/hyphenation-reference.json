@@ -1,0 +1,444 @@
+{
+  "$comment": "How TeX hyphenates each word: lualatex under babel, loaded through its ini files as docedit.cls does, with the hyph-utf8 patterns, read from \\showhyphens in the log (Latin Modern, TU encoding). Written by scripts/hyphenation-reference.ts; the kernel must give the same hyphens for the same patterns and minimums (WASM-009).",
+  "tool": "This is LuaHBTeX, Version 1.22.0 (TeX Live 2025)",
+  "languages": {
+    "en-us": [
+      {
+        "word": "hyphenation",
+        "hyphenated": "hy-phen-ation"
+      },
+      {
+        "word": "algorithm",
+        "hyphenated": "al-go-rithm"
+      },
+      {
+        "word": "typography",
+        "hyphenated": "ty-pog-ra-phy"
+      },
+      {
+        "word": "computer",
+        "hyphenated": "com-puter"
+      },
+      {
+        "word": "dictionary",
+        "hyphenated": "dic-tio-nary"
+      },
+      {
+        "word": "extensive",
+        "hyphenated": "ex-ten-sive"
+      },
+      {
+        "word": "international",
+        "hyphenated": "in-ter-na-tional"
+      },
+      {
+        "word": "programming",
+        "hyphenated": "pro-gram-ming"
+      },
+      {
+        "word": "development",
+        "hyphenated": "de-vel-op-ment"
+      },
+      {
+        "word": "responsibility",
+        "hyphenated": "re-spon-si-bil-ity"
+      },
+      {
+        "word": "associate",
+        "hyphenated": "as-so-ciate"
+      },
+      {
+        "word": "project",
+        "hyphenated": "project"
+      },
+      {
+        "word": "table",
+        "hyphenated": "ta-ble"
+      },
+      {
+        "word": "paragraph",
+        "hyphenated": "para-graph"
+      },
+      {
+        "word": "rendering",
+        "hyphenated": "ren-der-ing"
+      },
+      {
+        "word": "document",
+        "hyphenated": "doc-u-ment"
+      },
+      {
+        "word": "collaboration",
+        "hyphenated": "col-lab-o-ra-tion"
+      },
+      {
+        "word": "architecture",
+        "hyphenated": "ar-chi-tec-ture"
+      }
+    ],
+    "en-gb": [
+      {
+        "word": "hyphenation",
+        "hyphenated": "hy-phen-a-tion"
+      },
+      {
+        "word": "algorithm",
+        "hyphenated": "al-gorithm"
+      },
+      {
+        "word": "typography",
+        "hyphenated": "ty-po-graphy"
+      },
+      {
+        "word": "computer",
+        "hyphenated": "com-puter"
+      },
+      {
+        "word": "dictionary",
+        "hyphenated": "dic-tion-ary"
+      },
+      {
+        "word": "extensive",
+        "hyphenated": "ex-tens-ive"
+      },
+      {
+        "word": "international",
+        "hyphenated": "in-ter-na-tional"
+      },
+      {
+        "word": "programming",
+        "hyphenated": "pro-gram-ming"
+      },
+      {
+        "word": "development",
+        "hyphenated": "de-vel-op-ment"
+      },
+      {
+        "word": "responsibility",
+        "hyphenated": "re-spons-ib-il-ity"
+      },
+      {
+        "word": "aluminium",
+        "hyphenated": "alu-minium"
+      },
+      {
+        "word": "colourful",
+        "hyphenated": "col-our-ful"
+      },
+      {
+        "word": "paragraph",
+        "hyphenated": "para-graph"
+      },
+      {
+        "word": "rendering",
+        "hyphenated": "ren-der-ing"
+      },
+      {
+        "word": "document",
+        "hyphenated": "doc-u-ment"
+      },
+      {
+        "word": "collaboration",
+        "hyphenated": "col-lab-or-a-tion"
+      },
+      {
+        "word": "architecture",
+        "hyphenated": "ar-chi-tec-ture"
+      },
+      {
+        "word": "organisation",
+        "hyphenated": "or-gan-isa-tion"
+      }
+    ],
+    "de-1996": [
+      {
+        "word": "Silbentrennung",
+        "hyphenated": "Sil-ben-tren-nung"
+      },
+      {
+        "word": "Bibliothek",
+        "hyphenated": "Bi-blio-thek"
+      },
+      {
+        "word": "Wörterbuch",
+        "hyphenated": "Wör-ter-buch"
+      },
+      {
+        "word": "Rechtschreibung",
+        "hyphenated": "Recht-schrei-bung"
+      },
+      {
+        "word": "Informationsverarbeitung",
+        "hyphenated": "In-for-ma-ti-ons-ver-ar-bei-tung"
+      },
+      {
+        "word": "Straße",
+        "hyphenated": "Stra-ße"
+      },
+      {
+        "word": "Entwicklung",
+        "hyphenated": "Ent-wick-lung"
+      },
+      {
+        "word": "Dokument",
+        "hyphenated": "Do-ku-ment"
+      },
+      {
+        "word": "Zusammenarbeit",
+        "hyphenated": "Zu-sam-men-ar-beit"
+      },
+      {
+        "word": "Computer",
+        "hyphenated": "Com-pu-ter"
+      },
+      {
+        "word": "Verantwortung",
+        "hyphenated": "Ver-ant-wor-tung"
+      },
+      {
+        "word": "Möglichkeit",
+        "hyphenated": "Mög-lich-keit"
+      },
+      {
+        "word": "Textverarbeitung",
+        "hyphenated": "Text-ver-ar-bei-tung"
+      },
+      {
+        "word": "Absatzformatierung",
+        "hyphenated": "Ab-satz-for-ma-tie-rung"
+      },
+      {
+        "word": "Seitenumbruch",
+        "hyphenated": "Sei-ten-um-bruch"
+      },
+      {
+        "word": "Schriftart",
+        "hyphenated": "Schrift-art"
+      }
+    ],
+    "fr": [
+      {
+        "word": "hyphénation",
+        "hyphenated": "hy-phé-na-tion"
+      },
+      {
+        "word": "ordinateur",
+        "hyphenated": "or-di-na-teur"
+      },
+      {
+        "word": "développement",
+        "hyphenated": "dé-ve-lop-pe-ment"
+      },
+      {
+        "word": "communication",
+        "hyphenated": "com-mu-ni-ca-tion"
+      },
+      {
+        "word": "bibliothèque",
+        "hyphenated": "bi-blio-thèque"
+      },
+      {
+        "word": "dictionnaire",
+        "hyphenated": "dic-tion-naire"
+      },
+      {
+        "word": "programmation",
+        "hyphenated": "pro-gram-ma-tion"
+      },
+      {
+        "word": "typographie",
+        "hyphenated": "ty-po-gra-phie"
+      },
+      {
+        "word": "responsabilité",
+        "hyphenated": "res-pon-sa-bi-lité"
+      },
+      {
+        "word": "international",
+        "hyphenated": "in-ter-na-tio-nal"
+      },
+      {
+        "word": "paragraphe",
+        "hyphenated": "pa-ra-graphe"
+      },
+      {
+        "word": "document",
+        "hyphenated": "do-cu-ment"
+      },
+      {
+        "word": "collaboration",
+        "hyphenated": "col-la-bo-ra-tion"
+      },
+      {
+        "word": "architecture",
+        "hyphenated": "ar-chi-tec-ture"
+      },
+      {
+        "word": "traitement",
+        "hyphenated": "trai-te-ment"
+      },
+      {
+        "word": "impression",
+        "hyphenated": "im-pres-sion"
+      }
+    ],
+    "es": [
+      {
+        "word": "separación",
+        "hyphenated": "se-pa-ra-ción"
+      },
+      {
+        "word": "ordenador",
+        "hyphenated": "or-de-na-dor"
+      },
+      {
+        "word": "desarrollo",
+        "hyphenated": "de-sa-rro-llo"
+      },
+      {
+        "word": "comunicación",
+        "hyphenated": "co-mu-ni-ca-ción"
+      },
+      {
+        "word": "biblioteca",
+        "hyphenated": "bi-blio-te-ca"
+      },
+      {
+        "word": "diccionario",
+        "hyphenated": "dic-cio-na-rio"
+      },
+      {
+        "word": "programación",
+        "hyphenated": "pro-gra-ma-ción"
+      },
+      {
+        "word": "tipografía",
+        "hyphenated": "ti-po-gra-fía"
+      },
+      {
+        "word": "responsabilidad",
+        "hyphenated": "res-pon-sa-bi-li-dad"
+      },
+      {
+        "word": "internacional",
+        "hyphenated": "in-ter-na-cio-nal"
+      },
+      {
+        "word": "párrafo",
+        "hyphenated": "pá-rra-fo"
+      },
+      {
+        "word": "documento",
+        "hyphenated": "do-cu-men-to"
+      },
+      {
+        "word": "colaboración",
+        "hyphenated": "co-la-bo-ra-ción"
+      },
+      {
+        "word": "arquitectura",
+        "hyphenated": "ar-qui-tec-tu-ra"
+      },
+      {
+        "word": "procesamiento",
+        "hyphenated": "pro-ce-sa-mien-to"
+      },
+      {
+        "word": "impresión",
+        "hyphenated": "im-pre-sión"
+      }
+    ],
+    "it": [
+      {
+        "word": "sillabazione",
+        "hyphenated": "sil-la-ba-zio-ne"
+      },
+      {
+        "word": "calcolatore",
+        "hyphenated": "cal-co-la-to-re"
+      },
+      {
+        "word": "sviluppo",
+        "hyphenated": "svi-lup-po"
+      },
+      {
+        "word": "comunicazione",
+        "hyphenated": "co-mu-ni-ca-zio-ne"
+      },
+      {
+        "word": "biblioteca",
+        "hyphenated": "bi-blio-te-ca"
+      },
+      {
+        "word": "dizionario",
+        "hyphenated": "di-zio-na-rio"
+      },
+      {
+        "word": "programmazione",
+        "hyphenated": "pro-gram-ma-zio-ne"
+      },
+      {
+        "word": "tipografia",
+        "hyphenated": "ti-po-gra-fia"
+      },
+      {
+        "word": "responsabilità",
+        "hyphenated": "re-spon-sa-bi-li-tà"
+      },
+      {
+        "word": "internazionale",
+        "hyphenated": "in-ter-na-zio-na-le"
+      },
+      {
+        "word": "paragrafo",
+        "hyphenated": "pa-ra-gra-fo"
+      },
+      {
+        "word": "documento",
+        "hyphenated": "do-cu-men-to"
+      },
+      {
+        "word": "collaborazione",
+        "hyphenated": "col-la-bo-ra-zio-ne"
+      },
+      {
+        "word": "architettura",
+        "hyphenated": "ar-chi-tet-tu-ra"
+      },
+      {
+        "word": "elaborazione",
+        "hyphenated": "ela-bo-ra-zio-ne"
+      },
+      {
+        "word": "stampa",
+        "hyphenated": "stam-pa"
+      }
+    ]
+  },
+  "minimums": {
+    "en-us": {
+      "left": 2,
+      "right": 3
+    },
+    "en-gb": {
+      "left": 2,
+      "right": 3
+    },
+    "de-1996": {
+      "left": 2,
+      "right": 2
+    },
+    "fr": {
+      "left": 2,
+      "right": 3
+    },
+    "es": {
+      "left": 2,
+      "right": 2
+    },
+    "it": {
+      "left": 2,
+      "right": 2
+    }
+  }
+}

@@ -2,5 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "//": "Tests and the build script, which run in Node.js.",
   "compilerOptions": { "lib": ["ES2023", "DOM"], "types": ["node"] },
-  "include": ["src/**/*.ts", "node/**/*.ts", "scripts/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "node/**/*.ts",
+    "scripts/**/*.ts",
+    "e2e/**/*.ts",
+    "playwright.config.ts"
+  ]
 }

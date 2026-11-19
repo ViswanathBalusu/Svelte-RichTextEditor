@@ -21,6 +21,7 @@ import type {
   Limits,
   PresencePort,
   AssistantPort,
+  CommentsPort,
   ProofingPort,
   Resume,
   SyncChannel,
@@ -81,6 +82,10 @@ export interface AttachAt {
   presence?: PresencePort;
   /** This session (`welcome.session`), never listed as a peer. */
   session?: string;
+  /** The history port's read of the commit that introduced a suggestion (FE-046 criterion 2). */
+  history?: {
+    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+  };
   /** The user (`welcome.user.id`), whom suggestion marks name (03 §5; FE-042). */
   user?: string;
   /** The features both sides support, for the shell (05 §8.3). */
@@ -91,6 +96,8 @@ export interface AttachAt {
   proofing?: ProofingPort;
   /** The backend's assistant port, when it has one (13 §6.2; UX-045). It has no feature name (G91). */
   assistant?: AssistantPort;
+  /** The backend's comment port (05 §6.2; feature `comments`): the core lists the threads and draws each range (FE-048). */
+  threads?: CommentsPort;
 }
 
 /** What the session needs from the mounted editor (the editing core and the shell). */
@@ -141,6 +148,10 @@ export interface EditorHandle {
   readonly fill?: FillWatch;
   /** `de-workflow-complete` (FRW-071): the workflow was reported `completed`; absent in stand-in editors. */
   readonly workflowComplete?: { subscribe(listener: () => void): () => void };
+  /** `de-sign-request` (FRW-071): the participant started to sign a field; absent in stand-in editors. */
+  readonly signRequested?: {
+    subscribe(listener: (field: { fieldId: string; key: string }) => void): () => void;
+  };
 }
 
 export interface SessionHost {
@@ -396,7 +407,10 @@ export class Session {
       if (backend.assets && backend.features.has('assets'))
         at.assets = pictureAssets(backend.assets, this.docId);
       if (backend.proofing) at.proofing = backend.proofing;
+      // FE-046 criterion 2: the time of a suggestion is the server time of the commit that introduced it.
+      if (backend.history && backend.features.has('history')) at.history = backend.history;
       if (backend.assistant) at.assistant = backend.assistant;
+      if (backend.comments && backend.features.has('comments')) at.threads = backend.comments;
       at.features = [...backend.features];
       this.#channel = channel;
       this.#detach = editor.attach(channel, at);
@@ -499,6 +513,11 @@ export class Session {
         editor.workflowComplete.subscribe(() =>
           this.#emit('de-workflow-complete', { state: 'completed' }),
         ),
+      );
+    // `de-sign-request` (12 §10; FRW-071): the participant activated a signature or initials field.
+    if (editor.signRequested)
+      this.#unsubscribe.push(
+        editor.signRequested.subscribe((field) => this.#emit('de-sign-request', field)),
       );
     const confirmed = editor.confirmedSeq;
     if (confirmed) {

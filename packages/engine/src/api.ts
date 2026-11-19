@@ -775,8 +775,21 @@ export interface AttachOptions {
   restore?: RestorePlan;
   /** The assets port: a pasted picture is uploaded through it (FE-053; 10 §3.1). */
   assets?: AssetsPort;
+  /**
+   * `backend.threads` (05 §6.2; feature `comments`): the core lists the threads at the confirmed
+   * `seq` and takes the `thread.*` notices of the channel, so that each range is drawn and kept
+   * aligned (FE-048).
+   */
+  threads?: ThreadsPortLike;
   /** The proofing port (13 §6.1; UX-041): the core checks spelling and grammar through it. */
   proofing?: ProofingPort;
+  /**
+   * The history port's read of the commit that introduced a suggestion (HIS-042; FE-046 criterion
+   * 2): the card of a suggestion shows the server time of that commit.
+   */
+  history?: {
+    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+  };
 }
 
 /** The find state: `n of m` is `current` (1-based, null before a navigation) of `count` (FE-059). */
@@ -879,6 +892,7 @@ import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
 import type { MarkupView, SuggestionLabel, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
+import type { ThreadReport, ThreadsPortLike } from './thread-sync.ts';
 import type { ThreadSelection } from './comment-decorations.ts';
 import type { SuggestionItem } from './suggestion-list.ts';
 import type { SectionWarning } from './breaks-sections.ts';
@@ -1117,6 +1131,8 @@ export interface DocumentApi {
   setSuggestionLabel(label: SuggestionLabel | null): void;
   /** The client's copy of every thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadView<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The threads that are on a block, by the block's identifier (FE-048 criterion 1). */
+  readonly threadBlocks: ReadView<readonly { readonly id: string; readonly block: string }[]>;
   /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
   readonly selectedThread: ReadView<ThreadSelection | null>;
   /** The thread whose highlight the reader chose in the body; `n` counts the choices (UX-030). */
@@ -1129,6 +1145,21 @@ export interface DocumentApi {
   setThreadRange(threadId: string, range: { from: number; to: number }, seq: number): void;
   /** Removes a thread's range (the thread was deleted) (FE-048). */
   removeThreadRange(threadId: string): void;
+  /**
+   * The service's place for a thread at a `seq`: the client replaces its copy and maps the range
+   * forward from that `seq` (FE-048 criterion 4). `held`: `seq` is ahead of the confirmed document;
+   * `stale`: it is older than the commits the client keeps.
+   */
+  reportThread(threadId: string, report: ThreadReport): 'placed' | 'held' | 'stale';
+  /** Starts a thread through the comment port: a request, never a commit (FE-048 criterion 6). Resolves the thread's id. */
+  createThread(
+    target: { range: { from: number; to: number; baseSeq: number } } | { block: string },
+    comment: unknown,
+  ): Promise<string>;
+  /** Resolves or reopens a thread through the comment port: a request, never a commit (FE-048 criterion 6). */
+  setThreadState(threadId: string, state: 'open' | 'resolved'): Promise<void>;
+  /** Moves the caret to the next or previous thread and chooses it; no commit (FE-048 criterion 7). */
+  stepThread(direction: 'next' | 'previous'): string | null;
   /** Preserved atoms whose fallback text holds the current query, which the find skipped (FE-139). */
   skippedPreservedFind(): number;
   /** Resolves once every journal write requested so far is durable (FE-011). */

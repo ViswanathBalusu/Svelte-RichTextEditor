@@ -69,6 +69,11 @@ export interface ParagraphInput {
   readonly defaultTabStop?: number;
   /** Report the word spacing of every line but the last. */
   readonly justify?: boolean;
+  /**
+   * `settings.hyphenation` (03 §4.1; 02 §9.3): split words with the patterns of the languages the
+   * kernel holds, where the run's `language` names one. Off (the default) consults no pattern.
+   */
+  readonly hyphenate?: boolean;
 }
 
 /** One line of the answer. */
@@ -90,6 +95,8 @@ export interface BrokenLine {
    * rounded; 0 when the line is not stretched. Tabs and trailing spaces never stretch.
    */
   readonly wordSpacing: number;
+  /** The line ends inside a word: a hyphen is drawn after its last unit, and is in `width`. */
+  readonly hyphen: boolean;
 }
 
 const ALIGN_CODE: Record<TabAlign, number> = { left: 0, center: 1, right: 2, decimal: 3 };
@@ -142,17 +149,18 @@ export function packParagraph(p: ParagraphInput): PackedParagraph {
   };
 }
 
-/** The lines the crate answered with: six numbers for each, as `break_paragraph` writes them. */
+/** The lines the crate answered with: seven numbers for each, as `break_paragraph` writes them. */
 export function unpackLines(flat: ArrayLike<number>): BrokenLine[] {
   const lines: BrokenLine[] = [];
-  for (let i = 0; i + 5 < flat.length; i += 6) {
-    const [from = 0, to = 0, x = 0, width = 0, extra = 0, spaces = 0] = [
+  for (let i = 0; i + 6 < flat.length; i += 7) {
+    const [from = 0, to = 0, x = 0, width = 0, extra = 0, spaces = 0, hyphen = 0] = [
       flat[i],
       flat[i + 1],
       flat[i + 2],
       flat[i + 3],
       flat[i + 4],
       flat[i + 5],
+      flat[i + 6],
     ];
     lines.push({
       from,
@@ -162,6 +170,7 @@ export function unpackLines(flat: ArrayLike<number>): BrokenLine[] {
       extra,
       spaces,
       wordSpacing: spaces > 0 ? extra / spaces : 0,
+      hyphen: hyphen === 1,
     });
   }
   return lines;

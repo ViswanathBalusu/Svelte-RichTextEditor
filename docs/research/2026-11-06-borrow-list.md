@@ -266,6 +266,7 @@ These are the 48 pattern files hypher embeds by default (`typst/hypher`, directo
 | Danish | `hyph-da.tex` | LPPL 1.3 or later, or MIT (choice) | Yes, under MIT |
 | Dutch | `hyph-nl.tex` | LPPL 1 or later | Yes, with LPPL conditions |
 | English (US) | `hyph-en-us.tex` | Custom all-permissive: copying and distribution permitted if the notice is kept | Yes, keep the notice |
+| English (British) | `hyph-en-gb.tex` | MIT (stated in the file header, with its text) | Yes. Not in hypher; added 2026-11-18 by lane w6 for WASM-009 after reading the file in hyph-utf8 of TeX Live 2025 |
 | Estonian | `hyph-et.tex` | MIT or LPPL (choice) | Yes, under MIT |
 | Finnish (school) | `hyph-fi-x-school.tex` | MIT | Yes |
 | French | `hyph-fr.tex` | MIT | Yes |

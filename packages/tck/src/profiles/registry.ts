@@ -6,7 +6,7 @@
  * code that needs a fault, load or a feature the target lacks is skipped with that reason, and the
  * test of PRO-117 checks that every code has an entry here.
  */
-import { DEP1, chunkMessage, type ServerMessage, type Step } from '@docedit/protocol';
+import { DEP1, chunkMessage, type DocRole, type ServerMessage, type Step } from '@docedit/protocol';
 import { uuid7 } from '@docedit/model';
 import { KitFailure, check, equal, includes } from '../assert.ts';
 import { HELLO_BASE, type ScenarioContext } from '../context.ts';
@@ -153,12 +153,7 @@ async function replaceContent(ctx: ScenarioContext, doc: string) {
  * `join` that waits for a server that is busy proving its lease: a node answers `unavailable` to a
  * `ch.open` for a moment under load (05 §5.2), and the client opens again as 04 §9 says.
  */
-async function joinWhenAvailable(
-  ctx: ScenarioContext,
-  name: string,
-  doc: string,
-  role: Parameters<typeof join>[3],
-) {
+async function joinWhenAvailable(ctx: ScenarioContext, name: string, doc: string, role: DocRole) {
   for (let attempt = 1; ; attempt++) {
     try {
       return await join(ctx, name, doc, role);

@@ -1,0 +1,132 @@
+{
+  "$comment": "Hyphenation patterns the kernel can load (WASM-009), copied by scripts/hyphenation-patterns.ts from hyph-utf8 (TeX Live 2025). Each language is loaded when a document needs it; the patterns are not part of the WebAssembly file. Licences are those of the files, recorded in the borrow list (docs/research/2026-11-06-borrow-list.md, section 11); the notice file of each language is the file header that its licence asks to be kept.",
+  "refused": {
+    "sk": "GPL-2.0-or-later: copyleft",
+    "hu": "MPL-1.1, GPL-2.0 or LGPL-2.1: every option is copyleft"
+  },
+  "languages": [
+    {
+      "tag": "en-us",
+      "aliases": ["en"],
+      "patterns": {
+        "file": "hyph-en-us.pat.txt",
+        "sha256": "0f57318b878b132547ae92db39a6e1d1cf2a05d9008874955d6ecb910007a463",
+        "bytes": 31489
+      },
+      "exceptions": {
+        "file": "hyph-en-us.hyp.txt",
+        "sha256": "5e785c27e151f878c312991d937b5582615b77737ab30bac413d5967d6aa21da",
+        "bytes": 169
+      },
+      "notice": "hyph-en-us.notice.txt",
+      "licence": "LicenseRef-hyph-utf8-notice-preserved",
+      "left": 2,
+      "right": 3,
+      "fileMinimums": {
+        "left": 2,
+        "right": 3
+      },
+      "source": "hyph-utf8 patterns/tex/hyph-en-us.tex, patterns/txt/hyph-en-us.pat.txt"
+    },
+    {
+      "tag": "en-gb",
+      "aliases": [],
+      "patterns": {
+        "file": "hyph-en-gb.pat.txt",
+        "sha256": "651b89b4a0d4051995db8586e81ab109a4c7395d7706c06483893ebab5af013b",
+        "bytes": 54769
+      },
+      "exceptions": {
+        "file": "hyph-en-gb.hyp.txt",
+        "sha256": "947b7b8e76f6a0d8ebe296178ff92ad624e4912ffbaaf59b26f81a395124e366",
+        "bytes": 103
+      },
+      "notice": "hyph-en-gb.notice.txt",
+      "licence": "MIT",
+      "left": 2,
+      "right": 3,
+      "fileMinimums": {
+        "left": 2,
+        "right": 3
+      },
+      "source": "hyph-utf8 patterns/tex/hyph-en-gb.tex, patterns/txt/hyph-en-gb.pat.txt"
+    },
+    {
+      "tag": "de-1996",
+      "aliases": ["de"],
+      "patterns": {
+        "file": "hyph-de-1996.pat.txt",
+        "sha256": "0570839683e4843a6210b188e2a586fe06f2b6b73952ec8106a634209d735adb",
+        "bytes": 271680
+      },
+      "exceptions": null,
+      "notice": "hyph-de-1996.notice.txt",
+      "licence": "MIT",
+      "left": 2,
+      "right": 2,
+      "fileMinimums": {
+        "left": 2,
+        "right": 2
+      },
+      "source": "hyph-utf8 patterns/tex/hyph-de-1996.tex, patterns/txt/hyph-de-1996.pat.txt"
+    },
+    {
+      "tag": "fr",
+      "aliases": [],
+      "patterns": {
+        "file": "hyph-fr.pat.txt",
+        "sha256": "fd40a89e9e8eb0784a0919e50378814843e44afa41c5beaf0a85f6562820f6c2",
+        "bytes": 9674
+      },
+      "exceptions": null,
+      "notice": "hyph-fr.notice.txt",
+      "licence": "MIT",
+      "left": 2,
+      "right": 3,
+      "fileMinimums": {
+        "left": 2,
+        "right": 2
+      },
+      "source": "hyph-utf8 patterns/tex/hyph-fr.tex, patterns/txt/hyph-fr.pat.txt"
+    },
+    {
+      "tag": "es",
+      "aliases": [],
+      "patterns": {
+        "file": "hyph-es.pat.txt",
+        "sha256": "7ae8fa8d6a61ea4111c4a0412d019b62e7c07a62673121d0b711c5bc08d8e00c",
+        "bytes": 39989
+      },
+      "exceptions": null,
+      "notice": "hyph-es.notice.txt",
+      "licence": "MIT",
+      "left": 2,
+      "right": 2,
+      "fileMinimums": {
+        "left": 2,
+        "right": 2
+      },
+      "source": "hyph-utf8 patterns/tex/hyph-es.tex, patterns/txt/hyph-es.pat.txt"
+    },
+    {
+      "tag": "it",
+      "aliases": [],
+      "patterns": {
+        "file": "hyph-it.pat.txt",
+        "sha256": "ce650cffad4e81ecaf04591f3274a8ed909e82c587698c55e33b00e2aa7746de",
+        "bytes": 1840
+      },
+      "exceptions": null,
+      "notice": "hyph-it.notice.txt",
+      "licence": "MIT",
+      "choice": "LPPL-1.3c-or-later or MIT; MIT taken",
+      "left": 2,
+      "right": 2,
+      "fileMinimums": {
+        "left": 2,
+        "right": 2
+      },
+      "source": "hyph-utf8 patterns/tex/hyph-it.tex, patterns/txt/hyph-it.pat.txt"
+    }
+  ]
+}

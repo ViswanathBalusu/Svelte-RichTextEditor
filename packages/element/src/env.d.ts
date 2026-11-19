@@ -35,4 +35,13 @@ declare module '@docedit/layout-kernel/wasm/docedit_layout_kernel.js' {
   export const shape_cache_stats: KernelGlueModule['shape_cache_stats'];
   export const shape_cache_clear: KernelGlueModule['shape_cache_clear'];
   export const break_paragraph: KernelGlueModule['break_paragraph'];
+  export const hyphen_load: KernelGlueModule['hyphen_load'];
+  export const hyphen_alias: KernelGlueModule['hyphen_alias'];
+  export const hyphen_release: KernelGlueModule['hyphen_release'];
+  export const hyphen_release_all: KernelGlueModule['hyphen_release_all'];
+  export const hyphen_has: KernelGlueModule['hyphen_has'];
+  export const hyphen_tags: KernelGlueModule['hyphen_tags'];
+  export const hyphenate_word: KernelGlueModule['hyphenate_word'];
+  export const bidi_levels: KernelGlueModule['bidi_levels'];
+  export const bidi_visual_runs: KernelGlueModule['bidi_visual_runs'];
 }

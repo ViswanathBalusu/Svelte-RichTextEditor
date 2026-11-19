@@ -338,6 +338,16 @@ img.ProseMirror-separator {
   text-decoration-thickness: 2px;
 }
 
+/* A thread on a block (FE-048 criterion 1): a dashed outline, so the block is marked without colour. */
+.de-comment-block {
+  outline: 2px dashed currentcolor;
+  outline-offset: 2px;
+}
+
+.de-comment-block.de-comment-selected {
+  outline-style: solid;
+}
+
 .de-comment-selected {
   outline: 2px solid var(--de-focus, #0969da);
   outline-offset: 1px;
@@ -539,6 +549,9 @@ table.de-suggest-gone {
   .de-comment-range {
     text-decoration: underline dotted;
   }
+  .de-comment-block {
+    outline: 2px dashed CanvasText;
+  }
 }
 
 /*
@@ -588,4 +601,24 @@ table.de-suggest-gone {
   background: var(--de-field-background, #eaeef2);
   font-family: var(--de-font-ui, system-ui, sans-serif);
   font-size: 0.875em;
+}
+
+/* The card that names a suggestion's author and the time it was made (FE-046 criterion 2). It is
+   text in a bordered box, never colour alone, and sits beside the editing surface. */
+.de-suggestion-card {
+  position: absolute;
+  z-index: 3;
+  max-inline-size: min(24rem, 90%);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--de-border, currentColor);
+  border-radius: 0.25rem;
+  background: var(--de-field-background, Canvas);
+  color: var(--de-text, CanvasText);
+  font-family: var(--de-font-ui, system-ui, sans-serif);
+  font-size: 0.875em;
+  line-height: 1.3;
+  pointer-events: auto;
+}
+.de-suggestion-card[hidden] {
+  display: none;
 }
