@@ -12,7 +12,19 @@
  * Universal: no DOM and no Node.js API (FND-004). The caller supplies `read`, which fetches a
  * file's text (the worker uses `fetch`, Node.js tests read the file).
  */
-import type { LayoutKernel } from './index.ts';
+/**
+ * What the loader needs of a started kernel (`LayoutKernel` has it): the SHA-256 of bytes and the
+ * hyphenation store. Declared here, not imported, so that this file and `index.ts` do not import
+ * each other.
+ */
+export interface HyphenationHost {
+  sha256(data: Uint8Array): string;
+  readonly hyphenation: {
+    tags(): string[];
+    load(tag: string, patterns: string, exceptions: string, left: number, right: number): number;
+    alias(alias: string, tag: string): boolean;
+  };
+}
 
 /** One file of a language, as `patterns/manifest.json` lists it. */
 export interface HyphenationFile {
@@ -144,7 +156,7 @@ export function decodeUtf8(bytes: Uint8Array): string {
  * one manifest language load it once, and a language the kernel holds already is not read again.
  */
 export async function ensureHyphenation(
-  kernel: LayoutKernel,
+  kernel: HyphenationHost,
   manifest: HyphenationManifest,
   settings: HyphenationSettings,
   languages: Iterable<string>,
@@ -193,7 +205,7 @@ class HashMismatch extends Error {}
 class ReadFailed extends Error {}
 
 async function readChecked(
-  kernel: LayoutKernel,
+  kernel: HyphenationHost,
   file: HyphenationFile,
   read: (file: string) => Promise<Uint8Array>,
 ): Promise<string> {

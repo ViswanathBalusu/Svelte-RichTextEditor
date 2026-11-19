@@ -42,4 +42,6 @@ declare module '@docedit/layout-kernel/wasm/docedit_layout_kernel.js' {
   export const hyphen_has: KernelGlueModule['hyphen_has'];
   export const hyphen_tags: KernelGlueModule['hyphen_tags'];
   export const hyphenate_word: KernelGlueModule['hyphenate_word'];
+  export const bidi_levels: KernelGlueModule['bidi_levels'];
+  export const bidi_visual_runs: KernelGlueModule['bidi_visual_runs'];
 }

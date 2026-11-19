@@ -18,12 +18,15 @@ use std::str::FromStr;
 use harfrust::{shape, Buffer, Feature, Font, Language, ShapeOptions, ShaperFont};
 use wasm_bindgen::prelude::*;
 
+pub mod bidi;
+pub mod bidi_data;
 pub mod faces;
 pub mod hyphenate;
 pub mod linebreak;
 pub mod sha256;
 pub mod shaping;
 
+use bidi::{resolve as resolve_bidi, visual_runs, Direction};
 use faces::{FaceStore, Loaded};
 use hyphenate::{word_points, HyphenStore};
 use linebreak::{break_lines, Align, Measure, Params, Stop};
@@ -43,7 +46,7 @@ thread_local! {
 
 /// The version of the call interface. It changes when a call of the kernel changes its meaning, or
 /// when a call is added.
-pub const ABI_VERSION: u32 = 5;
+pub const ABI_VERSION: u32 = 6;
 
 /// The version of the crate, as `major.minor.patch`.
 #[wasm_bindgen]
@@ -469,6 +472,73 @@ pub fn break_paragraph(
     Ok(out)
 }
 
+/// The text as characters (a lone surrogate is U+FFFD) and the UTF-16 offset of each, with the
+/// length at the end.
+fn characters(text: &[u16]) -> (Vec<char>, Vec<usize>) {
+    let mut chars = Vec::with_capacity(text.len());
+    let mut offsets = Vec::with_capacity(text.len() + 1);
+    let mut at = 0usize;
+    for decoded in char::decode_utf16(text.iter().copied()) {
+        let c = decoded.unwrap_or(char::REPLACEMENT_CHARACTER);
+        chars.push(c);
+        offsets.push(at);
+        at += c.len_utf16();
+    }
+    offsets.push(text.len());
+    (chars, offsets)
+}
+
+/// The paragraph level and the resolved level of each UTF-16 unit of a paragraph (UAX #9; WASM-015):
+/// the answer is the paragraph level (0 or 1) followed by one level for each unit. `direction` is 0
+/// for left to right, 1 for right to left and anything else for automatic (the first strong
+/// character). The levels are those of the paragraph before a line is cut: L1 is applied by
+/// `bidi_visual_runs`.
+#[wasm_bindgen]
+pub fn bidi_levels(text: &[u16], direction: i32) -> Vec<u8> {
+    let (chars, _) = characters(text);
+    let paragraph = resolve_bidi(&chars, Direction::from_code(direction));
+    let mut out = Vec::with_capacity(text.len() + 1);
+    out.push(paragraph.level);
+    for (c, level) in chars.iter().zip(paragraph.levels.iter()) {
+        for _ in 0..c.len_utf16() {
+            out.push(*level);
+        }
+    }
+    out
+}
+
+/// The visual runs of the line `[from, to)` of a paragraph, left to right (UAX #9, L1 and L2;
+/// WASM-015): three numbers for each run, its first and last-plus-one UTF-16 offset (logical) and
+/// its level. An odd level reads right to left. Throws `bad_request` when the line is out of range
+/// or begins or ends inside a surrogate pair.
+#[wasm_bindgen]
+pub fn bidi_visual_runs(
+    text: &[u16],
+    direction: i32,
+    from: u32,
+    to: u32,
+) -> Result<Vec<u32>, JsError> {
+    let (chars, offsets) = characters(text);
+    let (from, to) = (from as usize, to as usize);
+    let (Some(first), Some(last)) = (
+        offsets.iter().position(|&o| o == from),
+        offsets.iter().position(|&o| o == to),
+    ) else {
+        return Err(JsError::new(ShapeFailure::BadRequest.code()));
+    };
+    if first > last {
+        return Err(JsError::new(ShapeFailure::BadRequest.code()));
+    }
+    let paragraph = resolve_bidi(&chars, Direction::from_code(direction));
+    let mut out = Vec::new();
+    for run in visual_runs(&paragraph, first, last) {
+        out.push(u32::try_from(offsets[run.start]).unwrap_or(u32::MAX));
+        out.push(u32::try_from(offsets[run.end]).unwrap_or(u32::MAX));
+        out.push(u32::from(run.level));
+    }
+    Ok(out)
+}
+
 /// Holds a hyphenation language (WASM-009): the text of its TeX pattern file (one pattern a line),
 /// the text of its exception file (one word a line, hyphens marked; may be empty), and the minimum
 /// characters before and after a hyphen (`\lefthyphenmin` and `\righthyphenmin`, 1 to 8). A language
@@ -559,7 +629,7 @@ mod tests {
     #[test]
     fn reports_the_crate_version_and_the_interface_version() {
         assert_eq!(kernel_version(), env!("CARGO_PKG_VERSION"));
-        assert_eq!(abi_version(), 5);
+        assert_eq!(abi_version(), 6);
     }
 
     #[test]

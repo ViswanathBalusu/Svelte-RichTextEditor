@@ -15,7 +15,7 @@
 import { packParagraph, unpackLines, type BrokenLine, type ParagraphInput } from './paragraph.ts';
 
 /** The version of the kernel's call interface that this package expects of the crate. */
-export const KERNEL_ABI_VERSION = 5;
+export const KERNEL_ABI_VERSION = 6;
 
 /** The files that `build:wasm` writes to `dist/`, by role. */
 export const KERNEL_FILES = {
@@ -90,6 +90,8 @@ export interface KernelGlue {
   hyphen_has(tag: string): boolean;
   hyphen_tags(): string;
   hyphenate_word(tag: string, word: Uint16Array): Uint32Array;
+  bidi_levels(text: Uint16Array, direction: number): Uint8Array;
+  bidi_visual_runs(text: Uint16Array, direction: number, from: number, to: number): Uint32Array;
 }
 
 /** The codes of a run that was not shaped (crates/layout-kernel/src/shaping.rs). */
@@ -179,6 +181,36 @@ export interface KernelHyphenation {
   word(tag: string, word: string): number[];
 }
 
+/** The base direction of a paragraph for the bidirectional algorithm: `dir` of the model, or automatic. */
+export type BidiDirection = 'ltr' | 'rtl' | 'auto';
+
+/** One visual run of a line: logical UTF-16 offsets, and the direction it reads in. */
+export interface VisualRun {
+  /** The first logical offset of the run. */
+  readonly start: number;
+  /** The offset after the run's last unit. */
+  readonly end: number;
+  /** The embedding level; odd reads right to left. */
+  readonly level: number;
+  readonly rtl: boolean;
+}
+
+/**
+ * The Unicode Bidirectional Algorithm, UAX #9 (WASM-015; 02 §11). The text is one paragraph.
+ * Offsets are UTF-16 code units of the block's text, the rule of 09 §7.1 (an inline atom is one
+ * unit, a bookmark none), so they are the layout tree's.
+ */
+export interface KernelBidi {
+  /** The paragraph level (0 or 1) and the resolved level of each code unit. */
+  levels(text: string, direction: BidiDirection): { paragraphLevel: number; levels: Uint8Array };
+  /**
+   * The visual runs of the line `[from, to)` (the whole text by default), left to right: each a range
+   * of logical offsets and a level. Runs of odd level read right to left. Throws `KernelShapeError`
+   * (`bad_request`) when the line is out of range or splits a surrogate pair.
+   */
+  visualRuns(text: string, direction: BidiDirection, from?: number, to?: number): VisualRun[];
+}
+
 /** What a run is shaped with: the face, the size, the language and the features of the painter. */
 export interface RunStyle {
   /** The face's alias (`de-font-<hash>`). */
@@ -248,6 +280,7 @@ export interface LayoutKernel {
   readonly faces: KernelFaces;
   readonly shaper: KernelShaper;
   readonly hyphenation: KernelHyphenation;
+  readonly bidi: KernelBidi;
   /**
    * The size of the module's linear memory in bytes (faces included), or `null` when the start did
    * not hand it over.
@@ -299,6 +332,8 @@ function faceCall<T>(call: () => T): T {
     throw new KernelFaceError(error instanceof Error ? error.message : String(error));
   }
 }
+
+const BIDI_CODES: Record<BidiDirection, number> = { ltr: 0, rtl: 1, auto: 2 };
 
 /** UTF-16 code units of a string, as the kernel reads them. */
 export function utf16Units(text: string): Uint16Array {
@@ -415,6 +450,23 @@ export function finishKernel(glue: Omit<KernelGlue, 'initSync'>, output?: unknow
         return joined === '' ? [] : joined.split(',');
       },
       word: (tag, word) => Array.from(glue.hyphenate_word(tag, utf16Units(word))),
+    },
+    bidi: {
+      levels: (text, direction) => {
+        const all = glue.bidi_levels(utf16Units(text), BIDI_CODES[direction]);
+        return { paragraphLevel: all[0] ?? 0, levels: all.slice(1) };
+      },
+      visualRuns: (text, direction, from = 0, to = text.length) => {
+        const flat = shapeCall(() =>
+          glue.bidi_visual_runs(utf16Units(text), BIDI_CODES[direction], from, to),
+        );
+        const runs: VisualRun[] = [];
+        for (let i = 0; i + 2 < flat.length; i += 3) {
+          const level = flat[i + 2] ?? 0;
+          runs.push({ start: flat[i] ?? 0, end: flat[i + 1] ?? 0, level, rtl: level % 2 === 1 });
+        }
+        return runs;
+      },
     },
     memoryBytes: () => memoryOf(output)?.buffer.byteLength ?? null,
   };

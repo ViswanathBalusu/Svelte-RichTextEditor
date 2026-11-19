@@ -1,6 +1,6 @@
 {
   "$comment": "Reference outputs of the layout kernel, recorded in Node.js (WASM-010): advances of fixed lines, and for every paragraph of the shared corpus the kernel input, the checksum of each run’s advances and the lines. Break opportunities are an input (UAX #14 from linebreak 1.1.0), not a kernel output (WASM-007 is not built). Rewritten by DOCEDIT_UPDATE_GOLDEN=1 on purpose only; WASM-011 compares every browser with it.",
-  "abi": 5,
+  "abi": 6,
   "faces": [
     {
       "file": "files/NotoSerif-Regular.ttf",
