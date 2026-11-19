@@ -36,7 +36,7 @@ About 30 stories wait only on a decision of 2026-11-15 being applied (for exampl
 - Default admission budget for expensive commits (SEC-028); CPU limit of the math gate per commit (EXP-051).
 - Importer success rate on real Word files that lets CI pass (EXP-110).
 - Subscriber count that counts as "many" for broadcast batching (SYN-041).
-- Bundle budget: the element bundle is 307.5 kB gzip against 300 kB, so `pnpm build` fails today. Raise the budget or set a tolerance (FND-008).
+- Bundle budget: settled by owner decision 32 (320 kB gzip). The build is still over it; see FND-008 Notes for the current figures.
 
 ### Product behaviour
 
