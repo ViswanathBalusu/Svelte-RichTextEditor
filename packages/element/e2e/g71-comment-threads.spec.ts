@@ -179,4 +179,40 @@ test.describe('comment threads in two elements', () => {
     await one.locator('[data-assign-clear]').click();
     await expect(two.locator('.de-comment-row [data-assignee]')).toHaveCount(0);
   });
+
+  test('the pane of the other element refreshes from the notices and announces each change (UX-030 criterion 4)', async ({
+    page,
+  }) => {
+    await openEmbed(page);
+    await mountEditor(page, { name: 'one', sub: 'ada' });
+    await mountEditor(page, { name: 'two', sub: 'bob', target: 'mount-2' });
+    const one = page.locator('doc-editor[data-test="one"]');
+    const two = page.locator('doc-editor[data-test="two"]');
+    // Bob has the pane open before anything happens.
+    expect(await exec(page, 'two', 'view.comments')).toMatchObject({ ok: true });
+    await expect(two.locator('.de-comment-row')).toHaveCount(0);
+    const announced = two.locator('.de-shell > [role="status"]');
+
+    await selectWords(page, 'one');
+    expect(await exec(page, 'one', 'review.comment')).toMatchObject({ ok: true });
+    const box = one.locator('[data-dialog="comment"]');
+    await box.getByRole('textbox', { name: 'Comment' }).fill('Please look.');
+    await box.getByRole('button', { name: 'Post' }).click();
+    await expect(box).toBeHidden();
+    await expect(two.locator('.de-comment-row')).toHaveCount(1);
+    await expect(announced).toHaveText(/^New comment thread by /);
+
+    // Ada opens the thread, replies, resolves and deletes it; Bob's pane follows and says so.
+    expect(await exec(page, 'one', 'view.comments')).toMatchObject({ ok: true });
+    await one.locator('[data-thread-open]').click();
+    await one.locator('[data-reply-field]').fill('And another thing.');
+    await one.locator('[data-reply-post]').click();
+    await expect(two.locator('.de-comment-replies')).toHaveText(/1 repl/);
+    await expect(announced).toHaveText(/^New reply in the thread by /);
+    await one.locator('[data-thread-state]').click();
+    await expect(announced).toHaveText(/ resolved.$/);
+    await one.locator('[data-thread-delete]').click();
+    await expect(two.locator('.de-comment-row')).toHaveCount(0);
+    await expect(announced).toHaveText(/ deleted.$/);
+  });
 });

@@ -279,4 +279,3 @@ export class ThreadSync {
     await patch.call(this.#port, threadId, { state }, { ifMatch: etag });
   }
 }
-
