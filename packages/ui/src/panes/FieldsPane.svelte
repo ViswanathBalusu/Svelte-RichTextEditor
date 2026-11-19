@@ -21,6 +21,9 @@
   const selected = live(service.selected);
   const roles = shell.core.roles ? live(shell.core.roles.list) : null;
   const revision = shell.core.revision ? live(shell.core.revision) : null;
+  // The workflow's state, as the lock banner follows it (FRW-073 criterion 4); the service's own
+  // `workflow()` is the fallback of a core that has no workflow service.
+  const workflowState = shell.core.workflowSend ? live(shell.core.workflowSend.state) : null;
   const id = `${shell.idPrefix}-fields`;
 
   /** The field the person chose from the list; the document's selection replaces it when it moves. */
@@ -44,7 +47,10 @@
     void revision?.current;
     return current === null
       ? true
-      : fieldPanelReadOnly(service.canChange(current), service.workflow?.() ?? null);
+      : fieldPanelReadOnly(
+          service.canChange(current),
+          workflowState?.current ?? service.workflow?.() ?? null,
+        );
   });
   const context = $derived.by(() => {
     void revision?.current;

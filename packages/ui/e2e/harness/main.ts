@@ -131,6 +131,8 @@ export interface MountOptions {
   send?: SendHarnessMode;
   /** The adoption and signing step's service of FRW-045 and FRW-046: see harness/frw-045-signing-port.ts; absent: none. */
   signing?: SigningHarnessMode;
+  /** The field properties service of FRW-073: one field, `tenant.name`, that this person may change. */
+  fieldProperties?: boolean;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
   catchUp?: CatchUpHarnessMode;
   share?: boolean;
@@ -632,6 +634,38 @@ function mountShell(options: MountOptions = {}): void {
     sendHandle = sendService(options.send, sendLog);
     // The roles and the rules panes are stand-ins here; they need only be offered for the links.
     Object.assign(core, { workflowSend: sendHandle, roles: {}, rules: {} });
+  }
+  if (options.fieldProperties) {
+    // One field of the tenant; the pane reads the workflow's state from `workflowSend` (FRW-073).
+    const draft = {
+      key: 'tenant.name',
+      kind: 'text',
+      label: 'Name',
+      assignee: 'role_tenant',
+      required: true,
+      readOnly: false,
+      default: null,
+      placeholder: null,
+      options: [],
+      format: null,
+      validation: null,
+      width: null,
+    };
+    const still = <T>(value: T) => ({ get: () => value, subscribe: () => () => {} });
+    Object.assign(core, {
+      roles: {
+        list: still([
+          { id: 'role_tenant', name: 'Tenant', color: '#0d47a1', order: 0, fields: [] },
+        ]),
+      },
+      fieldProperties: {
+        fields: still([{ id: 'fName00000000001', key: 'tenant.name', label: 'Name' }]),
+        selected: still<string | null>('fName00000000001'),
+        read: () => draft,
+        canChange: () => true,
+        apply: () => ({ ok: true }),
+      },
+    });
   }
   if (options.signing) {
     signingLog.adopts.length = 0;
