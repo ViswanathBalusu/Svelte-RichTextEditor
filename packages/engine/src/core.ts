@@ -82,6 +82,7 @@ import type {
   AssistantInsertOutcome,
   FieldFillOutcome,
   EquationRequest,
+  SignFieldRequest,
   EquationTarget,
   FindResult,
   FindState,
@@ -856,6 +857,11 @@ export class DocumentCore implements DocumentApi {
   readonly problem: ReadValue<CoreProblem | null>;
   /** The last request to open the math editor on an equation (FE-070); the shell opens it. */
   readonly equationRequest: ReadValue<EquationRequest | null>;
+  /**
+   * The last signature or initials field the person activated (FRW-046 criterion 1); the shell opens
+   * the adoption and signing step on it. Cleared when the step is closed.
+   */
+  readonly signRequest: ReadValue<SignFieldRequest | null>;
   readonly findState: ReadValue<FindState>;
   /** The proofing state and findings (UX-041); `available` is false without a proofing port. */
   readonly proofing: ReadValue<ProofingInfo>;
@@ -878,6 +884,7 @@ export class DocumentCore implements DocumentApi {
   #painted: FormatSnapshot | null = null;
   #problems = 0;
   #equationRequests = 0;
+  #signRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
   #find: {
     query: string;
@@ -1029,6 +1036,7 @@ export class DocumentCore implements DocumentApi {
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
     this.proofing = new ReadValue<ProofingInfo>(NO_PROOFING, sameJson, hub);
     this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
+    this.signRequest = new ReadValue<SignFieldRequest | null>(null, sameJson, hub);
     this.findState = new ReadValue<FindState>(
       { query: '', count: 0, current: null },
       sameJson,
@@ -1923,6 +1931,78 @@ export class DocumentCore implements DocumentApi {
     return (
       checkChange(this.#state.doc, tr.doc, tr.steps, tr.docs, this.#accessValue, false) === null
     );
+  }
+
+  /** The `form_field` with this id, or null. */
+  #formFieldById(id: string): PMNode | null {
+    let found: PMNode | null = null;
+    this.#state.doc.descendants((node) => {
+      if (found !== null) return false;
+      if (node.type.name === 'form_field' && node.attrs['id'] === id) found = node;
+      return found === null && node.type.name !== 'form_field';
+    });
+    return found;
+  }
+
+  /**
+   * Whether the person may sign the signature or initials field `id` now (FRW-046 criterion 2, as
+   * far as the client can tell; the server decides): the field is of that kind and not read-only,
+   * its role is one the participant holds, the participant is active and no rule hides or disables
+   * the field.
+   */
+  fieldSignable(id: string): boolean {
+    if (this.#effective === 'view') return false;
+    const node = this.#formFieldById(id);
+    if (node === null) return false;
+    const kind = node.attrs['kind'];
+    if (kind !== 'signature' && kind !== 'initials') return false;
+    if (node.attrs['readOnly'] === true) return false;
+    const role = node.attrs['assignee'];
+    const fill = this.#accessValue?.fill;
+    if (typeof role !== 'string' || !fill || !fill.active || !fill.roles.includes(role))
+      return false;
+    const rule = this.#fieldRules.of(id);
+    return rule === null || (rule.visible && rule.enabled);
+  }
+
+  /**
+   * Asks the shell to open the adoption and signing step on the field `id`, as activating it does
+   * (FRW-046 criterion 1). False when the field is not one this person may sign.
+   */
+  requestSign(id: string): boolean {
+    if (!this.fieldSignable(id)) return false;
+    const node = this.#formFieldById(id)!;
+    const label = node.attrs['label'];
+    const key = node.attrs['key'];
+    const role = node.attrs['assignee'];
+    this.signRequest.set({
+      n: ++this.#signRequests,
+      id,
+      key: typeof key === 'string' ? key : '',
+      kind: node.attrs['kind'] as 'signature' | 'initials',
+      label: typeof label === 'string' && label !== '' ? label : typeof key === 'string' ? key : id,
+      role: typeof role === 'string' ? this.#roleName(role) : null,
+    });
+    return true;
+  }
+
+  /** Closes the request for the adoption and signing step. */
+  clearSignRequest(): void {
+    this.signRequest.set(null);
+  }
+
+  /** The name of the role `id`, as the document defines it; the identifier when it has none. */
+  #roleName(id: string): string {
+    let name = id;
+    this.#state.doc.firstChild?.forEach((def) => {
+      if (
+        def.type.name === 'role_def' &&
+        def.attrs['id'] === id &&
+        typeof def.attrs['name'] === 'string'
+      )
+        name = def.attrs['name'];
+    });
+    return name;
   }
 
   /**

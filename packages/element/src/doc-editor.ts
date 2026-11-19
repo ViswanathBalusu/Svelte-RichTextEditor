@@ -40,6 +40,7 @@ import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './conf
 import type { HostExtension } from './extensions.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
+import type { SigningSource } from './signing.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
 import type { CompleteFillingOutcome } from './fill-actions.ts';
 import type { PrintOutcome } from './print.ts';
@@ -809,6 +810,7 @@ export class DocEditorElement extends Base {
       ...this.#exportService(docId),
       // The send dialog goes through the backend's workflow port, when it has one (FRW-028).
       ...this.#workflowSource(docId),
+      ...this.#signingSource(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       mathFontsUrl: this.#config.katexFontsUrl,
@@ -1053,6 +1055,26 @@ export class DocEditorElement extends Base {
     // A completed export's `layout.json` says where pages start; guides are optional (FE-068).
     if (job.state === 'completed' && job.result?.layout)
       void this.#readLayout(session, job.result.layout);
+  }
+
+  /**
+   * The adoption and signing step's source (FRW-045, FRW-046), when the session's backend has the
+   * assets port and the fields port and announced both features; otherwise nothing, and a signature
+   * field is not offered for signing.
+   */
+  #signingSource(docId: string): { signing?: () => SigningSource | null } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.assets || !backend.fields) return {};
+    if (!hasPort(backend, 'assets') || !hasPort(backend, 'fields')) return {};
+    return {
+      signing: () => {
+        const live = this.#session === session ? session?.backend : undefined;
+        return live?.assets && live.fields && session
+          ? { assets: live.assets, fields: live.fields, docId: session.docId }
+          : null;
+      },
+    };
   }
 
   /**

@@ -115,7 +115,12 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // FE-134: what a cross-reference may point at, for the dialog.
       | 'referenceTargets'
       // FE-088: the ids of the blocks that changes touched, for the layout's dirty set.
-      | 'takeLayoutDirty';
+      | 'takeLayoutDirty'
+      // FRW-046: a signature or initials field the participant may sign, and the request the shell takes.
+      | 'fieldSignable'
+      | 'requestSign'
+      | 'signRequest'
+      | 'clearSignRequest';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed

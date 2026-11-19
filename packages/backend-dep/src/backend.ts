@@ -30,6 +30,7 @@ import {
   type Discovery,
   type ErrorCode,
   type ExportsPort,
+  type FieldsPort,
   type FontsPort,
   type Grants,
   type HistoryPort,
@@ -71,6 +72,7 @@ import { createFilePorts, type FilePorts } from './files.ts';
 import { createReviewPorts, type ReviewPorts } from './review.ts';
 import { Timers, platform, type Platform } from './platform.ts';
 import { RestClient } from './rest.ts';
+import { createFieldsRest } from './fields.ts';
 import { createWorkflowRest } from './workflow.ts';
 
 /** The workflow object of `ch.opened` and `wf.changed` (FRW-035). */
@@ -205,6 +207,8 @@ export class DepBackend implements Backend {
   declare leases?: LeasesPort;
   /** The workflow port, present while `workflow` is negotiated (12 §10; FRW-035). */
   declare workflow?: WorkflowPort;
+  /** The fields port, present while `fields` is negotiated (12 §10; FRW-046). */
+  declare fields?: FieldsPort;
   /** Present only when the host proxies imports (`proxyImports`, PRO-097). */
   declare imports?: ImportsPort;
   readonly fonts: FontsPort;
@@ -259,6 +263,7 @@ export class DepBackend implements Backend {
   >();
   private readonly workflowLatest = new Map<string, WorkflowStatus>();
   private readonly workflowPort: WorkflowPort;
+  private readonly fieldsPort: FieldsPort;
   private readonly files: FilePorts;
   private readonly review: ReviewPorts;
 
@@ -350,6 +355,7 @@ export class DepBackend implements Backend {
       ...createWorkflowRest({ rest: () => this.rest() }),
       onChange: (docId, cb) => this.onWorkflowChange(docId, cb),
     };
+    this.fieldsPort = createFieldsRest({ rest: () => this.rest() });
     this.review = createReviewPorts({
       rest: () => this.rest(),
       clock: {
@@ -389,6 +395,8 @@ export class DepBackend implements Backend {
     else delete this.leases;
     if (this.negotiated.has('workflow')) this.workflow = this.workflowPort;
     else delete this.workflow;
+    if (this.negotiated.has('fields')) this.fields = this.fieldsPort;
+    else delete this.fields;
     if (this.opts.proxyImports === true) this.imports = this.review.imports;
     else delete this.imports;
   }

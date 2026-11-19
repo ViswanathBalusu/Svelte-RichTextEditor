@@ -67,6 +67,7 @@ import { sourcesService } from './sources.ts';
 import { fillView } from './fill.ts';
 import { rolesService } from './roles.ts';
 import { rulesService } from './rules.ts';
+import { signingService, type SigningSource } from './signing.ts';
 import { workflowSendService, type WorkflowSendSource } from './workflow-send.ts';
 import { fieldPropertiesService } from './field-properties.ts';
 import { mathEditorService } from './math-editor.ts';
@@ -106,6 +107,11 @@ export interface MountOptions {
    * Without it the shell offers no "send for completion" command. Null while no session is current.
    */
   workflow?: () => WorkflowSendSource | null;
+  /**
+   * The ports of the adoption and signing step (FRW-045, FRW-046): the assets port for the image and
+   * the fields port for the sign request. Absent: a signature field is not offered for signing.
+   */
+  signing?: () => SigningSource | null;
   /** The manifest's family-to-alias lookup (FE-062 criterion 1); absent when none was read. */
   fontAlias?: (family: string) => string | undefined;
   /** The signed URL of an asset, for the web view's pictures (FE-067 criterion 3); absent without assets. */
@@ -331,6 +337,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
 
   // The send dialog and the lock banner (FRW-028, FRW-029): made once, so that one service follows the workflow.
   const workflowSend = options.workflow ? workflowSendService(core, options.workflow) : null;
+  // The adoption and signing step (FRW-045, FRW-046): a signature field the participant activated.
+  const signing = options.signing ? signingService(core, options.signing) : null;
   // The end of a participant's work (FRW-071): `completeFilling`, `decline` and `de-workflow-complete`.
   const workflowCompleteListeners = new Set<() => void>();
   const fillActions = options.workflow
@@ -465,7 +473,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
         if (name === 'showReferences') return core.showReferences();
         // FE-134: `insertCaption` numbers the figure, table or selected equation the selection is on;
         // `insertCrossReference` takes the dialog's `{ target, format }` and inserts a `ref` field.
-        if (name === 'insertCaption') return core.run('insertCaption', { caption: { kind: 'here' } });
+        if (name === 'insertCaption')
+          return core.run('insertCaption', { caption: { kind: 'here' } });
         if (name === 'insertCrossReference') {
           const a = args as { target?: unknown; format?: unknown } | undefined;
           if (typeof a?.target !== 'string') return false;
@@ -599,8 +608,11 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(options.exports ? { exports: options.exports } : {}),
       // The send dialog (FRW-028): the pre-send checks and the send action.
       ...(workflowSend ? { workflowSend } : {}),
+      ...(signing ? { signing } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
-      ...(fillActions ? { accessCode: { submit: (code: string) => fillActions.verify(code) } } : {}),
+      ...(fillActions
+        ? { accessCode: { submit: (code: string) => fillActions.verify(code) } }
+        : {}),
       // How suggestions are shown (UX-035), and the words that name them for assistive technology.
       markupView: core.markupView,
       setMarkupView: (view) => core.setMarkupView(view),
@@ -800,6 +812,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       stopShortcuts();
       stopKeyboardInset();
       workflowSend?.dispose?.();
+      signing?.dispose?.();
       fillActions?.dispose();
       workflowCompleteListeners.clear();
       void unmount(app);
