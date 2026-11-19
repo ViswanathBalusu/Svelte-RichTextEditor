@@ -26,7 +26,7 @@ import type {
   ResolveUsers,
   SearchPrincipals,
 } from '@docedit/protocol';
-import type { ExportService } from '@docedit/ui';
+import type { ExportService, LeasesService } from '@docedit/ui';
 import type {
   CdmFragment,
   CommandArgs,
@@ -40,6 +40,7 @@ import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './conf
 import type { HostExtension } from './extensions.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
+import { leasesFor } from './lease-shell.ts';
 import type { SigningSource } from './signing.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
 import type { CompleteFillingOutcome } from './fill-actions.ts';
@@ -809,6 +810,8 @@ export class DocEditorElement extends Base {
       ...this.#assetImage(docId),
       // The export dialog's jobs go through the backend's exports port, when it has one (UX-101).
       ...this.#exportService(docId),
+      // The permissions pane offers check-out through the leases port, when the backend has one (PRM-043).
+      ...this.#leasesService(docId),
       // The send dialog goes through the backend's workflow port, when it has one (FRW-028).
       ...this.#workflowSource(docId),
       ...this.#signingSource(docId),
@@ -1092,6 +1095,16 @@ export class DocEditorElement extends Base {
           ? { port: session.backend.workflow, docId: session.docId }
           : null,
     };
+  }
+
+  /**
+   * The shell's check-out service (PRM-043), when the session's backend has the leases port and
+   * announced the feature; otherwise nothing, and the permissions pane offers no check-out.
+   */
+  #leasesService(docId: string): { leases?: LeasesService } {
+    const session = this.#session;
+    const service = leasesFor(session?.docId === docId ? session.backend : undefined, docId);
+    return service ? { leases: service } : {};
   }
 
   /**

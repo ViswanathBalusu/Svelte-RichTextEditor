@@ -21,6 +21,7 @@
   } from '../core-api.ts';
   import type { StringKey } from '../i18n/en-GB.ts';
   import { live } from '../live.ts';
+  import { checkOutState, leaseFailureKey } from '../shell/leases.ts';
   import { capabilitiesAnywhere } from '../shell/modes.ts';
   import {
     grantableCandidates,
@@ -252,6 +253,36 @@
     restricted: 'permissions.policy.restricted.help',
   };
 
+  // Check-out (PRM-043): offered only when the core has a leases service, which is when the backend
+  // announces `leases`. The region list follows the change by itself (a lease raises `perm.changed`).
+  const leasesView = core.leases ? live(core.leases.held) : null;
+  const checkOut = $derived(
+    selected && core.leases
+      ? checkOutState(selected, permissions?.current, leasesView?.current ?? [])
+      : null,
+  );
+  let leaseBusy = $state(false);
+  let leaseMessage = $state<StringKey | null>(null);
+
+  async function toggleLease(): Promise<void> {
+    if (!core.leases || !selected || !checkOut) return;
+    const region = selected.id;
+    const taking = checkOut.kind === 'offer';
+    leaseBusy = true;
+    leaseMessage = null;
+    try {
+      if (taking) await core.leases.acquire(region);
+      else await core.leases.release(region);
+      leaseMessage = taking ? 'lease.taken' : 'lease.released';
+      shell.announce(leaseMessage);
+    } catch (error) {
+      leaseMessage = leaseFailureKey(error);
+      shell.announce(leaseMessage);
+    } finally {
+      leaseBusy = false;
+    }
+  }
+
   // A state is shown by its icon and its text, never by colour alone (PRM-048 criterion 1).
   const STATE_ICON: Readonly<Record<'draft' | 'in_review' | 'approved', string>> = {
     draft: '○',
@@ -343,6 +374,43 @@
       {/if}
       {#if !manage}
         <p class="de-hint" id={`${id}-readonly`}>{tr.t('permissions.readOnly')}</p>
+      {/if}
+
+      {#if checkOut && checkOut.kind !== 'none'}
+        <section class="de-lease" aria-labelledby={`${id}-lease`} data-lease={checkOut.kind}>
+          <h4 class="de-subhead" id={`${id}-lease`}>{tr.t('lease.heading')}</h4>
+          {#if checkOut.kind === 'offer'}
+            <p class="de-hint" id={`${id}-lease-help`}>{tr.t('lease.help')}</p>
+            <button
+              type="button"
+              class="de-button"
+              disabled={leaseBusy}
+              aria-describedby={`${id}-lease-help`}
+              onclick={() => void toggleLease()}>{tr.t('lease.checkOut')}</button
+            >
+          {:else if checkOut.kind === 'mine'}
+            <p class="de-hint" id={`${id}-lease-help`}>{tr.t('lease.mine')}</p>
+            <button
+              type="button"
+              class="de-button"
+              disabled={leaseBusy}
+              aria-describedby={`${id}-lease-help`}
+              onclick={() => void toggleLease()}>{tr.t('lease.release')}</button
+            >
+          {:else if checkOut.kind === 'other'}
+            <p class="de-hint">{tr.t('lease.other', { name: nameOf(`user:${checkOut.holder}`) })}</p>
+          {:else}
+            <p class="de-hint">{tr.t(checkOut.reason)}</p>
+          {/if}
+          {#if leaseMessage}
+            <p
+              class={leaseMessage === 'lease.taken' || leaseMessage === 'lease.released'
+                ? 'de-hint'
+                : 'de-error'}
+              data-status="lease">{tr.t(leaseMessage)}</p
+            >
+          {/if}
+        </section>
       {/if}
 
       {#if core.grants}

@@ -40,6 +40,7 @@ import {
   type DocumentStats,
   type EditorMode,
   type ExportService,
+  type LeasesService,
   type ResolveUsers,
   type ReviewItem,
   type ShellSettings,
@@ -102,6 +103,11 @@ export interface MountOptions {
    * offers no export command.
    */
   exports?: ExportService;
+  /**
+   * Check-out of regions (PRM-043), when the backend has the leases port and announced `leases`.
+   * Without it the permissions pane shows no check-out control.
+   */
+  leases?: LeasesService;
   /**
    * The session's workflow port and document, when the backend has the workflow port (FRW-028).
    * Without it the shell offers no "send for completion" command. Null while no session is current.
@@ -649,6 +655,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
             ),
           }
         : {}),
+      // Check-out (PRM-043): the leases port, when the backend announced the feature.
+      ...(options.leases ? { leases: options.leases } : {}),
     },
     config.features,
   );
