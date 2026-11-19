@@ -153,4 +153,3 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
   });
 }
-
