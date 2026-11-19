@@ -954,11 +954,7 @@ export const AUTHORITY_SERVICE: ProfileDef = {
 
         // At the head the ranges come back as they were given, in the order given; no ranges is fine.
         const atHead = mapped(
-          expectOk(
-            await map(head, 2, [{ from: p + 2, to: p + 5 }]),
-            200,
-            'mapRanges at the head',
-          ),
+          expectOk(await map(head, 2, [{ from: p + 2, to: p + 5 }]), 200, 'mapRanges at the head'),
           'mapRanges',
         );
         jsonEqual(

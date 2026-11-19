@@ -17,7 +17,7 @@
  */
 import { mapRanges } from '@docedit/authority';
 import type { StepMap } from 'prosemirror-transform';
-import { DEFAULT_MAPPING_HISTORY } from './presence.ts';
+import { DEFAULT_MAPPING_HISTORY } from './mapping-history.ts';
 import type { Confirmed } from './sync/state.ts';
 
 /** Where the service says a thread is, at `seq`: a range of text or one block. */

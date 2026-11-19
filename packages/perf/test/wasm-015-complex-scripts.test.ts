@@ -88,11 +88,16 @@ describe.skipIf(!built)('complex scripts against HarfBuzz (WASM-015)', () => {
   // letter of the second word gets a different advance in HarfRust 0.15.0 (2202 at 200 twips) from
   // HarfBuzz's (3187); every other unit of this text and of every other text here is equal. The test
   // is marked as failing so that it turns red when the shaper changes and the case can be closed.
-  it.fails.skipIf(!have('arabic'))('shapes ببب تتت ثثث as HarfBuzz does (known difference)', () => {
-    const text = 'ببب تتت ثثث';
-    const style = { alias: aliases['arabic']!, sizeTwips: 200, language: 'ar', features: '' };
-    expect(Array.from(kernel.shaper.advances(style, text))).toEqual(reference('arabic', text, 200));
-  });
+  (have('arabic') ? it.fails : it.skip)(
+    'shapes ببب تتت ثثث as HarfBuzz does (known difference)',
+    () => {
+      const text = 'ببب تتت ثثث';
+      const style = { alias: aliases['arabic']!, sizeTwips: 200, language: 'ar', features: '' };
+      expect(Array.from(kernel.shaper.advances(style, text))).toEqual(
+        reference('arabic', text, 200),
+      );
+    },
+  );
 
   it.skipIf(!have('arabic'))(
     'shapes Arabic as HarfBuzz does, with joining, ligatures and marks',

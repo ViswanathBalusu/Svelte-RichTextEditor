@@ -17,17 +17,13 @@ import type { PresencePeers, PresenceUpdate, Unsubscribe } from '@docedit/protoc
 import type { Node } from 'prosemirror-model';
 import { Mapping, type StepMap } from 'prosemirror-transform';
 import type { PeerSelectionInfo, PresencePeerInfo, PresencePortLike } from './api.ts';
+import { DEFAULT_MAPPING_HISTORY } from './mapping-history.ts';
 import { PLACEHOLDER } from './schema.ts';
 import type { Clock } from './sync/session.ts';
 import { type Confirmed, type SyncState, unconfirmed } from './sync/state.ts';
 
 export type { PresencePortLike };
-
-/**
- * How many confirmed commits a receiver keeps the mapping of (SYN-036 criterion 4). The spec does not
- * state a number; this is a proposed default (ADR 0108), and the option `historyCommits` overrides it.
- */
-export const DEFAULT_MAPPING_HISTORY = 256;
+export { DEFAULT_MAPPING_HISTORY };
 
 type PeerRecord = PresencePeers['peers'][number];
 
