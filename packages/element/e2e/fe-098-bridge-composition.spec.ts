@@ -8,7 +8,7 @@
  * window of a real input method at the caret). Run from the repository root with
  * `DOCEDIT_DEMO_PORT=57098 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-098-bridge-composition.spec.ts --project=chromium`.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { SPIKE_IDS, openS1 } from './helpers.ts';
 
 test.beforeEach(({ browserName }) => {
@@ -18,7 +18,7 @@ test.beforeEach(({ browserName }) => {
   );
 });
 
-async function openPageView(page: import('@playwright/test').Page) {
+async function openPageView(page: Page) {
   await page.addInitScript(() => {
     const original = window.matchMedia.bind(window);
     window.matchMedia = (query: string) =>
