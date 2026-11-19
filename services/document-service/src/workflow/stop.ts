@@ -15,8 +15,15 @@
  * The events are returned, not raised: the route that calls these functions has the request context
  * that `emit` needs. Decisions: docs/adr/0386-w4-FRW-033-decline-and-void.md (proposed).
  */
-import { declineWorkflow, voidWorkflow, type WorkflowRefusal } from '@docedit/authority';
+import {
+  declineWorkflow,
+  voidWorkflow,
+  type ParticipantKind,
+  type WorkflowRefusal,
+} from '@docedit/authority';
 import type { DocRef } from '../storage/types.ts';
+import { anchorEvidence, type AnchorDeps } from './evidence-anchor.ts';
+import type { EvidenceLedger } from './evidence-ledger.ts';
 import type { ProgressOutcome } from './progress.ts';
 import { recordOf } from './record.ts';
 import { recordTransition, type TransitionDeps } from './transitions.ts';
@@ -67,6 +74,47 @@ export async function recordDecline(
     control: moved.control,
     raised: [{ name: 'participant_declined', participant }],
   };
+}
+
+/** The most UTF-8 bytes of a reason the evidence of a decline can hold (a row's data is 4096 bytes). */
+export const DECLINE_REASON_BYTES = 3000;
+
+/** What `recordDeclineEvidence` needs: the ledger, the outbox the anchor goes through and the clock. */
+export interface DeclineEvidenceDeps extends AnchorDeps {
+  readonly evidence: EvidenceLedger;
+}
+
+/**
+ * The evidence of a decline (12 §7; FRW-033 criterion 1; ADR 0415, proposed): the time and the
+ * reason, stored with the participant's other evidence under the tenant, and a control commit that
+ * follows the decline and carries the salted hash of it (origin `decline`), never the reason itself.
+ * The network identity is the participant's own request, so a decline made by the host's service
+ * credential has none. Returns the `seq` of the anchor, or null when it is queued and not stored yet.
+ */
+export async function recordDeclineEvidence(
+  deps: DeclineEvidenceDeps,
+  req: {
+    readonly ref: DocRef;
+    readonly participant: string;
+    readonly kind: ParticipantKind;
+    /** The reason as recorded in the transition, already trimmed. */
+    readonly reason: string;
+    readonly facts: { readonly address: string | null; readonly userAgent: string | null };
+  },
+): Promise<{ readonly seq: number | null }> {
+  const made = await deps.evidence.record(req.ref.tenant, {
+    doc: req.ref.doc,
+    participant: req.participant,
+    kind: req.kind,
+    item: 'declined',
+    origin: 'decline',
+    facts: {
+      items: { declined: { atMs: deps.now(), reason: req.reason } },
+      ipAddress: req.facts.address,
+      userAgent: req.facts.userAgent,
+    },
+  });
+  return anchorEvidence(deps, req.ref, { origin: 'decline', evidenceHash: made.hash });
 }
 
 export async function recordVoid(

@@ -1049,7 +1049,7 @@ test.describe('PRO-083, PRO-084, PRO-085 the element methods on the mounted edit
   type Methods = HTMLElement & {
     getContent(): Promise<{ seq: number; cdm: number; doc: unknown }>;
     flush(opts?: { timeoutMs?: number }): Promise<void>;
-    exec(command: string): boolean;
+    exec(command: string): { ok: boolean; reason: string | null };
     queryCommand(command: string): { enabled: boolean; active: boolean };
   };
 
@@ -1089,10 +1089,10 @@ test.describe('PRO-083, PRO-084, PRO-085 the element methods on the mounted edit
     );
     expect(commands).toEqual({
       before: { enabled: true, active: false },
-      ran: true,
+      ran: { ok: true, reason: null },
       after: { enabled: true, active: true },
       viewer: { enabled: false, active: false },
-      viewerRan: false,
+      viewerRan: { ok: false, reason: 'no-access' },
     });
 
     await page.keyboard.type(' Typed');

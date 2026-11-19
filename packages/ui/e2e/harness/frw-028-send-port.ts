@@ -84,10 +84,13 @@ export function sendService(
   const participants = view<readonly WorkflowParticipantView[]>(
     STATE_OF[mode] !== undefined && mode !== 'sent' ? PEOPLE : [],
   );
+  // A workflow past the send was sent at commit 7 (FRW-033 criterion 5: the copy starts there).
+  const sentSeq = view<number | null>(STATE_OF[mode] !== undefined ? 7 : null);
   return {
     state,
     failures,
     participants,
+    sentSeq,
     setFailures: (next) => failures.set(next),
     setState: (next) => state.set(next),
     async refresh() {

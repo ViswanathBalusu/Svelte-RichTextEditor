@@ -61,6 +61,7 @@ export type {
   FieldFillOutcome,
   FieldsApi,
   EquationRequest,
+  SignFieldRequest,
   EquationTarget,
   FieldArgs,
   FindResult,

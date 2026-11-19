@@ -122,6 +122,8 @@ export interface HandlerDeps {
   exportUrl?: (tenant: string, job: string, name: string, expiresAt: number) => string;
   /** Lifetime of a pre-signed upload, seconds (a setting). */
   uploadSeconds?: number;
+  /** Duration of a region lease, ms. Set only in test mode (PRO-109); absent: 5 minutes (07 §10). */
+  regionLeaseMs?: number;
   /** The rebase window in steps that a thread's `baseSeq` must be within; absent: the protocol default. */
   rebaseWindow?: number;
   /** The font set (PRO-067, BE-047). */

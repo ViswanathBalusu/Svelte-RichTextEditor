@@ -368,6 +368,14 @@ export class TokenService implements TokenVerifier {
     };
     for (const k of ['name', 'grp', 'wfp', 'amr', 'auth_time', 'access_since', 'restrict'] as const)
       if (request[k] !== undefined) claims[k] = request[k];
+    // The fill roles go under the claim name of the tenant (05 §3.1), `wfr` unless it is changed.
+    if (request.wfr !== undefined) {
+      if (!request.wfr.every(isOpaqueId))
+        throw new ApiError('validation_failed', 'a fill role is 1 to 255 characters', {
+          violations: [{ path: '/wfr', rule: 'opaque identifiers' }],
+        });
+      claims[this.#fillRolesClaim(tenant)] = request.wfr;
+    }
     const token = signJws(
       { alg: this.#signing.alg, typ: 'JWT', kid: this.#signing.kid },
       claims,

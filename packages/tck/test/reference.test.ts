@@ -9,8 +9,6 @@ import { judge, keep } from './targets/judge.ts';
 import { startReference, type StartedTarget } from './targets/reference.ts';
 
 export const REFERENCE_KNOWN: Readonly<Record<string, string>> = {
-  'semantics.steps':
-    'apply-020: the room refuses a step that removes one boundary of a region (P3) and the pure engine applies it (SYN-002 vs 04 §4); the same on the mock backend, reported to the authority',
   'exports.states':
     'the service runs no export job handler in process, so a job stays queued (PRO-063; 09 §9)',
   'perm-suggest.suggestion-accepted':
@@ -53,6 +51,14 @@ describe.skipIf(skip)('the kit against the reference service', () => {
     expect(v.unexpected).toEqual([]);
   });
 
+  it('passes the step-semantics and conversation fixtures through the server (PRO-110 criterion 5)', () => {
+    const semantics = report.profiles.find((p) => p.id === 'semantics')!;
+    expect(semantics.scenarios.map((s) => [s.id, s.outcome])).toEqual([
+      ['semantics.conversation', 'passed'],
+      ['semantics.steps', 'passed'],
+    ]);
+  });
+
   // PRM-005 criterion 4: a commit on a locked and on an archived document is refused with
   // `read_only` and `drop`, and the content and its seq do not change.
   it('passes sync.read-only for locked and archived documents (PRM-005)', () => {
@@ -64,7 +70,7 @@ describe.skipIf(skip)('the kit against the reference service', () => {
 
   // PRO-111 criterion 6: the `core` profile passes against the reference service, and this file runs
   // in `pnpm test`, which the CI workflow runs on every change. In-memory storage, test mode off:
-  // the two scenarios that need the test-mode switch are skipped, and `core.sync.busy` is skipped
+  // the three scenarios that need the test-mode switch are skipped, and `core.sync.busy` is skipped
   // because the in-memory store answers the first submit before the second is read. The PostgreSQL
   // run (services/document-service/test/postgres/u-pro-103-119-core.pg.test.ts, test mode on)
   // passes all of them.
@@ -74,7 +80,12 @@ describe.skipIf(skip)('the kit against the reference service', () => {
     const failed = core!.scenarios.filter((s) => s.outcome === 'failed').map((s) => s.id);
     expect(failed).toEqual([]);
     const skipped = core!.scenarios.filter((s) => s.outcome === 'skipped').map((s) => s.id);
-    expect(skipped.sort()).toEqual(['core.auth.expired', 'core.session.silence', 'core.sync.busy']);
+    expect(skipped.sort()).toEqual([
+      'core.auth.expired',
+      'core.channel.rejected.unavailable',
+      'core.session.silence',
+      'core.sync.busy',
+    ]);
     expect(core!.scenarios.filter((s) => s.id === 'core.channel.page')[0]?.outcome).toBe('passed');
   });
 

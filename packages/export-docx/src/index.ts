@@ -46,6 +46,8 @@ export { pname, splitPname, registeredPrefix } from './names.ts';
 export { decodeUtf8, Utf8Error } from './utf8.ts';
 export { checkPreserved, PRESERVED_GRAMMAR, treeDepth, canonicalTree } from './tree.ts';
 export type { TreeBody, TreeElement, TreeNode, TreeRef } from './tree.ts';
+export { nodesWithPreservedData, preservationReport } from './preservation-report.ts';
+export type { PreservationReport } from './preservation-report.ts';
 export { shareTrees, sharedTrees, worthSharing } from './share.ts';
 export { payloadDigests, payloads, untrustedPayloads } from './integrity.ts';
 export type { Payload, PayloadKind, Untrusted } from './integrity.ts';

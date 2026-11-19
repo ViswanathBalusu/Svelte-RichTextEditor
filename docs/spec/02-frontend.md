@@ -117,6 +117,7 @@ Immutable. Pages contain fragments; fragments contain lines or table rows; every
 
 - Text is measured with a canvas `measureText` context. Canvas offers no control over ligatures in any browser and no control over kerning in Safari, so the painter's CSS is pinned to whatever canvas does by default; it is not the other way round. Spike S5 measures the differences and also evaluates computing advances from the font files with HarfBuzz compiled to WebAssembly, which is deterministic across browsers and is what one comparable open-source editor does.
 - Measurements are cached by font alias, size, text and font epoch.
+- The kernel's measurement (ADR 0016; WASM-006) shapes a run in a face from the manifest's file, given the face's alias, a size in twentieths of a point, a language and the painter's OpenType features. It answers with an advance for each UTF-16 code unit, in whole units of 1/1280 pt, which is 64 to the twentieth of a point. An advance is the font's value scaled to the size and rounded half up in integer arithmetic, so it is the same in every runtime. The advance of a cluster is on its first code unit; the other units of the cluster and the second unit of a surrogate pair are 0; the units sum to the run's width. The kernel's cache is keyed by alias, the epoch at which the face was loaded, size, language, features and text.
 - Break opportunities come from a bundled implementation of the Unicode line breaking algorithm, because `Intl.Segmenter` has no line granularity.
 - Line breaking is first-fit (greedy). Hyphenation is off by default.
 - The painter places each line in its own box with `white-space: pre` so the browser never re-wraps what the engine decided. Justification is applied as computed word spacing, which stretches only ordinary and no-break spaces and excludes trailing spaces and tabs.
@@ -192,5 +193,5 @@ Budgets are in 13, section 9. Techniques: state outside reactive proxies; one in
 - The input bridge and the screen-reader plan for the page view (spike S9).
 - Native spellcheck is lost in the page view, and a Word-style context menu hides it in the web view too. The proofing port (13, section 6.1) is the answer in both.
 - Grammar and password-manager browser extensions behave inconsistently with editors inside shadow roots. This needs a compatibility list, not a design change.
-- Whether layout runs in a worker from the start or is moved there later.
+- Whether layout runs in a worker from the start or is moved there later. For the page view's text kernel this is settled: it runs in a worker of its own from the start, one for each editor instance (ADR 0016; WASM-004). The layout engine itself is not moved by that.
 - Touch selection handles and mobile editing in the page view.

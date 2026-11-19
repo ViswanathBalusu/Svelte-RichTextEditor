@@ -18,3 +18,5 @@ workspace = true
 # library and no font stack: fonts arrive as bytes from the manifest (WASM-005).
 [dependencies]
 wasm-bindgen = "=0.2.130"
+# The shaper of the kernel (ADR 0016: HarfRust; spikes S5 and S10 measured it with this version).
+harfrust = { version = "=0.15.0", default-features = false, features = ["std"] }

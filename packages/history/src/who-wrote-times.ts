@@ -14,8 +14,11 @@ import type { AttributionSpanOut } from './reader.ts';
 import { type HistoryResult, refuse } from './types.ts';
 
 export interface TimedRun extends AttributionSpanOut {
-  /** Server time, Unix milliseconds, of the commit that wrote the run. */
-  time: number;
+  /**
+   * Server time, Unix milliseconds, of the commit that wrote the run. Absent for a run of an
+   * unknown person: the time is withheld with the author (decision 37).
+   */
+  time?: number;
 }
 
 export interface AuthorSummary {
@@ -59,6 +62,10 @@ export function withRunTimes(
 
   const runs: TimedRun[] = [];
   for (const s of answer.spans) {
+    if (s.unknown) {
+      runs.push({ ...s });
+      continue;
+    }
     const time = times.get(s.seq);
     if (time === undefined)
       return refuse('internal', `no commit or creation time for seq ${s.seq} of a run`);
@@ -67,6 +74,7 @@ export function withRunTimes(
 
   const byAuthor = new Map<string, AuthorSummary>();
   for (const r of runs) {
+    if (r.unknown || r.time === undefined) continue;
     const key = `${r.user}\u0000${r.agent ?? ''}`;
     let a = byAuthor.get(key);
     if (!a) {

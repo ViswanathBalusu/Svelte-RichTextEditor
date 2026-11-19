@@ -158,14 +158,82 @@ describe('an old version as a read-only state (HIS-010)', () => {
     });
   });
 
-  it('says comment ranges are approximate between checkpoints (criterion 4, state only)', () => {
-    const make = (checkpointSeq: number | null) =>
-      VersionDocument.create(
-        { seq: 10, content: spikeDocument(), time: 't', checkpointSeq },
-        { schedule: microtask },
-      );
-    expect(make(10).approximateComments).toBe(false);
-    expect(make(8).approximateComments).toBe(true);
-    expect(make(null).approximateComments).toBe(true);
+  it('shows the comment ranges of the version seq, as the service maps them (criterion 4)', async () => {
+    const calls: Call[] = [];
+    const asked: unknown[] = [];
+    const pages: Record<string, { items: unknown[]; nextCursor: string | null }> = {
+      first: {
+        items: [
+          { id: 't1', state: 'open', target: { range: { from: 3, to: 9, baseSeq: 7 } } },
+          { id: 'block', state: 'open', target: { block: 'pIntro0000000001' } },
+        ],
+        nextCursor: 'more',
+      },
+      more: {
+        items: [{ id: 't2', state: 'open', target: { range: { from: 12, to: 12, baseSeq: 7 } } }],
+        nextCursor: null,
+      },
+    };
+    const comments = {
+      threads: (docId: string, query?: { seq?: number; cursor?: string }) => {
+        asked.push([docId, query]);
+        return Promise.resolve({ ...pages[query?.cursor ?? 'first']!, seq: query?.seq });
+      },
+    } as unknown as NonNullable<VersionOpener['comments']>;
+    const r = await openVersion(
+      { ...opener(fakeSync({ 10: spikeDocument() }, calls)), comments },
+      10,
+      { time: 't' },
+    );
+    if (!r.ok) throw new Error('did not open');
+    // The read asks for the ranges at the version seq, page after page.
+    expect(asked).toEqual([
+      ['doc-1', { seq: 10 }],
+      ['doc-1', { seq: 10, cursor: 'more' }],
+    ]);
+    expect(r.version.commentsShown).toBe(true);
+    // A block thread has no range; a deleted one is detached; the others are as the service gave them.
+    expect(r.version.commentRanges()).toEqual([
+      { id: 't1', from: 3, to: 9, detached: false },
+      { id: 't2', from: 12, to: 12, detached: true },
+    ]);
+    // Opening still read the content once and never opened a channel.
+    expect(calls.map((c) => c.kind)).toEqual(['loadContent']);
+  });
+
+  it('opens without comment ranges when the host has no comments or the read fails (criterion 4)', async () => {
+    const without = await openVersion(opener(fakeSync({ 10: spikeDocument() }, [])), 10, {
+      time: 't',
+    });
+    if (!without.ok) throw new Error('did not open');
+    expect(without.version.commentsShown).toBe(false);
+    expect(without.version.commentRanges()).toEqual([]);
+
+    const failing = {
+      threads: () => Promise.reject(new PortError('not_found', 'this server has no comments')),
+    } as unknown as NonNullable<VersionOpener['comments']>;
+    const failed = await openVersion(
+      { ...opener(fakeSync({ 10: spikeDocument() }, [])), comments: failing },
+      10,
+      { time: 't' },
+    );
+    if (!failed.ok) throw new Error('a version opens without its comments');
+    expect(failed.version.commentsShown).toBe(false);
+    expect(failed.version.commentRanges()).toEqual([]);
+  });
+
+  it('does not read the comments of a version it refused (criteria 4 and 5)', async () => {
+    const asked: unknown[] = [];
+    const comments = {
+      threads: (...a: unknown[]) => {
+        asked.push(a);
+        return Promise.reject(new Error('must not be called'));
+      },
+    } as unknown as NonNullable<VersionOpener['comments']>;
+    const r = await openVersion({ ...opener(fakeSync({}, [], 'forbidden')), comments }, 2, {
+      time: 't',
+    });
+    expect(r).toEqual({ ok: false, reason: 'forbidden' });
+    expect(asked).toEqual([]);
   });
 });

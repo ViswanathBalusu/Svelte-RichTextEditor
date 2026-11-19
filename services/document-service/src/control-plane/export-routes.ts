@@ -17,7 +17,7 @@ import {
   type ExportOutputs,
   type ExportPolicy,
 } from './exports.ts';
-import { minVisibleSeqOf, refuseBelowGate, regionInfosOfJson } from './gate.ts';
+import { refuseSeqBelowGate } from './gate.ts';
 import { checkIfMatch } from './http.ts';
 import type { JobRecord } from './jobs/queue.ts';
 import { withQueueProof } from './job-proof.ts';
@@ -145,21 +145,9 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
     const perms = await d.grants.current(ref);
     const headDoc = await d.content.rebuild(ref, head.incarnation, head.seq);
     // The `seq` option is a place that takes a sequence number: the history gate (07 §8; PRM-041).
+    // A named version is readable by everyone with `view` (ADR 0034).
     if (seq < head.seq && identity)
-      refuseBelowGate(
-        seq,
-        await minVisibleSeqOf({
-          caller: ctx.caller,
-          ref,
-          record,
-          head: head.seq,
-          regions: regionInfosOfJson(headDoc.doc),
-          perms,
-          logs: d.logs,
-          now: d.now(),
-        }),
-        head.seq,
-      );
+      await refuseSeqBelowGate(d, ctx.caller, ref, record, head.seq, seq);
     // The export is of what the requester may read (EXP-123; SR-C4).
     const content =
       seq === head.seq ? headDoc : await d.content.rebuild(ref, head.incarnation, seq);
@@ -185,6 +173,7 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       options,
       full: full || ctx.caller.kind === 'service',
       classVersion: policy.classVersion,
+      classification: record.label ?? null,
     });
     const now = d.now();
     const payload = {

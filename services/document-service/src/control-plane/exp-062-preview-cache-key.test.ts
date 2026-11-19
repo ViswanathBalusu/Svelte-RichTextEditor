@@ -26,6 +26,17 @@ describe('preview results are cached apart from final results (EXP-062 criterion
     expect(final).not.toBe(unset);
   });
 
+  it('changes the key with the classification label, and leaves unlabelled keys as they were (EXP-089)', () => {
+    const options = { profile: 'final' };
+    const none = exportRequestKey({ ...base, options });
+    expect(exportRequestKey({ ...base, options, classification: null })).toBe(none);
+    expect(exportRequestKey({ ...base, options, classification: '' })).toBe(none);
+    const internal = exportRequestKey({ ...base, options, classification: 'Internal' });
+    const secret = exportRequestKey({ ...base, options, classification: 'Secret' });
+    expect(new Set([none, internal, secret]).size).toBe(3);
+    expect(exportRequestKey({ ...base, options, classification: 'Internal' })).toBe(internal);
+  });
+
   it('keeps the preview key stable for an identical preview request', () => {
     const a = exportRequestKey({ ...base, options: { profile: 'preview' } });
     const b = exportRequestKey({ ...base, options: { profile: 'preview' } });

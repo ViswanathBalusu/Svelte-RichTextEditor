@@ -66,7 +66,7 @@ A client presents a JSON Web Token. Two issuers are supported:
 | `grp` | Optional array of group identifiers the user belongs to |
 | `docs` | Object mapping document identifiers (at most 20) to the user's role in each: `viewer`, `commenter`, `suggester`, `editor`, `owner`, `filler` |
 | `wfp`, `amr`, `auth_time` | For workflow participants (12, section 7) |
-| `wfr` | Optional array of role placeholder identifiers (12, section 3.1) that the user may fill outside a workflow, in the documents named by `docs` (12, section 13, "Form mode without a workflow"). The claim name is configurable per tenant; `wfr` is the default (owner decision 5a of 2026-11-15) |
+| `wfr` | Optional array of role placeholder identifiers (12, section 3.1) that the user may fill outside a workflow, in the documents named by `docs` (12, section 13, "Form mode without a workflow"). The claim name is configurable per tenant; `wfr` is the default (owner decision 5a of 2026-11-15). `POST /tokens` takes the roles as the member `wfr` and writes them under the claim name of the tenant |
 | `access_since` | Optional. The time the host first gave this user access, for the history visibility setting `since_access` |
 | `restrict` | Optional array of `no-export`, `no-copy`, `no-print` |
 
@@ -281,7 +281,7 @@ S  {"t":"event","ch":1,"d":{"type":"export.completed","resource":"/exports/0192f
 - JSON bodies. Errors use RFC 9457 problem details with a `code` from section 5.8.
 - **Browsers.** The service answers CORS preflights for the tenant's allowed origins, allows the headers `Authorization`, `Content-Type`, `If-Match`, `Idempotency-Key`, `DEP-Actor` and `traceparent`, and exposes `ETag`, `Retry-After`, `Deprecation` and `Sunset`. The conformance kit asserts these headers.
 - **Concurrency.** Every mutable resource has an `ETag`, and updates require `If-Match`.
-- **Idempotency.** `POST` requests that create something, and `PUT /documents/{id}/content`, accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
+- **Idempotency.** `POST` requests that create something, `PUT /documents/{id}/content` and `PATCH /documents/{id}/field-values` (the prefill of 12 §9; owner decision 184, ADR 0342), accept an `Idempotency-Key`. A key is scoped to the tenant, the caller, the route and a hash of the body, and is remembered for 24 hours. The same key with a different body is `idempotency_mismatch`.
 - **Lists** are `{ items, nextCursor }` with an opaque `cursor` and a `limit` of at most 200.
 - **Tracing.** Requests may carry `traceparent`; responses carry a request identifier.
 - **Identifiers in paths.** A resource addressed by a bare identifier (`/threads/{tid}`, `/exports/{jid}`, `/assets/{aid}`) is always resolved to its document, and the caller's token must cover that document. A caller whose token does not cover that document, and a user who may not see the resource (another user's export or import job), gets `not_found`, the answer for an identifier that names nothing, with the same body apart from the identifier (owner decision 57 of 2026-11-15; SEC-016). A caller who sees the resource but lacks the capability gets `forbidden`.
@@ -334,6 +334,7 @@ Callers are end users (every request is checked against that user's permissions)
 | `/documents/{id}/retention` | GET, PUT | Service credential only. The document's retention policy and the effective policy that applies to it. 08, section 11 |
 | `/holds` | GET | Service credential only. The tenant's legal holds, one page at a time. 08, section 11; 13, section 10 |
 | `/documents/{id}/holds` | POST | Service credential only. Places a legal hold on a document with a reason; audited. 08, section 11; 13, section 10 |
+| `/documents/{id}/holds/{holdId}` | DELETE | Service credential only. Releases one legal hold; audited with the actor and the time; a hold not in force is `not_found`. 08, section 11; 13, section 10 |
 | `/users/erase` | POST | Service credential only. Erases a person: deletes their mapping row, display name and read markers, and changes nothing in the log; audited. The `sub` is in the body, never in the path. A person in a document under legal hold is erased after the hold is released (owner decision 38). An unknown `sub` is `not_found`. 08, section 13; 13, section 10 |
 | `/documents/{id}/commits/{seq}/tombstone` | POST | Service credential only. Replaces the payload of one commit with a tombstone: the metadata row, the payload hash and the hash chain stay. Refused with `conflict` under a legal hold, when the payload is already removed and while no checkpoint covers the commit. Audited with the actor and the reason. The answer lists the checkpoints and cold segments that may still hold the removed text, and the attribution map. A read, comparison or rebuild that needs the payload is `not_found`. 08, section 13; 13, section 10 |
 | `/origins` | GET, POST | Service credential only. GET lists the origins the tenant allows. POST allows one origin (`{ origin }`, normalised) and is audited. 05, section 4; 13, section 10 |
@@ -401,7 +402,8 @@ The embedding API has its own version, exposed as the static property `DocEditor
 | `flush({ timeoutMs }): Promise<void>` | Resolves when nothing is unconfirmed; rejects at the timeout |
 | `getContent(): Promise<{ seq, cdm, doc }>` | |
 | `getSelectionContent()`, `insertContent(fragment)` | CDM fragments. Insertions pass through the same guards as typing |
-| `exec(command, args?)`, `queryCommand(command)` | Run a command; ask whether it is enabled and active |
+| `exec(command, args?)` | Runs a command and answers `{ ok, reason }`. `ok` is false when nothing ran, and `reason` is then a code: `unknown`, `unannounced`, `no-access`, `mode`, `not-applicable`, `no-effect` or `not-loaded` (never a message, never content). Owner decision 188 |
+| `queryCommand(command)` | Asks whether a command is enabled and active: `{ enabled, active }` |
 | `requestExport(options): Promise<{ jobId }>`, `print()` | `print()` prints the typeset PDF |
 | `focus()`, `destroy()` | |
 
@@ -430,6 +432,8 @@ Listed in 13, section 11.
 ### 8.3 Backend ports
 
 The component reaches a backend only through these interfaces: `auth`, `sync`, `permissions`, and optionally `presence`, `history`, `comments`, `assets`, `exports`, `imports`, `fonts`, `leases`, `fields`, `workflow`, `proofing`, `assistant`.
+
+A port that has a feature name (`assets`, `exports`, `history`, `comments`, `leases`) is present only when the server announces the feature and the client asked for it. `fonts` has no feature name: `backend-dep` offers it whenever the backend is built, because `GET /fonts` is tenant-wide (decision 95). The upload call of `assets` answers the asset identifier; the URL comes from `resolve()` after `asset.ready` (owner decision 189; G06 default accepted by decisions 196 to 220).
 
 ```ts
 interface Backend {
@@ -481,6 +485,18 @@ The authority service is the project's authority package behind a network interf
 | `restoreSteps`, `diff`, `attribution`, `migrate`, `evaluateRules` | As named |
 
 The service keeps recently used documents in memory and can rebuild any of them from storage, so it holds no state that matters. It has its own conformance profile.
+
+### 10.1 The history calls
+
+`restoreSteps`, `diff` and `attribution` are `POST` calls on a state, with canonical JSON bodies (ADR 0314 decision 3; ADR 0395, proposed, accepted as the starting point by owner decision 193). Every request names who asks: `requester` (`sub`, `session`, `role`, `groups`) and `permissions` (as `applyCommit`), and may carry `gate` (`{ min, named }`, 07 §8) and `now` (Unix milliseconds). The service computes the requester's access and hidden set from them. It plans and reports; it applies nothing and keeps nothing. A request the history rules refuse is an answer, `200` with `{ refused: { code, reason } }`, where `code` is `forbidden`, `not_found`, `conflict`, `workflow_active` or `validation_failed`. A malformed request is `invalid_request`, an unknown state `unknown_state` (the caller opens it again), and a seq below the checkpoint the state was opened from `not_found`.
+
+| Call and route | Request (besides the common fields) | Response |
+|---|---|---|
+| `restoreSteps`: `POST /v1/authority/states/{stateId}/restore-steps` | `toSeq`; optional `region`, `dryRun`, `retired`, `idSalt` | `{ kind: "steps", region, steps, parts }` or `{ kind: "snapshot", reason: "restore", region?, fallback?, content }`; in both `toSeq`, `headSeq`, `reidentified`, `recreated`, `replaced`, `preconditions` (what `applyCommit` checks again, 04 §5), `unchanged`, and, for a dry run, `dryRun` (the comparison from the head to the result) |
+| `diff`: `POST /v1/authority/states/{stateId}/diff` | `fromSeq`, `toSeq`; optional `region`, `granularity` (`word` or `char`) | `{ comparison }` as the history package defines it (08 §7) |
+| `attribution`: `POST /v1/authority/states/{stateId}/attribution` | optional `seq` (the head when absent), `region`, `blocks` (block identifiers) | `{ seq, blocks }`: for each block its `id`, `type`, `region`, `from` and `to`, and its runs (`from`, `len`, `user`, `seq`, and `agent`, `restoredBy`, `restoredSeq` when they apply). A block in a region the requester may not see is `not_found` |
+
+The attribution map is replayed from a baseline at the checkpoint the state was opened from: `checkpointRef` may carry `attribution` (the saved map) and `createdBy`, and a map that does not cover the checkpoint is refused at `open`.
 
 ## 11. Conformance
 

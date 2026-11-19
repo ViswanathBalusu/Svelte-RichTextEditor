@@ -91,7 +91,9 @@ export function resolveSuggestions(
 ): ResolveResult {
   const segments: Segment[] = [];
   state.doc.nodesBetween(scope.from, scope.to, (node, pos) => {
-    if (!node.isText) return true;
+    // Text, and the inline atoms that carry a mark of their own (a tab, a picture, a preserved
+    // atom: an imported Word file marks them as it marks text, EXP-103).
+    if (!node.isText && !(node.isInline && node.isLeaf)) return true;
     const from = Math.max(pos, scope.from);
     const to = Math.min(pos + node.nodeSize, scope.to);
     if (from >= to) return false;

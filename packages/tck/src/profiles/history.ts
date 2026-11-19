@@ -27,7 +27,15 @@ interface DiffBody {
 }
 interface AttributionBody {
   seq: number;
-  spans: Array<{ blockId: string; from: number; to: number; user: string; seq: number }>;
+  spans: Array<{
+    blockId: string;
+    from: number;
+    to: number;
+    user: string;
+    seq: number;
+    /** Content written below the reader's gate: an unknown person (owner decision 37). */
+    unknown?: boolean;
+  }>;
 }
 
 /**
@@ -344,6 +352,127 @@ export const HISTORY: ProfileDef = {
           201,
           'an editor names the first commit',
         );
+        await closeAll(s);
+      },
+    }),
+    hs({
+      id: 'gate.settings-matrix',
+      title:
+        'under each setting (editors, all, since_access) the gate decides the reads, and content below it is an unknown person',
+      spec: '07 §8, §12; 08 §7, §9; ADR 0034; HIS-025; HIS-026; owner decision 37',
+      covers: {
+        operations: [
+          'GET /documents/{id}/content',
+          'GET /documents/{id}/commits',
+          'GET /documents/{id}/diff',
+          'GET /documents/{id}/attribution',
+          'GET /documents/{id}/history-visibility',
+          'PUT /documents/{id}/history-visibility',
+        ],
+        errors: ['forbidden'],
+      },
+      async run(ctx) {
+        const s = await series(ctx);
+        const { doc } = s;
+        const base = `/documents/${doc}`;
+        const setSetting = async (setting: string) => {
+          const current = expectStatus(
+            await ctx.service.call('GET', `${base}/history-visibility`),
+            200,
+            'reading the history setting',
+          );
+          expectStatus(
+            await ctx.service.call('PUT', `${base}/history-visibility`, {
+              body: { setting },
+              headers: { 'if-match': current.headers.get('etag') ?? '*' },
+            }),
+            200,
+            `setting the history visibility to ${setting}`,
+          );
+        };
+        // The time of each commit, from the commits an editor reads (the editor sees all of them
+        // under the default setting, which holds before the first change).
+        const list = expectStatus(
+          await get(ctx, s.author.token, `${base}/commits`, { after: 0 }),
+          200,
+          'the commits, read by an editor',
+        ).json as { items: Array<{ seq: number; serverTime: string }> };
+        const timeOf = new Map(list.items.map((c) => [c.seq, Date.parse(c.serverTime)]));
+        for (const q of [s.s1, s.s2, s.s3])
+          check(timeOf.has(q), `the time of commit ${q} is known`, 'a time', timeOf.get(q));
+        const claim = new Date(timeOf.get(s.s2)!).toISOString();
+        // The gate is the last commit stored at or before the claim (ADR 0034, accepted).
+        const sinceGate = [s.s1, s.s2, s.s3]
+          .filter((q) => timeOf.get(q)! <= Date.parse(claim))
+          .reduce((a, b) => Math.max(a, b), 0);
+
+        const refused = (res: HttpResponse, what: string) => {
+          equal(problemCode(res), 'forbidden', `${what} is refused below the gate`);
+          equal(res.status, 403, `${what}: the status`);
+        };
+        /** Reads at every seq: refused below the gate, served at or above it, and at the head. */
+        const readsAgainst = async (who: string, token: string, gate: number) => {
+          for (const q of [0, s.s1, s.s2, s.s3]) {
+            const visible = q >= gate || q === s.s3;
+            const res = await get(ctx, token, `${base}/content`, { seq: q });
+            if (visible) expectStatus(res, 200, `${who}: content at ${q}`);
+            else refused(res, `${who}: content at ${q}`);
+            const att = await get(ctx, token, `${base}/attribution`, { atSeq: q });
+            if (visible) expectStatus(att, 200, `${who}: the attribution at ${q}`);
+            else refused(att, `${who}: the attribution at ${q}`);
+            const run = await get(ctx, token, `${base}/commits`, { after: q });
+            if (q >= gate) expectStatus(run, 200, `${who}: the commits after ${q}`);
+            else refused(run, `${who}: the commits after ${q}`);
+          }
+          // A comparison that starts below the gate is refused whole; from the gate it is served.
+          if (gate > 0)
+            refused(
+              await get(ctx, token, `${base}/diff`, { fromSeq: gate - 1, toSeq: s.s3 }),
+              `${who}: a comparison that straddles the gate`,
+            );
+          expectStatus(
+            await get(ctx, token, `${base}/diff`, { fromSeq: Math.min(gate, s.s3), toSeq: s.s3 }),
+            200,
+            `${who}: a comparison from the gate`,
+          );
+          // Attribution at the head: nothing from below the gate is named (decision 37).
+          const head = expectStatus(
+            await get(ctx, token, `${base}/attribution`, { atSeq: s.s3 }),
+            200,
+            `${who}: the attribution at the head`,
+          ).json as AttributionBody;
+          const named = head.spans.filter((x) => !x.unknown);
+          for (const x of named)
+            check(x.seq >= gate, `${who}: a named span is at or above the gate`, `>= ${gate}`, x);
+          if (gate > 0) {
+            check(
+              head.spans.some((x) => x.seq < gate || x.unknown),
+              `${who}: content below the gate is still covered, as an unknown person`,
+              'a span',
+              head.spans,
+            );
+            const below = head.spans.filter((x) => x.seq < gate && !x.unknown);
+            equal(below.length, 0, `${who}: no span names a commit below the gate`);
+          }
+        };
+
+        // `editors` (the default): a viewer reads the head only, an editor everything.
+        const { token: viewer } = await ctx.token('viewer-matrix', { [doc]: 'viewer' });
+        await setSetting('editors');
+        await readsAgainst('a viewer under editors', viewer, s.s3);
+        await readsAgainst('an editor under editors', s.author.token, 0);
+        // `all`: everyone with view reads everything.
+        await setSetting('all');
+        await readsAgainst('a viewer under all', viewer, 0);
+        // `since_access`: the claim decides, and without it the gate is the head.
+        await setSetting('since_access');
+        const { token: claimed } = await ctx.token(
+          'viewer-claim',
+          { [doc]: 'viewer' },
+          { access_since: claim },
+        );
+        await readsAgainst('a viewer with access_since', claimed, sinceGate);
+        await readsAgainst('a viewer without access_since', viewer, s.s3);
         await closeAll(s);
       },
     }),

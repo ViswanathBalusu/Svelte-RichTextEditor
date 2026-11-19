@@ -3,11 +3,11 @@
  * section 11; 13 section 10).
  *
  * A hold names a document of the tenant, the reason the service credential gave for it, the actor
- * who placed it and the time. The routes `POST /documents/{id}/holds` and `GET /holds` (hold-routes.ts)
- * read and write these records. A hold has no release here: what a hold suspends, its release and
- * the thinning it stops are HIS-031, HIS-030 and HIS-032, and the hold rule (`applyHold` in
- * `@docedit/history`) is not connected, because this service does not depend on that package. The
- * record of a hold is therefore the interface only.
+ * who placed it and the time. The routes `POST /documents/{id}/holds`, `DELETE
+ * /documents/{id}/holds/{holdId}` and `GET /holds` (hold-routes.ts) read and write these records.
+ * A release keeps the row (who released it and when) and removes the hold from force: the list, the
+ * `legalHold` of the document resource and the held set of the scheduler's sweeps no longer
+ * count it (HIS-031; owner decision 85). What a hold suspends is in the sweeps (`heldDocuments`).
  *
  * The shape of a hold (`reason` text, at most 500 characters) is a proposal, recorded in the story
  * notes of UX-080. A document may carry more than one hold; each placement is its own record, and
@@ -30,6 +30,9 @@ export interface HoldRow {
   readonly reason: string;
   readonly placedBy: string;
   readonly placedAt: number;
+  /** Set when the hold was released (HIS-031; owner decision 85); a released hold is not in force. */
+  readonly releasedBy?: string;
+  readonly releasedAt?: number;
 }
 
 /** A hold as the routes answer it. */
@@ -85,25 +88,59 @@ export function holdView(row: HoldRow): HoldView {
  */
 export interface HoldStore {
   add(row: HoldRow): Promise<void>;
+  /** The holds in force, that is, placed and not released. */
   list(tenant: string, after: string | null, limit: number): Promise<HoldRow[]>;
-  /** Whether the document has at least one hold placed on it (HIS-031 criterion 4; no release yet). */
+  /** Whether the document has at least one hold in force (HIS-031 criterion 4). */
   held(tenant: string, document: string): Promise<boolean>;
+  /**
+   * Releases one hold of the document, once: the hold as it was placed, or null when no such hold
+   * is in force (unknown, of another document or tenant, or already released).
+   */
+  release(
+    tenant: string,
+    document: string,
+    id: string,
+    actor: string,
+    at: number,
+  ): Promise<HoldRow | null>;
 }
 
 export class MemoryHoldStore implements HoldStore {
-  readonly #rows: HoldRow[] = [];
+  #rows: HoldRow[] = [];
 
   async add(row: HoldRow): Promise<void> {
     this.#rows.push(row);
   }
 
   async held(tenant: string, document: string): Promise<boolean> {
-    return this.#rows.some((r) => r.tenant === tenant && r.document === document);
+    return this.#rows.some(
+      (r) => r.tenant === tenant && r.document === document && r.releasedAt === undefined,
+    );
+  }
+
+  async release(
+    tenant: string,
+    document: string,
+    id: string,
+    actor: string,
+    at: number,
+  ): Promise<HoldRow | null> {
+    const i = this.#rows.findIndex(
+      (r) =>
+        r.tenant === tenant && r.document === document && r.id === id && r.releasedAt === undefined,
+    );
+    if (i < 0) return null;
+    const row = this.#rows[i]!;
+    this.#rows[i] = { ...row, releasedBy: actor, releasedAt: at };
+    return row;
   }
 
   async list(tenant: string, after: string | null, limit: number): Promise<HoldRow[]> {
     return this.#rows
-      .filter((r) => r.tenant === tenant && (after === null || r.id > after))
+      .filter(
+        (r) =>
+          r.tenant === tenant && r.releasedAt === undefined && (after === null || r.id > after),
+      )
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, limit);
   }
@@ -165,6 +202,42 @@ export class HoldService {
     return holdView(row);
   }
 
+  /**
+   * Releases one hold (HIS-031; owner decision 85). It is audited as the placement is, with the
+   * actor and the time (kind `hold.released`). After each release the hook `afterRelease` runs, so
+   * that the erasures that no held document blocks any more go ahead. A hold that is not in force,
+   * or that belongs to another document or tenant, is `not_found`.
+   */
+  async release(
+    tenant: string,
+    document: string,
+    holdId: string,
+    actor: string,
+  ): Promise<HoldView> {
+    const at = this.#now();
+    const row = await this.#store.release(tenant, document, holdId, actor, at);
+    if (row === null) throw new ApiError('not_found', 'no such hold in force');
+    await this.#audit.record([
+      {
+        id: uuid7(),
+        tenant,
+        doc: document,
+        actor,
+        kind: 'hold.released',
+        data: { hold: row.id, reason: row.reason, placedAt: new Date(row.placedAt).toISOString() },
+        at,
+      },
+    ]);
+    await this.afterRelease?.(tenant, document);
+    return holdView(row);
+  }
+
+  /**
+   * Called after a release, with the tenant and the document. The server sets it to run the
+   * erasures that waited for the hold (`ErasureRequests.afterRelease`).
+   */
+  afterRelease: ((tenant: string, document: string) => Promise<unknown>) | undefined;
+
   /** Whether a hold is in force on the document. Only a boolean leaves here: never the reasons. */
   async inForce(tenant: string, document: string): Promise<boolean> {
     return this.#store.held(tenant, document);
@@ -184,9 +257,9 @@ export class HoldService {
   }
 
   /**
-   * The documents of the tenant that a legal hold covers (BE-046 criterion 4). Holds have no
-   * release, so every stored hold is in force. Reads the store page by page; the sweeps of the
-   * scheduler call it once per tenant and run.
+   * The documents of the tenant that a legal hold covers (BE-046 criterion 4): those with a hold in
+   * force, so a released hold no longer keeps its document. Reads the store page by page; the sweeps
+   * of the scheduler call it once per tenant and run.
    */
   async heldDocuments(tenant: string): Promise<ReadonlySet<string>> {
     const held = new Set<string>();

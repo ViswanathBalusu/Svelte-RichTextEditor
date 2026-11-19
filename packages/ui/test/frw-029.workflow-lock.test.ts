@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { RecoveredEdits, WorkflowParticipantView } from '../src/core-api.ts';
 import { EN_GB } from '../src/i18n/en-GB.ts';
 import { NoticeTracker } from '../src/shell/notices.ts';
-import { lockBanner, lockKind, participantLabel } from '../src/shell/workflow-lock.ts';
+import { lockBanner, lockKind, participantLabel, reuseSeq } from '../src/shell/workflow-lock.ts';
 
 const person = (
   id: string,
@@ -56,6 +56,35 @@ describe('who may still act (FRW-029 criterion 6)', () => {
       kind: 'running',
       actors: [],
     });
+  });
+});
+
+describe('reusing a stopped workflow’s document (FRW-033 criterion 5)', () => {
+  it('offers the copy only for a declined or voided workflow, to a manager, when the host forks, and when the send is known', () => {
+    for (const state of ['declined', 'voided'])
+      expect(reuseSeq(state, 7, true, true), state).toBe(7);
+    // The first commit of a document is seq 0.
+    expect(reuseSeq('voided', 0, true, true)).toBe(0);
+    for (const state of [
+      null,
+      'draft',
+      'sent',
+      'in_progress',
+      'correcting',
+      'completed',
+      'expired',
+    ])
+      expect(reuseSeq(state, 7, true, true), String(state)).toBeNull();
+    expect(reuseSeq('declined', 7, false, true)).toBeNull();
+    expect(reuseSeq('declined', 7, true, false)).toBeNull();
+    expect(reuseSeq('declined', null, true, true)).toBeNull();
+    expect(reuseSeq('declined', -1, true, true)).toBeNull();
+    expect(reuseSeq('declined', 1.5, true, true)).toBeNull();
+  });
+
+  it('has its words in the source table', () => {
+    expect(typeof EN_GB['workflow.banner.reuse']).toBe('string');
+    expect(typeof EN_GB['workflow.banner.reuseRequested']).toBe('string');
   });
 });
 

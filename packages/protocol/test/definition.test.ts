@@ -237,6 +237,7 @@ const OTHER_ROUTES = [
   'GET /documents/{id}/workflow/final',
   // UX-080 (08 §11; 13 §10): legal holds through the administration API, service credential only.
   'POST /documents/{id}/holds',
+  'DELETE /documents/{id}/holds/{holdId}',
   'GET /holds',
   // HIS-038 (08 §13): the erasure of a person, service credential only.
   'POST /users/erase',
@@ -334,6 +335,7 @@ describe('the DEP definition', () => {
         'GET /documents/{id}/history-visibility',
         'PUT /documents/{id}/history-visibility',
         'POST /documents/{id}/holds',
+        'DELETE /documents/{id}/holds/{holdId}',
         'GET /holds',
         'POST /users/erase',
         'POST /documents/{id}/commits/{seq}/tombstone',

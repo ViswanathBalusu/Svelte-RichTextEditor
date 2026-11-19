@@ -29,6 +29,11 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
     file: 'control-plane/history-list-route.ts',
     gate: /historyViewOf\(/,
   },
+  // HIS-037: the segment starts at the caller's gate (`minVisibleSeqOf`) and refuses a range below it.
+  'GET /documents/{id}/audit-segment': {
+    file: 'control-plane/audit-segment-route.ts',
+    gate: CONTROL_GATE,
+  },
   'POST /documents/{id}/versions': { file: 'control-plane/versions-routes.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/restore': { file: 'control-plane/restore-route.ts', gate: CONTROL_GATE },
   'POST /documents/{id}/fork': { file: 'control-plane/history-routes.ts', gate: CONTROL_GATE },

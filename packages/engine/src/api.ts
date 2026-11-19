@@ -649,6 +649,19 @@ export interface EquationRequest extends EquationTarget {
   n: number;
 }
 
+/** A signature or initials field the person activated, for the shell's signing step (FRW-046). */
+export interface SignFieldRequest {
+  /** Counts the requests, so that the same field activated twice is two requests. */
+  n: number;
+  id: string;
+  key: string;
+  kind: 'signature' | 'initials';
+  /** The field's label, the document's text. */
+  label: string;
+  /** The name of the field's role, the document's text; null when the field has none. */
+  role: string | null;
+}
+
 /**
  * What confirming an equation came to (FE-070). A refusal changed nothing: `reason` is the
  * command's (`too-long`, `too-deep`, `read-only`, `suggestion`, `not-equation`). `rejected` means

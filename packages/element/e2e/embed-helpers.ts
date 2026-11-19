@@ -50,10 +50,16 @@ export async function mountEditor(
     mode?: string;
     /** Further attributes, set before the element connects (for example `toolbar`, `theme`). */
     attributes?: Record<string, string>;
+    /** The `config` property, set before the element connects (05 §8.1; PRO-081). */
+    config?: Record<string, unknown>;
+    /** Backend features announced in addition to the mock backend's own (05 §1 rule 4), for the shell's controls. */
+    announce?: string[];
+    /** Optional ports added to the mock backend (stand-ins that only exist; the shell offers a control for a port that is there). */
+    ports?: ('exports' | 'proofing' | 'assistant')[];
   } = {},
 ): Promise<void> {
   await page.evaluate(
-    async ({ sub, role, name, target, doc, mode, attributes }) => {
+    async ({ sub, role, name, target, doc, mode, attributes, config, announce, ports }) => {
       const e = (window as unknown as { __embed: Record<string, never> }).__embed as unknown as {
         backend(sub: string, role: string): unknown;
         docId: string;
@@ -64,6 +70,7 @@ export async function mountEditor(
       };
       const el = document.createElement('doc-editor') as HTMLElement & { backend: unknown };
       el.dataset['test'] = name;
+      if (config !== null) (el as unknown as { config: unknown }).config = config;
       if (mode !== null) el.setAttribute('mode', mode);
       for (const [attr, value] of Object.entries(attributes ?? {})) el.setAttribute(attr, value);
       const ready = new Promise<void>((resolve, reject) => {
@@ -76,7 +83,22 @@ export async function mountEditor(
           },
         );
       });
-      el.backend = e.backend(sub, role);
+      const backend = e.backend(sub, role) as { features: ReadonlySet<string> };
+      // A wrapper that answers `features` with more names and passes the rest through.
+      el.backend =
+        announce.length > 0 || ports.length > 0
+          ? new Proxy(backend, {
+              get: (target, key) => {
+                if (key === 'features') return new Set([...target.features, ...announce]);
+                if (key === 'exports' && ports.includes('exports')) return {};
+                if (key === 'assistant' && ports.includes('assistant')) return {};
+                if (key === 'proofing' && ports.includes('proofing'))
+                  return { check: () => Promise.resolve([]), addWord: () => Promise.resolve() };
+                const value = Reflect.get(target, key, target) as unknown;
+                return typeof value === 'function' ? value.bind(target) : value;
+              },
+            })
+          : backend;
       el.setAttribute(
         'doc-id',
         doc === 'second'
@@ -100,6 +122,9 @@ export async function mountEditor(
       doc: opts.doc ?? 'first',
       mode: opts.mode ?? null,
       attributes: opts.attributes ?? {},
+      config: opts.config ?? null,
+      announce: opts.announce ?? [],
+      ports: opts.ports ?? [],
     },
   );
   await expect(

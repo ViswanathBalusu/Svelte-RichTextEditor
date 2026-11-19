@@ -2,8 +2,8 @@
   "$comment": "Cargo.lock files that have been read and accepted (WASM-013 criterion 4; ADR 0016, decision 5). Each entry pins the SHA-256 of the lock file's text (line endings as LF). A dependency update changes the lock file, which fails scripts/licence-gate.ts until the entry is changed in the same commit, so an update is always a change that somebody has to read. Direct dependencies in Cargo.toml are exact (`=x.y.z`), and every cargo command of the kernel's build runs with --locked.",
   "locks": {
     "crates/Cargo.lock": {
-      "sha256": "b14362233d35ae4f4dff0ac380da326b66778b033cc956bf0e347aef5bc4a136",
-      "reviewed": "WASM-013, lane w6, 2026-11-18: wasm-bindgen 0.2.130 and its dependencies, 12 packages with the kernel crate; all MIT or Apache-2.0, unicode-ident also Unicode-3.0 (licences/kernel-data.json). Proposed; a maintainer confirms."
+      "sha256": "f424589d93a62a5f62765dbe9f45f1005551497b809309d0a8d1e4e271c950bd",
+      "reviewed": "WASM-006, lane w6, 2026-11-18: harfrust 0.15.0 (the kernel's shaper, ADR 0016) with read-fonts 0.46.0, font-types 0.12.7, bytemuck, smallvec, foldhash, once_cell, yoke, zerofrom and their macro crates added to wasm-bindgen 0.2.130 and its dependencies, 27 packages in all with the kernel crate. Read: none is a -sys crate, and every licence is on the allow-list (MIT, Apache-2.0, Zlib, Unicode-3.0). yoke, yoke-derive, zerofrom and zerofrom-derive carry the Unicode-3.0 licence and no data (licences/kernel-data.json). Proposed; a maintainer confirms."
     }
   }
 }

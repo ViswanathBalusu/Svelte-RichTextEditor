@@ -36,6 +36,23 @@ export interface LockBanner {
   readonly actors: readonly string[];
 }
 
+/**
+ * The sequence number a stopped workflow's document is copied from (FRW-033 criterion 5), or null
+ * when no copy is offered: the workflow was declined or voided, the host handles the fork request,
+ * the reader may manage the document, and the send's `sentSeq` is known. The copy starts from the
+ * document as it was sent, without what the participants filled in (proposed, ADR 0415).
+ */
+export function reuseSeq(
+  state: string | null,
+  sentSeq: number | null,
+  manage: boolean,
+  hostForks: boolean,
+): number | null {
+  if (state !== 'declined' && state !== 'voided') return null;
+  if (!manage || !hostForks) return null;
+  return sentSeq !== null && Number.isInteger(sentSeq) && sentSeq >= 0 ? sentSeq : null;
+}
+
 /** The banner for a workflow state and its participants; null when the state does not lock. */
 export function lockBanner(
   state: string | null,

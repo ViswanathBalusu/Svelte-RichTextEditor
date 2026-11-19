@@ -138,7 +138,9 @@ TeX decides the final line and page breaks. What the editor shows can only appro
 |---|---|---|
 | L0 | The web view shows no pages. A PDF preview and the read view show the truth | None beyond the preview |
 | L1 (opt-in, from phase 3) | After each compile, the page view adopts the typesetter's line and page breaks for paragraphs that have not been edited since. Pages match the PDF until the next edit upstream | The compile must report layout (7.1) |
-| L2 (experimental) | Lines match even for edited text, because the class forces the same first-fit breaks the editor computes, with the same fonts, no hyphenation and fixed leading | Gives up TeX's paragraph quality. If it is ever built, breaks are forced with penalties before TeX's own line breaker runs; the line breaker is not replaced, because a replacement would have to reimplement how inserts, marks and vertical material migrate |
+| L2 (experimental, to be built: owner decision 147, ADR 0413) | Lines match even for edited text, because the class forces the same first-fit breaks the editor computes, with the same fonts, no hyphenation and fixed leading | Gives up TeX's paragraph quality. Breaks are forced with penalties before TeX's own line breaker runs; the line breaker is not replaced, because a replacement would have to reimplement how inserts, marks and vertical material migrate |
+
+L2 is labelled experimental wherever it is offered, and the label states the loss: "Experimental. Forced line breaks make lines match the editor, but give up TeX's paragraph quality: line breaks are less even, and spacing can be looser or tighter than TeX would set it." (ADR 0413).
 
 Rebuilding TeX's paragraph and page builders in the browser is not attempted.
 
@@ -227,6 +229,8 @@ The `suggestions` option chooses `accept` (as if all were accepted), `reject` (a
 | `docx` | An OOXML writer from the CDM in `export-docx`. Suggestions become `w:ins` and `w:del` with author and date; comments become Word comments; regions follow 07, section 15; fields follow 12, section 12. For a document imported from Word, the writer patches the original package, as [ADR 0017](../adr/0017-lossless-docx-preservation-layer.md) describes. It copies unedited parts and elements verbatim, writes preserved properties back onto edited elements, and re-inserts preserved fragments, so that the file round-trips without loss |
 | `cdm` | The canonical JSON |
 | `html`, `md` | Direct writers, in phase 2, because pasting into and out of other tools is part of everyday use |
+
+The classification label (13 §10) is carried as follows (ADR 0414, proposed). PDF and DOCX: in the header and the footer of every page. HTML: a `header` and a `footer` element of class `de-classification` around the content, and a `classification` meta element. Markdown: the label in bold as the first and the last paragraph. `cdm`: not in the file, which is fixed by the content; the label stays on the document record. A document without a label has no marking. A change of label changes the export request key, so the next export is a new job.
 | EPUB | Later, through a Pandoc JSON writer |
 
 ## 12. DOCX import
@@ -255,7 +259,7 @@ With the LaTeX project's tagging support in TeX Live 2026, the class produces ta
 ## 15. Open issues
 
 - How precise offsets in `layout.json` can be (spike S4).
-- Whether L2 is ever worth building.
+- L2 is built (owner decision 147, 2026-11-15; ADR 0413). What stays open is how closely the editor's first-fit lines match the PDF on forced paragraphs, which the build stories measure.
 - Customer templates (assumption A3). A possible middle path is a small set of reviewed house classes with parameters; templates with role placeholders (12, section 9) cover much of the same demand.
 - Citations and a bibliography are in version 1 since the owner's decision of 2026-11-06 (03, section 13). How `biblatex` and biber fit the typed emitters (section 4), the passes (section 8) and the sandbox rules (section 9.3) is not yet specified.
 - Cost per preview compile at scale, and whether a browser-side engine could take over previews later. WebAssembly builds of LuaTeX exist but are large and carry licence obligations.

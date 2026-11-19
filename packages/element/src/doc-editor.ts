@@ -37,14 +37,17 @@ import type {
 } from '@docedit/engine/headless';
 import { endpointBackend } from './backend-source.ts';
 import { normaliseConfig, type DocEditorConfig, type NormalConfig } from './config.ts';
+import type { HostExtension } from './extensions.ts';
 import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
+import type { SigningSource } from './signing.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
 import type { CompleteFillingOutcome } from './fill-actions.ts';
 import type { PrintOutcome } from './print.ts';
 import {
   elementMethods,
   type ConfirmedContent,
+  type ExecOutcome,
   type FieldFillOutcome,
   type FieldReport,
   type HostApi,
@@ -68,7 +71,8 @@ import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
 import { selectView, VIEW_STRINGS, type ViewName } from './view-select.ts';
 import { frameScheduler } from './status.ts';
-import { requestLayoutKernel } from './layout-kernel-request.ts';
+import { fallbackFor, noticeReason, showPageViewNotice } from './kernel-fallback.ts';
+import { ElementKernel } from './layout-kernel-request.ts';
 import { EMBEDDING_VERSION, RELEASE } from './version.ts';
 
 /** `getToken` (05 §8.1): returns a token for the document, held in memory only. */
@@ -156,7 +160,7 @@ export class DocEditorElement extends Base {
   #config: NormalConfig = normaliseConfig(null);
   #resolveUsers: ResolveUsers | null = null;
   #searchPrincipals: SearchPrincipals | null = null;
-  #extensions: readonly unknown[] = [];
+  #extensions: readonly HostExtension[] = [];
   #strings: StringOverrides | null = null;
   #icons: IconOverrides | null = null;
 
@@ -193,6 +197,10 @@ export class DocEditorElement extends Base {
    * host's value; setting it again clears this.
    */
   #viewOverride: ViewName | null = null;
+  /** The message that says the page view is not available because the kernel did not start (WASM-003). */
+  #kernelNotice: HTMLElement | null = null;
+  /** The element's layout kernel: its worker runs while the page view is asked for (WASM-004). */
+  #kernel: ElementKernel | null = null;
   /** The block the editor moves to as soon as the web view is shown (FE-072 criterion 4). */
   #pendingBlock: string | null = null;
   #grace: ReturnType<typeof setTimeout> | null = null;
@@ -325,12 +333,15 @@ export class DocEditorElement extends Base {
     this.#mounted?.setIcons(this.#icons);
   }
 
-  /** Host-registered extensions (13 §7, 05 §8.1). A change while the shell is mounted is applied at once (UX-050). */
-  get extensions(): readonly unknown[] {
+  /**
+   * Host-registered extensions (13 §7, 05 §8.1; the entry type is `HostExtension`). A change while the
+   * shell is mounted is applied at once (UX-050). A value that is not an array gives no extensions.
+   */
+  get extensions(): readonly HostExtension[] {
     return this.#extensions;
   }
 
-  set extensions(value: readonly unknown[]) {
+  set extensions(value: readonly HostExtension[]) {
     this.#extensions = Array.isArray(value) ? Object.freeze([...value]) : [];
     this.#mounted?.setExtensions(this.#extensions);
   }
@@ -429,9 +440,32 @@ export class DocEditorElement extends Base {
    * the web view meanwhile and the kernel waits for it. Touch devices never get the page view (FE-113).
    */
   #prepareKernel(view: string | null): void {
+    this.#kernelNotice?.remove();
+    this.#kernelNotice = null;
     if (view !== 'print') return;
     if (typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches) return;
-    void requestLayoutKernel((detail) => this.#emit('de-diagnostic', detail));
+    // One kernel for each element: it owns the layout worker (WASM-004) and keeps its lifecycle.
+    this.#kernel ??= new ElementKernel((detail) => {
+      this.#emit('de-diagnostic', detail);
+      if (detail.kind === 'load-failed') this.#degradeKernel(detail);
+    });
+    void this.#kernel.start();
+  }
+
+  /**
+   * The kernel did not start (WASM-003). The host hears which feature degraded and which directive it
+   * lacks. Where canvas measurement is an acceptable fallback (S5), the page view will use it and
+   * nothing is shown; in Firefox the page view is not available, and a plain message says why and
+   * offers the web view and the read view. Editing, saving and the read view are not affected.
+   */
+  #degradeKernel(failure: DocEditorEventMap['de-diagnostic']): void {
+    const fallback = fallbackFor(navigator.userAgent);
+    this.#emit('de-diagnostic', { ...failure, kind: 'degraded', ms: null, fallback });
+    if (fallback !== 'web-view' || this.getAttribute('view') !== 'print') return;
+    this.#kernelNotice?.remove();
+    this.#kernelNotice = showPageViewNotice(this.#root, noticeReason(failure), (view) =>
+      this.setAttribute('view', view),
+    );
   }
 
   #attributes(): {
@@ -449,6 +483,8 @@ export class DocEditorElement extends Base {
   }
 
   #suspend(): void {
+    // The layout worker stops with the element; the first use after a resume creates it again (WASM-004).
+    this.#kernel?.stop();
     if (!this.#session || this.#suspended) return;
     this.#suspended = true;
     // Listeners on the page, observers and the channel go; the core and the journal stay (FE-005).
@@ -519,6 +555,9 @@ export class DocEditorElement extends Base {
     this.#reload = false;
     this.#clearFailure();
     void current?.close();
+    // The faces the kernel holds belong to the document that is closed (a tenant's own fonts go
+    // with its documents; WASM-005). The next document names the faces it needs.
+    if (current && this.#kernel?.running) void this.#kernel.releaseFaces(null).catch(() => {});
     const session: Session = new Session({
       docId,
       backend:
@@ -771,6 +810,7 @@ export class DocEditorElement extends Base {
       ...this.#exportService(docId),
       // The send dialog goes through the backend's workflow port, when it has one (FRW-028).
       ...this.#workflowSource(docId),
+      ...this.#signingSource(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       mathFontsUrl: this.#config.katexFontsUrl,
@@ -877,11 +917,13 @@ export class DocEditorElement extends Base {
   }
 
   /**
-   * Runs a command through the path the toolbar uses; false when it does not apply, is unknown or
-   * no document is loaded (PRO-085). `command` is an identifier of the command registry such as
-   * `format.bold` (UX-005), or a name of the editing core such as `bold`.
+   * Runs a command through the path the toolbar uses (PRO-085). The answer is `{ ok, reason }`
+   * (owner decision 188): `ok` is false when the command is unknown, is not allowed for this user or
+   * mode, changed nothing, or no document is loaded, and `reason` is a code that says which (see
+   * `ExecReason`). `command` is an identifier of the command registry such as `format.bold` (UX-005),
+   * or a name of the editing core such as `bold`.
    */
-  exec(command: CommandName | (string & {}), args?: CommandArgs): boolean {
+  exec(command: CommandName | (string & {}), args?: CommandArgs): ExecOutcome {
     return this.#methods.exec(command, args);
   }
 
@@ -1016,6 +1058,26 @@ export class DocEditorElement extends Base {
   }
 
   /**
+   * The adoption and signing step's source (FRW-045, FRW-046), when the session's backend has the
+   * assets port and the fields port and announced both features; otherwise nothing, and a signature
+   * field is not offered for signing.
+   */
+  #signingSource(docId: string): { signing?: () => SigningSource | null } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.assets || !backend.fields) return {};
+    if (!hasPort(backend, 'assets') || !hasPort(backend, 'fields')) return {};
+    return {
+      signing: () => {
+        const live = this.#session === session ? session?.backend : undefined;
+        return live?.assets && live.fields && session
+          ? { assets: live.assets, fields: live.fields, docId: session.docId }
+          : null;
+      },
+    };
+  }
+
+  /**
    * The send dialog's source (FRW-028), when the session's backend has the workflow port and
    * announced the feature; otherwise nothing, and the shell offers no "send for completion" command.
    */
@@ -1068,6 +1130,9 @@ export class DocEditorElement extends Base {
     this.#closeReadView();
     this.#hideWebLabel();
     this.#clearFailure();
+    // The worker and its memory are released (WASM-004).
+    this.#kernel?.destroy();
+    this.#kernel = null;
     const session = this.#session;
     this.#session = null;
     this.#sessionKey = null;

@@ -13,7 +13,7 @@ const surface = (page: Page, name = 'one') => page.locator(`${editor(name)} .de-
 
 type Host = HTMLElement & {
   queryCommand(id: string): { enabled: boolean; active: boolean };
-  exec(id: string): boolean;
+  exec(id: string): { ok: boolean; reason: string | null };
 };
 
 /** The state of a command as the host reads it and as the built-in toolbar button shows it. */
@@ -100,7 +100,7 @@ test.describe('UX-005 a host-built toolbar on the mounted element', () => {
       (sel) => (document.querySelector(sel) as Host).exec('format.bold'),
       editor('one'),
     );
-    expect(ran).toBe(true);
+    expect(ran).toEqual({ ok: true, reason: null });
     await expect(last.locator('strong, b, [data-mark="bold"]').first()).toBeVisible();
     expect((await bothStates(page, 'one', 'format.bold')).toolbar?.active).toBe(true);
 
@@ -119,9 +119,9 @@ test.describe('UX-005 a host-built toolbar on the mounted element', () => {
     );
     expect(refused).toEqual({
       viewerState: { enabled: false, active: false },
-      viewerRan: false,
+      viewerRan: { ok: false, reason: 'no-access' },
       unknownState: { enabled: false, active: false },
-      unknownRan: false,
+      unknownRan: { ok: false, reason: 'unknown' },
     });
   });
 

@@ -329,6 +329,7 @@
         "GET /documents/{id}/retention",
         "PUT /documents/{id}/retention",
         "POST /documents/{id}/holds",
+        "DELETE /documents/{id}/holds/{holdId}",
         "GET /holds",
         "POST /users/erase",
         "POST /documents/{id}/commits/{seq}/tombstone",

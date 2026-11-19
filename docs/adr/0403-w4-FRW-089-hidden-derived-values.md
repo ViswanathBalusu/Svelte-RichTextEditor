@@ -1,6 +1,6 @@
 # ADR 0403: Values derived from hidden content (FRW-089)
 
-**Status:** the first two parts are implemented as the story's criteria 1 and 2 say; the third part (a redacted copy of the sealed PDF for each participant) is proposed and waits for the owner. Written by lane w4, 2026-11-18.
+**Status:** accepted, 2026-11-18. The first two parts are implemented as the story's criteria 1 and 2 say. The third part (a redacted copy of the sealed PDF for each participant) was proposed and is now the owner's decision 133 of `docs/owner-decisions-2026-11-15.md`: "One sealed full PDF for the owner and a sealed view per participant, with evidence of what each saw". It is recorded here and in 12 §8.2 item 6; building it belongs to FRW-049 and FRW-050 to FRW-055. Written by lane w4, 2026-11-18.
 
 ## Context
 
@@ -36,18 +36,18 @@ There are two choices for the numbers a reader sees when a hidden region lies be
 
 The owner chose the first on 2026-11-15 (decision 11 of [owner-decisions-2026-11-15.md](../owner-decisions-2026-11-15.md)). ADR 0019 §1 and ADR 0032 (projections) apply it: `computeLabels` with the effects of `counterEffects`. A `ref` whose target is hidden is the one place where a number would name something the reader cannot see; part 1 gives it a placeholder.
 
-## 3. A redacted copy of the sealed PDF and of the evidence bundle (proposed, not decided)
+## 3. A redacted copy of the sealed PDF and of the evidence bundle (decided)
 
-Part B of `docs/owner-blockers-2026-11-17.md` gives the proposed default: one sealed full PDF for the owner and a sealed view per participant. This record repeats it so that FRW-089 and FRW-049 agree; it is not the owner's answer.
+The owner decided on 2026-11-15 (decision 133): one sealed full PDF for the owner and a sealed view per participant, with evidence of what each saw. This is the design below, which FRW-089 and FRW-049 share.
 
 - The full sealed PDF contains the whole document and goes to the owner and to anyone with `manage`.
 - Each participant receives a sealed PDF made from their own projection (`projectDocument`), with the placeholder where a region is hidden and the redaction marker where a value is. It is sealed separately, so a participant never holds a file that contains what they could not read.
 - The evidence bundle's record lists, for each participant, which of the two they received and the visibility class of their projection, and holds no hidden value. The hashes of the full document and of each view are both recorded, so the views can be tied to the sealed original.
 
-Until the owner decides, no export or evidence bundle for a participant is produced from the full document.
+No export or evidence bundle for a participant is produced from the full document. The code that makes the per-participant view (FRW-049, FRW-050 to FRW-055) does not exist yet; this record fixes what it must do.
 
 ## Consequences
 
-- Criteria 1 and 2 of FRW-089 are met and tested. Criterion 3 stays open.
+- All three criteria of FRW-089 are met: 1 and 2 are tested, and 3 records the owner's decision.
 - A reader's projection costs one more set per visibility class (`keys`, `targets`); both derive from the same document and regions, so the visibility key does not change.
 - The blanking of `styleRef` is conservative: a reader who has any region hidden sees no cached running-head text. If the owner wants it kept where the source paragraph is visible, the model must say which paragraph a `styleRef` came from, which it does not.
