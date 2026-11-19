@@ -17,7 +17,6 @@
  */
 import { mapRanges } from '@docedit/authority';
 import type { StepMap } from 'prosemirror-transform';
-import { DEFAULT_MAPPING_HISTORY } from './presence.ts';
 import type { Confirmed } from './sync/state.ts';
 
 /** Where the service says a thread is, at `seq`: a range of text or one block. */
@@ -33,7 +32,8 @@ export class ConfirmedLog {
   readonly #retain: number;
   #floor: number;
 
-  constructor(floor: number, retain: number = DEFAULT_MAPPING_HISTORY) {
+  /** `retain` is how many confirmed commits are kept; the core gives presence's bound (ADR 0108). */
+  constructor(floor: number, retain: number) {
     this.#floor = floor;
     this.#retain = Math.max(0, retain);
   }
