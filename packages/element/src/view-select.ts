@@ -25,6 +25,7 @@ export interface ViewChoice {
 /** The interface strings of the views. Replaceable strings are UX's (13 §8). */
 export const VIEW_STRINGS = {
   web: 'Web layout',
+  print: 'Page layout',
 } as const;
 
 /** The default view when the attribute is absent or unknown (proposed; see the header). */
