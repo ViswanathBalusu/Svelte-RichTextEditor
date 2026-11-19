@@ -33,6 +33,7 @@ export class ConfirmedLog {
   readonly #retain: number;
   #floor: number;
 
+  /** `retain` is how many confirmed commits are kept; the core gives presence's bound (ADR 0108). */
   constructor(floor: number, retain: number = DEFAULT_MAPPING_HISTORY) {
     this.#floor = floor;
     this.#retain = Math.max(0, retain);

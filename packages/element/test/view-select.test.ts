@@ -57,3 +57,35 @@ describe('the default (open question in 05 §8.1)', () => {
     expect(selectView('unknown', desktop)).toEqual({ view: 'web', fallback: false });
   });
 });
+
+describe('the web view stays available to people who zoom (FE-106 criterion 3, decision part)', () => {
+  const offers = fc.record({ touch: fc.boolean(), pageViewAvailable: fc.boolean() });
+  const attributes = fc.oneof(
+    fc.constantFrom('web', 'read', 'print', 'Print', '', 'page'),
+    fc.string(),
+    fc.constant(null),
+  );
+
+  it('gives the web view for view="web" with no fallback, whatever the page offers', () => {
+    fc.assert(
+      fc.property(offers, (offer) => {
+        expect(selectView('web', offer)).toEqual({ view: 'web', fallback: false });
+      }),
+    );
+  });
+
+  it('never leaves a person in a fixed-width page view with no way back: only the page view is a fixed-width view, and the web view is one attribute value away', () => {
+    fc.assert(
+      fc.property(attributes, offers, (attribute, offer) => {
+        const shown = selectView(attribute, offer).view;
+        // The page view is shown only when it was asked for, is built and the device is not touch.
+        if (shown === 'print') {
+          expect(attribute).toBe('print');
+          expect(offer).toEqual({ touch: false, pageViewAvailable: true });
+        }
+        // Whatever is shown, setting the attribute to web shows the web view.
+        expect(selectView('web', offer).view).toBe('web');
+      }),
+    );
+  });
+});

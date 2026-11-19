@@ -303,7 +303,7 @@ import { type AltRequest, setAltText } from './alt-text.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
-import { PresenceClient } from './presence.ts';
+import { DEFAULT_MAPPING_HISTORY, PresenceClient } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
 import { skippedPreservedAtoms } from './preserved-find.ts';
 import {
@@ -901,7 +901,7 @@ export class DocumentCore implements DocumentApi {
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
   /** The confirmed commits since the client's first `seq`: a range reported earlier is mapped through them (FE-048). */
-  #threadLog = new ConfirmedLog(0);
+  #threadLog = new ConfirmedLog(0, DEFAULT_MAPPING_HISTORY);
   /** Reports at a `seq` the client has not reached; placed when the confirmed document gets there. */
   readonly #threadHeld = new Map<string, ThreadReport>();
   /** The block each block thread is on (FE-048 criterion 1). */
@@ -4693,7 +4693,7 @@ one or original. It is a
     // each range; the maps of later commits carry a range forward from the seq it was reported at.
     let detachThreads: (() => void) | null = null;
     if (opts.threads && (!opts.features || opts.features.includes('comments'))) {
-      this.#threadLog = new ConfirmedLog(opts.seq);
+      this.#threadLog = new ConfirmedLog(opts.seq, DEFAULT_MAPPING_HISTORY);
       const threads = new ThreadSync(opts.threads, channel.docId, {
         report: (id, report) => {
           if (this.reportThread(id, report) === 'stale') void threads.load();

@@ -212,6 +212,8 @@
 /* Header (UX-014). */
 .de-header {
   display: flex;
+  /* Wrap, so a narrow window or a larger default font moves the actions down and clips nothing (FE-106). */
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--_de-space-3);
   padding-block: var(--_de-space-2);
@@ -233,6 +235,7 @@
 
 .de-header-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--_de-space-2);
   flex: 0 0 auto;
 }
@@ -1174,6 +1177,7 @@
 
 .de-zoom {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--_de-space-1);
 }
