@@ -32,6 +32,8 @@ import { verifyDetached, verifyWithOpenssl } from '../../../signing-service/test
 import { InProcessKeyService } from '../../../signing-service/test/support/world.ts';
 import { objectKeys } from '../../src/objects/store.ts';
 import { HttpSigningClient } from '../../src/workflow/signing-client.ts';
+import { extendFinalised, type ExtendDeps } from '../../src/workflow/extend-sealed.ts';
+import { verifySealedPdf } from '../../../signing-service/src/verify-sealed.ts';
 import { MemoryAnchorStore } from '../../src/workflow/anchor-store.ts';
 import { MemorySealedPdfStore } from '../../src/workflow/sealed-store.ts';
 import type { LogFields } from '../../src/log.ts';
@@ -118,6 +120,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     const jobs: Array<{ id: string; payload: Record<string, unknown> }> = [];
     const logged: LogFields[] = [];
     const sleeps: number[] = [];
+    const client = () =>
+      new HttpSigningClient({ url, credential: credential.current, timeoutMs: 120_000 });
 
     beforeAll(async () => {
       if (skip) return;
@@ -148,18 +152,9 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         finalSealing: {
           // The credential is read at each call, so that a test can send the worker's.
           signing: {
-            seal: (job) =>
-              new HttpSigningClient({
-                url,
-                credential: credential.current,
-                timeoutMs: 120_000,
-              }).seal(job),
-            anchor: (job) =>
-              new HttpSigningClient({
-                url,
-                credential: credential.current,
-                timeoutMs: 120_000,
-              }).anchor(job),
+            seal: (job) => client().seal(job),
+            anchor: (job) => client().anchor(job),
+            extend: (job) => client().extend(job),
           },
           retry: { attempts: 2, delaysMs: [10] },
           retainMs: RETAIN_MS,
@@ -384,6 +379,87 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       300_000,
     );
 
+    it.skipIf(skip !== null)(
+      'extends the sealed PDF of a finalised workflow for long-term validation and renews its time-stamp; the sealed object stays and /workflow/final returns the latest (FRW-056)',
+      async () => {
+        authority.current = new HttpTimestampAuthority(tsa.url);
+        credential.current = DOCUMENT_SERVICE_SECRET;
+        const w = await complete();
+        await waitFor('finalised', async () => (await stateOf(w.ref)) === 'finalised');
+        const original = (await sealed.read(w.ref.tenant, w.doc, w.workflowId))!.bytes;
+        const seq = jobs.find((j) => j.payload['doc'] === w.doc)!.payload['seq'] as number;
+        const deps: ExtendDeps = {
+          workflows: h.parts.workflows!,
+          sealed,
+          signing: client(),
+          now: () => Date.now(),
+          retainMs: RETAIN_MS,
+        };
+        const ask = { tenant: w.ref.tenant, doc: w.doc, seq, idempotencyKey: `ltv-${w.doc}` };
+
+        // Long-term validation data and a renewed time-stamp: a further object.
+        const first = await extendFinalised(deps, { ...ask, validation: true });
+        if (!first.ok) throw new Error(JSON.stringify(first));
+        expect(first).toMatchObject({ n: 1, stored: true });
+        const latest = (await sealed.readLatest(w.ref.tenant, w.doc, w.workflowId))!;
+        expect(latest.hash).toBe(first.hash);
+        expect(latest.n).toBe(1);
+        // The sealed object is stored byte for byte, and the update begins with it.
+        expect(
+          Buffer.from((await sealed.read(w.ref.tenant, w.doc, w.workflowId))!.bytes).equals(
+            Buffer.from(original),
+          ),
+        ).toBe(true);
+        expect(
+          Buffer.from(latest.bytes.subarray(0, original.length)).equals(Buffer.from(original)),
+        ).toBe(true);
+        expect(latest.bytes.length).toBeGreaterThan(original.length);
+        // The original signature still validates, and so does the whole file.
+        const proof = verifyWithOpenssl(latest.bytes, pki);
+        expect(proof.map((r) => r.signature.kind)).toEqual(['signature', 'document-time-stamp']);
+        for (const r of proof) expect(r.main.ok, r.main.detail).toBe(true);
+        expect((await verifySealedPdf(latest.bytes, [pki.root])).ok).toBe(true);
+        // `/workflow/final` returns the latest, with its hash.
+        const res = await fetch(`${h.base}/v1/documents/${w.doc}/workflow/final`, {
+          headers: { authorization: `Bearer ${w.owner}` },
+        });
+        expect(res.status).toBe(200);
+        expect(res.headers.get('etag')).toBe(`"sha256:${first.hash}"`);
+        expect(sha256(new Uint8Array(await res.arrayBuffer()))).toBe(first.hash);
+
+        // The same request again adds nothing; a new key renews once more, over the update.
+        expect(await extendFinalised(deps, { ...ask, validation: true })).toMatchObject({
+          ok: true,
+          n: 1,
+          stored: false,
+        });
+        const second = await extendFinalised(deps, {
+          ...ask,
+          idempotencyKey: `renew-${w.doc}`,
+          validation: false,
+        });
+        expect(second).toMatchObject({ ok: true, n: 2, stored: true });
+        const newest = (await sealed.readLatest(w.ref.tenant, w.doc, w.workflowId))!;
+        expect(
+          Buffer.from(newest.bytes.subarray(0, latest.bytes.length)).equals(
+            Buffer.from(latest.bytes),
+          ),
+        ).toBe(true);
+        expect((await verifySealedPdf(newest.bytes, [pki.root])).ok).toBe(true);
+        // An authority that is down gives no update and stores nothing.
+        authority.current = { stamp: () => Promise.reject(new Error('authority down')) };
+        expect(
+          await extendFinalised(deps, {
+            ...ask,
+            idempotencyKey: `down-${w.doc}`,
+            validation: false,
+          }),
+        ).toMatchObject({ ok: false, reason: 'tsa_unreachable', retryable: true });
+        expect((await sealed.readLatest(w.ref.tenant, w.doc, w.workflowId))!.n).toBe(2);
+        authority.current = new HttpTimestampAuthority(tsa.url);
+      },
+      300_000,
+    );
     it.skipIf(skip !== null)(
       'a third party with only the bundle, the sealed PDF, the anchor file and the root verifies them with the command (FRW-055 criterion 2)',
       async () => {

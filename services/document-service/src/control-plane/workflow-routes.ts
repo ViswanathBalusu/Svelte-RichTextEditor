@@ -1077,13 +1077,14 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
     await liveDocument(ctx, doc);
     const found = await store().read(ctx.caller.tenant, doc);
     if (found === null) throw new ApiError('not_found', `document ${doc} has no workflow`);
+    // The newest bytes: the sealed object, or its latest update for long-term validation (FRW-056).
     const sealed =
       found.state === 'finalised'
-        ? await d.sealedPdfs.read(ctx.caller.tenant, doc, found.id)
+        ? await d.sealedPdfs.readLatest(ctx.caller.tenant, doc, found.id)
         : null;
     if (sealed === null)
       throw new ApiError('not_found', `the workflow of document ${doc} has no sealed PDF yet`);
-    const hex = sealed.record.storedHash;
+    const hex = sealed.hash;
     const etag = `"sha256:${hex}"`;
     const headers = {
       ETag: etag,

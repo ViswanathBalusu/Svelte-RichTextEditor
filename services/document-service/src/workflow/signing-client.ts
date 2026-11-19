@@ -75,9 +75,41 @@ export type AnchorAttempt =
       readonly retryable: boolean;
     };
 
+/** A sealed PDF to extend for long-term validation and renew (FRW-056). */
+export interface ExtendJob {
+  readonly tenant: string;
+  readonly documentId: string;
+  readonly seq: number;
+  /** The newest stored bytes. */
+  readonly pdf: Uint8Array;
+  /** One request, one result: a repeat with the same key returns the first result. */
+  readonly idempotencyKey: string;
+  /** Add fresh validation data before the time-stamp. */
+  readonly validation: boolean;
+}
+
+export type ExtendAttempt =
+  | {
+      readonly ok: true;
+      /** The input, then the update. */
+      readonly pdf: Uint8Array;
+      /** SHA-256 of `pdf`, computed here. */
+      readonly sealedHash: string;
+      readonly timestampTime: Date;
+      /** The end of the new time-stamp's validity, ms since the epoch. */
+      readonly expiresAtMs: number;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: SigningFailure;
+      readonly code: string;
+      readonly retryable: boolean;
+    };
+
 export interface SigningClient {
   seal(job: SigningJob): Promise<SigningAttempt>;
   anchor(job: AnchorJob): Promise<AnchorAttempt>;
+  extend(job: ExtendJob): Promise<ExtendAttempt>;
 }
 
 const sha256Hex = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
@@ -272,6 +304,97 @@ export class HttpSigningClient implements SigningClient {
       keyId: wire.keyId,
     };
   }
+
+  async extend(job: ExtendJob): Promise<ExtendAttempt> {
+    const unavailable = (code: string): ExtendAttempt => ({
+      ok: false,
+      reason: 'signing_unavailable',
+      code,
+      retryable: true,
+    });
+    const failed = (code: string): ExtendAttempt => ({
+      ok: false,
+      reason: 'seal_failed',
+      code,
+      retryable: false,
+    });
+    let res: Response;
+    try {
+      res = await (this.#o.fetch ?? fetch)(`${this.#o.url}/v1/extend`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${this.#o.credential}`,
+        },
+        body: JSON.stringify({
+          tenant: job.tenant,
+          documentId: job.documentId,
+          seq: job.seq,
+          pdf: Buffer.from(job.pdf).toString('base64'),
+          pdfSha256: sha256Hex(job.pdf),
+          idempotencyKey: job.idempotencyKey,
+          validation: job.validation,
+        }),
+        signal: AbortSignal.timeout(this.#o.timeoutMs),
+      });
+    } catch {
+      return unavailable('unreachable');
+    }
+    let wire: ExtendWire;
+    try {
+      wire = (await res.json()) as ExtendWire;
+    } catch {
+      return res.status >= 500 ? unavailable('bad_answer') : failed('bad_answer');
+    }
+    if (!res.ok || wire.ok !== true) {
+      const code = typeof wire.code === 'string' ? wire.code : `http_${res.status}`;
+      if (code === 'tsa_unreachable')
+        return { ok: false, reason: 'tsa_unreachable', code, retryable: true };
+      if (wire.retryable === true) return unavailable(code);
+      return failed(code);
+    }
+    if (
+      typeof wire.pdf !== 'string' ||
+      typeof wire.sealedSha256 !== 'string' ||
+      typeof wire.timestampTime !== 'string' ||
+      typeof wire.expiresAtMs !== 'number'
+    )
+      return failed('bad_answer');
+    const extended = new Uint8Array(Buffer.from(wire.pdf, 'base64'));
+    const sealedHash = sha256Hex(extended);
+    const when = new Date(wire.timestampTime);
+    if (sealedHash !== wire.sealedSha256) return failed('hash_differs');
+    if (Number.isNaN(when.getTime()) || !Number.isFinite(wire.expiresAtMs))
+      return failed('bad_answer');
+    // The update only appends: the bytes that were sent are the first bytes that come back. A
+    // repeat of a request the service has served returns its first result, which is the bytes
+    // that were sent when that result is already the newest stored.
+    const replay = Buffer.compare(Buffer.from(extended), Buffer.from(job.pdf)) === 0;
+    if (
+      !replay &&
+      (extended.length <= job.pdf.length ||
+        Buffer.compare(Buffer.from(extended.subarray(0, job.pdf.length)), Buffer.from(job.pdf)) !==
+          0)
+    )
+      return failed('not_an_append');
+    return {
+      ok: true,
+      pdf: extended,
+      sealedHash,
+      timestampTime: when,
+      expiresAtMs: wire.expiresAtMs,
+    };
+  }
+}
+
+interface ExtendWire {
+  ok?: unknown;
+  code?: unknown;
+  retryable?: unknown;
+  pdf?: unknown;
+  sealedSha256?: unknown;
+  timestampTime?: unknown;
+  expiresAtMs?: unknown;
 }
 
 interface AnchorWire {

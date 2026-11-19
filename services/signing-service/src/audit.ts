@@ -17,7 +17,12 @@ export type AuditEvent =
   | 'anchor.requested'
   | 'anchor.anchored'
   | 'anchor.refused'
-  | 'anchor.failed';
+  | 'anchor.failed'
+  // Long-term validation and time-stamp renewal of a sealed PDF (FRW-056).
+  | 'extend.requested'
+  | 'extend.extended'
+  | 'extend.refused'
+  | 'extend.failed';
 
 export interface AuditEntry {
   /** ISO 8601, from the service's clock. */

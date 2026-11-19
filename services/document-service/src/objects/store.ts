@@ -97,6 +97,16 @@ export const objectKeys = {
     if (!SAFE_SEGMENT.test(workflow)) throw new RangeError('a workflow identifier is one segment');
     return `${objectKeys.prefix(tenant)}final/${doc}/${workflow}.pdf`;
   },
+  /** The 
+	h update of a sealed PDF: long-term validation data or a renewed time-stamp (FRW-056). */
+  finalUpdate(tenant: string, doc: string, workflow: string, n: number): string {
+    if (!Number.isSafeInteger(n) || n < 1) throw new RangeError('an update number is at least 1');
+    return objectKeys.final(tenant, doc, workflow).replace(/\.pdf$/, `.u${n}.pdf`);
+  },
+  /** The prefix under which the updates of one sealed PDF are listed. */
+  finalUpdates(tenant: string, doc: string, workflow: string): string {
+    return objectKeys.final(tenant, doc, workflow).replace(/\.pdf$/, '.u');
+  },
   /** The signed, time-stamped chain head of a completed workflow (FRW-054 criterion 3). */
   anchor(tenant: string, doc: string, workflow: string): string {
     assertUuid(doc, 'document');

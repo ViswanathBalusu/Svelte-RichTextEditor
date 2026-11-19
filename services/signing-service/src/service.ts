@@ -25,9 +25,15 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { checkSealRequest, selectSealingKey, type SealingConfig } from '@docedit/authority';
 import type { AuditEntry, AuditEvent, AuditSink } from './audit.ts';
-import { buildCms, cmsSignatureToken, timestampInfo, type TimestampSource } from './cms.ts';
+import {
+  buildCms,
+  certificateOf,
+  cmsSignatureToken,
+  timestampInfo,
+  type TimestampSource,
+} from './cms.ts';
 import type { KeyService } from './keyservice.ts';
-import { sealPdf, type PadesProfile, type ValidationData } from './pades.ts';
+import { extendPdf, sealPdf, type PadesProfile, type ValidationData } from './pades.ts';
 import { FixedWindowLimiter, type RateLimit } from './rate-limit.ts';
 
 /** The key services of the deployment, by key identifier. */
@@ -147,6 +153,8 @@ export class SigningService {
   readonly #credentials: readonly { hash: Buffer; caller: string }[];
   /** `documentId` and `seq` to the one hash that may be sealed for them. */
   readonly #bound = new Map<string, string>();
+  /** Results served, by document and idempotency key (in memory: a restart forgets them). */
+  readonly #extended = new Map<string, ExtendOutcome>();
 
   constructor(cfg: SigningServiceConfig) {
     this.#cfg = cfg;
@@ -422,7 +430,121 @@ export class SigningService {
       return fail('seal_failed');
     }
   }
+  /**
+   * Extends a sealed PDF for long-term validation and renews its time-stamp (12 §8.2 step 5;
+   * FRW-056): fresh validation data when asked, and a further document time-stamp, both as
+   * incremental updates. The same rules as `seal`: the caller's credential, the rate limit, the
+   * audit entry before the work, the hash of the bytes, no answer without a token. A request with an
+   * `idempotencyKey` already served returns the result it had and adds nothing.
+   */
+  async extend(secret: string | null, cmd: ExtendCommand): Promise<ExtendOutcome> {
+    const caller = this.#authenticate(secret);
+    const ids = {
+      caller,
+      tenant: cmd.tenant,
+      documentId: cmd.documentId,
+      seq: cmd.seq,
+      pdfSha256: cmd.pdfSha256,
+    };
+    const refuse = async (code: SealFailureCode): Promise<ExtendOutcome> => {
+      await this.#audit('extend.refused', { ...ids, code });
+      return { ok: false, code, retryable: RETRYABLE.has(code) };
+    };
+    if (caller === null) return refuse('unauthenticated');
+    if (!this.#limiter.take(caller)) return refuse('rate_limited');
+    if (caller !== this.#cfg.allowedCaller) return refuse('wrong_caller');
+    if (
+      cmd.tenant.length === 0 ||
+      cmd.documentId.length === 0 ||
+      cmd.idempotencyKey.length === 0 ||
+      !Number.isSafeInteger(cmd.seq) ||
+      cmd.seq < 0 ||
+      !HEX64.test(cmd.pdfSha256) ||
+      cmd.pdf.length === 0
+    )
+      return refuse('bad_request');
+    if (sha256Hex(cmd.pdf) !== cmd.pdfSha256) return refuse('hash_mismatch');
+    const served = this.#extended.get(`${cmd.documentId}\u0000${cmd.idempotencyKey}`);
+    if (served !== undefined) return served;
+    let key;
+    try {
+      key = selectSealingKey(this.#cfg.sealing, cmd.tenant);
+    } catch {
+      return refuse('no_key');
+    }
+    if (!(await this.#audit('extend.requested', { ...ids, keyId: key.keyId })))
+      return { ok: false, code: 'audit_unavailable', retryable: true };
+    const fail = async (code: SealFailureCode): Promise<ExtendOutcome> => {
+      await this.#audit('extend.failed', { ...ids, keyId: key.keyId, code });
+      return { ok: false, code, retryable: RETRYABLE.has(code) };
+    };
+    const extendedAt = this.#now();
+    try {
+      const result = await extendPdf(cmd.pdf, {
+        timestamps: {
+          stamp: (d) =>
+            this.#cfg.timestamps.stamp(d).catch((e: unknown) => {
+              throw new TimestampFailure(String(e));
+            }),
+        },
+        ...(cmd.validation
+          ? { validationData: (certs) => this.#cfg.validationData(key.keyId, certs) }
+          : {}),
+        time: extendedAt,
+        ...(this.#cfg.contentsBytes !== undefined
+          ? { contentsBytes: this.#cfg.contentsBytes }
+          : {}),
+      });
+      const sealedSha256 = sha256Hex(result.pdf);
+      const expiry = certificateOf(result.tokenCertificates[0] ?? new Uint8Array()).notAfter.value;
+      const outcome: ExtendOutcome = {
+        ok: true,
+        pdf: result.pdf,
+        sealedSha256,
+        timestampTime: result.timestampTime,
+        extendedAt,
+        expiresAtMs: expiry.getTime(),
+        validationAdded: cmd.validation,
+      };
+      this.#extended.set(`${cmd.documentId}\u0000${cmd.idempotencyKey}`, outcome);
+      if (!(await this.#audit('extend.extended', { ...ids, keyId: key.keyId, sealedSha256 })))
+        return { ok: false, code: 'audit_unavailable', retryable: true };
+      return outcome;
+    } catch (e) {
+      if (e instanceof TimestampFailure) return fail('tsa_unreachable');
+      return fail('seal_failed');
+    }
+  }
 }
+
+/** What the document service sends to extend a sealed PDF. */
+export interface ExtendCommand {
+  readonly tenant: string;
+  readonly documentId: string;
+  readonly seq: number;
+  /** The newest sealed bytes the document service holds. */
+  readonly pdf: Uint8Array;
+  readonly pdfSha256: string;
+  /** One request, one result: a repeat with the same key returns the first result. */
+  readonly idempotencyKey: string;
+  /** Add fresh validation data (a new DSS) before the time-stamp. */
+  readonly validation: boolean;
+}
+
+export type ExtendOutcome =
+  | {
+      readonly ok: true;
+      /** The input, then the update. */
+      readonly pdf: Uint8Array;
+      readonly sealedSha256: string;
+      /** `genTime` of the appended document time-stamp. */
+      readonly timestampTime: Date;
+      readonly extendedAt: Date;
+      /** The end of the new time-stamp's validity: the authority certificate's `notAfter`, in ms. */
+      readonly expiresAtMs: number;
+      readonly validationAdded: boolean;
+    }
+  | { readonly ok: false; readonly code: SealFailureCode; readonly retryable: boolean };
 
 /** What the document service sends to have a chain head anchored. */
 export interface AnchorCommand {
