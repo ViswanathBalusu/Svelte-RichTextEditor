@@ -28,6 +28,7 @@
     "build:wasm": "node scripts/build.ts build",
     "test:native": "node scripts/build.ts test",
     "test:wasm": "node scripts/build.ts build && vitest run --root ../.. --project node packages/layout-kernel",
+    "test:layout": "vitest run --root ../.. --project node packages/layout packages/perf/test packages/element/test/wasm",
     "patterns": "node scripts/hyphenation-patterns.ts",
     "verify:reproducible": "node scripts/build.ts verify"
   },
