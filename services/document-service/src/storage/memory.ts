@@ -16,6 +16,7 @@ import {
   RevisionConflictError,
   type AppendOptions,
   type ChangeOptions,
+  type CommitMetaRow,
   type DocRef,
   type DocumentChangeOptions,
   type DocumentPatch,
@@ -320,6 +321,23 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
     const d = this.#find(ref);
     if (!d) return [];
     return clone(d.log.filter((c) => c.seq >= fromSeq && (toSeq === undefined || c.seq <= toSeq)));
+  }
+
+  /** The metadata of the commits in a range, with no payload (as `PgLogStore.readMeta`). */
+  async readMeta(ref: DocRef, fromSeq: number, toSeq: number): Promise<CommitMetaRow[]> {
+    const d = this.#find(ref);
+    if (!d) return [];
+    return d.log
+      .filter((c) => c.seq >= fromSeq && c.seq <= toSeq)
+      .map((c) => ({
+        seq: c.seq,
+        kind: c.kind,
+        user: c.user,
+        session: c.session,
+        time: c.time,
+        origin: c.origin,
+        scopes: [...c.scopes],
+      }));
   }
 
   /** Attaches assets outside a commit; a row that exists is kept (HIS-022). */
