@@ -25,6 +25,7 @@ import { PERM_DOC, PERM_REGION } from './perm.ts';
 import { PRESENCE } from './presence.ts';
 import { REGISTRY_PROFILE } from './registry.ts';
 import { SEMANTICS } from './semantics.ts';
+import { WEBHOOKS_PROFILE } from './webhooks.ts';
 
 export const CORE: ProfileDef = {
   id: 'core',
@@ -34,23 +35,6 @@ export const CORE: ProfileDef = {
   requires: { kind: 'mode', mode: 'authority' },
   scenarios: [...CORE_SESSION, ...CORE_CHANNELS, ...CORE_SYNC, ...CORE_REST],
 };
-
-const later = (
-  id: string,
-  title: string,
-  spec: string,
-  requires: ProfileDef['requires'],
-  stories: string[],
-  pending: string,
-): ProfileDef => ({
-  id,
-  title,
-  spec,
-  stories,
-  requires,
-  scenarios: [],
-  pending,
-});
 
 export const PROFILES: readonly ProfileDef[] = [
   CORE,
@@ -70,14 +54,8 @@ export const PROFILES: readonly ProfileDef[] = [
   PERM_SUGGEST,
   HISTORY,
   COMMENTS,
-  later(
-    'webhooks',
-    'Signed webhooks',
-    '05 §7',
-    { kind: 'features', features: ['webhooks'] },
-    ['PRO-121'],
-    'PRO-121: phase 2',
-  ),
+  WEBHOOKS_PROFILE,
+
   LEASES,
   AUTHORITY_SERVICE,
   FAULT_INJECTION,

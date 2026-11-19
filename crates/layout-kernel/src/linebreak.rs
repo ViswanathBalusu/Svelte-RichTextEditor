@@ -17,6 +17,12 @@
 //! The break opportunities are an input: the offsets at which the Unicode line breaking algorithm
 //! (UAX #14) allows a break. Producing them is `WASM-007`.
 //!
+//! Hyphenation (WASM-009) adds a second kind of candidate: the offsets inside a word at which a
+//! hyphen may stand (`Params::hyphens`, found by `hyphenate.rs`). A line that ends at one takes the
+//! width of a hyphen (`Measure::hyphen`) and reports `hyphen`. A hyphen candidate that does not fit
+//! never ends the search, because the word's own end, still ahead, may fit where the hyphen does not;
+//! and when nothing fits, the whole word is taken as before and is not split.
+//!
 //! Offsets are UTF-16 code units of the block's text, in which an inline atom is one unit and a
 //! bookmark none (09 §7.1). Every length is in advance units (`shaping.rs`). Justification: every
 //! line but the last reports the space it needs to reach its available width and the number of
@@ -65,6 +71,9 @@ pub struct Params<'a> {
     pub text: &'a [u16],
     /// Offsets at which a break is allowed, ascending.
     pub opportunities: &'a [u32],
+    /// Offsets inside words at which a hyphen may stand, ascending. A candidate that is also a break
+    /// opportunity is a plain opportunity. Empty when hyphenation is off.
+    pub hyphens: &'a [u32],
     pub column_width: i64,
     pub indent_left: i64,
     pub indent_right: i64,
@@ -92,12 +101,17 @@ pub struct Line {
     pub extra: i64,
     /// Justified lines: the number of spaces that share `extra`; 0 for others.
     pub spaces: u32,
+    /// The line ends at a hyphen candidate: a hyphen is drawn after its last unit and is in `width`.
+    pub hyphen: bool,
 }
 
 /// The width of text[a, b) in advance units, as the caller shapes it (box runs count their width).
 pub trait Measure {
     type Error;
     fn span(&mut self, a: usize, b: usize) -> Result<i64, Self::Error>;
+    /// The width of the hyphen drawn when a line ends at offset `at` (in the face of the unit
+    /// before it).
+    fn hyphen(&mut self, at: usize) -> Result<i64, Self::Error>;
 }
 
 fn is_trailing(c: u16) -> bool {
@@ -212,6 +226,16 @@ impl<M: Measure> Breaker<'_, '_, M> {
         }
         Ok(self.advance_from(x, a, end)? - x)
     }
+
+    /// The fit of a line ending at a candidate: a hyphen candidate adds the hyphen's width.
+    fn fit_candidate(&mut self, a: usize, x: i64, b: usize, hyphen: bool) -> Result<i64, M::Error> {
+        let width = self.fit_width(a, x, b)?;
+        Ok(if hyphen {
+            width + self.measure.hyphen(b)?
+        } else {
+            width
+        })
+    }
 }
 
 /// Breaks the paragraph. Errors are the measure's.
@@ -246,37 +270,52 @@ pub fn break_lines<M: Measure>(p: &Params, measure: &mut M) -> Result<Vec<Line>,
         if s_start == s_end {
             let x = start_x(lines.is_empty());
             let width = b.fit_width(s_start, x, s_start)?;
-            lines.push(plain(s_start, s_start, x, width));
+            lines.push(plain(s_start, s_start, x, width, false));
             continue;
         }
-        let mut candidates: Vec<usize> = p
+        let mut candidates: Vec<(usize, bool)> = p
             .opportunities
             .iter()
             .map(|&o| o as usize)
             .filter(|&o| o > s_start && o < s_end)
+            .map(|o| (o, false))
             .collect();
-        candidates.push(s_end);
+        for &h in p.hyphens {
+            let h = h as usize;
+            if h > s_start && h < s_end && !candidates.iter().any(|&(o, _)| o == h) {
+                candidates.push((h, true));
+            }
+        }
+        candidates.sort_by_key(|&(o, _)| o);
+        candidates.push((s_end, false));
 
         let mut pos = s_start;
         let mut k = 0;
         while pos < s_end {
-            while k < candidates.len() && candidates[k] <= pos {
+            while k < candidates.len() && candidates[k].0 <= pos {
                 k += 1;
             }
             let x = start_x(lines.is_empty());
             let avail = p.column_width - p.indent_right - x;
-            let mut best: Option<usize> = None;
-            for &o in &candidates[k..] {
-                if b.fit_width(pos, x, o)? <= avail {
-                    best = Some(o);
-                } else {
+            let mut best: Option<(usize, bool)> = None;
+            for &(o, hyphen) in &candidates[k..] {
+                if b.fit_candidate(pos, x, o, hyphen)? <= avail {
+                    best = Some((o, hyphen));
+                } else if !hyphen {
                     break;
                 }
             }
             // Nothing fits: the first opportunity after the line start takes the overflowing word.
-            let to = best.unwrap_or(candidates[k]);
-            let width = b.fit_width(pos, x, to)?;
-            lines.push(plain(pos, to, x, width));
+            let (to, hyphen) = match best {
+                Some(found) => found,
+                None => candidates[k..]
+                    .iter()
+                    .copied()
+                    .find(|&(_, hyphen)| !hyphen)
+                    .unwrap_or(candidates[k]),
+            };
+            let width = b.fit_candidate(pos, x, to, hyphen)?;
+            lines.push(plain(pos, to, x, width, hyphen));
             pos = to;
         }
     }
@@ -299,7 +338,7 @@ pub fn break_lines<M: Measure>(p: &Params, measure: &mut M) -> Result<Vec<Line>,
     Ok(lines)
 }
 
-fn plain(from: usize, to: usize, x: i64, width: i64) -> Line {
+fn plain(from: usize, to: usize, x: i64, width: i64, hyphen: bool) -> Line {
     Line {
         from: u32::try_from(from).unwrap_or(u32::MAX),
         to: u32::try_from(to).unwrap_or(u32::MAX),
@@ -307,6 +346,7 @@ fn plain(from: usize, to: usize, x: i64, width: i64) -> Line {
         width,
         extra: 0,
         spaces: 0,
+        hyphen,
     }
 }
 
@@ -324,6 +364,9 @@ mod tests {
                 .iter()
                 .map(|&c| if c == u16::from(b'#') { 400 } else { 100 })
                 .sum())
+        }
+        fn hyphen(&mut self, _at: usize) -> Result<i64, Infallible> {
+            Ok(100)
         }
     }
 
@@ -343,6 +386,7 @@ mod tests {
         Params {
             text,
             opportunities: opp,
+            hyphens: &[],
             column_width: column,
             indent_left: 0,
             indent_right: 0,
@@ -556,5 +600,94 @@ mod tests {
             run(&p)[0].width
         };
         assert_eq!(stops([300, 800]), stops([800, 300]));
+    }
+
+    fn hyphenated<'a>(
+        text: &'a [u16],
+        opp: &'a [u32],
+        hyphens: &'a [u32],
+        column: i64,
+    ) -> Params<'a> {
+        let mut p = params(text, opp, column);
+        p.hyphens = hyphens;
+        p
+    }
+
+    #[test]
+    fn a_line_may_end_at_a_hyphen_candidate_and_takes_the_hyphen_width() {
+        let text = units("aaaa bbbbbbbb cc");
+        let opp = after_spaces(&text);
+        let lines = run(&hyphenated(&text, &opp, &[8, 11], 700));
+        assert_eq!(starts(&lines), vec![(0, 5), (5, 11), (11, 16)]);
+        assert_eq!(
+            lines.iter().map(|l| l.hyphen).collect::<Vec<_>>(),
+            vec![false, true, false]
+        );
+        // "bbb" and "bbb" and the drawn hyphen, 600 + 100.
+        assert_eq!(lines[1].width, 700);
+        // Without candidates the word overflows alone, as before.
+        let plain_lines = run(&params(&text, &opp, 700));
+        assert_eq!(starts(&plain_lines), vec![(0, 5), (5, 14), (14, 16)]);
+        assert!(plain_lines.iter().all(|l| !l.hyphen));
+    }
+
+    #[test]
+    fn a_hyphen_that_does_not_fit_does_not_stop_the_word_that_does() {
+        let text = units("aaaa bbbbbbbb cc");
+        let opp = after_spaces(&text);
+        // "bbbbbbbb" is exactly 800 wide: the candidates inside it (900 with the hyphen) must not
+        // end the search before the word's end is tried.
+        let lines = run(&hyphenated(&text, &opp, &[8, 11], 800));
+        assert_eq!(starts(&lines), vec![(0, 5), (5, 14), (14, 16)]);
+        assert!(lines.iter().all(|l| !l.hyphen));
+    }
+
+    #[test]
+    fn a_word_that_fits_nowhere_is_not_split() {
+        let text = units("bbbbbbbb");
+        let lines = run(&hyphenated(&text, &[], &[3, 6], 300));
+        assert_eq!(starts(&lines), vec![(0, 8)]);
+        assert!(!lines[0].hyphen);
+    }
+
+    #[test]
+    fn a_long_word_is_split_as_often_as_it_takes() {
+        let text = units("bbbbbbbb");
+        let lines = run(&hyphenated(&text, &[], &[3, 6], 400));
+        assert_eq!(starts(&lines), vec![(0, 3), (3, 6), (6, 8)]);
+        assert_eq!(
+            lines.iter().map(|l| l.hyphen).collect::<Vec<_>>(),
+            vec![true, true, false]
+        );
+        assert_eq!(lines[0].width, 400);
+    }
+
+    #[test]
+    fn a_hyphen_candidate_on_an_opportunity_is_the_opportunity() {
+        let text = units("aaaa bbbbbbbb cc");
+        let opp = after_spaces(&text);
+        let lines = run(&hyphenated(&text, &opp, &[5, 14], 700));
+        assert!(lines.iter().all(|l| !l.hyphen));
+        assert_eq!(starts(&lines), vec![(0, 5), (5, 14), (14, 16)]);
+    }
+
+    #[test]
+    fn a_hyphenated_line_that_is_justified_counts_its_hyphen() {
+        let text = units("aa bbbbbbbb");
+        let opp = after_spaces(&text);
+        let mut p = hyphenated(&text, &opp, &[6], 600);
+        p.justify = true;
+        let lines = run(&p);
+        // "aa bbb" + hyphen is 700 and does not fit 600: "aa " goes alone, then the word is split.
+        assert_eq!(starts(&lines), vec![(0, 3), (3, 6), (6, 11)]);
+        let mut q = hyphenated(&text, &opp, &[6], 700);
+        q.justify = true;
+        let lines = run(&q);
+        assert_eq!(starts(&lines), vec![(0, 6), (6, 11)]);
+        assert!(lines[0].hyphen);
+        assert_eq!(
+            (lines[0].width, lines[0].extra, lines[0].spaces),
+            (700, 0, 0)
+        );
     }
 }

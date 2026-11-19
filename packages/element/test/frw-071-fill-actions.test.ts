@@ -7,7 +7,10 @@
 import { DocumentCore } from '@docedit/engine/headless';
 import type { WorkflowPort } from '@docedit/protocol';
 import { describe, expect, it } from 'vitest';
-import { fieldsDocument } from '../../engine/test/frw-fields-fixture.ts';
+import type { EditorCore } from '@docedit/engine';
+import { fieldsDocument, participantAccess } from '../../engine/test/frw-fields-fixture.ts';
+import { SIGN_LANDLORD, SIGN_TENANT, withSignatures } from '../../engine/test/frw-046-fixture.ts';
+import { signRequestWatch } from '../src/signing.ts';
 import { FillActionError, fillActionsService, type FillActions } from '../src/fill-actions.ts';
 import { EVENT_NAMES, type DocEditorEventMap, type DocEditorEventName } from '../src/events.ts';
 import { elementMethods, hostApi } from '../src/host-api.ts';
@@ -260,6 +263,92 @@ describe('a session raises de-workflow-complete (criterion 4)', () => {
     expect(complete()).toEqual([]);
     for (const listener of [...listeners]) listener();
     expect(complete()).toEqual([{ name: 'de-workflow-complete', detail: { state: 'completed' } }]);
+    await session.close();
+    expect(listeners.size).toBe(0);
+  });
+});
+
+describe('de-sign-request (criterion 3)', () => {
+  const newCore = () =>
+    new DocumentCore({
+      doc: withSignatures(),
+      mode: 'fill',
+      access: participantAccess(['role_tenant']),
+      schedule,
+    });
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('names the field and its key each time the participant starts to sign, and not for a field of another role', async () => {
+    const core = newCore();
+    const fields: Array<{ fieldId: string; key: string }> = [];
+    const stop = signRequestWatch(core as unknown as EditorCore).subscribe((f) => fields.push(f));
+    expect(core.requestSign(SIGN_TENANT)).toBe(true);
+    await settle();
+    expect(fields).toEqual([{ fieldId: SIGN_TENANT, key: 'tenant.signature' }]);
+    // Closing the step raises nothing; starting again raises the event again.
+    core.clearSignRequest();
+    await settle();
+    expect(fields).toHaveLength(1);
+    expect(core.requestSign(SIGN_TENANT)).toBe(true);
+    await settle();
+    expect(fields).toHaveLength(2);
+    // A field the participant may not sign makes no request and no event.
+    expect(core.requestSign(SIGN_LANDLORD)).toBe(false);
+    await settle();
+    expect(fields).toHaveLength(2);
+    stop();
+    core.clearSignRequest();
+    core.requestSign(SIGN_TENANT);
+    await settle();
+    expect(fields).toHaveLength(2);
+  });
+
+  it('does not raise a request that was open before the listener was added', async () => {
+    const core = newCore();
+    core.requestSign(SIGN_TENANT);
+    const fields: unknown[] = [];
+    signRequestWatch(core as unknown as EditorCore).subscribe((f) => fields.push(f));
+    await settle();
+    expect(fields).toEqual([]);
+  });
+
+  it('is named by the element, raised by a session with the field and key, and stops at close', async () => {
+    expect(EVENT_NAMES).toContain('de-sign-request');
+    const { service: s, docId } = service();
+    const backend = backendFor(s, docId, 'editor', 'editor');
+    const host = coreHost();
+    const raised: { name: DocEditorEventName; detail: unknown }[] = [];
+    const listeners = new Set<(f: { fieldId: string; key: string }) => void>();
+    const mount = host.mount.bind(host);
+    const session = new Session({
+      docId,
+      backend,
+      ownsBackend: false,
+      host: {
+        emit<K extends DocEditorEventName>(name: K, detail: DocEditorEventMap[K]) {
+          raised.push({ name, detail });
+        },
+        async mount(content) {
+          const handle = await mount(content);
+          const withSign: EditorHandle = {
+            ...handle,
+            signRequested: {
+              subscribe: (listener) => {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+              },
+            },
+          };
+          return withSign;
+        },
+      },
+    });
+    await session.start();
+    await until(() => raised.some((e) => e.name === 'de-ready'), 'de-ready');
+    for (const listener of [...listeners]) listener({ fieldId: 'f1', key: 'tenant.signature' });
+    expect(raised.filter((e) => e.name === 'de-sign-request')).toEqual([
+      { name: 'de-sign-request', detail: { fieldId: 'f1', key: 'tenant.signature' } },
+    ]);
     await session.close();
     expect(listeners.size).toBe(0);
   });
