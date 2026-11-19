@@ -19,6 +19,17 @@ export interface TestLink {
 }
 
 const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = [
+  // Shipped when HIS-010 closed (2026-11-18).
+  [
+    'version-history',
+    [
+      { path: 'packages/ui/e2e/his-009-history-pane.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/his-010-version-view.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/his-013-compare.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/test/his-006-name-version.test.ts', kind: 'unit' },
+      { path: 'packages/ui/test/his-010-version-view.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when CDM-019 and FE-130 closed (2026-11-18).
   [
     'lists',
