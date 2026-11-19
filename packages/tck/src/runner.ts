@@ -278,13 +278,16 @@ export async function runKit(
       );
     }
     const c = counts(scenarios);
+    // A profile whose every scenario was skipped says why, as one skipped before it ran does.
+    const allSkipped = scenarios.length > 0 && c.skipped === scenarios.length;
+    const skipReason = allSkipped ? scenarios[0]?.reason : undefined;
     report.profiles.push({
       id: p.id,
       title: p.title,
       spec: p.spec,
       stories: [...p.stories],
       outcome: c.failed ? 'failed' : c.passed ? 'passed' : 'skipped',
-      ...(p.pending ? { reason: p.pending } : {}),
+      ...(p.pending ? { reason: p.pending } : skipReason ? { reason: skipReason } : {}),
       counts: c,
       scenarios,
     });

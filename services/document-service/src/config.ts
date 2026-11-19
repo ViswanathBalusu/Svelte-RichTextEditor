@@ -178,6 +178,12 @@ export interface WebhookSettings {
    * retried. The spec gives no figure for either, so there is no default (ADR 0216, proposed).
    */
   retry?: { baseMs: number; factor: number };
+  /**
+   * Test mode only (DOCEDIT_TEST_WEBHOOK_ALLOW, ADR 0316 proposal 2, accepted with owner decisions 196
+   * to 220): IP literals that the egress proxy reaches although they are loopback or private, so the
+   * conformance kit's receiver can be a target (PRO-121). Refused outside test mode.
+   */
+  testAllow?: readonly string[];
 }
 
 export const DEFAULTS: Omit<ServiceConfig, 'node'> = {
@@ -275,8 +281,10 @@ function retrySettings(env: NodeJS.ProcessEnv): WebhookSettings['retry'] {
 function webhookSettings(env: NodeJS.ProcessEnv): WebhookSettings | null {
   if (!flag(env, 'DOCEDIT_WEBHOOKS', false)) return null;
   const retry = retrySettings(env);
+  const testAllow = list(env['DOCEDIT_TEST_WEBHOOK_ALLOW'], []);
   return {
     ...(retry ? { retry } : {}),
+    ...(testAllow.length > 0 ? { testAllow } : {}),
     rejectedWindowMs: required(env, 'DOCEDIT_WEBHOOK_REJECTED_WINDOW_MS', 1),
     rejectedMax: required(env, 'DOCEDIT_WEBHOOK_REJECTED_MAX', 1),
     timeoutMs: required(env, 'DOCEDIT_WEBHOOK_TIMEOUT_MS', 1),
@@ -316,6 +324,8 @@ function flag(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean 
 export function checkConfig(c: ServiceConfig): void {
   if (c.testMode && c.environment === 'production')
     throw new Error('test mode is refused in production (set DOCEDIT_ENVIRONMENT to test)');
+  if (c.webhooks?.testAllow && !c.testMode)
+    throw new Error('DOCEDIT_TEST_WEBHOOK_ALLOW is for test mode only (DOCEDIT_TEST_MODE)');
   if (c.s3 && c.azure)
     throw new Error('choose one object store: DOCEDIT_S3_* or DOCEDIT_AZURE_ACCOUNT, not both');
   if (c.assetOrigin && !c.assetUrlKey)

@@ -4,6 +4,7 @@
  * optional inputs widen what the kit can check, and a scenario that needs a missing one is skipped
  * with the reason (ADR 0042).
  */
+import type { ReceiverOptions } from './receiver.ts';
 
 /**
  * The authority service the `authority-service` profile runs against (05 §10, §11; PRO-125). It is
@@ -38,6 +39,12 @@ export interface KitConfig {
   origin?: string;
   /** The authority service for the `authority-service` profile; without it the profile is skipped. */
   authorityService?: AuthorityServiceInput;
+  /**
+   * Where the kit's webhook receiver listens and the URL the target reaches it at (PRO-121). The
+   * target refuses private and loopback addresses (10 §3.2), so a run that needs them names a public
+   * URL, or the server is started in test mode with the receiver's address allowed.
+   */
+  receiver?: ReceiverOptions;
   /** Run only these profiles (default: all of them). */
   profiles?: readonly string[];
   /** Run only scenarios whose identifier starts with one of these. */
@@ -67,9 +74,13 @@ export interface KitConfig {
 }
 
 export interface ResolvedConfig extends Required<
-  Omit<KitConfig, 'origin' | 'profiles' | 'scenarios' | 'fuzz' | 'property' | 'authorityService'>
+  Omit<
+    KitConfig,
+    'origin' | 'profiles' | 'scenarios' | 'fuzz' | 'property' | 'authorityService' | 'receiver'
+  >
 > {
   origin: string | undefined;
+  receiver: ReceiverOptions | undefined;
   authorityService: AuthorityServiceInput | undefined;
   profiles: readonly string[] | undefined;
   scenarios: readonly string[] | undefined;
@@ -85,6 +96,7 @@ export function resolveConfig(c: KitConfig): ResolvedConfig {
     credential: c.credential,
     testMode: c.testMode,
     origin: c.origin,
+    receiver: c.receiver,
     authorityService: c.authorityService,
     profiles: c.profiles,
     scenarios: c.scenarios,
