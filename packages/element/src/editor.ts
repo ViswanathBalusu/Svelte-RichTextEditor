@@ -55,6 +55,7 @@ import type { NormalConfig } from './config.ts';
 import { attachWithSwitches, shellWithSwitches, switchedModes } from './feature-switches.ts';
 import type { Connection, StatusDetail } from './events.ts';
 import { fillActionsService } from './fill-actions.ts';
+import { threadsService, type ThreadsSource } from './threads.ts';
 import { hostApi, type HostApi } from './host-api.ts';
 import type { PdfSource } from './pdf/messages.ts';
 import type { PdfViewerFrame } from './pdf/viewer-frame.ts';
@@ -107,6 +108,12 @@ export interface MountOptions {
    * Without it the shell offers no "send for completion" command. Null while no session is current.
    */
   workflow?: () => WorkflowSendSource | null;
+  /**
+   * The backend's comments port and the document, when the backend offers threads and announced the
+   * feature (UX-028 to UX-032; ADR 0417). Without it the shell has no `threads` service and offers
+   * no comment command.
+   */
+  threads?: ThreadsSource;
   /**
    * The ports of the adoption and signing step (FRW-045, FRW-046): the assets port for the image and
    * the fields port for the sign request. Absent: a signature field is not offered for signing.
@@ -348,6 +355,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
     : null;
   // The guided bar follows `wf.changed` through the same status (FRW-035 criterion 6).
   const fill = fillView(core, fillActions?.status);
+  // The thread service (UX-028 to UX-032): the comments port, with the core's placement of each thread.
+  const threads = options.threads ? threadsService(core, options.threads) : null;
   const port = options.permissions ?? null;
   const viewers = new Set<PdfViewerFrame>();
   let destroyed = false;
@@ -610,6 +619,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
       ...(options.exports ? { exports: options.exports } : {}),
       // The send dialog (FRW-028): the pre-send checks and the send action.
       ...(workflowSend ? { workflowSend } : {}),
+      ...(threads ? { threads } : {}),
       ...(signing ? { signing } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
       ...(fillActions

@@ -42,6 +42,7 @@ import { exportEvent, startExport, type ExportRequest } from './export.ts';
 import { exportService } from './export-service.ts';
 import type { SigningSource } from './signing.ts';
 import type { WorkflowSendSource } from './workflow-send.ts';
+import type { ThreadsSource } from './threads.ts';
 import type { CompleteFillingOutcome } from './fill-actions.ts';
 import type { PrintOutcome } from './print.ts';
 import {
@@ -812,6 +813,8 @@ export class DocEditorElement extends Base {
       // The send dialog goes through the backend's workflow port, when it has one (FRW-028).
       ...this.#workflowSource(docId),
       ...this.#signingSource(docId),
+      // The comment threads go through the backend's comments port, when it has one (UX-028).
+      ...this.#threadsSource(docId),
       // Equations are drawn by KaTeX, loaded with the first equation (FE-069; equation-drawer.ts).
       drawEquation: equationDrawer({ fontsUrl: this.#config.katexFontsUrl }),
       mathFontsUrl: this.#config.katexFontsUrl,
@@ -1082,6 +1085,22 @@ export class DocEditorElement extends Base {
    * The send dialog's source (FRW-028), when the session's backend has the workflow port and
    * announced the feature; otherwise nothing, and the shell offers no "send for completion" command.
    */
+  #threadsSource(docId: string): { threads?: ThreadsSource } {
+    const session = this.#session;
+    const backend = session?.docId === docId ? session.backend : undefined;
+    if (!backend?.comments || !hasPort(backend, 'comments')) return {};
+    return {
+      threads: {
+        port: backend.comments,
+        docId,
+        self: () => {
+          const user = backend.auth.session?.user.id;
+          return user === undefined ? null : `user:${user}`;
+        },
+      },
+    };
+  }
+
   #workflowSource(docId: string): { workflow?: () => WorkflowSendSource | null } {
     const session = this.#session;
     const backend = session?.docId === docId ? session.backend : undefined;

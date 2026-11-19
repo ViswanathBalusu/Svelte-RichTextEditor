@@ -892,7 +892,13 @@ import type { AssetsPort, ImagePasteResult } from './image-paste.ts';
 import type { ResolveAction, SuggestionReport, SuggestionTarget } from './suggestion-resolve.ts';
 import type { MarkupView, SuggestionLabel, SuggestionSpec } from './suggestion-markup.ts';
 import type { ThreadRange } from './comment-ranges.ts';
-import type { ThreadReport, ThreadsPortLike } from './thread-sync.ts';
+import type {
+  CommentAnchorReport,
+  NoticeLike,
+  ThreadPlacement,
+  ThreadReport,
+  ThreadsPortLike,
+} from './thread-sync.ts';
 import type { ThreadSelection } from './comment-decorations.ts';
 import type { SuggestionItem } from './suggestion-list.ts';
 import type { SectionWarning } from './breaks-sections.ts';
@@ -1141,6 +1147,12 @@ export interface DocumentApi {
   selectThread(selection: ThreadSelection | null): void;
   /** Records that the reader chose a thread's highlight in the body (UX-030). */
   pickThread(id: string): void;
+  /** What a new thread would be about, from the selection (UX-028). Reads only. */
+  commentAnchor(): CommentAnchorReport | null;
+  /** Where a thread is in the document the reader sees, or null when no place is held (UX-030). */
+  threadPlacement(id: string): ThreadPlacement | null;
+  /** Calls the listener for each `thread.*` and `comment.*` notice; returns the stop function (UX-029). */
+  onThreadNotice(listener: (notice: NoticeLike) => void): () => void;
   /** Sets a thread's range as the service reports it at `seq` (FE-048). */
   setThreadRange(threadId: string, range: { from: number; to: number }, seq: number): void;
   /** Removes a thread's range (the thread was deleted) (FE-048). */
