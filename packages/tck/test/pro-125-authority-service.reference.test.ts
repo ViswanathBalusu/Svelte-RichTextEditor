@@ -140,6 +140,38 @@ describe.skipIf(skip)('the reference authority service passes the profile (PRO-1
   });
 });
 
+describe.skipIf(skip)('a service whose operator enabled migrations (PRO-107 criterion 4)', () => {
+  let service: StartedAuthority;
+  beforeAll(async () => {
+    service = await startAuthority({ env: { DOCEDIT_AUTHORITY_ALLOW_MIGRATIONS: 'true' } });
+  }, 60_000);
+  afterAll(async () => {
+    await service?.stop();
+  });
+
+  it('announces migrate, and the profile runs it (the migrate and evaluate-rules scenarios pass)', async () => {
+    const report = await runKit({
+      discovery: '',
+      credential: '',
+      testMode: false,
+      profiles: ['authority-service'],
+      scenarios: [
+        'authority-service.capabilities',
+        'authority-service.migrate',
+        'authority-service.evaluate-rules',
+      ],
+      authorityService: { url: service.url },
+    });
+    const by = (id: string) => report.profiles[0]?.scenarios.find((s) => s.id === id);
+    expect(report.ok, JSON.stringify(report.profiles[0]?.scenarios.map((s) => s.failure))).toBe(
+      true,
+    );
+    expect(by('authority-service.capabilities')?.notes.join(' ')).toMatch(/\bmigrate\b/);
+    expect(by('authority-service.migrate')?.outcome).toBe('passed');
+    expect(by('authority-service.evaluate-rules')?.outcome).toBe('passed');
+  });
+});
+
 describe.skipIf(skip)('a service with a bearer token (PRO-125)', () => {
   let service: StartedAuthority;
   beforeAll(async () => {
