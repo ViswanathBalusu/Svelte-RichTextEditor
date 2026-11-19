@@ -9,7 +9,7 @@ import { checkIfMatch, pageLimit, seqParam } from './http.ts';
 import { json, notModified, type Kit, type ReadAs } from './kit.ts';
 import { guard, type Ctx, type Handler } from './pipeline.ts';
 import { ApiError } from './problems.ts';
-import { minVisibleSeqOf, refuseBelowGate, regionInfosOfJson } from './gate.ts';
+import { refuseSeqBelowGate } from './gate.ts';
 
 const valuesEtag = (c: ReadAs) => `"v.${c.incarnation}.${c.seq}.${c.view}"`;
 
@@ -23,22 +23,9 @@ export function fieldRoutes(k: Kit): Record<string, Handler> {
     const head = await d.logs.head(ref);
     if (seq > head.seq)
       throw new ApiError('not_found', `no content at seq ${seq}; the head is ${head.seq}`);
-    if (seq === head.seq || ctx.caller.kind === 'service') return;
-    const full = await d.content.rebuild(ref, head.incarnation, head.seq);
-    refuseBelowGate(
-      seq,
-      await minVisibleSeqOf({
-        caller: ctx.caller,
-        ref,
-        record,
-        head: head.seq,
-        regions: regionInfosOfJson(full.doc),
-        perms: await d.grants.current(ref),
-        logs: d.logs,
-        now: d.now(),
-      }),
-      head.seq,
-    );
+    // The head, a named version and what the caller's gate allows (ADR 0034); a service credential
+    // reads full history.
+    await refuseSeqBelowGate(d, ctx.caller, ref, record, head.seq, seq);
   }
 
   const listFields: Handler = async (ctx) => {
