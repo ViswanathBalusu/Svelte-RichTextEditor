@@ -3,7 +3,8 @@
 //!
 //! WASM-001 is the toolchain: three calls that prove the build and the package end to end. WASM-005
 //! adds the font faces (`faces`), WASM-006 shaping and measurement with HarfRust (`shaping`) and
-//! WASM-008 first-fit line breaking (`linebreak`). The kernel reads no file, no clock and no system font: every input
+//! WASM-008 first-fit line breaking (`linebreak`) and WASM-009 hyphenation with TeX patterns
+//! (`hyphenate`). The kernel reads no file, no clock and no system font: every input
 //! is a byte slice, a string or a number given by the caller, and fonts arrive only as the bytes of
 //! the files the manifest names, checked against the manifest's SHA-256.
 //!
@@ -17,12 +18,17 @@ use std::str::FromStr;
 use harfrust::{shape, Buffer, Feature, Font, Language, ShapeOptions, ShaperFont};
 use wasm_bindgen::prelude::*;
 
+pub mod bidi;
+pub mod bidi_data;
 pub mod faces;
+pub mod hyphenate;
 pub mod linebreak;
 pub mod sha256;
 pub mod shaping;
 
+use bidi::{resolve as resolve_bidi, visual_runs, Direction};
 use faces::{FaceStore, Loaded};
+use hyphenate::{word_points, HyphenStore};
 use linebreak::{break_lines, Align, Measure, Params, Stop};
 use shaping::{
     scale_units, spread_advances, to_advance_units, ShapeCache, ShapeFailure, ShapeKey,
@@ -34,11 +40,13 @@ thread_local! {
     static FACES: RefCell<FaceStore<Font>> = const { RefCell::new(FaceStore::new()) };
     /// The answers of the shaper, by face, epoch, size, language, features and text (02 §9.3).
     static SHAPES: RefCell<ShapeCache> = RefCell::new(ShapeCache::new());
+    /// The hyphenation languages the page has loaded (WASM-009). Empty until a document needs one.
+    static HYPHENS: RefCell<HyphenStore> = const { RefCell::new(HyphenStore::new()) };
 }
 
 /// The version of the call interface. It changes when a call of the kernel changes its meaning, or
 /// when a call is added.
-pub const ABI_VERSION: u32 = 4;
+pub const ABI_VERSION: u32 = 6;
 
 /// The version of the crate, as `major.minor.patch`.
 #[wasm_bindgen]
@@ -316,6 +324,25 @@ struct RunMeasure<'a> {
 impl Measure for RunMeasure<'_> {
     type Error = ShapeFailure;
 
+    /// The width of a hyphen (U+002D) set in the run of the unit before `at`; a box has none.
+    fn hyphen(&mut self, at: usize) -> Result<i64, ShapeFailure> {
+        let before = at.saturating_sub(1);
+        let Some(i) = self.ends.iter().position(|&end| before < end as usize) else {
+            return Ok(0);
+        };
+        if self.boxes[i] >= 0 {
+            return Ok(0);
+        }
+        let advances = run_advances(
+            &self.aliases[i],
+            self.sizes[i],
+            &self.languages[i],
+            &self.features[i],
+            &[0x2d],
+        )?;
+        Ok(advances.iter().map(|&v| i64::from(v)).sum())
+    }
+
     /// The width of text[a, b): a text run is shaped over the part of it inside the range (through
     /// the cache), a box run counts its whole width when the range touches it.
     fn span(&mut self, a: usize, b: usize) -> Result<i64, ShapeFailure> {
@@ -353,8 +380,10 @@ impl Measure for RunMeasure<'_> {
 /// advance units, or -1 for a text run). `opportunities` are the offsets at which a break is allowed.
 /// `geometry` is `[column_width, indent_left, indent_right, indent_first, default_tab_stop]` and
 /// `tab_stops` pairs of `[position, align]` (0 left, 1 centre, 2 right, 3 decimal), all lengths in
-/// advance units. The answer is six numbers for each line: `from`, `to`, `x`, `width`, and for a
-/// justified line the space it needs (`extra`) and the number of spaces that share it. Throws
+/// advance units. The answer is seven numbers for each line: `from`, `to`, `x`, `width`, and for a
+/// justified line the space it needs (`extra`) and the number of spaces that share it, and 1 when
+/// the line ends at a hyphen (the hyphen is in `width`), else 0. With `hyphenate` the words of the
+/// languages loaded by `hyphen_load` may be split (WASM-009); without it no pattern is consulted. Throws
 /// `bad_request`, or what shaping throws (`unknown_face`, `bad_feature`, `shape_failed`, `bad_size`).
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
@@ -370,6 +399,7 @@ pub fn break_paragraph(
     geometry: &[i32],
     tab_stops: &[i32],
     justify: bool,
+    hyphenate: bool,
 ) -> Result<Vec<i32>, JsError> {
     let bad = || JsError::new(ShapeFailure::BadRequest.code());
     let runs = run_ends.len();
@@ -400,9 +430,15 @@ pub fn break_paragraph(
             align: Align::from_code(pair[1]),
         })
         .collect();
+    let hyphens = if hyphenate {
+        HYPHENS.with(|store| word_points(&store.borrow(), text, run_ends, &run_languages))
+    } else {
+        Vec::new()
+    };
     let params = Params {
         text,
         opportunities,
+        hyphens: &hyphens,
         column_width: i64::from(geometry[0]),
         indent_left: i64::from(geometry[1]),
         indent_right: i64::from(geometry[2]),
@@ -423,7 +459,7 @@ pub fn break_paragraph(
     let lines =
         break_lines(&params, &mut measure).map_err(|failure| JsError::new(failure.code()))?;
     let clamp = |v: i64| i32::try_from(v).unwrap_or(if v < 0 { i32::MIN } else { i32::MAX });
-    let mut out = Vec::with_capacity(lines.len() * 6);
+    let mut out = Vec::with_capacity(lines.len() * 7);
     for line in lines {
         out.push(clamp(i64::from(line.from)));
         out.push(clamp(i64::from(line.to)));
@@ -431,8 +467,139 @@ pub fn break_paragraph(
         out.push(clamp(line.width));
         out.push(clamp(line.extra));
         out.push(clamp(i64::from(line.spaces)));
+        out.push(i32::from(line.hyphen));
     }
     Ok(out)
+}
+
+/// The text as characters (a lone surrogate is U+FFFD) and the UTF-16 offset of each, with the
+/// length at the end.
+fn characters(text: &[u16]) -> (Vec<char>, Vec<usize>) {
+    let mut chars = Vec::with_capacity(text.len());
+    let mut offsets = Vec::with_capacity(text.len() + 1);
+    let mut at = 0usize;
+    for decoded in char::decode_utf16(text.iter().copied()) {
+        let c = decoded.unwrap_or(char::REPLACEMENT_CHARACTER);
+        chars.push(c);
+        offsets.push(at);
+        at += c.len_utf16();
+    }
+    offsets.push(text.len());
+    (chars, offsets)
+}
+
+/// The paragraph level and the resolved level of each UTF-16 unit of a paragraph (UAX #9; WASM-015):
+/// the answer is the paragraph level (0 or 1) followed by one level for each unit. `direction` is 0
+/// for left to right, 1 for right to left and anything else for automatic (the first strong
+/// character). The levels are those of the paragraph before a line is cut: L1 is applied by
+/// `bidi_visual_runs`.
+#[wasm_bindgen]
+pub fn bidi_levels(text: &[u16], direction: i32) -> Vec<u8> {
+    let (chars, _) = characters(text);
+    let paragraph = resolve_bidi(&chars, Direction::from_code(direction));
+    let mut out = Vec::with_capacity(text.len() + 1);
+    out.push(paragraph.level);
+    for (c, level) in chars.iter().zip(paragraph.levels.iter()) {
+        for _ in 0..c.len_utf16() {
+            out.push(*level);
+        }
+    }
+    out
+}
+
+/// The visual runs of the line `[from, to)` of a paragraph, left to right (UAX #9, L1 and L2;
+/// WASM-015): three numbers for each run, its first and last-plus-one UTF-16 offset (logical) and
+/// its level. An odd level reads right to left. Throws `bad_request` when the line is out of range
+/// or begins or ends inside a surrogate pair.
+#[wasm_bindgen]
+pub fn bidi_visual_runs(
+    text: &[u16],
+    direction: i32,
+    from: u32,
+    to: u32,
+) -> Result<Vec<u32>, JsError> {
+    let (chars, offsets) = characters(text);
+    let (from, to) = (from as usize, to as usize);
+    let (Some(first), Some(last)) = (
+        offsets.iter().position(|&o| o == from),
+        offsets.iter().position(|&o| o == to),
+    ) else {
+        return Err(JsError::new(ShapeFailure::BadRequest.code()));
+    };
+    if first > last {
+        return Err(JsError::new(ShapeFailure::BadRequest.code()));
+    }
+    let paragraph = resolve_bidi(&chars, Direction::from_code(direction));
+    let mut out = Vec::new();
+    for run in visual_runs(&paragraph, first, last) {
+        out.push(u32::try_from(offsets[run.start]).unwrap_or(u32::MAX));
+        out.push(u32::try_from(offsets[run.end]).unwrap_or(u32::MAX));
+        out.push(u32::from(run.level));
+    }
+    Ok(out)
+}
+
+/// Holds a hyphenation language (WASM-009): the text of its TeX pattern file (one pattern a line),
+/// the text of its exception file (one word a line, hyphens marked; may be empty), and the minimum
+/// characters before and after a hyphen (`\lefthyphenmin` and `\righthyphenmin`, 1 to 8). A language
+/// held under the tag is replaced. Returns the number of patterns. Throws `empty_tag`, `no_patterns`
+/// or `bad_minimum`.
+#[wasm_bindgen]
+pub fn hyphen_load(
+    tag: &str,
+    patterns: &str,
+    exceptions: &str,
+    left: u32,
+    right: u32,
+) -> Result<u32, JsError> {
+    let (left, right) = (left as usize, right as usize);
+    HYPHENS
+        .with(|store| {
+            store
+                .borrow_mut()
+                .load(tag, patterns, exceptions, left, right)
+        })
+        .map(|count| u32::try_from(count).unwrap_or(u32::MAX))
+        .map_err(|failure| JsError::new(failure.code()))
+}
+
+/// Lets `alias` (`en`, `en-GB`) stand for a loaded language. False when `tag` is not loaded.
+#[wasm_bindgen]
+pub fn hyphen_alias(alias: &str, tag: &str) -> bool {
+    HYPHENS.with(|store| store.borrow_mut().alias(alias, tag))
+}
+
+/// Frees a hyphenation language. False when it was not loaded.
+#[wasm_bindgen]
+pub fn hyphen_release(tag: &str) -> bool {
+    HYPHENS.with(|store| store.borrow_mut().release(tag))
+}
+
+/// Frees every hyphenation language.
+#[wasm_bindgen]
+pub fn hyphen_release_all() {
+    HYPHENS.with(|store| store.borrow_mut().release_all());
+}
+
+/// True when text tagged `tag` would be hyphenated: the tag, or the tag cut short, is loaded.
+#[wasm_bindgen]
+pub fn hyphen_has(tag: &str) -> bool {
+    HYPHENS.with(|store| store.borrow().has(tag))
+}
+
+/// The tags of the loaded languages, ascending, joined by commas.
+#[wasm_bindgen]
+pub fn hyphen_tags() -> String {
+    HYPHENS.with(|store| store.borrow().tags().join(","))
+}
+
+/// Where a hyphen may stand in a word of one language: UTF-16 offsets into `word`, ascending. Empty
+/// when the language is not loaded or the word is too short. The word is hyphenated whole, wherever
+/// it stands in a text; `break_paragraph` finds the words of a paragraph itself.
+#[wasm_bindgen]
+pub fn hyphenate_word(tag: &str, word: &[u16]) -> Vec<u32> {
+    let end = u32::try_from(word.len()).unwrap_or(u32::MAX);
+    HYPHENS.with(|store| word_points(&store.borrow(), word, &[end], &[tag.to_string()]))
 }
 
 /// What the shaping cache has done: hits, misses, entries and the code units of text it holds.
@@ -462,7 +629,7 @@ mod tests {
     #[test]
     fn reports_the_crate_version_and_the_interface_version() {
         assert_eq!(kernel_version(), env!("CARGO_PKG_VERSION"));
-        assert_eq!(abi_version(), 4);
+        assert_eq!(abi_version(), 6);
     }
 
     #[test]

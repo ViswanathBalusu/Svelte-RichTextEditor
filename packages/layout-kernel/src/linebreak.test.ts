@@ -230,7 +230,7 @@ describe.skipIf(!built)('the kernel breaks paragraphs by first fit (WASM-008)', 
       [13, 13],
     ]);
     expect(kernel.shaper.breakParagraph(paragraph(''))).toEqual([
-      { from: 0, to: 0, x: 0, width: 0, extra: 0, spaces: 0, wordSpacing: 0 },
+      { from: 0, to: 0, x: 0, width: 0, extra: 0, spaces: 0, wordSpacing: 0, hyphen: false },
     ]);
   });
 
