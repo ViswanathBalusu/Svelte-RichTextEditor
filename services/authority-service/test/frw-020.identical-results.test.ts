@@ -100,7 +100,7 @@ describe('the rules fixtures behind the authority service (FRW-020 criterion 2)'
         if ('value' in s) o.value = s.value ?? null;
         if (s.error !== undefined) o.error = s.error;
         const by = Object.fromEntries(Object.entries(s.by).filter(([, v]) => v !== undefined));
-        if (Object.keys(by).length) o.by = by as StateExpect['by'];
+        if (Object.keys(by).length) o.by = by as NonNullable<StateExpect['by']>;
         fields[s.key] = o;
       }
       const rules: Record<string, string> = {};

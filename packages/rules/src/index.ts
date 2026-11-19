@@ -164,5 +164,6 @@ export {
   type ConformanceReport,
   type FixtureCase,
   type FixtureSet,
+  type StateExpect,
 } from './conformance.ts';
 export { generateRulesSchema } from './schema.ts';
