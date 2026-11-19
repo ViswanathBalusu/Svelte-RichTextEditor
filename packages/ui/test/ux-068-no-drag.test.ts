@@ -15,15 +15,9 @@ const SRC = fileURLToPath(new URL('../src', import.meta.url));
 
 /** Files with a drag gesture, each with the keyboard or dialog alternative that was reviewed. */
 const REVIEWED: Readonly<Record<string, string>> = {
-<<<<<<< HEAD
-  // Drawing a signature uses pointer capture. It is one of three ways to adopt a signature; the
-  // typed name (a text field) and the uploaded image (a file field) need no drag (FRW-045).
-  'components/SignatureDialog.svelte': 'the typed name and the uploaded image are the alternatives',
-=======
   // Drawing a signature takes a pointer. It is one of three modes of the adoption step; typing the name
   // is the default mode and needs no pointer, and uploading an image needs none either (FRW-045).
   'components/SignatureDialog.svelte': 'the typed mode, which is the default',
->>>>>>> stories/w4
 };
 
 const GESTURE =
