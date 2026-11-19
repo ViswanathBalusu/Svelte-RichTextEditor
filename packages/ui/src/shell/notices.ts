@@ -11,7 +11,7 @@ import type { RecoveredEdits, RefusalNotice, ReplaceNotice, TrimNotice } from '.
 import type { StringKey } from '../i18n/en-GB.ts';
 
 export interface Notice {
-  readonly kind: 'refusal' | 'rejection' | 'trimmed' | 'replaced';
+  readonly kind: 'refusal' | 'rejection' | 'trimmed' | 'replaced' | 'glyph';
   /** The message, in plain words. */
   readonly key: StringKey;
   /** For rejections: the number of items set aside in this change. */
@@ -44,6 +44,8 @@ const REFUSALS: Readonly<Record<string, StringKey>> = {
   // A pasted picture that was not added (FE-053 criterion 3): the upload failed or was refused.
   'upload-failed': 'notice.refused.uploadFailed',
   'invalid-size': 'notice.refused.pictureSize',
+  // Unsent work of an earlier visit, made by someone else, was discarded (decision 47).
+  'other-user': 'notice.refused.otherUser',
 };
 
 const REJECTIONS: Readonly<Record<string, StringKey>> = {

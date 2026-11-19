@@ -141,7 +141,14 @@ describe('the words of a notice', () => {
     for (const key of keys) {
       // `skipped` is the second number of the replace report (FE-060 criterion 3).
       // `rule` is the rule's own words (FRW-023 criterion 5).
-      const text = tr.text(key, { count: 2, skipped: 1, rule: 'Enter at least 10.' });
+      // `char` and `family` are the symbol the person just inserted and the host's font name (FE-136).
+      const text = tr.text(key, {
+        count: 2,
+        skipped: 1,
+        rule: 'Enter at least 10.',
+        char: 'ω',
+        family: 'Test Face',
+      });
       expect(text, key).not.toMatch(/\{/);
       expect(text, key).not.toMatch(/region:|story:|field:/);
     }

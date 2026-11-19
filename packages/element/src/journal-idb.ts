@@ -79,7 +79,15 @@ export async function openIdbJournal(
         t.objectStore(QUEUES).put({
           docId,
           steps: JSON.parse(JSON.stringify(steps)),
-          ...(at ? { at: { seq: at.seq, incarnation: at.incarnation } } : {}),
+          ...(at
+            ? {
+                at: {
+                  seq: at.seq,
+                  incarnation: at.incarnation,
+                  ...(at.user === undefined ? {} : { user: at.user }),
+                },
+              }
+            : {}),
         });
       await done(t);
     },

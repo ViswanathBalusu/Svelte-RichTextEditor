@@ -10,6 +10,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./fonts/coverage": {
+      "types": "./src/fonts/coverage.ts",
+      "default": "./src/fonts/coverage.ts"
+    },
     "./class/*": "./class/*"
   },
   "scripts": {
