@@ -14,7 +14,11 @@ import { describe, expect, it } from 'vitest';
 const SRC = fileURLToPath(new URL('../src', import.meta.url));
 
 /** Files with a drag gesture, each with the keyboard or dialog alternative that was reviewed. */
-const REVIEWED: Readonly<Record<string, string>> = {};
+const REVIEWED: Readonly<Record<string, string>> = {
+  // Drawing a signature takes a pointer. It is one of three modes of the adoption step; typing the name
+  // is the default mode and needs no pointer, and uploading an image needs none either (FRW-045).
+  'components/SignatureDialog.svelte': 'the typed mode, which is the default',
+};
 
 const GESTURE =
   /\bdraggable\b|\bon:?drag(start|end|over|enter|leave)?\b|\bon:?drop\b|['"]drag(start|end|over|enter|leave)['"]|['"]drop['"]|setPointerCapture|(^|[\s;{])resize\s*:(?!\s*none)/m;
