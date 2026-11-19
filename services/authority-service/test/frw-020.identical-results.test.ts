@@ -14,7 +14,6 @@ import { type JsonEnvelope, documentHash } from '@docedit/model';
 import {
   type FixtureCase,
   type FixtureSet,
-  type StateExpect,
   RULES_VERSION,
   runCase,
   runFixtures,
@@ -24,6 +23,12 @@ import { AuthorityService } from '../src/service.ts';
 import { baseEnvelope } from './log.ts';
 
 type J = Record<string, unknown>;
+/** The state of one field in a fixture's xpect (StateExpect of the package, which it does not export). */
+type StateExpect = Extract<FixtureCase, { kind: 'rules' }>['expect'] extends infer E
+  ? E extends { fields: Record<string, infer S> }
+    ? S
+    : never
+  : never;
 
 const FIXTURES = resolve(import.meta.dirname, '../../../spec/rules/rules-1.fixtures.json');
 const set = JSON.parse(readFileSync(FIXTURES, 'utf8')) as FixtureSet;
@@ -100,7 +105,7 @@ describe('the rules fixtures behind the authority service (FRW-020 criterion 2)'
         if ('value' in s) o.value = s.value ?? null;
         if (s.error !== undefined) o.error = s.error;
         const by = Object.fromEntries(Object.entries(s.by).filter(([, v]) => v !== undefined));
-        if (Object.keys(by).length) o.by = by as StateExpect['by'];
+        if (Object.keys(by).length) o.by = by as NonNullable<StateExpect['by']>;
         fields[s.key] = o;
       }
       const rules: Record<string, string> = {};
