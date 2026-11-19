@@ -177,9 +177,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       });
       expect(granted.status, 'the grant is recorded').toBe(200);
     });
+    // Closing the service waits for a job that is still running; under load that took over the
+    // default hook limit of 10 s. It ends as soon as the service is down.
     afterAll(async () => {
       await h?.close();
-    });
+    }, 60_000);
 
     t()(
       'seeds a commit, a comment and presence inside the region, and a granted reader sees them while a reader without access sees none',
@@ -348,10 +350,15 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           expect(created.status, created.text).toBe(202);
           const id = created.json.id as string;
           let last = created;
-          for (let i = 0; i < 200; i++) {
+          // The wait ends when the job does, so the limit only bounds a job that hangs. An export
+          // takes about a second alone; with 60 busy processes on 20 cores the first of a process
+          // took 31 s (measured here), which a count of 200 polls (10 s of sleeping) did not cover.
+          const giveUp = Date.now() + 60_000;
+          for (;;) {
             last = await h.call('GET', `/v1/exports/${id}`, { token });
             const state = (last.json as Record<string, unknown>)['state'];
             if (state === 'done' || state === 'failed' || state === 'completed') break;
+            if (Date.now() > giveUp) break;
             await sleep(50);
           }
           const body = last.json as Record<string, unknown>;
