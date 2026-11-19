@@ -45,8 +45,39 @@ export type SigningAttempt =
       readonly retryable: boolean;
     };
 
+/** A chain head to be signed and time-stamped (FRW-054 criterion 3). */
+export interface AnchorJob {
+  readonly tenant: string;
+  readonly documentId: string;
+  readonly workflow: string;
+  /** The workflow's `completedSeq`. */
+  readonly seq: number;
+  /** Lower-case hexadecimal SHA-256 chain head at `seq`. */
+  readonly chainHead: string;
+}
+
+export type AnchorAttempt =
+  | {
+      readonly ok: true;
+      /** The signed record, canonical text. */
+      readonly record: string;
+      /** SHA-256 of `record`, computed here, not taken on trust. */
+      readonly recordSha256: string;
+      /** A detached CAdES-B-T over `recordSha256` (DER). */
+      readonly cms: Uint8Array;
+      readonly timestampTime: Date;
+      readonly keyId: string;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: SigningFailure;
+      readonly code: string;
+      readonly retryable: boolean;
+    };
+
 export interface SigningClient {
   seal(job: SigningJob): Promise<SigningAttempt>;
+  anchor(job: AnchorJob): Promise<AnchorAttempt>;
 }
 
 const sha256Hex = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
@@ -154,4 +185,102 @@ export class HttpSigningClient implements SigningClient {
       profile: wire.profile,
     };
   }
+
+  async anchor(job: AnchorJob): Promise<AnchorAttempt> {
+    const unavailable = (code: string): AnchorAttempt => ({
+      ok: false,
+      reason: 'signing_unavailable',
+      code,
+      retryable: true,
+    });
+    const failed = (code: string): AnchorAttempt => ({
+      ok: false,
+      reason: 'seal_failed',
+      code,
+      retryable: false,
+    });
+    let res: Response;
+    try {
+      res = await (this.#o.fetch ?? fetch)(`${this.#o.url}/v1/anchor`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${this.#o.credential}`,
+        },
+        body: JSON.stringify({
+          tenant: job.tenant,
+          documentId: job.documentId,
+          workflow: job.workflow,
+          seq: job.seq,
+          chainHead: job.chainHead,
+        }),
+        signal: AbortSignal.timeout(this.#o.timeoutMs),
+      });
+    } catch {
+      return unavailable('unreachable');
+    }
+    let wire: AnchorWire;
+    try {
+      wire = (await res.json()) as AnchorWire;
+    } catch {
+      return res.status >= 500 ? unavailable('bad_answer') : failed('bad_answer');
+    }
+    if (!res.ok || wire.ok !== true) {
+      const code = typeof wire.code === 'string' ? wire.code : `http_${res.status}`;
+      if (code === 'tsa_unreachable')
+        return { ok: false, reason: 'tsa_unreachable', code, retryable: true };
+      if (wire.retryable === true) return unavailable(code);
+      return failed(code);
+    }
+    if (
+      typeof wire.record !== 'string' ||
+      typeof wire.recordSha256 !== 'string' ||
+      typeof wire.cms !== 'string' ||
+      typeof wire.timestampTime !== 'string' ||
+      typeof wire.keyId !== 'string'
+    )
+      return failed('bad_answer');
+    // The record must say what was asked: this document, workflow, `seq` and head, and no more.
+    let signed: Record<string, unknown>;
+    try {
+      signed = JSON.parse(wire.record) as Record<string, unknown>;
+    } catch {
+      return failed('bad_answer');
+    }
+    const members = Object.keys(signed).sort().join(',');
+    if (
+      members !== 'chainHead,document,format,seq,tenant,workflow' ||
+      signed['chainHead'] !== job.chainHead ||
+      signed['document'] !== job.documentId ||
+      signed['seq'] !== job.seq ||
+      signed['tenant'] !== job.tenant ||
+      signed['workflow'] !== job.workflow
+    )
+      return failed('record_differs');
+    const recordSha256 = sha256Hex(new TextEncoder().encode(wire.record));
+    if (recordSha256 !== wire.recordSha256) return failed('hash_differs');
+    const when = new Date(wire.timestampTime);
+    if (Number.isNaN(when.getTime())) return failed('bad_answer');
+    const cms = new Uint8Array(Buffer.from(wire.cms, 'base64'));
+    if (cms.length === 0) return failed('bad_answer');
+    return {
+      ok: true,
+      record: wire.record,
+      recordSha256,
+      cms,
+      timestampTime: when,
+      keyId: wire.keyId,
+    };
+  }
+}
+
+interface AnchorWire {
+  ok?: unknown;
+  code?: unknown;
+  retryable?: unknown;
+  record?: unknown;
+  recordSha256?: unknown;
+  cms?: unknown;
+  timestampTime?: unknown;
+  keyId?: unknown;
 }

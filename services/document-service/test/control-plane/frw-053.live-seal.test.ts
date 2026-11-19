@@ -24,10 +24,11 @@ import {
   WORKER_SECRET,
 } from '../../../signing-service/test/support/service-world.ts';
 import { startTestTsa, type TestTsa } from '../../../signing-service/test/support/tsa.ts';
-import { verifyWithOpenssl } from '../../../signing-service/test/support/verify.ts';
+import { verifyDetached, verifyWithOpenssl } from '../../../signing-service/test/support/verify.ts';
 import { InProcessKeyService } from '../../../signing-service/test/support/world.ts';
 import { objectKeys } from '../../src/objects/store.ts';
 import { HttpSigningClient } from '../../src/workflow/signing-client.ts';
+import { MemoryAnchorStore } from '../../src/workflow/anchor-store.ts';
 import { MemorySealedPdfStore } from '../../src/workflow/sealed-store.ts';
 import type { LogFields } from '../../src/log.ts';
 import { DepClient } from '../data-plane/client.ts';
@@ -99,6 +100,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     /** The credential the document service sends; a test may swap it. */
     const credential = { current: DOCUMENT_SERVICE_SECRET };
     const sealed = new MemorySealedPdfStore();
+    const anchors = new MemoryAnchorStore();
     const clients: DepClient[] = [];
     const input = classicPdf();
     const jobs: Array<{ id: string; payload: Record<string, unknown> }> = [];
@@ -123,7 +125,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       url = `http://127.0.0.1:${addr.port}`;
       h = await startHarness(storage, {
         realDataPlane: true,
-        parts: { sealedPdfs: sealed },
+        parts: { sealedPdfs: sealed, anchors },
         logger: {
           info() {},
           warn() {},
@@ -140,6 +142,12 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
                 credential: credential.current,
                 timeoutMs: 120_000,
               }).seal(job),
+            anchor: (job) =>
+              new HttpSigningClient({
+                url,
+                credential: credential.current,
+                timeoutMs: 120_000,
+              }).anchor(job),
           },
           retry: { attempts: 2, delaysMs: [10] },
           retainMs: RETAIN_MS,
@@ -247,6 +255,26 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(reports[0]!.main.ok, reports[0]!.main.detail).toBe(true);
         expect(reports[0]!.timestamp?.ok, reports[0]!.timestamp?.detail).toBe(true);
 
+        // The chain head at completion is signed and time-stamped and written once (FRW-054).
+        const anchored = await anchors.read(w.ref.tenant, w.doc, w.workflowId);
+        expect(anchored).not.toBeNull();
+        expect(JSON.parse(anchored!.record)).toEqual({
+          chainHead: (job!.payload['sealing'] as { chainHead: string }).chainHead,
+          document: w.doc,
+          format: 'docedit-chain-head-anchor/1',
+          seq: job!.payload['seq'],
+          tenant: h.tenant,
+          workflow: w.workflowId,
+        });
+        expect(anchored!.recordSha256).toBe(sha256(new TextEncoder().encode(anchored!.record)));
+        const proof = verifyDetached(
+          new Uint8Array(Buffer.from(anchored!.cms, 'base64')),
+          new TextEncoder().encode(anchored!.record),
+          pki,
+        );
+        expect(proof.main.ok, proof.main.detail).toBe(true);
+        expect(proof.timestamp?.ok, proof.timestamp?.detail).toBe(true);
+
         // The route gives them back, and the event reached the host.
         const res = await fetch(`${h.base}/v1/documents/${w.doc}/workflow/final`, {
           headers: { authorization: `Bearer ${w.owner}` },
@@ -304,13 +332,16 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           kind: 'workflow.finalisation_failed',
           limit: 10,
         });
-        expect(failed.map((f) => f.data['stage'])).toContain('seal');
+        // The chain head is signed first, so the run stops at the anchor, and nothing is written.
+        expect(failed.map((f) => f.data['stage'])).toContain('anchor');
+        expect(await anchors.read(w.ref.tenant, w.doc, w.workflowId)).toBeNull();
 
         // The authority is back: the scheduled step (the same function) seals it.
         authority.current = new HttpTimestampAuthority(tsa.url);
         const out = await h.service.sealer!.sealCompletedWorkflow(w.ref);
         expect(out.status).toBe('sealed');
         expect(await stateOf(w.ref)).toBe('finalised');
+        expect(await anchors.read(w.ref.tenant, w.doc, w.workflowId)).not.toBeNull();
         expect(h.events.of('dep.workflow.finalised.v1').some((e) => e.subject === w.doc)).toBe(
           true,
         );
@@ -334,7 +365,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         await waitFor('the alert', () => counter() > before);
         expect(await stateOf(w.ref)).toBe('completed');
         const again = await h.service.sealer!.sealCompletedWorkflow(w.ref);
-        expect(again).toEqual({ status: 'gave_up', code: 'seal_refused' });
+        expect(again).toEqual({ status: 'gave_up', code: 'wrong_caller' });
         expect(counter()).toBe(before + 1);
         credential.current = DOCUMENT_SERVICE_SECRET;
       },

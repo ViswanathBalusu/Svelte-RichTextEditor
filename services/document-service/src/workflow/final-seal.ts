@@ -30,6 +30,7 @@ import type { EventSink } from '../control-plane/events.ts';
 import type { JobQueue } from '../control-plane/jobs/queue.ts';
 import { objectKeys, type ObjectStore } from '../objects/store.ts';
 import type { DocRef } from '../storage/types.ts';
+import { ANCHOR_FILE_FORMAT, type AnchorStore } from './anchor-store.ts';
 import { finalExportJobId } from './final-export-start.ts';
 import { raiseWorkflowEvents } from './raise-events.ts';
 import {
@@ -40,6 +41,8 @@ import {
 } from './seal-and-finalise.ts';
 
 export interface FinalSealDeps extends SealAndFinaliseDeps {
+  /** Where the signed, time-stamped chain head at completion is written once (FRW-054). */
+  readonly anchors: AnchorStore;
   readonly objects: Pick<ObjectStore, 'get'>;
   readonly queue: Pick<JobQueue, 'get'>;
   readonly events: EventSink;
@@ -126,6 +129,14 @@ export class FinalSealer {
       if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0)
         return stop('no_seq', false);
 
+      // The chain head at completion is signed and time-stamped and written once (FRW-054
+      // criterion 3), before the PDF is sealed. The pin of the job names it.
+      const pin = job.payload['sealing'] as { chainHead?: unknown } | undefined;
+      const head = pin?.chainHead;
+      if (typeof head !== 'string' || !HEX64.test(head)) return stop('no_chain_head', false);
+      const anchored = await this.#anchor(ref, workflow.id, seq, head, key);
+      if (anchored !== null) return anchored;
+
       const run = await sealAndFinalise(deps, {
         ref,
         actor: 'system',
@@ -144,6 +155,80 @@ export class FinalSealer {
       return { status: 'sealed', run };
     } finally {
       this.#running.delete(key);
+    }
+  }
+
+  /**
+   * Has the signing service sign and time-stamp the chain head and writes the file once. Null when
+   * the head is anchored (now or before); an outcome when the run must stop. A failure that can
+   * pass is asked again after the delays the caller sets, as the seal is.
+   */
+  async #anchor(
+    ref: DocRef,
+    workflow: string,
+    seq: number,
+    chainHead: string,
+    key: string,
+  ): Promise<FinalSealOutcome | null> {
+    const deps = this.#deps;
+    if ((await deps.anchors.read(ref.tenant, ref.doc, workflow)) !== null) return null;
+    const stop = async (
+      reason: 'tsa_unreachable' | 'signing_unavailable' | 'seal_failed',
+      code: string,
+      attempts: number,
+      retryable: boolean,
+    ): Promise<FinalSealOutcome> => {
+      await stopFinalisation(deps, {
+        ref,
+        workflow,
+        stage: 'anchor',
+        reason,
+        code,
+        attempts,
+        retryable,
+      });
+      if (!retryable) this.#gaveUp.set(key, code);
+      return { status: 'stopped', code, retryable };
+    };
+    let attempts = 0;
+    for (;;) {
+      attempts += 1;
+      const out = await deps.signing.anchor({
+        tenant: ref.tenant,
+        documentId: ref.doc,
+        workflow,
+        seq,
+        chainHead,
+      });
+      if (out.ok) {
+        const stored = await deps.anchors.store({
+          tenant: ref.tenant,
+          doc: ref.doc,
+          workflow,
+          file: {
+            format: ANCHOR_FILE_FORMAT,
+            record: out.record,
+            recordSha256: out.recordSha256,
+            cms: Buffer.from(out.cms).toString('base64'),
+            timestampTime: out.timestampTime.toISOString(),
+            keyId: out.keyId,
+          },
+          retainUntilMs: deps.now() + deps.retainMs,
+        });
+        if (stored.ok) return null;
+        return stop(
+          'seal_failed',
+          stored.reason === 'different_record' ? 'anchor_differs' : 'anchor_store_failed',
+          attempts,
+          stored.reason === 'store_failed',
+        );
+      }
+      if (out.retryable && attempts < deps.retry.attempts) {
+        const delays = deps.retry.delaysMs;
+        await deps.sleep(delays[Math.min(attempts - 1, delays.length - 1)] ?? 0);
+        continue;
+      }
+      return stop(out.reason, out.code, attempts, out.retryable);
     }
   }
 }

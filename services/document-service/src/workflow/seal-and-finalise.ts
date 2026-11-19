@@ -35,7 +35,8 @@ export interface OperatorAlert {
   readonly tenant: string;
   readonly doc: string;
   readonly workflow: string;
-  readonly stage: 'seal';
+  /** `anchor`: the signed chain head (FRW-054 criterion 3) was not written. */
+  readonly stage: 'seal' | 'anchor';
   readonly reason: SigningFailure;
   /** The signing service's code, for the operator. */
   readonly code: string;
@@ -157,6 +158,7 @@ export async function stopFinalisation(
   stop: {
     readonly ref: DocRef;
     readonly workflow: string;
+    readonly stage?: 'seal' | 'anchor';
     readonly reason: SigningFailure;
     readonly code: string;
     readonly attempts: number;
@@ -164,6 +166,7 @@ export async function stopFinalisation(
   },
 ): Promise<void> {
   const { ref } = stop;
+  const stage = stop.stage ?? 'seal';
   await deps.audit?.record([
     {
       id: uuid7(),
@@ -173,7 +176,7 @@ export async function stopFinalisation(
       kind: 'workflow.finalisation_failed',
       data: {
         workflow: stop.workflow,
-        stage: 'seal',
+        stage,
         reason: stop.reason,
         code: stop.code,
         attempts: stop.attempts,
@@ -186,7 +189,7 @@ export async function stopFinalisation(
     tenant: ref.tenant,
     doc: ref.doc,
     workflow: stop.workflow,
-    stage: 'seal',
+    stage,
     reason: stop.reason,
     code: stop.code,
     attempts: stop.attempts,

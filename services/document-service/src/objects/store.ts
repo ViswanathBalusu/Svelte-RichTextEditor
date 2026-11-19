@@ -97,6 +97,12 @@ export const objectKeys = {
     if (!SAFE_SEGMENT.test(workflow)) throw new RangeError('a workflow identifier is one segment');
     return `${objectKeys.prefix(tenant)}final/${doc}/${workflow}.pdf`;
   },
+  /** The signed, time-stamped chain head of a completed workflow (FRW-054 criterion 3). */
+  anchor(tenant: string, doc: string, workflow: string): string {
+    assertUuid(doc, 'document');
+    if (!SAFE_SEGMENT.test(workflow)) throw new RangeError('a workflow identifier is one segment');
+    return `${objectKeys.prefix(tenant)}anchors/${doc}/${workflow}.json`;
+  },
 };
 
 function seqText(seq: number): string {

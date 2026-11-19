@@ -118,6 +118,17 @@ export function timestampInfo(token: Uint8Array): TimestampInfo {
   };
 }
 
+/** The signature time-stamp token (DER) in the unsigned attributes of a CMS, or null. */
+export function cmsSignatureToken(cms: Uint8Array): Uint8Array | null {
+  const ci = new pkijs.ContentInfo({ schema: parseDer(cms) });
+  const sd = new pkijs.SignedData({ schema: ci.content });
+  const attr = sd.signerInfos[0]?.unsignedAttrs?.attributes.find(
+    (a) => a.type === OID.signatureTimeStampToken,
+  );
+  const value = attr?.values[0];
+  return value ? new Uint8Array(value.toBER()) : null;
+}
+
 export interface CmsOptions {
   keyService: KeyService;
   /** The signing certificate (DER), then its issuers up to but not including the root. */

@@ -7,13 +7,20 @@
  *
  * It answers 200 with `{"ok": true, "pdf": base64, "sealedSha256", "profile", "timestamped": true,
  * "timestampTime", "sealedAt", "keyId", "keyOwner"}`, or an error status with `{"ok": false,
- * "code", "retryable"}`. `GET /healthz` answers 200 and touches nothing else. No other route exists.
+ * "code", "retryable"}`. `GET /healthz` answers 200 and touches nothing else.
+ *
+ *     POST /v1/anchor     (FRW-054 criterion 3)
+ *     {"tenant", "documentId", "workflow", "seq", "chainHead"}
+ *
+ * signs and time-stamps a chain head: 200 with `{"ok": true, "record", "recordSha256", "cms": base64,
+ * "timestampTime", "anchoredAt", "keyId", "keyOwner"}`; the failures are those of `/v1/seal`. No other
+ * route exists.
  *
  * Nothing of a request is logged here: not the body, not the credential. The audit log of the
  * service (`audit.ts`) holds the identifiers and hashes.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import type { SealCommand, SealFailureCode, SigningService } from './service.ts';
+import type { AnchorCommand, SealCommand, SealFailureCode, SigningService } from './service.ts';
 
 export interface HttpOptions {
   /** The largest request body accepted, in bytes. The specification gives no figure. */
@@ -93,11 +100,67 @@ function parseCommand(raw: unknown): SealCommand | null {
   };
 }
 
+function parseAnchor(raw: unknown): AnchorCommand | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o['tenant'] !== 'string' ||
+    typeof o['documentId'] !== 'string' ||
+    typeof o['workflow'] !== 'string' ||
+    typeof o['seq'] !== 'number' ||
+    typeof o['chainHead'] !== 'string'
+  )
+    return null;
+  return {
+    tenant: o['tenant'],
+    documentId: o['documentId'],
+    workflow: o['workflow'],
+    seq: o['seq'],
+    chainHead: o['chainHead'],
+  };
+}
+
+/** `POST /v1/anchor`: signs and time-stamps a chain head (FRW-054 criterion 3). */
+async function anchorRoute(
+  service: SigningService,
+  req: IncomingMessage,
+  res: ServerResponse,
+  maxBodyBytes: number,
+): Promise<void> {
+  const body = await readBody(req, maxBodyBytes);
+  if (body === null) return send(res, 413, { ok: false, code: 'too_large', retryable: false });
+  let cmd: AnchorCommand | null;
+  try {
+    cmd = parseAnchor(JSON.parse(body.toString('utf8')));
+  } catch {
+    cmd = null;
+  }
+  // A body that is not a request is refused as `bad_request` after the credential is checked.
+  const out = await service.anchor(
+    bearer(req),
+    cmd ?? { tenant: '', documentId: '', workflow: '', seq: -1, chainHead: '' },
+  );
+  if (!out.ok)
+    return send(res, STATUS[out.code], { ok: false, code: out.code, retryable: out.retryable });
+  return send(res, 200, {
+    ok: true,
+    record: out.record,
+    recordSha256: out.recordSha256,
+    cms: Buffer.from(out.cms).toString('base64'),
+    timestampTime: out.timestampTime.toISOString(),
+    anchoredAt: out.anchoredAt.toISOString(),
+    keyId: out.keyId,
+    keyOwner: out.keyOwner,
+  });
+}
+
 export function createSigningServer(service: SigningService, opts: HttpOptions): Server {
   return createServer((req, res) => {
     void (async () => {
       const path = (req.url ?? '').split('?')[0];
       if (req.method === 'GET' && path === '/healthz') return send(res, 200, { ok: true });
+      if (req.method === 'POST' && path === '/v1/anchor')
+        return anchorRoute(service, req, res, opts.maxBodyBytes);
       if (req.method !== 'POST' || path !== '/v1/seal')
         return send(res, 404, { ok: false, code: 'not_found', retryable: false });
       const body = await readBody(req, opts.maxBodyBytes);

@@ -123,6 +123,7 @@ import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
 import type { ConsentTextStore } from './workflow/consent-service.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
 import { FinalSealer } from './workflow/final-seal.ts';
+import { MemoryAnchorStore, type AnchorStore } from './workflow/anchor-store.ts';
 import { HttpSigningClient, type SigningClient } from './workflow/signing-client.ts';
 import { recordParticipantOpened } from './workflow/participant-view.ts';
 import type { PolicyHookGate } from './control-plane/policy-hook-client.ts';
@@ -320,6 +321,8 @@ export interface ServiceParts {
   evidence?: EvidenceLedger;
   /** The sealed final PDFs (FRW-054): `GET /documents/{id}/workflow/final` reads them. Absent: the route is not offered. */
   sealedPdfs?: SealedPdfStore;
+  /** The signed, time-stamped chain heads at completion, written once (FRW-054 criterion 3). */
+  anchors?: AnchorStore;
   /** The registered access codes of workflow participants and their attempt counters (FRW-039). */
   accessCodes?: AccessCodeStore;
   /** The consent texts of the tenants (FRW-044). Absent: the consent route is not offered. */
@@ -682,6 +685,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     reminders: new MemoryReminderStore(),
     evidence: new MemoryEvidenceLedger(now),
     sealedPdfs: new MemorySealedPdfStore(),
+    anchors: new MemoryAnchorStore(),
     accessCodes: new MemoryAccessCodeStore(),
     quotaAdmin: quotaAdminOver(
       // The pipeline has authenticated the tenant before a quota route runs, so every tenant that
@@ -1165,9 +1169,9 @@ export async function startService(opts: StartOptions): Promise<Service> {
       : null);
   let sealer: FinalSealer | null = null;
   if (sealSetup) {
-    if (!parts.workflows || !parts.sealedPdfs)
+    if (!parts.workflows || !parts.sealedPdfs || !parts.anchors)
       throw new Error(
-        'sealing needs the workflow store and a sealed PDF store (parts.workflows, parts.sealedPdfs)',
+        'sealing needs the workflow store and the write-once stores (parts.workflows, parts.sealedPdfs, parts.anchors)',
       );
     sealer = new FinalSealer({
       workflows: parts.workflows,
@@ -1178,6 +1182,7 @@ export async function startService(opts: StartOptions): Promise<Service> {
       now,
       controlWaitMs: 500,
       sealed: parts.sealedPdfs,
+      anchors: parts.anchors,
       signing: sealSetup.signing,
       retry: sealSetup.retry,
       sleep: sealSetup.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
