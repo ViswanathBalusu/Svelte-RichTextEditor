@@ -71,7 +71,7 @@ import type { MountedReadView } from './read-view-element.ts';
 import { loadLayoutReport, pageGuideBlockIds, type LayoutReport } from './page-guides.ts';
 import { selectView, VIEW_STRINGS, type ViewName } from './view-select.ts';
 import { frameScheduler } from './status.ts';
-import { fallbackFor, noticeReason, showPageViewNotice } from './kernel-fallback.ts';
+import { chooseMeasurementProvider, noticeReason, showPageViewNotice } from './kernel-fallback.ts';
 import { ElementKernel } from './layout-kernel-request.ts';
 import { EMBEDDING_VERSION, RELEASE } from './version.ts';
 
@@ -459,7 +459,8 @@ export class DocEditorElement extends Base {
    * offers the web view and the read view. Editing, saving and the read view are not affected.
    */
   #degradeKernel(failure: DocEditorEventMap['de-diagnostic']): void {
-    const fallback = fallbackFor(navigator.userAgent);
+    const provider = chooseMeasurementProvider('unavailable', navigator.userAgent);
+    const fallback = provider === 'canvas' ? 'canvas-measurement' : 'web-view';
     this.#emit('de-diagnostic', { ...failure, kind: 'degraded', ms: null, fallback });
     if (fallback !== 'web-view' || this.getAttribute('view') !== 'print') return;
     this.#kernelNotice?.remove();
