@@ -45,7 +45,13 @@ const DECLARED = 'ua-2+a-4f';
 
 describe.skipIf(!ready.ok)(`EXP-016 corpus validation (${ready.reason})`, () => {
   for (const name of CORPUS_DOCUMENTS) {
-    it(`validates ${name} against every declared flavour`, async () => {
+    // `pages-20` holds Chinese, Japanese and Korean text and the worker image has no CJK face, so
+    // its compile stops on a fatal "Missing character". It fails the same way on every run and
+    // machine, alone or under load (not a flake). The face (licence, Hangul coverage) is the
+    // owner's to choose (EXP-056 Notes, ADR 0320 point 3; the same document is skipped in
+    // exp-056-layout-pdf.compile.test.ts). Remove the skip when the image has the face.
+    const run = name === 'pages-20' ? it.skip : it;
+    run(`validates ${name} against every declared flavour`, async () => {
       const doc = await loadDocument(name);
       const assets = Object.fromEntries(
         doc.assets.map((a) => [
