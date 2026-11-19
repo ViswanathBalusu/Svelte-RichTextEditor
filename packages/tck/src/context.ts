@@ -206,7 +206,13 @@ export class ScenarioContext {
     const restart = this.config.authorityService?.restart;
     if (!restart) this.skip('the run has no way to restart the authority service');
     const url = await restart();
-    if (typeof url === 'string') this.authority.url = url;
+    if (typeof url === 'string') {
+      this.authority.url = url;
+      // Every scenario has its own context: the run's address moves too, or a scenario that runs
+      // after the restart would call the old one.
+      const given = this.config.authorityService;
+      if (given) given.url = url;
+    }
   }
 
   /** Whether the server announces a feature (05 §1 rule 4). */

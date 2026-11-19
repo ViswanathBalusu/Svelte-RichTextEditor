@@ -123,10 +123,16 @@ describe.skipIf(skip)('the reference authority service passes the profile (PRO-1
     expect(outcome('authority-service.canonical-hash')?.notes.join(' ')).toMatch(/9 canonical/);
   });
 
-  it('skips mapRanges, with the reason: the interface has no route for it yet (PRO-105)', () => {
-    const m = outcome('authority-service.map-ranges');
-    expect(m?.outcome).toBe('skipped');
-    expect(m?.reason).toMatch(/PRO-105/);
+  it('runs mapRanges through the route of PRO-105, and it passes (criterion 1)', () => {
+    expect(outcome('authority-service.map-ranges')?.outcome).toBe('passed');
+  });
+
+  it('covers every call of 05 §10: the service announces the eight it must, and migrate is checked either way', () => {
+    const caps = scenarios().find((x) => x.id === 'authority-service.capabilities');
+    expect(caps?.outcome).toBe('passed');
+    for (const call of AUTHORITY_CALLS.filter((c) => c !== 'migrate'))
+      expect(caps?.notes.join(' '), call).toMatch(new RegExp(`\\b${call}\\b`));
+    expect(outcome('authority-service.migrate')?.outcome).toBe('passed');
   });
 
   it('skips the token scenario for a service without a token', () => {

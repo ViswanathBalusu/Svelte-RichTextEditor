@@ -6,13 +6,11 @@
  *
  * What it runs:
  * - the calls of 05 §10 one by one: `open`, `materialise`, `applyCommit`, `restoreSteps`, `diff`,
- *   `attribution`, `evaluateRules` and `migrate` (a service that does not announce `migrate` must
- *   refuse it with `migration_not_enabled`);
+ *   `attribution`, `evaluateRules`, `mapRanges` and `migrate` (a service that does not announce
+ *   `migrate` must refuse it with `migration_not_enabled`);
  * - the step-semantics fixtures of the pinned engine release, the canonical-hash fixtures of the
  *   model and the rules fixtures, each through the service, with the result of the fixture;
  * - a restart of the service between calls, when the caller can restart it.
- *
- * `mapRanges` has no HTTP route yet (PRO-105), so its scenario is always skipped, with that reason.
  */
 import {
   canonicalEnvelope,
@@ -30,7 +28,7 @@ import {
   expectProblem,
 } from '../authority-client.ts';
 import { KitFailure, check, equal, isObject, jsonEqual } from '../assert.ts';
-import { IDS, contractDocument, insertText, posIn } from '../documents.ts';
+import { IDS, contractDocument, deleteRange, insertText, posIn } from '../documents.ts';
 import { canonicalFixtures, engineDefinition, engineFixture, type ApplyCase } from '../fixtures.ts';
 import { sha256Hex } from '../jcs.ts';
 import { rulesFixtures, type RulesCase } from '../rules-fixtures.ts';
@@ -39,11 +37,12 @@ import { scenario, type ProfileDef, type ScenarioDef } from '../scenario.ts';
 
 const s = (def: Omit<ScenarioDef, 'id'> & { id: string }) => scenario('authority-service', def);
 
-/** The calls a service must implement; `migrate` is the operator's choice and `mapRanges` has no route yet. */
+/** The calls a service must implement; `migrate` is the operator's choice. */
 const REQUIRED_CALLS = [
   'open',
   'materialise',
   'applyCommit',
+  'mapRanges',
   'restoreSteps',
   'diff',
   'attribution',
@@ -865,8 +864,143 @@ export const AUTHORITY_SERVICE: ProfileDef = {
       spec: '05 §10; ADR 0015; PRO-105',
       covers: {},
       async run(ctx) {
-        ctx.skip(
-          'the interface has no route for mapRanges yet: the service of PRO-105 is not built, so the call cannot be exercised',
+        const a = ctx.authority;
+        const doc = `tck-${ctx.config.run}-map-ranges`;
+        const stateId0 = await open(ctx, doc, contract(doc));
+        const p = introPos();
+        // seq 1: "One " is inserted at the start of the intro. seq 2: it is deleted again.
+        const r1 = body(
+          expectOk(
+            await apply(ctx, stateId0, [insertText(p, 'One ')], EDITOR, {}, 0),
+            200,
+            'a first commit',
+          ),
+          'applyCommit',
+        );
+        equal(r1['seq'], 1, 'the first commit is seq 1');
+        const state1 = r1['stateId'] as string;
+        const r2 = body(
+          expectOk(
+            await apply(ctx, state1, [deleteRange(p, p + 4)], EDITOR, {}, 1),
+            200,
+            'a second commit',
+          ),
+          'applyCommit',
+        );
+        equal(r2['seq'], 2, 'the second commit is seq 2');
+        const head = r2['stateId'] as string;
+        const map = (stateId: string, seq: unknown, ranges: unknown) =>
+          a.onState(stateId, 'map-ranges', { seq, ranges });
+        const mapped = (res: { json: unknown; text: string }, what: string) => {
+          const b = body(res as never, what);
+          check(Array.isArray(b['ranges']), `${what}: the ranges`, 'ranges: []', b);
+          return b as { seq: number; headSeq: number; ranges: unknown[] };
+        };
+
+        // From seq 0: text after the insertion moves right and moves back with the deletion; a
+        // range before it stays; a caret (presence) is a range of zero width and stays a point.
+        const fromZero = mapped(
+          expectOk(
+            await map(head, 0, [
+              { from: p + 2, to: p + 5 },
+              { from: 1, to: 2 },
+              { from: p + 2, to: p + 2 },
+            ]),
+            200,
+            'mapRanges from seq 0',
+          ),
+          'mapRanges',
+        );
+        equal(fromZero.seq, 0, 'the answer names the seq the ranges were given at');
+        equal(fromZero.headSeq, 2, 'the answer names the head the ranges were mapped to');
+        const [a0, b0, c0] = fromZero.ranges as Array<{
+          from: number;
+          to: number;
+          collapsed: boolean;
+        }>;
+        jsonEqual(a0, { from: p + 2, to: p + 5, collapsed: false }, 'a range after both edits');
+        jsonEqual(b0, { from: 1, to: 2, collapsed: false }, 'a range before the edits');
+        check(
+          c0 !== undefined && c0.from === p + 2 && c0.to === p + 2,
+          'a presence position stays a position',
+          { from: p + 2, to: p + 2 },
+          c0,
+        );
+
+        // From seq 1: the text that seq 2 deleted collapses (ADR 0015); the text after it moves.
+        const fromOne = mapped(
+          expectOk(
+            await map(head, 1, [
+              { from: p, to: p + 4 },
+              { from: p + 6, to: p + 9 },
+            ]),
+            200,
+            'mapRanges from seq 1',
+          ),
+          'mapRanges',
+        );
+        const [gone, kept] = fromOne.ranges as Array<{
+          from: number;
+          to: number;
+          collapsed: boolean;
+        }>;
+        check(
+          gone !== undefined && gone.collapsed === true && gone.from === gone.to,
+          'a range whose content was deleted collapses (ADR 0015)',
+          { collapsed: true },
+          gone,
+        );
+        jsonEqual(kept, { from: p + 2, to: p + 5, collapsed: false }, 'a range after the deletion');
+
+        // At the head the ranges come back as they were given, in the order given; no ranges is fine.
+        const atHead = mapped(
+          expectOk(
+            await map(head, 2, [{ from: p + 2, to: p + 5 }]),
+            200,
+            'mapRanges at the head',
+          ),
+          'mapRanges',
+        );
+        jsonEqual(
+          atHead.ranges,
+          [{ from: p + 2, to: p + 5, collapsed: false }],
+          'ranges at the head are unchanged',
+        );
+        equal(
+          mapped(expectOk(await map(head, 0, []), 200, 'no ranges'), 'mapRanges').ranges.length,
+          0,
+          'no ranges give no ranges',
+        );
+        // A state is immutable: the call gives the same bytes twice.
+        const once = await map(head, 0, [{ from: p + 2, to: p + 5 }]);
+        const twice = await map(head, 0, [{ from: p + 2, to: p + 5 }]);
+        equal(twice.text, once.text, 'mapRanges gives the same bytes twice');
+
+        // The caller learns when to open again, and when its request is wrong.
+        expectProblem(
+          await map(ZERO, 0, [{ from: 0, to: 0 }]),
+          404,
+          'unknown_state',
+          'a state the service does not hold',
+        );
+        expectProblem(await map(head, 9, []), 404, 'not_found', 'a seq past the head');
+        expectProblem(
+          await map(head, -1, []),
+          400,
+          'invalid_request',
+          'a seq that is not a non-negative integer',
+        );
+        expectProblem(
+          await map(head, 0, [{ from: -1, to: 2 }]),
+          400,
+          'invalid_request',
+          'a range with a negative position',
+        );
+        expectProblem(
+          await map(head, 0, 'not an array'),
+          400,
+          'invalid_request',
+          'ranges that are not a list',
         );
       },
     }),

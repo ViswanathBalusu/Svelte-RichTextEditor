@@ -179,6 +179,12 @@ export interface EgressOptions {
   connector: Connector;
   /** Redirects followed before the delivery is refused. No default: the spec gives no number. */
   maxRedirects: number;
+  /**
+   * IP literals reached although the policy refuses them (test mode only; PRO-121). Each is an exact
+   * address named by the operator, never a range, and a name is never allowed this way. A redirect to
+   * one is followed like any other target.
+   */
+  allow?: readonly string[];
 }
 
 /** Sends a delivery through the policy above. Each redirect target is checked as a new request. */
@@ -186,6 +192,7 @@ export class EgressProxy implements Transport {
   readonly #resolver: Resolver;
   readonly #connector: Connector;
   readonly #maxRedirects: number;
+  readonly #allow: readonly string[];
 
   constructor(options: EgressOptions) {
     if (!Number.isSafeInteger(options.maxRedirects) || options.maxRedirects < 0)
@@ -193,6 +200,7 @@ export class EgressProxy implements Transport {
     this.#resolver = options.resolver;
     this.#connector = options.connector;
     this.#maxRedirects = options.maxRedirects;
+    this.#allow = options.allow ?? [];
   }
 
   async deliver(request: {
@@ -249,6 +257,8 @@ export class EgressProxy implements Transport {
     const host = url.hostname.replace(/^\[|\]$/g, '');
     const hostClass = classifyHost(url.hostname);
     let addresses: readonly string[];
+    if (isIP(host) !== 0 && this.#allow.some((a) => sameAddress(a, host)))
+      return { ok: true, address: host };
     if (hostClass !== 'name') {
       // An IP literal, `localhost` or an empty host: decided without asking the resolver.
       const reason = reasonForClass(hostClass);
