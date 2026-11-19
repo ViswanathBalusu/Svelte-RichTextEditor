@@ -161,6 +161,7 @@ import {
   insertTableCaption,
 } from './captions-refs.ts';
 import { type ReferenceTarget, referenceTargets } from './reference-targets.ts';
+import type { SuggestionCardFormat } from './view/suggestion-card.ts';
 import {
   type GlyphCoverage,
   type GlyphNotice,
@@ -973,6 +974,9 @@ export class DocumentCore implements DocumentApi {
   /** The assets port of the configuration, and the one `attach` gave, which wins (FE-053). */
   readonly #configAssets: AssetsPort | null;
   #attachedAssets: AssetsPort | null = null;
+  #attachedHistory: NonNullable<AttachOptions['history']> | null = null;
+  #suggestionCard: SuggestionCardFormat | null = null;
+  readonly #suggestionTimes = new Map<string, Promise<string | null>>();
   /** The user suggestion marks name (FE-042): the configuration's, then the one `attach` gave. */
   #user: string | null;
   /** `settings.trackChanges` of the last definitions read, by the definitions node (FE-041). */
@@ -1016,6 +1020,7 @@ export class DocumentCore implements DocumentApi {
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.altRequest = new ReadValue<AltRequest | null>(null, sameJson, hub);
     this.glyphNotice = new ReadValue<GlyphNotice | null>(null, sameJson, hub);
+    this.suggestionCardChanged = new ReadValue<number>(0, Object.is, hub);
     this.#requested = config.mode ?? 'edit';
     this.#accessValue = config.access ?? null;
     this.#effective = effectiveMode(this.#requested, this.#accessValue);
@@ -2864,6 +2869,45 @@ one or original. It is a
   }
 
   /**
+   * Sets the shell's words for the card of a suggestion, which names its author and the time (FE-046
+   * criterion 2), or clears them. The body view reads it when the card shows and when it is set.
+   */
+  setSuggestionCard(format: SuggestionCardFormat | null): void {
+    this.#suggestionCard = format;
+    this.suggestionCardChanged.set(this.suggestionCardChanged.get() + 1);
+  }
+
+  /** The shell's words for the card of a suggestion, or null. */
+  get suggestionCardFormat(): SuggestionCardFormat | null {
+    return this.#suggestionCard;
+  }
+
+  /** Counts the changes of the card's words, so that a card on show is drawn again. */
+  readonly suggestionCardChanged: ReadValue<number>;
+
+  /**
+   * The server time of the commit that introduced the suggestion `id`, as the history port gives
+   * it (decision 109 of `docs/owner-decisions-2026-11-15.md`), or null when there is no port, the
+   * commit is below the reader's gate or the answer fails. A time does not change, so it is kept.
+   */
+  suggestionTime(id: string): Promise<string | null> {
+    const known = this.#suggestionTimes.get(id);
+    if (known !== undefined) return known;
+    const port = this.#attachedHistory;
+    if (port === null || this.#docId === '') return Promise.resolve(null);
+    const asked = port
+      .suggestionIntroduction(this.#docId, id)
+      .then((answer) => (typeof answer.time === 'string' ? answer.time : null))
+      .catch(() => null);
+    // A failed or empty answer is asked again the next time; only a time is kept.
+    void asked.then((time) => {
+      if (time === null) this.#suggestionTimes.delete(id);
+    });
+    this.#suggestionTimes.set(id, asked);
+    return asked;
+  }
+
+  /**
    * The continuous section breaks whose page setup changes a margin (FE-135 criterion 6). The core
    * only computes them; the view decides how to show them, and the criterion stays open until it does.
    */
@@ -4375,6 +4419,7 @@ one or original. It is a
     this.connection.set('online');
     if (opts.features) this.setFeatures(opts.features);
     if (opts.assets) this.#attachedAssets = opts.assets;
+    if (opts.history) this.#attachedHistory = opts.history;
     const detachProofing = opts.proofing ? this.attachProofing(opts.proofing) : null;
     if (opts.user !== undefined) this.#user = opts.user;
     // Work the journal kept from an earlier visit goes back on the document before the session
@@ -4423,6 +4468,7 @@ one or original. It is a
       if (this.#session === session) {
         this.#session = null;
         this.#attachedAssets = null;
+        this.#attachedHistory = null;
         this.connection.set('detached');
         this.presence.set([]);
         this.peerSelections.set([]);

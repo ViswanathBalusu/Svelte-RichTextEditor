@@ -81,6 +81,10 @@ export interface AttachAt {
   presence?: PresencePort;
   /** This session (`welcome.session`), never listed as a peer. */
   session?: string;
+  /** The history port's read of the commit that introduced a suggestion (FE-046 criterion 2). */
+  history?: {
+    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+  };
   /** The user (`welcome.user.id`), whom suggestion marks name (03 §5; FE-042). */
   user?: string;
   /** The features both sides support, for the shell (05 §8.3). */
@@ -396,6 +400,8 @@ export class Session {
       if (backend.assets && backend.features.has('assets'))
         at.assets = pictureAssets(backend.assets, this.docId);
       if (backend.proofing) at.proofing = backend.proofing;
+      // FE-046 criterion 2: the time of a suggestion is the server time of the commit that introduced it.
+      if (backend.history && backend.features.has('history')) at.history = backend.history;
       if (backend.assistant) at.assistant = backend.assistant;
       at.features = [...backend.features];
       this.#channel = channel;

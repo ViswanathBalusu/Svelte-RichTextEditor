@@ -159,6 +159,15 @@ export function createReviewPorts(host: ReviewPortsHost): ReviewPorts {
           shape: 'Activity',
         })
       ).value,
+
+    suggestionIntroduction: async (docId, suggestionId) =>
+      (
+        await call<Response<'getSuggestionIntroduction'>>(
+          'GET',
+          docPath(docId, `/suggestions/${enc(suggestionId)}/introduction`),
+          { shape: 'SuggestionIntroduction' },
+        )
+      ).value,
   };
 
   const threadPath = (threadId: string, rest = ''): string => `/threads/${enc(threadId)}${rest}`;

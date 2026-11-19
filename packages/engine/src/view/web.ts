@@ -53,6 +53,7 @@ import { comparisonDecorations } from './comparison-decorations.ts';
 import { suggestionDecorations } from './suggestion-decorations.ts';
 import { paragraphView } from './paragraph-format-view.ts';
 import { sectionWarningPlugin } from './section-warning-view.ts';
+import { SuggestionCard } from './suggestion-card.ts';
 import { tocPlugin, tocView } from './toc-view.ts';
 import { tableCellView, tableStylePlugin } from './table-style-view.ts';
 
@@ -201,6 +202,7 @@ export class EditorCore extends DocumentCore {
   /** The comparison drawn in a version view (HIS-013); null in the live editor. */
   #comparison: readonly ComparisonSpec[] | null = null;
   #view: EditorView | null = null;
+  #card: SuggestionCard | null = null;
   /** The live form field controls and mirrors of the body view (FRW-004, FRW-006). */
   readonly #fieldViews = new FormFieldViews();
   #sub: SubEditor | null = null;
@@ -588,6 +590,13 @@ export class EditorCore extends DocumentCore {
       },
     );
     this.#view = view;
+    // FE-046 criterion 2: the card that names a suggestion's author and time, on hover and at the caret.
+    const card = new SuggestionCard(view, {
+      format: () => this.suggestionCardFormat,
+      time: (id) => this.suggestionTime(id),
+    });
+    this.#card = card;
+    const uncard = this.suggestionCardChanged.subscribe(() => card.refresh());
     const ended = () => this.compositionEnded();
     target.addEventListener('compositionend', ended);
     // A change of the find state redraws the highlights at once (the view is not told by a transaction).
@@ -664,6 +673,9 @@ export class EditorCore extends DocumentCore {
       unreveal();
       unproof();
       unmarkup();
+      uncard();
+      card.destroy();
+      if (this.#card === card) this.#card = null;
       undirection();
       uncarets();
       win?.removeEventListener('resize', redraw);
@@ -677,6 +689,7 @@ export class EditorCore extends DocumentCore {
   #update(state: EditorState, transactions: readonly Transaction[]): void {
     const before = this.#view?.state.doc;
     this.#view?.updateState(state);
+    this.#card?.update();
     // Mirrors follow their target fields, and a control follows its entry (FRW-004, FRW-006).
     // A change of nothing but field values draws only the fields whose state moved (FRW-023 c. 6).
     if (before !== state.doc) this.#fieldViews.refresh(state.doc, onlyFieldValues(transactions));

@@ -117,6 +117,11 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       // FE-136 criterion 4: the font coverage the host read, the characters it shows missing, and the
       // notice for a symbol the font lacks.
       | 'noticeForeignWork'
+      // FE-046 criterion 2: the card that names a suggestion's author and the time of its commit.
+      | 'setSuggestionCard'
+      | 'suggestionCardFormat'
+      | 'suggestionCardChanged'
+      | 'suggestionTime'
       | 'setGlyphCoverage'
       | 'missingGlyphs'
       | 'glyphNotice'

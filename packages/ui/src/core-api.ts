@@ -817,6 +817,12 @@ export interface CoreApi {
    */
   setSuggestionLabel?(label: ((kind: 'ins' | 'del' | 'fmt', user: string) => string) | null): void;
   /**
+   * Gives the body the words of the card that names a suggestion's author and the time of the commit
+   * that introduced it (FE-046 criterion 2): the author's identifier and the time (ISO 8601 UTC, or
+   * null when it is not known) in, one line out. Null removes the card.
+   */
+  setSuggestionCard?(format: ((user: string, time: string | null) => string) | null): void;
+  /**
    * The suggestions of the document in order, with what the user may do with each (UX-036,
    * UX-037). Read again when `revision` moves. Absent: the review tools are not offered.
    */

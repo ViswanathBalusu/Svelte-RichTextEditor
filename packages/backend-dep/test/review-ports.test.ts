@@ -96,6 +96,24 @@ describe('history port over REST (PRO-097 criterion 1)', () => {
     }
   });
 
+  it('reads the commit that introduced a suggestion with GET (FE-046 criterion 2; HIS-042)', async () => {
+    const { ports, sent } = recordingRest(() => ({
+      body: {
+        suggestion: 'sgOne00000000001',
+        time: '2026-11-18T10:30:00Z',
+        user: 'u-suggester',
+        origin: 'client',
+        seq: 7,
+      },
+    }));
+    const answer = await ports.history.suggestionIntroduction(DOC, 'sgOne00000000001');
+    expect(answer).toMatchObject({ time: '2026-11-18T10:30:00Z', user: 'u-suggester' });
+    expect(sent.map((s) => [s.method, s.url])).toEqual([
+      ['GET', `https://dep.test/api/documents/${DOC}/suggestions/sgOne00000000001/introduction`],
+    ]);
+    expect(sent[0]?.headers['if-match']).toBeUndefined();
+  });
+
   it('sends the bearer token only in the Authorization header, never in the URL', async () => {
     const { ports, sent } = recordingRest(() => ({ body: { items: [], nextCursor: null } }));
     await ports.history.history(DOC);

@@ -764,6 +764,13 @@ export interface AttachOptions {
   assets?: AssetsPort;
   /** The proofing port (13 §6.1; UX-041): the core checks spelling and grammar through it. */
   proofing?: ProofingPort;
+  /**
+   * The history port's read of the commit that introduced a suggestion (HIS-042; FE-046 criterion
+   * 2): the card of a suggestion shows the server time of that commit.
+   */
+  history?: {
+    suggestionIntroduction(docId: string, suggestionId: string): Promise<{ time: string }>;
+  };
 }
 
 /** The find state: `n of m` is `current` (1-based, null before a navigation) of `count` (FE-059). */

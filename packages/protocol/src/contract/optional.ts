@@ -25,6 +25,7 @@ const MEMBERS = {
     'restore',
     'setReadMarker',
     'activity',
+    'suggestionIntroduction',
   ],
   comments: [
     'threads',
