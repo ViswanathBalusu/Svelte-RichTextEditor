@@ -999,6 +999,7 @@ export function workflowRoutes(k: Kit): Record<string, Handler> {
           versions: d.versions,
           audit: d.audit,
           evidence: d.evidence,
+          sealing: d.sealing === true,
           now: d.now,
           onQueued: d.onJobQueued,
         },

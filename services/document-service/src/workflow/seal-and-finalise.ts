@@ -16,8 +16,9 @@
  *    Every other time (the transition, the audit, the control commit) is `deps.now()`, the
  *    server's clock.
  *
- * Not built: scheduling of a later run (a job of the queue, as the renewal has), and a channel that
- * delivers the alert. `alert` is a port; the default composition has none (no channel is specified).
+ * The live path calls it from `FinalSealer` (final-seal.ts), which also finds a run that stopped (the
+ * scheduled task `workflow.seal`). `alert` is a port; the composition in server.ts gives it an error
+ * log line and a counter (docs/adr/0420-w4-FRW-052-053-live-seal-path.md, proposed).
  */
 import { finaliseWorkflow, type FinalisationOutcome } from '@docedit/authority';
 import { uuid7 } from '@docedit/model';
@@ -134,29 +135,9 @@ export async function sealAndFinalise(
       compile: { ok: true },
       seal: { ok: false, reason: out.reason },
     });
-    await deps.audit?.record([
-      {
-        id: uuid7(),
-        tenant: ref.tenant,
-        doc: ref.doc,
-        actor: 'system',
-        kind: 'workflow.finalisation_failed',
-        data: {
-          workflow: current.id,
-          stage: 'seal',
-          reason: out.reason,
-          code: out.code,
-          attempts,
-        },
-        at: deps.now(),
-      },
-    ]);
-    await deps.alert({
-      kind: 'workflow.finalisation_stopped',
-      tenant: ref.tenant,
-      doc: ref.doc,
+    await stopFinalisation(deps, {
+      ref,
       workflow: current.id,
-      stage: 'seal',
       reason: out.reason,
       code: out.code,
       attempts,
@@ -164,4 +145,51 @@ export async function sealAndFinalise(
     });
     return { ok: true, sealed: false, attempts, gate, resource: current, retryable: out.retryable };
   }
+}
+
+/**
+ * Records that finalisation stopped before the sealed PDF was stored and tells the operator: the
+ * audit entry `workflow.finalisation_failed` and the alert port. The workflow is not touched. Used
+ * by `sealAndFinalise` and by the step that finds the PDF to seal (`sealFinalExport`).
+ */
+export async function stopFinalisation(
+  deps: Pick<SealAndFinaliseDeps, 'audit' | 'alert' | 'now'>,
+  stop: {
+    readonly ref: DocRef;
+    readonly workflow: string;
+    readonly reason: SigningFailure;
+    readonly code: string;
+    readonly attempts: number;
+    readonly retryable: boolean;
+  },
+): Promise<void> {
+  const { ref } = stop;
+  await deps.audit?.record([
+    {
+      id: uuid7(),
+      tenant: ref.tenant,
+      doc: ref.doc,
+      actor: 'system',
+      kind: 'workflow.finalisation_failed',
+      data: {
+        workflow: stop.workflow,
+        stage: 'seal',
+        reason: stop.reason,
+        code: stop.code,
+        attempts: stop.attempts,
+      },
+      at: deps.now(),
+    },
+  ]);
+  await deps.alert({
+    kind: 'workflow.finalisation_stopped',
+    tenant: ref.tenant,
+    doc: ref.doc,
+    workflow: stop.workflow,
+    stage: 'seal',
+    reason: stop.reason,
+    code: stop.code,
+    attempts: stop.attempts,
+    retryable: stop.retryable,
+  });
 }
