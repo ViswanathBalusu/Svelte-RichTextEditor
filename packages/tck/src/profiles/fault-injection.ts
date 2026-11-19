@@ -46,7 +46,12 @@ interface HookState {
 }
 
 /** A call of a hook, with the service credential. */
-async function hook(ctx: ScenarioContext, method: 'GET' | 'POST', path: string, body?: unknown) {
+export async function hook(
+  ctx: ScenarioContext,
+  method: 'GET' | 'POST',
+  path: string,
+  body?: unknown,
+) {
   const url = new URL(`/_test${path}`, ctx.target.discovery.rest).toString();
   const res = await http.request(method, url, {
     token: ctx.config.credential,
