@@ -7,7 +7,11 @@
 // raised. A time-stamp authority that is down leaves the workflow `completed`, with an alert (an
 // error log line and a counter); the scheduled step's function seals it when the authority is back.
 // Memory storage and, when the test environment is up, PostgreSQL in Podman.
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import type { Server } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { HttpTimestampAuthority, type TimestampSource } from '../../../signing-service/src/cms.ts';
@@ -84,6 +88,14 @@ const body = (doc: string) => ({
 
 const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 const RETAIN_MS = 365 * 24 * 3600 * 1000;
+
+/** What the verification command prints, in the parts this test reads. */
+interface Report {
+  status: string;
+  anchorMatches: boolean | null;
+  evidence: { evidenceInChain: string[]; failedEvidence: string[] };
+  seal: { ok: boolean; signatures: unknown[] };
+}
 
 for (const storage of ['memory', 'postgres'] as Storage[]) {
   describe(`the final PDF is sealed and the workflow finalised by the service itself (${storage}; FRW-052, FRW-053)`, async () => {
@@ -368,6 +380,69 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(again).toEqual({ status: 'gave_up', code: 'wrong_caller' });
         expect(counter()).toBe(before + 1);
         credential.current = DOCUMENT_SERVICE_SECRET;
+      },
+      300_000,
+    );
+
+    it.skipIf(skip !== null)(
+      'a third party with only the bundle, the sealed PDF, the anchor file and the root verifies them with the command (FRW-055 criterion 2)',
+      async () => {
+        authority.current = new HttpTimestampAuthority(tsa.url);
+        credential.current = DOCUMENT_SERVICE_SECRET;
+        const w = await complete();
+        await waitFor('finalised', async () => (await stateOf(w.ref)) === 'finalised');
+        const bundle = await h.call('GET', `/v1/documents/${w.doc}/workflow/evidence`, {
+          token: w.owner,
+        });
+        expect(bundle.status, bundle.text).toBe(200);
+        const pdf = (await sealed.read(w.ref.tenant, w.doc, w.workflowId))!.bytes;
+        const anchor = await anchors.read(w.ref.tenant, w.doc, w.workflowId);
+        const dir = mkdtempSync(join(tmpdir(), 'frw055-'));
+        try {
+          const root = resolve(import.meta.dirname, '../../..', '..');
+          const run = (bundleText: string, pdfBytes: Uint8Array) => {
+            writeFileSync(join(dir, 'bundle.json'), bundleText);
+            writeFileSync(join(dir, 'sealed.pdf'), pdfBytes);
+            writeFileSync(join(dir, 'anchor.json'), JSON.stringify(anchor));
+            const r = spawnSync(
+              process.execPath,
+              [
+                'services/signing-service/scripts/verify-final.ts',
+                join(dir, 'bundle.json'),
+                join(dir, 'sealed.pdf'),
+                '--root',
+                pki.rootPem,
+                '--anchor',
+                join(dir, 'anchor.json'),
+              ],
+              { cwd: root, encoding: 'utf8', windowsHide: true },
+            );
+            return { code: r.status, report: JSON.parse(r.stdout) as Report };
+          };
+          const good = run(bundle.text, pdf);
+          expect(good.code, JSON.stringify(good.report)).toBe(0);
+          expect(good.report.status).toBe('intact');
+          expect(good.report.anchorMatches).toBe(true);
+          expect(good.report.evidence.evidenceInChain.length).toBeGreaterThan(0);
+          expect(good.report.seal.signatures.length).toBeGreaterThan(0);
+
+          // One byte of the sealed PDF changed: the seal is broken.
+          const flipped = new Uint8Array(pdf);
+          flipped[20] = (flipped[20] as number) ^ 1;
+          const badPdf = run(bundle.text, flipped);
+          expect(badPdf.code).toBe(1);
+          expect(badPdf.report.seal.ok).toBe(false);
+
+          // One evidence item changed: the item is named.
+          const altered = JSON.parse(bundle.text);
+          const item = altered.evidence.items[0];
+          item.canonical = item.canonical.replace('"p1"', '"p2"');
+          const badItem = run(JSON.stringify(altered), pdf);
+          expect(badItem.code).toBe(1);
+          expect(badItem.report.evidence.failedEvidence).toContain(item.id);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
       },
       300_000,
     );
