@@ -34,14 +34,20 @@ import type {
   StatusDetail,
   SyncState,
 } from './events.ts';
-import type { AssetsPort as PictureAssetsPort, JournalPort } from '@docedit/engine';
+import type { AssetsPort as PictureAssetsPort, GlyphCoverage, JournalPort } from '@docedit/engine';
 // A value import from the headless entry only: the view code stays in its own chunk.
-import { type RestorePlan, readRestorePlan, restoreBase } from '@docedit/engine/headless';
+import {
+  type RestorePlan,
+  discardForeignWork,
+  readRestorePlan,
+  restoreBase,
+} from '@docedit/engine/headless';
 import { pictureAssets } from './assets.ts';
 import { type IdbJournal, openIdbJournal } from './journal-idb.ts';
 import { AUTH_CODES, codeOf, messageOf, retryAfterMsOf } from './errors.ts';
 import type { FailureInfo } from './failure.ts';
 import { manifestFamilyLookup, readOnce, registerManifestFonts } from './font-loader.ts';
+import { loadGlyphCoverage, usedFamilies } from './font-coverage.ts';
 import type { HostApi } from './host-api.ts';
 import {
   DEFAULT_PRESENCE_BASELINE_MS,
@@ -101,6 +107,10 @@ export interface EditorHandle {
   suspend?(): void;
   /** Ends a suspension: the shell observes again and the core reopens the channel with a resume. */
   resume?(): void;
+  /** Warns that unsent work of another user was discarded (decision 47); absent in stand-in editors. */
+  noticeForeignWork?(): void;
+  /** Hands the core the character coverage of the fonts (FE-136 criterion 4); absent in stand-in editors. */
+  setGlyphCoverage?(coverage: GlyphCoverage | null): void;
   readonly saveState: ReadView<SyncState>;
   /** The confirmed `seq` (04 §7). */
   readonly confirmedSeq: ReadView<number> | null;
@@ -307,6 +317,15 @@ export class Session {
         return;
       }
       this.#idbJournal = journal;
+      // Unsent work of an earlier visit is sent again only for the same signed-in user; work of
+      // anyone else is discarded and the person is told (decision 47 of
+      // `docs/owner-decisions-2026-11-15.md`).
+      const signedIn = backend.auth.session?.user.id;
+      let foreignWork = false;
+      if (journal && signedIn !== undefined) {
+        const gone = await discardForeignWork(journal, this.docId, signedIn);
+        foreignWork = gone.commits > 0 || gone.queue;
+      }
       const plan = journal ? await readRestorePlan(journal, this.docId) : null;
       // The content the journal's work was made on: the document at the commit's `base`, pinned, so
       // that the work is sent again under its own identifier and rebased by the usual catch-up
@@ -338,6 +357,16 @@ export class Session {
       const editor = await this.#options.host.mount(content, fontAlias);
       if (this.closed) return editor.destroy();
       this.#editor = editor;
+      if (foreignWork) editor.noticeForeignWork?.();
+      // FE-136 criterion 4: the coverage of the fonts, so that a symbol the font lacks is flagged. It
+      // is read alongside the load; a manifest or a file that cannot be read leaves it unknown.
+      if (fonts && editor.setGlyphCoverage) {
+        void loadGlyphCoverage(fonts, usedFamilies(content.doc))
+          .then((coverage) => {
+            if (!this.closed) editor.setGlyphCoverage?.(coverage);
+          })
+          .catch(() => {});
+      }
 
       this.#phase = 'opening';
       const incarnation = resumeAt?.incarnation ?? content.incarnation;

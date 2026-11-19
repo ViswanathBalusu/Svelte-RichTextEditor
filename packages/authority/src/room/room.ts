@@ -1420,7 +1420,7 @@ export class Room {
     const ev = request.evidence as Partial<EvidenceAnchor> | undefined;
     if (
       !isObject(ev) ||
-      (ev.origin !== 'sign' && ev.origin !== 'rules') ||
+      (ev.origin !== 'sign' && ev.origin !== 'rules' && ev.origin !== 'decline') ||
       typeof ev.evidenceHash !== 'string' ||
       !/^[0-9a-f]{64}$/.test(ev.evidenceHash)
     )

@@ -28,4 +28,11 @@ declare module '@docedit/layout-kernel/wasm/docedit_layout_kernel.js' {
   export const faces_count: KernelGlueModule['faces_count'];
   export const faces_bytes_held: KernelGlueModule['faces_bytes_held'];
   export const font_epoch: KernelGlueModule['font_epoch'];
+  export const advance_units_per_point: KernelGlueModule['advance_units_per_point'];
+  export const shape_advances: KernelGlueModule['shape_advances'];
+  export const shape_width: KernelGlueModule['shape_width'];
+  export const face_line_metrics: KernelGlueModule['face_line_metrics'];
+  export const shape_cache_stats: KernelGlueModule['shape_cache_stats'];
+  export const shape_cache_clear: KernelGlueModule['shape_cache_clear'];
+  export const break_paragraph: KernelGlueModule['break_paragraph'];
 }

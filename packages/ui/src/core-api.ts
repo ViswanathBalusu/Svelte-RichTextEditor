@@ -764,6 +764,15 @@ export interface CoreApi {
   readonly refusal?: ReadView<RefusalNotice | null>;
   /** The last picture inserted without alternative text; the shell asks for it (FE-132 criterion 5). */
   readonly altRequest?: ReadView<{ readonly n: number; readonly asset: string } | null>;
+  /**
+   * The last symbol inserted in a font that has no glyph for it (FE-136 criterion 4; 09 §3.2); the
+   * shell flags it. `family` is null for the default face.
+   */
+  readonly glyphNotice?: ReadView<{
+    readonly n: number;
+    readonly char: string;
+    readonly family: string | null;
+  } | null>;
   /** The last deletion the core trimmed to the editable parts (FE-037 criterion 2); the shell announces it. */
   readonly trimmed?: ReadView<TrimNotice | null>;
   /** What the last Replace or Replace all did, with the counts (FE-060 criterion 3); the shell reports it. */
@@ -939,6 +948,8 @@ export interface CoreApi {
   readonly rules?: RulesService;
   /** The send dialog's checks and the send action (FRW-028). Absent: no "send for completion" command. */
   readonly workflowSend?: WorkflowSendService;
+  /** Adopting a signature and signing a field (FRW-045, FRW-046). Absent: signature fields cannot be signed here. */
+  readonly signing?: SigningService;
   /** Submits the participant's access code (FRW-039). Absent: the bar shows no code input. */
   readonly accessCode?: AccessCodeService;
   /** The math editor for equations (FE-070). Absent: an equation is not editable in the shell. */
@@ -1226,6 +1237,12 @@ export interface WorkflowSendService {
    * for the lock banner: who may still act (FRW-029 criterion 6). Empty until the resource is read.
    */
   readonly participants: ReadView<readonly WorkflowParticipantView[]>;
+  /**
+   * The sequence number of the commit the document was sent at (12 §6.1 `sentSeq`); null before the
+   * send or while the resource has not been read. The copy a stopped workflow offers starts from it
+   * (FRW-033 criterion 5). Absent: no copy is offered.
+   */
+  readonly sentSeq?: ReadView<number | null>;
   /** Reads the workflow resource again (the participants and the state). */
   refresh(): Promise<void>;
   /** Moves to the form field with this key; false when there is none. */
@@ -1235,6 +1252,58 @@ export interface WorkflowSendService {
   /** Asks the server to send; the state follows the answer. */
   send(): Promise<WorkflowSendOutcome>;
   /** Stops following the workflow; called when the editor is destroyed. */
+  dispose?(): void;
+}
+
+/** How a signature or initials image was made (12 §3.3; FRW-045). */
+export type SignatureMode = 'typed' | 'drawn' | 'uploaded';
+export type SignatureKind = 'signature' | 'initials';
+
+/** The value a signature field takes: the image asset and how it was made. */
+export interface SignatureAdoption {
+  readonly asset: string;
+  readonly mode: SignatureMode;
+}
+
+export type AdoptOutcome =
+  | { readonly ok: true; readonly adoption: SignatureAdoption }
+  // `rejected`: the asset worker refused the image (`asset.failed`); `failed`: anything else.
+  | { readonly ok: false; readonly reason: 'rejected' | 'failed' };
+
+export type SignOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'consent' | 'forbidden' | 'not_active' | 'failed' };
+
+/** A signature or initials field the participant activated (FRW-046 criterion 1). */
+export interface SignRequest {
+  /** Counts the requests, so that the same field activated twice is two requests. */
+  readonly n: number;
+  readonly id: string;
+  readonly key: string;
+  readonly kind: SignatureKind;
+  /** The field's label, the document's text. */
+  readonly label: string;
+  /** The name of the role the field belongs to, the document's text; null when it has none. */
+  readonly role: string | null;
+}
+
+/** The signing ceremony's adoption and sign steps over the backend (FRW-045, FRW-046). */
+export interface SigningService {
+  /** The field the participant activated, until the step is closed. */
+  readonly request: ReadView<SignRequest | null>;
+  /** The adoption made earlier for this kind and kept for the rest of the visit; null when none. */
+  adopted(kind: SignatureKind): SignatureAdoption | null;
+  /** Uploads the image through the asset worker and resolves once it is `ready`, or says why not. */
+  adopt(
+    kind: SignatureKind,
+    mode: SignatureMode,
+    image: Blob,
+    filename: string,
+  ): Promise<AdoptOutcome>;
+  /** Asks the server to sign the field with the adoption (`POST /documents/{id}/fields/{fid}/sign`). */
+  sign(fieldId: string, adoption: SignatureAdoption): Promise<SignOutcome>;
+  /** Closes the step without signing. */
+  dismiss(): void;
   dispose?(): void;
 }
 

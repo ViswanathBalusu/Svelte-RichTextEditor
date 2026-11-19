@@ -548,7 +548,9 @@ export type RefusalReason =
   // A pasted picture that was not added after its upload (FE-053 criterion 3): the upload failed or
   // the asset service did not accept the file, or its size cannot be used. No content is named.
   | 'upload-failed'
-  | 'invalid-size';
+  | 'invalid-size'
+  // Unsent work of an earlier visit belonged to another signed-in user and was discarded (decision 47).
+  | 'other-user';
 
 /** The last local change the region guard refused (FE-036): `n` counts refusals. */
 export interface RefusalNotice {
@@ -645,6 +647,19 @@ export interface EquationTarget {
 /** A request to open the math editor on an equation (FE-070): `n` counts requests. */
 export interface EquationRequest extends EquationTarget {
   n: number;
+}
+
+/** A signature or initials field the person activated, for the shell's signing step (FRW-046). */
+export interface SignFieldRequest {
+  /** Counts the requests, so that the same field activated twice is two requests. */
+  n: number;
+  id: string;
+  key: string;
+  kind: 'signature' | 'initials';
+  /** The field's label, the document's text. */
+  label: string;
+  /** The name of the field's role, the document's text; null when the field has none. */
+  role: string | null;
 }
 
 /**

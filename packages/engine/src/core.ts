@@ -82,6 +82,7 @@ import type {
   AssistantInsertOutcome,
   FieldFillOutcome,
   EquationRequest,
+  SignFieldRequest,
   EquationTarget,
   FindResult,
   FindState,
@@ -161,6 +162,14 @@ import {
   insertTableCaption,
 } from './captions-refs.ts';
 import { type ReferenceTarget, referenceTargets } from './reference-targets.ts';
+import {
+  type GlyphCoverage,
+  type GlyphNotice,
+  type MissingGlyph,
+  familyAtCaret,
+  lacksGlyph,
+  missingGlyphs,
+} from './glyph-check.ts';
 import { referenceGuardPlugin, referencePositions } from './referenced-targets.ts';
 import {
   EQUATION_NODES,
@@ -839,6 +848,13 @@ export class DocumentCore implements DocumentApi {
   /** The last picture that was inserted without alternative text, for the shell to ask for it (FE-132). */
   readonly altRequest: ReadValue<AltRequest | null>;
   #altRequests = 0;
+  /**
+   * The last symbol inserted in a font that has no glyph for it, for the shell to flag before the
+   * export stops on it (FE-136 criterion 4; 09 §3.2).
+   */
+  readonly glyphNotice: ReadValue<GlyphNotice | null>;
+  #glyphNotices = 0;
+  #glyphCoverage: GlyphCoverage | null = null;
   readonly mode: ReadValue<ModeState>;
   /** Suggestion mode at the caret, and why (FE-041 criterion 5). */
   readonly suggestion: ReadValue<SuggestionModeInfo>;
@@ -856,6 +872,11 @@ export class DocumentCore implements DocumentApi {
   readonly problem: ReadValue<CoreProblem | null>;
   /** The last request to open the math editor on an equation (FE-070); the shell opens it. */
   readonly equationRequest: ReadValue<EquationRequest | null>;
+  /**
+   * The last signature or initials field the person activated (FRW-046 criterion 1); the shell opens
+   * the adoption and signing step on it. Cleared when the step is closed.
+   */
+  readonly signRequest: ReadValue<SignFieldRequest | null>;
   readonly findState: ReadValue<FindState>;
   /** The proofing state and findings (UX-041); `available` is false without a proofing port. */
   readonly proofing: ReadValue<ProofingInfo>;
@@ -878,6 +899,7 @@ export class DocumentCore implements DocumentApi {
   #painted: FormatSnapshot | null = null;
   #problems = 0;
   #equationRequests = 0;
+  #signRequests = 0;
   /** The find (FE-059): the query, its matches in the body and the current one (0-based). */
   #find: {
     query: string;
@@ -1000,6 +1022,7 @@ export class DocumentCore implements DocumentApi {
     this.words = new ReadValue<number | null>(null, Object.is, hub);
     this.refusal = new ReadValue<RefusalNotice | null>(null, sameJson, hub);
     this.altRequest = new ReadValue<AltRequest | null>(null, sameJson, hub);
+    this.glyphNotice = new ReadValue<GlyphNotice | null>(null, sameJson, hub);
     this.#requested = config.mode ?? 'edit';
     this.#accessValue = config.access ?? null;
     this.#effective = effectiveMode(this.#requested, this.#accessValue);
@@ -1029,6 +1052,7 @@ export class DocumentCore implements DocumentApi {
     this.problem = new ReadValue<CoreProblem | null>(null, sameJson, hub);
     this.proofing = new ReadValue<ProofingInfo>(NO_PROOFING, sameJson, hub);
     this.equationRequest = new ReadValue<EquationRequest | null>(null, sameJson, hub);
+    this.signRequest = new ReadValue<SignFieldRequest | null>(null, sameJson, hub);
     this.findState = new ReadValue<FindState>(
       { query: '', count: 0, current: null },
       sameJson,
@@ -1729,11 +1753,36 @@ export class DocumentCore implements DocumentApi {
   }
 
   /**
-   * Moves the selection to a reference that blocked the last refused deletion, the next one at each
-   * call and the first again after the last (FE-133 criterion 5). References the reader may not
-   * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
-   * no reference is left to show.
+   * Tells the person that unsent work an earlier visit left behind belonged to someone else and
+   * was discarded (decision 47 of `docs/owner-decisions-2026-11-15.md`). The notice names nothing.
    */
+  noticeForeignWork(): void {
+    this.#refused({ reason: 'other-user', scopes: [] });
+  }
+
+  /**
+   * Gives the editor the character coverage of the fonts, as the host read it from the font files
+   * (FE-136 criterion 4). A family the function does not know is never flagged. Null removes it.
+   */
+  setGlyphCoverage(coverage: GlyphCoverage | null): void {
+    this.#glyphCoverage = coverage;
+  }
+
+  /** Every character of the body that its font lacks, in document order (09 §3.2). */
+  missingGlyphs(): MissingGlyph[] {
+    return this.#glyphCoverage === null ? [] : missingGlyphs(this.#state.doc, this.#glyphCoverage);
+  }
+
+  /** Publishes a notice when the symbol just inserted has no glyph in the font it is set in. */
+  #flagSymbol(before: EditorState, symbol: string): void {
+    const coverage = this.#glyphCoverage;
+    if (coverage === null) return;
+    const family = familyAtCaret(before.doc, before.selection.from, before.storedMarks);
+    if (lacksGlyph(coverage, family, symbol)) {
+      this.glyphNotice.set({ n: ++this.#glyphNotices, char: symbol, family });
+    }
+  }
+
   /**
    * What a cross-reference may point at, in this reader's document (FE-134 criterion 2): headings,
    * numbered paragraphs, captions, labelled equations and bookmarks, each with the text a reference
@@ -1743,6 +1792,12 @@ export class DocumentCore implements DocumentApi {
     return referenceTargets(this.#state.doc);
   }
 
+  /**
+   * Moves the selection to a reference that blocked the last refused deletion, the next one at each
+   * call and the first again after the last (FE-133 criterion 5). References the reader may not
+   * view are skipped. False, and nothing changes, when no deletion was refused for this reason or
+   * no reference is left to show.
+   */
   showReferences(): boolean {
     if (this.#referencedTargets.length === 0) return false;
     const doc = this.#state.doc;
@@ -1923,6 +1978,78 @@ export class DocumentCore implements DocumentApi {
     return (
       checkChange(this.#state.doc, tr.doc, tr.steps, tr.docs, this.#accessValue, false) === null
     );
+  }
+
+  /** The `form_field` with this id, or null. */
+  #formFieldById(id: string): PMNode | null {
+    let found: PMNode | null = null;
+    this.#state.doc.descendants((node) => {
+      if (found !== null) return false;
+      if (node.type.name === 'form_field' && node.attrs['id'] === id) found = node;
+      return found === null && node.type.name !== 'form_field';
+    });
+    return found;
+  }
+
+  /**
+   * Whether the person may sign the signature or initials field `id` now (FRW-046 criterion 2, as
+   * far as the client can tell; the server decides): the field is of that kind and not read-only,
+   * its role is one the participant holds, the participant is active and no rule hides or disables
+   * the field.
+   */
+  fieldSignable(id: string): boolean {
+    if (this.#effective === 'view') return false;
+    const node = this.#formFieldById(id);
+    if (node === null) return false;
+    const kind = node.attrs['kind'];
+    if (kind !== 'signature' && kind !== 'initials') return false;
+    if (node.attrs['readOnly'] === true) return false;
+    const role = node.attrs['assignee'];
+    const fill = this.#accessValue?.fill;
+    if (typeof role !== 'string' || !fill || !fill.active || !fill.roles.includes(role))
+      return false;
+    const rule = this.#fieldRules.of(id);
+    return rule === null || (rule.visible && rule.enabled);
+  }
+
+  /**
+   * Asks the shell to open the adoption and signing step on the field `id`, as activating it does
+   * (FRW-046 criterion 1). False when the field is not one this person may sign.
+   */
+  requestSign(id: string): boolean {
+    if (!this.fieldSignable(id)) return false;
+    const node = this.#formFieldById(id)!;
+    const label = node.attrs['label'];
+    const key = node.attrs['key'];
+    const role = node.attrs['assignee'];
+    this.signRequest.set({
+      n: ++this.#signRequests,
+      id,
+      key: typeof key === 'string' ? key : '',
+      kind: node.attrs['kind'] as 'signature' | 'initials',
+      label: typeof label === 'string' && label !== '' ? label : typeof key === 'string' ? key : id,
+      role: typeof role === 'string' ? this.#roleName(role) : null,
+    });
+    return true;
+  }
+
+  /** Closes the request for the adoption and signing step. */
+  clearSignRequest(): void {
+    this.signRequest.set(null);
+  }
+
+  /** The name of the role `id`, as the document defines it; the identifier when it has none. */
+  #roleName(id: string): string {
+    let name = id;
+    this.#state.doc.firstChild?.forEach((def) => {
+      if (
+        def.type.name === 'role_def' &&
+        def.attrs['id'] === id &&
+        typeof def.attrs['name'] === 'string'
+      )
+        name = def.attrs['name'];
+    });
+    return name;
   }
 
   /**
@@ -2325,10 +2452,12 @@ export class DocumentCore implements DocumentApi {
         return args.toc === undefined
           ? null
           : insertToc(state, this.#newId(), args.toc, { writable }, dispatch);
-      case 'insertSymbol':
-        return args.symbol === undefined
-          ? null
-          : insertSymbol(state, args.symbol, { writable }, dispatch);
+      case 'insertSymbol': {
+        if (args.symbol === undefined) return null;
+        const result = insertSymbol(state, args.symbol, { writable }, dispatch);
+        if (result.ok && dispatch) this.#flagSymbol(state, args.symbol);
+        return result;
+      }
       case 'insertCaption': {
         const caption = args.caption;
         if (caption === undefined) {
@@ -4319,6 +4448,7 @@ one or original. It is a
       ...(opts.clock ? { clock: opts.clock } : {}),
       ...(opts.retry ? { retry: opts.retry } : {}),
       ...(opts.journal ? { journal: opts.journal } : {}),
+      ...(opts.user !== undefined ? { user: opts.user } : {}),
     };
     this.#journalFailed = false;
     this.#serviceUnavailable = false;

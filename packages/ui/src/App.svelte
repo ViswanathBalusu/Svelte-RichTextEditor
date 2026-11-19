@@ -71,6 +71,7 @@
     PaneName,
     ProofingFindingView,
     ReadView,
+    SignRequest,
     ResolveUsers,
     SearchPrincipals,
     ViewName,
@@ -485,6 +486,28 @@
     });
   }
 
+  // A symbol the font lacks is flagged before the export stops on it (FE-136 criterion 4; 09 §3.2).
+  if (core.glyphNotice) {
+    const glyphs = core.glyphNotice;
+    let seen = glyphs.get()?.n ?? 0;
+    let serial = 0;
+    const stop = glyphs.subscribe(() => {
+      const next = glyphs.get();
+      if (!next || next.n === seen) return;
+      seen = next.n;
+      const family = next.family;
+      notice = {
+        kind: 'glyph',
+        key: family === null ? 'notice.glyph.missingDefault' : 'notice.glyph.missing',
+        count: 1,
+        params: family === null ? { char: next.char } : { char: next.char, family },
+        serial: ++serial + 1_000_000,
+      };
+      announce(notice.key, { count: 1, ...notice.params });
+    });
+    onDestroy(stop);
+  }
+
   // The mode in effect is announced when it changes (UX-015 criterion 6).
   if (core.mode) {
     const view = core.mode;
@@ -539,6 +562,7 @@
     | 'math'
     | 'version'
     | 'send'
+    | 'sign'
     | 'alt'
     | 'crossReference'
     | null
@@ -556,6 +580,22 @@
       if (dialog !== null) return;
       altAsset = request.asset;
       dialog = 'alt';
+    });
+    onDestroy(stop);
+  }
+  // A signature or initials field the participant activated opens the adoption and signing step
+  // (FRW-045, FRW-046 criterion 1); the service keeps the request until the step is closed.
+  let signRequest = $state.raw<SignRequest | null>(null);
+  if (core.signing) {
+    const signing = core.signing;
+    let seen = signing.request.get()?.n ?? 0;
+    const stop = signing.request.subscribe(() => {
+      const request = signing.request.get();
+      if (!request || request.n === seen) return;
+      seen = request.n;
+      if (dialog !== null) return;
+      signRequest = request;
+      dialog = 'sign';
     });
     onDestroy(stop);
   }
@@ -1633,6 +1673,7 @@
       ExportDialog,
       MathEditorDialog,
       SendDialog,
+      SignatureDialog,
       VersionDialog,
     } = dialogs}
     {#if dialog === 'math' && core.mathEditor && equation}
@@ -1674,6 +1715,16 @@
         service={core.workflowSend}
         onNavigate={goToCheck}
         onClose={() => (dialog = null)}
+      />
+    {:else if dialog === 'sign' && core.signing && signRequest}
+      <SignatureDialog
+        service={core.signing}
+        request={signRequest}
+        onClose={() => {
+          dialog = null;
+          signRequest = null;
+          core.signing?.dismiss();
+        }}
       />
     {:else if dialog === 'crossReference'}
       <CrossReferenceDialog

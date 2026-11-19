@@ -30,7 +30,7 @@ export interface Anchored {
 export async function anchorEvidence(
   deps: AnchorDeps,
   ref: DocRef,
-  evidence: { readonly origin: 'sign' | 'rules'; readonly evidenceHash: string },
+  evidence: { readonly origin: 'sign' | 'rules' | 'decline'; readonly evidenceHash: string },
 ): Promise<Anchored> {
   const item = await deps.outbox.enqueue({
     tenant: ref.tenant,

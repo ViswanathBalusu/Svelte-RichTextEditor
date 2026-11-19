@@ -100,6 +100,7 @@ const KNOWN_PARAMS = [
   'origin',
   'seq',
   'deliveryId',
+  'holdId',
 ];
 
 /** Client messages that take an identifier, and those that do not (05 §5). */
@@ -332,7 +333,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       });
       ids['webhook'] = made('webhook', hook, hook.json?.id);
       const hold = await asB('POST', `/v1/documents/${ids['doc']}/holds`, { reason: 'sweep' });
-      made('hold', hold, hold.json?.id);
+      ids['holdId'] = made('hold', hold, hold.json?.id);
       // B's workflow, so that the control reads and replaces an object of its own (FRW-025).
       const workflow = await h.call('PUT', `/v1/documents/${ids['doc']}/workflow`, {
         token: ownerB,

@@ -18,6 +18,7 @@
  * an unknown tree is left out, and an unknown atom is written as its fallback text.
  */
 import {
+  canonicalize,
   sha256HexBytes,
   utf8,
   type JsonEnvelope,
@@ -884,8 +885,11 @@ class Writer {
   rPr(marks: readonly JsonMark[] | undefined, po: PartOut, local: Map<string, string>): string {
     const rm = marksToValues(marks);
     const pm = (marks ?? []).find((m) => m.type === 'preserved');
-    const props =
+    let props =
       pm && !this.untrusted.mark.has(pm) ? this.tree(pm.attrs?.['props'] as JsonValue) : null;
+    // The identity-bound values of the run's residue are in the source map, not in the document.
+    const identity = props ? this.sm.runIdentity?.[canonicalize(props)] : undefined;
+    if (props && identity) props = restoreIdentity(props, identity);
     const items = mergeContainer(RPR, rm.values, elementsOf(props?.children), this.ctx, []);
     if (!items.length && !props?.attrs) return '';
     const pl = new Map(local);

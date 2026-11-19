@@ -297,6 +297,12 @@ export const EN_GB = {
     other:
       'Replaced {count} matches. Skipped {skipped}: you cannot change those parts of the document.',
   },
+  'notice.refused.otherUser':
+    'Unsent work from an earlier visit belonged to another person and was discarded. It was not sent.',
+  'notice.glyph.missing':
+    'The font {family} has no glyph for {char}. The PDF takes it from a fallback font if one has it; otherwise the export stops.',
+  'notice.glyph.missingDefault':
+    'The default font has no glyph for {char}. The PDF takes it from a fallback font if one has it; otherwise the export stops.',
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {
@@ -858,6 +864,46 @@ export const EN_GB = {
   'workflow.banner.voided': 'The workflow was voided. The document stays locked.',
   'workflow.banner.actors': 'May act now: {names}.',
   'workflow.banner.nobody': 'No one has to act now.',
+  // The adoption and signing step (FRW-045, FRW-046). Names and labels are the document's text.
+  'dialog.sign.title.signature': 'Adopt and use your signature',
+  'dialog.sign.title.initials': 'Adopt and use your initials',
+  'signature.intro': 'Choose how it is made. Typing is the default and needs no pointer.',
+  'signature.field': 'Field: {label}',
+  'signature.mode.label': 'How to make it',
+  'signature.mode.typed': 'Type it',
+  'signature.mode.drawn': 'Draw it',
+  'signature.mode.uploaded': 'Upload an image',
+  'signature.typed.signature': 'Your name as it will appear',
+  'signature.typed.initials': 'Your initials',
+  'signature.preview.label': 'Preview, as text',
+  'signature.preview.empty': 'Nothing typed yet.',
+  'signature.drawn.canvas': 'Drawing area',
+  'signature.drawn.hint': 'Draw with a pointer. If you cannot draw, choose Type it.',
+  'signature.drawn.clear': 'Clear the drawing',
+  'signature.uploaded.label': 'Image file (PNG or JPEG)',
+  'signature.problem.typed': 'Type your name first.',
+  'signature.problem.drawn': 'Draw something first.',
+  'signature.problem.file': 'Choose a PNG or JPEG image first.',
+  'signature.adopt': 'Adopt it',
+  'signature.adopting': 'Saving the image.',
+  'signature.adopted.signature': 'Your signature is adopted: {mode}.',
+  'signature.adopted.initials': 'Your initials are adopted: {mode}.',
+  'signature.change': 'Change it',
+  'signature.sign': 'Sign this field',
+  'signature.switch.signature': 'Adopt my signature instead',
+  'signature.switch.initials': 'Adopt my initials instead',
+  'signature.result.rejected': 'The image was refused. Choose another, or type your name instead.',
+  'signature.result.failed': 'The image could not be saved. Try again.',
+  'signature.sign.consent': 'Accept the consent text before signing.',
+  'signature.sign.forbidden': 'You may not sign this field.',
+  'signature.sign.not_active': 'It is not your turn to sign.',
+  'signature.sign.failed': 'The field could not be signed. Try again.',
+  'announce.signature.adopted': 'Signature adopted.',
+  'announce.initials.adopted': 'Initials adopted.',
+  'announce.signature.signed': 'Signed: {label}.',
+  'workflow.banner.reuse': 'Copy to a new document',
+  'workflow.banner.reuseRequested':
+    'Asked to copy the document as it was sent into a new document.',
   'notice.refused.workflow':
     'That change was not made: the document is out for completion and is locked.',
   'notice.rejected.workflow': {

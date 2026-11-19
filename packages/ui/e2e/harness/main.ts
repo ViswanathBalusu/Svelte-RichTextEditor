@@ -65,6 +65,11 @@ import {
 import { historyPort, type HistoryHarnessMode } from './his-009-history-port.ts';
 import { sendService, type SendHarnessLog, type SendHarnessMode } from './frw-028-send-port.ts';
 import { catchUpPort, type CatchUpHarnessMode } from './his-028-catch-up-port.ts';
+import {
+  signingService,
+  type SigningHarnessLog,
+  type SigningHarnessMode,
+} from './frw-045-signing-port.ts';
 
 const violations: string[] = [];
 document.addEventListener('securitypolicyviolation', (e) => {
@@ -75,6 +80,9 @@ document.addEventListener('securitypolicyviolation', (e) => {
 /** What the shell asked of the send service (FRW-028). */
 const sendLog: SendHarnessLog = { fields: [], suggestions: [], refreshes: 0, sends: 0 };
 let sendHandle: ReturnType<typeof sendService> | null = null;
+/** What the adoption and signing step asked of its service (FRW-045, FRW-046). */
+const signingLog: SigningHarnessLog = { adopts: [], signs: [], dismissed: 0 };
+let signingHandle: ReturnType<typeof signingService> | null = null;
 const errors: string[] = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => errors.push(String(e.reason)));
@@ -121,6 +129,8 @@ export interface MountOptions {
   history?: HistoryHarnessMode;
   /** The send dialog's service of FRW-028: see harness/frw-028-send-port.ts for the modes; absent: none. */
   send?: SendHarnessMode;
+  /** The adoption and signing step's service of FRW-045 and FRW-046: see harness/frw-045-signing-port.ts; absent: none. */
+  signing?: SigningHarnessMode;
   /** The catch-up port of HIS-028: with activity, without, failing, or a user who has not viewed the head. */
   catchUp?: CatchUpHarnessMode;
   share?: boolean;
@@ -623,6 +633,13 @@ function mountShell(options: MountOptions = {}): void {
     // The roles and the rules panes are stand-ins here; they need only be offered for the links.
     Object.assign(core, { workflowSend: sendHandle, roles: {}, rules: {} });
   }
+  if (options.signing) {
+    signingLog.adopts.length = 0;
+    signingLog.signs.length = 0;
+    signingLog.dismissed = 0;
+    signingHandle = signingService(options.signing, signingLog);
+    Object.assign(core, { signing: signingHandle });
+  }
   if (options.accessCode) {
     accessCodeLog.length = 0;
     const answers = options.accessCode;
@@ -1043,6 +1060,15 @@ const harness = {
   setSendFailures: (next: Parameters<ReturnType<typeof sendService>['setFailures']>[0]) =>
     sendHandle?.setFailures(next),
   setSendState: (next: string | null) => sendHandle?.setState(next),
+  /** What the adoption and signing step asked of its service (FRW-045), and a field the participant activates (FRW-046). */
+  signingLog: () => JSON.parse(JSON.stringify(signingLog)) as SigningHarnessLog,
+  activateSignature: (field: {
+    id: string;
+    key: string;
+    kind: 'signature' | 'initials';
+    label: string;
+    role: string | null;
+  }) => signingHandle?.activate(field),
   grantSaves: () => need().core.grants?.saves ?? [],
   /** The comment threads port (UX-028, UX-031): what was asked for, and what the core reports. */
   principalQueries: () => [...principalQueries],

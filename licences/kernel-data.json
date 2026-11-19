@@ -9,6 +9,42 @@
       "finding": "The crate is `(MIT OR Apache-2.0) AND Unicode-3.0`: its code is under MIT or Apache-2.0 and the tables under the Unicode licence. The Unicode licence (version 3, 2023) is permissive: it asks that the copyright and permission notice appear in the documentation or notices that accompany copies of the data. Unicode-3.0 is on the allow-list of licences/policy.json. The crate's LICENSE-UNICODE file is part of the element's third-party notices (scripts/release/release.ts writes the notices of the crates compiled into the module) and of its bill of materials.",
       "decision": "WASM-013, lane w6, 2026-11-18 (proposed; a maintainer confirms)",
       "expires": "2027-05-18"
+    },
+    {
+      "crate": "yoke",
+      "version": "0.8.4",
+      "data": "None: the crate has no data tables. It is in the dependency tree because HarfRust (the kernel's shaper, WASM-006) depends on read-fonts, which depends on yoke and zerofrom.",
+      "dataLicence": "Unicode-3.0 (the crate's own licence; no data)",
+      "finding": "The crate is yoke, a helper of part of the ICU4X project and its licence is Unicode-3.0 (MIT-style, with the Unicode notice). It is a zero-copy and ownership helper (a dependency of read-fonts and harfrust through the font parser) and carries no Unicode data tables: the licence is the project's, not a data licence. Unicode-3.0 is on the allow-list of licences/policy.json. Its LICENSE file is part of the element's third-party notices (scripts/release/release.ts) and of its bill of materials.",
+      "decision": "WASM-006, lane w6, 2026-11-18 (proposed; a maintainer confirms)",
+      "expires": "2027-05-18"
+    },
+    {
+      "crate": "yoke-derive",
+      "version": "0.8.4",
+      "data": "None: the crate has no data tables. It is in the dependency tree because HarfRust (the kernel's shaper, WASM-006) depends on read-fonts, which depends on yoke and zerofrom.",
+      "dataLicence": "Unicode-3.0 (the crate's own licence; no data)",
+      "finding": "The crate is yoke-derive, the derive macro of yoke, a helper of part of the ICU4X project and its licence is Unicode-3.0 (MIT-style, with the Unicode notice). It is a zero-copy and ownership helper (a dependency of read-fonts and harfrust through the font parser) and carries no Unicode data tables: the licence is the project's, not a data licence. Unicode-3.0 is on the allow-list of licences/policy.json. Its LICENSE file is part of the element's third-party notices (scripts/release/release.ts) and of its bill of materials.",
+      "decision": "WASM-006, lane w6, 2026-11-18 (proposed; a maintainer confirms)",
+      "expires": "2027-05-18"
+    },
+    {
+      "crate": "zerofrom",
+      "version": "0.1.8",
+      "data": "None: the crate has no data tables. It is in the dependency tree because HarfRust (the kernel's shaper, WASM-006) depends on read-fonts, which depends on yoke and zerofrom.",
+      "dataLicence": "Unicode-3.0 (the crate's own licence; no data)",
+      "finding": "The crate is zerofrom, a helper of part of the ICU4X project and its licence is Unicode-3.0 (MIT-style, with the Unicode notice). It is a zero-copy and ownership helper (a dependency of read-fonts and harfrust through the font parser) and carries no Unicode data tables: the licence is the project's, not a data licence. Unicode-3.0 is on the allow-list of licences/policy.json. Its LICENSE file is part of the element's third-party notices (scripts/release/release.ts) and of its bill of materials.",
+      "decision": "WASM-006, lane w6, 2026-11-18 (proposed; a maintainer confirms)",
+      "expires": "2027-05-18"
+    },
+    {
+      "crate": "zerofrom-derive",
+      "version": "0.1.8",
+      "data": "None: the crate has no data tables. It is in the dependency tree because HarfRust (the kernel's shaper, WASM-006) depends on read-fonts, which depends on yoke and zerofrom.",
+      "dataLicence": "Unicode-3.0 (the crate's own licence; no data)",
+      "finding": "The crate is zerofrom-derive, the derive macro of zerofrom, a helper of part of the ICU4X project and its licence is Unicode-3.0 (MIT-style, with the Unicode notice). It is a zero-copy and ownership helper (a dependency of read-fonts and harfrust through the font parser) and carries no Unicode data tables: the licence is the project's, not a data licence. Unicode-3.0 is on the allow-list of licences/policy.json. Its LICENSE file is part of the element's third-party notices (scripts/release/release.ts) and of its bill of materials.",
+      "decision": "WASM-006, lane w6, 2026-11-18 (proposed; a maintainer confirms)",
+      "expires": "2027-05-18"
     }
   ]
 }

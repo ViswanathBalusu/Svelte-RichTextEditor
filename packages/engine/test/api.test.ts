@@ -114,8 +114,19 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'suggestionLabel'
       // FE-134: what a cross-reference may point at, for the dialog.
       | 'referenceTargets'
+      // FE-136 criterion 4: the font coverage the host read, the characters it shows missing, and the
+      // notice for a symbol the font lacks.
+      | 'noticeForeignWork'
+      | 'setGlyphCoverage'
+      | 'missingGlyphs'
+      | 'glyphNotice'
       // FE-088: the ids of the blocks that changes touched, for the layout's dirty set.
-      | 'takeLayoutDirty';
+      | 'takeLayoutDirty'
+      // FRW-046: a signature or initials field the participant may sign, and the request the shell takes.
+      | 'fieldSignable'
+      | 'requestSign'
+      | 'signRequest'
+      | 'clearSignRequest';
     expectTypeOf<Exclude<keyof DocumentCore, Allowed>>().toEqualTypeOf<never>();
     type WebAllowed =
       | Allowed

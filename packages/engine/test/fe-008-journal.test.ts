@@ -175,7 +175,7 @@ describe('FE-008: the journal is written before a commit is sent', () => {
     await sleep(20);
     const { commits } = await journal.read(docId);
     // `incarnation` is the log's identifier at `base` (FE-009), not a credential.
-    const allowed = new Set(['docId', 'id', 'base', 'steps', 'origin', 'incarnation']);
+    const allowed = new Set(['docId', 'id', 'base', 'steps', 'origin', 'incarnation', 'user']);
     for (const c of commits) for (const k of Object.keys(c)) expect(allowed.has(k)).toBe(true);
     expect(JSON.stringify(commits)).not.toMatch(/token|bearer|authorization/i);
     detach();
