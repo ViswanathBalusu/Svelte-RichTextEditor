@@ -71,6 +71,8 @@ export function workflowSendService(
   let state: string | null = null;
   let participants: readonly { readonly roles: readonly string[] }[] = [];
   let views: readonly WorkflowParticipantView[] = [];
+  let sentSeq: number | null = null;
+  const sentSeqListeners = new Set<() => void>();
   const stateListeners = new Set<() => void>();
   const participantListeners = new Set<() => void>();
   const failureListeners = new Set<() => void>();
@@ -115,6 +117,11 @@ export function workflowSendService(
         })),
       );
       setState(value.state);
+      const seq = value.sentSeq ?? null;
+      if (seq !== sentSeq) {
+        sentSeq = seq;
+        for (const listener of [...sentSeqListeners]) listener();
+      }
     } catch (error) {
       // A document with no workflow resource yet is a draft with nobody bound.
       if (error instanceof PortError && error.code === 'not_found') {
@@ -148,6 +155,13 @@ export function workflowSendService(
       subscribe(listener) {
         participantListeners.add(listener);
         return () => participantListeners.delete(listener);
+      },
+    },
+    sentSeq: {
+      get: () => sentSeq,
+      subscribe(listener) {
+        sentSeqListeners.add(listener);
+        return () => sentSeqListeners.delete(listener);
       },
     },
     state: {

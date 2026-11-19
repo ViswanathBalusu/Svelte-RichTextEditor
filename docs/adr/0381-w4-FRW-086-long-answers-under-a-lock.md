@@ -1,6 +1,6 @@
 # ADR 0381: A long formatted answer in a locked document (FRW-086)
 
-**Status:** accepted, 2026-11-18. Written by lane w4 on 2026-11-17 as a proposal. The owner settled it as decision 132 of `docs/owner-decisions-2026-11-15.md` ("The participant may edit their granted region while the document is locked (review SR-M26, option a)"). Lane w4 applied option (a) on 2026-11-18: 07 §4 limit 1 and the 12 §6.2 row now carry the wording below, and `computeAccess` (`packages/authority/src/permissions/access.ts`) implements it. Still not done: the comparison of `resume` against `sentSeq` does not yet leave out the regions granted to roles (see "Effect on the freeze"); until it does, an edit in such a region counts as a change of the body at `resume` and resets the participants who had completed, which fails on the safe side.
+**Status:** accepted, 2026-11-18. Written by lane w4 on 2026-11-17 as a proposal. The owner settled it as decision 132 of `docs/owner-decisions-2026-11-15.md` ("The participant may edit their granted region while the document is locked (review SR-M26, option a)"). Lane w4 applied option (a) on 2026-11-18: 07 §4 limit 1 and the 12 §6.2 row now carry the wording below, and `computeAccess` (`packages/authority/src/permissions/access.ts`) implements it. The comparison of `resume` against `sentSeq` now leaves out the content of the regions granted to roles (`snapshotOf` with `grantedRegions`, read from the grants by the resume route; see "Effect on the freeze"). Corrected on 2026-11-18: the origin of such an edit is the client's own hint (`input` from the editor), as for any edit (08 §2), not a reserved server origin; the earlier text said `edit`.
 
 ## Context
 
@@ -32,7 +32,7 @@ The service records `sentSeq` and `sentHash` as 12 §6.2 says. They name the doc
 
 ### Attribution
 
-An edit by a role-granted participant is an ordinary commit by that participant's `sub`, with origin `edit` and the scope of the region. It is attributed, compared and shown in the history like any edit, with the participant's name from the workflow. It is not a fill: the origin is `edit`, so it is not subject to `field_invalid` or `conflict` of P9.
+An edit by a role-granted participant is an ordinary commit of kind `steps` by that participant's `sub`, with the origin the client sent (08 §2) and the scope of the region. It is attributed, compared and shown in the history like any edit, with the participant's name from the workflow. It is not a fill and not a server-authored value (P8): it carries none of the reserved origins `sign` or `rules`, so it is not subject to `field_invalid` or `conflict` of P9. The outcome check (07 §5) refuses the same participant any step outside the region, a step that reaches out of it, and a step that removes the region node itself.
 
 ### Under a signature
 
@@ -50,5 +50,6 @@ Proposed wording for the row "While `sent` or `in_progress`": "The authority acc
 
 ## Consequences
 
-- FRW-086 stays unticked in all three criteria: each asks for the owner's decision or for the spec text that follows from it.
+- FRW-086: all three criteria are ticked. The tests are `packages/authority/test/frw-086.granted-regions-snapshot.test.ts` and `services/document-service/test/control-plane/frw-086.region-under-lock.test.ts`. One open point stays with the owner: the checklist warning above (a signer ordered before a role that holds a region grant).
+- One observation, not decided here: `resume` compares the document with `sentSeq`, so a field a participant filled after the send is a change of a field of that participant, and it resets them when the owner resumes. This is how FRW-032 reads 12 §6.2 and is outside this story.
 - FRW-012 can then be finished: the connection of a bound participant needs `participantRoles`, which the token binding (FRW-038) supplies, and limit 1 needs the exception above.

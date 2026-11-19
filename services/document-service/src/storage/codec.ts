@@ -37,7 +37,7 @@ export interface CommitPayload {
    * The salted hash of the workflow evidence a control commit anchors (12 §7; FRW-041): the origin
    * (`sign` or `rules`) and the hash, nothing else. Absent from every other commit.
    */
-  evidence?: { origin: 'sign' | 'rules'; evidenceHash: string };
+  evidence?: { origin: 'sign' | 'rules' | 'decline'; evidenceHash: string };
 }
 
 /** The hashed metadata of one commit: the fields 08 §2 lists, in canonical form. */

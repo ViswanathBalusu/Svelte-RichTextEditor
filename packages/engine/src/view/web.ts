@@ -456,6 +456,10 @@ export class EditorCore extends DocumentCore {
               fillable: (id) => this.fieldFillable(id),
               rules: (id) => this.fieldRuleState(id),
               focused: (id) => this.selectField(id),
+              signable: (id) => this.fieldSignable(id),
+              signRequest: (id) => {
+                this.requestSign(id);
+              },
             },
             this.#fieldViews,
           ),

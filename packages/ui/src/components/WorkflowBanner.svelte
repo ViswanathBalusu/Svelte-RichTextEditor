@@ -9,7 +9,8 @@
   import { useShell } from '../context.ts';
   import type { WorkflowSendService } from '../core-api.ts';
   import { live } from '../live.ts';
-  import { lockBanner, type LockBanner } from '../shell/workflow-lock.ts';
+  import { capabilitiesAnywhere } from '../shell/modes.ts';
+  import { lockBanner, reuseSeq, type LockBanner } from '../shell/workflow-lock.ts';
 
   interface Props {
     service: WorkflowSendService;
@@ -24,6 +25,29 @@
   // svelte-ignore state_referenced_locally
   const participants = live(service.participants);
   const banner: LockBanner | null = $derived(lockBanner(state.current, participants.current));
+
+  // A declined or voided document can be reused: the owner asks the host to copy it as it was sent,
+  // and the host calls the fork with its service credential (FRW-033 criterion 5; HIS-022).
+  // svelte-ignore state_referenced_locally
+  const sentSeq = service.sentSeq ? live(service.sentSeq) : null;
+  const permissions = shell.core.permissions ? live(shell.core.permissions) : null;
+  const manage = $derived(
+    permissions ? capabilitiesAnywhere(permissions.current).has('manage') : false,
+  );
+  const reuse = $derived(
+    reuseSeq(
+      state.current,
+      sentSeq?.current ?? null,
+      manage,
+      shell.requestFork !== undefined,
+    ),
+  );
+
+  function requestReuse(): void {
+    if (reuse === null || shell.requestFork === undefined) return;
+    shell.requestFork(reuse);
+    shell.announce('workflow.banner.reuseRequested');
+  }
 </script>
 
 {#if banner}
@@ -45,6 +69,11 @@
           ? tr.t('workflow.banner.actors', { names: banner.actors.join(', ') })
           : tr.t('workflow.banner.nobody')}
       </span>
+    {/if}
+    {#if reuse !== null}
+      <button type="button" class="de-list-button" data-workflow-reuse onclick={requestReuse}>
+        {tr.t('workflow.banner.reuse')}
+      </button>
     {/if}
   </div>
 {/if}

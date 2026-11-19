@@ -5,6 +5,7 @@
 import { uuid7 } from '@docedit/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DepClient } from '../data-plane/client.ts';
+import { until } from '../data-plane/support.ts';
 import {
   documentWithRegions,
   skipReason,
@@ -259,6 +260,58 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         );
         expect((await h.parts.versions!.list(ref, { kind: 'sent' })).length).toBe(1);
       },
+    );
+
+    it.skipIf(skip)(
+      'sends wf.changed to each connected client, a participant with their own status only (criterion 4)',
+      async () => {
+        const doc = await h.createDocument({ content: document({ assignee: 'tenant' }) });
+        const owner = h.userToken({ [doc]: 'owner' }, { sub: `owner-027-${uuid7()}` });
+        const body = {
+          ...BODY(doc),
+          participants: [
+            { id: 'p1', roles: ['tenant'], kind: 'filler', order: 1, sub: 'sub-027-p1' },
+            { id: 'p2', roles: ['landlord'], kind: 'signer', order: 2, sub: 'sub-027-p2' },
+          ],
+        };
+        const made = await h.call('PUT', `/v1/documents/${doc}/workflow`, {
+          token: owner,
+          body,
+          headers: { 'if-match': '"0"' },
+        });
+        expect(made.status, made.text).toBe(201);
+
+        const open = async (token: string): Promise<DepClient> => {
+          const c = await DepClient.connect(`${h.base.replace(/^http/, 'ws')}/dep`);
+          clients.push(c);
+          expect((await c.hello(token)).t).toBe('welcome');
+          expect((await c.open(1, doc)).t).toBe('ch.opened');
+          return c;
+        };
+        const participantToken = (pid: string) =>
+          h.userToken({ [doc]: 'filler' }, { sub: `sub-027-${pid}`, wfp: pid });
+        const watcher = await open(owner);
+        const first = await open(participantToken('p1'));
+        const second = await open(participantToken('p2'));
+        const pushes = (c: DepClient) =>
+          c
+            .all('wf.changed', 1)
+            .map((m) => m.d as { state: string; participant?: { id: string; state: string } });
+
+        const r = await send(doc, owner);
+        expect(r.status, r.text).toBe(200);
+
+        for (const c of [watcher, first, second])
+          await until(() => pushes(c).some((p) => p.state === 'sent'), 5000, 'wf.changed');
+        // The owner is no participant: the state alone.
+        expect(pushes(watcher).at(-1)!.participant).toBeUndefined();
+        // A participant gets their own status and nobody else's.
+        expect(pushes(first).at(-1)!.participant).toEqual({ id: 'p1', state: 'active' });
+        expect(pushes(second).at(-1)!.participant).toEqual({ id: 'p2', state: 'waiting' });
+        expect(JSON.stringify(pushes(first))).not.toContain('p2');
+        expect(JSON.stringify(pushes(second))).not.toContain('p1');
+      },
+      60_000,
     );
   });
 }

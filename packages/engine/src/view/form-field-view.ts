@@ -46,6 +46,10 @@ export interface FormFieldPort {
   rules?(id: string): FieldRuleState | null;
   /** The control of the field took focus: the field is the one the person selected (FRW-073). */
   focused?(id: string): void;
+  /** Whether the person may sign the signature or initials field now (FRW-046). */
+  signable?(id: string): boolean;
+  /** The person activated a signature or initials field: the shell opens the signing step (FRW-046). */
+  signRequest?(id: string): void;
 }
 
 /** The kinds drawn as a native control. */
@@ -586,9 +590,113 @@ class FormFieldView implements NodeView, Refreshable {
   }
 }
 
+/** Whether a stored signature value is set: `{ asset, mode }` (12 §3.3). */
+function isSigned(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { asset?: unknown }).asset === 'string'
+  );
+}
+
+/**
+ * A signature or initials field (FRW-046 criterion 1): a button. Activating it, by click or by
+ * Enter or Space, asks the shell to open the adoption and signing step. The state is a word on the
+ * button ("Sign here", "Signed", "Not yet your turn"), never colour alone. A field that is signed, or
+ * that the person may not sign, is not a tab stop; the shell shows the signature image itself.
+ */
+class SignFieldView implements NodeView, Refreshable {
+  readonly dom: HTMLElement;
+  readonly #button: HTMLButtonElement;
+  readonly #port: FormFieldPort;
+  readonly #views: FormFieldViews;
+  #node: PMNode;
+
+  constructor(node: PMNode, port: FormFieldPort, views: FormFieldViews) {
+    this.#node = node;
+    this.#port = port;
+    this.#views = views;
+    const dom = document.createElement('span');
+    dom.className = 'de-form-field de-sign-field';
+    dom.setAttribute('data-kind', String(node.attrs['kind']));
+    dom.setAttribute('data-field', String(node.attrs['id']));
+    dom.contentEditable = 'false';
+    dom.style.display = 'inline-block';
+    dom.style.verticalAlign = 'baseline';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'de-sign-button';
+    button.style.font = 'inherit';
+    button.style.border = '1px solid currentColor';
+    button.style.padding = '0 0.4em';
+    button.addEventListener('click', this.#clicked);
+    dom.append(button);
+    this.dom = dom;
+    this.#button = button;
+    views.add(this);
+    this.#draw();
+  }
+
+  readonly #clicked = (): void => {
+    if (isSigned(this.#node.attrs['value'])) return;
+    this.#port.signRequest?.(String(this.#node.attrs['id']));
+  };
+
+  #draw(): void {
+    const node = this.#node;
+    const kind = String(node.attrs['kind']);
+    const noun = kind === 'initials' ? 'initials' : 'signature';
+    const label = node.attrs['label'];
+    const named = typeof label === 'string' && label !== '' ? label : String(node.attrs['key']);
+    const signed = isSigned(node.attrs['value']);
+    const signable = !signed && (this.#port.signable?.(String(node.attrs['id'])) ?? false);
+    const word = signed ? 'Signed' : signable ? `Sign ${noun}` : 'Not signed';
+    this.#button.textContent = word;
+    this.#button.setAttribute('aria-label', `${named}: ${word.toLowerCase()}`);
+    this.#button.disabled = !signable;
+    this.dom.toggleAttribute('data-signed', signed);
+    if (signed) this.#button.setAttribute('aria-disabled', 'true');
+    else this.#button.removeAttribute('aria-disabled');
+  }
+
+  refresh(): void {
+    this.#draw();
+  }
+
+  update(node: PMNode): boolean {
+    if (node.type !== this.#node.type) return false;
+    if (node.attrs['kind'] !== this.#node.attrs['kind']) return false;
+    if (node.attrs['id'] !== this.#node.attrs['id']) return false;
+    this.#node = node;
+    this.#draw();
+    return true;
+  }
+
+  stopEvent(event: Event): boolean {
+    return event.target instanceof Node && this.dom.contains(event.target);
+  }
+
+  ignoreMutation(): boolean {
+    return true;
+  }
+
+  destroy(): void {
+    this.#views.remove(this);
+    this.#button.removeEventListener('click', this.#clicked);
+  }
+}
+
 /** The node view of a `form_field`: a native control for the kinds a person fills by hand. */
 export function formFieldView(port: FormFieldPort, views: FormFieldViews): NodeViewConstructor {
   return (node, view) => {
+    const kind = String(node.attrs['kind']);
+    if (
+      (kind === 'signature' || kind === 'initials') &&
+      typeof node.attrs['id'] === 'string' &&
+      port.signRequest !== undefined &&
+      !isRedactionMarker(node.attrs['value'] as JsonValue | undefined)
+    )
+      return new SignFieldView(node, port, views);
     const drawn =
       CONTROL_KINDS.has(String(node.attrs['kind'])) &&
       typeof node.attrs['id'] === 'string' &&

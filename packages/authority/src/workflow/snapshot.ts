@@ -24,17 +24,27 @@ function rootOf(input: unknown): unknown {
   return isObj(input) && 'doc' in input ? input['doc'] : input;
 }
 
-/** The node with the `value` of every form field removed; the input is not changed. */
-function withoutValues(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(withoutValues);
+/**
+ * The node with the `value` of every form field removed, and the content of every region in
+ * `granted` emptied; the input is not changed.
+ */
+function withoutValues(node: unknown, granted: ReadonlySet<string>): unknown {
+  if (Array.isArray(node)) return node.map((n) => withoutValues(n, granted));
   if (!isObj(node)) return node;
+  const attrs = node['attrs'];
+  const emptied =
+    node['type'] === 'region' &&
+    isObj(attrs) &&
+    typeof attrs['id'] === 'string' &&
+    granted.has(attrs['id']);
   const out: Obj = {};
   for (const [k, v] of Object.entries(node)) {
     if (k === 'attrs' && node['type'] === 'form_field' && isObj(v)) {
       const rest: Obj = { ...v };
       delete rest['value'];
       out[k] = rest;
-    } else out[k] = withoutValues(v);
+    } else if (k === 'content' && emptied) out[k] = [];
+    else out[k] = withoutValues(v, granted);
   }
   return out;
 }
@@ -49,8 +59,17 @@ function fieldsOf(node: unknown, found: Obj[] = []): Obj[] {
   return found;
 }
 
-/** The body and the field values of a document, as the comparison of `resume` reads them. */
-export function snapshotOf(input: unknown): DocumentSnapshot {
+/**
+ * The body and the field values of a document, as the comparison of `resume` reads them.
+ * `grantedRegions` are the identifiers of the regions granted to roles. Their content is not part of
+ * the body, because a participant who holds the role may edit it while the workflow runs (07 §4
+ * limit 1; FRW-086). The region node and its attributes stay, so adding, removing or renaming the
+ * region is still a change of the body, and the values of fields inside it are still compared.
+ */
+export function snapshotOf(
+  input: unknown,
+  grantedRegions: ReadonlySet<string> = new Set(),
+): DocumentSnapshot {
   const root = rootOf(input);
   const fields: Record<string, string | null> = {};
   for (const attrs of fieldsOf(root)) {
@@ -59,7 +78,7 @@ export function snapshotOf(input: unknown): DocumentSnapshot {
     const value = attrs['value'];
     fields[key] = value === undefined || value === null ? null : canonicalize(value);
   }
-  return { body: canonicalize(withoutValues(root)), fields };
+  return { body: canonicalize(withoutValues(root, grantedRegions)), fields };
 }
 
 /**
