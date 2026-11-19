@@ -137,7 +137,7 @@ test('the kernel orders mixed-direction text as the browser does, for 1500 rando
       const mismatches: string[] = [];
       let compared = 0;
       for (const text of samples) {
-        if (skipArabicIndic && /[٠-٩]/.test(text)) continue;
+        if (skipArabicIndic && /[\u0660-\u0669\u2066-\u2069]/.test(text)) continue;
         for (const direction of directions) {
           const want = browserOrder(text, direction);
           // Only characters the browser gave a width to are compared (a mark has none).
@@ -159,7 +159,7 @@ test('the kernel orders mixed-direction text as the browser does, for 1500 rando
       // character (P2, P3): it gives right to left to `/"]aa` followed by Hebrew and Arabic, and
       // places trailing spaces differently. And it does not raise Arabic-Indic digits (class AN) to
       // level 2 in left-to-right text: `AN ] AN` stays in logical order where UAX #9 reverses it.
-      // So the run in WebKit compares the two explicit directions, on strings without such digits.
+      // It also orders text after an unmatched isolate initiator differently (`aa RLI [ 1`: UAX #9 puts the digit left of the bracket). So the run in WebKit compares the two explicit directions, on strings without such digits and without isolate controls.
       directions: browserName === 'webkit' ? ['ltr', 'rtl'] : ['ltr', 'rtl', 'auto'],
       skipArabicIndic: browserName === 'webkit',
     },
