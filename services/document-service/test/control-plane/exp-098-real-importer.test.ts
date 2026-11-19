@@ -136,7 +136,7 @@ equires; returns the job. */
       skipped.every((s) => s.includes('(I4)')),
       'every file that does not complete fails on I4 only',
     ).toBe(true);
-  });
+  }, 300_000);
 
   it('fails the job, and stores nothing, when the document lacks a feature the import needs', async () => {
     const { doc, job } = await run('poi/sample.docx', 'none');

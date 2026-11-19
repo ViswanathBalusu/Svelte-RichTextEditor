@@ -84,7 +84,7 @@ describe('EXP-115 criterion 2: field dates in the DOCX package', () => {
         )?.[1] ?? '';
       if (typeof c.expected !== 'string') {
         expect(result).toBe('');
-        expect(out.warnings.some((w) => /date field/.test(String(w.message ?? w)))).toBe(true);
+        expect(out.warnings.some((w) => /date field/.test(w))).toBe(true);
         return;
       }
       expect(result).toBe(c.expected);
