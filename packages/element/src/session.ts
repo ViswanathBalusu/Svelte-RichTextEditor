@@ -21,6 +21,7 @@ import type {
   Limits,
   PresencePort,
   AssistantPort,
+  CommentsPort,
   ProofingPort,
   Resume,
   SyncChannel,
@@ -95,6 +96,8 @@ export interface AttachAt {
   proofing?: ProofingPort;
   /** The backend's assistant port, when it has one (13 §6.2; UX-045). It has no feature name (G91). */
   assistant?: AssistantPort;
+  /** The backend's comment port (05 §6.2; feature `comments`): the core lists the threads and draws each range (FE-048). */
+  threads?: CommentsPort;
 }
 
 /** What the session needs from the mounted editor (the editing core and the shell). */
@@ -403,6 +406,7 @@ export class Session {
       // FE-046 criterion 2: the time of a suggestion is the server time of the commit that introduced it.
       if (backend.history && backend.features.has('history')) at.history = backend.history;
       if (backend.assistant) at.assistant = backend.assistant;
+      if (backend.comments && backend.features.has('comments')) at.threads = backend.comments;
       at.features = [...backend.features];
       this.#channel = channel;
       this.#detach = editor.attach(channel, at);

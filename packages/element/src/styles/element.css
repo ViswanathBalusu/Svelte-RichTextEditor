@@ -338,6 +338,16 @@ img.ProseMirror-separator {
   text-decoration-thickness: 2px;
 }
 
+/* A thread on a block (FE-048 criterion 1): a dashed outline, so the block is marked without colour. */
+.de-comment-block {
+  outline: 2px dashed currentcolor;
+  outline-offset: 2px;
+}
+
+.de-comment-block.de-comment-selected {
+  outline-style: solid;
+}
+
 .de-comment-selected {
   outline: 2px solid var(--de-focus, #0969da);
   outline-offset: 1px;
@@ -538,6 +548,9 @@ table.de-suggest-gone {
   /* A comment range keeps its underline under forced colours (FE-048 criterion 7). */
   .de-comment-range {
     text-decoration: underline dotted;
+  }
+  .de-comment-block {
+    outline: 2px dashed CanvasText;
   }
 }
 

@@ -241,6 +241,8 @@ import {
 } from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
+import { mapRanges } from '@docedit/authority';
+import { ConfirmedLog, type NoticeLike, ThreadSync, type ThreadReport } from './thread-sync.ts';
 import type { ThreadSelection } from './comment-decorations.ts';
 import { listSuggestions, type SuggestionItem } from './suggestion-list.ts';
 import {
@@ -336,6 +338,7 @@ import {
   type Discarded,
   type Effect,
   type SyncState,
+  type Confirmed,
   type Transition,
   initialState,
   insertedText,
@@ -883,6 +886,8 @@ export class DocumentCore implements DocumentApi {
   readonly proofing: ReadValue<ProofingInfo>;
   /** The client's copy of each thread's range, mapped through every change (FE-048). */
   readonly threadRanges: ReadValue<readonly (ThreadRange & { readonly id: string })[]>;
+  /** The threads that are on a block (a figure, a table or an equation), by the block's identifier (FE-048). */
+  readonly threadBlocks: ReadValue<readonly { readonly id: string; readonly block: string }[]>;
   /** The thread the comments pane chose; the body marks it and scrolls to it (UX-030). */
   readonly selectedThread: ReadValue<ThreadSelection | null>;
   /** The suggestion last revealed by next, previous or the review pane; the body scrolls to it (UX-036). */
@@ -895,6 +900,13 @@ export class DocumentCore implements DocumentApi {
   #suggestionLabel: SuggestionLabel | null = null;
   readonly #comments = new CommentRanges();
   #commentSeq = 0;
+  /** The confirmed commits since the client's first `seq`: a range reported earlier is mapped through them (FE-048). */
+  #threadLog = new ConfirmedLog(0);
+  /** Reports at a `seq` the client has not reached; placed when the confirmed document gets there. */
+  readonly #threadHeld = new Map<string, ThreadReport>();
+  /** The block each block thread is on (FE-048 criterion 1). */
+  readonly #blockThreads = new Map<string, string>();
+  #threadSync: ThreadSync | null = null;
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
   /** The formatting the painter took (UX-009). */
   #painted: FormatSnapshot | null = null;
@@ -1068,6 +1080,11 @@ export class DocumentCore implements DocumentApi {
       sameJson,
       hub,
     );
+    this.threadBlocks = new ReadValue<readonly { readonly id: string; readonly block: string }[]>(
+      [],
+      sameJson,
+      hub,
+    );
     this.markupView = new ReadValue<MarkupView>('all', Object.is, hub);
     this.selectedThread = new ReadValue<ThreadSelection | null>(null, sameJson, hub);
     this.revealedSuggestion = new ReadValue<{ readonly id: string; readonly n: number } | null>(
@@ -1130,6 +1147,16 @@ export class DocumentCore implements DocumentApi {
         },
         'Mod-y': () => {
           this.run('redo');
+          return true;
+        },
+        // FE-048 criterion 7: a thread is reached from the keyboard. The keys are a proposal (the
+        // spec names none): Alt+F8 and Shift+Alt+F8 move to the next and previous thread.
+        'Alt-F8': () => {
+          this.stepThread('next');
+          return true;
+        },
+        'Shift-Alt-F8': () => {
+          this.stepThread('previous');
           return true;
         },
       }),
@@ -3287,14 +3314,137 @@ one or original. It is a
     this.#publishThreadRanges();
   }
 
+  /**
+   * The service's place for a thread, at a `seq` (FE-048 criteria 1 and 4; 05 §5.6): a listed thread
+   * or a `thread.*` notice. The client replaces its copy and maps the range forward from `seq`,
+   * through the confirmed commits since and then through its unconfirmed steps, with the authority's
+   * own `mapRanges`. Answers `held` when `seq` is ahead of the confirmed document (the report is
+   * placed when the document gets there) and `stale` when `seq` is older than the commits the
+   * client keeps (the threads are listed again).
+   */
+  reportThread(threadId: string, report: ThreadReport): 'placed' | 'held' | 'stale' {
+    if (report.block !== undefined) {
+      this.#comments.remove(threadId);
+      this.#threadHeld.delete(threadId);
+      this.#blockThreads.set(threadId, report.block);
+      for (const api of this.#extApis) api.commentNoted(threadId);
+      this.#publishThreadRanges();
+      return 'placed';
+    }
+    if (!report.range) return 'stale';
+    if (report.seq > this.#sync.seq) {
+      this.#threadHeld.set(threadId, report);
+      return 'held';
+    }
+    const at = this.#threadLog.mapFrom(report.range, report.seq);
+    if (at === null) {
+      this.#threadHeld.delete(threadId);
+      return 'stale';
+    }
+    const local = unconfirmed(this.#sync).map((step) => step.getMap());
+    const [mapped] = local.length > 0 ? mapRanges([at], local) : [at];
+    this.#threadHeld.delete(threadId);
+    this.#blockThreads.delete(threadId);
+    this.#comments.set(threadId, { from: mapped!.from, to: mapped!.to }, this.#sync.seq);
+    for (const api of this.#extApis) api.commentNoted(threadId);
+    this.#publishThreadRanges();
+    return 'placed';
+  }
+
+  /**
+   * Starts a thread on a range or a block (05 §6.2). It is a control-plane request to the thread
+   * resource: no step is made, no commit is sent and the document does not change (FE-048 criterion
+   * 6). The thread is placed from the answer, or from its `thread.created` notice. Rejects when the
+   * backend has no comment port.
+   */
+  createThread(
+    target: { range: { from: number; to: number; baseSeq: number } } | { block: string },
+    comment: unknown,
+  ): Promise<string> {
+    const threads = this.#threadSync;
+    if (!threads) return Promise.reject(new Error('the backend has no comment port'));
+    return threads.create(target, comment);
+  }
+
+  /** Resolves or reopens a thread (05 §6.2): a request to the thread, never a commit (FE-048 criterion 6). */
+  setThreadState(threadId: string, state: 'open' | 'resolved'): Promise<void> {
+    const threads = this.#threadSync;
+    if (!threads) return Promise.reject(new Error('the backend has no comment port'));
+    return threads.setState(threadId, state);
+  }
+
+  /** The confirmed document moved: keep the maps, place the reports that are now reachable (FE-048). */
+  #threadsConfirmed(changes: readonly Confirmed[]): void {
+    let replaced = false;
+    for (const c of changes) {
+      this.#threadLog.record(c);
+      if (c.steps === null) replaced = true;
+    }
+    for (const [id, report] of [...this.#threadHeld])
+      if (report.seq <= this.#sync.seq) this.reportThread(id, report);
+    // After a reset or a reload the copies cannot be mapped: the service's listing replaces them.
+    if (replaced) void this.#threadSync?.load();
+  }
+
+  /**
+   * Moves the caret to the start of the next or previous thread in document order, wrapping at the
+   * ends, and chooses that thread (FE-048 criterion 7). A thread on a block selects the block. No
+   * step, no commit. Answers the thread's identifier, or null when no thread is drawn.
+   */
+  stepThread(direction: 'next' | 'previous'): string | null {
+    const stops: { id: string; pos: number; block: string | null }[] = [];
+    for (const id of this.#comments.ids()) {
+      const range = this.#comments.get(id)!;
+      if (!range.detached && range.to > range.from)
+        stops.push({ id, pos: range.from, block: null });
+    }
+    if (this.#blockThreads.size > 0) {
+      const wanted = new Map<string, string>();
+      for (const [id, block] of this.#blockThreads) wanted.set(block, id);
+      this.#state.doc.descendants((node, pos) => {
+        const block = node.attrs['id'] as string | undefined;
+        const id = block === undefined ? undefined : wanted.get(block);
+        if (id !== undefined && block !== undefined) stops.push({ id, pos, block });
+        return true;
+      });
+    }
+    if (stops.length === 0) return null;
+    stops.sort((a, b) => a.pos - b.pos);
+    const at = this.#state.selection.from;
+    let index: number;
+    if (direction === 'next') {
+      index = stops.findIndex((s) => s.pos > at);
+      if (index < 0) index = 0;
+    } else {
+      index = -1;
+      for (let k = stops.length - 1; k >= 0; k--)
+        if (stops[k]!.pos < at) {
+          index = k;
+          break;
+        }
+      if (index < 0) index = stops.length - 1;
+    }
+    const stop = stops[index]!;
+    const selection =
+      stop.block !== null && NodeSelection.isSelectable(this.#state.doc.nodeAt(stop.pos)!)
+        ? NodeSelection.create(this.#state.doc, stop.pos)
+        : TextSelection.near(this.#state.doc.resolve(stop.pos + (stop.block !== null ? 1 : 0)));
+    this.dispatch(this.#state.tr.setSelection(selection).scrollIntoView());
+    this.selectThread({ id: stop.id, block: stop.block });
+    return stop.id;
+  }
+
   /** Removes a thread's range (the thread was deleted) (FE-048). */
   removeThreadRange(threadId: string): void {
+    this.#threadHeld.delete(threadId);
+    this.#blockThreads.delete(threadId);
     this.#comments.remove(threadId);
     for (const api of this.#extApis) api.commentNoted(threadId);
     this.#publishThreadRanges();
   }
 
   #publishThreadRanges(): void {
+    this.threadBlocks.set([...this.#blockThreads].map(([id, block]) => ({ id, block })));
     this.threadRanges.set(this.#comments.ids().map((id) => ({ id, ...this.#comments.get(id)! })));
   }
 
@@ -4539,9 +4689,40 @@ one or original. It is a
         },
       );
     }
+    // FE-048: the service's threads are listed at the confirmed seq, and its `thread.*` notices place
+    // each range; the maps of later commits carry a range forward from the seq it was reported at.
+    let detachThreads: (() => void) | null = null;
+    if (opts.threads && (!opts.features || opts.features.includes('comments'))) {
+      this.#threadLog = new ConfirmedLog(opts.seq);
+      const threads = new ThreadSync(opts.threads, channel.docId, {
+        report: (id, report) => {
+          if (this.reportThread(id, report) === 'stale') void threads.load();
+        },
+        remove: (id) => this.removeThreadRange(id),
+        seq: () => this.#sync.seq,
+        failed: (message) => {
+          this.#problems++;
+          this.problem.set({
+            n: this.#problems,
+            code: 'threads_unavailable',
+            message,
+            fatal: false,
+          });
+        },
+      });
+      this.#threadSync = threads;
+      const unlisten = channel.onEvent((n: NoticeLike) => threads.onNotice(n));
+      detachThreads = () => {
+        unlisten();
+        threads.end();
+        if (this.#threadSync === threads) this.#threadSync = null;
+      };
+      void threads.load();
+    }
     this.#publish();
     return () => {
       session.end();
+      detachThreads?.();
       detachProofing?.();
       this.#presenceClient?.end();
       this.#presenceClient = null;
@@ -4682,11 +4863,14 @@ one or original. It is a
 
   /** Tells presence how the confirmed document moved, so that peers' positions are mapped (SYN-036). */
   #presenceConfirmed(t: Transition, seqBefore: number): void {
-    const presence = this.#presenceClient;
-    if (!presence) return;
-    if (t.confirmed) presence.confirmed(t.confirmed);
-    else if (t.state.seq !== seqBefore)
-      presence.confirmed([{ from: seqBefore, to: t.state.seq, steps: null }]);
+    const changes: readonly Confirmed[] | null = t.confirmed
+      ? t.confirmed
+      : t.state.seq !== seqBefore
+        ? [{ from: seqBefore, to: t.state.seq, steps: null }]
+        : null;
+    if (changes === null) return;
+    this.#threadsConfirmed(changes);
+    this.#presenceClient?.confirmed(changes);
   }
 
   /**
@@ -4861,7 +5045,9 @@ one or original. It is a
         };
         this.#publishSync();
         // The confirmed document is replaced as a whole here: peers' positions cannot be mapped (SYN-036).
-        this.#presenceClient?.confirmed([{ from: seqBefore, to: this.#sync.seq, steps: null }]);
+        const replaced = [{ from: seqBefore, to: this.#sync.seq, steps: null }];
+        this.#threadsConfirmed(replaced);
+        this.#presenceClient?.confirmed(replaced);
       },
       setCompositionProbe: (probe) => {
         this.#probe = probe;
@@ -4878,6 +5064,8 @@ one or original. It is a
     this.#proofing = null;
     this.#session?.end();
     this.#session = null;
+    this.#threadSync?.end();
+    this.#threadSync = null;
     if (this.#flushTimer !== null) clearTimeout(this.#flushTimer);
     this.#flushTimer = null;
     this.#words.stop();

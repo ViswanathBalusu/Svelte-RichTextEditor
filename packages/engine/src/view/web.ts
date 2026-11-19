@@ -578,6 +578,7 @@ export class EditorCore extends DocumentCore {
                 state.doc,
                 this.threadRanges.get(),
                 this.selectedThread.get(),
+                this.threadBlocks.get(),
               ).find(),
             )
             .add(state.doc, pageGuideDecorations(state.doc, this.#pageGuides).find())
@@ -606,6 +607,7 @@ export class EditorCore extends DocumentCore {
     // A change of the find state redraws the highlights at once (the view is not told by a transaction).
     // A change of a thread's range redraws its decoration at once (FE-048).
     const unthread = this.threadRanges.subscribe(() => this.#view?.setProps({}));
+    const unblocks = this.threadBlocks.subscribe(() => this.#view?.setProps({}));
     // A thread chosen in the comments pane is marked and brought into view (UX-030 criterion 2).
     const unselect = this.selectedThread.subscribe(() => {
       const v = this.#view;
@@ -673,6 +675,7 @@ export class EditorCore extends DocumentCore {
       remove();
       unfind();
       unthread();
+      unblocks();
       unselect();
       unreveal();
       unproof();
