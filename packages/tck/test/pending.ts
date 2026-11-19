@@ -29,8 +29,6 @@ export const PENDING: Readonly<Record<string, string>> = {
   'operation GET /documents/{id}/audit-segment': `the log segment for a third party (08 §12) is served and tested in the document service (HIS-037); a kit scenario follows with the history profile: ${HISTORY}`,
   'operation GET /documents/{id}/suggestions/{sid}/introduction': `the introducing commit of a suggestion (08 §14) is served and tested in the document service (HIS-042); a kit scenario follows with the history profile: ${HISTORY}`,
   'operation GET /documents/{id}/activity': `activity (08 §10): ${HISTORY}`,
-  'operation GET /documents/{id}/audit-segment': `audit segment of the hash chain (08 §12; HIS-037): ${HISTORY}`,
-  'operation GET /documents/{id}/suggestions/{sid}/introduction': `the commit that introduced a suggestion (08 §14; HIS-042): ${HISTORY}`,
   'operation GET /imports/{jid}':
     'imports take a service credential and arrive with EXP (G79; D16)',
   'operation GET /fonts': 'the font manifest has no shape and no feature yet (G75; G06)',

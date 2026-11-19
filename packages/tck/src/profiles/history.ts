@@ -432,7 +432,9 @@ export const HISTORY: ProfileDef = {
             await get(ctx, token, `${base}/attribution`, { atSeq: s.s3 }),
             200,
             `${who}: the attribution at the head`,
-          ).json as AttributionBody & { spans: Array<{ unknown?: boolean }> };
+          ).json as {
+            spans: Array<AttributionBody['spans'][number] & { unknown?: boolean }>;
+          };
           const named = head.spans.filter((x) => !x.unknown);
           for (const x of named)
             check(x.seq >= gate, `${who}: a named span is at or above the gate`, `>= ${gate}`, x);

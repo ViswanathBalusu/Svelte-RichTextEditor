@@ -28,6 +28,16 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/export-latex/src/fe-130-list-labels.compile.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when FE-134 closed (2026-11-18).
+  [
+    'captions-and-cross-references',
+    [
+      { path: 'packages/element/e2e/fe-134-cross-reference.spec.ts', kind: 'playwright' },
+      { path: 'packages/engine/test/fe-134-table-equation-captions.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-134-referenced-target.test.ts', kind: 'unit' },
+      { path: 'packages/export-latex/src/fe-134-numbers.compile.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-011 closed (2026-11-17).
   [
     'command-search',

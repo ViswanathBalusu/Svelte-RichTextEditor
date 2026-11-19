@@ -465,7 +465,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
         if (name === 'showReferences') return core.showReferences();
         // FE-134: `insertCaption` numbers the figure, table or selected equation the selection is on;
         // `insertCrossReference` takes the dialog's `{ target, format }` and inserts a `ref` field.
-        if (name === 'insertCaption') return core.run('insertCaption', { caption: { kind: 'here' } });
+        if (name === 'insertCaption')
+          return core.run('insertCaption', { caption: { kind: 'here' } });
         if (name === 'insertCrossReference') {
           const a = args as { target?: unknown; format?: unknown } | undefined;
           if (typeof a?.target !== 'string') return false;
@@ -600,7 +601,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The send dialog (FRW-028): the pre-send checks and the send action.
       ...(workflowSend ? { workflowSend } : {}),
       // The access code input of the guided bar (FRW-039): the participant's verify endpoint.
-      ...(fillActions ? { accessCode: { submit: (code: string) => fillActions.verify(code) } } : {}),
+      ...(fillActions
+        ? { accessCode: { submit: (code: string) => fillActions.verify(code) } }
+        : {}),
       // How suggestions are shown (UX-035), and the words that name them for assistive technology.
       markupView: core.markupView,
       setMarkupView: (view) => core.setMarkupView(view),

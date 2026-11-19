@@ -50,8 +50,11 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       (await h.call('GET', `/v1/documents/${doc}`, { token: h.apiKey })).json.legalHold;
     const audit = async (kind: string, doc: string) =>
       (
-        (await h.call('GET', `/v1/audit?kind=${kind}&document=${doc}&limit=50`, { token: h.apiKey }))
-          .json as { items: Array<{ actor: string; at: string; document: string; data?: unknown }> }
+        (
+          await h.call('GET', `/v1/audit?kind=${kind}&document=${doc}&limit=50`, {
+            token: h.apiKey,
+          })
+        ).json as { items: Array<{ actor: string; at: string; document: string; data?: unknown }> }
       ).items;
 
     it.skipIf(skip)(
