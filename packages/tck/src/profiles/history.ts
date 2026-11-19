@@ -27,7 +27,15 @@ interface DiffBody {
 }
 interface AttributionBody {
   seq: number;
-  spans: Array<{ blockId: string; from: number; to: number; user: string; seq: number }>;
+  spans: Array<{
+    blockId: string;
+    from: number;
+    to: number;
+    user: string;
+    seq: number;
+    /** Content written below the reader's gate: an unknown person (owner decision 37). */
+    unknown?: boolean;
+  }>;
 }
 
 /**
@@ -432,7 +440,7 @@ export const HISTORY: ProfileDef = {
             await get(ctx, token, `${base}/attribution`, { atSeq: s.s3 }),
             200,
             `${who}: the attribution at the head`,
-          ).json as AttributionBody & { spans: Array<{ unknown?: boolean }> };
+          ).json as AttributionBody;
           const named = head.spans.filter((x) => !x.unknown);
           for (const x of named)
             check(x.seq >= gate, `${who}: a named span is at or above the gate`, `>= ${gate}`, x);

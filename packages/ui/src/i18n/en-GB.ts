@@ -297,6 +297,12 @@ export const EN_GB = {
     other:
       'Replaced {count} matches. Skipped {skipped}: you cannot change those parts of the document.',
   },
+  'notice.refused.otherUser':
+    'Unsent work from an earlier visit belonged to another person and was discarded. It was not sent.',
+  'notice.glyph.missing':
+    'The font {family} has no glyph for {char}. The PDF takes it from a fallback font if one has it; otherwise the export stops.',
+  'notice.glyph.missingDefault':
+    'The default font has no glyph for {char}. The PDF takes it from a fallback font if one has it; otherwise the export stops.',
   'notice.trimmed.kept':
     'Part of that deletion was kept: you cannot change some of the text it covered.',
   'notice.rejected.permission': {

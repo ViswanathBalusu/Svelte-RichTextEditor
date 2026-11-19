@@ -8,6 +8,7 @@ import { KitFailure, check, equal, excludes, jsonEqual, oneOf } from '../assert.
 import type { ScenarioContext } from '../context.ts';
 import { IDS, contractDocument, insertText, longDocument, posIn } from '../documents.ts';
 import { scenario, type ScenarioDef } from '../scenario.ts';
+import { TEST_HOOKS_FEATURE, hook } from './fault-injection.ts';
 import {
   acked,
   ackedWithRetry,
@@ -376,6 +377,33 @@ export const CORE_CHANNELS: ScenarioDef[] = [
         'channel_limit',
         own ? { token: own } : {},
       );
+    },
+  }),
+  s({
+    id: 'channel.rejected.unavailable',
+    title: 'ch.open while the server cannot serve the document is rejected with unavailable',
+    spec: '05 §5.2, §11',
+    needs: { testMode: true },
+    covers: { messages: ['ch.rejected'], errors: ['unavailable'] },
+    async run(ctx) {
+      // Only a server that fails on demand lets the kit see this code. The hook is the one of the
+      // fault-injection profile (ADR 0219, owner decision 192; ADR 0398): POST /_test/database
+      // makes the store unreachable, so the room cannot be opened or kept.
+      if (!ctx.has(TEST_HOOKS_FEATURE))
+        ctx.skip(`the server does not announce ${TEST_HOOKS_FEATURE}`);
+      const doc = await ctx.document();
+      const w = await ctx.session('unavailable', { [doc]: 'editor' });
+      let down = false;
+      try {
+        const res = await hook(ctx, 'POST', '/database', { down: true });
+        check(res.status === 204, 'the database hook answers 204', '204', res.status);
+        down = true;
+        await rejectedWith(ctx, w, 1, doc, 'unavailable');
+      } finally {
+        if (down) await hook(ctx, 'POST', '/database', { down: false });
+      }
+      // The refusal is not final: once the store is back, the document opens.
+      await opened(ctx, w.wire, 2, doc, {});
     },
   }),
   s({

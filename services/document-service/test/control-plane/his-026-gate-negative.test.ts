@@ -441,7 +441,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       'attribution for a reader with no gate names the authors of every commit',
       async () => {
         const doc = await makeDoc('all');
-        const token = tokenOf(doc, SCENARIOS.find((x) => x.setting === 'all' && x.role === 'viewer')!);
+        const token = tokenOf(
+          doc,
+          SCENARIOS.find((x) => x.setting === 'all' && x.role === 'viewer')!,
+        );
         const r = await h.call('GET', `/v1/documents/${doc}/attribution?atSeq=${HEAD}`, { token });
         expect(r.status).toBe(200);
         const spans = r.json.spans as Array<{ unknown?: true; seq: number }>;

@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ownerAccess } from '../../test/fixtures.ts';
+import { COMMENT_RANGE_CLASS } from '../comment-decorations.ts';
 import type { AssetImageLookup } from '../image-source.ts';
 import { spikeDocument } from '../spike-document.ts';
 import { VersionView } from './version-web.ts';
@@ -111,6 +112,56 @@ describe.skipIf(!isBrowser)('an old version in the web view (HIS-010)', () => {
     }
   });
 
+  it('draws the comment ranges of the version in their positions of that time (HIS-010 criterion 4)', async () => {
+    // The position of the text in the document, found with a state of its own.
+    const probe = new EditorCore({
+      doc: spikeDocument(),
+      access: ownerAccess(),
+      schedule: (run) => queueMicrotask(run),
+    });
+    const probeHost = document.createElement('div');
+    document.body.append(probeHost);
+    const unmountProbe = probe.mountBody(probeHost);
+    let from = -1;
+    try {
+      viewsOf(probe).view!.state.doc.descendants((n, pos) => {
+        if (from < 0 && n.isText && n.text?.includes('Alpha')) from = pos;
+        return from < 0;
+      });
+    } finally {
+      unmountProbe();
+      probe.destroy();
+      probeHost.remove();
+    }
+    expect(from).toBeGreaterThan(0);
+    const view = VersionView.open(
+      {
+        seq: 4,
+        content: spikeDocument(),
+        time: '2026-11-01T10:00:00Z',
+        comments: [{ id: 'thread-then', from, to: from + 5 }],
+      },
+      { schedule: (run) => queueMicrotask(run) },
+    );
+    const host = document.createElement('div');
+    document.body.append(host);
+    const unmount = view.mount(host);
+    try {
+      await tick();
+      const marked = Array.from(host.querySelectorAll(`.${COMMENT_RANGE_CLASS}`));
+      expect(marked).toHaveLength(1);
+      expect(marked[0]!.textContent).toBe('Alpha');
+      // Still read-only, and still no channel.
+      expect(host.querySelector('[contenteditable]')?.getAttribute('contenteditable')).toBe(
+        'false',
+      );
+      expect(view.connection()).toBe('detached');
+    } finally {
+      unmount();
+      view.destroy();
+      host.remove();
+    }
+  });
   it('reports the blocks the user selected, for "who wrote this" (HIS-015)', async () => {
     const view = VersionView.open(
       { seq: 2, content: spikeDocument(), time: '2026-11-01T10:00:00Z' },

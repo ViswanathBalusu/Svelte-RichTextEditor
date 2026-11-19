@@ -16,6 +16,7 @@ import {
   type BatchOperation,
   type BlockBatch,
   type FaceRequest,
+  type MeasureRun,
   type FaceStatus,
   type FromWorker,
   type ToWorker,
@@ -191,6 +192,45 @@ export class LayoutWorker {
   }
 
   /**
+   * Shapes each block as one run (`runs[i]` for block `i`) and returns the advance of every code
+   * unit, in advance units, in the order of the blocks' text. The arrays of a `BlockBatch` are
+   * transferred. A refused run (an unknown face) rejects with its code and does not end the worker.
+   */
+  async measure(
+    runs: readonly MeasureRun[],
+    blocks: readonly string[] | BlockBatch,
+  ): Promise<Int32Array> {
+    const packed = Array.isArray(blocks)
+      ? packBlocks(blocks as readonly string[])
+      : (blocks as BlockBatch);
+    const units = packed.text.length;
+    const started = this.#now();
+    const answer = await this.#request({
+      type: 'measure',
+      id: 0,
+      runs,
+      text: packed.text,
+      offsets: packed.offsets,
+    });
+    if (answer.type === 'error') throw new LayoutWorkerError(answer.code, answer.message);
+    if (answer.type !== 'advances')
+      throw new LayoutWorkerError('worker_failed', 'the layout worker answered out of turn');
+    this.#record({
+      op: 'advances',
+      blocks: runs.length,
+      units,
+      workerMs: answer.ms,
+      roundTripMs: Math.round((this.#now() - started) * 1000) / 1000,
+    });
+    return answer.values;
+  }
+
+  #record(stat: BatchStat): void {
+    this.#stats.push(stat);
+    if (this.#stats.length > STAT_LIMIT) this.#stats.shift();
+  }
+
+  /**
    * Asks the worker to hold these font files for `owner` (`''` is the platform's fonts, anything
    * else a tenant), fetching and checking the ones it does not hold. Nothing else is loaded.
    */
@@ -235,7 +275,7 @@ export class LayoutWorker {
       try {
         // The typed arrays of a batch change owner here: the page keeps no copy.
         const transfer: ArrayBuffer[] = [];
-        if (stamped.type === 'batch')
+        if (stamped.type === 'batch' || stamped.type === 'measure')
           transfer.push(stamped.text.buffer as ArrayBuffer, stamped.offsets.buffer as ArrayBuffer);
         this.#worker.postMessage(stamped, transfer);
       } catch (error) {

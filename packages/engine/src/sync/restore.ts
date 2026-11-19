@@ -58,6 +58,37 @@ export async function readRestorePlan(
 }
 
 /**
+ * Removes the journal's unconfirmed work for `docId` when it was made by another signed-in user
+ * (decision 47 of `docs/owner-decisions-2026-11-15.md`: unsent work is sent again only for the same
+ * user, and otherwise discarded after a warning). The owner of the work is the user written with
+ * its commit, or with its queue when no commit is left; work with no user written (a journal of
+ * before this rule) is kept, since nothing says whose it is. Returns how many commits and whether
+ * a queue were discarded; the caller gives the warning.
+ */
+export async function discardForeignWork(
+  journal: JournalPort,
+  docId: string,
+  user: string,
+): Promise<{ readonly commits: number; readonly queue: boolean }> {
+  let held;
+  try {
+    held = await journal.read(docId);
+  } catch {
+    return { commits: 0, queue: false };
+  }
+  const foreign = (owner: string | undefined): boolean => owner !== undefined && owner !== user;
+  const commits = held.commits.filter((e) => e.docId === docId && foreign(e.user));
+  const queueForeign = held.queue.length > 0 && foreign(held.queueAt?.user);
+  try {
+    for (const entry of commits) await journal.remove(docId, entry.id);
+    if (queueForeign) await journal.setQueue(docId, []);
+  } catch {
+    return { commits: 0, queue: false };
+  }
+  return { commits: commits.length, queue: queueForeign };
+}
+
+/**
  * The document the plan's work was made on: the `seq` to load the content at, and the incarnation to
  * resume with. Null when the journal does not say (a queue written before FE-009).
  */

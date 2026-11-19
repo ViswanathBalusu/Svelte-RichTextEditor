@@ -1853,6 +1853,14 @@ class Importer {
       const props: TreeBody = {};
       if (Object.keys(rPrAttrs).length) props.attrs = rPrAttrs;
       if (read.residue.length) props.children = read.residue;
+      // Identity-bound values go to the source map, keyed by the canonical text of what stays in
+      // the mark (EXP-116 criterion 3). Runs with equal residue share the first run's values: they
+      // are editing-session identifiers, and any one of them is valid for Word.
+      const identityTree = splitIdentity(props, IDENTITY_ATTRS);
+      if (identityTree.length) {
+        const runIdentity = (this.sm.runIdentity ??= {});
+        runIdentity[canonicalize(props)] ??= identityTree;
+      }
       if (!this.fits(props, 'preserved mark')) return null;
       marks.push({ type: 'preserved', attrs: { props: props as unknown as JsonValue } });
     }

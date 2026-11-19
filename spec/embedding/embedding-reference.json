@@ -99,8 +99,8 @@
       "kind": "property",
       "static": false,
       "access": "read/write",
-      "signature": "readonly unknown[]",
-      "summary": "Host-registered extensions (13 §7, 05 §8.1). A change while the shell is mounted is applied at once (UX-050)."
+      "signature": "readonly HostExtension[]",
+      "summary": "Host-registered extensions (13 §7, 05 §8.1; the entry type is `HostExtension`). A change while the shell is mounted is applied at once (UX-050). A value that is not an array gives no extensions."
     },
     {
       "name": "headerState",
@@ -147,8 +147,8 @@
       "kind": "method",
       "static": false,
       "access": "call",
-      "signature": "exec(command: CommandName | (string & {}), args?: CommandArgs): boolean",
-      "summary": "Runs a command through the path the toolbar uses; false when it does not apply, is unknown or no document is loaded (PRO-085). `command` is an identifier of the command registry such as `format.bold` (UX-005), or a name of the editing core such as `bold`."
+      "signature": "exec(command: CommandName | (string & {}), args?: CommandArgs): ExecOutcome",
+      "summary": "Runs a command through the path the toolbar uses (PRO-085). The answer is `{ ok, reason }` (owner decision 188): `ok` is false when the command is unknown, is not allowed for this user or mode, changed nothing, or no document is loaded, and `reason` is a code that says which (see `ExecReason`). `command` is an identifier of the command registry such as `format.bold` (UX-005), or a name of the editing core such as `bold`."
     },
     {
       "name": "queryCommand",
@@ -971,6 +971,12 @@
       "type": "boolean",
       "default": "false",
       "summary": "Experimental, for spike evidence only: use the nonce <style> element even where constructable stylesheets work."
+    },
+    {
+      "name": "features",
+      "type": "object",
+      "default": "{\"comments\":true,\"export\":true,\"history\":true,\"assistant\":true}",
+      "summary": "Feature switches (PRO-081; owner decision 89). Each group is on unless its key is false: comments (comments and suggestions), export (export and print), history, and assistant (assistant and proofing). A group that is off has no controls when the editor loads; it is not a permission, and the server still decides what a caller may do. Any other value, or a key that is not a group, is ignored."
     },
     {
       "name": "pageGuides",

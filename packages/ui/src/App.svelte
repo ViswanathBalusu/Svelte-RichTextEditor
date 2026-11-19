@@ -486,6 +486,28 @@
     });
   }
 
+  // A symbol the font lacks is flagged before the export stops on it (FE-136 criterion 4; 09 §3.2).
+  if (core.glyphNotice) {
+    const glyphs = core.glyphNotice;
+    let seen = glyphs.get()?.n ?? 0;
+    let serial = 0;
+    const stop = glyphs.subscribe(() => {
+      const next = glyphs.get();
+      if (!next || next.n === seen) return;
+      seen = next.n;
+      const family = next.family;
+      notice = {
+        kind: 'glyph',
+        key: family === null ? 'notice.glyph.missingDefault' : 'notice.glyph.missing',
+        count: 1,
+        params: family === null ? { char: next.char } : { char: next.char, family },
+        serial: ++serial + 1_000_000,
+      };
+      announce(notice.key, { count: 1, ...notice.params });
+    });
+    onDestroy(stop);
+  }
+
   // The mode in effect is announced when it changes (UX-015 criterion 6).
   if (core.mode) {
     const view = core.mode;

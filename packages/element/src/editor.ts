@@ -581,6 +581,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       // The shell's notices for a refused local change and for work set aside (UX; 07 §9), and for a
       // deletion the core trimmed to the parts the user may change (FE-037 criterion 2).
       refusal: core.refusal,
+      altRequest: core.altRequest,
+      glyphNotice: core.glyphNotice,
       recovered: core.recovered,
       trimmed: core.trimmed,
       // The report of Replace and Replace all: how many matches changed and how many were skipped (FE-060).
@@ -777,6 +779,13 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     setAccess(access: Access) {
       core.setAccess(access);
+    },
+    noticeForeignWork() {
+      core.noticeForeignWork();
+    },
+    // FE-136 criterion 4: the coverage of the fonts, read from the manifest's files.
+    setGlyphCoverage(coverage) {
+      core.setGlyphCoverage(coverage);
     },
     setMode(mode: EditMode) {
       core.setMode(mode);
