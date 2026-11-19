@@ -16,6 +16,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { KERNEL_FILES, createKernel, type KernelGlue, type LayoutKernel } from '../src/index.ts';
+import type { HyphenationManifest } from '../src/hyphenation.ts';
 
 /** The build of the kernel: `pnpm --filter @docedit/layout-kernel build:wasm` writes it. */
 export const KERNEL_DIST = resolve(import.meta.dirname, '../dist');
@@ -94,3 +95,17 @@ export function loadManifestFaces(
   }
   return { aliases, added };
 }
+
+/** The folder of the bundled hyphenation patterns (`scripts/hyphenation-patterns.ts` writes it). */
+export const PATTERNS_DIR = resolve(import.meta.dirname, '../patterns');
+
+/** `patterns/manifest.json`: the languages that can be loaded, and the ones that are refused. */
+export function readHyphenationManifest(dir: string = PATTERNS_DIR): HyphenationManifest {
+  return JSON.parse(readFileSync(resolve(dir, 'manifest.json'), 'utf8')) as HyphenationManifest;
+}
+
+/** The reader `ensureHyphenation` wants, over the folder of the patterns. */
+export const hyphenationReader =
+  (dir: string = PATTERNS_DIR) =>
+  (file: string): Promise<Uint8Array> =>
+    Promise.resolve(new Uint8Array(readFileSync(resolve(dir, file))));

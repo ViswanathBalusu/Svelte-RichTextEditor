@@ -15,7 +15,7 @@
 import { packParagraph, unpackLines, type BrokenLine, type ParagraphInput } from './paragraph.ts';
 
 /** The version of the kernel's call interface that this package expects of the crate. */
-export const KERNEL_ABI_VERSION = 4;
+export const KERNEL_ABI_VERSION = 5;
 
 /** The files that `build:wasm` writes to `dist/`, by role. */
 export const KERNEL_FILES = {
@@ -75,7 +75,21 @@ export interface KernelGlue {
     geometry: Int32Array,
     tab_stops: Int32Array,
     justify: boolean,
+    hyphenate: boolean,
   ): Int32Array;
+  hyphen_load(
+    tag: string,
+    patterns: string,
+    exceptions: string,
+    left: number,
+    right: number,
+  ): number;
+  hyphen_alias(alias: string, tag: string): boolean;
+  hyphen_release(tag: string): boolean;
+  hyphen_release_all(): void;
+  hyphen_has(tag: string): boolean;
+  hyphen_tags(): string;
+  hyphenate_word(tag: string, word: Uint16Array): Uint32Array;
 }
 
 /** The codes of a run that was not shaped (crates/layout-kernel/src/shaping.rs). */
@@ -126,6 +140,43 @@ export interface KernelFaces {
   bytesHeld(): number;
   /** The font epoch: the number of faces loaded in this instance. */
   epoch(): number;
+}
+
+/** The codes of a hyphenation language that was refused (crates/layout-kernel/src/hyphenate.rs). */
+export type HyphenErrorCode = 'empty_tag' | 'no_patterns' | 'bad_minimum';
+
+/** A hyphenation language the kernel refused. `code` is the crate's code. */
+export class KernelHyphenError extends Error {
+  override name = 'KernelHyphenError';
+  readonly code: string;
+  constructor(code: string) {
+    super(code);
+    this.code = code;
+  }
+}
+
+/**
+ * The hyphenation languages a kernel holds (WASM-009; 02 §9.3). A language is the text of its TeX
+ * pattern file and of its exception file, loaded when a document needs it; the kernel holds none
+ * of its own. Text in a language that is not held is not hyphenated.
+ */
+export interface KernelHyphenation {
+  /**
+   * Holds a language under its BCP 47 tag, replacing one held before. `left` and `right` are the
+   * minimum characters before and after a hyphen (1 to 8). Returns the number of patterns. Throws
+   * `KernelHyphenError`.
+   */
+  load(tag: string, patterns: string, exceptions: string, left: number, right: number): number;
+  /** Lets a tag (`en`) stand for a held language. False when `tag` is not held. */
+  alias(alias: string, tag: string): boolean;
+  release(tag: string): boolean;
+  releaseAll(): void;
+  /** True when text tagged `tag` would be hyphenated (the tag, or the tag cut short, is held). */
+  has(tag: string): boolean;
+  /** The tags held, ascending. */
+  tags(): string[];
+  /** The UTF-16 offsets of `word` at which a hyphen may stand; empty when the language is not held. */
+  word(tag: string, word: string): number[];
 }
 
 /** What a run is shaped with: the face, the size, the language and the features of the painter. */
@@ -196,6 +247,7 @@ export interface LayoutKernel {
   sha256(data: Uint8Array): string;
   readonly faces: KernelFaces;
   readonly shaper: KernelShaper;
+  readonly hyphenation: KernelHyphenation;
   /**
    * The size of the module's linear memory in bytes (faces included), or `null` when the start did
    * not hand it over.
@@ -340,10 +392,29 @@ export function finishKernel(glue: Omit<KernelGlue, 'initSync'>, output?: unknow
               p.geometry,
               p.tabStops,
               paragraph.justify === true,
+              paragraph.hyphenate === true,
             ),
           ),
         );
       },
+    },
+    hyphenation: {
+      load: (tag, patterns, exceptions, left, right) => {
+        try {
+          return glue.hyphen_load(tag, patterns, exceptions, left, right);
+        } catch (error) {
+          throw new KernelHyphenError(error instanceof Error ? error.message : String(error));
+        }
+      },
+      alias: (alias, tag) => glue.hyphen_alias(alias, tag),
+      release: (tag) => glue.hyphen_release(tag),
+      releaseAll: () => glue.hyphen_release_all(),
+      has: (tag) => glue.hyphen_has(tag),
+      tags: () => {
+        const joined = glue.hyphen_tags();
+        return joined === '' ? [] : joined.split(',');
+      },
+      word: (tag, word) => Array.from(glue.hyphenate_word(tag, utf16Units(word))),
     },
     memoryBytes: () => memoryOf(output)?.buffer.byteLength ?? null,
   };
@@ -351,3 +422,4 @@ export function finishKernel(glue: Omit<KernelGlue, 'initSync'>, output?: unknow
 
 export * from './batch.ts';
 export * from './paragraph.ts';
+export * from './hyphenation.ts';

@@ -14,11 +14,13 @@
       "types": "./node/index.ts",
       "default": "./node/index.ts"
     },
-    "./wasm/*": "./dist/*"
+    "./wasm/*": "./dist/*",
+    "./patterns/*": "./patterns/*"
   },
   "files": [
     "src",
     "node",
+    "patterns",
     "dist"
   ],
   "scripts": {
@@ -26,6 +28,7 @@
     "build:wasm": "node scripts/build.ts build",
     "test:native": "node scripts/build.ts test",
     "test:wasm": "node scripts/build.ts build && vitest run --root ../.. --project node packages/layout-kernel",
+    "patterns": "node scripts/hyphenation-patterns.ts",
     "verify:reproducible": "node scripts/build.ts verify"
   },
   "license": "Apache-2.0"
