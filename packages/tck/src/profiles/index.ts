@@ -24,6 +24,7 @@ import { PERM_SUGGEST } from './perm-suggest.ts';
 import { PERM_DOC, PERM_REGION } from './perm.ts';
 import { PRESENCE } from './presence.ts';
 import { REGISTRY_PROFILE } from './registry.ts';
+import { RULES_PROFILE } from './rules.ts';
 import { SEMANTICS } from './semantics.ts';
 import { WEBHOOKS_PROFILE } from './webhooks.ts';
 
@@ -50,6 +51,7 @@ export const PROFILES: readonly ProfileDef[] = [
   FUZZ,
   FIELDS,
   PERM_FILL,
+  RULES_PROFILE,
   CORE_RELAY_PROFILE,
   PERM_SUGGEST,
   HISTORY,

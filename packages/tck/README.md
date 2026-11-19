@@ -56,6 +56,7 @@ profile whose requirement the server does not meet is reported as skipped, with 
 | `fuzz` | mode `authority` | Fuzzing of the envelope parser and of step validation. |
 | `fields` | feature `fields` | Fillable fields (12 §4). |
 | `perm-fill` | feature `fields` | Fill permissions (12): a property test of a participant minted with the `wfr` roles claim (FRW-066). |
+| `rules` | features `rules`, `fields` | The rules fixtures (12 §5; FRW-020): each `rules` case of the published set is one scenario named by the fixture identifier, judged through fills and saves over DEP. Cases that need the server clock, formula values or messages are judged by `authority-service` (`evaluate-rules`). |
 | `core-relay` | mode `relay` | Relays only (05 §9). One scenario: discovery says `relay` and announces none of `regions`, `suggest-enforced`, `fields` (PRO-124). The scenarios that submit commits to a relay (`stale_base` on a base that is not the head; commits at the head stored and relayed unchanged) wait for a relay server that speaks DEP. |
 | `perm-suggest` | feature `suggest-enforced` | Suggestion-only rule (07 §5.2); built (PRO-118), run against the mock backend. Scope: `ins`, `del` and `fmt` marks on text in a paragraph; block-level suggestions (paragraphs, whole table rows, whole tables) are tested in `packages/authority`, not in the profile (PRM-062). |
 | `history` | feature `history` | History, versions, comparison, attribution, restore; not yet built (PRO-119). |
@@ -74,7 +75,7 @@ roadmap, with the `core` scenarios first. The order after `core` is a proposal r
 1. `core`. Nothing else can be checked until discovery, authentication, channels and sync work.
 2. The mode profiles that need nothing else: `semantics`, `perm-doc`, `authz`, `registry`, `fuzz`.
 3. The feature profiles for the features the server announces, in the order of 05 §11: `presence`,
-   `perm-region`, `exports`, `assets`, `fields`, `perm-fill`, `perm-read`, `perm-suggest`.
+   `perm-region`, `exports`, `assets`, `fields`, `perm-fill`, `rules`, `perm-read`, `perm-suggest`.
 4. The profiles of the phase 2 features, when the server implements them: `history`, `comments`,
    `webhooks`, `leases`.
 5. `authority-service` and `core-relay`, when the server is a second kind of backend.
