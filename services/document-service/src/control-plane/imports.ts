@@ -37,6 +37,11 @@ export const DOCX_CONTENT_TYPE =
 export interface ImportedDocument {
   envelope: unknown;
   warnings: ReadonlyArray<string | Record<string, unknown>>;
+  /**
+   * How much of the file the model keeps as preserved data and what that costs in bytes (EXP-116
+   * criterion 5): the job's `preservation` member. Counts and bytes only, never content.
+   */
+  preservation?: Record<string, unknown>;
 }
 
 /** Reads the bytes of a `.docx` file into CDM content. It throws when the file is refused. */
@@ -139,7 +144,12 @@ export function importJobHandler(o: ImportJobDeps): JobHandler {
       const code = (e as { code?: unknown } | null)?.code;
       throw new JobFailure(typeof code === 'string' ? code : 'internal', reasonOf(e));
     }
-    return { seq, asset: assetId, warnings: warningsOf(imported.warnings) };
+    return {
+      seq,
+      asset: assetId,
+      warnings: warningsOf(imported.warnings),
+      ...(imported.preservation ? { preservation: { ...imported.preservation } } : {}),
+    };
   };
 }
 
@@ -212,6 +222,7 @@ function importJobOf(job: JobRecord): ImportJob & Record<string, unknown> {
       ? {
           seq: result['seq'],
           warnings: (result['warnings'] as Array<Record<string, unknown>> | undefined) ?? [],
+          ...(result['preservation'] ? { preservation: result['preservation'] } : {}),
         }
       : {}),
     ...(job.state === 'failed' && job.error

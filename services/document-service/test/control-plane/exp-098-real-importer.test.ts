@@ -4,7 +4,7 @@
 // Runs in memory with the real data plane.
 import { uuid7 } from '@docedit/model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { importDocx } from '../../../../packages/export-docx/src/index.ts';
+import { importDocx, preservationReport } from '../../../../packages/export-docx/src/index.ts';
 import { corpusFiles, readFile } from '../../../../packages/export-docx/test/corpus.ts';
 import { DOCX_CONTENT_TYPE, type DocxImporter } from '../../src/control-plane/imports.ts';
 import { documentWithRegions, startHarness, type Harness } from './support.ts';
@@ -15,7 +15,12 @@ describe('import job with the real Word importer (memory)', () => {
   let h: Harness;
   const importer: DocxImporter = async (bytes) => {
     const r = await importDocx(bytes);
-    return { envelope: r.envelope, warnings: r.warnings };
+    // EXP-116 criterion 5: the share of preserved nodes and the size overhead, from the same import.
+    return {
+      envelope: r.envelope,
+      warnings: r.warnings,
+      preservation: { ...(await preservationReport(bytes, r)) },
+    };
   };
 
   beforeAll(async () => {
@@ -100,6 +105,38 @@ equires; returns the job. */
     expect(stored).toContain('"type":"style_def"');
     expect(content.json.seq).toBeGreaterThan(0);
   });
+
+  it('reports the share of preserved nodes and the size overhead of the corpus files that complete (EXP-116)', async () => {
+    const names = corpusFiles().map((f) => f.name);
+    const skipped: string[] = [];
+    let done = 0;
+    for (const name of names) {
+      const { job } = await run(name, 'those of the file');
+      if (job['state'] !== 'completed') {
+        skipped.push(name + ' ' + JSON.stringify(job['error']));
+        continue;
+      }
+      done++;
+      const p = job['preservation'] as Record<string, number | null>;
+      expect(p, name).toBeDefined();
+      expect(p['nodes']).toBeGreaterThan(0);
+      expect(p['nodesWithPreserved']).toBeGreaterThan(0);
+      expect(p['share']).toBeCloseTo(p['nodesWithPreserved']! / p['nodes']!, 10);
+      expect(p['share']).toBeGreaterThan(0);
+      expect(p['share']).toBeLessThanOrEqual(1);
+      // The same file without preservation is smaller: preserved data costs bytes.
+      expect(p['overheadBytes']).toBe(p['bytes']! - p['baselineBytes']!);
+      expect(p['overheadBytes']).toBeGreaterThan(0);
+      expect(p['overhead']).toBeCloseTo(p['overheadBytes']! / p['baselineBytes']!, 10);
+    }
+    // The job stores no picture the importer makes (ADR 0373, decision 6), so a file with pictures
+    // fails the checks (I4) and reports nothing: that is the open part of EXP-116 criterion 5.
+    expect(done, 'files imported through the job').toBeGreaterThan(30);
+    expect(
+      skipped.every((s) => s.includes('(I4)')),
+      'every file that does not complete fails on I4 only',
+    ).toBe(true);
+  }, 300_000);
 
   it('fails the job, and stores nothing, when the document lacks a feature the import needs', async () => {
     const { doc, job } = await run('poi/sample.docx', 'none');
