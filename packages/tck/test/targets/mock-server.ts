@@ -190,6 +190,11 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
       sub,
       ...(typeof body['name'] === 'string' ? { name: body['name'] } : {}),
       groups: Array.isArray(body['grp']) ? (body['grp'] as string[]) : [],
+      // The fill roles claim (wfr, 05 §3.1): the mock's stand-in is MockUser.fill.
+      ...(Array.isArray(body['wfr']) &&
+      (body['wfr'] as unknown[]).every((r) => typeof r === 'string')
+        ? { fill: { roles: body['wfr'] as string[], active: true } }
+        : {}),
     };
     const t = service.mintToken(user, Object.fromEntries(entries) as Record<string, DocRole>);
     // NumericDate has whole seconds: the expiry is the same instant in the token and in expiresAt.
