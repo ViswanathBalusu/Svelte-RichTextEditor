@@ -55,7 +55,9 @@ export interface Notice {
 export class StubDataPlane implements DataPlane {
   readonly notices: Notice[] = [];
   deps: DataPlaneDeps | null = null;
-  readonly features = ['presence', 'regions', 'suggest-enforced'];
+  // `leases` is on by default (owner decision 190; PRM-043), and the lease routes answer only while
+  // it is announced; a test that switches it off passes `config.features` (prm-043-leases-switch).
+  readonly features = ['presence', 'regions', 'suggest-enforced', 'leases'];
   handleUpgrade(_req: IncomingMessage, socket: Duplex): void {
     this.notices.push({ kind: 'upgrade' });
     socket.end('HTTP/1.1 418 Stub\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
