@@ -78,7 +78,7 @@ import {
   noticeReason,
   showPageViewNotice,
 } from './kernel-fallback.ts';
-import { ElementKernel } from './layout-kernel-request.ts';
+import type { ElementKernel } from './layout-kernel-request.ts';
 import { EMBEDDING_VERSION, RELEASE } from './version.ts';
 
 /** `getToken` (05 §8.1): returns a token for the document, held in memory only. */
@@ -457,6 +457,17 @@ export class DocEditorElement extends Base {
     this.#kernelNotice = null;
     if (view !== 'print') return;
     if (typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches) return;
+    void this.#startKernel();
+  }
+
+  /**
+   * The kernel's request code loads here, with the page view, not with the first interactive editor
+   * (FND-008; owner decision 32).
+   */
+  async #startKernel(): Promise<void> {
+    const { ElementKernel } = await import('./layout-kernel-request.ts');
+    // The view may have changed while the code loaded.
+    if (this.getAttribute('view') !== 'print') return;
     // One kernel for each element: it owns the layout worker (WASM-004) and keeps its lifecycle.
     this.#kernel ??= new ElementKernel((detail) => {
       this.#emit('de-diagnostic', detail);
