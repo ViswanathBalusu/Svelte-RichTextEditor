@@ -184,6 +184,11 @@ export interface HandlerDeps {
   evidence?: EvidenceLedger;
   /** The sealed final PDFs (FRW-054). Absent: `GET /documents/{id}/workflow/final` is not offered. */
   sealedPdfs?: SealedPdfStore;
+  /**
+   * True when this service seals the final PDF (FRW-053): the final export job then carries the
+   * pin of a sealing export, so the worker compiles twice and compares (EXP-079).
+   */
+  sealing?: boolean;
   /** The tenant's allowed origins and public keys, listed by `/origins` and `/keys` (UX-077). */
   tenantRegistry?: TenantRegistry;
   /** The index of `GET /search` (BE-054 criterion 2). Absent: the route is not offered. */
