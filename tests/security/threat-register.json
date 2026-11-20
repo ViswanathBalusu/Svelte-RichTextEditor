@@ -1,5 +1,5 @@
 {
-  "$comment": "The threat register (SEC-001): every threat of 10 §3 tied to its control, the epic/story that builds it, and the SEC story whose tests prove it. A threat with no proving tests yet is marked \"control-not-built\" with the phase it is due. register.test.ts checks this file on every build (10 §2, §3, §5). Trust boundaries and actors follow 10 §2. specRows quotes the wording of 10 §3 that a row covers (a table row's threat, or a phrase of the prose in §3.4, §3.7 and §3.8); register.test.ts reads docs/spec/10-security.md and fails when a table row, a §3.7 item or a §3.8 sentence has no register row.",
+  "$comment": "The threat register (SEC-001): every threat of 10 §3 tied to its control, the epic/story that builds it, and the SEC story whose tests prove it. register.test.ts checks this file on every build with the rules of test/support/register-check.ts (10 §2, §3, §5). Status follows the backlog: \"proven\" when every acceptance criterion of the proving story that the row names (criteria, 1-based; all of them when absent) is ticked; \"partly-proven\" when tests exist and one of those criteria is not ticked, with each unticked criterion listed in open; \"control-not-built\" with the phase it is due when there are no tests yet. A test is named by its file: a name without a slash is under tests/security/test, a path with a slash starts at the repository root; the file must exist and name the proving story. Trust boundaries and actors follow 10 §2. specRows quotes the wording of 10 §3 that a row covers (a table row's threat, or a phrase of the prose in §3.4, §3.7 and §3.8); register.test.ts reads docs/spec/10-security.md and fails when a table row, a §3.7 item or a §3.8 sentence has no register row.",
   "spec": "10",
   "review": {
     "phase": "1a",
@@ -89,9 +89,29 @@
       "control": "No raw HTML in the CDM; every attribute has a grammar (I11); DOM built with DOM APIs",
       "builtBy": ["CDM-013", "FE-050"],
       "provenBy": "SEC-005",
+      "criteria": [1, 2, 4, 5],
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "html-sinks.test.ts",
+        "injection-corpus.test.ts",
+        "sec-005-every-position.test.ts",
+        "packages/element/e2e/sec-005-canary.spec.ts"
+      ],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "the corpus at every position of the CDM leaves out the five node types that need a stored asset or a preserved fragment"
+        },
+        {
+          "criterion": 2,
+          "what": "the corpus rendered in display names, comment bodies, field labels and values, region titles, alt text and document titles in every supported browser"
+        },
+        {
+          "criterion": 4,
+          "what": "the corpus through PUT content, prefill, import and restore"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Script injection through document content"]
     },
@@ -102,9 +122,19 @@
       "control": "Pasted HTML sanitised then parsed through the schema",
       "builtBy": ["FE-054"],
       "provenBy": "SEC-005",
+      "criteria": [3],
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "packages/element/e2e/sec-005-canary.spec.ts",
+        "packages/element/e2e/sec-005-image-paste.spec.ts"
+      ],
+      "open": [
+        {
+          "criterion": 3,
+          "what": "pasted HTML through the Word and Google Docs cleaners, beside the fragment, whitelist and plain-text paths that are run"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Script injection through paste"]
     },
@@ -115,9 +145,15 @@
       "control": "link.href allow-list (I9); noopener, noreferrer",
       "builtBy": ["CDM-013", "BE-043"],
       "provenBy": "SEC-006",
+      "criteria": [1, 2, 5],
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "link-safety.test.ts",
+        "packages/engine/src/sec-006-link-render.universal.test.ts",
+        "packages/export-docx/test/sec-006-link-schemes.test.ts",
+        "packages/export-latex/src/sec-006-link-schemes.test.ts"
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Dangerous links"]
     },
@@ -128,9 +164,21 @@
       "control": "Never embedded as data; uploaded, validated and re-encoded; SVG never rendered live",
       "builtBy": ["BE-043"],
       "provenBy": "SEC-006",
+      "criteria": [3, 4],
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "data-url-media.test.ts",
+        "packages/element/e2e/sec-006-data-url-paste.spec.ts",
+        "packages/engine/test/sec-006-no-live-svg.test.ts",
+        "services/asset-worker/test/content.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 4,
+          "what": "an SVG with script and outside references uploaded and shown in the editor, with a canary and a network log"
+        }
+      ],
       "boundaries": ["host-page-to-element", "service-to-workers"],
       "specRows": ["Hostile images"]
     },
@@ -141,9 +189,10 @@
       "control": "Sandboxed cross-origin viewer with script off",
       "builtBy": ["FE-071"],
       "provenBy": "SEC-036",
+      "criteria": [1, 2],
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": ["packages/element/e2e/pdf-viewer.spec.ts"],
       "boundaries": ["host-page-to-element"],
       "specRows": ["A hostile PDF from a compromised worker"]
     },
@@ -155,8 +204,18 @@
       "builtBy": ["FE-008", "FE-009"],
       "provenBy": "SEC-007",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "packages/element/e2e/sec-007-wire-storage.spec.ts",
+        "packages/element/e2e/sec-007-wire-scan.spec.ts",
+        "packages/element/e2e/sec-007-token-scan.spec.ts"
+      ],
+      "open": [
+        {
+          "criterion": 2,
+          "what": "the network log of a session scanned for the token in every address, an asset read address included"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Token theft"]
     },
@@ -168,8 +227,17 @@
       "builtBy": ["FE-125"],
       "provenBy": "FE-125",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "packages/element/e2e/s2-features.spec.ts",
+        "packages/element/test/published-policies.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 5,
+          "what": "the policy test seen to run again in CI after a dependency update"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Strict host policies"],
       "mergedFrom": "SEC-008",
@@ -182,9 +250,21 @@
       "control": "Hash-derived font aliases; shortcuts fire only inside the editor; duplicate element detected",
       "builtBy": ["FE-001", "FE-021"],
       "provenBy": "SEC-009",
+      "criteria": [1, 2, 3],
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "packages/element/src/sec-009-host-fonts.universal.test.ts",
+        "packages/element/e2e/sec-009-host-focus.spec.ts",
+        "packages/element/test/sec-009-host-shortcuts.test.ts",
+        "packages/element/test/sec-009-collision-error.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 2,
+          "what": "editor shortcuts pressed with the focus in the host page fire nothing in the editor"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Global side effects on the host page"]
     },
@@ -195,9 +275,16 @@
       "control": "Events carry identifiers and counts, not content",
       "builtBy": ["FE-061"],
       "provenBy": "SEC-009",
+      "criteria": [4],
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": ["packages/element/e2e/sec-009-event-scan.spec.ts"],
+      "open": [
+        {
+          "criterion": 4,
+          "what": "the scanned session also comments and fills, not only types and exports"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Leaking content to the host page by accident"]
     },
@@ -209,8 +296,19 @@
       "builtBy": ["UX-045", "UX-046"],
       "provenBy": "SEC-010",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "packages/ui/test/sec-010-action-approval.test.ts",
+        "packages/ui/test/sec-010-prefill-data.test.ts",
+        "packages/authority/test/sec-010-assistant-origin.test.ts",
+        "packages/element/e2e/sec-010-assistant-injection.spec.ts"
+      ],
+      "open": [
+        {
+          "criterion": 3,
+          "what": "model output arriving in the document only as suggestions, attributed to the user with the agent named"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Prompt injection through document text"]
     },
@@ -251,8 +349,8 @@
       "builtBy": ["BE-031"],
       "provenBy": "SEC-014",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": ["revocation.test.ts", "sec-014-restart-revocation.test.ts"],
       "boundaries": ["element-to-service"],
       "specRows": ["Reconnecting after revocation"]
     },
@@ -264,8 +362,14 @@
       "builtBy": ["BE-025", "BE-034"],
       "provenBy": "SEC-015",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": ["replay-and-key-reuse.test.ts", "sec-015-inflight-copies.test.ts"],
+      "open": [
+        {
+          "criterion": 2,
+          "what": "a thousand rapid copies of a commit that is still being stored: one stored, every copy acknowledged alike"
+        }
+      ],
       "boundaries": ["element-to-service", "host-backend-to-service"],
       "specRows": [
         "Replay and resubmission",
@@ -280,8 +384,8 @@
       "builtBy": ["BE-032"],
       "provenBy": "SEC-016",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": ["bare-identifiers.test.ts"],
       "boundaries": ["host-backend-to-service"],
       "specRows": ["Reaching someone else's thread, export or asset by its bare identifier"]
     },
@@ -294,7 +398,11 @@
       "provenBy": "SEC-017",
       "phase": "1a",
       "status": "proven",
-      "tests": ["malformed-input.test.ts"],
+      "tests": [
+        "malformed-input.test.ts",
+        "reassembly-bounds.test.ts",
+        "sec-017-envelope-hostile.test.ts"
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Oversized or malformed messages"]
     },
@@ -306,8 +414,15 @@
       "builtBy": ["BE-030", "BE-027"],
       "provenBy": "SEC-018",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "resource-exhaustion.test.ts",
+        "sec-018-address-flood.test.ts",
+        "sec-018-flood-verify.test.ts",
+        "sec-018-tenant-flood.test.ts",
+        "sec-018-presence-memory.test.ts",
+        "presence-bounds.test.ts"
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Resource exhaustion"]
     },
@@ -320,7 +435,11 @@
       "provenBy": "SEC-019",
       "phase": "1a",
       "status": "proven",
-      "tests": ["identity-spoofing.test.ts"],
+      "tests": [
+        "identity-spoofing.test.ts",
+        "thread-author.test.ts",
+        "sec-019-thread-author.route.test.ts"
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Identity spoofing"]
     },
@@ -332,8 +451,12 @@
       "builtBy": ["BE-055", "BE-056", "BE-057"],
       "provenBy": "SEC-020",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "webhook-forgery.test.ts",
+        "sec-020-webhook-logs.test.ts",
+        "sec-020-metrics-logs.test.ts"
+      ],
       "boundaries": ["service-to-host-backend"],
       "specRows": ["Forged webhooks", "Server-side request forgery through webhook targets"]
     },
@@ -346,7 +469,14 @@
       "provenBy": "SEC-021",
       "phase": "1a",
       "status": "proven",
-      "tests": ["bypass-classes.test.ts"],
+      "tests": [
+        "bypass-classes.test.ts",
+        "fill-only-fields.test.ts",
+        "field-value-types.test.ts",
+        "suggest-only-users.test.ts",
+        "suggest-only-bookmarks.test.ts",
+        "suggest-only-blocks.test.ts"
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Changing a part of a document without permission"],
       "alsoProvenBy": ["SEC-022", "SEC-023"]
@@ -359,8 +489,8 @@
       "builtBy": ["PRM-009", "PRM-010"],
       "provenBy": "SEC-024",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": ["header-footer-stories.test.ts", "shared-definitions.test.ts"],
       "boundaries": ["element-to-service"],
       "specRows": ["Defacing protected text through shared styles"]
     },
@@ -373,7 +503,7 @@
       "provenBy": "SEC-025",
       "phase": "1a",
       "status": "proven",
-      "tests": ["rebase-tricks.test.ts"],
+      "tests": ["rebase-tricks.test.ts", "sec-025-rebase-oracle.test.ts"],
       "boundaries": ["element-to-service"],
       "specRows": ["Bypassing validation through rebase tricks"]
     },
@@ -386,7 +516,11 @@
       "provenBy": "SEC-026",
       "phase": "1a",
       "status": "proven",
-      "tests": ["permission-races.test.ts"],
+      "tests": [
+        "permission-races.test.ts",
+        "permission-stress.test.ts",
+        "sec-026-lease-expiry.test.ts"
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Editing under permissions that were just revoked"]
     },
@@ -398,8 +532,19 @@
       "builtBy": ["CDM-013", "SYN-001", "SYN-006"],
       "provenBy": "SEC-027",
       "phase": "1a",
-      "status": "proven",
-      "tests": ["corrupting-commits.test.ts"],
+      "status": "partly-proven",
+      "tests": [
+        "corrupting-commits.test.ts",
+        "corrupting-limits.test.ts",
+        "sec-027-attribute-grammar.test.ts",
+        "sec-027-invariant-matrix.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 2,
+          "what": "every invariant violated with each allowed step type that can violate it"
+        }
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Corrupting the document"]
     },
@@ -411,8 +556,24 @@
       "builtBy": ["BE-001", "BE-058", "SYN-037"],
       "provenBy": "SEC-028",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "sec-028-cpu-budget.test.ts",
+        "sec-028-expensive-commits.test.ts",
+        "fuzz-time-limit.test.ts",
+        "packages/authority/test/slow-input.test.ts",
+        "packages/authority/test/sec-028-throwing-commit.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "expensive commits in volume from several channels while other rooms keep their acknowledgement latency"
+        },
+        {
+          "criterion": 3,
+          "what": "checkpoint serialisation, log replay, comparisons and conversions in worker threads during the attack"
+        }
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Stalling or crashing a process that hosts many rooms"]
     },
@@ -424,8 +585,25 @@
       "builtBy": ["HIS-001", "HIS-002", "BE-081"],
       "provenBy": "SEC-029",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "history-tamper.test.ts",
+        "sec-029-db-tamper.test.ts",
+        "sec-029-changed-chain-head.test.ts",
+        "sec-029-anchors.s3.test.ts",
+        "sec-029-control-commits.test.ts",
+        "services/export-worker/src/sec-029-manifest-chain-head.pg.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 3,
+          "what": "each permission and workflow change as a control commit inside the chain"
+        },
+        {
+          "criterion": 5,
+          "what": "chain heads anchored in write-once storage, and what a rewrite before an anchor leaves undetected"
+        }
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Forging history"]
     },
@@ -437,8 +615,14 @@
       "builtBy": ["PRM-046", "PRM-047"],
       "provenBy": "SEC-030",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "approved-regions.test.ts",
+        "sec-030-approval-wiring.test.ts",
+        "sec-030-approval-hash.test.ts",
+        "sec-030-region-state.test.ts",
+        "sec-030-restore-approved.test.ts"
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Changing an approved region"]
     },
@@ -451,7 +635,12 @@
       "provenBy": "SEC-031",
       "phase": "1a",
       "status": "proven",
-      "tests": ["two-writers.test.ts"],
+      "tests": [
+        "two-writers.test.ts",
+        "sec-031-chaos.test.ts",
+        "lease-fencing.test.ts",
+        "two-writers-chaos.test.ts"
+      ],
       "boundaries": ["element-to-service", "service-to-workers"],
       "specRows": ["Two writers"]
     },
@@ -463,8 +652,14 @@
       "builtBy": ["BE-036", "BE-038", "PRM-041"],
       "provenBy": "SEC-032",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "sec-032-seq-inputs.route.test.ts",
+        "sec-032-read-marker.route.test.ts",
+        "old-version-gate.test.ts",
+        "pinned-read-gate.test.ts",
+        "pinned-read-gate.route.test.ts"
+      ],
       "boundaries": ["element-to-service"],
       "specRows": ["Reading deleted text through old versions"]
     },
@@ -476,8 +671,21 @@
       "builtBy": ["EXP-042", "EXP-043", "EXP-044"],
       "provenBy": "SEC-033",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "latex-emitters.test.ts",
+        "sec-033-contexts.test.ts",
+        "sec-033-v-bullets.test.ts",
+        "sec-033-w3-context-list.test.ts",
+        "packages/export-latex/src/sec-033-hostile-text.compile.test.ts",
+        "services/export-worker/src/sec-033-unescaped.escape.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "a fuzz target per emitter whose output is compiled and shown by the trace to run no unexpected control sequence"
+        }
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["typed emitters for every context in which a user's string can reach TeX"]
     },
@@ -489,8 +697,22 @@
       "builtBy": ["EXP-049", "EXP-050"],
       "provenBy": "SEC-034",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "math-gate.test.ts",
+        "math-commit-gate.test.ts",
+        "sec-034-production-math-gate.test.ts",
+        "services/document-service/src/data-plane/sec-034-math-gate.test.ts",
+        "packages/authority/test/sec-034.math-gate-previous.test.ts",
+        "packages/export-latex/src/sec-034-gate.compile.fuzz.test.ts",
+        "services/export-worker/src/sec-034-region-equation.e2e.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 5,
+          "what": "the end-to-end case: the strongest accepted equation built to cover a price in another region, checked by extracted text and rendered pixels"
+        }
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["a strict gate on math that also stops content painted outside its box"]
     },
@@ -502,8 +724,18 @@
       "builtBy": ["EXP-068", "EXP-070", "EXP-073"],
       "provenBy": "SEC-035",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "services/export-worker/src/sandbox.escape.test.ts",
+        "services/export-worker/src/sec-035-sandbox-env.test.ts",
+        "services/export-worker/src/sec-033-unescaped.escape.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 6,
+          "what": "the suite run in CI on every change to the image, the class or the worker, with a release blocked by a failure"
+        }
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["a single-use sandbox per job"]
     },
@@ -514,9 +746,16 @@
       "control": "Outputs treated as hostile; layout schema-checked; logs bounded; results served nosniff",
       "builtBy": ["EXP-055", "EXP-064"],
       "provenBy": "SEC-036",
+      "criteria": [3, 4, 5, 6],
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "tex-bundle-notice.test.ts",
+        "sec-036-raw-log.route.test.ts",
+        "sec-036-raw-log-route.test.ts",
+        "sec-036-result-origin.test.ts",
+        "services/export-worker/src/diagnostics.test.ts"
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["outputs treated as hostile"]
     },
@@ -527,9 +766,10 @@
       "control": "Two independent compiles are compared before sealing",
       "builtBy": ["FRW-052", "EXP-068"],
       "provenBy": "SEC-042",
+      "criteria": [2],
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": ["sec-042-tampered-pdf.test.ts"],
       "boundaries": ["service-to-workers", "service-to-signing"],
       "specRows": ["two independent compiles before sealing"]
     },
@@ -541,8 +781,12 @@
       "builtBy": ["BE-042", "BE-043", "BE-044"],
       "provenBy": "SEC-037",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "sec-037-asset-refs-wire.test.ts",
+        "sec-037-asset-refs-room.test.ts",
+        "services/document-service/test/control-plane/sec-037-asset-refusals.test.ts"
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": [
         "Overwriting or claiming an asset by declaring its hash",
@@ -557,8 +801,12 @@
       "builtBy": ["BE-043"],
       "provenBy": "SEC-038",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "services/asset-worker/test/content.test.ts",
+        "services/asset-worker/test/sandbox.podman.test.ts",
+        "services/document-service/test/control-plane/sec-038-resource-limit.test.ts"
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["Decompression bombs"]
     },
@@ -569,9 +817,15 @@
       "control": "Reject DTDs and entities; never follow external relationships; refuse macros",
       "builtBy": ["EXP-098", "EXP-099"],
       "provenBy": "SEC-039",
+      "criteria": [1, 2, 3, 4, 6, 7],
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "docx-import-abuse.test.ts",
+        "sec-039-entry-names.test.ts",
+        "sec-039-importer-fuzz.test.ts",
+        "sec-039-embedded-objects.test.ts"
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["XML external entities", "Remote content in DOCX", "Macros and embedded objects"]
     },
@@ -583,8 +837,14 @@
       "builtBy": ["BE-043", "BE-045"],
       "provenBy": "SEC-040",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "services/asset-worker/test/content.test.ts",
+        "services/asset-worker/test/worker.test.ts",
+        "services/asset-worker/test/sandbox.podman.test.ts",
+        "services/asset-worker/test/origin.test.ts",
+        "services/asset-worker/test/origin-isolation.test.ts"
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["Decoder exploits", "Content-type confusion"]
     },
@@ -595,6 +855,7 @@
       "control": "Imported authors become labels, never user identities",
       "builtBy": ["EXP-098", "EXP-099"],
       "provenBy": "SEC-039",
+      "criteria": [5],
       "phase": "2",
       "status": "proven",
       "tests": ["docx-import-abuse.test.ts"],
@@ -622,8 +883,18 @@
       "builtBy": ["FRW-052", "EXP-068"],
       "provenBy": "SEC-042",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": ["sec-042-tampered-pdf.test.ts", "sealed-write-once.test.ts"],
+      "open": [
+        {
+          "criterion": 4,
+          "what": "the hash sent to the signing service compared with the stored PDF"
+        },
+        {
+          "criterion": 5,
+          "what": "long-term validation data added only as incremental updates, the sealed bytes not rewritten"
+        }
+      ],
       "boundaries": ["service-to-signing"],
       "specRows": ["A tampered PDF being sealed"]
     },
@@ -635,8 +906,18 @@
       "builtBy": ["FRW-040", "FRW-050"],
       "provenBy": "SEC-043",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": ["language-check.test.ts"],
+      "open": [
+        {
+          "criterion": 2,
+          "what": "the certificate of completion and the evidence record presenting the host's claims as assertions recorded as given"
+        },
+        {
+          "criterion": 3,
+          "what": "counsel's review of the wording recorded before launch"
+        }
+      ],
       "boundaries": ["service-to-signing"],
       "specRows": ["Claims about signer identity the platform cannot support"]
     },
@@ -648,8 +929,20 @@
       "builtBy": ["FRW-040", "FRW-050"],
       "provenBy": "SEC-044",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "evidence-outside-log.test.ts",
+        "evidence-purge-job.test.ts",
+        "sec-044-evidence-scan.pg.test.ts",
+        "sec-044-w8-workflow-scan.test.ts",
+        "sec-044-v-payload-salt.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "the scan of the commit log, control commits, audit trail, logs and search entries after a completed workflow"
+        }
+      ],
       "boundaries": ["service-to-signing"],
       "specRows": ["Evidence leaking or outliving its purpose"]
     },
@@ -661,8 +954,8 @@
       "builtBy": ["FRW-008", "FRW-009", "FRW-010"],
       "provenBy": "SEC-022",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": ["fill-only-fields.test.ts", "field-value-types.test.ts"],
       "boundaries": ["element-to-service"],
       "specRows": ["A filler changing more than their fields"]
     },
@@ -674,8 +967,32 @@
       "builtBy": ["BE-011", "BE-012", "BE-003"],
       "provenBy": "SEC-045",
       "phase": "1a",
-      "status": "proven",
-      "tests": ["tenant-isolation.test.ts"],
+      "status": "partly-proven",
+      "tests": [
+        "tenant-isolation.test.ts",
+        "tenant-objects.test.ts",
+        "sec-045-unfiltered-handler.test.ts",
+        "sec-045-route-sweep.test.ts",
+        "sec-045-v-b-threads.test.ts",
+        "sec-045-v-b-identifiers.test.ts",
+        "sec-045-signed-url-tenant.test.ts",
+        "sec-045-scenario-keys.test.ts",
+        "sec-045-v-c-webhooks.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 4,
+          "what": "every object key of a full scenario under the tenant prefix, and a signed URL of one tenant refused on a key of another"
+        },
+        {
+          "criterion": 5,
+          "what": "the tenant in the key of every cache, counter and stream"
+        },
+        {
+          "criterion": 7,
+          "what": "one tenant's fonts unavailable to another tenant's export job"
+        }
+      ],
       "boundaries": ["host-backend-to-service", "service-to-workers"],
       "specRows": ["Row-level security and a tenant identifier on every table"]
     },
@@ -687,8 +1004,11 @@
       "builtBy": ["BE-045"],
       "provenBy": "SEC-046",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": [
+        "services/document-service/test/control-plane/sec-046-v-revoke-url.test.ts",
+        "services/document-service/src/control-plane/signed-url-capability.test.ts"
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["Signed URLs are short-lived"]
     },
@@ -700,8 +1020,21 @@
       "builtBy": ["BE-088"],
       "provenBy": "SEC-047",
       "phase": "1a",
-      "status": "proven",
-      "tests": ["logs-no-content.test.ts"],
+      "status": "partly-proven",
+      "tests": [
+        "logs-no-content.test.ts",
+        "sec-047-structural-dump.test.ts",
+        "sec-047-compile-log.test.ts",
+        "sec-047-v-compile-log-route.test.ts",
+        "sec-047-v-canary-surfaces.test.ts",
+        "sec-047-w3-field-values-alt-text.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "the full canary scenario: no canary in any log line, metric, trace, error report or dump"
+        }
+      ],
       "boundaries": ["host-backend-to-service"],
       "specRows": ["Logs and metrics never contain document content or tokens"]
     },
@@ -713,8 +1046,23 @@
       "builtBy": ["BE-033", "BE-057"],
       "provenBy": "SEC-048",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "secret-scan.test.ts",
+        "services/document-service/test/postgres/u-sec-033-048-secret-rotation.pg.test.ts",
+        "services/export-worker/test/u-sec-033-048-container-env.podman.test.ts",
+        "services/asset-worker/test/u-sec-033-048-container-env.podman.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "secret scanning of the repository, the images and the default configuration in CI"
+        },
+        {
+          "criterion": 2,
+          "what": "only the secrets a container needs present in its environment and files"
+        }
+      ],
       "boundaries": ["host-backend-to-service"],
       "specRows": ["Secrets are held in a secret manager and rotated"]
     },
@@ -726,8 +1074,8 @@
       "builtBy": ["BE-096"],
       "provenBy": "SEC-049",
       "phase": "2",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "proven",
+      "tests": ["sec-049-backup-keys.test.ts", "sec-049-backup-sealing.test.ts"],
       "boundaries": ["service-to-workers"],
       "specRows": ["Backups are encrypted"]
     },
@@ -739,8 +1087,18 @@
       "builtBy": ["FND-001", "FND-002"],
       "provenBy": "SEC-050",
       "phase": "1a",
-      "status": "proven",
-      "tests": ["supply-chain.test.ts"],
+      "status": "partly-proven",
+      "tests": ["supply-chain.test.ts", "engine-identifier.test.ts"],
+      "open": [
+        {
+          "criterion": 2,
+          "what": "the dependency review of a pull request in CI: licence, advisories and install scripts"
+        },
+        {
+          "criterion": 3,
+          "what": "the daily advisory scan raising an issue"
+        }
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["Lock files, dependency review"]
     },
@@ -752,8 +1110,18 @@
       "builtBy": ["SEC-050", "FND-012"],
       "provenBy": "SEC-051",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": ["sbom-bill.test.ts", "sec-051-image-contents.test.ts"],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "a bill of materials attached to each artefact of a release"
+        },
+        {
+          "criterion": 2,
+          "what": "the bill compared with the lock files and the image contents in the release, a mismatch failing it"
+        }
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["a software bill of materials per release"]
     },
@@ -765,8 +1133,22 @@
       "builtBy": ["BE-006", "FND-012"],
       "provenBy": "SEC-052",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": ["base-image-pins.test.ts"],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "each image signed in the release pipeline"
+        },
+        {
+          "criterion": 2,
+          "what": "the Helm chart and the compose file referencing images by digest"
+        },
+        {
+          "criterion": 3,
+          "what": "a documented deployment policy that refuses an unsigned or altered image"
+        }
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["signed container images, pinned base images"]
     },
@@ -778,8 +1160,22 @@
       "builtBy": ["EXP-015", "EXP-073"],
       "provenBy": "SEC-053",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": ["tex-package-list.test.ts"],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "the worker image as a curated TeX Live pinned by digest, the build failing on a LuaTeX older than 1.17"
+        },
+        {
+          "criterion": 3,
+          "what": "the licence manifest and the source offer for GPL components among the release artefacts"
+        },
+        {
+          "criterion": 4,
+          "what": "a TeX Live upgrade as a class version change run against the stored reference PDFs"
+        }
+      ],
       "boundaries": ["service-to-workers"],
       "specRows": ["a pinned TeX Live with a licence manifest"]
     },
@@ -791,8 +1187,21 @@
       "builtBy": ["FE-125"],
       "provenBy": "SEC-054",
       "phase": "1b",
-      "status": "control-not-built",
-      "tests": [],
+      "status": "partly-proven",
+      "tests": [
+        "sec-054-font-origins.test.ts",
+        "packages/element/e2e/sec-054-network-tour.spec.ts",
+        "packages/element/e2e/sec-054-tour-math.spec.ts",
+        "packages/element/e2e/sec-054-tour-pdf-viewer.spec.ts",
+        "scripts/supply-chain/bundle.test.ts",
+        "scripts/supply-chain/origin-sandbox.test.ts"
+      ],
+      "open": [
+        {
+          "criterion": 1,
+          "what": "the network record of a tour of every feature: every script, style, font and WebAssembly request to the host or the configured service only"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["The editor bundle loads no code at run time from third-party origins"]
     },
@@ -804,8 +1213,14 @@
       "builtBy": ["UX-050", "UX-060"],
       "provenBy": "SEC-055",
       "phase": "4",
-      "status": "proven",
+      "status": "partly-proven",
       "tests": ["sec-055-sandbox-boundary.test.ts"],
+      "open": [
+        {
+          "criterion": 5,
+          "what": "the review complete (its sign-off by a named person), and then recorded here as such"
+        }
+      ],
       "boundaries": ["host-page-to-element"],
       "specRows": [
         "Sandboxed third-party extensions",
@@ -821,7 +1236,7 @@
       "provenBy": "SEC-059",
       "phase": "1a",
       "status": "proven",
-      "tests": ["fuzz.test.ts"],
+      "tests": ["fuzz.test.ts", "fuzz-time-limit.test.ts"],
       "boundaries": ["element-to-service"]
     }
   ]
