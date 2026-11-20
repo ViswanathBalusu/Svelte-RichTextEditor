@@ -241,8 +241,15 @@ import {
 } from './suggestion-markup.ts';
 import { type SuggestionModeState, suggestionMode } from './suggestion-mode.ts';
 import { CommentRanges, type ThreadRange } from './comment-ranges.ts';
-import { mapRanges } from '@docedit/authority';
-import { ConfirmedLog, type NoticeLike, ThreadSync, type ThreadReport } from './thread-sync.ts';
+import { mapRanges, rangeScopes } from '@docedit/authority';
+import {
+  ConfirmedLog,
+  type CommentAnchorReport,
+  type NoticeLike,
+  ThreadSync,
+  type ThreadPlacement,
+  type ThreadReport,
+} from './thread-sync.ts';
 import type { ThreadSelection } from './comment-decorations.ts';
 import { listSuggestions, type SuggestionItem } from './suggestion-list.ts';
 import {
@@ -303,7 +310,7 @@ import { type AltRequest, setAltText } from './alt-text.ts';
 import { figureRefusal, resizeFigure, setFigureLayout } from './figure-layout.ts';
 import { changeIndent } from './paragraph-indent.ts';
 import { setParagraphFormat } from './paragraph-format.ts';
-import { DEFAULT_MAPPING_HISTORY, PresenceClient } from './presence.ts';
+import { DEFAULT_MAPPING_HISTORY, PresenceClient, toConfirmed } from './presence.ts';
 import { type SearchMatch, findMatches } from './search.ts';
 import { skippedPreservedAtoms } from './preserved-find.ts';
 import {
@@ -350,6 +357,13 @@ import {
 import type { RestorePlan } from './sync/restore.ts';
 import type { SelectionShim } from './view-support.ts';
 import { CDM1 } from '@docedit/model/definition';
+
+/** The blocks a thread may be about as a whole (UX-028 criterion 2), and what the pane calls them. */
+const THREAD_BLOCKS: ReadonlyMap<string, string> = new Map([
+  ['figure', 'figure'],
+  ['table', 'table'],
+  ['equation_block', 'equation'],
+]);
 
 /** The engine this build implements and the CDM it reads (03 §11.1; FE-030 criterion 8). */
 export const ENGINE = 'pm-steps/1';
@@ -907,6 +921,7 @@ export class DocumentCore implements DocumentApi {
   /** The block each block thread is on (FE-048 criterion 1). */
   readonly #blockThreads = new Map<string, string>();
   #threadSync: ThreadSync | null = null;
+  readonly #threadListeners = new Set<(notice: NoticeLike) => void>();
   readonly queryNames: readonly CoreQueryName[] = QUERY_NAMES;
   /** The formatting the painter took (UX-009). */
   #painted: FormatSnapshot | null = null;
@@ -3443,6 +3458,110 @@ one or original. It is a
     this.#publishThreadRanges();
   }
 
+  /**
+   * What a new comment thread would be created on (UX-028; 05 §6.2 `target`; 07 §12): the text
+   * range of the selection, in the positions of the confirmed document at `baseSeq`, or the figure,
+   * table or equation selected as a block; and the capabilities of every scope that it covers.
+   * Null when the selection is empty or holds nothing a thread can be about. It reads only.
+   */
+  commentAnchor(): CommentAnchorReport | null {
+    const state = this.#state;
+    const sel = state.selection;
+    const doc = state.doc;
+    if ('node' in sel && sel.node) {
+      const node = sel.node as PMNode;
+      const id = node.attrs['id'] as string | undefined;
+      if (id === undefined || !THREAD_BLOCKS.has(node.type.name)) return null;
+      return {
+        selection: { kind: 'block', id },
+        scopes: [this.#capsOfScope(this.#scopeIn(doc, sel.from))],
+      };
+    }
+    if (sel.empty) return null;
+    const { anchor, head } = toConfirmed(this.#sync, sel.anchor, sel.head);
+    const from = Math.min(anchor, head);
+    const to = Math.max(anchor, head);
+    if (to <= from) return null;
+    // The scopes are those of the selection in the document the user sees.
+    const scopes = rangeScopes(doc, sel.from, sel.to).filter((x) => x !== 'doc');
+    return {
+      selection: { kind: 'range', from, to, baseSeq: this.#sync.seq },
+      scopes: (scopes.length > 0 ? scopes : ['body']).map((x) => this.#capsOfScope(x)),
+    };
+  }
+
+  /** The capabilities in a scope, as the shell shows them: view, comment, suggest and edit. */
+  #capsOfScope(scope: string): readonly Capability[] {
+    const access = this.#accessValue;
+    if (!access) return this.#readOnly ? ['view', 'comment'] : FULL_CAPS;
+    const caps = capsOf(access, depScope(scope)).filter((c): c is Capability =>
+      (FULL_CAPS as readonly string[]).includes(c),
+    );
+    return this.#readOnly ? caps.filter((c) => c === 'view' || c === 'comment') : caps;
+  }
+
+  /**
+   * Where a thread is in the document the reader sees now (UX-029, UX-030): its place in document
+   * order, whether its text was deleted, the commented words or the kind of block, and the
+   * capabilities in the scopes it covers. Null for a thread this client holds no place for.
+   */
+  threadPlacement(id: string): ThreadPlacement | null {
+    const doc = this.#state.doc;
+    const range = this.#comments.get(id);
+    if (range) {
+      const size = doc.content.size;
+      const from = Math.min(Math.max(0, range.from), size);
+      const to = Math.min(Math.max(0, range.to), size);
+      const detached = range.detached || to <= from;
+      const scopes = detached
+        ? [this.#scopeIn(doc, from)]
+        : rangeScopes(doc, from, to).filter((x) => x !== 'doc');
+      return {
+        position: from,
+        detached,
+        excerpt: detached ? null : doc.textBetween(from, to, ' '),
+        blockKind: null,
+        caps: this.#sharedCaps(scopes.length > 0 ? scopes : ['body']),
+      };
+    }
+    const block = this.#blockThreads.get(id);
+    if (block === undefined) return null;
+    let found: { pos: number; kind: string } | null = null;
+    doc.descendants((node, pos) => {
+      if (found) return false;
+      if (node.attrs['id'] === block) found = { pos, kind: node.type.name };
+      return found === null;
+    });
+    if (found === null)
+      return { position: 0, detached: true, excerpt: null, blockKind: null, caps: ['view'] };
+    const at: { pos: number; kind: string } = found;
+    return {
+      position: at.pos,
+      detached: false,
+      excerpt: null,
+      blockKind: THREAD_BLOCKS.get(at.kind) ?? at.kind,
+      caps: this.#sharedCaps([this.#scopeIn(doc, at.pos)]),
+    };
+  }
+
+  /** What the user may do in every one of the scopes: the capabilities they all have. */
+  #sharedCaps(scopes: readonly string[]): readonly Capability[] {
+    const each = scopes.map((x) => this.#capsOfScope(x));
+    return FULL_CAPS.filter((c) => each.every((caps) => caps.includes(c)));
+  }
+
+  /**
+   * Calls `listener` for every `thread.*` and `comment.*` notice of the channel, after the core
+   * has placed the range it carries (FE-048; UX-029, UX-030). The notice names the thread; a
+   * client reads it again. Returns the function that stops the calls.
+   */
+  onThreadNotice(listener: (notice: NoticeLike) => void): () => void {
+    this.#threadListeners.add(listener);
+    return () => {
+      this.#threadListeners.delete(listener);
+    };
+  }
+
   #publishThreadRanges(): void {
     this.threadBlocks.set([...this.#blockThreads].map(([id, block]) => ({ id, block })));
     this.threadRanges.set(this.#comments.ids().map((id) => ({ id, ...this.#comments.get(id)! })));
@@ -4711,7 +4830,11 @@ one or original. It is a
         },
       });
       this.#threadSync = threads;
-      const unlisten = channel.onEvent((n: NoticeLike) => threads.onNotice(n));
+      const unlisten = channel.onEvent((n: NoticeLike) => {
+        threads.onNotice(n);
+        if (n.type.startsWith('thread.') || n.type.startsWith('comment.'))
+          for (const listener of [...this.#threadListeners]) listener(n);
+      });
       detachThreads = () => {
         unlisten();
         threads.end();

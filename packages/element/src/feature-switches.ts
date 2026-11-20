@@ -104,6 +104,7 @@ export function shellWithSwitches<T extends CoreApi>(shell: T, on: FeatureSwitch
       markupView: _f,
       setMarkupView: _g,
       setSuggestionLabel: _h,
+      threads: _i,
       ...rest
     } = out;
     out = rest as unknown as T;

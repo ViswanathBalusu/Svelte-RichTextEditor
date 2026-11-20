@@ -30,7 +30,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const as = (sub: string) => h.userToken({ [doc]: 'editor' }, { sub });
         const made = await h.call('POST', `/v1/documents/${doc}/threads`, {
           token: as('ed-1'),
-          body: { target: { block: BODY_BLOCK }, comment: { text: 'Please check.' } },
+          body: {
+            target: { block: BODY_BLOCK },
+            comment: { body: [{ type: 'text', text: 'Please check.' }] },
+          },
         });
         expect(made.status).toBe(201);
         const url = `/v1/threads/${made.json.id as string}`;

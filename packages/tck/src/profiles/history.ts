@@ -658,7 +658,10 @@ export const HISTORY: ProfileDef = {
         const { token: commenter } = await ctx.token('commenter', { [doc]: 'commenter' });
         // A comment on the intro, which the restore of the open region does not touch.
         const thread = await ctx.service.as(commenter, 'POST', `/documents/${doc}/threads`, {
-          body: { target: { block: IDS.intro }, comment: { body: 'kit' } },
+          body: {
+            target: { block: IDS.intro },
+            comment: { body: [{ type: 'text', text: 'kit' }] },
+          },
         });
         expectStatus(thread, 201, 'a thread on the intro');
         const tid = (thread.json as { id: string }).id;

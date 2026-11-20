@@ -61,6 +61,9 @@ const SERVICE_ROUTES = (MATRIX.find((r) => r.id === 'service')?.routes ?? []).ma
   return { method, path: new RegExp(`^${template.replace(/\{[^}]+\}/g, '[^/]+')}$`) };
 });
 
+/** The mock service has the comments port in process (ADR 0417), but this REST emulation has no thread routes: it does not announce the feature, so the kit skips the `comments` profile. */
+const notComments = (feature: string): boolean => feature !== 'comments';
+
 export interface MockTargetOptions {
   presence?: boolean;
   /** Test of the failure report of a profile: a minted token's wfr claim gives no fill roles. */
@@ -286,7 +289,7 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
           rest: `${origin}/v1`,
           engines: ['pm-steps/1'],
           cdm: { min: 1, max: 1 },
-          features: [...service.features],
+          features: service.features.filter(notComments),
           mode: 'authority',
           jwks_uri: `${origin}/.well-known/jwks.json`,
         },
@@ -614,7 +617,7 @@ export async function startMock(opts: MockTargetOptions = {}): Promise<StartedTa
         tokens,
         covers,
         testMode,
-        features: service.features,
+        features: service.features.filter(notComments),
         ended: (x) => sessions.delete(x),
         stall,
         closeOnUnknown: opts.closeOnUnknown ?? {},
