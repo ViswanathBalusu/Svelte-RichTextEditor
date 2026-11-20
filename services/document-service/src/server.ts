@@ -106,6 +106,8 @@ import {
 } from './control-plane/document-purge.ts';
 import { PgPurgeStore } from './control-plane/document-purge-pg.ts';
 import { PgHoldStore } from './control-plane/holds-pg.ts';
+import { MemorySessionRecordStore, SessionRecords } from './control-plane/session-records.ts';
+import { PgSessionRecordStore } from './control-plane/session-records-pg.ts';
 import {
   MemoryWorkflowResourceStore,
   type WorkflowResourceStore,
@@ -206,7 +208,14 @@ import type { KeyService } from './storage/key-service.ts';
 import { S3ObjectStore } from './objects/s3.ts';
 import { AzureBlobObjectStore } from './objects/azure.ts';
 import { MemoryObjectStore, type ObjectStore } from './objects/store.ts';
-import type { CreateDataPlane, DataPlane, ErrorContext, ParticipantOpened, Span } from './seams.ts';
+import type {
+  CreateDataPlane,
+  DataPlane,
+  ErrorContext,
+  ParticipantOpened,
+  SessionOpened,
+  Span,
+} from './seams.ts';
 import { createPool, inTenant, isUuid, sqlState, type Pool } from './storage/db.ts';
 import { PgDocumentStore } from './storage/document-store.ts';
 import { PgGrantStore } from './storage/grant-store.ts';
@@ -332,6 +341,11 @@ export interface ServiceParts {
   leases?: NodeLeaseStore;
   /** The read markers of `/read-marker` (HIS-027). Absent: the route is not offered. */
   readMarkers?: ReadMarkerStore;
+  /**
+   * The session records (HIS-003; 08 §2): the user agent family and the client version of each
+   * session, stored before its channel opens. Absent: no session is recorded.
+   */
+  sessionRecords?: SessionRecords;
   /** The comment threads of `/threads` (PRO-059, PRO-060). Absent: the routes are not offered. */
   threads?: ThreadStore;
   /** The named versions of `/versions` (HIS-006; PRO-054). Absent: the routes are not offered. */
@@ -634,6 +648,7 @@ export function pgParts(pool: Pool, now: () => number = Date.now): ServiceParts 
     leases: new PgNodeLeases(pool),
     homeRegions: new PgHomeRegions(pool),
     readMarkers: new PgReadMarkerStore(pool),
+    sessionRecords: new SessionRecords(new PgSessionRecordStore(pool)),
     threads: new PgThreadStore(pool),
     versions: new PgVersionStore(pool),
   };
@@ -678,6 +693,7 @@ export function memoryParts(now: () => number = Date.now): ServiceParts {
     leases: new MemoryNodeLeases(),
     homeRegions: new MemoryHomeRegions(),
     readMarkers: new MemoryReadMarkerStore(),
+    sessionRecords: new SessionRecords(new MemorySessionRecordStore()),
     threads: new MemoryThreadStore(),
     versions: new MemoryVersionStore((ref) => store.head(ref).then((h) => h.seq)),
   };
@@ -1010,6 +1026,10 @@ export async function startService(opts: StartOptions): Promise<Service> {
               open,
             ).then(() => undefined),
         }
+      : {}),
+    // HIS-003: the user agent family and the client version of each session (08 §2; decision 24).
+    ...(parts.sessionRecords
+      ? { sessionOpened: (open: SessionOpened) => parts.sessionRecords!.opened(open) }
       : {}),
     now,
     checkpoints,

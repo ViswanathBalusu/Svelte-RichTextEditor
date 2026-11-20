@@ -14,8 +14,8 @@
  *    set-aside checkpoints), the files of its export jobs, and the objects of its assets that no
  *    other document references and whose content no other asset shares (assets are stored by hash);
  * 2. deletes the rows keyed by the document, in one transaction (`PurgeStore.remove`): commits and
- *    their metadata, checkpoints, grants, versions, threads and comments, read markers, workflow
- *    state and evidence, jobs, and the document itself;
+ *    their metadata, checkpoints, grants, versions, threads and comments, read markers, session
+ *    records (HIS-003), workflow state and evidence, jobs, and the document itself;
  * 3. removes the document from the search index; and
  * 4. writes the audit event `document.purged` (the document and counts, never content).
  *
