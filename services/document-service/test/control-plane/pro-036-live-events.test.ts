@@ -18,7 +18,7 @@ import {
 const LEGAL = 'rLegal0000000001';
 const LEGAL_BLOCK = 'pLegal0000000001';
 const BODY_BLOCK = 'pEnd000000000001';
-const comment = { text: 'Is this still right?' };
+const comment = { body: [{ type: 'text', text: 'Is this still right?' }] };
 
 const visibility: Visibility = (conn) =>
   conn.role === 'owner'
@@ -81,7 +81,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         const reply = await h.call('POST', `/v1/threads/${tid}/comments`, {
           token: owner,
-          body: { text: 'A reply' },
+          body: { body: [{ type: 'text', text: 'A reply' }] },
         });
         expect((await eventOf(editor, 'comment.created')).resource).toBe(
           `/comments/${reply.json.id}`,
@@ -141,7 +141,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         expect(hidden.status, hidden.text).toBe(201);
         const reply = await h.call('POST', `/v1/threads/${hidden.json.id}/comments`, {
           token: owner,
-          body: { text: 'Hidden reply' },
+          body: { body: [{ type: 'text', text: 'Hidden reply' }] },
         });
         expect(reply.status, reply.text).toBe(201);
         // A thread in the open body follows, as the marker that the editor's channel is live.

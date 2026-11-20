@@ -13,6 +13,7 @@ import {
   applySteps,
   regionsOf,
   type Connection,
+  type ThreadAnchor,
   type Outbound,
   type PermissionState,
   type RegionGrant,
@@ -61,6 +62,7 @@ import {
   type SegmentRecord,
 } from './persist.ts';
 import { MemoryLog, PersistedLog, type SegmentLog } from './storage.ts';
+import { MockThreads } from './threads.ts';
 
 export interface DocumentHooks {
   now(): number;
@@ -114,6 +116,16 @@ export class MockDocument implements ChannelHost {
   /** Answers to server-authored commits: the requester is not a channel (04 §10). */
   private readonly requesters = new Map<string, Outbound['msg'][]>();
   state: 'active' | 'locked' | 'archived' = 'active';
+  /** The comment threads of the document (05 §6.2; ADR 0015; ADR 0417). */
+  readonly threads: MockThreads = new MockThreads({
+    now: () => this.hooks.now(),
+    room: () => this.room,
+    offset: () => this.segment.offset,
+    head: () => this.head,
+    notify: (n, readable) => {
+      for (const a of this.attached.values()) if (readable(a.conn)) a.channel.event(n);
+    },
+  });
 
   constructor(
     id: string,
@@ -211,8 +223,14 @@ export class MockDocument implements ChannelHost {
   }
 
   /** A room whose sequence number 0 is `initial`, under the grants revision of its segment. */
-  private newRoom(initial: Node, requires: readonly string[], seg?: Segment): Room {
+  private newRoom(
+    initial: Node,
+    requires: readonly string[],
+    seg?: Segment,
+    threads?: readonly ThreadAnchor[],
+  ): Room {
     return new Room({
+      ...(threads && threads.length > 0 ? { threads } : {}),
       schema,
       initial,
       requires,
@@ -223,6 +241,26 @@ export class MockDocument implements ChannelHost {
       incarnation: this.incarnation,
       now: () => this.hooks.now(),
       ...(this.hooks.mathGate ? { mathGate: this.hooks.mathGate } : {}),
+    });
+  }
+
+  /**
+   * The thread anchors a new room starts with (ADR 0015). After a snapshot commit (`replaced`) a
+   * range cannot follow the content: each range thread is detached and keeps the scopes it covered,
+   * and a block thread follows its identifier. Otherwise the anchors keep their place, with their
+   * seq counted from the new room's start (`shift` is the old offset minus the new one).
+   */
+  private carryThreads(old: Room, replaced: boolean, shift: number): ThreadAnchor[] {
+    return old.threadAnchors().map((a): ThreadAnchor => {
+      if (!replaced) return { ...a, seq: Math.max(0, a.seq + shift) };
+      if (!('range' in a.target)) return { ...a, seq: 0 };
+      return {
+        ...a,
+        seq: 0,
+        detached: true,
+        target: { range: { from: 0, to: 0 } },
+        scopes: a.detached ? (a.scopes ?? []) : (old.threadScopes(a.id) ?? []),
+      };
     });
   }
 
@@ -725,7 +763,12 @@ export class MockDocument implements ChannelHost {
       });
     this.stored.set(uuid7(), { seq, user: 'system' });
     const old = this.room;
-    this.room = this.newRoom(initial, content.requires, this.segment);
+    this.room = this.newRoom(
+      initial,
+      content.requires,
+      this.segment,
+      this.carryThreads(old, true, 0),
+    );
     this.bridge.resetRegions();
     for (const [roomId, a] of this.attached) {
       old.close(roomId);
@@ -746,6 +789,7 @@ export class MockDocument implements ChannelHost {
    */
   adopt(restored: RestoredDocument): void {
     const newSegments = restored.record.segments.length !== this.segments.length;
+    const oldOffset = this.segment.offset;
     const oldHead = this.head;
     const revision = this.perms.revision;
     if (this.incarnation !== restored.record.incarnation)
@@ -754,7 +798,12 @@ export class MockDocument implements ChannelHost {
     this.state = this.perms.documentState;
     this.loadSegments(restored);
     const old = this.room;
-    this.room = this.newRoom(this.segment.initial, this.segment.requires, this.segment);
+    this.room = this.newRoom(
+      this.segment.initial,
+      this.segment.requires,
+      this.segment,
+      this.carryThreads(old, newSegments, oldOffset - this.segment.offset),
+    );
     this.bridge.resetRegions();
     const seg = this.segment;
     for (const [roomId, a] of this.attached) {

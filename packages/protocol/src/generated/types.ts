@@ -632,8 +632,22 @@ export interface ConnectHint {
 /** Changes and comment activity by other people since the caller's read marker (08 §10). Placeholder: not defined by the prose. */
 export type Activity = { [key: string]: unknown };
 
-/** A comment body; it may contain mentions (13 §5). Placeholder: not defined by the prose. */
-export type CommentInput = { [key: string]: unknown };
+/** One piece of a comment body: text, or a mention (13 §5; ADR 0417). */
+export type CommentBodyPart = {
+  type: "text";
+  /** Typed text, shown as text and never as markup. */
+  text: string;
+} | {
+  type: "mention";
+  /** The mentioned user or group, `user:<id>` or `group:<id>`. The node holds the identifier only; a name comes from the host (13 §5). */
+  principal: string;
+};
+
+/** The body of a new or edited comment (13 §5; ADR 0417). The service raises `dep.comment.mentioned` for each mention of a new comment. */
+export interface CommentInput {
+  /** The comment, in order. */
+  body: CommentBodyPart[];
+}
 
 export interface RangeTarget {
   range: {
@@ -651,25 +665,44 @@ export interface BlockTarget {
 /** The room maps the range to the head and checks `comment` there (05 §6.2). */
 export interface CreateThreadRequest {
   target: RangeTarget | BlockTarget;
-  /** The first comment. Placeholder name. */
+  /** The first comment (ADR 0417). */
   comment: CommentInput;
 }
 
+/** A comment thread with its comments (ADR 0417). The entity tag of `GET /threads/{tid}` is the `If-Match` of a change of state or assignee. */
 export interface Thread {
   id: string;
   state: "open" | "resolved";
+  /** The person the thread is assigned to as a task, `user:<id>`; null when nobody (07 §12). */
   assignee?: string | null;
+  /** A range is where the text is at `baseSeq`; an empty range (`from` equals `to`) is a thread whose text was deleted (ADR 0015). */
   target?: RangeTarget | BlockTarget;
+  /** The author of the thread and of its first comment, `user:<id>`. */
+  createdBy: string;
+  createdAt: string;
+  /** The entity tag of this version, as `GET /threads/{tid}` sends it in `ETag`: a list item has no header of its own. */
+  etag: string;
+  /** The comments in the order they were made, without deleted ones. */
+  comments: Comment[];
 }
 
 export interface UpdateThreadRequest {
   state?: "open" | "resolved";
+  /** A principal, `user:<id>`, or null to clear. */
   assignee?: string | null;
 }
 
-/** A comment. Placeholder: not defined by the prose. */
+/** A comment of a thread (ADR 0417). Its entity tag is the `If-Match` of an edit. */
 export interface Comment {
   id: string;
+  /** The author, `user:<id>`. */
+  author: string;
+  createdAt: string;
+  /** Null while the comment was never edited. */
+  editedAt: string | null;
+  /** The entity tag of this version, the `If-Match` of an edit or delete; a comment inside a thread has no header of its own. */
+  etag: string;
+  body: CommentBodyPart[];
 }
 
 export interface CreateAssetRequest {

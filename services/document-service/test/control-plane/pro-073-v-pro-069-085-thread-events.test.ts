@@ -60,7 +60,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         });
         const created = await h.call('POST', `/v1/documents/${doc}/threads`, {
           token: as(doc, 'editor', 'ed-1'),
-          body: { target: { block: BODY_BLOCK }, comment: { text: 'Lane V-PRO-069-085' } },
+          body: {
+            target: { block: BODY_BLOCK },
+            comment: { body: [{ type: 'text', text: 'Lane V-PRO-069-085' }] },
+          },
         });
         expect(created.status, created.text).toBe(201);
         const url = `/v1/threads/${created.json.id as string}`;
@@ -81,7 +84,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
 
         const comment = await h.call('POST', `${url}/comments`, {
           token: as(doc, 'editor', 'ed-4'),
-          body: { text: 'A reply' },
+          body: { body: [{ type: 'text', text: 'A reply' }] },
         });
         expect(comment.status, comment.text).toBe(201);
 

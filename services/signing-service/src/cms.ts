@@ -44,6 +44,19 @@ export interface TimestampSource {
   stamp(digest: Uint8Array): Promise<Uint8Array>;
 }
 
+/**
+ * The nonce of a time-stamp query: 8 bytes that read as a positive DER INTEGER. Such an integer has
+ * no leading zero byte (X.690 8.3.2), and an authority may refuse a query that has one: OpenSSL
+ * answers "the data submitted has the wrong format". So the first byte is between 1 and 0x7f; a
+ * random first byte falls outside that range in one case in 128 (0x00 and 0x80). `random` is for tests.
+ */
+export function timestampNonce(random: (size: number) => Uint8Array = randomBytes): Uint8Array {
+  let nonce = random(8);
+  while (((nonce[0] as number) & 0x7f) === 0) nonce = random(8);
+  nonce[0] = (nonce[0] as number) & 0x7f;
+  return nonce;
+}
+
 /** An RFC 3161 client for one authority URL (HTTP, `application/timestamp-query`). */
 export class HttpTimestampAuthority implements TimestampSource {
   readonly url: string;
@@ -52,8 +65,7 @@ export class HttpTimestampAuthority implements TimestampSource {
   }
 
   async stamp(digest: Uint8Array): Promise<Uint8Array> {
-    const nonce = randomBytes(8);
-    nonce[0] = (nonce[0] as number) & 0x7f;
+    const nonce = timestampNonce();
     const req = new pkijs.TimeStampReq({
       version: 1,
       messageImprint: new pkijs.MessageImprint({

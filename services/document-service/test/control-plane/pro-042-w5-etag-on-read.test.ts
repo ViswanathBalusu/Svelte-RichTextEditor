@@ -108,7 +108,10 @@ describe('every mutable resource is read with an ETag (PRO-042 criterion 1)', ()
   it('a thread, and a comment in the responses that return it', async () => {
     const created = await h.call('POST', `/v1/documents/${doc}/threads`, {
       token: editor('ed-1'),
-      body: { target: { block: BODY_BLOCK }, comment: { text: 'Is this still right?' } },
+      body: {
+        target: { block: BODY_BLOCK },
+        comment: { body: [{ type: 'text', text: 'Is this still right?' }] },
+      },
     });
     expect(created.status, created.text).toBe(201);
     const url = `/v1/threads/${created.json.id as string}`;
@@ -128,7 +131,7 @@ describe('every mutable resource is read with an ETag (PRO-042 criterion 1)', ()
 
     const comment = await h.call('POST', `${url}/comments`, {
       token: editor('ed-1'),
-      body: { text: 'A reply.' },
+      body: { body: [{ type: 'text', text: 'A reply.' }] },
     });
     expect(comment.status, comment.text).toBe(201);
     const commentTag = tagOf(comment);
@@ -136,14 +139,14 @@ describe('every mutable resource is read with an ETag (PRO-042 criterion 1)', ()
     const edited = await h.call('PATCH', commentUrl, {
       token: editor('ed-1'),
       headers: { 'If-Match': commentTag },
-      body: { text: 'A reply, edited.' },
+      body: { body: [{ type: 'text', text: 'A reply, edited.' }] },
     });
     expect(edited.status, edited.text).toBe(200);
     expect(tagOf(edited)).not.toBe(commentTag);
     const stale = await h.call('PATCH', commentUrl, {
       token: editor('ed-1'),
       headers: { 'If-Match': commentTag },
-      body: { text: 'Too late.' },
+      body: { body: [{ type: 'text', text: 'Too late.' }] },
     });
     expect(stale.status).toBe(412);
   });

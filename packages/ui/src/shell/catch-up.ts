@@ -12,7 +12,11 @@
  * - the number of changes is announced once for each load that finds activity (a polite live region).
  */
 import type { CatchUpActivity, CatchUpForYou, CatchUpPort, HistoryChange } from '../core-api.ts';
-import { summaryByRegion, usersOf, type RegionRow } from './history-compare.ts';
+import type { RegionRow } from './history-compare.ts';
+
+/** The comparison helpers load with the first activity, not with the first interactive editor (FND-008). */
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+type Compare = typeof import('./history-compare.ts');
 
 export type CatchUpStatus = 'loading' | 'ready' | 'empty' | 'error' | 'forbidden';
 
@@ -73,8 +77,8 @@ export function forYouOrder(items: readonly CatchUpForYou[]): CatchUpForYou[] {
   return [...items.filter((i) => i.kind === 'mention'), ...items.filter((i) => i.kind === 'task')];
 }
 
-function peopleOf(activity: CatchUpActivity): string[] {
-  const seen = new Set<string>(usersOf(activity.changes as readonly HistoryChange[]));
+function peopleOf(compare: Compare, activity: CatchUpActivity): string[] {
+  const seen = new Set<string>(compare.usersOf(activity.changes as readonly HistoryChange[]));
   for (const item of activity.forYou) if (item.author !== null) seen.add(item.author);
   return [...seen];
 }
@@ -90,8 +94,11 @@ export function createCatchUpController(port: CatchUpPort): CatchUpController {
     for (const l of [...listeners]) l();
   };
 
-  const names = async (activity: CatchUpActivity): Promise<ReadonlyMap<string, string | null>> => {
-    const ids = peopleOf(activity);
+  const names = async (
+    compare: Compare,
+    activity: CatchUpActivity,
+  ): Promise<ReadonlyMap<string, string | null>> => {
+    const ids = peopleOf(compare, activity);
     const out = new Map<string, string | null>();
     if (ids.length === 0) return out;
     if (!port.resolveUsers) {
@@ -123,7 +130,8 @@ export function createCatchUpController(port: CatchUpPort): CatchUpController {
       return;
     }
     const activity = result.activity;
-    const resolved = await names(activity);
+    const compare = await import('./history-compare.ts');
+    const resolved = await names(compare, activity);
     if (mine !== asked || finished) return;
     if (!hasActivity(activity)) {
       set({ ...NOTHING, status: 'empty', activity });
@@ -133,7 +141,7 @@ export function createCatchUpController(port: CatchUpPort): CatchUpController {
     set({
       status: 'ready',
       activity,
-      regions: summaryByRegion(activity.changes),
+      regions: compare.summaryByRegion(activity.changes),
       forYou: forYouOrder(activity.forYou),
       badge: badgeOf(activity),
       names: resolved,

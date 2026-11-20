@@ -53,7 +53,7 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           token,
           body: {
             target: { block: 'pIntro0000000001' },
-            comment: { body: 'Check this clause.' },
+            comment: { body: [{ type: 'text', text: 'Check this clause.' }] },
             author: CLAIMED,
             createdBy: CLAIMED,
             user: CLAIMED,
@@ -81,14 +81,22 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const editor = await h.mintToken(h.a, EDITOR_SUB, { [doc]: 'editor' });
         const created = await h.call('POST', `/v1/documents/${doc}/threads`, {
           token: owner,
-          body: { target: { block: 'pIntro0000000001' }, comment: { body: 'Thread.' } },
+          body: {
+            target: { block: 'pIntro0000000001' },
+            comment: { body: [{ type: 'text', text: 'Thread.' }] },
+          },
         });
         expect(created.status).toBe(201);
         const tid = created.json.id as string;
 
         const reply = await h.call('POST', `/v1/threads/${tid}/comments`, {
           token: editor,
-          body: { body: 'A reply.', author: CLAIMED, createdBy: CLAIMED, user: CLAIMED },
+          body: {
+            body: [{ type: 'text', text: 'A reply.' }],
+            author: CLAIMED,
+            createdBy: CLAIMED,
+            user: CLAIMED,
+          },
         });
         expect(reply.status).toBe(201);
         const stored = await store().get(h.a.id, tid);

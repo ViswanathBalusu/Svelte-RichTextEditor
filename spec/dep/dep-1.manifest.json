@@ -3,7 +3,7 @@
   "status": "draft",
   "subprotocol": "dep.v1",
   "generator": "packages/protocol/scripts/generate.ts",
-  "definitionHash": "323d2c1a02fad7fcb7647732680c670fefd410746ba66cf85ce54f430f66fee0",
+  "definitionHash": "c2919830d6920c0e92a44909686f014094cf8a398ab53629cf0b2ddea484030e",
   "cdm": {
     "min": 1,
     "max": 1,
@@ -22,8 +22,8 @@
   },
   "files": {
     "spec/dep/dep-1.asyncapi.json": "7824ed66e63c28d0afb86b13b4ed0e3ee664bfac2219a62eafd1fdf50585d56e",
-    "spec/dep/dep-1.openapi.json": "502388dfed254f092446da1c626f0b58bbf6b033f135d3a57a2a3f8d267283ee",
-    "spec/dep/dep-1.schema.json": "7913ab0d2d7165cdacd46f5e5dee72b85aae044779f340d77f5f2f71f1e9243d",
+    "spec/dep/dep-1.openapi.json": "e6f277daf38301e137b0a899d1dea545dc3b4efb8896c09e162ecfd542cc25d4",
+    "spec/dep/dep-1.schema.json": "285f44f904dd04c6c19835462998ae95fd07e8d2e68a9e70aa8e5d7ac358361f",
     "spec/dep/webhooks/dep.document.created.v1.schema.json": "1e16a104e436cdf8f6213fc1f051a4d9a1ec58a4c2c5eeb25829ed86ae672c54",
     "spec/dep/webhooks/dep.document.deleted.v1.schema.json": "890c2efa8c1731ef2208fbf3c86629fa2eabf2b1eef70dd74e6e8eb52a53e404",
     "spec/dep/webhooks/dep.document.state_changed.v1.schema.json": "9cc6359f41bf28afce274afe4a664fbdd0cb18ac1bc118a80341fb83f32954fb",
@@ -60,7 +60,7 @@
     "spec/dep/webhooks/dep.workflow.completed.v1.schema.json": "ed324ab76a9225e8f652b3f1cfc201a31929cdf80777f1bdc4e44b60d34c4dca",
     "spec/dep/webhooks/dep.workflow.finalised.v1.schema.json": "9152416acc7809df32797943418c7a08be2f0169dd5f581a6c712d938774b333",
     "spec/dep/dep-1.registry.json": "7eb833f98d4c74c97c822ebc6fc0c86c9ecece683303fd552ec7c6b3c9702872",
-    "spec/dep/dep-1.gaps.json": "9f39f72f4a6e61ac2a30bf96e95cda034772f01351a6f23e8d5da99ab4c13533",
-    "packages/protocol/src/generated/types.ts": "e12931cdbb53e692716b0a8afb801080ac9d132cb0d3618b8635283f32dbdb58"
+    "spec/dep/dep-1.gaps.json": "13f01607bcec08af7322852875b0f4034b5618ec22fd80b4806ad06abc5f0d54",
+    "packages/protocol/src/generated/types.ts": "4ddc535bb63d9f15a8e9292d4c9390cbf668bf507c0d6255739de5a5bbb4b2d1"
   }
 }
