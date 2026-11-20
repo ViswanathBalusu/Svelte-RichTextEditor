@@ -36,6 +36,18 @@ import {
   commentDecorations,
 } from '../comment-decorations.ts';
 import { pageGuideDecorations } from '../page-guide-decorations.ts';
+import {
+  blockText,
+  findBlock,
+  pressKey,
+  replaceTransaction,
+  selectionOf,
+  selectTransaction,
+  stepFrom,
+  textBlocks,
+  type PageViewHandle,
+  type PageViewHooks,
+} from '../page-input.ts';
 import { proofingDecorations } from '../proofing-decorations.ts';
 import { ReadValue, sameJson } from '../read-value.ts';
 import { FIND_CURRENT_CLASS, findDecorations } from '../search-highlight.ts';
@@ -714,6 +726,83 @@ export class EditorCore extends DocumentCore {
       for (const t of transactions) mapping.appendMapping(t.mapping);
       if (!sub.sync(state, mapping)) this.closePanel();
     }
+  }
+
+  /**
+   * Attaches the page view to this core (02 §9.6; FE-098). The page view has no ProseMirror view of
+   * its own: it reads the document and the selection as block identifiers and offsets, and every
+   * change goes through `dispatchTransaction`, so the guards, suggestion mode, the sync queue and the
+   * history treat it as an edit made in the web view. The body view may stay mounted behind it, so
+   * switching views keeps one core. `hooks.update` is told of every new state (local, remote or a
+   * replaced document); `hooks.focus` is called when something asks the core to take focus.
+   * Returns the page view's handle; `detach` removes the hooks.
+   */
+  attachPageView(hooks: PageViewHooks): PageViewHandle {
+    let composingBlock: string | null = null;
+    const remove = this.addView({
+      update: (state, transactions) =>
+        hooks.update(
+          transactions.some((t) => t.docChanged) || transactions.length === 0,
+          transactions.length === 0,
+        ),
+      composing: () => {
+        if (composingBlock === null) return null;
+        const block = findBlock(this.editorState.doc, composingBlock);
+        return block === null ? null : block.pos;
+      },
+      focus: () => hooks.focus(),
+      // A change of the mode or the access moves what may be edited, with no new state (FE-029).
+      lockChanged: () => hooks.update(false, false),
+      accessChanged: () => hooks.update(false, false),
+    });
+    return {
+      content: () => this.getContent(),
+      selection: () => selectionOf(this.editorState),
+      select: (anchor, head = anchor) => {
+        const tr = selectTransaction(this.editorState, anchor, head);
+        if (tr === null) return false;
+        this.dispatch(tr);
+        return true;
+      },
+      text: (blockId) => {
+        const block = findBlock(this.editorState.doc, blockId);
+        return block === null ? null : blockText(block.node);
+      },
+      blocks: () => textBlocks(this.editorState.doc),
+      replace: (blockId, from, to, text, caret) => {
+        if (this.readOnly) return false;
+        const before = this.editorState.doc;
+        const tr = replaceTransaction(this.editorState, blockId, from, to, text, caret);
+        if (tr === null) return false;
+        this.dispatch(tr);
+        return this.editorState.doc !== before;
+      },
+      key: (key) => {
+        if (this.readOnly) return false;
+        return pressKey(this.editorState, key, (tr) => this.dispatch(tr));
+      },
+      step: (point, direction) => stepFrom(this.editorState.doc, point, direction),
+      takeDirty: () => this.takeLayoutDirty(),
+      // The clipboard goes through the core as the web view's does: a refused copy writes nothing (FE-055).
+      copy: (event) => writeClipboard(event, this.copySelection()),
+      cut: (event) => writeClipboard(event, this.cutSelection().payload),
+      paste: (event) => {
+        if (this.readOnly || !this.#paste(event.clipboardData)) return false;
+        event.preventDefault();
+        return true;
+      },
+      run: (command) => this.run(command),
+      composing: (blockId) => {
+        const ended = composingBlock !== null && blockId === null;
+        composingBlock = blockId;
+        if (ended) this.compositionEnded();
+      },
+      readOnly: () => this.readOnly,
+      detach: () => {
+        composingBlock = null;
+        remove();
+      },
+    };
   }
 
   /** The block being composed: the body paragraph, or the open sub-editor's whole node (S1). */

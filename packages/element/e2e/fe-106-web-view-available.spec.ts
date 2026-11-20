@@ -25,6 +25,7 @@ function facts(page: Page) {
     const shell = root.querySelector<HTMLElement>('.de-shell');
     return {
       surface: surface !== null,
+      pageView: root.querySelector('.de-page-view') !== null,
       shellShown: shell !== null && getComputedStyle(shell).display !== 'none',
       label: root.querySelector('.de-view-label')?.textContent ?? null,
       pageScrollWidth: document.documentElement.scrollWidth,
@@ -42,9 +43,14 @@ const setView = (page: Page, value: string) =>
     value,
   });
 
-test('view="print" at 320 CSS pixels gives the web view, and the web view stays one value away (FE-106, criterion 3)', async ({
+test('view="print" at 320 CSS pixels gives the page view, and the web view stays one value away (FE-106, criterion 3)', async ({
   page,
+  browserName,
 }) => {
+  test.skip(
+    browserName === 'firefox',
+    'the page view is not offered in Firefox (S5); fe-065-view-print-fallback.spec.ts covers it',
+  );
   // A touch screen makes some browsers answer `any-pointer: coarse`; this test is about a desktop pointer.
   await page.addInitScript(() => {
     const original = window.matchMedia.bind(window);
@@ -54,11 +60,18 @@ test('view="print" at 320 CSS pixels gives the web view, and the web view stays 
   await openEmbed(page);
   await mountEditor(page, { attributes: { view: 'print' } });
 
+  // The page view (FE-101) shows fixed-width pages, so it is the one view that does not reflow: the way
+  // back to the web view is the point of this test.
+  await expect.poll(async () => (await facts(page)).label).toBe('Page layout');
   const asked = await facts(page);
-  expect(asked.surface).toBe(true);
-  expect(asked.label).toBe('Web layout');
-  expect(asked.surfaceOverflow).toBeLessThanOrEqual(0);
-  expect(asked.pastEdge).toBe(0);
+  expect(asked.pageView).toBe(true);
+
+  await setView(page, 'web');
+  await expect.poll(async () => (await facts(page)).label).toBe('Web layout');
+  const web = await facts(page);
+  expect(web.pageView).toBe(false);
+  expect(web.surfaceOverflow).toBeLessThanOrEqual(0);
+  expect(web.pastEdge).toBe(0);
 
   await setView(page, 'read');
   await expect.poll(async () => (await facts(page)).shellShown).toBe(false);

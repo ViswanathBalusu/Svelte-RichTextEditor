@@ -32,6 +32,7 @@ import {
   Icons,
   type IconOverrides,
   createCommandRegistry,
+  eventKey,
   headerMode,
   themeMode,
   toolbarMode,
@@ -202,6 +203,12 @@ export interface MountedEditor extends EditorHandle {
   text(key: string, params: Readonly<Record<string, string | number>>): string | null;
   /** Brings the host's extensions in line with the list the element holds (UX-050). */
   setExtensions(list: readonly unknown[]): void;
+  /**
+   * Runs the registry command bound to a key event, as the shell's own listener does, for the page
+   * view's input bridge, which is a text field that listener leaves alone (FE-098 criterion 6). True
+   * when the key is bound to an offered command, whether or not it could run.
+   */
+  pageShortcut(event: KeyboardEvent): boolean;
 }
 
 export { SettingsStore };
@@ -804,6 +811,14 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     setExtensions(list: readonly unknown[]) {
       app.setExtensions(list);
+    },
+    pageShortcut(event: KeyboardEvent) {
+      const key = eventKey(event);
+      if (key === null) return false;
+      const id = registry.commandForKey(key);
+      if (!id || !registry.state(id).offered) return false;
+      registry.exec(id);
+      return true;
     },
     restoreShareFocus() {
       return app.restoreFocus();

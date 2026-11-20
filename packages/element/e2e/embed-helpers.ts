@@ -127,9 +127,23 @@ export async function mountEditor(
       ports: opts.ports ?? [],
     },
   );
-  await expect(
-    page.locator(`doc-editor[data-test="${opts.name ?? 'one'}"] .de-editing-surface`),
-  ).toBeVisible();
+  const name = opts.name ?? 'one';
+  if (opts.attributes?.['view'] === 'print') {
+    // The page view hides the web view's surface and shows its own pages (FE-101); where the page view
+    // is not offered the surface is shown, so either one being visible means the editor is up.
+    await page.waitForFunction((n) => {
+      const root = document.querySelector(`doc-editor[data-test="${n}"]`)?.shadowRoot;
+      const shown = (el: Element): boolean => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+      };
+      return [
+        ...(root?.querySelectorAll('.de-editing-surface, .de-page-view .de-page') ?? []),
+      ].some(shown);
+    }, name);
+    return;
+  }
+  await expect(page.locator(`doc-editor[data-test="${name}"] .de-editing-surface`)).toBeVisible();
 }
 
 /**
