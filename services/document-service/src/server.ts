@@ -123,6 +123,7 @@ import { PgAccessCodeStore } from './workflow/access-code-pg.ts';
 import type { ConsentTextStore } from './workflow/consent-service.ts';
 import { sweepTenant } from './workflow/schedule-sweep.ts';
 import { FinalSealer } from './workflow/final-seal.ts';
+import { appearanceRequestFor } from './workflow/appearances.ts';
 import { MemoryAnchorStore, type AnchorStore } from './workflow/anchor-store.ts';
 import { HttpSigningClient, type SigningClient } from './workflow/signing-client.ts';
 import { recordParticipantOpened } from './workflow/participant-view.ts';
@@ -1190,6 +1191,18 @@ export async function startService(opts: StartOptions): Promise<Service> {
       objects: parts.objects,
       queue: parts.queue,
       events,
+      // The visible appearances at the signature and initials fields (FRW-057).
+      ...(parts.evidence
+        ? {
+            appearances: (ref, workflow, job) =>
+              appearanceRequestFor(
+                { objects: parts.objects, content, evidence: parts.evidence! },
+                ref,
+                workflow,
+                job,
+              ),
+          }
+        : {}),
       // The operator's alert (FRW-052 criterion 5): an error line and a counter to alert on. The
       // audit entry `workflow.finalisation_failed` is written by the step itself.
       alert: (a) => {

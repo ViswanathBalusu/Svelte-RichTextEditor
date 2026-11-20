@@ -27,7 +27,12 @@ import { finaliseSealed, type FinaliseSealedOutcome } from './finalise-sealed.ts
 import type { SealedPdfStore } from './sealed-store.ts';
 import type { TransitionDeps } from './transitions.ts';
 import type { WorkflowResourceView } from './workflow-resource.ts';
-import type { SigningClient, SigningFailure } from './signing-client.ts';
+import type {
+  AppearanceReport,
+  AppearanceRequest,
+  SigningClient,
+  SigningFailure,
+} from './signing-client.ts';
 
 /** What the operator is told when finalisation stops at the seal. */
 export interface OperatorAlert {
@@ -63,6 +68,8 @@ export interface SealAndFinaliseRequest {
   /** The `seq` the PDF was compiled at (the workflow's `completedSeq`). */
   readonly seq: number;
   readonly retainUntilMs: number;
+  /** Visible appearances at the signature and initials fields (FRW-057). */
+  readonly appearances?: AppearanceRequest | undefined;
 }
 
 export type SealAndFinaliseOutcome =
@@ -72,6 +79,8 @@ export type SealAndFinaliseOutcome =
       readonly attempts: number;
       /** The time in the seal's time-stamp token: the third party's time. */
       readonly timestampTime: Date;
+      /** What was drawn at the fields and what was not, when appearances were asked for. */
+      readonly appearances?: AppearanceReport;
       readonly final: Extract<FinaliseSealedOutcome, { readonly ok: true }>;
     }
   | {
@@ -112,6 +121,7 @@ export async function sealAndFinalise(
       pdf: req.pdf,
       compileSha256: [req.compileSha256[0], req.compileSha256[1]],
       seal: current.members.finalisation?.seal,
+      appearances: req.appearances,
     });
     if (out.ok) {
       const final = await finaliseSealed(deps, {
@@ -123,7 +133,14 @@ export async function sealAndFinalise(
         retainUntilMs: req.retainUntilMs,
       });
       if (!final.ok) return { ok: false, problem: final.problem };
-      return { ok: true, sealed: true, attempts, timestampTime: out.timestampTime, final };
+      return {
+        ok: true,
+        sealed: true,
+        attempts,
+        timestampTime: out.timestampTime,
+        ...(out.appearances ? { appearances: out.appearances } : {}),
+        final,
+      };
     }
     if (out.retryable && attempts < attemptsAllowed) {
       const delays = deps.retry.delaysMs;
