@@ -133,7 +133,7 @@ import type { RoleEdit, RoleEditOutcome, RoleInfo } from './role-edit.ts';
 import { listRoles, nextRoleId } from './role-read.ts';
 import type { SourceEdit, SourceEditOutcome, SourceInfo } from './source-edit.ts';
 import { listSources } from './source-read.ts';
-import { authoringPart, rulesPart } from './parts.ts';
+import { authoringPart, extensionPart, rulesPart } from './parts.ts';
 import {
   type SectionWarning,
   insertBreak,
@@ -210,7 +210,7 @@ import { type Internals, register } from './internals.ts';
 import { layoutDirtyTracker } from './layout-dirty.ts';
 import { INTERNAL, REMOTE, RESOLVE_ORIGIN, SUGGESTED, type ResolveOrigin } from './meta.ts';
 import { scopeDiff } from './scope-diff.ts';
-import { ExtensionApi } from './extension-api.ts';
+import type { ExtensionApi } from './extension-api.ts';
 import type { ExtensionApiOptions, ExtensionDocumentApi } from './extension-api-types.ts';
 import { recordAsSuggestion, suggestDelete, suggestReplace } from './suggestion-edit.ts';
 import {
@@ -4686,7 +4686,7 @@ one or original. It is a
    * the guards and suggestion mode as typing does. It ends with dispose() or when the core is destroyed.
    */
   extensionApi(options: ExtensionApiOptions): ExtensionDocumentApi {
-    const api: ExtensionApi = new ExtensionApi(
+    const api: ExtensionApi = new (extensionPart.get().ExtensionApi)(
       {
         state: () => this.#state,
         seq: () => this.#sync.seq,

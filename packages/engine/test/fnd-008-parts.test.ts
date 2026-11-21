@@ -68,6 +68,7 @@ describe('before a part is loaded', () => {
     needs(() => c.editRule({ op: 'delete', id: 'r1' }), 'rules');
     needs(() => c.ruleItems(), 'rules');
     needs(() => c.sendChecklist([]), 'rules');
+    needs(() => c.extensionApi({ maxRanges: 2 }), 'extension');
     expect(JSON.stringify(c.getContent().doc)).toBe(before);
     c.destroy();
   });
@@ -118,7 +119,7 @@ describe('a part that fails to load', () => {
 describe('after the parts are loaded', () => {
   it('lets the core change roles, sources, fields and rules', async () => {
     const c = core();
-    await loadParts(['authoring', 'rules']);
+    await loadParts(['authoring', 'extension', 'rules']);
     expect(
       c.editRole({ op: 'add', id: c.nextRoleId(), values: { name: 'Witness', color: '#336699' } }),
     ).toEqual({ ok: true });
@@ -133,6 +134,9 @@ describe('after the parts are loaded', () => {
     expect(c.sources().map((s) => s.id)).toEqual(['smith2026']);
     expect(c.ruleItems()).toEqual([]);
     expect(c.sendChecklist([])).toEqual(expect.any(Array));
+    const api = c.extensionApi({ maxRanges: 2 });
+    expect(typeof api.dispose).toBe('function');
+    api.dispose();
     c.destroy();
   });
 

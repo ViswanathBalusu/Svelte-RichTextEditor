@@ -8,7 +8,7 @@ import fc from 'fast-check';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { TextSelection } from 'prosemirror-state';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   DocumentCore,
   type CoreConfig,
@@ -19,6 +19,10 @@ import type { CdmFragment } from '../src/cdm-fragment.ts';
 import { internals } from '../src/testing.ts';
 import { SPIKE_IDS, editorAccess, regionOnlyAccess, spikeDocument } from './fixtures.ts';
 import { microtask, posOf } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The extension API loads on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['extension']));
 
 /** A queue of deliveries the test runs on its own. */
 function manual(): { later: (run: () => void) => void; run: () => void; waiting: () => number } {

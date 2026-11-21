@@ -7,7 +7,11 @@
 import { DocumentCore, type ExtensionDocumentApi as EngineApi } from '@docedit/engine/headless';
 import type { ExtensionDocumentApi as UiApi } from '@docedit/ui';
 import { spikeDocument } from '@docedit/engine/testing';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadParts } from '@docedit/engine/headless';
+
+// The extension API loads on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['extension']));
 
 // Compile-time: each side is assignable to the other, so neither can drift without a type error.
 type Same = EngineApi extends UiApi ? (UiApi extends EngineApi ? true : false) : false;

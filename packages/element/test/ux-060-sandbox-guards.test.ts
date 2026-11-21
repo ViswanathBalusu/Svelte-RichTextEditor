@@ -13,7 +13,11 @@ import {
   type SandboxAccess,
   type SandboxLogEntry,
 } from '@docedit/ui/sandbox-protocol';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadParts } from '@docedit/engine/headless';
+
+// The extension API loads on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['extension']));
 
 const EDIT = ['view', 'comment', 'suggest', 'edit'] as const;
 const READ = ['view', 'comment'] as const;

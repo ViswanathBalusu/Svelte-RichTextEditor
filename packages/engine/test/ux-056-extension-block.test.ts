@@ -9,11 +9,15 @@
  */
 import { validate } from '@docedit/model/validate';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { DocumentCore, type ExtBlockDraft } from '../src/headless.ts';
 import { internals } from '../src/testing.ts';
 import { IDS, SPIKE_IDS, contractDocument, regionOnlyAccess, spikeDocument } from './fixtures.ts';
 import { join, microtask, newService, posOf, until } from './support.ts';
+import { loadParts } from '../src/parts.ts';
+
+// The extension API loads on first use (FND-008; engine parts.ts).
+beforeAll(() => loadParts(['extension']));
 
 const DRAFT: ExtBlockDraft = {
   extension: 'com.example.chart',

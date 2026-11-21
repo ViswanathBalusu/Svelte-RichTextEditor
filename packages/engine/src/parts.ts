@@ -18,10 +18,11 @@
  */
 
 import type * as Authoring from './authoring.ts';
+import type * as ExtensionPart from './extension-part.ts';
 import type * as RulesPart from './rules-part.ts';
 
 /** The names of the parts. */
-export type PartName = 'authoring' | 'rules';
+export type PartName = 'authoring' | 'extension' | 'rules';
 
 export class PartNotLoadedError extends Error {
   readonly part: PartName;
@@ -81,11 +82,18 @@ export const authoringPart = new Part<typeof Authoring>(
   () => import('./authoring.ts'),
 );
 
+/** The document API of a host extension (xtension-part.ts). */
+export const extensionPart = new Part<typeof ExtensionPart>(
+  'extension',
+  () => import('./extension-part.ts'),
+);
+
 /** The rules language: evaluation while filling, the rule builder, the pre-send checks. */
 export const rulesPart = new Part<typeof RulesPart>('rules', () => import('./rules-part.ts'));
 
 const PARTS: Readonly<Record<PartName, Part<unknown>>> = {
   authoring: authoringPart,
+  extension: extensionPart,
   rules: rulesPart,
 };
 
