@@ -98,6 +98,40 @@ export function editor(page: Page): Locator {
   return page.locator('doc-editor');
 }
 
+/**
+ * Runs a command of the shell as a person does: its toolbar button, or, when the toolbar has no
+ * room for it, the same command in the toolbar's "More" menu.
+ */
+export async function runCommand(page: Page, id: string): Promise<void> {
+  await editor(page).locator('[data-command-id]').first().waitFor();
+  const button = editor(page).locator(`button[data-command-id="${id}"]:not([data-menu-item])`);
+  if ((await button.count()) > 0 && (await button.first().isVisible())) {
+    await button.first().click();
+    return;
+  }
+  await editor(page).locator('[data-command-id="toolbar.more"]').click();
+  await editor(page).locator(`[data-menu-item][data-command-id="${id}"]`).click();
+}
+
+/**
+ * Exports the open document as a PDF from the shell's export dialog, waits for the stack's worker
+ * to finish, and shows the result in the PDF preview pane (EXP-001). Returns the pane.
+ */
+export async function exportToPdfPane(page: Page): Promise<Locator> {
+  await runCommand(page, 'document.export');
+  const dialog = editor(page).locator('dialog[data-dialog="export"]');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Export', exact: true }).click();
+  await expect(dialog.locator('[data-status="export"]')).toHaveText('Finished', {
+    timeout: 300_000,
+  });
+  await dialog.getByRole('button', { name: 'Show in the PDF preview' }).click();
+  await expect(dialog).toBeHidden();
+  const pane = editor(page).locator('[data-pane="pdf"]');
+  await expect(pane).toBeVisible();
+  return pane;
+}
+
 /** The body paragraph of a region of the demo template, by the region's title. */
 export function regionParagraph(page: Page, regionTitle: string): Locator {
   return editor(page).locator(`.de-region[data-title="${regionTitle}"] p.de-p`).first();

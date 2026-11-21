@@ -8,6 +8,9 @@
  * `startExport` does the checks of PRO-086: no document, no exports port, no `exports` feature, and
  * the `no-export` restriction each refuse before any request is sent.
  *
+ * `latestPdf` is the newest job of target `pdf` this service started, whoever asked for it (the
+ * dialog or the PDF pane); the shell's PDF pane shows it (EXP-001).
+ *
  * Open (docs/adr/0388-w3-UX-101-export-targets.md): the protocol has no way for a deployment to
  * announce its export targets, so `EXPORT_TARGETS` is a fixed list. The service refuses a target it
  * does not support with `validation_failed`, and the dialog then says the export did not start.
@@ -105,8 +108,30 @@ export function exportService(options: ExportServiceOptions): ExportService {
     return last;
   };
 
+  // The newest PDF job this service started (EXP-001): the PDF pane shows it. "Newest" is by the
+  // order the jobs were first reported in, so a late report of an older job does not replace it.
+  let pdfJobs = 0;
+  const pdfOrder = new Map<string, number>();
+  let latestPdf: ExportJobView | null = null;
+  const pdfListeners = new Set<() => void>();
+  const followPdf = (view: ExportJobView): void => {
+    if (view.target !== 'pdf') return;
+    let order = pdfOrder.get(view.id);
+    if (order === undefined) pdfOrder.set(view.id, (order = ++pdfJobs));
+    if (latestPdf !== null && order < (pdfOrder.get(latestPdf.id) ?? 0)) return;
+    latestPdf = view;
+    for (const listener of [...pdfListeners]) listener();
+  };
+
   return {
     targets: { get: targetsNow, subscribe: () => () => {} },
+    latestPdf: {
+      get: () => latestPdf,
+      subscribe(listener) {
+        pdfListeners.add(listener);
+        return () => pdfListeners.delete(listener);
+      },
+    },
     async request(target: ExportTarget, given: ExportOptions): Promise<{ jobId: string }> {
       // The options the dialog passes are the wire options; nothing is added or renamed here.
       const body: ExportRequest = { target, options: { ...given } };
@@ -114,6 +139,7 @@ export function exportService(options: ExportServiceOptions): ExportService {
         const e = entry(job.id);
         e.view = jobView(job);
         for (const listener of [...e.listeners]) listener();
+        followPdf(e.view);
         options.onJob?.(job);
       });
     },

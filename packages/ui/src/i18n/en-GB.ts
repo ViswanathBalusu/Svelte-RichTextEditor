@@ -1098,6 +1098,14 @@ export const EN_GB = {
   'export.preflight.continue': 'Continue',
   'export.preflight.cancel': 'Do not export',
   'export.failed.start': 'The export could not be started.',
+  // The PDF preview pane (EXP-001). The job's state and page count use the export strings above.
+  'export.showInPane': 'Show in the PDF preview',
+  'pdf.empty': 'No PDF has been made in this session yet.',
+  'pdf.make': 'Make a preview',
+  'pdf.refresh': 'Make a new preview',
+  'pdf.loading': 'Loading the PDF',
+  'pdf.failed.start': 'The preview could not be started.',
+  'pdf.failed.view': 'The PDF could not be shown. Make a new preview to try again.',
   // Client export filters of extensions (UX-055). The format's label is the extension's own text.
   'export.filter.noExport': 'Your access does not allow export.',
   'export.filter.save': 'Save {name}',

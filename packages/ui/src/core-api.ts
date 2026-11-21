@@ -631,6 +631,28 @@ export interface ExportService {
   /** The job as `export.*` events report it; null for an unknown job. */
   job(jobId: string): ReadView<ExportJobView | null>;
   cancel(jobId: string): Promise<void>;
+  /**
+   * The newest job of target `pdf` that this service started, as its reports arrive; null before
+   * the first. The PDF pane shows it (EXP-001). Absent: the core does not follow one, and the pane
+   * is not offered.
+   */
+  readonly latestPdf?: ReadView<ExportJobView | null>;
+}
+
+/**
+ * The viewer of a typeset PDF (FE-071; 09 §9.3 rule 7): the core puts a sandboxed frame of another
+ * origin into `container` and opens the PDF in it. The shell never fetches or parses the file.
+ */
+export interface PdfViewService {
+  /**
+   * Opens the PDF at a signed URL in a new frame inside `container`; resolves with the page count
+   * once the first page is drawn, and rejects when the viewer or the file cannot be loaded.
+   * `destroy()` removes the frame.
+   */
+  open(
+    container: Element,
+    source: { readonly url: string },
+  ): Promise<{ readonly viewer: { destroy(): void }; readonly pages: number }>;
 }
 
 /** Roles a region grant may give (07 §2). */
@@ -934,6 +956,8 @@ export interface CoreApi {
 
   /** Export jobs (UX-101), when the backend announces `exports`. */
   readonly exports?: ExportService;
+  /** The viewer of the typeset PDF, for the PDF pane (EXP-001; FE-071). Absent: no PDF pane. */
+  readonly pdf?: PdfViewService;
   /**
    * The document as this reader holds it (the engine's `getContent()`, a CDM envelope), for the
    * client export filters of extensions (UX-055; 13 §7.1). Never hidden content (ADR 0019).
