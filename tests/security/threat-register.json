@@ -91,19 +91,14 @@
       "provenBy": "SEC-005",
       "criteria": [1, 2, 4, 5],
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "html-sinks.test.ts",
         "injection-corpus.test.ts",
         "sec-005-every-position.test.ts",
         "sec-005-entry-routes.test.ts",
+        "packages/element/e2e/sec-005-rendered-corpus.spec.ts",
         "packages/element/e2e/sec-005-canary.spec.ts"
-      ],
-      "open": [
-        {
-          "criterion": 2,
-          "what": "the corpus rendered in display names, comment bodies, field labels and values, region titles, alt text and document titles in every supported browser"
-        }
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Script injection through document content"]
@@ -117,16 +112,11 @@
       "provenBy": "SEC-005",
       "criteria": [3],
       "phase": "1b",
-      "status": "partly-proven",
+      "status": "proven",
       "tests": [
         "packages/element/e2e/sec-005-canary.spec.ts",
+        "packages/element/e2e/sec-005-paste-paths.spec.ts",
         "packages/element/e2e/sec-005-image-paste.spec.ts"
-      ],
-      "open": [
-        {
-          "criterion": 3,
-          "what": "pasted HTML through the Word and Google Docs cleaners, beside the fragment, whitelist and plain-text paths that are run"
-        }
       ],
       "boundaries": ["host-page-to-element"],
       "specRows": ["Script injection through paste"]

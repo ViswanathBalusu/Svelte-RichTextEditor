@@ -66,6 +66,29 @@ const call = (rig: Rig, method: string, path: string, token: string, body?: unkn
     headers: { 'Idempotency-Key': randomUUID() },
   }) as Promise<Reply>;
 
+/** A call with the service credential, acting for a user who is below the gate (`DEP-Actor`). */
+const serviceCall = (rig: Rig, method: string, path: string, body: unknown) =>
+  rig.h.call(method, path, {
+    token: rig.h.a.apiKey,
+    headers: { 'Idempotency-Key': randomUUID(), 'DEP-Actor': 'carol' },
+    body,
+  }) as Promise<Reply>;
+
+/** The template record of the rig's document, made once (a document is the template of one record). */
+let templateId: string | undefined;
+async function templateOf(rig: Rig): Promise<string> {
+  if (templateId === undefined) {
+    const made = (await rig.h.call('POST', '/v1/templates', {
+      token: rig.h.a.apiKey,
+      headers: { 'Idempotency-Key': randomUUID() },
+      body: { document: rig.doc, name: 'SEC-032 template' },
+    })) as Reply;
+    expect(made.status, made.text).toBe(201);
+    templateId = made.json.id as string;
+  }
+  return templateId;
+}
+
 const CASES: Record<string, Case> = {
   'GET /documents/{id}/content|query.seq': {
     async below(rig, as) {
@@ -266,6 +289,45 @@ const CASES: Record<string, Case> = {
         body: { atSeq: rig.head },
       });
       expect(r.status, r.text).toBe(201);
+    },
+  },
+  'POST /documents|body.templateSeq': {
+    // FRW-062: a document made from a template forks the template document at this seq. The
+    // service credential names the user it acts for in `DEP-Actor`, as for a fork.
+    async below(rig) {
+      const template = await templateOf(rig);
+      refused(await serviceCall(rig, 'POST', '/v1/documents', { template, templateSeq: 1 }));
+    },
+    async at(rig) {
+      const template = await templateOf(rig);
+      const r = await serviceCall(rig, 'POST', '/v1/documents', {
+        template,
+        templateSeq: rig.head,
+      });
+      expect(r.status, r.text).toBe(201);
+    },
+  },
+  'POST /bulk-sends|body.templateSeq': {
+    // FRW-063: the seq is pinned once for every row, through the same `pinTemplate`.
+    async below(rig) {
+      const template = await templateOf(rig);
+      refused(
+        await serviceCall(rig, 'POST', '/v1/bulk-sends', {
+          template,
+          templateSeq: 1,
+          rows: [{}],
+        }),
+      );
+    },
+    async at(rig) {
+      const template = await templateOf(rig);
+      const r = await serviceCall(rig, 'POST', '/v1/bulk-sends', {
+        template,
+        templateSeq: rig.head,
+        rows: [{}],
+      });
+      expect(r.status, r.text).not.toBe(403);
+      expect(r.text).not.toContain(MARKER);
     },
   },
   'POST /documents/{id}/versions|body.seq': {

@@ -23,11 +23,12 @@ import {
   roleCaps,
 } from '@docedit/authority';
 import type { JsonNode } from '@docedit/model';
-import type { DocRef, DocumentRecord, LogStore } from '../storage/types.ts';
+import type { DocRef, DocumentRecord, GrantStore, LogStore } from '../storage/types.ts';
+import type { VersionStorePort } from '../storage/versions-memory.ts';
+import type { WorkflowResourceStore } from '../workflow/workflow-resource.ts';
 import { stateAllowed } from '../data-plane/gate.ts';
 import { recordOf } from '../workflow/record.ts';
-import { regionsOfJson } from './content.ts';
-import type { HandlerDeps } from './kit.ts';
+import { regionsOfJson, type ContentReader } from './content.ts';
 import type { Caller } from './pipeline.ts';
 import { ApiError } from './problems.ts';
 
@@ -57,7 +58,7 @@ export function connectionOn(caller: Caller, doc: string): Connection | null {
  * the connection of `connectionOn`, which holds no workflow role, so they grant nothing more.
  */
 export async function readerConnectionOn(
-  d: Pick<HandlerDeps, 'workflows'>,
+  d: { workflows?: WorkflowResourceStore },
   caller: Caller,
   doc: string,
 ): Promise<Connection | null> {
@@ -191,13 +192,25 @@ export function actingConnection(surrogate: string): Connection {
 }
 
 /**
+ * What the history gate reads from the handler dependencies. A structural type, so that this file
+ * does not import `kit.ts`, which imports it (no cycle).
+ */
+export interface SeqGateDeps {
+  content: ContentReader;
+  logs: LogStore;
+  grants: GrantStore;
+  versions?: VersionStorePort;
+  now: () => number;
+}
+
+/**
  * Refuses a `seq` below the gate of the caller, or of `opts.as` (07 §8; PRM-041, PRM-042). The head
  * and a named version of the document are always readable (ADR 0034). A role with `edit` sees full
  * history under the default setting without reading regions. A service credential without `as`
  * reads full history.
  */
 export async function refuseSeqBelowGate(
-  d: HandlerDeps,
+  d: SeqGateDeps,
   caller: Caller,
   ref: DocRef,
   record: DocumentRecord,

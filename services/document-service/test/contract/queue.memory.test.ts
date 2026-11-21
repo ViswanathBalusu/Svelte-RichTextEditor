@@ -83,6 +83,19 @@ class Delegating implements JobQueue {
   latestFor(tenant: string, doc: string, kind: string): Promise<JobRecord | null> {
     return this.inner.latestFor(tenant, doc, kind);
   }
+  findCompletedWith(
+    tenant: string,
+    doc: string,
+    kind: string,
+    member: string,
+    value: string,
+    since: number,
+  ): Promise<JobRecord | null> {
+    return this.inner.findCompletedWith(tenant, doc, kind, member, value, since);
+  }
+  workerTime(tenant: string, kinds: readonly string[], from: number, to: number): Promise<number> {
+    return this.inner.workerTime(tenant, kinds, from, to);
+  }
   depth(): Promise<QueueDepth[]> {
     return this.inner.depth();
   }

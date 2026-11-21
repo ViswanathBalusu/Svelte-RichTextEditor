@@ -18,10 +18,7 @@
     "stuck": [],
     "missing": [],
     "appliedTwice": [],
-    "keptAsRecovered": [
-      "F00718",
-      "F00717"
-    ],
+    "keptAsRecovered": ["F00718", "F00717"],
     "forbiddenTyped": 93,
     "forbiddenInRegion": [],
     "people": {
@@ -110,10 +107,7 @@
       "detail": {
         "tab": "grace",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "G00024",
-          "G00025"
-        ],
+        "unconfirmed": ["G00024", "G00025"],
         "journalled": true,
         "journalMs": 2
       }
@@ -145,10 +139,7 @@
       "detail": {
         "tab": "grace",
         "how": "closed",
-        "unconfirmed": [
-          "G00088",
-          "G00089"
-        ],
+        "unconfirmed": ["G00088", "G00089"],
         "journalled": true,
         "journalMs": 3
       }
@@ -180,10 +171,7 @@
       "detail": {
         "tab": "ada",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "A00163",
-          "A00164"
-        ],
+        "unconfirmed": ["A00163", "A00164"],
         "journalled": true,
         "journalMs": 14
       }
@@ -292,10 +280,7 @@
       "detail": {
         "tab": "fill",
         "how": "closed",
-        "unconfirmed": [
-          "F00143",
-          "F00144"
-        ],
+        "unconfirmed": ["F00143", "F00144"],
         "journalled": true,
         "journalMs": 8
       }
@@ -341,10 +326,7 @@
       "detail": {
         "tab": "ada",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "A00460",
-          "A00461"
-        ],
+        "unconfirmed": ["A00460", "A00461"],
         "journalled": true,
         "journalMs": 7
       }
@@ -376,10 +358,7 @@
       "detail": {
         "tab": "ada",
         "how": "closed",
-        "unconfirmed": [
-          "A00521",
-          "A00522"
-        ],
+        "unconfirmed": ["A00521", "A00522"],
         "journalled": true,
         "journalMs": 12
       }
@@ -418,10 +397,7 @@
       "detail": {
         "tab": "grace",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "G00567",
-          "G00568"
-        ],
+        "unconfirmed": ["G00567", "G00568"],
         "journalled": true,
         "journalMs": 3
       }
@@ -432,10 +408,7 @@
       "detail": {
         "tab": "grace",
         "how": "closed",
-        "unconfirmed": [
-          "G00584",
-          "G00585"
-        ],
+        "unconfirmed": ["G00584", "G00585"],
         "journalled": true,
         "journalMs": 3
       }
@@ -446,10 +419,7 @@
       "detail": {
         "tab": "ada",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "A00632",
-          "A00633"
-        ],
+        "unconfirmed": ["A00632", "A00633"],
         "journalled": true,
         "journalMs": 4
       }
@@ -488,10 +458,7 @@
       "detail": {
         "tab": "grace",
         "how": "closed",
-        "unconfirmed": [
-          "G00690",
-          "G00691"
-        ],
+        "unconfirmed": ["G00690", "G00691"],
         "journalled": true,
         "journalMs": 3
       }
@@ -544,10 +511,7 @@
       "detail": {
         "tab": "grace",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "G00794",
-          "G00795"
-        ],
+        "unconfirmed": ["G00794", "G00795"],
         "journalled": true,
         "journalMs": 4
       }
@@ -642,10 +606,7 @@
       "detail": {
         "tab": "fill",
         "how": "closed",
-        "unconfirmed": [
-          "F00394",
-          "F00393"
-        ],
+        "unconfirmed": ["F00394", "F00393"],
         "journalled": true,
         "journalMs": 6
       }
@@ -656,10 +617,7 @@
       "detail": {
         "tab": "grace",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "G00991",
-          "G00992"
-        ],
+        "unconfirmed": ["G00991", "G00992"],
         "journalled": true,
         "journalMs": 4
       }
@@ -775,10 +733,7 @@
       "detail": {
         "tab": "fill",
         "how": "closed",
-        "unconfirmed": [
-          "F00476",
-          "F00477"
-        ],
+        "unconfirmed": ["F00476", "F00477"],
         "journalled": true,
         "journalMs": 17
       }
@@ -789,10 +744,7 @@
       "detail": {
         "tab": "ada",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "A01234",
-          "A01235"
-        ],
+        "unconfirmed": ["A01234", "A01235"],
         "journalled": true,
         "journalMs": 9
       }
@@ -852,10 +804,7 @@
       "detail": {
         "tab": "fill",
         "how": "closed",
-        "unconfirmed": [
-          "F00529",
-          "F00530"
-        ],
+        "unconfirmed": ["F00529", "F00530"],
         "journalled": true,
         "journalMs": 13
       }
@@ -901,10 +850,7 @@
       "detail": {
         "tab": "fill",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "F00557",
-          "F00558"
-        ],
+        "unconfirmed": ["F00557", "F00558"],
         "journalled": true,
         "journalMs": 10
       }
@@ -964,10 +910,7 @@
       "detail": {
         "tab": "grace",
         "how": "closed",
-        "unconfirmed": [
-          "G01471",
-          "G01472"
-        ],
+        "unconfirmed": ["G01471", "G01472"],
         "journalled": true,
         "journalMs": 5
       }
@@ -992,10 +935,7 @@
       "detail": {
         "tab": "grace",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "G01508",
-          "G01509"
-        ],
+        "unconfirmed": ["G01508", "G01509"],
         "journalled": true,
         "journalMs": 3
       }
@@ -1083,10 +1023,7 @@
       "detail": {
         "tab": "fill",
         "how": "closed",
-        "unconfirmed": [
-          "F00664",
-          "F00663"
-        ],
+        "unconfirmed": ["F00664", "F00663"],
         "journalled": true,
         "journalMs": 7
       }
@@ -1118,10 +1055,7 @@
       "detail": {
         "tab": "grace",
         "how": "renderer crashed",
-        "unconfirmed": [
-          "G01687",
-          "G01688"
-        ],
+        "unconfirmed": ["G01687", "G01688"],
         "journalled": true,
         "journalMs": 5
       }
@@ -1160,10 +1094,7 @@
       "detail": {
         "tab": "fill",
         "how": "closed",
-        "unconfirmed": [
-          "F00718",
-          "F00717"
-        ],
+        "unconfirmed": ["F00718", "F00717"],
         "journalled": true,
         "journalMs": 8
       }

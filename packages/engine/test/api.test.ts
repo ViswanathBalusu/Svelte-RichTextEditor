@@ -127,6 +127,8 @@ describe('no ProseMirror type on the document API (FE-026 criterion 2)', () => {
       | 'glyphNotice'
       // FE-088: the ids of the blocks that changes touched, for the layout's dirty set.
       | 'takeLayoutDirty'
+      // UX-102: the paragraph format at the selection, for the ruler (a read view of the core).
+      | 'paragraphFormat'
       // FRW-046: a signature or initials field the participant may sign, and the request the shell takes.
       | 'fieldSignable'
       | 'requestSign'

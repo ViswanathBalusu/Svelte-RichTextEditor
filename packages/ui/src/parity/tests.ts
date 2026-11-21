@@ -432,6 +432,33 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/element/test/exp-001-latest-pdf.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when the stories of the row closed (lanes w1 and w9, 2026-11-21); entries added by the
+  // batch 12 integrator.
+  [
+    'recovery-journal',
+    [
+      { path: 'packages/engine/test/fe-008-journal.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-009-resubmit.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/fe-010-recovered-journal.test.ts', kind: 'unit' },
+      { path: 'packages/element/e2e/fe-008-journal-reopen.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-009-resubmit-reopen.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/fe-010-recovered-reopen.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/ux-017-recovered-pane.spec.ts', kind: 'playwright' },
+    ],
+  ],
+  [
+    'regions-and-permissions',
+    [
+      { path: 'packages/engine/test/prm-026.region-lock.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/prm-027.next-editable-region.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/prm-033.mark-region.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/prm-035.grant-change-live.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/prm-036.region-policy.test.ts', kind: 'unit' },
+      { path: 'packages/element/e2e/prm-026-lock-indicator.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/e2e/prm-027-next-editable-region.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/prm-035-grants.spec.ts', kind: 'playwright' },
+    ],
+  ],
 ];
 
 export const ROW_TESTS: ReadonlyMap<string, readonly TestLink[]> = new Map(ROW_TEST_ENTRIES);

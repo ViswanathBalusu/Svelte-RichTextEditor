@@ -86,6 +86,11 @@ export const QUEUE_CHECKS: QueueCheck[] = [
         finishedAt: null,
         priority: 0,
         cacheKey: null,
+        claimedAt: null,
+        startedAt: null,
+        startGapMs: null,
+        startGapStage: null,
+        workerMs: 0,
       });
       for (const t of [createdAt, updatedAt, runAfter]) assert.ok(Number.isSafeInteger(t));
       assert.deepStrictEqual(await h.queue.get(h.tenant, id), job);

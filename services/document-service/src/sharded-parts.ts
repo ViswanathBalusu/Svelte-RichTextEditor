@@ -22,6 +22,7 @@ import type { Pool } from './storage/db.ts';
 import {
   FanOutNodeLeases,
   foldAny,
+  foldVoid,
   foldUnion,
   routeByTenant,
   ShardedOutbox,
@@ -89,7 +90,17 @@ export function shardedPgParts(
       Reflect.deleteProperty(writable, key);
       continue;
     }
-    writable[key] = routeByTenant(map, Object.fromEntries(stores) as Record<string, object>);
+    // The setters of a PostgreSQL log store (document keys, cold segments) name no tenant: every
+    // shard's store gets them.
+    const setters =
+      key === 'logs' || key === 'ownership'
+        ? { fanOut: { useDocumentKeys: foldVoid, useColdSegments: foldVoid } }
+        : {};
+    writable[key] = routeByTenant(
+      map,
+      Object.fromEntries(stores) as Record<string, object>,
+      setters,
+    );
   }
   // `ownership` is the log store of each shard under another name; both routes reach the same one.
   if (first.outbox)
