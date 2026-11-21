@@ -674,4 +674,44 @@ describe('region-only editors stay out of definitions (PRM-030)', () => {
       });
     }
   });
+
+  it('refuses a change to a footer, and a footer or a header they would create (criterion 3)', () => {
+    // The rich document with a footer story that the page setup names.
+    const doc = richDoc();
+    const json = doc.toJSON() as { content: J[] };
+    const defs = json.content[0]!['content'] as J[];
+    (defs.find((d) => d['type'] === 'page_setup')!['attrs'] as J)['footerDefault'] =
+      'sFooter000000001';
+    json.content.splice(2, 0, {
+      type: 'story',
+      attrs: { id: 'sFooter000000001', kind: 'footer' },
+      content: [
+        {
+          type: 'paragraph',
+          attrs: { id: 'pFooter000000001' },
+          content: [{ type: 'text', text: 'Foot' }],
+        },
+      ],
+    });
+    const footed = schema.nodeFromJSON(json);
+    footed.check();
+
+    const typed = verdictOf(MORE.rita, footed, typeIn('pFooter000000001'));
+    expect(typed).toMatchObject({ ok: false, code: 'permission_denied' });
+    expect(refused(typed)).toEqual(['story:sFooter000000001']);
+    // Creating the footer (the story and the page setup's link to it) and removing it are refused.
+    const created = verdictBetween(MORE.rita, doc, footed);
+    expect(created).toMatchObject({ ok: false, code: 'permission_denied' });
+    expect(refused(created)).toEqual(expect.arrayContaining(['doc', 'story:sFooter000000001']));
+    expect(verdictBetween(MORE.rita, footed, doc)).toMatchObject({
+      ok: false,
+      code: 'permission_denied',
+    });
+    // The same changes by an owner are accepted, and Rita still styles her own region.
+    expect(verdictOf(USERS.alice, footed, typeIn('pFooter000000001')).ok).toBe(true);
+    expect(verdictBetween(USERS.alice, doc, footed).ok).toBe(true);
+    expect(verdictOf(MORE.rita, footed, setAttr('pTerms000000001A', 'style', 'Heading1')).ok).toBe(
+      true,
+    );
+  });
 });

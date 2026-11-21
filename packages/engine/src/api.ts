@@ -80,7 +80,15 @@ export type CommandName =
   | 'renameRegion'
   // UX-009: the format painter takes the formatting at the selection, then puts it on another one.
   | 'copyFormat'
-  | 'pasteFormat';
+  | 'pasteFormat'
+  | StyleDefCommandName;
+
+/**
+ * The commands that change the document's style definitions (UX-022; 07 §5.3, §7; PRM-030). They
+ * take `styleDef`. They run through `checkStyleEdit`, so `queryCommand` says why one is unavailable:
+ * a user who may edit only regions gets `no-access`.
+ */
+export type StyleDefCommandName = 'createStyle' | 'changeStyle' | 'deleteStyle';
 
 /**
  * The authoring commands that take arguments (FE-053, FE-070, FE-133 to FE-137, FE-140). Each one
@@ -260,6 +268,13 @@ export interface CommandArgs {
    * caret's block, false an inline one at the caret. The math editor is then asked to open on it.
    */
   newEquation?: { display: boolean };
+  /**
+   * For the style definition commands (UX-022; PRM-030). `createStyle` takes `name` and `kind`, and
+   * `basedOn` when the style has a parent. `changeStyle` takes the style's `id` with the new `name`
+   * or `basedOn`. `deleteStyle` takes the `id`. `queryCommand` without the name or the identifier
+   * answers for the user alone: whether they may change style definitions at all.
+   */
+  styleDef?: { id?: string; name?: string; kind?: StyleKind; basedOn?: string | null };
 }
 
 /**
@@ -274,7 +289,10 @@ export interface CommandArgs {
  * - `scheme-not-allowed`: a link target whose scheme I9 does not allow (FE-133);
  * - `malformed-link`: a link target that is not a URL or an in-document target `#name` (I9);
  * - `bad-bookmark-name`: a bookmark name that does not follow the CDM's pattern (FE-133);
- * - `duplicate-bookmark`: a bookmark name the document already uses (FE-133).
+ * - `duplicate-bookmark`: a bookmark name the document already uses (FE-133);
+ * - `region`, `built-in`, `in-use`, `duplicate-name`, `bad-name`, `bad-based-on` (with
+ *   `unknown-style`): why a style definition command is unavailable, as `StyleEditReason` names
+ *   them (UX-022; PRM-030).
  */
 export type CommandUnavailable =
   | 'read-only'
@@ -299,15 +317,22 @@ export type CommandUnavailable =
   | 'not-a-figure'
   | 'bad-size'
   | 'bad-placement'
-  | 'float-in-cell';
+  | 'float-in-cell'
+  | 'region'
+  | 'built-in'
+  | 'in-use'
+  | 'duplicate-name'
+  | 'bad-name'
+  | 'bad-based-on';
 
 export interface CommandState {
   enabled: boolean;
   active: boolean;
   /**
    * Why the command is unavailable. Present only when `enabled` is false and the core knows the
-   * reason; today that is the table commands (FE-040) and the authoring commands (FE-133, FE-137,
-   * FE-140). Other commands leave it out.
+   * reason; today that is the table commands (FE-040), the authoring commands (FE-133, FE-137,
+   * FE-140), the style definition commands and `editHeader` (07 §7; PRM-030). Other commands leave
+   * it out.
    */
   reason?: CommandUnavailable;
 }
@@ -971,6 +996,7 @@ export interface DocumentApi {
    * Why `query(name)` answered false, as a reason code the shell turns into its own words
    * (`reason.query.<code>`); null when the query is true or has no reason to give. For
    * `canMarkRegion`: `suggestion` (FE-044 criterion 5), `locked`, `nested`, `structure` or `blocks`.
+   * For `hasHeader`: `structure` when the user may not change headers and footers (07 §7; PRM-030).
    */
   queryReason(name: string): string | null;
 
