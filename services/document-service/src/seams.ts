@@ -134,6 +134,26 @@ export interface ParticipantOpened {
   readonly at: number;
 }
 
+/**
+ * What the data plane knows about a session that is about to open a channel on a document (HIS-003
+ * criterion 3; 08 §2, last paragraph): the session, its user, the `User-Agent` of the upgrade
+ * request and the client version of `hello`. The composition reduces the last two before anything
+ * is stored (owner decision 24). Nothing else about the connection is passed: no address, no
+ * origin, no host `sub`, no name and no token. Added for HIS-003 (additive).
+ */
+export interface SessionOpened {
+  readonly tenant: string;
+  readonly doc: string;
+  /** The session of the connection (05 §5.1), as its commits record it. */
+  readonly session: string;
+  /** The per-tenant surrogate of the session's user (BE-013). */
+  readonly user: string;
+  /** The `User-Agent` of the upgrade request as sent, cut to 512 characters, or null. */
+  readonly userAgent: string | null;
+  /** `hello.client.version`, as sent. */
+  readonly clientVersion: string;
+}
+
 export interface DataPlaneDeps {
   readonly logs: LogStore;
   readonly ownership: OwnershipStore;
@@ -227,6 +247,16 @@ export interface DataPlaneDeps {
    * open and never delays it; a failure is reported, not sent to the client. Absent: nothing is done.
    */
   readonly participantOpened?: (open: ParticipantOpened) => Promise<void> | void;
+  // --- Added for HIS-003 (additive). ----------------------------------------------------------
+  /**
+   * Called when a session is about to open a channel on a document, once per session and document
+   * (HIS-003 criterion 3; 08 §2: the service stores, per session, the user agent family and the
+   * client version). Unlike `participantOpened`, the channel waits for it: the channel opens only
+   * after it resolves, and when it rejects the failure is reported and the channel is refused with
+   * `unavailable`, so that no commit is stored for a session without its record. Absent: nothing is
+   * recorded.
+   */
+  readonly sessionOpened?: (open: SessionOpened) => Promise<void> | void;
   // --- Added by packet A2 (additive). ---------------------------------------------------------
   /**
    * The per-tenant user mapping (BE-013; S6 gap G11): storage and rooms hold surrogates, the wire

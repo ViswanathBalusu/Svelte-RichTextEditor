@@ -1475,6 +1475,7 @@ export interface HistoryVersionView {
   /**
    * Draws the changes of a comparison whose newer version this is (HIS-013): insertions and formatting
    * with the marks of suggestions, a change bar on each changed block. Absent when the host cannot draw one.
+   * An empty list removes the marks (the pane sends one when a restore preview is cancelled, HIS-021).
    */
   showComparison?(changes: readonly HistoryChange[]): void;
   /** Shows or hides deleted text; hidden, the layout does not move. */
@@ -1588,6 +1589,48 @@ export interface HistoryChoices {
   readonly people: readonly HistoryChoice[];
 }
 
+/** What a restore from the history pane asks for (`POST /restore`; 08 §8). */
+export interface HistoryRestoreRequest {
+  /** The state to return to. */
+  readonly toSeq: number;
+  /** One region (HIS-018), or null for the whole document (HIS-019). */
+  readonly region: string | null;
+}
+
+/** Why the service refuses a restore or its dry run (05 §6.2; 07 §13; 12 §10). */
+export type HistoryRestoreRefusal =
+  'forbidden' | 'not_found' | 'conflict' | 'workflow_active' | 'too_large' | 'failed';
+
+/** The dry run of a restore (HIS-021): what it would change. Nothing is committed for it. */
+export interface HistoryRestorePreview {
+  /** The head the dry run was computed against. */
+  readonly headSeq: number;
+  /** True when the restore would change nothing. */
+  readonly unchanged: boolean;
+  /** The comparison between the current content and the result, as `GET /diff` gives one. */
+  readonly comparison: HistoryComparison;
+  /** Definitions the restore would bring back, a style for example (HIS-020). */
+  readonly recreated?: readonly string[];
+  /** Definitions it cannot bring back for this user; the restored text takes the default instead. */
+  readonly replaced?: readonly string[];
+}
+
+export type HistoryRestorePreviewResult =
+  | { readonly ok: true; readonly preview: HistoryRestorePreview }
+  | { readonly ok: false; readonly reason: HistoryRestoreRefusal };
+
+export type HistoryRestoreResult =
+  | { readonly ok: true; readonly seq: number }
+  | { readonly ok: false; readonly reason: HistoryRestoreRefusal };
+
+/** What this user may restore (07 §13): the pane offers nothing else. */
+export interface HistoryRestoreScopes {
+  /** The whole document, which needs `manage`. */
+  readonly document: boolean;
+  /** The regions the user holds `edit` in. */
+  readonly regions: readonly string[];
+}
+
 /**
  * The host's history port. The element adapts the document service's `/history` and `/versions`
  * routes to this shape; the pane itself never calls the network.
@@ -1620,6 +1663,27 @@ export interface HistoryPort {
    * joined; HIS-015). The service limits the answer by the user's gate and projection.
    */
   whoWrote?(query: HistoryWhoQuery): Promise<HistoryWhoResult>;
+  /**
+   * The dry run of a restore (`POST /restore` with `dryRun`; HIS-021): the comparison between the
+   * current content and what the restore would leave. It commits nothing, and the service asks for
+   * the same permission and visibility as for the restore itself. The pane offers a restore only
+   * when the host gives this method, `restore` and `openVersion`.
+   */
+  previewRestore?(request: HistoryRestoreRequest): Promise<HistoryRestorePreviewResult>;
+  /**
+   * Restores the whole document or one region to the state at `toSeq` (`POST /restore`; HIS-018,
+   * HIS-019). The pane calls it only after the user has seen the dry run of the same request and
+   * confirmed. `headSeq` is the head that dry run was computed against, so a host that knows the
+   * document has moved since can answer `conflict`, and the pane then asks for a new preview.
+   */
+  restore?(
+    request: HistoryRestoreRequest & { readonly headSeq: number },
+  ): Promise<HistoryRestoreResult>;
+  /**
+   * What this user may restore (07 §13). Absent: the pane offers the whole document and every
+   * region of `choices()`, and shows the service's refusal when it comes.
+   */
+  restoreScopes?(): Promise<HistoryRestoreScopes>;
   /**
    * Called by the host when the list may have changed (a version was named, for instance); the
    * pane then asks again. Returns the function that stops the calls.
