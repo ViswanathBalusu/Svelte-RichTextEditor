@@ -715,8 +715,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
   // The host's extensions are activated once the shell exists; a later change comes through setExtensions.
   app.setExtensions(options.extensions());
   const stopShortcuts = attachShortcuts(root, (command) => core.run(command));
-  // FE-114: on a touch device the caret stays above the on-screen keyboard.
-  const stopKeyboardInset = attachKeyboardInset(root, core);
+  // FE-114: on a touch device the caret stays above the on-screen keyboard. The watch listens on the
+  // page's visual viewport, so it is stopped while the element is suspended (FE-005).
+  let stopKeyboardInset: (() => void) | null = attachKeyboardInset(root, core);
 
   const api = hostApi(core, registry, fillActions ?? undefined);
 
@@ -774,17 +775,21 @@ export function mountEditor(options: MountOptions): MountedEditor {
     flushJournal() {
       return core.flushJournal();
     },
-    // FE-005: the shell stops its observers and its colour-scheme listener; the core closes its
-    // channel. A PDF viewer's frame, and the PDF.js worker in it, is unloaded by the browser when the
-    // element leaves the document.
+    // FE-005: the shell stops its observers and its colour-scheme listener; the watch of the visual
+    // viewport stops; the core closes its channel and its views take their listeners off the page's
+    // window. A PDF viewer's frame, and the PDF.js worker in it, is unloaded by the browser when the
+    // element leaves the document (e2e/fe-005-suspend-resume.spec.ts measures each of these).
     suspend() {
       if (destroyed) return;
       app.setSuspended(true);
+      stopKeyboardInset?.();
+      stopKeyboardInset = null;
       core.suspendSync();
     },
     resume() {
       if (destroyed) return;
       app.setSuspended(false);
+      stopKeyboardInset ??= attachKeyboardInset(root, core);
       core.resumeSync();
     },
     setAccess(access: Access) {
@@ -837,7 +842,8 @@ export function mountEditor(options: MountOptions): MountedEditor {
       for (const viewer of viewers) viewer.destroy();
       viewers.clear();
       stopShortcuts();
-      stopKeyboardInset();
+      stopKeyboardInset?.();
+      stopKeyboardInset = null;
       workflowSend?.dispose?.();
       signing?.dispose?.();
       fillActions?.dispose();

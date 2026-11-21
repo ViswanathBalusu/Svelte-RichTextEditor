@@ -54,6 +54,8 @@ export class PdfViewerFrame {
   #port: MessagePort | null = null;
   #destroyed = false;
   #failReady: ((e: Error) => void) | null = null;
+  /** The `open` calls that wait for the frame's answer: `destroy()` rejects them (FE-005). */
+  readonly #opening = new Set<(e: Error) => void>();
 
   constructor(container: Element, options: PdfViewerOptions) {
     const url = new URL(options.url, document.baseURI);
@@ -127,22 +129,32 @@ export class PdfViewerFrame {
     };
   }
 
-  /** Opens a PDF; resolves with its page count once the first page is drawn. */
+  /**
+   * Opens a PDF; resolves with its page count once the first page is drawn. Rejects with
+   * `unavailable` when the viewer is destroyed before the frame has answered, so that a caller never
+   * waits on a frame that is gone.
+   */
   async open(source: PdfSource): Promise<{ pages: number; worker: boolean }> {
     const port = await this.#ready;
     if (this.#destroyed) throw new PdfViewerError('unavailable', 'the viewer was closed');
     return new Promise((resolve, reject) => {
       let opened: { pages: number; worker: boolean } | null = null;
+      const settle = (run: () => void): void => {
+        stop();
+        this.#opening.delete(closed);
+        run();
+      };
+      const closed = (e: Error): void => settle(() => reject(e));
       const stop = this.onMessage((m) => {
         if (m.type === 'opened') opened = { pages: m.pages, worker: m.worker };
         else if (m.type === 'rendered' && opened) {
-          stop();
-          resolve(opened);
+          const result = opened;
+          settle(() => resolve(result));
         } else if (m.type === 'failed' && m.code === 'load_failed') {
-          stop();
-          reject(new PdfViewerError('load_failed', m.message));
+          settle(() => reject(new PdfViewerError('load_failed', m.message)));
         }
       });
+      this.#opening.add(closed);
       const message: ToViewer = { type: 'open', source, strings: this.#strings };
       if ('data' in source) port.postMessage(message, [source.data]);
       else port.postMessage(message);
@@ -161,6 +173,10 @@ export class PdfViewerFrame {
     if (this.#destroyed) return;
     this.#destroyed = true;
     this.#failReady?.(new PdfViewerError('unavailable', 'the viewer was closed'));
+    // An `open` that still waits for its pages will get no answer from a frame that is removed.
+    for (const closed of [...this.#opening])
+      closed(new PdfViewerError('unavailable', 'the viewer was closed'));
+    this.#opening.clear();
     if (this.#port) {
       const close: ToViewer = { type: 'close' };
       this.#port.postMessage(close);

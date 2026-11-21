@@ -121,6 +121,36 @@ describe('the integration guide policy section (FE-017)', () => {
     expect(effects).not.toMatch(/adds no listener to `document` or `window`/);
   });
 
+  it('names the listeners on the window, the visual viewport and the font set, and what a suspension keeps (FE-005)', () => {
+    const effects = section(guide, 'Global side effects visible to the host page');
+    const read = (path: string) => readFileSync(resolve(ELEMENT, path), 'utf8');
+    // Each listener the guide names is one the source adds; the check reads the source.
+    expect(read('../engine/src/view/web.ts')).toMatch(
+      /win\?\.addEventListener\('resize', redraw\)/,
+    );
+    expect(read('src/keyboard-inset.ts')).toMatch(/visual\.addEventListener\('resize', update\)/);
+    expect(read('src/page-view/page-view.ts')).toMatch(
+      /fonts\?\.addEventListener\?\.\('loadingdone', onFonts\)/,
+    );
+    expect(effects).toContain("A `resize` listener on the page's `window`");
+    expect(effects).toContain('`window.visualViewport`');
+    expect(effects).toContain("A `loadingdone` listener on the page's font set (`document.fonts`)");
+    // What stays on `document` while the element is suspended is said, with the decision.
+    expect(effects).toMatch(/Kept until the editor is destroyed:/);
+    expect(effects).toMatch(/delegated-event handlers of the UI framework/);
+    expect(effects).toContain('owner decision 181');
+    // The editor code keeps no other listener on `document` or `window` than the ones named: every
+    // `addEventListener` on them in the element, the shell and the core is one of these.
+    const sources = [
+      ['src/doc-editor.ts', read('src/doc-editor.ts')],
+      ['src/session.ts', sessionSource],
+      ['../engine/src/view/web.ts', read('../engine/src/view/web.ts')],
+    ] as const;
+    const onPage = /\b(document|window|win\??)\.addEventListener\(\s*'([a-z]+)'/g;
+    const found = sources.flatMap(([, text]) => [...text.matchAll(onPage)].map((m) => m[2]));
+    expect(found.sort()).toEqual(['pointerdown', 'resize', 'visibilitychange']);
+  });
+
   it('lets a host see which directives it may omit, per feature', () => {
     expect(section(guide, 'Paste')).toMatch(/Omit:/);
     expect(section(guide, 'Math editor (MathLive)')).toMatch(/Omit:/);

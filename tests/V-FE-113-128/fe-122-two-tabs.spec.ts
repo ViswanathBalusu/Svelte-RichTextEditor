@@ -26,7 +26,8 @@ import {
 } from '../../services/document-service/test/support/env.ts';
 
 const TENANT_NAME = 'V-FE-113-128 two tabs';
-const PAGE_ORIGIN = 'http://127.0.0.1:57078';
+/** The demo page's origin: the port of playwright.config.ts (`DOCEDIT_TWO_TABS_PORT`, default 57078). */
+const PAGE_ORIGIN = `http://127.0.0.1:${process.env['DOCEDIT_TWO_TABS_PORT'] ?? 57078}`;
 /** The restricted region of `documentWithRegions` and the text of its paragraph. */
 const LEGAL_REGION = 'rLegal0000000001';
 const LEGAL_TEXT = 'Liability';
@@ -267,6 +268,30 @@ test('two tabs with different grants: only the tab with the region grant changes
   await context.close();
 });
 
+/**
+ * Counts the `pagehide` listeners on the page's `window`: the DEP client the element makes for
+ * `endpoint` holds one from `connect()` to `close()` (packages/backend-dep/src/platform.ts).
+ */
+async function countPageHideListeners(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const held = new Set<unknown>();
+    const add = window.addEventListener.bind(window);
+    const remove = window.removeEventListener.bind(window);
+    window.addEventListener = ((type: string, fn: unknown, options?: unknown) => {
+      if (type === 'pagehide' && fn) held.add(fn);
+      add(type, fn as EventListener, options as AddEventListenerOptions);
+    }) as typeof window.addEventListener;
+    window.removeEventListener = ((type: string, fn: unknown, options?: unknown) => {
+      if (type === 'pagehide') held.delete(fn);
+      remove(type, fn as EventListener, options as EventListenerOptions);
+    }) as typeof window.removeEventListener;
+    (window as unknown as { __pageHide: () => number }).__pageHide = () => held.size;
+  });
+}
+
+const pageHideListeners = (page: Page): Promise<number> =>
+  page.evaluate(() => (window as unknown as { __pageHide: () => number }).__pageHide());
+
 test('FE-005: a suspended element closes its socket, and a reconnected one resumes on a new one', async ({
   browser,
 }) => {
@@ -275,10 +300,13 @@ test('FE-005: a suspended element closes its socket, and a reconnected one resum
   const grace = await context.newPage();
   const errors: string[] = [];
   for (const p of [ada, grace]) p.on('pageerror', (e) => errors.push(e.message));
+  await countPageHideListeners(ada);
   await openTab(ada, 'ada', tokenAda);
   await openTab(grace, 'grace', tokenGrace);
   const sockets = socketsOf.get(ada)!;
   expect(sockets).toEqual({ opened: 1, closedByPage: 0 });
+  // The DEP client the element made listens for `pagehide` on the window while it is connected.
+  expect(await pageHideListeners(ada)).toBe(1);
 
   const intro = (p: Page) => p.locator('doc-editor .de-editing-surface p').first();
   await intro(ada).click();
@@ -294,6 +322,8 @@ test('FE-005: a suspended element closes its socket, and a reconnected one resum
   });
   await expect.poll(() => sockets.closedByPage, { timeout: 10_000 }).toBe(1);
   expect(sockets.opened).toBe(1);
+  // The backend the element made is closed, so its listener on the window is gone with the socket.
+  expect(await pageHideListeners(ada)).toBe(0);
 
   // Grace goes on while Ada's element is suspended.
   await intro(grace).click();
@@ -307,10 +337,72 @@ test('FE-005: a suspended element closes its socket, and a reconnected one resum
   await expect.poll(() => sockets.opened, { timeout: 20_000 }).toBe(2);
   await expect.poll(() => bodyText(ada), { timeout: 20_000 }).toContain('While-away');
   expect(await bodyText(ada)).toContain('Before-suspend');
+  expect(await pageHideListeners(ada)).toBe(1);
   await intro(ada).click();
   await ada.keyboard.press('End');
   await ada.keyboard.type(' After-resume');
   await expect.poll(() => bodyText(grace), { timeout: 20_000 }).toContain('After-resume');
+
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test('FE-005: an element in the read view closes its socket when suspended and opens one again', async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await countPageHideListeners(page);
+  await reachService(page);
+  await page.addInitScript(
+    (cfg) => {
+      (window as unknown as { __fe122: unknown }).__fe122 = cfg;
+    },
+    { endpoint: service.url, docId, token: tokenAda, sub: 'ada', view: 'read' },
+  );
+  await page.goto('/pages/fe-122-two-tabs.html');
+  const sockets = socketsOf.get(page)!;
+  // The read view has no editing core: the element makes the backend, connects it and asks for the
+  // export. Whether this service can export does not matter here; the socket is what is counted.
+  const readViews = () =>
+    page.evaluate(() => {
+      const w = window as unknown as { __held?: Element };
+      const el = document.querySelector('doc-editor') ?? w.__held;
+      return el?.shadowRoot?.querySelectorAll('.de-read-view').length ?? 0;
+    });
+  await expect.poll(readViews, { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => sockets.opened, { timeout: 20_000 }).toBe(1);
+  expect(sockets.closedByPage).toBe(0);
+  await expect.poll(() => pageHideListeners(page)).toBe(1);
+  // No editing surface is mounted for this view.
+  expect(
+    await page.evaluate(
+      () =>
+        document.querySelector('doc-editor')!.shadowRoot!.querySelectorAll('.de-editing-surface')
+          .length,
+    ),
+  ).toBe(0);
+
+  await page.evaluate(() => {
+    const el = document.querySelector('doc-editor') as HTMLElement;
+    (window as unknown as { __held: HTMLElement }).__held = el;
+    el.remove();
+  });
+  // Suspended: the read view is closed, and the backend the element opened closes its socket.
+  await expect.poll(() => sockets.closedByPage, { timeout: 10_000 }).toBe(1);
+  await expect.poll(readViews).toBe(0);
+  expect(sockets.opened).toBe(1);
+  expect(await pageHideListeners(page)).toBe(0);
+
+  await page.evaluate(() => {
+    document.getElementById('mount')!.append((window as unknown as { __held: HTMLElement }).__held);
+  });
+  // Back: the read view is shown again on a new connection.
+  await expect.poll(() => sockets.opened, { timeout: 20_000 }).toBe(2);
+  await expect.poll(readViews, { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => pageHideListeners(page)).toBe(1);
 
   expect(errors).toEqual([]);
   await context.close();

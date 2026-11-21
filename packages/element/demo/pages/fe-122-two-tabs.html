@@ -28,6 +28,8 @@
         const el = document.createElement('doc-editor');
         el.dataset.test = cfg.sub;
         el.setAttribute('endpoint', cfg.endpoint);
+        // `view` is given only by the test of the read view (FE-005); absent, the web view is shown.
+        if (cfg.view) el.setAttribute('view', cfg.view);
         el.setAttribute('doc-id', cfg.docId);
         el.getToken = async () => cfg.token;
         el.addEventListener('de-ready', () => {

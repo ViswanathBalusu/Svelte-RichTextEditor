@@ -656,7 +656,15 @@ export class EditorCore extends DocumentCore {
     const redraw = () => this.#drawCarets();
     const uncarets = this.peerSelections.subscribe(redraw);
     const win = target.ownerDocument.defaultView;
-    win?.addEventListener('resize', redraw);
+    // The listener on the page's window is held only while the element is not suspended (FE-005).
+    let onResize = false;
+    const listenToResize = (on: boolean): void => {
+      if (on === onResize) return;
+      onResize = on;
+      if (on) win?.addEventListener('resize', redraw);
+      else win?.removeEventListener('resize', redraw);
+    };
+    listenToResize(true);
     this.#drawCarets();
     // A change of the document's base direction (FE-111) is applied to the surface at once.
     const undirection = this.direction.subscribe(() =>
@@ -682,6 +690,12 @@ export class EditorCore extends DocumentCore {
         if (this.#view) this.#fieldViews.refresh(this.#view.state.doc);
         this.#sub?.view.setProps({});
       },
+      // Suspended: nothing of this view listens on the page's window. Back: it listens again, and
+      // the carets are measured where the layout is now (the window may have changed meanwhile).
+      suspended: (on) => {
+        listenToResize(!on);
+        if (!on) redraw();
+      },
     });
     return () => {
       remove();
@@ -697,7 +711,7 @@ export class EditorCore extends DocumentCore {
       if (this.#card === card) this.#card = null;
       undirection();
       uncarets();
-      win?.removeEventListener('resize', redraw);
+      listenToResize(false);
       target.removeEventListener('compositionend', ended);
       view.destroy();
       if (this.#view === view) this.#view = null;

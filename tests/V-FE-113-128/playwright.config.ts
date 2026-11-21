@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const elementDir = join(here, '..', '..', 'packages', 'element');
-const port = 57078;
+// `DOCEDIT_TWO_TABS_PORT` gives a run its own port, so that two lanes can run this suite at once.
+const port = Number(process.env['DOCEDIT_TWO_TABS_PORT'] ?? 57078);
 
 // The element's server reads these at start-up (demo/serve.ts, scripts/vite-configs.ts).
 process.env['DOCEDIT_DEMO_PORT'] = String(port);

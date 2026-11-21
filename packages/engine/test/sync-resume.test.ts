@@ -327,6 +327,94 @@ describe('suspend and resume (FE-005 criteria 3 and 4; 02 §2.1)', () => {
     expect(textOfNode(h.i.state.doc, SPIKE_IDS.after).startsWith('ab')).toBe(true);
     expect(h.c.recovered.get().count).toBe(0);
   });
+
+  it('tells the mounted views, once for each change, with or without a channel', () => {
+    // The web view takes its `resize` listener off the page's window while suspended and puts it
+    // back (view/web.ts; packages/element/e2e/fe-005-suspend-resume.spec.ts measures it).
+    const calls: string[] = [];
+    class Probe extends DocumentCore {
+      constructor() {
+        super({ doc: spikeDocument() });
+        this.view('first');
+      }
+      view(name: string): () => void {
+        return this.addView({
+          update: () => {},
+          composing: () => null,
+          focus: () => {},
+          suspended: (on) => calls.push(`${name}:${String(on)}`),
+        });
+      }
+    }
+    const c = new Probe();
+    c.resumeSync(); // not suspended: nothing to tell
+    c.suspendSync();
+    c.suspendSync(); // already suspended
+    expect(calls).toEqual(['first:true']);
+    // A view that mounts during the suspension starts suspended.
+    const remove = c.view('late');
+    expect(calls).toEqual(['first:true', 'late:true']);
+    c.resumeSync();
+    c.resumeSync();
+    expect(calls).toEqual(['first:true', 'late:true', 'first:false', 'late:false']);
+    // A view that was removed is not told again; a view without the hook is left alone.
+    remove();
+    c.suspendSync();
+    expect(calls.slice(4)).toEqual(['first:true']);
+  });
+
+  it('with a channel, the views are told when it closes and before it reopens', async () => {
+    const order: string[] = [];
+    class Probe extends DocumentCore {
+      constructor() {
+        super({ doc: spikeDocument(), schedule: (run) => queueMicrotask(run) });
+        this.addView({
+          update: () => {},
+          composing: () => null,
+          focus: () => {},
+          suspended: (on) => order.push(`${on ? 'suspended' : 'resumed'}:${this.connection.get()}`),
+        });
+      }
+    }
+    const c = new Probe();
+    const channel = new ScriptedChannel({
+      head: 0,
+      incarnation: 'inc-1',
+      catchUp: 'stream',
+      access: editorAccess(),
+    });
+    const clock = new ManualClock();
+    c.attach(channel, {
+      seq: 0,
+      incarnation: 'inc-1',
+      sync: {
+        open: async () =>
+          new ScriptedChannel({
+            head: 0,
+            incarnation: 'inc-1',
+            catchUp: 'stream',
+            access: editorAccess(),
+          }),
+        loadContent: async (): Promise<Content> => ({
+          ...(spikeDocument() as Content),
+          seq: 0,
+          incarnation: 'inc-1',
+        }),
+      },
+      clock,
+      batchMs: 100,
+      retry: { minMs: 10, maxMs: 40 },
+    });
+    await sleep(0);
+    c.suspendSync();
+    expect(channel.closed).toBe(true);
+    c.resumeSync();
+    await clock.advance(1);
+    await sleep(5);
+    // The views hear of the suspension after the channel is closed, and of the return first.
+    expect(order).toEqual(['suspended:offline', 'resumed:offline']);
+    expect(c.connection.get()).toBe('online');
+  });
 });
 
 describe('a page catch-up reads commits, not content (SYN-028 criterion 4)', () => {

@@ -22,7 +22,7 @@ This document covers the `<doc-editor>` element: packaging, Shadow DOM, the Svel
 | `connectedCallback` | First time: mounts the Svelte application and creates the editing core. Later times: re-attaches global listeners and resumes |
 | Start of loading | Happens in a microtask once a document identifier and a token source (`getToken` or `backend`) are both present, whatever order the host set them in |
 | `connectedMoveCallback` | Where the browser supports moving an element without disconnecting it, nothing happens |
-| `disconnectedCallback` | Waits one microtask. If the element is still disconnected, it suspends: removes listeners on `document` and `window`, stops observers and workers, and closes the socket. After a grace period (default 30 seconds) it destroys itself, unless the `keep-alive` attribute is present. Garbage collection is never relied on, because workers, channels and timers keep an editor reachable |
+| `disconnectedCallback` | Waits one microtask. If the element is still disconnected, it suspends: removes its own listeners on `document` and `window`, stops its observers and workers, and closes the socket. Two kinds of listener stay on `document` until the editor is destroyed, because neither library can take them off and put them back: the editing library's `selectionchange` listener and the UI framework's delegated-event handlers (owner decision 181 of 2026-11-15). After a grace period (default 30 seconds) it destroys itself, unless the `keep-alive` attribute is present. Garbage collection is never relied on, because workers, channels and timers keep an editor reachable |
 | `attributeChangedCallback` | Reflects attributes into the application |
 | `destroy()` | Unmounts Svelte, destroys the editing core, releases everything |
 

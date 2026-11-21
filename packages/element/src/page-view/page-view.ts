@@ -75,6 +75,13 @@ export interface MountedPageView {
   status(): PageStatus | null;
   /** Lays the document out and paints now (tests; the view does it on the next frame itself). */
   flush(): void;
+  /**
+   * The element is suspended (FE-005; 02 §2.1): the view stops listening on the page's font set.
+   * It stays mounted with its pages and its place.
+   */
+  suspend(): void;
+  /** The element is back: the view listens again and lays out once more, as a face may have arrived. */
+  resume(): void;
   /** Removes the view and detaches it from the core. Safe to call twice. */
   destroy(): void;
 }
@@ -596,7 +603,8 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
       }
     }),
   ];
-  // A face that arrives after the first layout changes the widths: lay out again (FE-064).
+  // A face that arrives after the first layout changes the widths: lay out again (FE-064). The font
+  // set is the page's own, so the listener is held only while the element is not suspended (FE-005).
   const fonts = doc.fonts;
   const onFonts = (): void => {
     providers = options.providers ?? pageProviders(undefined, Date.now());
@@ -604,7 +612,27 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
     relayout = true;
     schedule();
   };
-  fonts?.addEventListener?.('loadingdone', onFonts);
+  let onFontSet = false;
+  const listenToFonts = (on: boolean): void => {
+    if (on === onFontSet) return;
+    onFontSet = on;
+    if (on) fonts?.addEventListener?.('loadingdone', onFonts);
+    else fonts?.removeEventListener?.('loadingdone', onFonts);
+  };
+  listenToFonts(true);
+  /** The faces the page has loaded, so that a suspension can tell whether one arrived meanwhile. */
+  const loadedFaces = (): string => {
+    if (!fonts || typeof fonts.forEach !== 'function') return '';
+    const faces: string[] = [];
+    fonts.forEach((face) => {
+      if (face.status === 'loaded')
+        faces.push(
+          [face.family, face.style, face.weight, face.stretch, face.unicodeRange].join('|'),
+        );
+    });
+    return faces.sort().join('\n');
+  };
+  let facesAtSuspension = '';
 
   project();
   // The first pass runs now, so the pages exist when the element reports the view as shown.
@@ -622,7 +650,7 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
     if (destroyed) return;
     destroyed = true;
     for (const stop of stops) stop();
-    fonts?.removeEventListener?.('loadingdone', onFonts);
+    listenToFonts(false);
     handle.detach();
     win?.dispose();
     win = null;
@@ -636,6 +664,17 @@ export function mountPageView(options: PageViewOptions): MountedPageView {
     flush: () => {
       relayout = true;
       flush();
+    },
+    suspend: () => {
+      if (destroyed || !onFontSet) return;
+      listenToFonts(false);
+      facesAtSuspension = loadedFaces();
+    },
+    resume: () => {
+      if (destroyed || onFontSet) return;
+      listenToFonts(true);
+      // A face that finished loading during the suspension was not heard: measure again.
+      if (loadedFaces() !== facesAtSuspension) onFonts();
     },
     destroy,
   };
