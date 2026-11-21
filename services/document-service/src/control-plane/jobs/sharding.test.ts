@@ -66,6 +66,9 @@ describe("a tenant call goes to the tenant's shard (BE-070 criterion 1)", () => 
             await q.setLimit(job.tenant, KIND, 2);
             await q.latestFor(job.tenant, job.doc!, KIND);
             await q.findCompleted(job.tenant, 'a'.repeat(64), 0);
+            // The reads of EXP-008 and EXP-009 name a tenant too.
+            await q.findCompletedWith(job.tenant, job.doc!, KIND, 'previewKey', 'a'.repeat(64), 0);
+            expect(await q.workerTime(job.tenant, [KIND], 0, Date.UTC(2100, 0))).toBe(0);
           }
           expect(log.length).toBeGreaterThan(0);
           for (const call of log) expect(call.shard).toBe(map.shardOf(call.tenant));

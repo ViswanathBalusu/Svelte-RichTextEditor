@@ -4,6 +4,21 @@ The export worker takes `export` jobs from the control plane's queue, converts t
 bundle, compiles it in a single-use Podman sandbox and stores the outputs (09 §9). The image is
 built from `Containerfile` with `scripts/build-image.ts`.
 
+## Previews
+
+Two rules of 06 §10 bound what previews cost (EXP-008; proposed in
+`docs/adr/0421-w2-EXP-008-preview-start-gap-and-reuse.md`).
+
+- **One compile of a document per preview window.** The queue takes no preview of a document
+  within the window (ten seconds, `DOCEDIT_PREVIEW_WINDOW_MS` of the document service) after the
+  compile of another preview of that document started, nor while one is on its way to its compile.
+  The start is the moment the worker reports the stage `compiling`, just before the sandbox.
+- **No compile for an unchanged bundle.** After conversion the worker computes the preview key of
+  the bundle (`src/preview-reuse.ts`). When an earlier preview of the document has the same key,
+  the job ends `completed` with that preview's files and no sandbox runs. The log line of such a
+  job says "no compile, an earlier preview of the same bundle is shown". Final exports always
+  compile here; the control plane answers an identical request from its first result (EXP-006).
+
 ## Limits of every job
 
 Sizing worker nodes from these limits: [CAPACITY.md](CAPACITY.md).

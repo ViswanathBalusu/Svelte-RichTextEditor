@@ -15,7 +15,10 @@
  * - A preview requested while another preview of the same document was created less than the
  *   preview window ago (06 §10: ten seconds; a setting) starts no compile of its own before the
  *   window ends: the same requester with the same key gets the pending job back, and a different
- *   request waits until the window has passed (BE-051; EXP-008).
+ *   request waits until the window has passed (BE-051; EXP-008). That hold counts from a request.
+ *   The guarantee is the start gap every preview job carries: the queue claims no preview of a
+ *   document within the window after the compile of another one started, nor while one is about
+ *   to start its compile (`startGapMs`, `startGapStage`; EXP-008 criterion 2; ADR 0421).
  * - An export is of what the requester may read (EXP-123): the job records the requester's class
  *   and hidden scopes, and the worker builds the bundle from that projection. A full export needs
  *   `manage` and `options.full: true`; a service credential reads the full document anyway.
@@ -53,8 +56,17 @@ export interface ExportOutputs {
    * EXP-113 criterion 2). Absent from a worker that does not report it.
    */
   imagesWithoutAlt?: number;
-  /** The job whose prefix holds the files, when it is not this job (a cached result). */
+  /**
+   * The job whose prefix holds the files, when it is not this job: a cached result (EXP-006), or a
+   * preview that showed the files of an earlier preview of the same bundle (EXP-008 criterion 3).
+   */
   from?: string;
+  /**
+   * The preview key of a preview's bundle, as the worker computed it (EXP-008 criterion 3;
+   * `preview-reuse.ts` of the export worker). The worker looks for it in the queue to find an
+   * earlier preview of the same bundle. The control plane neither reads nor shows it.
+   */
+  previewKey?: string;
 }
 
 /**
@@ -72,6 +84,13 @@ export const LOCALE_PATTERN =
 export const EXPORT_KIND = 'export';
 export const PREVIEW_KIND = 'preview';
 export const EXPORT_KINDS = [EXPORT_KIND, PREVIEW_KIND] as const;
+
+/**
+ * The stage a preview's compile begins with (05 §6.2 `compiling`): the worker reports it just
+ * before it starts the sandbox, and the preview window counts from that time (EXP-008 criterion 2;
+ * `NewJob.startGapStage` of the queue).
+ */
+export const PREVIEW_START_STAGE = 'compiling';
 
 /** Claim priorities (higher first): previews before requested exports (BE-050 criterion 1). */
 export const EXPORT_PRIORITIES: Readonly<Record<string, number>> = {

@@ -181,6 +181,26 @@ export class ShardedJobQueue implements JobQueue {
     return this.#on(tenant).latestFor(tenant, doc, kind);
   }
 
+  async findCompletedWith(
+    tenant: string,
+    doc: string,
+    kind: string,
+    member: string,
+    value: string,
+    since: number,
+  ): Promise<JobRecord | null> {
+    return this.#on(tenant).findCompletedWith(tenant, doc, kind, member, value, since);
+  }
+
+  async workerTime(
+    tenant: string,
+    kinds: readonly string[],
+    from: number,
+    to: number,
+  ): Promise<number> {
+    return this.#on(tenant).workerTime(tenant, kinds, from, to);
+  }
+
   /** Queued and running jobs over every shard, summed by kind and priority. */
   async depth(): Promise<QueueDepth[]> {
     const sums = new Map<string, QueueDepth>();

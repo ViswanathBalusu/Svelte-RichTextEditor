@@ -50,7 +50,7 @@ import { Placement } from './control-plane/room-routing.ts';
 import { MemoryEventSink, type EventSink } from './control-plane/events.ts';
 import { DebouncedEventSink } from './control-plane/event-throttle.ts';
 import { CompileBudget } from './control-plane/exp-009-compile-budget.ts';
-import { EXPORT_KIND, PREVIEW_KIND, exportHooks } from './control-plane/exports.ts';
+import { EXPORT_KIND, EXPORT_KINDS, PREVIEW_KIND, exportHooks } from './control-plane/exports.ts';
 import {
   IMPORT_KIND,
   importHooks,
@@ -1171,8 +1171,11 @@ export async function startService(opts: StartOptions): Promise<Service> {
   const exportHandlers: Record<string, JobHandler> = { ...(opts.jobHandlers ?? {}) };
   if (exportHandlers[EXPORT_KIND] && !exportHandlers[PREVIEW_KIND])
     exportHandlers[PREVIEW_KIND] = exportHandlers[EXPORT_KIND]!;
-  // The monthly compile-minute budget (EXP-009): every settled export and preview counts.
-  const compileBudget = new CompileBudget(quotaSource ?? null);
+  // The monthly compile-minute budget (EXP-009): the worker time of every export and preview job
+  // counts, as the queue measured it, whichever process ran the job.
+  const compileBudget = new CompileBudget(quotaSource ?? null, (tenant, from, to) =>
+    parts.queue.workerTime(tenant, EXPORT_KINDS, from, to),
+  );
   // The seal step (FRW-052 criterion 5, FRW-053): when the final export of a completed workflow has
   // finished, its PDF goes to the signing service, is stored write-once and the workflow becomes
   // `finalised`. A run that stops is reported to the operator through the log and a counter.
@@ -1278,7 +1281,6 @@ export async function startService(opts: StartOptions): Promise<Service> {
       }),
     metered: (job, outcome, ranMs) => {
       if (outcome.state === 'lost') return;
-      compileBudget.record(job.tenant, ranMs, now());
       meter.add(
         job.tenant,
         job.kind === PREVIEW_KIND ? DRIVERS.previewCompiles : DRIVERS.finalCompiles,
