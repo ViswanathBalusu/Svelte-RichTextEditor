@@ -97,6 +97,13 @@ create table doc_commit_payloads (               -- steps or control data; moves
   primary key (doc_id, seq)
 ) partition by hash (doc_id);
 
+create table commit_cold_segments (              -- which segment object holds the payloads of which run (08 §11)
+  doc_id uuid not null, from_seq bigint not null, to_seq bigint not null, object_key text not null,
+  state text not null,                           -- pending (not read: being written or removed) | moved
+  payloads int not null,                         -- payloads the object holds; falls when one is thinned or tombstoned
+  created_at timestamptz not null, moved_at timestamptz,
+  primary key (doc_id, from_seq));
+
 create table commit_scopes (                     -- per-region and per-field history
   doc_id uuid not null, scope text not null, seq bigint not null,
   primary key (doc_id, scope, seq));
@@ -170,7 +177,7 @@ Tables for tenants and their keys and origins, webhooks and deliveries, workflow
 
 Notes:
 - The head row is separate from the wide `documents` row so that the hot write path touches one narrow row.
-- Commit metadata and payload are separate tables. Metadata stays for listing, filtering and the hash chain; payloads move to cold segments (08, section 11).
+- Commit metadata and payload are separate tables. Metadata stays for listing, filtering and the hash chain; payloads move to cold segments (08, section 11). `commit_cold_segments` is the index of the segments; the job that writes it and deletes the moved payload rows runs under the purge role, not the service role (ADR 0418, proposed).
 - Position maps are not stored. They are derived from the steps, which needs no document.
 - Per-scope history uses the `commit_scopes` side table, not an index on the log.
 - The job queue is a table in stage 1. Workers claim jobs with `FOR UPDATE SKIP LOCKED`.

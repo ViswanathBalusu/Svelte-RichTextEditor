@@ -229,9 +229,10 @@ export class ContentReader {
   }
 
   /**
-   * The commits from `from` to `to` for a rebuild. A payload that is not in the log table (thinned,
-   * or moved to a cold segment; HIS-032 criterion 4) is answered as `not_found`, with the reason, so
-   * the rebuild does not fail as an internal error.
+   * The commits from `from` to `to` for a rebuild. A payload that is in no store (thinned, or
+   * replaced by a tombstone; HIS-032 criterion 4) is answered as `not_found`, with the reason, so
+   * the rebuild does not fail as an internal error. A payload in a cold segment is read by the log
+   * store (HIS-029); a segment that cannot be read is the pipeline's `unavailable`.
    */
   async #readCommits(ref: DocRef, from: number, to: number): Promise<LogCommit[]> {
     try {
@@ -240,10 +241,22 @@ export class ContentReader {
       if (e instanceof PayloadAbsentError)
         throw new ApiError(
           'not_found',
-          `the detail of seq ${e.seq} of ${ref.doc} is no longer available (its payload was removed: thinned, moved or replaced by a tombstone; 08 §11, §13)`,
+          `the detail of seq ${e.seq} of ${ref.doc} is no longer available (its payload was removed: thinned or replaced by a tombstone; 08 §11, §13)`,
         );
       throw e;
     }
+  }
+
+  /** The newest checkpoint at or before `seq`, as content to replay from. */
+  async #checkpointAt(ref: DocRef, seq: number): Promise<Rebuilt> {
+    const cp = await this.#o.checkpoints.latest(ref, seq);
+    if (!cp) throw new ApiError('internal', `document ${ref.doc} has no content at seq 0`);
+    return {
+      seq: cp.seq,
+      doc: cp.content.doc as JsonNode,
+      cdm: cp.content.cdm,
+      requires: [...cp.content.requires],
+    };
   }
 
   /** The full content at `seq` (no projection): for checks inside the service only. */
@@ -251,27 +264,38 @@ export class ContentReader {
     const base = `${ref.tenant}/${ref.doc}/${incarnation}/`;
     const hit = this.#rebuilt.get(base + seq);
     if (hit) return hit;
-    // Start from the newest rebuilt content or checkpoint at or before `seq`.
-    let from: Rebuilt | null = null;
+    // Start from the newest rebuilt content at hand at or before `seq`, or else from the newest
+    // checkpoint there.
+    let known: Rebuilt | null = null;
     for (const k of this.#rebuilt.keys()) {
       if (!k.startsWith(base)) continue;
       const s = Number(k.slice(base.length));
-      if (s <= seq && (!from || s > from.seq)) from = this.#rebuilt.get(k) ?? null;
+      if (s <= seq && (!known || s > known.seq)) known = this.#rebuilt.get(k) ?? null;
     }
-    if (!from) {
-      const cp = await this.#o.checkpoints.latest(ref, seq);
-      if (!cp) throw new ApiError('internal', `document ${ref.doc} has no content at seq 0`);
-      from = {
-        seq: cp.seq,
-        doc: cp.content.doc as JsonNode,
-        cdm: cp.content.cdm,
-        requires: [...cp.content.requires],
-      };
-    }
+    let from: Rebuilt = known ?? (await this.#checkpointAt(ref, seq));
     let out = from;
     if (from.seq < seq) {
-      const commits = await this.#readCommits(ref, from.seq + 1, seq);
-      if (commits.length !== seq - from.seq || commits.some((c, i) => c.seq !== from.seq + 1 + i))
+      let commits: LogCommit[];
+      try {
+        commits = await this.#readCommits(ref, from.seq + 1, seq);
+      } catch (e) {
+        // The replay began at rebuilt content that was at hand. A checkpoint nearer to `seq` may
+        // need none of the payloads that could not be read (removed: HIS-032, HIS-040; in a cold
+        // segment that cannot be read: HIS-029), so the answer does not depend on what this
+        // process happens to have rebuilt before.
+        if (!known) throw e;
+        let nearer: Rebuilt;
+        try {
+          nearer = await this.#checkpointAt(ref, seq);
+        } catch {
+          throw e;
+        }
+        if (nearer.seq <= from.seq) throw e;
+        from = nearer;
+        commits = nearer.seq < seq ? await this.#readCommits(ref, nearer.seq + 1, seq) : [];
+      }
+      const first = from.seq + 1;
+      if (commits.length !== seq - from.seq || commits.some((c, i) => c.seq !== first + i))
         throw new ApiError('internal', `the log of ${ref.doc} has a gap below seq ${seq}`);
       // A snapshot commit replaces the content (04 §3.2; BE-037): never replay across one, start
       // again from its content, which the data plane writes as the checkpoint at its seq.

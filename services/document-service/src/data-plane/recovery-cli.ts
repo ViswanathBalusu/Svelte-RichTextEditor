@@ -5,8 +5,9 @@
  *   node src/data-plane/recovery-cli.ts rebuild --tenant T --doc D [--seq N]
  *       Prints the SHA-256 of the canonical document at N (default: the head); exit 0.
  *   node src/data-plane/recovery-cli.ts verify --tenant T --doc D
- *       Checks the hash chain, every payload against its hash, and every recorded checkpoint
- *       against a replay; exit 1 naming the first broken `seq`.
+ *       Checks the hash chain, every payload against its hash (those in the log table and those
+ *       that have moved to cold segments, HIS-029), and every recorded checkpoint against a
+ *       replay; exit 1 naming the first broken `seq`.
  *   node src/data-plane/recovery-cli.ts incarnation [--dry-run]
  *       Lists the documents whose checkpoints reach past their head (dry run), or gives each a
  *       new incarnation and sets those checkpoints aside.
@@ -17,6 +18,7 @@
 import { configFromEnv } from '../config.ts';
 import { ObjectCheckpointStore } from '../objects/checkpoints.ts';
 import { S3ObjectStore } from '../objects/s3.ts';
+import { ObjectColdPayloads } from '../storage/cold-payloads.ts';
 import { createPool } from '../storage/db.ts';
 import { PgGrantStore } from '../storage/grant-store.ts';
 import { PgLogStore } from '../storage/log-store.ts';
@@ -37,10 +39,16 @@ if (!config.databaseUrl || !config.s3) {
 }
 const pool = createPool({ connectionString: config.databaseUrl });
 const grants = new PgGrantStore(pool);
-const logs = new PgLogStore(pool, { permissions: (ref) => grants.current(ref) });
+const objects = new S3ObjectStore(config.s3);
+// Payloads that have moved to cold segments are read from the object store (HIS-029): `rebuild`
+// replays them, and `verify` checks each against the hash the chain covers.
+const logs = new PgLogStore(pool, {
+  permissions: (ref) => grants.current(ref),
+  coldPayloads: new ObjectColdPayloads(objects),
+});
 const stores = {
   logs,
-  checkpoints: new ObjectCheckpointStore(new S3ObjectStore(config.s3)),
+  checkpoints: new ObjectCheckpointStore(objects),
   index: new PgCheckpointIndex(pool),
   audit: new PgAuditStore(pool),
 };

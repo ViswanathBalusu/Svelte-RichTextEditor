@@ -337,6 +337,7 @@ export class MemoryStore implements LogStore, OwnershipStore, GrantStore, Docume
         time: c.time,
         origin: c.origin,
         scopes: [...c.scopes],
+        revision: c.revision,
       }));
   }
 

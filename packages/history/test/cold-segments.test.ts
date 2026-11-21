@@ -16,11 +16,15 @@ import {
   type SegmentCodec,
   type SegmentObjects,
   coldMovePlan,
+  coldPayloads,
   COLD_AFTER_MS,
+  dropFromSegment,
   moveSegment,
   readPayloads,
+  readSegment,
   type SegmentRef,
   segmentPath,
+  segmentText,
 } from '../src/cold-segments.ts';
 import { thinBundle } from '../src/payload-thinning.ts';
 import { DAY_MS } from '../src/thinning.ts';
@@ -492,6 +496,373 @@ describe('the chain after a cold move (HIS-029)', () => {
     };
     const broken = await verifyBundle(forged, { schema });
     expect(broken.status).toBe('altered');
+  });
+});
+
+describe('the size of a segment (HIS-029)', () => {
+  it('cuts a long run into segments of at most maxPayloads consecutive payloads', () => {
+    const candidates = Array.from({ length: 7 }, (_, i) => ({
+      seq: i + 1,
+      time: OLD + i,
+      payloadHash: 'h',
+    }));
+    const plan = coldMovePlan(candidates, { now: NOW, maxPayloads: 3 });
+    if (!plan.ok) throw new Error('plan refused');
+    expect(plan.segments.map((s) => [s.fromSeq, s.toSeq, s.path])).toEqual([
+      [1, 3, 'segments/1-3.payloads.zst'],
+      [4, 6, 'segments/4-6.payloads.zst'],
+      [7, 7, 'segments/7-7.payloads.zst'],
+    ]);
+  });
+
+  it('cuts a run when the bytes of its payloads would pass maxBytes, and gives a larger payload a segment of its own', () => {
+    const sizes = [40, 40, 40, 500, 10, 10];
+    const candidates = sizes.map((size, i) => ({
+      seq: i + 1,
+      time: OLD + i,
+      payloadHash: 'h',
+      size,
+    }));
+    const plan = coldMovePlan(candidates, { now: NOW, maxBytes: 100 });
+    if (!plan.ok) throw new Error('plan refused');
+    expect(plan.segments.map((s) => [s.fromSeq, s.toSeq])).toEqual([
+      [1, 2],
+      [3, 3],
+      [4, 4],
+      [5, 6],
+    ]);
+  });
+
+  it('refuses a limit that is not a whole number of 1 or more, and a size that is not a whole number', () => {
+    expect(coldMovePlan([], { now: NOW, maxPayloads: 0 }).ok).toBe(false);
+    expect(coldMovePlan([], { now: NOW, maxPayloads: 1.5 }).ok).toBe(false);
+    expect(coldMovePlan([], { now: NOW, maxBytes: 0 }).ok).toBe(false);
+    expect(coldMovePlan([{ seq: 1, time: OLD, payloadHash: 'h', size: -1 }], { now: NOW }).ok).toBe(
+      false,
+    );
+  });
+
+  it('keeps each seq once and every segment within both limits, whatever the limits (property)', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.record({ old: fc.boolean(), size: fc.integer({ min: 0, max: 300 }) }), {
+          minLength: 0,
+          maxLength: 40,
+        }),
+        fc.integer({ min: 1, max: 6 }),
+        fc.integer({ min: 1, max: 400 }),
+        (rows, maxPayloads, maxBytes) => {
+          const candidates = rows.map((r, i) => ({
+            seq: i + 1,
+            time: r.old ? OLD : RECENT,
+            payloadHash: 'h',
+            size: r.size,
+          }));
+          const plan = coldMovePlan(candidates, { now: NOW, maxPayloads, maxBytes });
+          if (!plan.ok) throw new Error('plan refused');
+          const moved = plan.segments.flatMap((s) => s.entries.map((e) => e.seq));
+          expect([...moved, ...plan.keep].sort((a, b) => a - b)).toEqual(
+            candidates.map((c) => c.seq),
+          );
+          for (const seg of plan.segments) {
+            expect(seg.entries.length).toBeLessThanOrEqual(maxPayloads);
+            expect(seg.toSeq - seg.fromSeq + 1).toBe(seg.entries.length);
+            expect(seg.path).toBe(`segments/${seg.fromSeq}-${seg.toSeq}.payloads.zst`);
+            const bytes = seg.entries.reduce((n, e) => n + rows[e.seq - 1]!.size, 0);
+            // A single payload larger than the limit is alone in its segment.
+            if (seg.entries.length > 1) expect(bytes).toBeLessThanOrEqual(maxBytes);
+          }
+          // The limits never change which payloads move.
+          const free = coldMovePlan(candidates, { now: NOW });
+          if (!free.ok) throw new Error('plan refused');
+          expect(plan.keep).toEqual(free.keep);
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+});
+
+describe('reading the cold segments alone (HIS-029)', () => {
+  /** Three old payloads moved into one segment, and the pieces a reader needs. */
+  async function moved() {
+    const { candidates, payloads, hashes } = await candidatesOf([OLD, OLD, OLD]);
+    const plan = coldMovePlan(candidates, { now: NOW });
+    if (!plan.ok) throw new Error('plan refused');
+    const hot = memoryHot(payloads);
+    const objects = memoryObjects();
+    const seg = plan.segments[0]!;
+    const r = await moveSegment(seg, ioOf(hot, objects));
+    if (!r.ok) throw new Error(r.reason);
+    return { payloads, hashes, hot, objects, seg, index: planOf([seg]) };
+  }
+
+  it('gives the payloads asked for, each checked against the hash of its commit', async () => {
+    const m = await moved();
+    const wanted = new Map([
+      [1, m.hashes.get(1)!],
+      [3, m.hashes.get(3)!],
+    ]);
+    const got = await coldPayloads(wanted, m.index, { objects: m.objects, codec: plainCodec });
+    if (!got.ok) throw new Error(got.reason);
+    expect([...got.payloads]).toEqual([
+      [1, m.payloads.get(1)],
+      [3, m.payloads.get(3)],
+    ]);
+    expect(got.absent).toEqual([]);
+  });
+
+  it('reads each segment object once, however many payloads are asked of it', async () => {
+    const m = await moved();
+    let gets = 0;
+    const counting: SegmentObjects = {
+      put: m.objects.put,
+      async get(path) {
+        gets++;
+        return m.objects.get(path);
+      },
+    };
+    const got = await coldPayloads(m.hashes, m.index, { objects: counting, codec: plainCodec });
+    expect(got.ok).toBe(true);
+    expect(gets).toBe(1);
+  });
+
+  it('reports as absent a commit no segment covers and one its segment no longer holds', async () => {
+    const m = await moved();
+    const dropped = await dropFromSegment(m.seg.path, [2], {
+      objects: m.objects,
+      codec: plainCodec,
+    });
+    expect(dropped).toEqual({ ok: true, removed: [2], remaining: 2, written: true });
+    const wanted = new Map([...m.hashes, [9, 'f'.repeat(64)]]);
+    const got = await coldPayloads(wanted, m.index, { objects: m.objects, codec: plainCodec });
+    if (!got.ok) throw new Error(got.reason);
+    expect([...got.payloads.keys()]).toEqual([1, 3]);
+    expect(got.absent).toEqual([2, 9]);
+  });
+
+  it('answers unavailable, with the commit, when the object is missing, unreadable or not a segment (criterion 5)', async () => {
+    const m = await moved();
+    const io = (objects: SegmentObjects) => ({ objects, codec: plainCodec });
+    const missing = await coldPayloads(m.hashes, m.index, io(memoryObjects()));
+    expect(missing).toMatchObject({ ok: false, status: 'unavailable', seq: 1 });
+    const down = await coldPayloads(
+      m.hashes,
+      m.index,
+      io({
+        put: m.objects.put,
+        async get() {
+          throw new Error('storage is down');
+        },
+      }),
+    );
+    expect(down).toMatchObject({ ok: false, status: 'unavailable', seq: 1 });
+    const other = memoryObjects();
+    await other.put(m.seg.path, new TextEncoder().encode('{"format":"other","entries":[]}'));
+    expect(await coldPayloads(m.hashes, m.index, io(other))).toMatchObject({
+      ok: false,
+      status: 'unavailable',
+    });
+    // Nothing is read for a commit list that is empty.
+    expect(await coldPayloads(new Map(), m.index, io(memoryObjects()))).toEqual({
+      ok: true,
+      payloads: new Map(),
+      absent: [],
+    });
+  });
+
+  it('answers mismatch for a payload that was changed in the segment, and for a recorded hash that is not the commit hash (criterion 4)', async () => {
+    const m = await moved();
+    const entries = [1, 2, 3].map((seq) => ({
+      seq,
+      payloadHash: m.hashes.get(seq)!,
+      payload: m.payloads.get(seq),
+    }));
+    // The payload of seq 2 is changed and its recorded hash is left as it was.
+    const changed = memoryObjects();
+    await changed.put(
+      m.seg.path,
+      await plainCodec.encode(
+        segmentText(entries.map((e) => (e.seq === 2 ? { ...e, payload: payloadFor(2, ' x') } : e))),
+      ),
+    );
+    const io = (objects: SegmentObjects) => ({ objects, codec: plainCodec });
+    expect(await coldPayloads(m.hashes, m.index, io(changed))).toMatchObject({
+      ok: false,
+      status: 'mismatch',
+      seq: 2,
+    });
+    // The payload of seq 3 is changed and the recorded hash is made to fit it: the hash the segment
+    // records is then not the one the chain covers.
+    const forgedPayload = payloadFor(3, ' y');
+    const forged = memoryObjects();
+    await forged.put(
+      m.seg.path,
+      await plainCodec.encode(
+        segmentText(
+          await Promise.all(
+            entries.map(async (e) =>
+              e.seq === 3
+                ? {
+                    seq: 3,
+                    payload: forgedPayload,
+                    payloadHash: (await payloadDigest(forgedPayload)).hash,
+                  }
+                : e,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(await coldPayloads(m.hashes, m.index, io(forged))).toMatchObject({
+      ok: false,
+      status: 'mismatch',
+      seq: 3,
+    });
+    // `readPayloads` refuses the same two objects.
+    for (const objects of [changed, forged])
+      expect(
+        await readPayloads(
+          { fromSeq: 1, toSeq: 3, hashes: m.hashes, index: m.index },
+          ioOf(memoryHot(new Map()), objects),
+        ),
+      ).toMatchObject({ ok: false, status: 'mismatch' });
+  });
+});
+
+describe('removing payloads from a segment (HIS-029, for HIS-032 and HIS-040)', () => {
+  async function segmentOf(count: number) {
+    const { candidates, payloads, hashes } = await candidatesOf(
+      Array.from({ length: count }, () => OLD),
+    );
+    const plan = coldMovePlan(candidates, { now: NOW });
+    if (!plan.ok) throw new Error('plan refused');
+    const objects = memoryObjects();
+    const seg = plan.segments[0]!;
+    const r = await moveSegment(seg, ioOf(memoryHot(payloads), objects));
+    if (!r.ok) throw new Error(r.reason);
+    return { payloads, hashes, objects, seg };
+  }
+
+  it('writes the object again without the payloads, under the same name, and the rest reads as before', async () => {
+    const s = await segmentOf(5);
+    const io = { objects: s.objects, codec: plainCodec };
+    const before = s.objects.files.get(s.seg.path)!;
+    const r = await dropFromSegment(s.seg.path, [4, 2, 99], io);
+    expect(r).toEqual({ ok: true, removed: [2, 4], remaining: 3, written: true });
+    const text = new TextDecoder().decode(s.objects.files.get(s.seg.path)!);
+    expect(text).not.toContain(`${CANARY}2`);
+    expect(text).not.toContain(`${CANARY}4`);
+    expect(new TextDecoder().decode(before)).toContain(`${CANARY}2`);
+    const back = await readSegment(s.seg.path, io);
+    if (!back.ok) throw new Error(back.reason);
+    expect([...back.entries.keys()]).toEqual([1, 3, 5]);
+    for (const seq of [1, 3, 5]) {
+      expect(back.entries.get(seq)!.payload).toEqual(s.payloads.get(seq));
+      expect(back.entries.get(seq)!.payloadHash).toBe(s.hashes.get(seq));
+    }
+    expect([...s.objects.files.keys()]).toEqual([s.seg.path]);
+  });
+
+  it('writes nothing when no payload of the list is in the segment, and nothing when none would remain', async () => {
+    const s = await segmentOf(2);
+    let puts = 0;
+    const counting: SegmentObjects = {
+      async put(path, bytes) {
+        puts++;
+        return s.objects.put(path, bytes);
+      },
+      get: s.objects.get,
+    };
+    const io = { objects: counting, codec: plainCodec };
+    expect(await dropFromSegment(s.seg.path, [7, 8], io)).toEqual({
+      ok: true,
+      removed: [],
+      remaining: 2,
+      written: false,
+    });
+    expect(await dropFromSegment(s.seg.path, [1, 2], io)).toEqual({
+      ok: true,
+      removed: [1, 2],
+      remaining: 0,
+      written: false,
+    });
+    expect(puts).toBe(0);
+    // The object is the caller's to remove: it is still as it was.
+    expect((await readSegment(s.seg.path, io)).ok).toBe(true);
+  });
+
+  it('puts the old bytes back when the rewritten object does not read back, and removes nothing', async () => {
+    const s = await segmentOf(3);
+    const before = s.objects.files.get(s.seg.path)!;
+    let reads = 0;
+    const faulty: SegmentObjects = {
+      put: s.objects.put,
+      async get(path) {
+        reads++;
+        // The first read is of the object as it is; the second is the read-back.
+        if (reads === 2) return new TextEncoder().encode('{"format":"other"}');
+        return s.objects.get(path);
+      },
+    };
+    const r = await dropFromSegment(s.seg.path, [2], { objects: faulty, codec: plainCodec });
+    expect(r).toMatchObject({ ok: false, status: 'unavailable' });
+    expect(s.objects.files.get(s.seg.path)).toEqual(before);
+  });
+
+  it('answers unavailable and changes nothing when the object is missing, cannot be decoded or cannot be written', async () => {
+    const s = await segmentOf(3);
+    const before = s.objects.files.get(s.seg.path)!;
+    expect(
+      await dropFromSegment('segments/9-9.payloads.zst', [9], {
+        objects: s.objects,
+        codec: plainCodec,
+      }),
+    ).toMatchObject({ ok: false, status: 'unavailable' });
+    const junk = memoryObjects();
+    await junk.put(s.seg.path, new TextEncoder().encode('not a segment'));
+    expect(
+      await dropFromSegment(s.seg.path, [1], { objects: junk, codec: plainCodec }),
+    ).toMatchObject({ ok: false, status: 'unavailable' });
+    const readOnly: SegmentObjects = {
+      async put() {
+        throw new Error('put failed');
+      },
+      get: s.objects.get,
+    };
+    expect(
+      await dropFromSegment(s.seg.path, [1], { objects: readOnly, codec: plainCodec }),
+    ).toMatchObject({ ok: false, status: 'unavailable' });
+    expect(s.objects.files.get(s.seg.path)).toEqual(before);
+  });
+
+  it('never loses or changes a payload that is not in the list, whatever is removed (property)', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 10 }),
+        fc.array(fc.integer({ min: 0, max: 12 }), { maxLength: 12 }),
+        async (count, drop) => {
+          const s = await segmentOf(count);
+          const io = { objects: s.objects, codec: plainCodec };
+          const r = await dropFromSegment(s.seg.path, drop, io);
+          if (!r.ok) throw new Error(r.reason);
+          const expected = [...s.payloads.keys()].filter((seq) => !drop.includes(seq));
+          expect(r.remaining).toBe(r.removed.length === 0 ? count : expected.length);
+          expect(r.removed).toEqual([...s.payloads.keys()].filter((seq) => drop.includes(seq)));
+          if (!r.written) return;
+          const got = await coldPayloads(
+            s.hashes,
+            [{ fromSeq: s.seg.fromSeq, toSeq: s.seg.toSeq, path: s.seg.path }],
+            io,
+          );
+          if (!got.ok) throw new Error(got.reason);
+          expect([...got.payloads.keys()]).toEqual(expected);
+          for (const seq of expected) expect(got.payloads.get(seq)).toEqual(s.payloads.get(seq));
+          expect(got.absent).toEqual(r.removed);
+        },
+      ),
+      { numRuns: 100 },
+    );
   });
 });
 

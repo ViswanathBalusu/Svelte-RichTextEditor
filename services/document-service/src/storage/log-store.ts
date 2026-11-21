@@ -38,11 +38,17 @@ import {
 } from './document-keys.ts';
 import { PayloadAbsentError } from './payload-absent.ts';
 import {
+  ColdSegmentUnavailableError,
+  type ColdIndexRow,
+  type ColdPayloadSource,
+} from './cold-payloads.ts';
+import {
   chainHash,
   decodeContent,
   decodePayload,
   encodeCommit,
   metadataBytes,
+  payloadFromJson,
   type CommitMetadata,
 } from './codec.ts';
 import {
@@ -104,6 +110,12 @@ export interface PgLogStoreOptions {
    * the table and opened on read. Without it the store never looks for a key.
    */
   documentKeys?: DocumentKeys;
+  /**
+   * Cold segments (HIS-029; 08 §11). With it, a read takes the payload of a commit that has no
+   * payload row from the segment that `commit_cold_segments` names for it, so a range that straddles
+   * the boundary reads both stores. Without it such a commit reads as a removed one.
+   */
+  coldPayloads?: ColdPayloadSource;
 }
 
 export type ChainVerdict = { ok: true; head: number } | { ok: false; seq: number; reason: string };
@@ -124,13 +136,25 @@ interface CommitRow {
   cdm_version: number;
   engine: string;
   payload: Buffer | null;
+  /** The hash the chain covers: a payload read from a cold segment is checked against it (HIS-029). */
+  payload_hash: Buffer;
   scopes: string[];
+}
+
+/**
+ * What a read needs when some of its commits have no payload row (HIS-029): the cold segments that
+ * cover them, and which of them were replaced by a tombstone (HIS-040). A tombstoned payload is
+ * never taken from a segment, even while the segment still holds it.
+ */
+interface ColdLookup {
+  index: ColdIndexRow[];
+  tombstoned: ReadonlySet<number>;
 }
 
 const COMMIT_ROWS = `
   SELECT c.seq, c.kind, c.commit_id, c.user_id, c.session_id, c.agent, c.server_ts, c.origin,
          c.base, c.rebased, c.access_rev, c.token_jti, c.cdm_version, c.engine, p.payload,
-         coalesce(s.scopes, '{}') AS scopes
+         c.payload_hash, coalesce(s.scopes, '{}') AS scopes
     FROM doc_commits c
     LEFT JOIN doc_commit_payloads p ON p.doc_id = c.doc_id AND p.seq = c.seq
     LEFT JOIN LATERAL (
@@ -145,7 +169,7 @@ const SELECT_COMMITS = `${COMMIT_ROWS}
 
 /** The metadata of a range of commits, with no payload (`readMeta`). */
 const SELECT_COMMIT_META = `
-  SELECT c.seq, c.kind, c.user_id, c.session_id, c.server_ts, c.origin,
+  SELECT c.seq, c.kind, c.user_id, c.session_id, c.server_ts, c.origin, c.access_rev,
          coalesce(s.scopes, '{}') AS scopes
     FROM doc_commits c
     LEFT JOIN LATERAL (
@@ -311,10 +335,13 @@ function checkRequest(ref: DocRef, req: WriteRequest, options: AppendOptions): L
  * were recorded, so that a restarted room can rebuild an acknowledgement from the log (HIS-001;
  * SYN-008). A snapshot commit comes back with its checkpoint reference; its content is read with
  * `snapshotContent`.
+ *
+ * `cold` is the payload read from a cold segment for a row that has no payload row (HIS-029). A row
+ * with neither was thinned or replaced by a tombstone: `PayloadAbsentError`.
  */
-function toStoredCommit(row: CommitRow): LogCommit {
-  if (!row.payload) throw new PayloadAbsentError(int(row.seq));
-  const payload = decodePayload(row.payload);
+function toStoredCommit(row: CommitRow, cold?: unknown): LogCommit {
+  if (!row.payload && cold === undefined) throw new PayloadAbsentError(int(row.seq));
+  const payload = row.payload ? decodePayload(row.payload) : payloadFromJson(cold);
   if (row.kind === 'snapshot') {
     if (!payload.snapshot) throw new Error(`snapshot commit ${row.seq} has no reference`);
     const s: SnapshotCommit = {
@@ -371,6 +398,7 @@ export class PgLogStore implements LogStore, OwnershipStore {
   readonly #lockTimeoutMs: number;
   readonly #unknownAttempts: number;
   #keys: DocumentKeys | undefined;
+  #cold: ColdPayloadSource | undefined;
 
   constructor(pool: Pool, options: PgLogStoreOptions) {
     this.#pool = pool;
@@ -378,11 +406,20 @@ export class PgLogStore implements LogStore, OwnershipStore {
     this.#lockTimeoutMs = options.lockTimeoutMs ?? 5000;
     this.#unknownAttempts = options.unknownAttempts ?? 5;
     this.#keys = options.documentKeys;
+    this.#cold = options.coldPayloads;
   }
 
   /** Turns on per-document keys after construction (HIS-041), for a store made before the keys were. */
   useDocumentKeys(keys: DocumentKeys): void {
     this.#keys = keys;
+  }
+
+  /**
+   * Turns on reading from cold segments after construction (HIS-029), for a store made before the
+   * object store was chosen. Without it a commit whose payload has moved reads as a removed one.
+   */
+  useColdSegments(source: ColdPayloadSource): void {
+    this.#cold = source;
   }
 
   /** The sealer of the document, or null when it has no key (or the store has no key support). */
@@ -427,15 +464,15 @@ export class PgLogStore implements LogStore, OwnershipStore {
 
   async #storedOf(ref: DocRef, ids: readonly string[]): Promise<LogCommit | null> {
     const sealer = await this.#sealerOf(ref);
-    return this.#inTenant(
+    const fetched = await this.#inTenant(
       ref,
       async (c) => {
-        const r = await c.query<CommitRow>(SELECT_BY_ID, [ref.doc, ids]);
-        const [row] = await this.#opened(ref, r.rows.slice(0, 1), sealer);
-        return row ? toStoredCommit(row) : null;
+        const rows = (await c.query<CommitRow>(SELECT_BY_ID, [ref.doc, ids])).rows.slice(0, 1);
+        return { rows, cold: await this.#coldLookup(c, ref, rows) };
       },
       true,
     );
+    return (await this.#commits(ref, fetched.rows, fetched.cold, sealer))[0] ?? null;
   }
 
   async #append(
@@ -673,7 +710,14 @@ export class PgLogStore implements LogStore, OwnershipStore {
 
   async read(ref: DocRef, fromSeq = 1, toSeq?: number): Promise<LogCommit[]> {
     const sealer = await this.#sealerOf(ref);
-    return this.#inTenant(ref, (c) => this.#select(c, ref, fromSeq, toSeq ?? null, sealer), true);
+    // The rows and the cold index are read in one transaction; the segment objects, if any are
+    // needed, are fetched after it, so no database connection waits on object storage.
+    const fetched = await this.#inTenant(
+      ref,
+      (c) => this.#rows(c, ref, fromSeq, toSeq ?? null),
+      true,
+    );
+    return this.#commits(ref, fetched.rows, fetched.cold, sealer);
   }
 
   /** The metadata of the commits in a range, with no payload read (HIS-040: a removed payload does not stop a list). */
@@ -681,10 +725,9 @@ export class PgLogStore implements LogStore, OwnershipStore {
     return this.#inTenant(
       ref,
       async (c) => {
-        const r = await c.query<Omit<CommitRow, 'payload' | 'commit_id' | 'agent'>>(
-          SELECT_COMMIT_META,
-          [ref.doc, fromSeq, toSeq],
-        );
+        const r = await c.query<
+          Omit<CommitRow, 'payload' | 'payload_hash' | 'commit_id' | 'agent'>
+        >(SELECT_COMMIT_META, [ref.doc, fromSeq, toSeq]);
         return r.rows.map((row) => ({
           seq: int(row.seq),
           kind: row.kind,
@@ -693,6 +736,7 @@ export class PgLogStore implements LogStore, OwnershipStore {
           time: millis(row.server_ts)!,
           origin: row.origin,
           scopes: row.scopes,
+          revision: int(row.access_rev),
         }));
       },
       true,
@@ -1073,6 +1117,11 @@ export class PgLogStore implements LogStore, OwnershipStore {
             if (!createHash('sha256').update(text).digest().equals(r.payload_hash))
               return { ok: false, seq: int(r.seq), reason: 'the payload does not match its hash' };
           }
+          // The payloads that moved to cold segments are read from them and hashed in the same way
+          // (HIS-029 criterion 4). One the segment no longer holds was removed after the move and
+          // is skipped, as a thinned payload is.
+          const cold = await this.#verifyCold(c, ref);
+          if (cold) return cold;
           const s = await c.query<{ seq: string; content: Buffer; content_hash: Buffer }>(
             'SELECT seq, content, content_hash FROM doc_snapshots WHERE doc_id = $1 ORDER BY seq',
             [ref.doc],
@@ -1172,6 +1221,60 @@ export class PgLogStore implements LogStore, OwnershipStore {
     );
   }
 
+  /**
+   * Reads every payload that a moved segment of `commit_cold_segments` holds and compares the hash
+   * the segment records for it, and the hash of the payload itself, with the hash the chain covers.
+   * Null when all match (or the store reads no cold segments); otherwise the first commit that
+   * cannot be checked or does not match.
+   */
+  async #verifyCold(
+    client: Queryable,
+    ref: DocRef,
+  ): Promise<Extract<ChainVerdict, { ok: false }> | null> {
+    if (!this.#cold) return null;
+    const index = await client.query<{ from_seq: string; to_seq: string; object_key: string }>(
+      `SELECT from_seq, to_seq, object_key FROM commit_cold_segments
+        WHERE doc_id = $1 AND state = 'moved' ORDER BY from_seq`,
+      [ref.doc],
+    );
+    // One segment at a time, so that the payloads of one object at most are held in memory.
+    for (const s of index.rows) {
+      const row: ColdIndexRow = {
+        fromSeq: int(s.from_seq),
+        toSeq: int(s.to_seq),
+        objectKey: s.object_key,
+      };
+      const covered = await client.query<{ seq: string; payload_hash: Buffer }>(
+        `SELECT c.seq, c.payload_hash
+           FROM doc_commits c
+          WHERE c.doc_id = $1 AND c.seq BETWEEN $2 AND $3
+            AND NOT EXISTS (SELECT 1 FROM doc_commit_payloads p
+                             WHERE p.doc_id = c.doc_id AND p.seq = c.seq)
+            AND NOT EXISTS (SELECT 1 FROM commit_tombstones t
+                             WHERE t.doc_id = c.doc_id AND t.seq = c.seq)
+          ORDER BY c.seq`,
+        [ref.doc, row.fromSeq, row.toSeq],
+      );
+      const wanted = new Map(
+        covered.rows.map((r) => [int(r.seq), r.payload_hash.toString('hex')] as const),
+      );
+      try {
+        await this.#cold.read(ref, wanted, [row]);
+      } catch (e) {
+        if (!(e instanceof ColdSegmentUnavailableError)) throw e;
+        return {
+          ok: false,
+          seq: e.seq ?? row.fromSeq,
+          reason:
+            e.status === 'mismatch'
+              ? 'the payload in a cold segment does not match its hash'
+              : 'a cold segment cannot be read, so its payloads cannot be checked',
+        };
+      }
+    }
+    return null;
+  }
+
   async #select(
     client: Queryable,
     ref: DocRef,
@@ -1179,8 +1282,85 @@ export class PgLogStore implements LogStore, OwnershipStore {
     toSeq: number | null,
     sealer: DocumentSealer | null,
   ): Promise<LogCommit[]> {
-    const r = await client.query<CommitRow>(SELECT_COMMITS, [ref.doc, fromSeq, toSeq]);
-    return (await this.#opened(ref, r.rows, sealer)).map(toStoredCommit);
+    const fetched = await this.#rows(client, ref, fromSeq, toSeq);
+    return this.#commits(ref, fetched.rows, fetched.cold, sealer);
+  }
+
+  /** The stored rows of a range, and what is needed to read those whose payload has moved (HIS-029). */
+  async #rows(
+    client: Queryable,
+    ref: DocRef,
+    fromSeq: number,
+    toSeq: number | null,
+  ): Promise<{ rows: CommitRow[]; cold: ColdLookup | null }> {
+    const rows = (await client.query<CommitRow>(SELECT_COMMITS, [ref.doc, fromSeq, toSeq])).rows;
+    return { rows, cold: await this.#coldLookup(client, ref, rows) };
+  }
+
+  /**
+   * The cold segments that cover the rows without a payload row, and the tombstones among those
+   * rows. Null when every row has its payload in the table (the usual case: nothing more is read),
+   * when no segment covers the others, or when the store reads no cold segments.
+   */
+  async #coldLookup(
+    client: Queryable,
+    ref: DocRef,
+    rows: readonly CommitRow[],
+  ): Promise<ColdLookup | null> {
+    if (!this.#cold) return null;
+    let min = Infinity;
+    let max = -Infinity;
+    for (const row of rows) {
+      if (row.payload) continue;
+      const seq = int(row.seq);
+      if (seq < min) min = seq;
+      if (seq > max) max = seq;
+    }
+    if (max < min) return null;
+    const index = await client.query<{ from_seq: string; to_seq: string; object_key: string }>(
+      `SELECT from_seq, to_seq, object_key FROM commit_cold_segments
+        WHERE doc_id = $1 AND state = 'moved' AND to_seq >= $2 AND from_seq <= $3
+        ORDER BY from_seq`,
+      [ref.doc, min, max],
+    );
+    if (index.rows.length === 0) return null;
+    const dead = await client.query<{ seq: string }>(
+      'SELECT seq FROM commit_tombstones WHERE doc_id = $1 AND seq >= $2 AND seq <= $3',
+      [ref.doc, min, max],
+    );
+    return {
+      index: index.rows.map((r) => ({
+        fromSeq: int(r.from_seq),
+        toSeq: int(r.to_seq),
+        objectKey: r.object_key,
+      })),
+      tombstoned: new Set(dead.rows.map((r) => int(r.seq))),
+    };
+  }
+
+  /**
+   * The rows as commits, with sealed payloads opened (HIS-041) and moved payloads read from their
+   * cold segments (HIS-029). Each cold payload is checked against the hash of its row before it is
+   * used; a segment that cannot be read rejects with `ColdSegmentUnavailableError`.
+   */
+  async #commits(
+    ref: DocRef,
+    rows: readonly CommitRow[],
+    lookup: ColdLookup | null,
+    sealer: DocumentSealer | null,
+  ): Promise<LogCommit[]> {
+    const opened = await this.#opened(ref, rows, sealer);
+    let cold: Map<number, unknown> | null = null;
+    if (lookup && this.#cold) {
+      const wanted = new Map<number, string>();
+      for (const row of opened) {
+        const seq = int(row.seq);
+        if (!row.payload && !lookup.tombstoned.has(seq))
+          wanted.set(seq, row.payload_hash.toString('hex'));
+      }
+      cold = await this.#cold.read(ref, wanted, lookup.index);
+    }
+    return opened.map((row) => toStoredCommit(row, cold?.get(int(row.seq))));
   }
 
   async #inTenant<T>(ref: DocRef, fn: (c: PoolClient) => Promise<T>, readOnly = false): Promise<T> {

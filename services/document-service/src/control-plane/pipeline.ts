@@ -43,6 +43,7 @@ import {
   DocumentKeyDestroyedError,
   DocumentKeyUnavailableError,
 } from '../storage/document-keys.ts';
+import { ColdSegmentUnavailableError } from '../storage/cold-payloads.ts';
 import { PayloadAbsentError } from '../storage/payload-absent.ts';
 import { ApiError, isApiError, type RestCode } from './problems.ts';
 import { Router, type OperationDef } from './router.ts';
@@ -325,6 +326,7 @@ export class Pipeline {
       const err = isApiError(e)
         ? e
         : (payloadAbsentRefusal(e) ??
+          coldSegmentRefusal(e, this.#o.unavailableRetryAfterS ?? 1) ??
           documentKeyRefusal(e) ??
           registryRefusal(e) ??
           infrastructureRefusal(e, this.#o.unavailableRetryAfterS ?? 1) ??
@@ -531,10 +533,10 @@ const REST_CODES: ReadonlySet<string> = new Set(
  * of the REST surface becomes that problem; its message is not passed on, since it may quote input.
  */
 /**
- * A read that needs the payload of a commit that is not in the log table (thinned, moved to a cold
- * segment or replaced by a tombstone; HIS-040 criterion 2, HIS-032 criterion 4) is 
-ot_found with a
- * message that the detail was removed. It never returns content built without the commit.
+ * A read that needs the payload of a commit that is in no store (thinned, or replaced by a
+ * tombstone; HIS-040 criterion 2, HIS-032 criterion 4) is `not_found` with a message that the
+ * detail was removed. It never returns content built without the commit. A payload that moved to a
+ * cold segment is not such a commit: the log store reads it from the segment (HIS-029).
  */
 function payloadAbsentRefusal(e: unknown): ApiError | null {
   if (!(e instanceof PayloadAbsentError)) return null;
@@ -542,6 +544,23 @@ function payloadAbsentRefusal(e: unknown): ApiError | null {
     'not_found',
     `the detail of commit ${e.seq} was removed and is no longer available (08 §11, §13)`,
     { cause: e },
+  );
+}
+
+/**
+ * A read that needs a payload from a cold segment that cannot be read (HIS-029 criterion 5): the
+ * object is missing or cannot be decoded, or a payload in it does not match the hash the chain
+ * covers. It is `unavailable` with a `Retry-After`, and nothing is served in its place. Reads that
+ * need no cold payload, and live editing, are not affected.
+ */
+function coldSegmentRefusal(e: unknown, retryAfterS: number): ApiError | null {
+  if (!(e instanceof ColdSegmentUnavailableError)) return null;
+  return new ApiError(
+    'unavailable',
+    e.seq === undefined
+      ? 'a part of the history of this document cannot be read now (08 §11)'
+      : `the detail of commit ${e.seq} cannot be read now (08 §11)`,
+    { retryAfterS, cause: e },
   );
 }
 

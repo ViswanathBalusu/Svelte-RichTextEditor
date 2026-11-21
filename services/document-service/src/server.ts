@@ -161,6 +161,12 @@ import {
 } from './control-plane/checkpoint-thinning.ts';
 import { gateThinning } from './data-plane/recovery.ts';
 import {
+  ColdSegments,
+  coldSegmentsTask,
+  type ColdSegmentStore,
+} from './control-plane/cold-segments.ts';
+import { PgColdSegmentStore } from './control-plane/cold-segments-pg.ts';
+import {
   PayloadThinning,
   payloadThinningTask,
   type ThinningStore,
@@ -216,6 +222,7 @@ import type {
   SessionOpened,
   Span,
 } from './seams.ts';
+import { ObjectColdPayloads } from './storage/cold-payloads.ts';
 import { createPool, inTenant, isUuid, sqlState, type Pool } from './storage/db.ts';
 import { PgDocumentStore } from './storage/document-store.ts';
 import { PgGrantStore } from './storage/grant-store.ts';
@@ -307,6 +314,14 @@ export interface ServiceParts {
    * connects as a member of `docedit_purge`. Absent: no checkpoint thinning task runs.
    */
   checkpointThinningStore?: CheckpointThinningStore;
+  /**
+   * The rows of the cold segments (HIS-029): the job that moves payloads older than 30 days to
+   * object storage, and the removal of payloads from segments by thinning and tombstones. Like
+   * `purgeStore` it needs a pool that connects as a member of `docedit_purge`; `startService` makes
+   * it from `config.purgeDatabaseUrl`. Absent: no payload moves. Reading moved payloads needs no
+   * such store: every PostgreSQL log store reads them from `objects`.
+   */
+  coldSegmentStore?: ColdSegmentStore;
   /**
    * Per-document keys (HIS-041). With both `documentKeyStore` and `keyService`, the service seals
    * the payloads and objects of documents that have a key and builds `documentKeys` to give and
@@ -792,6 +807,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
       ? createPool({ connectionString: config.purgeDatabaseUrl, connectionTimeoutMillis: 5000 })
       : null;
   if (purgeDb) base.purgeStore = new PgPurgeStore(purgeDb);
+  // The move of old payloads to cold segments (HIS-029) deletes payload rows, so it uses that role.
+  if (purgeDb) base.coldSegmentStore = new PgColdSegmentStore(purgeDb);
   if (config.s3) base.objects = new S3ObjectStore(config.s3);
   else if (config.azure) base.objects = new AzureBlobObjectStore(config.azure);
   const parts: ServiceParts = { ...base, ...opts.parts };
@@ -810,6 +827,25 @@ export async function startService(opts: StartOptions): Promise<Service> {
     parts.objects = new DocumentKeyedObjectStore(rawObjects, keys);
     parts.documentKeys = keys;
   }
+  // Cold segments (HIS-029; 08 §11). A PostgreSQL log store reads the payloads that have moved from
+  // the object store, so a range that straddles the boundary reads both stores; the standby's store
+  // does too. The object store is the one the service settled on above, sealing included.
+  const coldPayloads = new ObjectColdPayloads(parts.objects);
+  if (parts.logs instanceof PgLogStore) parts.logs.useColdSegments(coldPayloads);
+  if (parts.replica?.logs instanceof PgLogStore) parts.replica.logs.useColdSegments(coldPayloads);
+  const coldSegments =
+    parts.coldSegmentStore && parts.audit
+      ? new ColdSegments({
+          store: parts.coldSegmentStore,
+          objects: parts.objects,
+          audit: parts.audit,
+          now,
+          afterMs: config.coldAfterDays * DAY_MS,
+          ...(parts.documentKeys ? { documentKeys: parts.documentKeys } : {}),
+          // A hold does not stop a move (08 §11); the audit event of the move says it was seen.
+          ...(parts.holds ? { held: (tenant: string) => parts.holds!.heldDocuments(tenant) } : {}),
+        })
+      : undefined;
   const erasures = erasuresOver(parts, now);
   // A release lets the erasures that waited for the hold run (HIS-031; owner decision 85).
   if (parts.holds && erasures) {
@@ -829,6 +865,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
           audit: parts.audit,
           held: async (tenant, doc) => (parts.holds ? parts.holds.inForce(tenant, doc) : false),
           now,
+          // A payload that has moved is taken out of its cold segment (HIS-029).
+          ...(coldSegments ? { cold: coldSegments } : {}),
         })
       : undefined;
   const readSessionsMax = opts.readSessions ?? config.readSessions ?? undefined;
@@ -1288,6 +1326,8 @@ export async function startService(opts: StartOptions): Promise<Service> {
           retention: parts.retention,
           audit: parts.audit,
           now,
+          // Payloads that have moved to cold segments are thinned there (HIS-029).
+          ...(coldSegments ? { cold: coldSegments } : {}),
         })
       : null;
   // Thinning of old checkpoints (HIS-030): a checkpoint that replaces older ones is compared with a
@@ -1334,6 +1374,20 @@ export async function startService(opts: StartOptions): Promise<Service> {
         })
       : null;
   const tasks: ScheduledTask[] = [
+    // The move of payloads older than 30 days to cold segments (HIS-029). It is not a task that
+    // deletes: a legal hold does not stop it, because moving is not thinning (08 §11).
+    ...(coldSegments
+      ? [
+          coldSegmentsTask(coldSegments, (tenant, failed) => {
+            for (const f of failed)
+              logger.error({
+                event: 'payloads.cold.failed',
+                tenant,
+                message: `${f.doc}: ${f.reason}`,
+              });
+          }),
+        ]
+      : []),
     ...(checkpointThinning ? [checkpointThinningTask(checkpointThinning)] : []),
     // Thinning of old payloads for tenants and documents whose policy says so (HIS-032); the
     // scheduler hands the task the documents under a legal hold, and the task leaves them alone.

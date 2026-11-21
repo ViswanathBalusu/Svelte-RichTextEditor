@@ -18,6 +18,12 @@
  * range the checkpoints remain: a rebuild inside it answers `not_found` with the reason
  * (`PayloadAbsentError`), and the history list reads metadata only.
  *
+ * Payloads that have moved to cold segments (HIS-029) are thinned by the same plan. The store lists
+ * the segments that hold commits older than the period, and the payloads the plan removes are taken
+ * out of their segment objects (`ColdSegments.remove`), which are written again without them. A
+ * segment is opened only when it holds more payloads than the plan would keep in its range, so a
+ * segment that was thinned already is not read again every day.
+ *
  * The metadata rows, the payload hashes and the chain stay; the chain still verifies. Each document
  * that loses payloads gets one audit event, `history.thinned`, with counts and never content.
  */
@@ -25,8 +31,21 @@ import { payloadThinningPlan, type PayloadRecord, type PinnedVersion } from '@do
 import { DAY_MS } from './document-purge.ts';
 import type { AuditStore } from '../storage/types.ts';
 import { uuid7 } from '@docedit/model';
+import type { ColdRemoval } from './cold-segments.ts';
 import type { RetentionService } from './retention.ts';
 import type { ScheduledTask, TaskScope } from './scheduler.ts';
+
+/** A cold segment that holds commits older than the cut, as the plan reads it (HIS-029). */
+export interface ThinningSegment {
+  readonly fromSeq: number;
+  readonly toSeq: number;
+  /** The payloads the segment object holds now. */
+  readonly payloads: number;
+  /** The commits of its range that a tombstone replaced: their payloads are gone already. */
+  readonly tombstoned: number;
+  /** The commits of its range older than the cut that no tombstone replaced. */
+  readonly commits: readonly PayloadRecord[];
+}
 
 /** What the plan reads about one document. */
 export interface ThinningFacts {
@@ -36,6 +55,8 @@ export interface ThinningFacts {
   readonly checkpoints: readonly number[];
   /** The stored versions of the document. */
   readonly versions: readonly PinnedVersion[];
+  /** The cold segments with commits older than the cut. Absent: the store knows no cold segments. */
+  readonly cold?: readonly ThinningSegment[];
 }
 
 /** The rows of the thinning. The PostgreSQL implementation runs under the purge role (0073). */
@@ -53,6 +74,11 @@ export interface PayloadThinningDeps {
   retention: RetentionService;
   audit: AuditStore;
   now: () => number;
+  /**
+   * Takes payloads out of cold segments (HIS-029; `ColdSegments`). Without it the payloads that
+   * have moved are left where they are.
+   */
+  cold?: { remove(tenant: string, doc: string, seqs: readonly number[]): Promise<ColdRemoval> };
 }
 
 export interface ThinningRunResult {
@@ -90,16 +116,31 @@ export class PayloadThinning {
       const periodMs = policy.afterDays * DAY_MS;
       const facts = await this.#d.store.facts(tenant, doc, now - periodMs);
       const newest = facts.checkpoints.reduce((m, s) => Math.max(m, s), 0);
-      const plan = payloadThinningPlan(facts.commits, facts.checkpoints, facts.versions, {
-        now,
-        periodMs,
-        hold: false,
-      });
+      // One plan for the payloads in the table and those in cold segments (HIS-029).
+      const segments = this.#d.cold ? (facts.cold ?? []) : [];
+      const plan = payloadThinningPlan(
+        [...facts.commits, ...segments.flatMap((s) => s.commits)],
+        facts.checkpoints,
+        facts.versions,
+        { now, periodMs, hold: false },
+      );
       if (!plan.ok) throw new Error(`the thinning plan of ${doc} was refused: ${plan.reason}`);
       // The room replays what follows the newest checkpoint, so those payloads stay.
-      const remove = plan.remove.filter((seq) => seq <= newest);
-      if (remove.length === 0) continue;
-      const removed = await this.#d.store.remove(tenant, doc, remove);
+      const remove = new Set(plan.remove.filter((seq) => seq <= newest));
+      if (remove.size === 0) continue;
+      const hot = facts.commits.map((c) => c.seq).filter((seq) => remove.has(seq));
+      let removed = hot.length > 0 ? await this.#d.store.remove(tenant, doc, hot) : 0;
+      let fromSegments = 0;
+      for (const segment of segments) {
+        const go = segment.commits.map((c) => c.seq).filter((seq) => remove.has(seq));
+        if (go.length === 0) continue;
+        // What the segment may still hold once these are gone. It is opened only when it holds
+        // more than that: a segment thinned by an earlier run holds no more, and is not read.
+        const kept = segment.toSeq - segment.fromSeq + 1 - segment.tombstoned - go.length;
+        if (segment.payloads <= kept) continue;
+        fromSegments += (await this.#d.cold!.remove(tenant, doc, go)).removed.length;
+      }
+      removed += fromSegments;
       if (removed === 0) continue;
       out.thinned.push({ doc, removed });
       await this.#d.audit.record([
@@ -111,6 +152,7 @@ export class PayloadThinning {
           kind: 'history.thinned',
           data: {
             removed,
+            fromSegments,
             keptForVersions: plan.keptForVersions.length,
             afterDays: policy.afterDays,
           },

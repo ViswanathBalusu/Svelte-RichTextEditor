@@ -16,7 +16,15 @@
  *   plan, it changes nothing in it);
  * - a range that straddles the boundary is read from both stores and gives the same payloads as
  *   before the move. A segment that cannot be read makes the cold part of the range `unavailable`;
- *   the hot part of a read is not affected (`readPayloads`).
+ *   the hot part of a read is not affected (`readPayloads`);
+ * - a payload read from a segment is used only when the hash the segment records for it and the
+ *   hash of the payload itself both equal the hash in the commit's metadata, which is the hash the
+ *   chain covers (`readPayloads`, `coldPayloads`);
+ * - a segment may be limited in the number of payloads and in bytes, so that a read of one old
+ *   commit never loads an unbounded object (`ColdPolicy.maxPayloads`, `maxBytes`);
+ * - a payload can be removed from a segment afterwards, by thinning (HIS-032) or a tombstone
+ *   (HIS-040). The object is written again without it and read back; the range in its name stays
+ *   (`dropFromSegment`). A read then finds the commit in no store, as for any removed payload.
  *
  * Compression is not done here: the codec is an input, and the service supplies zstd (08 §11).
  * Text is passed to the codec as a string, so this module needs no text decoder of its own.
@@ -55,6 +63,11 @@ export interface ColdCandidate {
   time: number;
   /** The payload hash recorded in the commit metadata (lower-case hexadecimal SHA-256). */
   payloadHash: string;
+  /**
+   * Bytes of the canonical payload (the `size` of the commit metadata). Read only when the policy
+   * limits the bytes of a segment; a candidate without it counts as 0 bytes.
+   */
+  size?: number;
 }
 
 export interface ColdPolicy {
@@ -67,6 +80,16 @@ export interface ColdPolicy {
    * without it; the flag is returned so that the audit can show that the hold was seen.
    */
   hold?: boolean;
+  /**
+   * The most payloads one segment holds. A longer run of consecutive payloads is cut into several
+   * segments. No limit when omitted.
+   */
+  maxPayloads?: number;
+  /**
+   * The most bytes of canonical payload one segment holds, by the candidates' `size`. A payload
+   * larger than the limit has a segment of its own. No limit when omitted.
+   */
+  maxBytes?: number;
 }
 
 export interface ColdPlanSegment extends SegmentRef {
@@ -94,25 +117,41 @@ export function coldMovePlan(
   const afterMs = policy.afterMs ?? COLD_AFTER_MS;
   if (!Number.isSafeInteger(afterMs) || afterMs < 0)
     return refuse('validation_failed', 'afterMs is a whole number of milliseconds, not negative');
+  const { maxPayloads, maxBytes } = policy;
+  if (maxPayloads !== undefined && (!Number.isSafeInteger(maxPayloads) || maxPayloads < 1))
+    return refuse('validation_failed', 'maxPayloads is a whole number, 1 or more');
+  if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1))
+    return refuse('validation_failed', 'maxBytes is a whole number of bytes, 1 or more');
   const all = [...commits].sort((a, b) => a.seq - b.seq);
   for (let i = 1; i < all.length; i++)
     if (all[i]!.seq === all[i - 1]!.seq)
       return refuse('validation_failed', 'each seq appears once in the candidates');
+  for (const c of all)
+    if (c.size !== undefined && (!Number.isSafeInteger(c.size) || c.size < 0))
+      return refuse('validation_failed', 'the size of a candidate is a whole number of bytes');
 
   const cut = policy.now - afterMs;
   const segments: ColdPlanSegment[] = [];
   const keep: number[] = [];
   let run: ColdPlanSegment | null = null;
+  let runBytes = 0;
   for (const c of all) {
     if (c.time >= cut) {
       keep.push(c.seq);
       run = null;
       continue;
     }
-    if (run !== null && run.toSeq + 1 === c.seq) {
+    const size = c.size ?? 0;
+    const fits =
+      run !== null &&
+      run.toSeq + 1 === c.seq &&
+      (maxPayloads === undefined || run.entries.length < maxPayloads) &&
+      (maxBytes === undefined || runBytes + size <= maxBytes);
+    if (run !== null && fits) {
       run.toSeq = c.seq;
       run.path = `segments/${run.fromSeq}-${c.seq}.payloads.zst`;
       run.entries.push({ seq: c.seq, payloadHash: c.payloadHash });
+      runBytes += size;
     } else {
       run = {
         fromSeq: c.seq,
@@ -120,6 +159,7 @@ export function coldMovePlan(
         path: `segments/${c.seq}-${c.seq}.payloads.zst`,
         entries: [{ seq: c.seq, payloadHash: c.payloadHash }],
       };
+      runBytes = size;
       segments.push(run);
     }
   }
@@ -288,6 +328,56 @@ export interface ColdReadInput {
   index: SegmentIndex;
 }
 
+/** One payload as a segment object holds it, with the payload hash the segment records for it. */
+export interface SegmentEntry {
+  seq: number;
+  payloadHash: string;
+  payload: unknown;
+}
+
+export type SegmentRead =
+  | { ok: true; entries: Map<number, SegmentEntry> }
+  | { ok: false; status: ColdStatus; reason: string };
+
+/**
+ * Reads and decodes one segment object. A missing object, a read that throws and bytes that are not
+ * a segment are all `unavailable`: the caller serves nothing in their place.
+ */
+export async function readSegment(
+  path: string,
+  io: Pick<ColdIo, 'objects' | 'codec'>,
+): Promise<SegmentRead> {
+  let bytes: Uint8Array | undefined;
+  try {
+    bytes = await io.objects.get(path);
+  } catch {
+    return { ok: false, status: 'unavailable', reason: 'the segment object cannot be read' };
+  }
+  if (bytes === undefined)
+    return { ok: false, status: 'unavailable', reason: 'the segment object is missing' };
+  let parsed: ReturnType<typeof parseSegment>;
+  try {
+    parsed = parseSegment(await io.codec.decode(bytes));
+  } catch {
+    parsed = null;
+  }
+  if (parsed === null)
+    return { ok: false, status: 'unavailable', reason: 'the segment object cannot be decoded' };
+  return { ok: true, entries: new Map(parsed.map((e) => [e.seq, e])) };
+}
+
+/**
+ * Checks one entry of a segment against the hash in the commit's metadata: the hash the segment
+ * records and the hash of the payload itself must both be that hash. Returns the reason, or null.
+ */
+async function entryProblem(entry: SegmentEntry, want: string): Promise<string | null> {
+  if (entry.payloadHash !== want)
+    return 'the payload hash a segment records differs from the hash in the commit';
+  if ((await payloadDigest(entry.payload)).hash !== want)
+    return 'a cold payload does not match its hash';
+  return null;
+}
+
 /**
  * The payloads of `fromSeq` to `toSeq` from both stores (HIS-029 criterion 2). A payload in the
  * hot store is read there; otherwise it is read from the segment that holds it, and the segment
@@ -309,7 +399,7 @@ export async function readPayloads(
       reason: 'the range is a pair of whole sequence numbers',
     };
   const out: Array<{ seq: number; payload: unknown }> = [];
-  const loaded = new Map<string, Map<number, unknown>>();
+  const loaded = new Map<string, Map<number, SegmentEntry>>();
   for (let seq = input.fromSeq; seq <= input.toSeq; seq++) {
     let hot: unknown | undefined;
     try {
@@ -331,48 +421,166 @@ export async function readPayloads(
       entries = got.entries;
       loaded.set(seg.path, entries);
     }
-    const payload = entries.get(seq);
+    const entry = entries.get(seq);
     const want = input.hashes.get(seq);
-    if (payload === undefined || want === undefined)
+    if (entry === undefined || want === undefined)
       return {
         ok: false,
         status: 'missing',
         reason: 'the segment does not hold that payload',
         seq,
       };
-    if ((await payloadDigest(payload)).hash !== want)
-      return {
-        ok: false,
-        status: 'mismatch',
-        reason: 'a cold payload does not match its hash',
-        seq,
-      };
-    out.push({ seq, payload });
+    const problem = await entryProblem(entry, want);
+    if (problem !== null) return { ok: false, status: 'mismatch', reason: problem, seq };
+    out.push({ seq, payload: entry.payload });
   }
   return { ok: true, payloads: out };
 }
 
-async function readSegment(
-  path: string,
+export type ColdLookup =
+  | {
+      ok: true;
+      /** The payloads found, each checked against the hash in `wanted`. */
+      payloads: Map<number, unknown>;
+      /** The commits no segment holds any more, in `seq` order: removed after the move, or never moved. */
+      absent: number[];
+    }
+  | { ok: false; status: Exclude<ColdStatus, 'missing'>; reason: string; seq: number };
+
+/**
+ * The payloads of the commits in `wanted` (each `seq` with the payload hash of its metadata) from
+ * the cold segments alone, for a caller that has read its hot store already (the document
+ * service's log store). Each segment object is read once.
+ *
+ * A commit that no segment of the index covers, or that its segment no longer holds, is `absent`:
+ * its payload was removed after the move (`dropFromSegment`), and the caller answers as for any
+ * removed payload. A segment that cannot be read is `unavailable`, and a payload that does not
+ * match its hash is `mismatch`; neither returns any payload (HIS-029 criterion 5).
+ */
+export async function coldPayloads(
+  wanted: ReadonlyMap<number, string>,
+  index: SegmentIndex,
   io: Pick<ColdIo, 'objects' | 'codec'>,
-): Promise<
-  { ok: true; entries: Map<number, unknown> } | { ok: false; status: ColdStatus; reason: string }
-> {
-  let bytes: Uint8Array | undefined;
+): Promise<ColdLookup> {
+  const payloads = new Map<number, unknown>();
+  const absent: number[] = [];
+  const loaded = new Map<string, Map<number, SegmentEntry>>();
+  for (const seq of [...wanted.keys()].sort((a, b) => a - b)) {
+    const seg = index.find((s) => s.fromSeq <= seq && seq <= s.toSeq);
+    if (seg === undefined) {
+      absent.push(seq);
+      continue;
+    }
+    let entries = loaded.get(seg.path);
+    if (entries === undefined) {
+      const got = await readSegment(seg.path, io);
+      if (!got.ok)
+        return {
+          ok: false,
+          status: got.status === 'mismatch' ? 'mismatch' : 'unavailable',
+          reason: got.reason,
+          seq,
+        };
+      entries = got.entries;
+      loaded.set(seg.path, entries);
+    }
+    const entry = entries.get(seq);
+    if (entry === undefined) {
+      absent.push(seq);
+      continue;
+    }
+    const problem = await entryProblem(entry, wanted.get(seq)!);
+    if (problem !== null) return { ok: false, status: 'mismatch', reason: problem, seq };
+    payloads.set(seq, entry.payload);
+  }
+  return { ok: true, payloads, absent };
+}
+
+export type SegmentRewrite =
+  | {
+      ok: true;
+      /** The payloads that were in the segment and are no longer, in `seq` order. */
+      removed: number[];
+      /** How many payloads the segment holds now. */
+      remaining: number;
+      /**
+       * Whether the object was written again. False when nothing was to remove, and when nothing
+       * would remain: the caller then removes the object itself, which this function never does.
+       */
+      written: boolean;
+    }
+  | { ok: false; status: ColdStatus; reason: string };
+
+/**
+ * Removes the payloads of `seqs` from one segment object (thinning, HIS-032; a tombstone, HIS-040).
+ * The object is written again under the same path without them and read back; if it does not read
+ * back as written, the bytes it had are put back and nothing counts as removed. When no payload
+ * would remain, nothing is written: `remaining` is 0 and the caller removes the object.
+ *
+ * The caller makes sure that nobody else writes the same object meanwhile (the service holds a lock
+ * for the document), and that a put replaces the object in one step, as object stores do.
+ */
+export async function dropFromSegment(
+  path: string,
+  seqs: readonly number[],
+  io: Pick<ColdIo, 'objects' | 'codec'>,
+): Promise<SegmentRewrite> {
+  let original: Uint8Array | undefined;
   try {
-    bytes = await io.objects.get(path);
+    original = await io.objects.get(path);
   } catch {
     return { ok: false, status: 'unavailable', reason: 'the segment object cannot be read' };
   }
-  if (bytes === undefined)
+  if (original === undefined)
     return { ok: false, status: 'unavailable', reason: 'the segment object is missing' };
   let parsed: ReturnType<typeof parseSegment>;
   try {
-    parsed = parseSegment(await io.codec.decode(bytes));
+    parsed = parseSegment(await io.codec.decode(original));
   } catch {
     parsed = null;
   }
   if (parsed === null)
     return { ok: false, status: 'unavailable', reason: 'the segment object cannot be decoded' };
-  return { ok: true, entries: new Map(parsed.map((e) => [e.seq, e.payload])) };
+
+  const drop = new Set(seqs);
+  const kept = parsed.filter((e) => !drop.has(e.seq));
+  const removed = parsed
+    .filter((e) => drop.has(e.seq))
+    .map((e) => e.seq)
+    .sort((a, b) => a - b);
+  if (removed.length === 0) return { ok: true, removed, remaining: parsed.length, written: false };
+  if (kept.length === 0) return { ok: true, removed, remaining: 0, written: false };
+
+  const text = segmentText(kept);
+  try {
+    await io.objects.put(path, await io.codec.encode(text));
+  } catch {
+    return { ok: false, status: 'unavailable', reason: 'the segment object could not be written' };
+  }
+  // The read-back is what makes the rewrite safe for the payloads that stay.
+  let back: string | null;
+  try {
+    const bytes = await io.objects.get(path);
+    back = bytes === undefined ? null : await io.codec.decode(bytes);
+  } catch {
+    back = null;
+  }
+  if (back !== text) {
+    try {
+      await io.objects.put(path, original);
+    } catch {
+      return {
+        ok: false,
+        status: 'unavailable',
+        reason:
+          'the rewritten segment did not read back, and the bytes it had could not be put back',
+      };
+    }
+    return {
+      ok: false,
+      status: 'unavailable',
+      reason: 'the rewritten segment did not read back; the bytes it had were put back',
+    };
+  }
+  return { ok: true, removed, remaining: kept.length, written: true };
 }
