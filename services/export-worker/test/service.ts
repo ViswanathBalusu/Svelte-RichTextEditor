@@ -19,6 +19,7 @@ import {
   startService,
   type S3Settings,
   type Service,
+  type ServiceConfig,
 } from '@docedit/document-service';
 import { uuid7 } from '@docedit/model';
 
@@ -97,12 +98,18 @@ function jws(header: object, payload: object, key: KeyObject): string {
   return `${input}.${b64(sign(null, Buffer.from(input), key))}`;
 }
 
-export async function startTestService(): Promise<TestService> {
+/**
+ * `config`: settings of the service a test needs other than the defaults, for example a short
+ * preview window (`previewWindowMs`), so that a test of two previews need not wait ten seconds.
+ */
+export async function startTestService(
+  opts: { config?: Partial<ServiceConfig> } = {},
+): Promise<TestService> {
   const s3 = await testS3();
   // Objects in the S3 store when it is up: a part passed here wins over the service's own choice.
   const parts = { ...memoryParts(), ...(s3 ? { objects: new S3ObjectStore(s3) } : {}) };
   const service = await startService({
-    config: { ...configFromEnv({}), port: 0, workers: 1, s3 },
+    config: { ...configFromEnv({}), port: 0, workers: 1, s3, ...opts.config },
     parts,
     signing: signingKey(undefined, 'export-e2e'),
   });

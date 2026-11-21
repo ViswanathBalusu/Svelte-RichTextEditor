@@ -63,5 +63,12 @@ export type { Content, ContentStores } from './content.ts';
 export { imageFontManifest } from './fonts.ts';
 export { createExportHandler, OUTPUT_FILES } from './job.ts';
 export type { ExportHandlerDeps, ExportMetrics, ExportOutputStore } from './job.ts';
+export {
+  earlierPreviewFrom,
+  PREVIEW_KEY_MEMBER,
+  PREVIEW_REUSE_MAX_AGE_MS,
+  previewBundleKey,
+} from './preview-reuse.ts';
+export type { EarlierPreview, EarlierPreviewLookup } from './preview-reuse.ts';
 export { createExportWorker, EXPORT_JOB_KINDS, exportJobHandlers } from './worker.ts';
 export type { ExportWorker, ExportWorkerOptions } from './worker.ts';

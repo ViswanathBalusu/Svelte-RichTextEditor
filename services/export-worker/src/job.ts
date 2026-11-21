@@ -5,6 +5,8 @@
  * 1. Reads the payload the control plane wrote, and refuses one that carries TeX or a bundle.
  * 2. `converting`: reads the content at the job's `seq` from storage, plans the compile from the
  *    options (profile.ts), converts, seals the bundle for this job and verifies it (verify.ts).
+ *    A preview whose bundle an earlier preview of the document already compiled ends here, with
+ *    that preview's files and no compile (preview-reuse.ts; EXP-008 criterion 3).
  * 3. `compiling`: compiles in a fresh single-use sandbox (sandbox.ts) under the limits of 09 §9.3,
  *    with SOURCE_DATE_EPOCH from the job's creation time; a cancelled job kills its sandbox.
  * 4. Reads every output as hostile: the log through the bounded parser (diagnostics.ts), the layout
@@ -55,6 +57,12 @@ import {
   type SealingPin,
 } from './exp-079-pair.ts';
 import { limitDiagnostic, limitMessage, limitReached } from './outcome.ts';
+import {
+  PREVIEW_KEY_MEMBER,
+  previewBundleKey,
+  reusedPreview,
+  type EarlierPreviewLookup,
+} from './preview-reuse.ts';
 import { formatJobDate, planJob, type JobPlan } from './profile.ts';
 import {
   compileInSandbox,
@@ -114,6 +122,12 @@ export interface ExportMetrics {
   logBytes: number;
   pdfBytes: number | null;
   pages: number | null;
+  /**
+   * True when the attempt compiled nothing, because it shows the files of an earlier preview of
+   * the same bundle (preview-reuse.ts; EXP-008 criterion 3): its sandbox times are 0 and it has no
+   * PDF size, so a latency summary leaves it out (metrics-log.ts). Absent otherwise.
+   */
+  reused?: boolean;
 }
 
 export interface ExportHandlerDeps {
@@ -160,6 +174,12 @@ export interface ExportHandlerDeps {
   onMetrics?: (metrics: ExportMetrics, job: JobRecord) => void;
   /** Test hook: called with the verified bundle and its seal just before the compile. */
   beforeCompile?: (files: Record<string, string>, seal: string, job: JobRecord) => void;
+  /**
+   * Finds an earlier preview of the job's document with the same preview key (preview-reuse.ts;
+   * EXP-008 criterion 3). When it finds one, a preview job shows that preview's files again and
+   * compiles nothing. Absent: every preview compiles.
+   */
+  earlierPreview?: EarlierPreviewLookup;
 }
 
 /** The file of the `cdm` target under the job's prefix (EXP-086). */
@@ -596,6 +616,32 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       };
       return texOut as unknown as Record<string, unknown>;
     }
+    // A preview whose bundle is that of an earlier preview of the document shows that preview's
+    // files again, and nothing is compiled (06 §10; EXP-008 criterion 3). The key leaves out the
+    // job's instant, which is why it can match across jobs, and takes in the diagnostics the job
+    // has so far, so that the earlier result is the one this job's own compile would give
+    // (preview-reuse.ts).
+    const previewKey =
+      plan.profile === 'preview' && !payload.sealing
+        ? previewBundleKey(bundle.manifest, diagnostics)
+        : null;
+    if (previewKey !== null && deps.earlierPreview) {
+      // A lookup that fails is a miss: showing earlier files saves a compile and is never needed
+      // for a correct result, so the preview is compiled instead.
+      const earlier = await deps.earlierPreview(job, previewKey).catch(() => null);
+      const reused = earlier
+        ? reusedPreview(earlier, job, previewKey, {
+            chainHead: bundle.manifest.chainHead,
+            imagesWithoutAlt,
+          })
+        : null;
+      if (reused) {
+        stopIfCancelled(ctx);
+        m.reused = true;
+        m.pages = reused.pages ?? null;
+        return { ...reused, metrics: m };
+      }
+    }
     // A sealing export is pinned to the state the workflow completed at (EXP-079 criterion 2): a
     // bundle of another seq or chain head is refused before anything is compiled.
     if (payload.sealing) {
@@ -798,7 +844,11 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler {
       metrics: m,
       ...(pair?.ok ? { sealing: { pdfSha256: pair.hashes, compileMs: pair.compileMs } } : {}),
     };
-    return out as unknown as Record<string, unknown>;
+    // A later preview of the same bundle finds this one by its key (EXP-008 criterion 3).
+    return {
+      ...(out as unknown as Record<string, unknown>),
+      ...(previewKey !== null ? { [PREVIEW_KEY_MEMBER]: previewKey } : {}),
+    };
   };
 
   // Every attempt reports its metrics once, when it ends, whatever its target and outcome (EXP-064

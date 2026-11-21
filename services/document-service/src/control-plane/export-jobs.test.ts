@@ -344,6 +344,62 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
     );
 
     it.skipIf(skip)(
+      'starts one preview compile of a document per window, however many viewers wait (EXP-008 criterion 2)',
+      async () => {
+        const doc = await h.createDocument({ content: documentWithRegions() });
+        const first = h.userToken({ [doc]: 'editor' });
+        const second = h.userToken({ [doc]: 'editor' }, { sub: 'eva' });
+        const third = h.userToken({ [doc]: 'editor' }, { sub: 'max' });
+        holdPreview = true;
+        const before = ran.length;
+        const one = (await post(doc, first, { profile: 'preview', tagging: 'draft' })).json
+          .id as string;
+        await reach(first, one, ['converting']);
+        // Two more viewers ask for previews of their own while the first compiles. Each is held by
+        // the request rule until a window after the preview asked for before it, which for both is
+        // about ten seconds from now.
+        const two = (await post(doc, second, { profile: 'preview', tagging: 'off' })).json
+          .id as string;
+        const three = (await post(doc, third, { profile: 'preview', tagging: 'on' })).json
+          .id as string;
+        release();
+        await reach(first, one, ['completed']);
+        expect(ran.length).toBe(before + 1);
+        // The window passes. Both waiting previews are due by the time they were asked for, and
+        // only one of them starts: the other waits a window after that start.
+        h.advance(10_001);
+        await waitFor(() => ran.length >= before + 2);
+        await sleep(300);
+        expect(ran.length).toBe(before + 2);
+        const states = async () => [
+          (await h.call('GET', `/v1/exports/${two}`, { token: second })).json.state as string,
+          (await h.call('GET', `/v1/exports/${three}`, { token: third })).json.state as string,
+        ];
+        let seen: string[] = [];
+        for (let i = 0; i < 200 && !seen.includes('completed'); i++) {
+          await sleep(20);
+          seen = await states();
+        }
+        expect([...seen].sort()).toEqual(['completed', 'queued']);
+        // After another window the last one compiles too.
+        h.advance(10_001);
+        await reach(second, two, ['completed']);
+        await reach(third, three, ['completed']);
+        expect(ran.length).toBe(before + 3);
+        // The starts the queue recorded are a window apart, in its own clock (for PostgreSQL the
+        // harness has moved the earlier starts back with the clock, as it does every job time).
+        const starts = (
+          await Promise.all([one, two, three].map((id) => h.parts.queue.get(h.tenant, id)))
+        )
+          .map((j) => j!.startedAt!)
+          .sort((x, y) => x - y);
+        expect(starts).toHaveLength(3);
+        for (let i = 1; i < starts.length; i++)
+          expect(starts[i]! - starts[i - 1]!).toBeGreaterThanOrEqual(10_000);
+      },
+    );
+
+    it.skipIf(skip)(
       'starts no second preview compile while the window runs, and answers the same request with the pending job (BE-051 criterion 1)',
       async () => {
         const doc = await h.createDocument({ content: documentWithRegions() });

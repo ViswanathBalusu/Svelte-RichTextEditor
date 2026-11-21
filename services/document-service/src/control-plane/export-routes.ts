@@ -12,6 +12,7 @@ import {
   LOCALE_PATTERN,
   PDF_STANDARDS,
   PREVIEW_KIND,
+  PREVIEW_START_STAGE,
   exportRequestKey,
   exportState,
   type ExportOutputs,
@@ -19,7 +20,7 @@ import {
 } from './exports.ts';
 import { refuseSeqBelowGate } from './gate.ts';
 import { checkIfMatch } from './http.ts';
-import type { JobRecord } from './jobs/queue.ts';
+import { MAX_START_GAP_MS, type JobRecord } from './jobs/queue.ts';
 import { withQueueProof } from './job-proof.ts';
 import { json, type Kit } from './kit.ts';
 import { admitExportConcurrency } from './live-quota-rest.ts';
@@ -38,6 +39,8 @@ export const EXPORT_POLICY_DEFAULTS: ExportPolicy = {
 export function exportRoutes(k: Kit): Record<string, Handler> {
   const { d, rest, refOf, liveDocument } = k;
   const policy = d.exportPolicy ?? EXPORT_POLICY_DEFAULTS;
+  /** The preview window as the queue takes it: whole milliseconds, within the queue's bound. */
+  const previewGapMs = Math.min(MAX_START_GAP_MS, Math.max(0, Math.round(policy.previewWindowMs)));
   const queued = (
     kind: string,
     doc: string,
@@ -222,10 +225,12 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
       return accepted(job);
     }
 
-    // At most one preview compile per document per window (06 §10; BE-051; EXP-008). The window
-    // is in the queue's clock: it ends at the latest preview's `createdAt` plus the window, and the
-    // queue holds the new job until then. This node's clock is not compared with the queue's, which
-    // for PostgreSQL is the database's (06 §2.1).
+    // At most one preview compile per document per window (06 §10; BE-051; EXP-008). Two rules
+    // keep it. Here, at the request: the new job is held until the latest preview's `createdAt`
+    // plus the window, in the queue's clock, so this node's clock is not compared with the queue's,
+    // which for PostgreSQL is the database's (06 §2.1). That hold is early and cheap, but it counts
+    // from a request, not from a start. The guarantee is the job's start gap below, which the queue
+    // keeps at each claim from the time a preview of the document last started its compile.
     let notBefore: number | undefined;
     if (kind === PREVIEW_KIND) {
       const latest = await d.queue.latestFor(ctx.caller.tenant, doc, PREVIEW_KIND);
@@ -257,6 +262,14 @@ export function exportRoutes(k: Kit): Record<string, Handler> {
         traceparent: `00-${ctx.trace.traceId}-${ctx.trace.spanId}-01`,
       }),
       ...(notBefore !== undefined ? { notBefore } : {}),
+      // The window is kept where a preview starts: the queue leaves this job alone until the
+      // window has passed since the latest start of a preview of the document, whoever asked for
+      // it and however long it waited for a worker (06 §10; EXP-008 criterion 2). The start is the
+      // compile's: the time the worker reports the stage `compiling`, just before its sandbox.
+      // A window of zero switches the rule off, and the job carries neither.
+      ...(kind === PREVIEW_KIND && previewGapMs > 0
+        ? { startGapMs: previewGapMs, startGapStage: PREVIEW_START_STAGE }
+        : {}),
     });
     d.onJobQueued?.();
     k.notify()?.(

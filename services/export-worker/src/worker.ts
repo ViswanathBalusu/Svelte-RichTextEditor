@@ -12,7 +12,9 @@
  * The same handlers can instead run inside the document service, registered with
  * `startService({ jobHandlers: exportJobHandlers(deps) })`; the service's runner then also turns
  * progress and outcomes into `export.*` notifications and webhooks through its hooks, which a
- * separate worker process does not have.
+ * separate worker process does not have. Registered that way, the handlers show an earlier preview
+ * of the same bundle again only when `deps.earlierPreview` is given (`earlierPreviewFrom(queue)`,
+ * preview-reuse.ts; EXP-008 criterion 3); `createExportWorker` sets it from its own queue.
  */
 import {
   JobRunner,
@@ -21,6 +23,7 @@ import {
   type JobRecord,
 } from '@docedit/document-service';
 import { createExportHandler, type ExportHandlerDeps, type ExportMetrics } from './job.ts';
+import { earlierPreviewFrom } from './preview-reuse.ts';
 
 /** The job kinds of the control plane's exports (exports.ts of the document service). */
 export const EXPORT_JOB_KINDS = ['export', 'preview'] as const;
@@ -63,7 +66,12 @@ export interface ExportWorker {
 export function createExportWorker(o: ExportWorkerOptions): ExportWorker {
   const runner = new JobRunner({
     queue: o.queue,
-    handlers: exportJobHandlers(o.deps),
+    // An earlier preview of the same bundle is looked up in the worker's own queue, unless the
+    // caller gives another lookup (EXP-008 criterion 3).
+    handlers: exportJobHandlers({
+      ...o.deps,
+      earlierPreview: o.deps.earlierPreview ?? earlierPreviewFrom(o.queue),
+    }),
     ...(o.kinds ? { kinds: o.kinds } : {}),
     worker: o.worker,
     leaseMs: o.leaseMs,
