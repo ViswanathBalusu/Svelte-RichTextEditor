@@ -14,7 +14,7 @@
   import { useShell } from '../context.ts';
   import { live } from '../live.ts';
   import type { Notice } from '../shell/notices.ts';
-  import { languageAt } from '../shell/status.ts';
+  import { languageAt, languageName as languageNameOf } from '../shell/status.ts';
   import { classificationName } from '../shell/classification.ts';
   import { proofingBarItem } from '../proofing/present.ts';
   import type { StatusItemRegistry } from '../extensions/contributions.ts';
@@ -77,13 +77,7 @@
 
   const hidden = $derived(access?.current.limit === 'hidden');
 
-  function languageName(tag: string): string {
-    try {
-      return new Intl.DisplayNames([tr.locale], { type: 'language' }).of(tag) ?? tag;
-    } catch {
-      return tag;
-    }
-  }
+  const languageName = (tag: string): string => languageNameOf(tag, tr.locale);
 
   /** The language at the caret: its mark, else the document's default (UX-018 criterion 3). */
   const languageText = $derived.by(() => {

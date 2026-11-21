@@ -30,7 +30,17 @@ function editorSelection(page: Page): Promise<string> {
 test.describe('bidirectional text in the web view (FE-111, criterion 2)', () => {
   test('typing mixed direction text keeps its order, and selecting it selects what the browser selects', async ({
     page,
+    browserName,
   }) => {
+    // Firefox on Linux (Playwright 1.65, hosted runner and the Playwright container) puts the caret of
+    // the plain reference element, at the logical end of its right-to-left text, where Shift+ArrowRight
+    // selects nothing (Shift+ArrowLeft selects the last letter); on Windows it selects as in Chromium
+    // and WebKit. The steps of the reference are then not those the test describes, so it cannot
+    // compare the editor against it there. The other FE-111 specs run in Firefox on Linux.
+    test.skip(
+      browserName === 'firefox' && process.platform === 'linux',
+      'Firefox on Linux moves the reference caret the other way at the end of a right-to-left line',
+    );
     await openEmbed(page);
     await mountEditor(page, { doc: 'rtl' });
 

@@ -141,9 +141,11 @@ test.describe('a view with pages (UX-021)', () => {
       wrapper: 'presentation',
     });
     // A pointer target of at least 24 by 24 CSS pixels.
+    // The boxes of Firefox come in single precision, which gives 23.99997 for a box of 24px
+    // (seen on Linux); the stylesheet sets the size to 24px, so the tolerance is the rounding.
     const box = (await first.boundingBox())!;
-    expect(box.width).toBeGreaterThanOrEqual(24);
-    expect(box.height).toBeGreaterThanOrEqual(24);
+    expect(box.width).toBeGreaterThanOrEqual(24 - 0.001);
+    expect(box.height).toBeGreaterThanOrEqual(24 - 0.001);
     expect(await axe(page)).toEqual([]);
   });
 
