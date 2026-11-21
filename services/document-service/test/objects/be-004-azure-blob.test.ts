@@ -13,6 +13,11 @@ import {
   type ObjectStore,
 } from '../../src/objects/store.ts';
 import { emptyDocument } from '../../src/control-plane/content.ts';
+import {
+  ASSET_STORE_CHECKS,
+  CHECKPOINT_STORE_CHECKS,
+  objectHarness,
+} from '../contract/object-checks.ts';
 import { settings as testSettings } from '../support/env.ts';
 
 // The public, well-known key of the Azurite emulator's devstoreaccount1 account. It is not a secret.
@@ -163,5 +168,15 @@ describe.skipIf(skip !== null)('Azure Blob adapter (BE-004)', () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('%PDF');
     expect((await fetch(url.replace('output.pdf', 'other.pdf'))).status).toBe(403);
+  });
+
+  // The contract suites of BE-003 as they are shared since 2026-11-20 (test/contract/
+  // object-checks.ts): the same lists that run against the in-memory store and the S3 gateway.
+  describe('CheckpointStore contract (Azure Blob)', () => {
+    for (const c of CHECKPOINT_STORE_CHECKS) it(c.name, () => c.run(objectHarness(store)));
+  });
+
+  describe('AssetStore contract (Azure Blob)', () => {
+    for (const c of ASSET_STORE_CHECKS) it(c.name, () => c.run(objectHarness(store)));
   });
 });
