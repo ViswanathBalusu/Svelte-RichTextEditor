@@ -111,7 +111,7 @@ describe.skipIf(!built)('the kernel in Node.js (WASM-010)', () => {
       }
     }, 120_000);
 
-    it('lock advances, the kernel’s input and the lines of the shared corpus in the golden file', () => {
+    it('lock advances, the kernel’s input, its segmentation and the lines of the shared corpus in the golden file', () => {
       const locked = JSON.parse(readFileSync(goldenFile, 'utf8')) as KernelReference;
       expect(locked.abi).toBe(recorded.abi);
       expect(locked.faces).toEqual(recorded.faces);
@@ -129,6 +129,9 @@ describe.skipIf(!built)('the kernel in Node.js (WASM-010)', () => {
             theirs[i]!.runChecksums,
           );
           expect(p.lines, `${name} paragraph ${i} lines`).toEqual(theirs[i]!.lines);
+          expect(p.segmentation, `${name} paragraph ${i} segmentation`).toEqual(
+            theirs[i]!.segmentation,
+          );
         }
       }
     });
