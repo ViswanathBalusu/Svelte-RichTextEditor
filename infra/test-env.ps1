@@ -11,7 +11,10 @@
   reset   down, then up: a clean state.
   status  Show the containers and whether each is ready.
   run     reset, run the command given after the command name, then down whatever happened.
-          Exits with the command's exit code. This is the form CI uses.
+          Exits with the command's exit code. This is the form CI uses. It sets DOCEDIT_TEST_ENV=1
+          for the command: the tests that need the environment (S3 store, worker image, test
+          services) then fail when something is absent. Without it they skip, with the reason on
+          the console.
 
   Definitions: infra/containers/compose.json, a compose file (JSON is valid YAML). This script
   starts the same services with `podman run` because Compose cannot pass --cgroups=disabled,
@@ -348,6 +351,8 @@ switch ($Command) {
       # Splat a variable: an inline @(...) would reach a PowerShell shim (pnpm.ps1) as one argument.
       $program = $cmd[0]
       $arguments = @($cmd | Select-Object -Skip 1)
+      # The tests that need the environment fail, instead of skipping, when something in it is absent.
+      $env:DOCEDIT_TEST_ENV = '1'
       & $program @arguments
       $code = $LASTEXITCODE
     } finally {

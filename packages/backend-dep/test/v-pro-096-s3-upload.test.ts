@@ -105,95 +105,105 @@ function fileOf(text: string, type: string): UploadSource {
   };
 }
 
-describe('PRO-096 criterion 1 against the test object store (V-PRO-086-102)', () => {
-  beforeAll(async () => {
-    // Fail early with a clear message when the container is not up (no silent skip).
-    const probe = await fetch(`http://${ENV['DOCEDIT_S3_HOST']}:${ENV['DOCEDIT_S3_PORT']}`).catch(
-      (e: unknown) => e,
-    );
-    if (probe instanceof Error)
-      throw new Error(`the S3 test store is not reachable: ${probe.message}`);
-  });
+// The test environment (infra/test-env.ps1) sets DOCEDIT_TEST_ENV=1 for the command it runs. Then the
+// store must be up and an unreachable store fails the test. Without it (a plain `pnpm test` on a
+// host with no containers, the hosted unit job) the file skips, with the reason on the console.
+const probe = await fetch(STORE_ORIGIN).catch((e: unknown) => e);
+const unreachable = probe instanceof Error ? probe.message : null;
+const required = process.env['DOCEDIT_TEST_ENV'] === '1';
+if (unreachable !== null && !required)
+  console.warn(
+    `v-pro-096-s3-upload: skipped: the S3 test store is not reachable at ${STORE_ORIGIN} (${unreachable}); start it with: pwsh -NoProfile -File infra/test-env.ps1 up -NoExport`,
+  );
 
-  afterAll(async () => {
-    for (const key of written) await store.delete(key).catch(() => undefined);
-  });
-
-  it('sends the bytes to a real pre-signed address, completes the asset and resolves after asset.ready', async () => {
-    const dep = new MockDepServer({
-      welcome: (d) => ({
-        ...d,
-        features: [
-          ...new Set([...((d['features'] as string[] | undefined) ?? []), 'assets', 'exports']),
-        ],
-      }),
-    });
-    const files = new FileServer(dep);
-    const server = new StoreUploadServer(files);
-    const net = new MemoryNetwork(server);
-    const docId = dep.service.createDocument(contractDocument(), { grants: [LEGAL_GRANT] });
-
-    // The control plane (REST and the channel) goes through the in-memory network. A request to
-    // the store's origin goes over the real network exactly as backend-dep made it: same address,
-    // same method, headers and body. Nothing is rewritten or signed here.
-    const memFetch = net.platform().fetch as FetchLike;
-    const toStore: Array<{ url: string; method: string; headers: Record<string, string> }> = [];
-    const storeFetch: FetchLike = async (url, init) => {
-      if (!url.startsWith(`${STORE_ORIGIN}/`)) return memFetch(url, init);
-      toStore.push({ url, method: init.method, headers: { ...init.headers } });
-      const res = await globalThis.fetch(url, init as RequestInit);
-      return res as unknown as ResponseLike;
-    };
-
-    const b: DepBackend = createDepBackend({
-      endpoint: dep.endpoint,
-      getToken: async () => dep.mintToken(USERS.editor, { [docId]: 'editor' }),
-      features: ['presence', 'regions', 'suggest-enforced', 'assets', 'exports'],
-      platform: { random: () => 0, ...net.platform(), fetch: storeFetch },
+describe.skipIf(unreachable !== null && !required)(
+  'PRO-096 criterion 1 against the test object store (V-PRO-086-102)',
+  () => {
+    beforeAll(() => {
+      if (unreachable !== null)
+        throw new Error(`the S3 test store is not reachable: ${unreachable}`);
     });
 
-    await b.connect();
-    const c = await b.sync.loadContent(docId);
-    const ch: SyncChannel = await b.sync.open(docId, {
-      resume: { seq: c.seq, incarnation: c.incarnation },
+    afterAll(async () => {
+      for (const key of written) await store.delete(key).catch(() => undefined);
     });
-    expect(ch).toBeDefined();
 
-    const payload = `pixels ${PREFIX}`;
-    const up = await b.assets!.upload(docId, {
-      filename: 'logo.png',
-      source: fileOf(payload, 'image/png'),
+    it('sends the bytes to a real pre-signed address, completes the asset and resolves after asset.ready', async () => {
+      const dep = new MockDepServer({
+        welcome: (d) => ({
+          ...d,
+          features: [
+            ...new Set([...((d['features'] as string[] | undefined) ?? []), 'assets', 'exports']),
+          ],
+        }),
+      });
+      const files = new FileServer(dep);
+      const server = new StoreUploadServer(files);
+      const net = new MemoryNetwork(server);
+      const docId = dep.service.createDocument(contractDocument(), { grants: [LEGAL_GRANT] });
+
+      // The control plane (REST and the channel) goes through the in-memory network. A request to
+      // the store's origin goes over the real network exactly as backend-dep made it: same address,
+      // same method, headers and body. Nothing is rewritten or signed here.
+      const memFetch = net.platform().fetch as FetchLike;
+      const toStore: Array<{ url: string; method: string; headers: Record<string, string> }> = [];
+      const storeFetch: FetchLike = async (url, init) => {
+        if (!url.startsWith(`${STORE_ORIGIN}/`)) return memFetch(url, init);
+        toStore.push({ url, method: init.method, headers: { ...init.headers } });
+        const res = await globalThis.fetch(url, init as RequestInit);
+        return res as unknown as ResponseLike;
+      };
+
+      const b: DepBackend = createDepBackend({
+        endpoint: dep.endpoint,
+        getToken: async () => dep.mintToken(USERS.editor, { [docId]: 'editor' }),
+        features: ['presence', 'regions', 'suggest-enforced', 'assets', 'exports'],
+        platform: { random: () => 0, ...net.platform(), fetch: storeFetch },
+      });
+
+      await b.connect();
+      const c = await b.sync.loadContent(docId);
+      const ch: SyncChannel = await b.sync.open(docId, {
+        resume: { seq: c.seq, incarnation: c.incarnation },
+      });
+      expect(ch).toBeDefined();
+
+      const payload = `pixels ${PREFIX}`;
+      const up = await b.assets!.upload(docId, {
+        filename: 'logo.png',
+        source: fileOf(payload, 'image/png'),
+      });
+      expect(up.asset).toMatch(/^[0-9a-f-]{36}$/);
+
+      // backend-dep sent one PUT, to the very address the server handed out, with no bearer token.
+      const handedOut = server.handedOut.get(up.asset);
+      expect(handedOut).toMatch(/X-Amz-Signature=/);
+      expect(toStore).toEqual([
+        {
+          url: handedOut,
+          method: 'PUT',
+          headers: expect.not.objectContaining({ authorization: expect.anything() }),
+        },
+      ]);
+
+      // The bytes are in the store under the key of this asset, and nowhere else.
+      const key = `${PREFIX}${up.asset}`;
+      const stored = await store.get(key, 1024);
+      expect(stored).not.toBeNull();
+      expect(new TextDecoder().decode(stored!)).toBe(payload);
+
+      // The asset is ready on the server: the outcome arrived before upload() resolved.
+      expect(files.assets.get(up.asset)?.mime).toBe('image/png');
+
+      // The URL of the asset is resolved through the port, after asset.ready.
+      // The shape read here is ResolvedAssets (05 §6.2), the one FileServer answers.
+      const resolved = (await b.assets!.resolve(docId, [up.asset])) as {
+        assets: Array<{ asset: string; url: string }>;
+      };
+      expect(resolved.assets[0]?.asset).toBe(up.asset);
+      expect(resolved.assets[0]?.url).toBeTruthy();
+
+      await b.close();
     });
-    expect(up.asset).toMatch(/^[0-9a-f-]{36}$/);
-
-    // backend-dep sent one PUT, to the very address the server handed out, with no bearer token.
-    const handedOut = server.handedOut.get(up.asset);
-    expect(handedOut).toMatch(/X-Amz-Signature=/);
-    expect(toStore).toEqual([
-      {
-        url: handedOut,
-        method: 'PUT',
-        headers: expect.not.objectContaining({ authorization: expect.anything() }),
-      },
-    ]);
-
-    // The bytes are in the store under the key of this asset, and nowhere else.
-    const key = `${PREFIX}${up.asset}`;
-    const stored = await store.get(key, 1024);
-    expect(stored).not.toBeNull();
-    expect(new TextDecoder().decode(stored!)).toBe(payload);
-
-    // The asset is ready on the server: the outcome arrived before upload() resolved.
-    expect(files.assets.get(up.asset)?.mime).toBe('image/png');
-
-    // The URL of the asset is resolved through the port, after asset.ready.
-    // The shape read here is ResolvedAssets (05 §6.2), the one FileServer answers.
-    const resolved = (await b.assets!.resolve(docId, [up.asset])) as {
-      assets: Array<{ asset: string; url: string }>;
-    };
-    expect(resolved.assets[0]?.asset).toBe(up.asset);
-    expect(resolved.assets[0]?.url).toBeTruthy();
-
-    await b.close();
-  });
-});
+  },
+);

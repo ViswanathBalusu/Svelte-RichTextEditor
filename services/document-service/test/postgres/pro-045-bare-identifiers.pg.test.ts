@@ -15,7 +15,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { S3ObjectStore, type S3Settings } from '../../src/objects/s3.ts';
 import { ensureServiceRole, migrate } from '../../src/index.ts';
-import { ADMIN, postgresUnavailable, settings, SERVICE_USER } from '../support/env.ts';
+import { ADMIN, machineEnv, postgresUnavailable, settings, SERVICE_USER } from '../support/env.ts';
 import { judge } from '../../../../packages/tck/test/targets/judge.ts';
 import {
   startReference,
@@ -88,7 +88,9 @@ describe.skipIf(unavailable !== null)(
             // The WSL Podman machine delegates no cgroup controllers, so the sandbox's --memory and
             // --pids-limit fail through the remote client; the machine route is the development one
             // (services/asset-worker/src/container.ts).
-            DOCEDIT_PODMAN_MACHINE: S['DOCEDIT_PODMAN_MACHINE'] ?? 'podman-machine-default',
+            // Windows and macOS development hosts only: on Linux Podman runs directly, and a machine name
+            // would send every sandbox call through `podman machine ssh`.
+            ...machineEnv(S),
             DOCEDIT_S3_HOST: S['DOCEDIT_S3_HOST'] ?? '127.0.0.1',
             DOCEDIT_S3_PORT: S['DOCEDIT_S3_PORT'] ?? '57070',
             DOCEDIT_S3_REGION: s3Settings.region,
