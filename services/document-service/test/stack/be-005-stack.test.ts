@@ -17,8 +17,13 @@
  *
  * On a machine where Compose cannot start the file (a WSL Podman machine), stack.ps1 starts the
  * same definitions: PostgreSQL and the store as containers, the Node.js services as processes.
+ *
+ * Criterion 4 is not shown here. The last test inspects the container in which the stack's export
+ * worker compiles a job, and that container has no network; the worker itself is a process of the
+ * host under stack.ps1 and has the host's network. Which of the two "the export worker container"
+ * means is the owner's (decision 60; docs/adr/0421-w5-BE-005-export-worker-network.md).
  */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -62,6 +67,7 @@ const serviceUrl = `http://127.0.0.1:${s['DOCEDIT_DEMO_SERVICE_PORT']}`;
 const cli = s['DOCEDIT_CONTAINER_CLI'] || 'podman';
 const project = s['DOCEDIT_DEMO_PROJECT']!;
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const readJson = (name: string): Json =>
   JSON.parse(readFileSync(`${dataDir}/${name}`, 'utf8')) as Json;
 const credential = (): string => readJson('secrets.json')['apiKey']['credential'] as string;
@@ -95,6 +101,60 @@ const servicePool = () =>
     password: s['DOCEDIT_DEMO_PG_SERVICE_PASSWORD']!,
     max: 2,
   });
+
+/**
+ * Where the export worker starts its compile containers (services/export-worker, container.ts): on
+ * a Podman machine through `podman machine ssh`, otherwise with the local command line.
+ */
+function sandboxRoute(): { machine: string | null } {
+  const named = s['DOCEDIT_PODMAN_MACHINE'] || process.env['DOCEDIT_PODMAN_MACHINE'];
+  if (named) return { machine: named };
+  const text = (args: string[]) => execFileSync(cli, args, { encoding: 'utf8' }).trim();
+  if (text(['info', '--format', '{{.Host.ServiceIsRemote}}']) !== 'true') return { machine: null };
+  const running = text(['machine', 'list', '--format', '{{.Name}}|{{.Running}}'])
+    .split(/\r?\n/)
+    .map((line) => line.trim().split('|'))
+    .find(([, up]) => up === 'true');
+  if (!running) throw new Error('Podman is remote and no machine is running');
+  return { machine: running[0]!.replace(/\*$/, '') };
+}
+
+/**
+ * A shell loop that inspects every compile container (`docedit-job-*`) once while it runs, where the
+ * containers run, and prints one line for each. A container lives for one compile and is removed
+ * when it ends, and a round trip from this process can take longer than that on a busy machine. The
+ * loop prints `tick` on every turn, so it ends when its output is closed.
+ */
+const WATCH = [
+  'echo watching; seen="";',
+  'while :; do',
+  '  for n in $(podman ps --filter name=docedit-job- --format "{{.Names}}"); do',
+  '    case " $seen " in',
+  '      *" $n "*) ;;',
+  '      *) seen="$seen $n";',
+  '         podman inspect --format "container|{{.Name}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{.Config.User}}|{{.EffectiveCaps}}|{{.Config.Image}}" "$n" 2>/dev/null;;',
+  '    esac;',
+  '  done;',
+  '  echo tick || exit 0; sleep 0.2;',
+  'done',
+].join('\n');
+
+/** The command lines of the processes a process started. */
+function childCommandLines(pid: number): string[] {
+  const r =
+    process.platform === 'win32'
+      ? spawnSync(
+          'pwsh',
+          [
+            '-NoProfile',
+            '-Command',
+            `Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}" | ForEach-Object CommandLine`,
+          ],
+          { encoding: 'utf8' },
+        )
+      : spawnSync('ps', ['-o', 'args=', '--ppid', String(pid)], { encoding: 'utf8' });
+  return (r.stdout ?? '').split(/\r?\n/).filter((line) => line.trim() !== '');
+}
 
 function stack(command: string): void {
   const r = spawnSync(
@@ -170,6 +230,73 @@ describe.skipIf(!live)('the stack of apps/reference-host/compose.json, running (
       await pool.end();
     }
   });
+
+  it('compiles a job in a container that has no network (the compile container, not the worker process)', async () => {
+    const workerPid = Number(readFileSync(`${dataDir}/pids/export-worker.pid`, 'utf8').trim());
+    expect(Number.isSafeInteger(workerPid)).toBe(true);
+    const { machine } = sandboxRoute();
+    const watcher = machine
+      ? spawn(
+          cli,
+          [
+            'machine',
+            'ssh',
+            machine,
+            `echo ${Buffer.from(WATCH).toString('base64')} | base64 -d | sh`,
+          ],
+          { stdio: ['ignore', 'pipe', 'ignore'] },
+        )
+      : spawn('sh', ['-c', WATCH], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let seen = '';
+    watcher.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      seen += chunk;
+    });
+    try {
+      // The loop is in place before the job is queued.
+      for (let i = 0; i < 600 && !seen.includes('watching'); i++) await sleep(100);
+      expect(seen).toContain('watching');
+
+      const doc = (await rest('POST', '/documents', { content: documentWithRegions() })).json[
+        'id'
+      ] as string;
+      const queued = await rest('POST', `/documents/${doc}/exports`, { target: 'pdf' });
+      expect(queued.status).toBe(202);
+      let job = queued.json;
+      let name: string | null = null;
+      let commandLine = '';
+      while (!['completed', 'failed', 'cancelled'].includes(job['state'])) {
+        // The worker of this stack starts the container: the command is a child of its process.
+        if (!name)
+          for (const line of childCommandLines(workerPid)) {
+            const m = /--name=(docedit-job-[0-9a-f]+)/.exec(line);
+            if (m) {
+              name = m[1]!;
+              commandLine = line;
+            }
+          }
+        await sleep(150);
+        job = (await rest('GET', `/exports/${job['id']}`)).json;
+      }
+      expect(job['state']).toBe('completed');
+      expect(name, 'the worker started no compile container').not.toBeNull();
+      expect(commandLine).toContain('--network=none');
+      if (machine) expect(commandLine).toContain(`machine ssh ${machine}`);
+
+      // Inspected while it ran, where it ran: no network, a read-only root, no capabilities, and
+      // the unprivileged user of the image.
+      await sleep(1500);
+      const line = seen.split(/\r?\n/).find((l) => l.startsWith(`container|${name}|`));
+      expect(line, `the loop did not see ${name}`).toBeDefined();
+      const [, , network, readOnly, user, capabilities, image] = line!.split('|');
+      expect(network).toBe('none');
+      expect(readOnly).toBe('true');
+      expect(user).toBe('10001:10001');
+      expect(capabilities).toBe('[]');
+      expect(image).toBe(s['DOCEDIT_EXPORT_IMAGE']);
+    } finally {
+      watcher.kill();
+    }
+  }, 300_000);
 
   it.skipIf(!restart)(
     'keeps documents and their history when the stack is stopped and started on the same volumes (criterion 5)',
