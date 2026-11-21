@@ -2,8 +2,8 @@
  * FE-065 criteria 1 and 3, the web view part (lane V-FE-065-080, round 3). With `view="web"` (and
  * with the default) the web view is shown and labelled "Web layout", a label that comes from the
  * element's interface strings (view-select.ts, VIEW_STRINGS), and no page edge is drawn. A change of
- * `view` between web and print keeps the editing surface and its document: print has no page view
- * yet and falls back to the web view, so the session is kept (criterion 3 for those two values; the
+ * `view` between web and print keeps the editing surface and its document: the page view (FE-101) shows
+ * the same core behind pages, so the session is kept (criterion 3 for those two values; the
  * read view has no core and is not covered here). Run from the repository root with
  * `DOCEDIT_DEMO_PORT=57040 pnpm exec playwright test -c packages/element/playwright.config.ts packages/element/e2e/fe-065-web-label.spec.ts`
  * (Chromium, Firefox and WebKit).
@@ -52,7 +52,18 @@ test('the label is there by default, with no view attribute (FE-065, criterion 1
 
 test('a change between web and print keeps the editing surface and its text (FE-065, criterion 3)', async ({
   page,
+  browserName,
 }) => {
+  test.skip(
+    browserName === 'firefox',
+    'the page view is not offered in Firefox (S5); fe-065-view-print-fallback.spec.ts covers it',
+  );
+  // A touch screen makes some browsers answer 'any-pointer: coarse'; this test is about a desktop pointer.
+  await page.addInitScript(() => {
+    const original = window.matchMedia.bind(window);
+    window.matchMedia = (query: string) =>
+      original(query.includes('any-pointer: coarse') ? 'not all' : query);
+  });
   await openEmbed(page);
   await mountEditor(page, { attributes: { view: 'web' } });
   const before = await bodyText(page);
@@ -74,5 +85,6 @@ test('a change between web and print keeps the editing surface and its text (FE-
   }, editor);
   expect(kept).toBe(true);
   expect(await bodyText(page)).toBe(before);
-  expect((await webFacts(page)).label).toBe('Web layout');
+  // The page view (FE-101) is shown now, over the same editing surface.
+  await expect.poll(async () => (await webFacts(page)).label).toBe('Page layout');
 });

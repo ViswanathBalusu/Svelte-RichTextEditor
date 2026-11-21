@@ -16,7 +16,7 @@ const BODY_BLOCK = 'pEnd000000000001';
 
 /** A comment body with text and mention nodes, as the editor's mention picker writes it. */
 const body = (...principals: string[]) => ({
-  parts: [
+  body: [
     { type: 'text', text: 'Please look at this ' },
     ...principals.flatMap((p) => [
       { type: 'mention', principal: p },
@@ -32,7 +32,7 @@ describe('mentionsOf (PRO-060 criterion 4)', () => {
       'group:legal',
     ]);
     expect(
-      mentionsOf({ type: 'doc', content: [{ type: 'p', content: [body('user:ben').parts[1]] }] }),
+      mentionsOf({ type: 'doc', content: [{ type: 'p', content: [body('user:ben').body[1]] }] }),
     ).toEqual(['user:ben']);
   });
 
@@ -68,7 +68,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const doc = await h.createDocument({ content: documentWithRegions() });
         const t = await h.call('POST', `/v1/documents/${doc}/threads`, {
           token: as(doc, 'editor', 'ed-1'),
-          body: { target: { block: BODY_BLOCK }, comment: { text: 'No mention here' } },
+          body: {
+            target: { block: BODY_BLOCK },
+            comment: { body: [{ type: 'text', text: 'No mention here' }] },
+          },
         });
         expect(t.status).toBe(201);
         expect(mentioned(doc)).toEqual([]);
@@ -91,11 +94,14 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const doc = await h.createDocument({ content: documentWithRegions() });
       const t = await h.call('POST', `/v1/documents/${doc}/threads`, {
         token: as(doc, 'editor', 'ed-1'),
-        body: { target: { block: BODY_BLOCK }, comment: { text: 'First' } },
+        body: {
+          target: { block: BODY_BLOCK },
+          comment: { body: [{ type: 'text', text: 'First' }] },
+        },
       });
       const plain = await h.call('POST', `/v1/threads/${t.json.id}/comments`, {
         token: as(doc, 'editor', 'ed-2'),
-        body: { text: 'A plain reply' },
+        body: { body: [{ type: 'text', text: 'A plain reply' }] },
       });
       expect(plain.status).toBe(201);
       const edit = await h.call('PATCH', `/v1/comments/${plain.json.id}`, {
@@ -123,7 +129,10 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       const doc = await h.createDocument({ content: documentWithRegions() });
       const t = await h.call('POST', `/v1/documents/${doc}/threads`, {
         token: as(doc, 'editor', 'ed-1'),
-        body: { target: { block: BODY_BLOCK }, comment: { text: 'First' } },
+        body: {
+          target: { block: BODY_BLOCK },
+          comment: { body: [{ type: 'text', text: 'First' }] },
+        },
       });
       const refused = await h.call('POST', `/v1/threads/${t.json.id}/comments`, {
         token: as(doc, 'viewer', 'vw-1'),

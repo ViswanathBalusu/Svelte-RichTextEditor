@@ -24,6 +24,7 @@ import { signJws } from './jwt.ts';
 import { JobFailure, type JobHandler } from './jobs/runner.ts';
 import { MemoryJobQueue } from './jobs/queue.ts';
 import { signingKey } from './tokens.ts';
+import { startOnFetchablePort } from '../../test/support/ports.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -471,21 +472,26 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
         const firstKey = (await h.parts.queue.get(h.tenant, first))?.cacheKey;
         // A second service over the same stores, running under another house class version. The
         // class version is part of the request key, so the same request must compile again there.
-        const other = await startService({
-          config: {
-            ...configFromEnv({}),
-            port: 0,
-            workers: 1,
-            jobIdleMs: 20,
-            jobLeaseMs: 2000,
-            exportClassVersion: 'class-2099.1',
-          },
-          parts: h.parts,
-          createDataPlane: () => new StubDataPlane(),
-          jobHandlers: { export: exportHandler },
-          signing: signingKey(undefined, 'service-test'),
-          now: () => h.now(),
-        });
+        const other = await startOnFetchablePort(
+          () =>
+            startService({
+              config: {
+                ...configFromEnv({}),
+                port: 0,
+                workers: 1,
+                jobIdleMs: 20,
+                jobLeaseMs: 2000,
+                exportClassVersion: 'class-2099.1',
+              },
+              parts: h.parts,
+              createDataPlane: () => new StubDataPlane(),
+              jobHandlers: { export: exportHandler },
+              signing: signingKey(undefined, 'service-test'),
+              now: () => h.now(),
+            }),
+          (s) => s.url,
+          (s) => s.close(),
+        );
         try {
           const iat = Math.floor(h.now() / 1000);
           const token = signJws(
@@ -530,21 +536,26 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
       async () => {
         const key = 'p'.repeat(40);
         const doc = await h.createDocument({ content: documentWithRegions() });
-        const other = await startService({
-          config: {
-            ...configFromEnv({}),
-            port: 0,
-            workers: 1,
-            jobIdleMs: 20,
-            jobLeaseMs: 2000,
-            exportProofKey: key,
-          },
-          parts: h.parts,
-          createDataPlane: () => new StubDataPlane(),
-          jobHandlers: { export: exportHandler },
-          signing: signingKey(undefined, 'service-test'),
-          now: () => h.now(),
-        });
+        const other = await startOnFetchablePort(
+          () =>
+            startService({
+              config: {
+                ...configFromEnv({}),
+                port: 0,
+                workers: 1,
+                jobIdleMs: 20,
+                jobLeaseMs: 2000,
+                exportProofKey: key,
+              },
+              parts: h.parts,
+              createDataPlane: () => new StubDataPlane(),
+              jobHandlers: { export: exportHandler },
+              signing: signingKey(undefined, 'service-test'),
+              now: () => h.now(),
+            }),
+          (s) => s.url,
+          (s) => s.close(),
+        );
         try {
           const iat = Math.floor(h.now() / 1000);
           const token = signJws(

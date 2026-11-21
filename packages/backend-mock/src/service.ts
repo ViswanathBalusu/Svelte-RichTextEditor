@@ -84,6 +84,7 @@ export class MockService implements BackendHost {
       'suggest-enforced',
       'fields',
       'rules',
+      'comments',
       ...(this.presence ? ['presence'] : []),
     ];
   }

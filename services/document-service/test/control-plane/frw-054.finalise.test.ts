@@ -220,6 +220,8 @@ for (const storage of ['memory', 'postgres'] as Storage[]) {
           store: () =>
             Promise.resolve({ store: { ok: false, reason: 'store_failed' }, record: null }),
           read: () => Promise.resolve(null),
+          readLatest: () => Promise.resolve(null),
+          storeUpdate: () => Promise.resolve({ ok: false, reason: 'not_sealed' }),
         };
         const out = await finaliseSealed(deps(failing), request(w.ref));
         expect(out).toMatchObject({

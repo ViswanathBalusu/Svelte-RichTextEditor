@@ -188,6 +188,8 @@ export async function startHarness(
     realDataPlane?: boolean;
     /** Overrides of the composed webhook dispatcher (`config.webhooks` set); its dispatcher is the sink. */
     webhooks?: StartOptions['webhooks'];
+    /** The seal step of finalisation (FRW-053): the signing client and the retry of a run. */
+    finalSealing?: StartOptions['finalSealing'];
   } = {},
 ): Promise<Harness> {
   let offset = 0;
@@ -226,6 +228,7 @@ export async function startHarness(
       // With `config.webhooks` the composed dispatcher is the sink, and the two are exclusive.
       ...(config.webhooks ? {} : { events }),
       ...(opts.webhooks ? { webhooks: opts.webhooks } : {}),
+      ...(opts.finalSealing ? { finalSealing: opts.finalSealing } : {}),
       now,
       signing: signingKey(undefined, 'service-test'),
       ...(opts.realDataPlane
