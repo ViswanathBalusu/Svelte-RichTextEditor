@@ -44,6 +44,15 @@ test.describe('the mirrored shell has no visual regression (UX-064, criterion 7)
     const missing = shots.filter(
       (name) => !existsSync(testInfo.snapshotPath(name, { kind: 'screenshot' })),
     );
+    // The Linux baselines were recorded in the Playwright container, whose fonts a hosted runner
+    // does not have (the first hosted run differed by 2,165 pixels in the toolbar). CI runs this
+    // spec in that container (the job "visual", scripts/ci/visual-in-container.sh), which sets this.
+    test.skip(
+      !recording &&
+        process.platform === 'linux' &&
+        process.env['DOCEDIT_PLAYWRIGHT_CONTAINER'] !== '1',
+      'the Linux baselines are pixel-exact only in the Playwright container (scripts/ci/visual-in-container.sh)',
+    );
     test.skip(
       !recording && missing.length > 0,
       `no stored baseline for ${browserName} on ${process.platform}; baselines exist for win32 only (record with --update-snapshots)`,

@@ -2,7 +2,10 @@
 #
 # Results are only comparable on the reference machine: a dedicated self-hosted runner with the label
 # `docedit-reference`, set up and calibrated as ADR 0037 describes. Until such a runner is
-# registered, the jobs that need it wait in the queue; the cross-browser and Rust jobs run on
+# registered, the job that needs it is skipped: set the repository variable
+# DOCEDIT_REFERENCE_RUNNER to 'true' once the runner exists (Settings, Secrets and variables,
+# Actions, Variables). Without that, the job would wait in the queue until the run is cancelled
+# after 24 hours, which reports a cancelled run and no result. The cross-browser and Rust jobs run on
 # GitHub-hosted runners.
 name: perf
 
@@ -30,7 +33,10 @@ permissions:
 jobs:
   harness:
     name: Typing latency, load and memory on the reference runner (FND-007)
-    if: (github.event_name == 'schedule' && github.event.schedule == '41 3 * * *') || github.event_name == 'workflow_dispatch'
+    if: >-
+      vars.DOCEDIT_REFERENCE_RUNNER == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '41 3 * * *') ||
+      github.event_name == 'workflow_dispatch')
     runs-on: [self-hosted, docedit-reference]
     timeout-minutes: 180
     steps:
