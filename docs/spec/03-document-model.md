@@ -30,7 +30,7 @@ The Canonical Document Model is the stored and transferred form of a document. T
 
 **Canonical form.** Wherever a hash of a document is taken, the input is the RFC 8785 serialisation of the envelope with these rules: an attribute whose value equals its schema default is omitted; marks on a text node are ordered by their position in the schema's mark list and then by the canonical serialisation of their attributes; adjacent text nodes with equal marks are merged. The conformance kit carries hash fixtures.
 
-**Units.** Lengths are integers in twentieths of a point (1/1440 inch), including font sizes. `lineSpacing` under the `multiple` rule is an integer in thousandths (1150 means 1.15 lines). Colours are `#RRGGBB`.
+**Units.** Lengths are integers in twentieths of a point (1/1440 inch), including font sizes. `lineSpacing` under the `multiple` rule is an integer in thousandths (1150 means 1.15 lines). Colours are `#RRGGBB` with the letters in upper case, so that two implementations write the same bytes. Every integer lies inside the range that RFC 8785 serialises the same way in every language; section 4.8 gives the ranges.
 
 ## 3. Structure
 
@@ -56,7 +56,7 @@ doc
 
 ## 4. Nodes
 
-An attribute value of `null` means "not set here; inherit". Every node and mark also has an `ext` attribute (section 11.2).
+An attribute value of `null` means "not set here; inherit". Every node and mark also has an `ext` attribute (section 11.2). Every attribute has a grammar and a default; section 4.8 gives the rules, and the tables below name the attributes.
 
 ### 4.1 Definition nodes
 
@@ -71,7 +71,7 @@ An attribute value of `null` means "not set here; inherit". Every node and mark 
 | `source_def` | none | Draft (section 4.7). `id`, `kind` (a CSL item type), `title`, `authors`, `editors` (lists of names), `issued`, `accessed` (dates as EDTF strings), `containerTitle`, `publisher`, `publisherPlace`, `edition`, `volume`, `issue`, `pages`, `number`, `doi`, `url`, `isbn`, `issn`, `language`, `note`, `extra` (further CSL variables) |
 | `story` | `block+` | `id`, `kind` (`header`, `footer`) |
 
-Built-in styles (`Normal`, `Heading1` to `Heading9`, `Caption`, `FootnoteText` and the like) have reserved identifiers and are present in every document. Every other definition gets a random identifier; its human-readable label is `name`. When pasted content brings a definition whose identifier already exists, the editing core maps it to the existing one instead of inserting a duplicate.
+Built-in styles (`Normal`, `Heading1` to `Heading9`, `Caption`, `FootnoteText` and the others that section 4.8 lists) have reserved identifiers. A reserved identifier may be used only by a built-in style of its kind. The built-in styles are available to every document: a document defines the ones it uses, as the example of section 12 defines two, and a document that lacks a built-in style is valid (owner decision 7 of 2026-11-15). A new document made by the model has all of them. Every other definition gets a random identifier from the editor; its human-readable label is `name`. When pasted content brings a definition whose identifier already exists, the editing core maps it to the existing one instead of inserting a duplicate.
 
 Formatting properties of a style are separate attributes so that two people changing different properties of the same style do not overwrite each other. `levels` in a numbering definition is one attribute; concurrent edits to the same numbering definition resolve to the later commit.
 
@@ -157,6 +157,34 @@ Draft, from [ADR 0031](../adr/0031-cdm-1-model-completion.md) (proposed; CDM-052
 - A `citation` is an inline atom naming one or more sources in order. Every cited source exists, and a source that is still cited cannot be deleted (invariant I4).
 - A `bibliography` is a block atom. Its entries, like the text of a citation, are generated at layout and export time in the style `settings.citationStyle` names.
 
+### 4.8 Attribute grammars, defaults and reference forms
+
+From [ADR 0018](../adr/0018-cdm-attribute-grammars.md), which the owner accepted on 2026-11-15 (decision 7 of the [owner's decisions](../owner-decisions-2026-11-15.md)). Every attribute has a grammar, which invariant I11 checks: a type, and a range, a length or a pattern. Every attribute has a default, which the canonical form omits (section 2). The values live in one place, the definition in `packages/model`. The table generated from it, [`spec/cdm/cdm-1.attributes.md`](../../spec/cdm/cdm-1.attributes.md), gives the grammar and the default of every attribute of every node and mark, and is normative for each of them. These are the rules behind it.
+
+| Topic | Rule |
+|---|---|
+| Required values | An `id`, and a few others such as the `asset` of a figure, the `name` of a style and the `pageSetup` of the body, are required in a stored document. Their default is null only so that ProseMirror can create the node (section 9). I2 refuses a null `id` at the end of a commit, and I11 refuses null in the others |
+| Integers | Lengths are at most 31,680 twips (22 inches); indents may be negative by as much. Font sizes are 20 to 32,760 twips (1 to 1,638 points). Every range lies inside the interoperable range of RFC 8785, at most 2^53 - 1 in size |
+| Colours | `#RRGGBB` with the letters `A` to `F` in upper case |
+| Strings | Lengths count Unicode code points, as JSON Schema does. Free text refuses the C0 and C1 control characters and DEL, except tab and line feed. Patterns are ASCII regular expressions that behave the same in ECMAScript and in Python |
+| Alignment | Paragraphs: `start`, `center`, `end`, `justify`, `distribute`. These are logical values, because a paragraph has a direction. Tables, figures and numbering levels: `start`, `center`, `end` |
+| Tab stops | Alignment: `left`, `center`, `right`, `decimal`. Leader: `none`, `dot`, `hyphen`, `underscore`, `middleDot`, `heavy`. Positions are measured from the left margin (section 7) |
+| Borders | An object `{ style, width, color, space }`. Style: `none`, `single`, `double`, `dotted`, `dashed`, `thick`. The width is 0 to 240 twips, a null colour means automatic, and the space is 0 to 620 twips. A paragraph has the sides `top`, `bottom`, `left`, `right` and `between`; a table has `top`, `bottom`, `left`, `right`, `insideH` and `insideV`; a cell has the four sides |
+| Shading | An object `{ fill }`, so that a pattern can be added later without a new attribute |
+| Other value sets | Orientation: `portrait`, `landscape`. Page number format: `decimal`, `lowerRoman`, `upperRoman`, `lowerLetter`, `upperLetter`. Footnote format: `decimal`, `lowerRoman`, `upperRoman`, `lowerLetter`, `upperLetter`, `symbol`. Vertical alignment of a cell: `top`, `center`, `bottom`. Highlight: `yellow`, `green`, `cyan`, `magenta`, `blue`, `red`, `darkBlue`, `darkCyan`, `darkGreen`, `darkMagenta`, `darkRed`, `darkYellow`, `darkGray`, `lightGray`, `black`, `white`; these are the sixteen highlight colours of Word files, so that imports round-trip (A2). A language is a well-formed BCP 47 tag |
+| Built-in styles | Paragraph styles: `Normal`, `Heading1` to `Heading9`, `Title`, `Subtitle`, `Quote`, `IntenseQuote`, `ListParagraph`, `NoSpacing`, `Caption`, `FootnoteText`, `Header`, `Footer`, `TOCHeading`, `TOC1` to `TOC9`. Character styles: `DefaultParagraphFont`, `FootnoteReference`, `Hyperlink`, `Strong`, `Emphasis`. Table styles: `TableNormal`, `TableGrid` |
+| Bullets | The published list for `bulletChar`: • ◦ ▪ ■ □ ● ○ – — ➢ ✓ ♦ ◆ * - |
+| Definition identifiers | 1 to 64 characters from the letters `A` to `Z` and `a` to `z`, the digits, `_` and `-`, so the `ps1` of the example in section 12 is valid. The editor gives a new definition a random identifier of 16 characters |
+| Node identifiers | 16 characters of the URL-safe Base64 alphabet (section 9). A `listId` has the same form |
+| Field targets | One form for each kind of target of `field.target`: `bookmark:<name>`; `node:<paragraph id>` for a heading, a numbered paragraph and a caption; `eq:<label>` for an equation; `style:<style id>` for `styleRef`; `field:<key>` for `formValue` |
+| Link targets | `link.href` is an `http`, `https` or `mailto` address, or `#<name>` for a target in the document (I9) |
+| Unique names | The `name` of an `anchor` and the `label` of an equation are unique in the document, because references point at them |
+| The `ext` attribute | An object whose keys have the form `vendor.example:name`. At most 4 KiB of canonical JSON, at most 8 levels deep, integers only (section 11.2) |
+| The `before` of a `fmt` suggestion | `{ "marks": [mark JSON], "attrs": { name: value } }`, at most 4 KiB |
+| Extension payloads | At most 16 KiB on an `extension_block` (I12) and at most 4 KiB on an `extension_inline`. A payload never holds a number that is not an integer |
+
+The limits of preserved data are in section 4.6.
+
 ## 5. Marks
 
 | Mark | Attributes | Notes |
@@ -225,7 +253,7 @@ The authority MUST reject a commit whose result violates any of these. `model.va
 | I8 | `latex` attributes pass the math gate in 09 |
 | I9 | `link.href` uses an allowed scheme: `http`, `https`, `mailto`, or an in-document target |
 | I10 | Forbidden combinations: a footnote inside a footnote or a caption; a figure with `placement: float` inside a table cell; page and column breaks inside cells, captions and footnotes; tables inside stories and footnotes; form fields inside stories and footnotes (12, section 3.2) |
-| I11 | Every attribute value matches the grammar declared for it in the schema: type, range, length and pattern. Identifiers, names, templates, colours and lengths all have one. This is what keeps hostile strings out of the exporters (09) and out of the editor's styles |
+| I11 | Every attribute value matches the grammar declared for it in the schema: type, range, length and pattern (section 4.8). Identifiers, names, templates, colours and lengths all have one. This is what keeps hostile strings out of the exporters (09) and out of the editor's styles |
 | I12 | Reserved for the rules on extensions: the envelope of an extension node is valid and within its size limit |
 
 I13 to I15 are defined in 12.
@@ -234,7 +262,9 @@ I13 to I15 are defined in 12.
 
 Node identifiers are 16-character strings over the URL-safe Base64 alphabet, generated randomly by the client that creates the node.
 
-In the editing schema `id` defaults to null, because ProseMirror cannot create or fill nodes that have a required attribute. The identifier plugin sets missing identifiers in the same transaction, and invariant I2 is checked at the end of the commit. When a paragraph is split, the part that keeps the existing content keeps the identifier; pressing Enter at the start of a paragraph gives the fresh identifier to the new empty paragraph. Copies made by pasting or duplicating get fresh identifiers.
+In the editing schema `id` defaults to null, because ProseMirror cannot create or fill nodes that have a required attribute. The identifier plugin sets missing identifiers in the same transaction, and invariant I2 is checked at the end of the commit. When a paragraph is split, the part that keeps the existing content keeps the identifier; pressing Enter at the start of a paragraph gives the fresh identifier to the new empty paragraph. When a paragraph is split in the middle, the first part keeps the identifier and the second gets a fresh one, as at the end of a paragraph: the identifier stays with the start of the content, which is what comments on blocks and diagnostics point at (ADR 0018). Copies made by pasting or duplicating get fresh identifiers.
+
+Definition identifiers have their own, wider form (section 4.8): a reserved built-in name, or any short identifier such as the `ps1` of the example in section 12. The editor gives a new definition a random identifier of 16 characters.
 
 ## 10. Writer support
 
@@ -270,6 +300,8 @@ The writer-support table of every construct (each node type, mark, `field` kind 
 ### 11.2 Additive attributes
 
 A ProseMirror schema silently drops attributes it does not declare. New optional attributes are therefore introduced inside `ext`, an object attribute present on every node and mark with default `{}`, under a namespaced key. Every reader preserves `ext` unchanged. An attribute moves out of `ext` only at the next major version.
+
+A key of `ext` has the form `vendor.example:name`: a namespace in lower-case letters, digits, dots and hyphens, a colon, and a name. The whole object is at most 4 KiB of canonical JSON and at most 8 levels deep, and it holds no number that is not an integer (section 4.8; I11).
 
 ### 11.3 Migration
 
@@ -316,3 +348,6 @@ A ProseMirror schema silently drops attributes it does not declare. New optional
 - Citations and a bibliography are a version 1 requirement since the owner's decision of 2026-11-06 that the first release serves all three candidate markets, academic writing included. Section 4.7 defines them as a draft (CDM-052; ADR 0031, proposed), and EXP-121 maps them to `biblatex`. The citation styles of the house class (`settings.citationStyle`) are proposed, not decided.
 - `levels` of a numbering definition is one attribute. If concurrent edits to numbering definitions prove common, levels should become child nodes.
 - Block-level suggestions for table cells and columns are not defined.
+- The template of a numbering level takes only the placeholders `%1` to `%9` and a little punctuation (section 4.1), so the "Article %1" of a Word file cannot be stored. The grammar must widen before such files are imported without loss (A2; ADR 0018, open questions; review SR-M22).
+- A list of tab stops replaces the inherited list as a whole. It cannot clear one inherited stop, which Word files do (ADR 0018, open questions).
+- `caption` has no `id`, although principle 6 gives every block-level node one, and the `title` field has no source of its text inside the CDM (ADR 0018, open questions).
