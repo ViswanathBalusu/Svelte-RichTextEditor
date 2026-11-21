@@ -104,6 +104,7 @@ import type {
   StatusSummary,
   StyleInfo,
   StyleSummary,
+  StyleDefCommandName,
   StyleEditCheck,
   StyleEditOp,
   StyleEditResult,
@@ -341,6 +342,8 @@ import {
   stylesOf,
 } from './styles.ts';
 import {
+  type StyleChanges,
+  type StyleDocRefusal,
   changeStyle,
   createStyle,
   deleteStyle,
@@ -633,6 +636,33 @@ const AUTHORING: ReadonlySet<CommandName> = new Set<CommandName>([
   'insertEquation',
   'setEquationLatex',
 ]);
+
+/**
+ * The style definition commands, with the operation each one is (UX-022; PRM-030 criterion 2). They
+ * are answered and run through `checkStyleEdit`, so a refusal carries its reason.
+ */
+const STYLE_DEF_OPS: Readonly<Record<StyleDefCommandName, StyleEditOp>> = {
+  createStyle: 'create',
+  changeStyle: 'change',
+  deleteStyle: 'delete',
+};
+
+const isStyleDefCommand = (name: CommandName): name is StyleDefCommandName =>
+  Object.hasOwn(STYLE_DEF_OPS, name);
+
+/** The changes a `changeStyle` command asks for: the members its arguments give, and no others. */
+function styleChangesOf(spec: NonNullable<CommandArgs['styleDef']>): StyleChanges {
+  return {
+    ...(spec.name !== undefined ? { name: spec.name } : {}),
+    ...(spec.basedOn !== undefined ? { basedOn: spec.basedOn } : {}),
+  };
+}
+
+/**
+ * The identifier of the story in a transaction that only asks the guard whether a header or footer
+ * story may be created. The transaction is never dispatched, so the identifier is never stored.
+ */
+const PROBE_STORY_ID = 'probe';
 
 const isLocatorLabel = (v: string): v is (typeof LOCATOR_LABELS)[number] =>
   (LOCATOR_LABELS as readonly string[]).includes(v);
@@ -1757,12 +1787,20 @@ export class DocumentCore implements DocumentApi {
 
   /**
    * Why a named query answered false (13 §4; ui `CoreApi.queryReason`), as a code the shell states
-   * as `reason.query.<code>`. Only `canMarkRegion` gives one: `suggestion` when suggestion mode
-   * cannot record a region (FE-044 criterion 5), `locked`, `nested` inside a region (PRM-033
-   * criterion 2), `structure` without the right to change the body and the document's structure, and
-   * `blocks` for a selection that is not whole blocks of the body. Null otherwise.
+   * as `reason.query.<code>`. `canMarkRegion` gives `suggestion` when suggestion mode cannot record
+   * a region (FE-044 criterion 5), `locked`, `nested` inside a region (PRM-033 criterion 2),
+   * `structure` without the right to change the body and the document's structure, and `blocks` for
+   * a selection that is not whole blocks of the body. `canInsertField` gives `fieldLimit`.
+   * `hasHeader` gives `structure` when the user's rights are what keeps the header from them (07 §7;
+   * PRM-030 criterion 2); a lock or a mode is the mode switcher's to explain. Null otherwise.
    */
   queryReason(name: string): string | null {
+    if (name === 'hasHeader') {
+      const header = this.queryCommand('editHeader');
+      return !header.enabled && header.reason === 'no-access' && !this.#locked()
+        ? 'structure'
+        : null;
+    }
     if (name === 'canInsertField') {
       // The document limit of form fields (I15; FRW-072 criterion 4), which the shell states as
       // `reason.query.fieldLimit`. Other refusals have no code here.
@@ -2804,6 +2842,12 @@ export class DocumentCore implements DocumentApi {
           if (!this.canEdit(`story:${id}`)) return false;
           return dispatch ? this.openStory(id) : true;
         };
+      case 'createStyle':
+      case 'changeStyle':
+      case 'deleteStyle':
+        // `queryCommand` and `run` answer these before they ask for a command (`#styleDefState`,
+        // `#runStyleDef`): the style methods make their own transactions and name their refusals.
+        return null;
     }
   }
 
@@ -2881,8 +2925,13 @@ export class DocumentCore implements DocumentApi {
     const setupId = pageSetupIdOf(state.doc);
     if (setupId === null) return false;
     // An availability check (no dispatch) must not draw from the id source: the toolbar asks on
-    // every update, and each draw would shift the ids later suggestions and stories receive.
-    if (!dispatch) return createVariantStory(state, setupId, part, variant, 'probe') !== null;
+    // every update, and each draw would shift the ids later suggestions and stories receive. The
+    // guard is asked about the same change, so a person who may not create the story is told that
+    // the command is unavailable before they try (07 §7; PRM-030 criterion 2).
+    if (!dispatch) {
+      const probe = createVariantStory(state, setupId, part, variant, PROBE_STORY_ID);
+      return probe !== null && this.#guardRefusal(probe) === null;
+    }
     const storyId = this.#newId();
     const tr = createVariantStory(state, setupId, part, variant, storyId);
     if (tr === null) return false;
@@ -2892,6 +2941,33 @@ export class DocumentCore implements DocumentApi {
       if (node.type.name === 'story' && node.attrs['id'] === storyId) present = true;
     });
     return present ? this.openStory(storyId) : false;
+  }
+
+  /**
+   * What the region guard would answer for a transaction that is not dispatched: its refusal, or
+   * null. The guard itself (guard.ts) decides the same change again when the real one is dispatched.
+   */
+  #guardRefusal(tr: Transaction): Refusal | null {
+    return checkChange(tr.before, tr.doc, tr.steps, tr.docs, this.#accessValue, this.#locked());
+  }
+
+  /**
+   * Why the story of a header or footer variant that has none cannot be created now (07 §7; PRM-030
+   * criterion 2): `read-only` under a lock, `no-access` when the user may not change `doc`, `defs`
+   * or stories. Null when it can be created, and when there is nothing to create (no page setup, or
+   * the variant has its story).
+   */
+  #storyCreationRefusal(
+    state: EditorState,
+    part: StoryPart,
+    variant: StoryVariant,
+  ): 'read-only' | 'no-access' | null {
+    const setupId = pageSetupIdOf(state.doc);
+    const probe =
+      setupId === null ? null : createVariantStory(state, setupId, part, variant, PROBE_STORY_ID);
+    const refusal = probe === null ? null : this.#guardRefusal(probe);
+    if (refusal === null) return null;
+    return refusal.reason === 'read-only' ? 'read-only' : 'no-access';
   }
 
   /**
@@ -2977,6 +3053,7 @@ export class DocumentCore implements DocumentApi {
   }
 
   run(name: CommandName, args?: CommandArgs): boolean {
+    if (isStyleDefCommand(name)) return this.#runStyleDef(name, args?.styleDef);
     const command = this.#command(name, args);
     if (!command || !this.#allowed(name)) return false;
     if (isTableOp(name) && this.#suggestsTable()) return this.#runSuggestedTable(name);
@@ -3684,6 +3761,7 @@ one or original. It is a
 
   queryCommand(name: CommandName, args?: CommandArgs): CommandState {
     const state = this.#state;
+    if (isStyleDefCommand(name)) return this.#styleDefState(name, args?.styleDef);
     if (BLOCK_ONLY_COMMANDS.has(name)) {
       // A block change suggestion mode cannot record is unavailable there, and says why (FE-044
       // criterion 5). Suggestion mode is off in a locked document, so the lock needs no check here.
@@ -3807,7 +3885,8 @@ one or original. It is a
         break;
       case 'editHeader': {
         // FE-056 criterion 6 (07 §7): a header the user may not change disables the command and
-        // says why; with no header there is no reason to give.
+        // says why. With no header the command would create one, so a user who may not create it
+        // is told the same (PRM-030 criterion 2); a document with no page setup has no reason.
         let headerId: string | null = null;
         state.doc.forEach((node) => {
           if (headerId === null && node.type.name === 'story' && node.attrs['kind'] === 'header')
@@ -3815,6 +3894,10 @@ one or original. It is a
         });
         if (headerId !== null && !this.canEdit(`story:${headerId}`))
           return { enabled: false, active: false, reason: 'no-access' };
+        if (headerId === null) {
+          const reason = this.#storyCreationRefusal(state, 'header', 'default');
+          if (reason !== null) return { enabled: false, active: false, reason };
+        }
         break;
       }
       default:
@@ -3935,6 +4018,43 @@ one or original. It is a
     return this.#runStyleCommand(deleteStyle(id))
       ? { ok: true, id }
       : { ok: false, reason: 'no-access', regions: check.regions };
+  }
+
+  /**
+   * The state of a style definition command (PRM-030 criterion 2; UX-022; 07 §7). The user's own
+   * limits (a lock, suggestion mode, no right to change definitions) are answered whatever the
+   * arguments are, so a toolbar can ask before it has a name or a style. With the arguments, the
+   * document's limits are answered too: a built-in style, a style in use or used by a region the
+   * user may not edit, a name that is taken, a parent that does not fit.
+   */
+  #styleDefState(name: StyleDefCommandName, spec: CommandArgs['styleDef']): CommandState {
+    const op = STYLE_DEF_OPS[name];
+    const check = this.checkStyleEdit(op, spec?.id);
+    if (!check.ok) return { enabled: false, active: false, reason: check.reason };
+    let refusal: StyleDocRefusal | null = null;
+    if (op === 'create' && spec?.name !== undefined && spec.kind !== undefined)
+      refusal = styleCreateRefusal(this.#state.doc, spec.kind, spec.name, spec.basedOn ?? null);
+    else if (op === 'change' && spec?.id !== undefined)
+      refusal = styleChangeRefusal(this.#state.doc, spec.id, styleChangesOf(spec));
+    return refusal === null
+      ? { enabled: true, active: false }
+      : { enabled: false, active: false, reason: refusal };
+  }
+
+  /**
+   * Runs a style definition command through the style methods above, which check the user's rights
+   * again and record a refusal for the shell. False when the arguments name no style to act on.
+   */
+  #runStyleDef(name: StyleDefCommandName, spec: CommandArgs['styleDef']): boolean {
+    if (spec === undefined) return false;
+    if (name === 'createStyle') {
+      if (spec.name === undefined || spec.kind === undefined) return false;
+      const basedOn = spec.basedOn ?? null;
+      return this.createStyle({ name: spec.name, kind: spec.kind, basedOn }).ok;
+    }
+    if (spec.id === undefined) return false;
+    if (name === 'deleteStyle') return this.deleteStyle(spec.id).ok;
+    return this.changeStyle(spec.id, styleChangesOf(spec)).ok;
   }
 
   /** Whether `id` names a paragraph style of the document. */

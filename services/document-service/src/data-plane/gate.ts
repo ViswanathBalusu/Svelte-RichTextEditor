@@ -37,7 +37,7 @@ export type SeqRule =
 export interface SeqInput {
   /** The message type or the route, as the protocol definition names it. */
   readonly where: string;
-  /** The field or parameter, as a path (`resume.seq`, `query.after`). */
+  /** The field or parameter, as a path (`resume.seq`, `query.after`, `body.atSeq`, `path.seq`). */
   readonly field: string;
   readonly rule: SeqRule;
   /** Who applies it, or why it is exempt. */
@@ -46,7 +46,13 @@ export interface SeqInput {
 
 /**
  * Every place a client supplies a sequence number (07 §8 lists `seq`, `fromSeq`, `toSeq`, `atSeq`,
- * `after`, `baseSeq` and `resume.seq`). Fields the server sends are not inputs and are not listed.
+ * `after`, `baseSeq` and `resume.seq`; a member whose name ends in `Seq`, such as `templateSeq`,
+ * and a `{seq}` in a path are found by the same walk, PRM-041 criterion 1). Fields the server sends
+ * are not inputs and are not listed.
+ *
+ * A service credential is exempt from the gate, and when it names the user it acts for
+ * (`DEP-Actor`) that user's gate applies (07 §8; owner decision 80 of 2026-11-15; ADR 0379). The
+ * routes that take a service credential only are listed with the rule that applies to that user.
  */
 export const SEQ_INPUTS: readonly SeqInput[] = [
   {
@@ -168,6 +174,36 @@ export const SEQ_INPUTS: readonly SeqInput[] = [
     field: 'body.seq',
     rule: 'exempt',
     note: 'stores the caller own marker and reads nothing; the marker only moves forward (HIS-027 criterion 2)',
+  },
+  {
+    where: 'POST /documents',
+    field: 'body.templateSeq',
+    rule: 'state',
+    note: 'FRW-062: a document made from a template is a fork of the template document at this seq; pinTemplate applies the gate as the fork does (a service credential, so the gate of the user it names; owner decision 80)',
+  },
+  {
+    where: 'POST /bulk-sends',
+    field: 'body.templateSeq',
+    rule: 'state',
+    note: 'FRW-063: the seq is pinned once for every row, through the same pinTemplate',
+  },
+  {
+    where: 'PUT /documents/{id}/workflow',
+    field: 'body.sentSeq',
+    rule: 'exempt',
+    note: 'the server owns it: a writer may echo it from a read and checkWorkflowBody ignores it (FRW-025)',
+  },
+  {
+    where: 'PUT /documents/{id}/workflow',
+    field: 'body.participants.completedSeq',
+    rule: 'exempt',
+    note: 'the server owns it: stripped from each participant before the body is checked (FRW-025)',
+  },
+  {
+    where: 'POST /documents/{id}/commits/{seq}/tombstone',
+    field: 'path.seq',
+    rule: 'exempt',
+    note: 'a service credential only; it removes the payload of the commit and returns none of it (HIS-040)',
   },
 ];
 

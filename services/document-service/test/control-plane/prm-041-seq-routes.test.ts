@@ -39,6 +39,10 @@ const BUILT: Record<string, { file: string; gate: RegExp }> = {
   'POST /documents/{id}/fork': { file: 'control-plane/history-routes.ts', gate: CONTROL_GATE },
   // PRM-042: the threads at a state are refused below the gate, as the content is.
   'GET /documents/{id}/threads': { file: 'control-plane/thread-routes.ts', gate: CONTROL_GATE },
+  // FRW-062 and FRW-063: the template seq is pinned through `pinTemplate`, which calls
+  // `refuseSeqBelowGate` as the fork does (a service credential: the gate of the user it names).
+  'POST /documents': { file: 'control-plane/template-routes.ts', gate: CONTROL_GATE },
+  'POST /bulk-sends': { file: 'control-plane/bulk-send.ts', gate: /pinTemplate\(/ },
 };
 
 /** Gated inputs that are not gated yet, or whose route is not built; each with its reason. */

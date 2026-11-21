@@ -141,6 +141,82 @@ describe('fallbacks (UX-025, criteria 2 and 3)', () => {
   });
 });
 
+describe('a host that sets its directory after the editor has loaded (PRO-080; PRM-026)', () => {
+  /** As the element reads the host's property at each call: null while the host has set none. */
+  function lateHost() {
+    const state: { callback: ResolveUsers | null; calls: string[][] } = {
+      callback: null,
+      calls: [],
+    };
+    const people = new PeopleDirectory({ resolveUsers: (ids) => state.callback?.(ids) ?? null });
+    const set = (directory: Record<string, UserInfo | null>): void => {
+      state.callback = async (ids) => {
+        state.calls.push([...ids]);
+        return ids.map((id) => directory[id] ?? null);
+      };
+    };
+    return { people, state, set };
+  }
+
+  it('keeps nothing while the host has no directory, and asks again when it has one', async () => {
+    const { people, state, set } = lateHost();
+    const listener = vi.fn();
+    people.view.subscribe(listener);
+    // The shell asks as soon as it draws: the lock indicators name people at once.
+    people.request(['u1', 'u2']);
+    await flush();
+    // That was not an answer of the host: nothing is resolved, and the shell is told nothing.
+    expect(people.lookup('u1', 'Service name')).toEqual({
+      id: 'u1',
+      name: 'Service name',
+      avatarUrl: null,
+      resolved: false,
+    });
+    expect(listener).not.toHaveBeenCalled();
+
+    set({ u1: { id: 'u1', name: 'Ada Lovelace' } });
+    people.refresh();
+    await flush();
+    expect(state.calls).toEqual([['u1', 'u2']]);
+    expect(people.lookup('u1', 'Service name')).toMatchObject({
+      name: 'Ada Lovelace',
+      resolved: true,
+    });
+    // "Unknown" from the host itself is an answer, and is cached as before.
+    expect(people.lookup('u2')).toMatchObject({ name: null, resolved: true });
+    expect(listener).toHaveBeenCalledTimes(1);
+    people.refresh();
+    people.request(['u1', 'u2']);
+    await flush();
+    expect(state.calls).toHaveLength(1);
+  });
+
+  it('asks the host at the next request too, when nobody said the directory arrived', async () => {
+    const { people, state, set } = lateHost();
+    people.request(['u1']);
+    await flush();
+    set({ u1: { id: 'u1', name: 'Ada Lovelace' } });
+    people.request(['u1']);
+    await flush();
+    expect(state.calls).toEqual([['u1']]);
+    expect(people.lookup('u1').name).toBe('Ada Lovelace');
+  });
+
+  it('does nothing at a refresh while there is still no directory, and never loops', async () => {
+    const { people, state } = lateHost();
+    const listener = vi.fn();
+    people.view.subscribe(listener);
+    people.request(['u1']);
+    await flush();
+    people.refresh();
+    people.refresh();
+    await flush();
+    expect(state.calls).toEqual([]);
+    expect(listener).not.toHaveBeenCalled();
+    expect(people.lookup('u1').resolved).toBe(false);
+  });
+});
+
 describe('values from the host are data (UX-025, criterion 4)', () => {
   it('keeps names as plain strings, whatever they contain', async () => {
     const { resolveUsers } = host({
@@ -176,9 +252,11 @@ describe('the directory has no path to the document service (UX-025, criterion 5
     const people = new PeopleDirectory({ resolveUsers: async () => [] });
     const fields = Object.getOwnPropertyNames(people);
     expect(fields).toEqual(['view']);
+    // `refresh` asks the host again for what it was not asked while it had no directory.
     expect(Object.getOwnPropertyNames(PeopleDirectory.prototype).sort()).toEqual([
       'constructor',
       'lookup',
+      'refresh',
       'request',
     ]);
   });

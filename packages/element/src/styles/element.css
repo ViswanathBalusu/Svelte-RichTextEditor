@@ -277,6 +277,9 @@ img.ProseMirror-separator {
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: 0.4em;
+  box-sizing: border-box;
+  inline-size: fit-content;
+  max-inline-size: 100%;
   margin: 0 0 0.4em;
   padding: 0.15em 0.4em;
   border: 1px solid var(--de-region-locked, currentColor);

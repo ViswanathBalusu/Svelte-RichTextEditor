@@ -633,19 +633,45 @@ export class MockDocument implements ChannelHost {
     return this.grants();
   }
 
-  /** The derived region list of `GET /documents/{id}/regions`, in document order. */
+  /**
+   * The derived region list of `GET /documents/{id}/regions`, in document order, with who can edit
+   * each region as the document service derives it (05 §6.2 `RegionEditors`; PRM-032 criterion 5):
+   * the document roles that may edit by role alone, the principals with an `editor` grant that has
+   * not expired, and the holder of a lease. Nobody while the region is approved or the document is
+   * not active.
+   */
   regions(): RegionInfo[] {
     const out: RegionInfo[] = [];
     const doc = this.room.document;
+    const now = this.hooks.now();
     doc.child(doc.childCount - 1).forEach((n) => {
       if (n.type.name !== 'region') return;
       const id = String(n.attrs['id']);
+      const policy = n.attrs['policy'] === 'restricted' ? 'restricted' : 'inherit';
+      const state = this.perms.regionStates.get(id) ?? 'draft';
+      const frozen = state === 'approved' || this.perms.documentState !== 'active';
+      const lease = this.perms.leases.find((l) => l.region === id && l.expiresAt > now);
+      const principals = frozen
+        ? []
+        : this.perms.grants
+            .filter(
+              (g) =>
+                g.region === id &&
+                g.role === 'editor' &&
+                (g.expiresAt === null || g.expiresAt > now),
+            )
+            .map((g) => g.principal);
       out.push({
         id,
         title: String(n.attrs['title'] ?? ''),
-        policy: n.attrs['policy'] === 'restricted' ? 'restricted' : 'inherit',
+        policy,
         order: out.length,
-        state: this.perms.regionStates.get(id) ?? 'draft',
+        state,
+        editors: {
+          roles: frozen ? [] : policy === 'inherit' ? ['editor', 'owner'] : ['owner'],
+          principals: [...new Set(principals)].sort(),
+          ...(lease && !frozen ? { leasedTo: lease.holder } : {}),
+        },
       });
     });
     return out;

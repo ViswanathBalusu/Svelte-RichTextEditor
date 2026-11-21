@@ -216,6 +216,11 @@ export interface MountedEditor extends EditorHandle {
   /** Replaces the host's icons while the shell is mounted (UX-063). */
   setIcons(overrides: IconOverrides | null): void;
   /**
+   * The host set its `resolveUsers` while the shell is mounted (PRO-080): the names the shell asked
+   * for while there was none are asked for again.
+   */
+  resolveUsersChanged(): void;
+  /**
    * A message of the shell's catalogue in the locale in use, with the host's replacements applied
    * (UX-064); null for a key the catalogue does not have. The announcer reads its sentences here
    * (FE-107 criterion 6).
@@ -765,8 +770,12 @@ export function mountEditor(options: MountOptions): MountedEditor {
   };
 
   const people = new PeopleDirectory({
-    // The property as it is when the shell asks: a host may set it after the element loaded.
-    resolveUsers: (ids) => options.resolveUsers()?.(ids) ?? Promise.resolve(ids.map(() => null)),
+    // The property as it is when the shell asks: a host may set it after the element loaded. While
+    // it has none the answer is null, which the directory does not keep as the host's answer: the
+    // shell asks for names as soon as it draws (the lock indicators of PRM-026), often before the
+    // host has set its callback, and a name asked for then is asked again once it has
+    // (`resolveUsersChanged`).
+    resolveUsers: (ids) => options.resolveUsers()?.(ids) ?? null,
   });
   // The host's replacements by key (UX-063). A missing key falls back to the source table; an
   // unknown key is reported to the console, in every build. The shell reads this catalogue.
@@ -907,6 +916,9 @@ export function mountEditor(options: MountOptions): MountedEditor {
     },
     setIcons(overrides: IconOverrides | null) {
       icons.setOverrides(overrides);
+    },
+    resolveUsersChanged() {
+      people.refresh();
     },
     text(key, params) {
       return strings.current.has(key) ? strings.current.text(key, params) : null;

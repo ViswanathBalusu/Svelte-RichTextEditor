@@ -1,5 +1,5 @@
 /**
- * The history visibility gate (07 §8; 08 §9; HIS-023, HIS-024, PRM-041; ADR 0034, proposed).
+ * The history visibility gate (07 §8; 08 §9; HIS-023, HIS-024, PRM-041; ADR 0034).
  *
  * The gate is a number per user and moment, `minVisibleSeq(user)`, the lowest sequence number
  * whose content the user may read. Two rules are built on it:
@@ -107,6 +107,25 @@ export async function minVisibleSeqAsync(
   let step = search.next();
   while (!step.done) step = search.next(await g.timeOf(step.value));
   return step.value;
+}
+
+/**
+ * Whether the rule asks who edits somewhere under a setting (08 §9: only `editors` does). A caller
+ * that would have to read the document's regions to answer that reads them only when this is true
+ * and the role alone does not hold `edit`. The answer is taken from the rule itself, so a caller
+ * holds no copy of it (PRM-041 criterion 1).
+ */
+export function gateAsksWhoEdits(setting: HistoryVisibility): boolean {
+  const g = { setting, accessSince: undefined, head: 1 };
+  return decided({ ...g, editsSomewhere: true }) !== decided({ ...g, editsSomewhere: false });
+}
+
+/**
+ * Whether the rule may read commit times under a setting (only `since_access` does, and only with
+ * the claim), so that a caller reads the log's times from storage only then. Taken from the rule.
+ */
+export function gateReadsTimes(setting: HistoryVisibility): boolean {
+  return decided({ setting, editsSomewhere: false, accessSince: 0, head: 1 }) === null;
 }
 
 /** Whether the content at `seq` is visible: at or above the gate, the head, or a named version. */

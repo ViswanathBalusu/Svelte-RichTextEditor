@@ -37,7 +37,9 @@ export function whoCanEdit(region: RegionSummary, tr: Translator, nameOf: NameOf
     return region.title === null ? tr.t('reason.access.hidden') : tr.t('region.editors.none');
   if (editors.leasedTo)
     return tr.t('region.editors.lease', { name: nameOf(`user:${editors.leasedTo}`) });
-  const names = editors.principals.map(nameOf);
+  // A name is said once: the host's directory names people, not groups, so several groups share one
+  // neutral word, as people do until the directory has answered for them.
+  const names = [...new Set(editors.principals.map(nameOf))];
   const roleKeys: StringKey[] = [];
   if (editors.roles.includes('editor')) roleKeys.push('region.role.editor');
   if (editors.roles.includes('owner')) roleKeys.push('region.role.owner');
