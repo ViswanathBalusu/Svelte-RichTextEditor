@@ -67,7 +67,7 @@ import { mountLiveRegion, type LiveRegion } from './live-region.ts';
 import type { AssetImageLookup } from '@docedit/engine';
 import { assetImageLookup } from './assets.ts';
 import { equationDrawer } from './equation-drawer.ts';
-import { Session } from './session.ts';
+import { type MountHints, Session } from './session.ts';
 import { failureView, mountFailure, type FailureInfo, type FailureSurface } from './failure.ts';
 import type { MountedReadView } from './read-view-element.ts';
 import type { MountedPageView } from './page-view/page-view.ts';
@@ -598,7 +598,7 @@ export class DocEditorElement extends Base {
         emit: (name, detail) => {
           if (this.#session === session) this.#emit(name, detail);
         },
-        mount: (content, fontAlias) => this.#mount(content, docId, fontAlias),
+        mount: (content, fontAlias, hints) => this.#mount(content, docId, fontAlias, hints),
         failed: (info) => {
           if (this.#session === session) this.#showFailure(info);
         },
@@ -931,6 +931,7 @@ export class DocEditorElement extends Base {
     content: Content,
     docId: string,
     fontAlias?: (family: string) => string | undefined,
+    hints?: MountHints,
   ): Promise<MountedEditor> {
     const module = await import('./editor.ts');
     const { mountEditor, settingsFrom } = module;
@@ -941,6 +942,8 @@ export class DocEditorElement extends Base {
       root: this.#root,
       content,
       config: this.#config,
+      // Work of an earlier visit is still only in the journal (UX-016 criterion 5).
+      ...(hints?.journalHoldsWork ? { journalHoldsWork: true } : {}),
       // The manifest's family lookup (FE-062 criterion 1), when the session read one.
       ...(fontAlias ? { fontAlias } : {}),
       // Pictures are drawn from the signed URLs of the assets port, when the backend has one (FE-067).

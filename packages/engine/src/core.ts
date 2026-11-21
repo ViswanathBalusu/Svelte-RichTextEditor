@@ -427,6 +427,12 @@ export interface CoreConfig {
   assetImage?: AssetImageLookup;
   /** Draws equations in the web view (FE-069); absent, the LaTeX source is shown as text. */
   drawEquation?: EquationDrawer;
+  /**
+   * The journal holds work an earlier visit left unconfirmed, which `attach` is about to put back
+   * (FE-009). Until `attach` has done so the save state reads `unsaved` and not `saved`, because
+   * that work is only in the journal (02 §2.2; UX-016 criterion 5). Default false.
+   */
+  journalHoldsWork?: boolean;
 }
 
 /** A document the core cannot open (03 §2, §11.1): the codes are DEP's (05 §5.8). */
@@ -961,6 +967,11 @@ export class DocumentCore implements DocumentApi {
   #journalFailed = false;
   /** The service's last answer to a commit of ours was `unavailable` (FE-008 criterion 4; 06 §8). */
   #serviceUnavailable = false;
+  /**
+   * The journal holds work of an earlier visit that no channel has put back yet
+   * (`CoreConfig.journalHoldsWork`; UX-016 criterion 5). While it is set nothing reads `saved`.
+   */
+  #journalHeld = false;
   #accessValue: Access | null;
   #proofing: ProofingController | null = null;
   /** The `mode` the host set, and the one in force under the access (FE-029). */
@@ -1114,6 +1125,7 @@ export class DocumentCore implements DocumentApi {
       hub,
     );
     this.#deferRemote = config.deferRemoteWhileComposing ?? true;
+    this.#journalHeld = config.journalHoldsWork === true;
     this.#requires = [...config.doc.requires];
     const doc = readEnvelope(config.doc, this.#schema);
     this.#sync = initialState(doc);
@@ -1735,9 +1747,12 @@ export class DocumentCore implements DocumentApi {
       queued: s.queue.length,
     });
     const conn = this.connection.get();
+    // Work an earlier visit left in the journal is not confirmed either, though this core holds
+    // nothing of it yet (UX-016 criterion 5).
+    const confirmed = settled(s) && !this.#journalHeld;
     const save: SaveState = this.#readOnly
       ? 'readonly'
-      : settled(s)
+      : confirmed
         ? 'saved'
         : conn === 'online' && !this.#journalFailed && !this.#serviceUnavailable
           ? 'saving'
@@ -1746,7 +1761,7 @@ export class DocumentCore implements DocumentApi {
     this.status.set({ connection: conn === 'detached' ? 'offline' : conn, sync: save });
     // Presence carries the confirmed seq: a new one is published (deduplicated, rate-limited).
     this.#presenceClient?.selectionChanged();
-    if (settled(s)) for (const w of this.#waiters.splice(0)) w.resolve();
+    if (confirmed) for (const w of this.#waiters.splice(0)) w.resolve();
   }
 
   #summary(state: EditorState): SelectionSummary {
@@ -4782,7 +4797,10 @@ one or original. It is a
     const detachProofing = opts.proofing ? this.attachProofing(opts.proofing) : null;
     if (opts.user !== undefined) this.#user = opts.user;
     // Work the journal kept from an earlier visit goes back on the document before the session
-    // starts, so that the session sees it as its own in-flight commit and queue (FE-009).
+    // starts, so that the session sees it as its own in-flight commit and queue (FE-009). From here
+    // the sync state itself says whether that work is confirmed, so the hold of the save state ends
+    // (UX-016 criterion 5): work put back reads `saving`, work set aside is in recovered edits.
+    this.#journalHeld = false;
     const notRestored = opts.restore ? this.#restoreUnconfirmed(opts.restore) : [];
     const session = new SyncSession(this.#host(), channel, sessionOpts);
     this.#session = session;
@@ -4898,7 +4916,7 @@ one or original. It is a
   }
 
   flush(opts: { timeoutMs?: number } = {}): Promise<void> {
-    if (settled(this.#sync)) return Promise.resolve();
+    if (settled(this.#sync) && !this.#journalHeld) return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       const waiter = { resolve: () => resolve() };
       this.#waiters.push(waiter);
@@ -4908,7 +4926,11 @@ one or original. It is a
           if (i < 0) return;
           this.#waiters.splice(i, 1);
           const s = this.#sync;
-          const count = (s.inflight ? 1 : 0) + (s.queue.length ? 1 : 0);
+          // Work that is still only in the journal of an earlier visit counts as one.
+          const count = Math.max(
+            (s.inflight ? 1 : 0) + (s.queue.length ? 1 : 0),
+            this.#journalHeld ? 1 : 0,
+          );
           reject(Object.assign(new Error(`${count} unconfirmed commits remain`), { count }));
         }, opts.timeoutMs);
     });

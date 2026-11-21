@@ -165,7 +165,18 @@ export interface SessionHost {
   mount(
     content: Content,
     fontAlias?: (family: string) => string | undefined,
+    hints?: MountHints,
   ): Promise<EditorHandle>;
+}
+
+/** What the session knows before the editor exists and the editor must show from its first frame. */
+export interface MountHints {
+  /**
+   * The journal holds work an earlier visit left unconfirmed, which the session is about to hand to
+   * `attach` (FE-009). The editor's save state then starts at `unsaved`, never at `saved`
+   * (UX-016 criterion 5).
+   */
+  journalHoldsWork?: boolean;
 }
 
 export interface SessionOptions {
@@ -364,7 +375,13 @@ export class Session {
       this.#phase = 'mounting';
       const fontAlias = families ? await families : undefined;
       if (this.closed) return;
-      const editor = await this.#options.host.mount(content, fontAlias);
+      // A plan always holds unconfirmed work (`readRestorePlan`): the indicator says so from the
+      // first frame, before the channel is open (UX-016 criterion 5).
+      const editor = await this.#options.host.mount(
+        content,
+        fontAlias,
+        plan ? { journalHoldsWork: true } : undefined,
+      );
       if (this.closed) return editor.destroy();
       this.#editor = editor;
       if (foreignWork) editor.noticeForeignWork?.();

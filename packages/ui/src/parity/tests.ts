@@ -215,6 +215,20 @@ const ROW_TEST_ENTRIES: ReadonlyArray<readonly [string, readonly TestLink[]]> = 
       { path: 'packages/ui/test/context-menu.test.ts', kind: 'unit' },
     ],
   ],
+  // Shipped when UX-016 closed (2026-11-20): the indicator's words in the shell, the return of a
+  // visit that ended unsaved in the element and against the demo stack, and the outage and flush
+  // on the element's own path.
+  [
+    'save-state',
+    [
+      { path: 'packages/element/e2e/ux-016-return-unsaved.spec.ts', kind: 'playwright' },
+      { path: 'apps/reference-host/e2e/w3-ux-016-return.spec.ts', kind: 'playwright' },
+      { path: 'packages/ui/e2e/header.spec.ts', kind: 'playwright' },
+      { path: 'packages/element/test/ux-016-outage-flush.test.ts', kind: 'unit' },
+      { path: 'packages/element/test/save-state.test.ts', kind: 'unit' },
+      { path: 'packages/engine/test/ux-016-return-unsaved.test.ts', kind: 'unit' },
+    ],
+  ],
   // Shipped when UX-062 closed (2026-11-18): the light, dark and high-contrast themes and forced colours.
   [
     'themes',

@@ -139,6 +139,11 @@ export interface MountOptions {
   /** The `mode` the host asked for (05 §8.1); the core applies the most restrictive one allowed. */
   mode: EditMode;
   /**
+   * The journal holds work an earlier visit left unconfirmed (FE-009): the save indicator starts at
+   * `unsaved` and stays there until the channel is attached (UX-016 criterion 5).
+   */
+  journalHoldsWork?: boolean;
+  /**
    * Called when the owner activates the share command; the element raises `de-share-request` from
    * it (PRO-089, UX-039). The shell shows the command when this is given.
    */
@@ -371,6 +376,7 @@ export function mountEditor(options: MountOptions): MountedEditor {
     selectionShim: config.selectionShim,
     deferRemoteWhileComposing: config.deferRemoteWhileComposing,
     mode: options.mode,
+    ...(options.journalHoldsWork ? { journalHoldsWork: true } : {}),
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
     ...(options.assetImage ? { assetImage: options.assetImage } : {}),
     ...(options.drawEquation ? { drawEquation: options.drawEquation } : {}),
